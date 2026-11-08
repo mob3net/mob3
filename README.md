@@ -293,8 +293,8 @@ engine; tests live next to the code.
 Contributions are welcome. Every pull request must include the broad
 license-grant CLA statement described in [CONTRIBUTING.md](CONTRIBUTING.md);
 it keeps MOB³ available under both AGPL-3.0-only and a commercial license.
-The CI workflow checks the statement on pull requests and runs formatting, vet
-and tests on pull requests and pushes to `main`.
+The PR workflow checks the statement. The CI workflow runs formatting, vet and
+tests on pull requests and pushes to `main`.
 
 ## License
 
