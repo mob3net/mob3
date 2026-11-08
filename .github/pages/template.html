@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color.">
+<title>MOB³ — a small terminal web browser in Go</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1f2328;
+    --muted: #59636e;
+    --link: #0645ad;
+    --line: #d1d9e0;
+    --panel: #f6f8fa;
+    --warn-bg: #fff3cd;
+    --warn-line: #d4a72c;
+    --warn-fg: #442c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --link: #6cb6ff;
+      --line: #30363d;
+      --panel: #161b22;
+      --warn-bg: #3b2f00;
+      --warn-line: #9e6a03;
+      --warn-fg: #f0d58c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--link); }
+  .site-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .site-header .brand {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--fg);
+    text-decoration: none;
+    letter-spacing: .01em;
+  }
+  .site-header nav { display: flex; gap: 1rem; font-size: .95rem; }
+  .site-header nav a { text-decoration: none; }
+  .site-header nav a:hover { text-decoration: underline; }
+  .content {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 4rem;
+  }
+  .content > p:first-child { margin-top: 0; }
+  .content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 1rem;
+  }
+  h1, h2, h3, h4 { line-height: 1.3; margin: 2rem 0 .75rem; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.45rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 1.15rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  code {
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--panel);
+    border-radius: 4px;
+    padding: .12em .35em;
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: .85rem 1rem;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; }
+  blockquote {
+    margin-left: 0;
+    padding: .75rem 1rem;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    border-left-width: 4px;
+    border-radius: 4px;
+    color: var(--warn-fg);
+  }
+  blockquote p:last-child { margin-bottom: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: .45rem .65rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--panel); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+  .site-footer {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+  @media (max-width: 520px) {
+    .site-header { flex-direction: column; gap: .35rem; }
+    h1 { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="https://mob3net.github.io/mob3/">MOB³</a>
+  <nav>
+    <a href="https://github.com/mob3net/mob3">GitHub</a>
+    <a href="https://github.com/mob3net/mob3/releases">Releases</a>
+    <a href="https://github.com/mob3net/mob3/blob/main/LICENSE">License</a>
+  </nav>
+</header>
+<main class="content">
+{{CONTENT}}
+</main>
+<footer class="site-footer">
+  <p>MOB³ is a hobby project, not a secure browser. Licensed under AGPL-3.0-only.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,60 @@
+# Build the one-page site from README.md and publish it to GitHub Pages.
+#
+# The site lives on the generated `gh-pages` branch. This workflow rebuilds it
+# whenever the README, the page template or the build script changes on `main`,
+# and can be run by hand from the Actions tab. The branch is output only: edit
+# README.md and the files under .github/pages/ instead.
+
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/pages/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build site
+        env:
+          SITE_DIR: ${{ runner.temp }}/site
+        run: .github/pages/build.sh "$SITE_DIR"
+
+      - name: Publish gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_DIR: ${{ runner.temp }}/site
+        run: |
+          set -euo pipefail
+          cd "$SITE_DIR"
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Site is unchanged; nothing to publish."
+            exit 0
+          fi
+          git commit -q -m "Update site from README"
+          git push --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            gh-pages

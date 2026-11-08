@@ -1,5 +1,6 @@
 # Build output
 /bin/
+/_site/
 
 # Go test and coverage artifacts
 *.test
