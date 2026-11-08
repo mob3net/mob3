@@ -404,9 +404,10 @@ Standard Go layout:
 - Dependencies are vendored in `vendor/`; `make vendor` regenerates it and the
   tree must build without network access. `vendor/` is committed, never cleaned.
 - Build output lives in `bin/` (ignored by git); `make clean` removes `bin/`.
-- `Dockerfile` is a multi-stage build: `golang:1.27-bookworm` compiles the
-  vendored static binary, and `gcr.io/distroless/static-debian12:nonroot` runs
-  it as a non-root user with CA certificates. The build stage copies only
+- `Dockerfile` is a multi-stage build: `golang:1.27-bookworm` cross-compiles
+  the vendored static binary from `$BUILDPLATFORM`, and `alpine:3` runs it as a
+  non-root user with CA certificates. Alpine is required so the image can cover
+  `linux/arm/v6`; distroless has no armv6 manifest. The build stage copies only
   `go.mod`, `go.sum`, `vendor/`, `cmd/` and `internal/`; do not use `COPY . .` or
   a `.dockerignore`. `make docker` builds `mob3`, and the image includes
   `LICENSE` and `THIRD_PARTY_NOTICES` under `/usr/share/doc/mob3`.
@@ -434,6 +435,11 @@ Standard Go layout:
   the Windows archive contains `mob3.exe`. The release job verifies that exactly
   eight archives were produced, waits up to five minutes for the GitHub release
   to exist, and uploads with `--clobber` so re-runs replace assets.
+- After the release job succeeds, the `docker` job publishes a multi-arch image
+  to `ghcr.io/mob3net/mob3` for `linux/386`, `linux/amd64`, `linux/arm64`,
+  `linux/arm/v6` and `linux/arm/v7`, tagged with the Git tag and `latest`. It
+  uses `GITHUB_TOKEN` with `packages: write`. The first GHCR package is private by
+  default; making it public is a manual repository setting.
 - Release jobs use native runners (Ubuntu, macOS, Windows) so signing tools are
   available. Signing is optional and driven by repository secrets; missing
   secrets publish unsigned archives rather than failing the release. macOS uses

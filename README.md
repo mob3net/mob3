@@ -67,10 +67,21 @@ Without `-it`, stdin is not a terminal and MOB³ uses dump mode:
 docker run --rm mob3 -dump -width 100 https://example.com
 ```
 
-The image is a non-root distroless image with CA certificates. For kitty or
-iTerm2 inline images, pass the terminal graphics environment variables, for
-example `-e TERM -e TERM_PROGRAM -e KITTY_WINDOW_ID`; otherwise images use
-half-block art.
+The image is a non-root Alpine image with CA certificates. For kitty or iTerm2
+inline images, pass the terminal graphics environment variables, for example
+`-e TERM -e TERM_PROGRAM -e KITTY_WINDOW_ID`; otherwise images use half-block
+art.
+
+Each release also publishes `ghcr.io/mob3net/mob3` with the release tag and
+`latest`, for `linux/386`, `linux/amd64`, `linux/arm64`, `linux/arm/v6` and
+`linux/arm/v7`:
+
+```
+docker run --rm -it ghcr.io/mob3net/mob3:latest https://example.com
+```
+
+The first published package is private by default; make it public in the
+repository's package settings if anonymous pulls should work.
 
 ## Releases
 
