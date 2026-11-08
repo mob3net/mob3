@@ -17,7 +17,7 @@ func Run(args []string) int {
 	widthFlag := fs.Int("width", 0, "layout width in columns (default: terminal width or 100)")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
-	ua := fs.String("ua", "", "custom User-Agent (default Firefox-like with MOB3 suffix)")
+	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal))")
 	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "auto", "image protocol: auto, kitty, iterm or blocks")

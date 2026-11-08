@@ -257,8 +257,9 @@ Standard Go layout:
   `docs/icon.png` is only a raster copy.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
-  keys, mouse and forms), not as a one-line footer status, so every shortcut
-  including `!` is visible and selectable. The page includes try-it links for
+  command-line flags, keys, mouse and forms), not as a one-line footer status,
+  so every shortcut including `!` is visible and selectable. The flag table
+  must list every option accepted by `Run`. The page includes try-it links for
   alert/confirm/prompt and an editable demo field; inline handlers work even on
   pages with no `<script>` elements.
 - **Focus:** focused links use a yellow background highlight on text and a
@@ -402,11 +403,11 @@ Standard Go layout:
 - Images load concurrently (max 6) and are cached per resolved URL for reloads.
 - Blocked responses are replaced with a locally generated “Site blocked” page;
   they do not run the site’s challenge scripts or load its assets.
-- Default User-Agent: a Firefox-like token with the project identity appended:
-  **`Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)`**.
-  UA-sniffing sites (notably Google) otherwise serve basic/no-JavaScript pages.
-  `-ua` overrides it. Keep this string documented in `README.md` and
-  `AGENTS.md` whenever it changes.
+- Default User-Agent: **`MOB3/1.0 (+terminal)`**. MOB³ identifies itself
+  rather than impersonating another browser; UA-sniffing sites may therefore
+  serve simplified or no-JavaScript pages. `-ua` overrides it. Keep this string
+  documented in `README.md`, the built-in help page and `AGENTS.md` whenever it
+  changes.
 - HTTPS uses Go’s TLS; there is no certificate UI or proxy configuration UI.
 
 ## 7. Build, test and compatibility

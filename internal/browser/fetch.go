@@ -93,7 +93,7 @@ func NewLoader() *Loader {
 				return nil
 			},
 		},
-		userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)",
+		userAgent: "MOB3/1.0 (+terminal)",
 		searchURL: DefaultSearchURL,
 	}
 }
@@ -716,6 +716,27 @@ th { color: #57606a; }
 </style></head><body>
 <h1>MOB³ Help</h1>
 <p class="muted">A small terminal browser. Keys are vim-first.</p>
+
+<h2>Command line</h2>
+<p><b>mob3 [flags] [url|file]</b> opens the start page with no arguments.</p>
+<table>
+<tr><th>Option</th><th>Description</th></tr>
+<tr><td><b>-dump</b></td><td>render the page to stdout and exit</td></tr>
+<tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
+<tr><td><b>-graphics</b> string</td><td>image protocol: auto, kitty, iterm or blocks (default "auto")</td></tr>
+<tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
+<tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
+<tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
+<tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
+<tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal))</td></tr>
+<tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
+<tr><td><b>-cpuprofile</b> string</td><td>write a CPU profile to this file</td></tr>
+<tr><td><b>-version</b></td><td>print the version and exit</td></tr>
+<tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
+</table>
+<p class="muted">Examples: <b>mob3 https://go.dev</b>,
+<b>mob3 'golang tutorial'</b>,
+<b>mob3 -dump -width 120 -no-color page.html</b>.</p>
 
 <h2>Keyboard</h2>
 <table>

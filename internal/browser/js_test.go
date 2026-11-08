@@ -222,7 +222,7 @@ func TestJSNavigator(t *testing.T) {
 		`document.title = navigator.userAgent + "|" + navigator.language;`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	if !strings.HasPrefix(page.Title, "Mozilla/5.0") || !strings.Contains(page.Title, "MOB3/1.0") ||
+	if !strings.HasPrefix(page.Title, "MOB3/1.0") ||
 		!strings.HasSuffix(page.Title, "|en-US") {
 		t.Fatalf("title = %q", page.Title)
 	}

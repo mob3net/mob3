@@ -23,7 +23,7 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Command line", "-dump", "-width", "-graphics", "-no-js", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
@@ -234,7 +234,7 @@ func TestBranding(t *testing.T) {
 		}
 	}
 	ua := NewLoader().userAgent
-	if !strings.HasPrefix(ua, "Mozilla/5.0") || !strings.Contains(ua, "MOB3/1.0") {
+	if ua != "MOB3/1.0 (+terminal)" {
 		t.Errorf("User-Agent = %q", ua)
 	}
 }

@@ -160,9 +160,7 @@ Examples:
 `-graphics=auto` detects kitty, WezTerm, Ghostty and iTerm2. Other terminals,
 tmux/screen/zellij and `-dump` use half-block art.
 
-The default User-Agent is
-`Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)`.
-Override it with `-ua`.
+The default User-Agent is `MOB3/1.0 (+terminal)`. Override it with `-ua`.
 
 When URL input is not URL-shaped — it contains whitespace or has no dot, so
 `golang tutorial` or `golang` — MOB³ opens DuckDuckGo's server-rendered
@@ -203,7 +201,8 @@ fallback.
 
 `Esc` stops an in-flight page load or clears a selection. The top bar shows
 back, reload, the page title, help and a full-width URL field. `?` or the
-toolbar help button opens the built-in `about:help` page. Opening the URL field
+toolbar help button opens the built-in `about:help` page, which documents keys,
+mouse, forms and every command-line flag. Opening the URL field
 prefills and selects the current URL; typing replaces it. Inside the field,
 Left/Right, Home/End, Backspace/Delete, Ctrl-A, Ctrl-K, Ctrl-U and Ctrl-W edit
 the URL; the block caret overlays text without shifting it.
