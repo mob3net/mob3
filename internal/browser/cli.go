@@ -18,6 +18,7 @@ func Run(args []string) int {
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default Firefox-like with MOB3 suffix)")
+	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "auto", "image protocol: auto, kitty, iterm or blocks")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
@@ -62,6 +63,7 @@ func Run(args []string) int {
 	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
 	loader := NewLoader()
 	loader.noScripts = *noJS
+	loader.searchURL = *search
 	if *ua != "" {
 		loader.userAgent = *ua
 	}

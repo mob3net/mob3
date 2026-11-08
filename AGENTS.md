@@ -308,6 +308,15 @@ Standard Go layout:
   an inserted cell, so moving it never shifts the URL text. Existing local paths become `file://`;
   bare host-like input becomes `https://`; `host:port` becomes `http://`;
   relative references against a base only for `/`, `./`, `../`, `#`, `?`.
+- **Search fallback:** input that contains whitespace or has no dot (for
+  example `golang tutorial` or `golang`) is treated as a search query.
+  `-search` takes a URL template whose `%s` is replaced with the URL-escaped
+  query; the default is `https://html.duckduckgo.com/html/?q=%s` (the
+  server-rendered endpoint; the main DuckDuckGo page is JS-only and renders
+  blank without scripts), and an empty value disables the fallback. Valid URLs,
+  `example.com`, `host:port`, local files, `about:`/`data:` and base-relative
+  references still resolve as URLs. The fallback applies only to typed
+  navigation, not link hrefs or form actions.
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
   a `<pre>`); binaries are never rendered as HTML.
 - **JavaScript scope:** classic inline and external scripts run in document

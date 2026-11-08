@@ -145,6 +145,7 @@ mob3 [flags] [url|file]
   -color         force ANSI color when dumping
   -no-color      disable ANSI colors in dump mode
   -ua string     custom User-Agent
+  -search str    search URL template with %s (default DuckDuckGo; empty disables)
   -version       print the version and exit
 ```
 
@@ -162,6 +163,14 @@ tmux/screen/zellij and `-dump` use half-block art.
 The default User-Agent is
 `Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)`.
 Override it with `-ua`.
+
+When URL input is not URL-shaped — it contains whitespace or has no dot, so
+`golang tutorial` or `golang` — MOB³ opens DuckDuckGo's server-rendered
+search page instead of failing. Inputs such as `example.com`, `localhost:8080`,
+`/path`, `about:start`, `file` paths and full URLs still navigate normally. Use
+`-search` with a `%s` template to choose another engine, for example
+`-search 'https://www.bing.com/search?q=%s'`, or `-search ''` to disable the
+fallback.
 
 ## Keys and mouse
 

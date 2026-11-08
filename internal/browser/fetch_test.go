@@ -285,6 +285,33 @@ func TestDecodeBodyCharsets(t *testing.T) {
 	}
 }
 
+func TestResolveInputSearch(t *testing.T) {
+	cases := []struct {
+		in, want string
+		tmpl     string
+	}{
+		{"golang tutorial", "https://html.duckduckgo.com/html/?q=golang+tutorial", DefaultSearchURL},
+		{"golang", "https://html.duckduckgo.com/html/?q=golang", DefaultSearchURL},
+		{"example.com", "https://example.com", DefaultSearchURL},
+		{"localhost:8080", "http://localhost:8080", DefaultSearchURL},
+		{"https://go.dev/doc", "https://go.dev/doc", DefaultSearchURL},
+		{"go.dev docs", "https://www.bing.com/search?q=go.dev+docs", "https://www.bing.com/search?q=%s"},
+	}
+	for _, c := range cases {
+		u, err := ResolveInput(c.in, nil, c.tmpl)
+		if err != nil {
+			t.Errorf("%s: %v", c.in, err)
+			continue
+		}
+		if u.String() != c.want {
+			t.Errorf("%s => %s, want %s", c.in, u, c.want)
+		}
+	}
+	if _, err := ResolveInput("golang tutorial", nil, ""); err == nil {
+		t.Error("disabled search should fail on a query")
+	}
+}
+
 func TestResolveLocalFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "page.html")

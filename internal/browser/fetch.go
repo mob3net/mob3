@@ -27,6 +27,11 @@ const (
 	maxImagePixels  = 25_000_000 // 25 MP; bounds decompression cost
 )
 
+// DefaultSearchURL is the template used when input looks like a search query.
+// %s is replaced with the URL-escaped query; an empty template disables search.
+// DuckDuckGo's html endpoint is server-rendered, unlike the JS-only main page.
+const DefaultSearchURL = "https://html.duckduckgo.com/html/?q=%s"
+
 // imageConfigOK rejects decompression bombs before decoding pixel data.
 func imageConfigOK(cfg image.Config) bool {
 	if cfg.Width <= 0 || cfg.Height <= 0 {
@@ -59,6 +64,7 @@ type Script struct {
 type Loader struct {
 	client    *http.Client
 	userAgent string
+	searchURL string
 	noScripts bool
 	imgMu     sync.Mutex
 	imgs      map[string]image.Image
@@ -88,11 +94,22 @@ func NewLoader() *Loader {
 			},
 		},
 		userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)",
+		searchURL: DefaultSearchURL,
 	}
 }
 
-// ResolveURL turns user input into an absolute URL.
+// ResolveURL turns user input into an absolute URL without search fallback.
 func ResolveURL(input string, base *url.URL) (*url.URL, error) {
+	return resolveURL(input, base, "")
+}
+
+// ResolveInput is like ResolveURL but falls back to searchURL when the input
+// looks like a search query rather than a URL. An empty searchURL disables it.
+func ResolveInput(input string, base *url.URL, searchURL string) (*url.URL, error) {
+	return resolveURL(input, base, searchURL)
+}
+
+func resolveURL(input string, base *url.URL, searchURL string) (*url.URL, error) {
 	s := strings.TrimSpace(input)
 	if s == "" {
 		return nil, errors.New("empty URL")
@@ -133,7 +150,29 @@ func ResolveURL(input string, base *url.URL) (*url.URL, error) {
 		// host:port, most likely a local development server
 		return url.Parse("http://" + s)
 	}
+	if searchURL != "" && looksLikeSearch(s) {
+		return searchURLFor(searchURL, s)
+	}
 	return url.Parse("https://" + s)
+}
+
+// looksLikeSearch reports whether input is a query rather than a host or path:
+// it contains whitespace, or has no dot to form a host name.
+func looksLikeSearch(s string) bool {
+	if strings.ContainsAny(s, " \t\n\r") {
+		return true
+	}
+	return !strings.Contains(s, ".")
+}
+
+// searchURLFor substitutes the escaped query into the search template. A
+// template without %s gets the query appended.
+func searchURLFor(template, query string) (*url.URL, error) {
+	q := url.QueryEscape(query)
+	if strings.Contains(template, "%s") {
+		return url.Parse(strings.ReplaceAll(template, "%s", q))
+	}
+	return url.Parse(template + q)
 }
 
 // Load fetches a page and all of its stylesheets and images.
@@ -150,7 +189,7 @@ func (l *Loader) LoadContext(ctx context.Context, input string, base *url.URL) (
 // LoadRequest loads a page with an explicit HTTP method and request body.
 // Resources discovered while parsing the response are always fetched with GET.
 func (l *Loader) LoadRequest(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL) (*Page, error) {
-	u, err := ResolveURL(input, base)
+	u, err := ResolveInput(input, base, l.searchURL)
 	if err != nil {
 		return nil, err
 	}

@@ -111,6 +111,14 @@ func NewBrowser(w, h int) *Browser {
 	}
 }
 
+// searchTemplate returns the configured search URL template.
+func (b *Browser) searchTemplate() string {
+	if b.loader != nil {
+		return b.loader.searchURL
+	}
+	return DefaultSearchURL
+}
+
 // headerRows returns the number of rows used by the top bar.
 func (b *Browser) headerRows() int {
 	if b.height < 3 {
@@ -145,7 +153,7 @@ func (b *Browser) Navigate(input string, push bool) {
 }
 
 func (b *Browser) navigateRequest(method, input string, body []byte, contentType string, push bool) {
-	u, err := ResolveURL(input, b.url)
+	u, err := ResolveInput(input, b.url, b.searchTemplate())
 	if err != nil {
 		b.status = "Invalid URL: " + err.Error()
 		b.draw()

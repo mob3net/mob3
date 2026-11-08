@@ -250,6 +250,25 @@ func TestFormPOSTSubmission(t *testing.T) {
 	}
 }
 
+func TestNavigateSearchesQuery(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.loader.searchURL = "https://www.bing.com/search?q=%s"
+	ch := make(chan string, 1)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		ch <- target
+		return &Page{}, nil
+	}
+	b.Navigate("golang tutorial", false)
+	select {
+	case got := <-ch:
+		if got != "https://www.bing.com/search?q=golang+tutorial" {
+			t.Errorf("target = %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("search navigation did not start")
+	}
+}
+
 func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.url = mustParse(t, "https://example.com/")
