@@ -19,6 +19,12 @@ images inline with kitty or iTerm2 graphics, falling back to half-block art.
 JavaScript runs through the pure-Go goja engine; there are no other third-party
 modules. Requires Go 1.27 or newer. The project page is <https://mob3.net>.
 
+Try it with Docker:
+
+```
+docker run --rm -it ghcr.io/mob3net/mob3
+```
+
 ## Run
 
 ```
@@ -291,7 +297,7 @@ engine; tests live next to the code.
 ## Contributing
 
 Contributions are welcome. Every pull request must include the broad
-license-grant CLA statement described in [CONTRIBUTING.md](CONTRIBUTING.md);
+license-grant CLA statement described in [CONTRIBUTING.md](https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md);
 it keeps MOB³ available under both AGPL-3.0-only and a commercial license.
 The PR workflow checks the statement. The CI workflow runs formatting, vet and
 tests on pull requests and pushes to `main`.
@@ -299,7 +305,7 @@ tests on pull requests and pushes to `main`.
 ## License
 
 MOB³ is licensed under the GNU Affero General Public License, version 3 only
-(AGPL-3.0-only). Copyright (c) 2026 Milos Stojanovic. See [LICENSE](LICENSE).
+(AGPL-3.0-only). Copyright (c) 2026 Milos Stojanovic. See [LICENSE](https://github.com/mob3net/mob3/blob/main/LICENSE).
 
 A separate commercial license is available on request for use without the
 AGPL's source-disclosure requirements. Ask the copyright holder if you need
@@ -309,4 +315,4 @@ MOB³ is provided “as is”, without warranty of any kind. See the warning at 
 top: this is a hobby browser, not a security boundary.
 
 Third-party module licenses are listed in
-[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+[THIRD_PARTY_NOTICES](https://github.com/mob3net/mob3/blob/main/THIRD_PARTY_NOTICES).
