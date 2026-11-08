@@ -25,6 +25,20 @@ func runCaptured(t *testing.T, args []string) (int, []byte) {
 	return code, out
 }
 
+func TestRunVersion(t *testing.T) {
+	old := Version
+	Version = "v9.9.9"
+	defer func() { Version = old }()
+
+	code, out := runCaptured(t, []string{"-version"})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if string(out) != "v9.9.9\n" {
+		t.Fatalf("version output = %q", out)
+	}
+}
+
 func TestRunDump(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "page.html")

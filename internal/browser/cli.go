@@ -18,6 +18,7 @@ func Run(args []string) int {
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default Firefox-like with MOB3 suffix)")
+	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "auto", "image protocol: auto, kitty, iterm or blocks")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
@@ -33,6 +34,10 @@ func Run(args []string) int {
 			return 0
 		}
 		return 2
+	}
+	if *showVersion {
+		fmt.Println(Version)
+		return 0
 	}
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)

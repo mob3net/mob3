@@ -148,11 +148,13 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
           EXT: ${{ matrix.ext }}
+          VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist/stage
           CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-            -ldflags "-s -w" -o "dist/stage/mob3${EXT}" ./cmd/mob3
+            -ldflags "-s -w -X browser/internal/browser.Version=${VERSION}" \
+            -o "dist/stage/mob3${EXT}" ./cmd/mob3
 
       - name: Sign macOS binary (optional)
         if: matrix.goos == 'darwin' && env.MACOS_CERT_P12_BASE64 != ''
@@ -345,5 +347,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

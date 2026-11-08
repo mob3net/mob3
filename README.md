@@ -45,6 +45,24 @@ The result is a single static binary. Dependencies are vendored under
 `vendor/`, so the build needs no network access. When stdin/stdout are not a
 terminal, MOB³ automatically falls back to dump mode.
 
+## Versioning
+
+Git tags such as `v1.2.3` are the source of truth for releases. `mob3 -version`
+prints the embedded version. Local builds show `dev` unless a version is
+provided:
+
+```
+make VERSION=v1.2.3
+./bin/mob3 -version
+```
+
+The release workflow injects the tag into both the binaries and the Docker
+image. For a local Docker build:
+
+```
+docker build --build-arg VERSION=v1.2.3 -t mob3 .
+```
+
 ## Docker
 
 Build the image:
@@ -121,6 +139,7 @@ mob3 [flags] [url|file]
   -color         force ANSI color when dumping
   -no-color      disable ANSI colors in dump mode
   -ua string     custom User-Agent
+  -version       print the version and exit
 ```
 
 Examples:

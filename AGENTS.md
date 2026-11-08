@@ -112,6 +112,7 @@ Standard Go layout:
 | `mouse.go` | Mouse event type, SGR/X10 decoding helpers and click-to-link hit testing support. |
 | `fetch.go` | HTTP(S)/file/data loading, cookie jar, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation. |
+| `version.go` | Build-time version string reported by `-version`; default `dev`. |
 | `usage.go` | Process resident-memory sampling for the footer. |
 | `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists. |
@@ -421,6 +422,12 @@ Standard Go layout:
   dump output. The project must still cross-compile for Darwin and Windows.
 - Keep the binary out of layout decisions: it may be committed/present locally,
   but `make clean` removes it.
+- The Git tag (`vX.Y.Z`) is the release version source of truth.
+  `internal/browser.Version` defaults to `dev` and is set at build time with
+  `-ldflags "-X browser/internal/browser.Version=<tag>"`; `mob3 -version` prints
+  it. Release binaries and the Docker image both receive `github.ref_name`.
+  Local builds use `make VERSION=vX.Y.Z` or
+  `docker build --build-arg VERSION=vX.Y.Z`.
 - Pull requests run `.github/workflows/pr.yml` on open, synchronize, reopen and
   edit. The `CLA` job requires the exact statement
   `I have read and agree to the MOB³ Contributor License Agreement.` in the PR
