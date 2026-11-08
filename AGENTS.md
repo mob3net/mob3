@@ -440,8 +440,9 @@ Standard Go layout:
 - Release assets are named `mob3_<tag>_<os>_<platform>.tar.gz` (`.zip` on
   Windows) and include `SHA256SUMS`. Linux and macOS archives contain `mob3`;
   the Windows archive contains `mob3.exe`. The release job verifies that exactly
-  eight archives were produced, waits up to five minutes for the GitHub release
-  to exist, and uploads with `--clobber` so re-runs replace assets.
+  eight archives were produced, creates the GitHub release from the tag with
+  generated notes when it is missing, and uploads with `--clobber` so re-runs
+  replace assets.
 - After the release job succeeds, the `docker` job publishes a multi-arch image
   to `ghcr.io/mob3net/mob3` for `linux/386`, `linux/amd64`, `linux/arm64`,
   `linux/arm/v6` and `linux/arm/v7`, tagged with the Git tag and `latest`. It

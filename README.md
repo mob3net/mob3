@@ -115,9 +115,9 @@ for example `mob3_v1.0.0_linux_armv6.tar.gz`. Extract the archive and run
 `./mob3` (`mob3.exe` on Windows). Windows and macOS binaries are code-signed
 when release signing is configured; otherwise they are published unsigned.
 
-The workflow starts on the tag push but attaches the archives to the GitHub
-release, so publish the release from the tag (or create it within five minutes
-of pushing the tag).
+Pushing the tag is enough: if no GitHub release exists for it, the workflow
+creates one with generated notes, then attaches the archives. You can still
+create or edit the release in the web interface first.
 
 Verify a download with the release checksums:
 

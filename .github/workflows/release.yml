@@ -10,9 +10,9 @@
 # workflow from the tagged commit.
 #
 # Publishing a release in the web interface creates the tag and the release
-# together, and the order is not guaranteed. The job builds first and then
-# waits for the release to appear before uploading, so either order works. A
-# tag that never gets a release fails after five minutes instead of hanging.
+# together, and the order is not guaranteed. The job builds first and creates
+# the release from the tag with generated notes if it does not exist yet, then
+# uploads the archives. A tag push on its own is therefore enough.
 #
 # The archives are named `mob3_<tag>_<os>_<platform>.tar.gz` (`zip` on
 # Windows), for example `mob3_v1.0.0_linux_armv6.tar.gz`. `armv6` and `armv7`
@@ -262,7 +262,7 @@ jobs:
           retention-days: 5
 
   release:
-    name: Attach archives to release
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -289,19 +289,18 @@ jobs:
       - name: Checksums
         run: cd dist && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS
 
-      - name: Wait for the release
+      - name: Ensure the release exists
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         run: |
-          for _ in $(seq 1 60); do
-            if gh release view "$VERSION" >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Release $VERSION was not found after five minutes." >&2
-          exit 1
+          set -euo pipefail
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release create "$VERSION" \
+              --verify-tag \
+              --title "$VERSION" \
+              --generate-notes
+          fi
 
       - name: Upload assets
         env:
