@@ -33,8 +33,8 @@ written in Go
   license-grant CLA in `CONTRIBUTING.md` and the PR statement it describes.
   Never merge contributed code without that agreement. Contributors keep their
   copyright but grant the Maintainer the right to relicense under AGPL-3.0-only
-  or commercial terms. The `Pull request` workflow checks the statement and
-  runs formatting, vet and tests.
+  or commercial terms. The `CI` workflow checks the statement on pull requests
+  and runs formatting, vet and tests on pull requests and pushes to `main`.
 - **Commit messages.** End every completed change with a short, one-line commit
   message summarizing the work. Do not commit unless explicitly asked; just
   provide the message.
@@ -429,9 +429,11 @@ Standard Go layout:
   Local builds use `make VERSION=vX.Y.Z` or
   `docker build --build-arg VERSION=vX.Y.Z`.
 - Pull requests run `.github/workflows/pr.yml` on open, synchronize, reopen and
-  edit. The `CLA` job requires the exact statement
+  edit, and pushes to `main` run it too. The `CLA` job runs only for pull
+  requests and requires the exact statement
   `I have read and agree to the MOB³ Contributor License Agreement.` in the PR
-  description; the `Test` job runs gofmt, `go vet` and tests.
+  description; the `Test` job runs gofmt, `go vet` and tests on both pushes and
+  pull requests.
 - Releases are built by `.github/workflows/release.yml` on any `v*` tag push,
   not on `release: published`, because release-triggered workflows run from the
   default branch. The workflow checks gofmt, `go vet` and tests first, then
