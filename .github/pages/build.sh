@@ -34,5 +34,7 @@ if (!template.includes("{{CONTENT}}")) {
 fs.writeFileSync(outputPath, template.replace("{{CONTENT}}", body));
 NODE
 
+printf 'mob3.net\n' >"$out/CNAME"
+printf '/bin/\n/_site/\n' >"$out/.gitignore"
 touch "$out/.nojekyll"
-echo "Wrote $out/index.html"
+echo "Wrote $out/index.html, $out/CNAME and $out/.gitignore"

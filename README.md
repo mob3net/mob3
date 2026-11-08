@@ -17,7 +17,7 @@ HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and shows
 images inline with kitty or iTerm2 graphics, falling back to half-block art.
 
 JavaScript runs through the pure-Go goja engine; there are no other third-party
-modules. Requires Go 1.27 or newer.
+modules. Requires Go 1.27 or newer. The project page is <https://mob3.net>.
 
 ## Run
 

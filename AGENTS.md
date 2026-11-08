@@ -439,7 +439,10 @@ Standard Go layout:
   `npx`) and wraps it in `.github/pages/template.html`;
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, page files or workflow, and on manual dispatch.
-  Never edit `gh-pages` by hand; change the README, template or build script.
+  The build writes a `CNAME` for **`mob3.net`**; the site is served at
+  `https://mob3.net` (apex A/AAAA DNS to GitHub Pages, `www` CNAME to
+  `mob3net.github.io`, HTTPS enforced in the Pages settings). Never edit
+  `gh-pages` by hand; change the README, template or build script.
 - Releases are built by `.github/workflows/release.yml` on any `v*` tag push,
   not on `release: published`, because release-triggered workflows run from the
   default branch. The workflow checks gofmt, `go vet` and tests first, then
