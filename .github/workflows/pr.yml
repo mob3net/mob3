@@ -1,0 +1,59 @@
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: "-mod=vendor"
+  GOPROXY: "off"
+
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check contribution statement
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          needle="I have read and agree to the MOB³ Contributor License Agreement."
+          if ! grep -Fq -- "$needle" <<<"${PR_BODY:-}"; then
+            echo "::error::Add the CLA statement from CONTRIBUTING.md to the pull request description." >&2
+            exit 1
+          fi
+          echo "CLA statement found."
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Formatting
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests
+        run: go test ./... -count=1

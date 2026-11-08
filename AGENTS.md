@@ -1,0 +1,507 @@
+# AGENTS.md — Project decisions and working agreement
+
+This file is the durable record of the requirements, decisions and instructions
+for this repository. **Every important new instruction from the user must be
+folded into the section it governs**, rewritten as the rule in force, before or
+alongside the code change it causes. There is no history section: past entries
+are merged into the rules they produced, and superseded ones are dropped.
+
+Project: **MOB³**, a small web browser for the terminal,
+written in Go
+
+---
+
+## 1. Working agreement
+
+- **Ask before deciding.** Anything that needs attention, approval, or is a
+  software design decision must be asked, not assumed. Preferred method: ask
+  **one question at a time**, wait for the answer. Do not ask many decisions at
+  once.
+- **If an unanswered question matters, ask again.** The user tends to forget,
+  and an answer is not implied by silence.
+- **Update this file with every new decision or change in plan.** Fold the
+  decision into the section it governs.
+- **Tests as you go.** Add or update tests in the same change as every behavior
+  change or bug fix; do not defer tests to a later pass. Tests must stay
+  network-free and should cover each affected layer (parser, style, layout,
+  paint, input) where practical.
+- **Docs stay current.** Update `README.md` (and any other existing
+  documentation) in the same change whenever user-visible behavior, flags,
+  keys, build output, supported features or limitations change. The `docs/`
+  tree is deferred for now, but existing docs must never go stale.
+- **Contributions.** Every external contribution requires the broad
+  license-grant CLA in `CONTRIBUTING.md` and the PR statement it describes.
+  Never merge contributed code without that agreement. Contributors keep their
+  copyright but grant the Maintainer the right to relicense under AGPL-3.0-only
+  or commercial terms. The `Pull request` workflow checks the statement and
+  runs formatting, vet and tests.
+- **Commit messages.** End every completed change with a short, one-line commit
+  message summarizing the work. Do not commit unless explicitly asked; just
+  provide the message.
+- **Documentation split.** Keep `README.md` user-facing; keep this file
+  decision-facing;
+
+## 2. Non-negotiable constraints
+
+- **Go 1.27.** `go.mod` declares `go 1.27`; the target toolchain is Go 1.27.x
+  and the code may use standard-library and language features available through
+  Go 1.27.
+- **Single static binary.** Build with `CGO_ENABLED=0`; `make` produces a
+  statically linked binary. No cgo and no external system libraries.
+- **License.** The project is licensed under AGPL-3.0-only; `LICENSE` carries
+  the full GNU Affero General Public License v3 text, and the README records
+  the copyright (currently `2026 Milos Stojanovic`). A separate commercial
+  license is available on request; do not add commercial terms or a contact
+  unless the copyright holder supplies them. Contributions use the broad
+  license-grant CLA in `CONTRIBUTING.md` so both licensing options remain
+  available. Keep the license file and the README License section in sync.
+- **Not a secure browser.** MOB³ is a hobby engine with no sandboxing, process
+  or site isolation, CSP enforcement, certificate UI or security hardening, and
+  it is not audited. This warning must stay prominent in `README.md` and on the
+  built-in start and help pages. Never present it as safe for passwords,
+  accounts, payments or confidential data.
+- **Dependency policy.** Standard library plus the approved
+  `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
+  `github.com/srwiley/oksvg` + `github.com/srwiley/rasterx` (user-requested SVG
+  support), and their pure-Go transitive modules (`regexp2`, `sourcemap`,
+  `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`). No
+  other third-party modules without a new explicit user decision. goja is pure Go
+  and must not change the single-binary or no-cgo constraints. All dependencies
+  are **vendored in `vendor/` and committed**; builds use `-mod=vendor` and need
+  no network. Run `go mod vendor` after any `go.mod`/`go.sum` change and keep
+  `vendor/modules.txt` in sync.
+- **SVG is not in core Go.** The standard library and `golang.org/x/image`
+  provide no SVG parser or renderer, and there is no known plan to add one.
+  MOB³ therefore uses the vendored, pure-Go `oksvg` + `rasterx` renderer for
+  SVG (partial SVG2); inline SVG decodes through the same path, with a
+  label/`alt` fallback when rasterization fails.
+- **JavaScript via goja.** Page scripts run through goja in a per-page runtime.
+  Classic inline and external scripts execute in document order; `async`,
+  `defer` and modules are ignored. `-no-js` disables both script fetching and
+  execution. `<noscript>` is hidden when JS is enabled and shown with
+  `-no-js`. Text inputs and textareas are editable; GET and urlencoded POST
+  forms submit with Enter. File uploads, multipart forms and most other
+  controls remain unsupported.
+- **Terminal-only presentation.** There is no GUI toolkit and no native
+  window. All output is ANSI/Unicode in the terminal, and a terminal cell is
+  the layout unit.
+- **Images.** Native terminal graphics come first — kitty graphics protocol,
+  then iTerm2 inline images — with colored half-block art (`▀`/`▄`) as the
+  fallback. No sixel.
+- Keep it bare-bones but functional: real fetching, parsing, layout, rendering,
+  navigation and scrolling.
+
+## 3. Architecture
+
+Standard Go layout:
+
+- `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
+  exits with its status.
+- `internal/browser/` — package `browser` with the engine, CLI loop and tests.
+  No `internal` package is imported from outside this module.
+
+| File | Decision / responsibility |
+| --- | --- |
+| `cmd/mob3/main.go` | Executable entry point only. |
+| `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
+| `css.go` | Hand-written CSS rule/selector/declaration parser. Supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
+| `style.go` | Computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. |
+| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates. |
+| `paint.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support. |
+| `graphics.go` | Kitty and iTerm2 inline-image protocols, terminal capability detection, PNG encoding/downscaling, placement cache. |
+| `mouse.go` | Mouse event type, SGR/X10 decoding helpers and click-to-link hit testing support. |
+| `fetch.go` | HTTP(S)/file/data loading, cookie jar, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache. |
+| `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation. |
+| `usage.go` | Process resident-memory sampling for the footer. |
+| `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
+| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists. |
+| `term_linux.go` | Linux termios raw mode, window size via ioctl, key/escape-sequence decoding. |
+| `term_stub.go` | Non-Linux build stub; interactive unsupported, dump still works. |
+| `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
+| `cli.go` | `Run`: flags, dump mode, interactive event loop. |
+| `*_test.go` | Unit tests alongside the code; no network dependencies. |
+
+## 4. Rendering and layout
+
+- **Scope:** ambitious CSS subset rather than text-only or solid-basics — own
+  CSS parser, cascade, specificity, inheritance, selectors, box model, tables,
+  lists, backgrounds, borders and text styling. Basic row-direction flexbox is
+  supported; grid, floating and absolute layout are still approximated as
+  block flow.
+- **Responsive media queries:** `@media` conditions are stored per rule and
+  matched against the layout viewport (`columns * 8` CSS px). `screen`/`all`,
+  min/max-width (and device-width) work; `print` never matches; unsupported
+  features such as `prefers-color-scheme: dark` do not match. This keeps
+  desktop/mobile duplicates from rendering at the same time.
+- **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
+  side by side, honouring explicit widths, `flex`/`flex-grow`, shrink-to-fit
+  items and `gap`/`column-gap`. Wrapping, `justify-content`, `align-items` and
+  ordering are not implemented. Form controls always use the inline widget
+  path even when CSS gives them block/flex display, so their editable value is
+  rendered inside flex containers.
+- **Off-screen transforms:** a `transform` that moves content fully off-screen
+  (`translateX/Y(-…)` or `scale(0…)`) marks the element hidden. This suppresses
+  cloned fixed navs and closed drawers that rely on transforms instead of
+  `display:none`.
+- **Cell mapping:** `1 column = 8 CSS px`, `1 row = 16 CSS px`. Two image rows
+  are packed into one terminal cell vertically to preserve image aspect ratio.
+- **Line height:** computed with `floor(fontSize * lineHeight / 16)`, minimum
+  1 row. This avoids body text with `line-height: 1.6` consuming two terminal
+  rows. Rule of thumb: only fonts ≥32px produce a 2-row line box.
+- **Base font:** 16px, line-height 1. UA headings use bold/color/margins; h1 is
+  32px (2 rows), others are effectively 1 row.
+- **Large type:** true scaled glyphs use kitty’s text-sizing protocol in real
+  kitty with the minimal `OSC 66 ; s=N ; text BEL` form; layout allocates
+  `round(font-size/16)` cells per character and matching line rows for runs
+  scaled above 1. Do not send the optional `w` key: metadata uses `:` between
+  keys, and terminals that only parse `s` render a `w=...` prefix as literal
+  text. Disabled on non-kitty terminals, in dump mode, and with
+  `-text-scale=off`, where the bold/line-height hierarchy remains. Control
+  characters are stripped before text is embedded in the OSC sequence, so page
+  text cannot inject terminal escapes.
+- **No font files:** the terminal font is used for all glyphs; font size affects
+  line height and emphasis, not glyph scale outside kitty.
+- **UA page style:** white page background, near-black text, and an `8px`
+  `body` margin so pages get the usual browser gutter unless author CSS
+  overrides it.
+- **Auto margins:** `margin:auto` is distinguished from an unset length; a
+  constrained-width block with auto left/right margins centers itself
+  (`margin:0 auto`).
+- **Borders/grid lines** are solid colored cell rectangles, not box-drawing
+  characters. Table borders use a collapsed 1-cell grid.
+- **Inline background/space handling:** inter-word spaces are emitted as text
+  fragments so backgrounds, link focus highlighting and link rectangles are
+  continuous. Inline and inline-block backgrounds (nav links, buttons) are
+  painted behind their text fragments; block backgrounds are painted once with
+  the box.
+- **Contrast fallback:** when resolved text and effective background colors are
+  too close (for example white text whose background came from an unsupported
+  gradient or CSS variable), foreground switches to near-black on light
+  backgrounds or white on dark backgrounds.
+- **Wide characters:** East Asian/emoji width 2, combining marks width 0,
+  continuation cells marked and skipped in ANSI output.
+- **Text wrapping:** greedy word wrapping; overlong words are hard-split;
+  `white-space: pre` preserves spaces/newlines; `nowrap` never wraps.
+- **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height are
+  hidden (`display:none`) to avoid rendering them as one-character columns.
+- **Percentage heights are ignored** because parent heights are indefinite;
+  this avoids `height:100%` on logos becoming 100 terminal rows.
+- **Tables:** shrink-to-fit column widths from max-content measurements, scaled
+  down to available width; `colspan` supported; `rowspan` ignored; empty rows
+  are skipped.
+- **Lists:** markers rendered in the list padding area; disc/circle/square,
+  decimal, alpha and roman styles.
+- **Images:** intrinsic size in CSS px → cells; CSS/HTML width/height honored;
+  aspect ratio preserved; transparency composited over the underlying cell;
+  PNG/JPEG/GIF and SVG; WebP is unsupported. SVG is rasterized with oksvg +
+  rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
+  response; inline `<svg>` is serialized back to XML with SVG camelCase names
+  restored and rasterized before layout. If inline SVG decoding fails it falls
+  back to `aria-label`, `<title>` or visible text; `aria-hidden` SVGs are
+  skipped. Broken images show `[image: alt]`, or nothing when `alt` is empty.
+  In interactive mode with a detected graphics terminal, the same rectangles
+  are filled with a real inline image
+  (kitty/iTerm2) instead of half-block art; images clipped by the viewport are
+  cropped to the visible cell rows. A focused linked image loses its border
+  highlight because inline graphics paint above text; the footer still shows
+  the target.
+- **Graphics protocol preference:** kitty first, then iTerm2, then half-block
+  art. Selected automatically from environment variables and overridable with
+  `-graphics=auto|kitty|iterm|blocks`. Under tmux/screen/zellij auto-detection
+  falls back to half-block art because the multiplexer consumes graphics
+  escapes unless passthrough is configured.
+- **Graphics encoding:** images are transmitted as PNG (kitty `f=100`, base64;
+  iTerm2 `OSC 1337;File`). Text is still painted as ANSI cells; only image
+  rectangles are overlaid. Kitty deletes previous placements each frame
+  (`a=d`) and re-places images, scaled to the layout cell box, with `q=2` so
+  replies do not pollute stdin; APC replies are drained defensively. A
+  full-screen clear also clears kitty image data, so the placement cache is
+  reset and images are retransmitted after `2J` (scroll, resize, mode switch). iTerm2
+  saves/restores the cursor around an inline image sized in cells with
+  `preserveAspectRatio=0`. Source images are downscaled to about the terminal
+  cell size (default 8×16 px) before encoding. Dump mode always uses half-block
+  art.
+- **Output robustness:** interactive mode disables terminal autowrap
+  (`\x1b[?7l`) and restores it on exit, clips double-width glyphs that would
+  cross the right edge, repaints the top bar and footer every frame, and forces
+  a full text repaint whenever the scroll offset changes. A stray terminal wrap
+  or scroll must never leave the chrome stale.
+- **Dump rendering:** prints the whole document height (capped at 20,000 rows),
+  no browser chrome. Color is automatic on a TTY, forced by `-color`, disabled
+  by `-no-color`.
+
+## 5. Browser / UX
+
+- **Chrome:** a browser-like top bar, two rows on terminals at least five rows
+  tall (one row on shorter terminals). The toolbar row holds `← Back`,
+  `⟳ Reload`, the page title, and `? Help` pinned to the far right; the URL row
+  is a full-width field that becomes the editable `Open: …` prompt with a
+  cursor marker while the prompt is open. The toolbar row uses a subtle
+  horizontal gradient.
+- **Toolbar responsiveness:** full labels at 40+ columns; at narrower widths
+  fall back to `←`, `⟳`, `?`; below 24 columns hide back/reload so the URL
+  field stays usable; below 6 columns hide help. Every toolbar item is
+  clickable via per-frame button hit regions including the row coordinate.
+- **Keys (vim-first):** Vim-style bindings are the preferred convention and
+  take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
+  page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
+  `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `o` URL
+  prompt, `u` show URL, `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
+  not move `g`/`G` or the `o` prompt to browser-style keys.
+- **Start page:** `about:start` shows the `docs/icon.svg` artwork embedded
+  directly in `startPageHTML` (inline `<svg>`, no runtime fetch), rendered
+  through the normal inline-SVG path and sized by `.brand svg` to `64px`
+  (8×4 cells). Keep the inline path data in sync with `docs/icon.svg`;
+  `docs/icon.png` is only a raster copy.
+- **Help page:** `?` and the toolbar `?` navigate to the built-in
+  `about:help` HTML page. Help lives as a normal rendered document (tables for
+  keys, mouse and forms), not as a one-line footer status, so every shortcut
+  including `!` is visible and selectable. The page includes try-it links for
+  alert/confirm/prompt and an editable demo field; inline handlers work even on
+  pages with no `<script>` elements.
+- **Focus:** focused links use a yellow background highlight on text and a
+  yellow border on images; the focused URL is shown in the footer.
+- **Mouse:** enable click reporting with `\x1b[?1000h`, drag reporting with
+  `\x1b[?1002h`, and SGR extended coordinates with `\x1b[?1006h`; disable all
+  three on exit. SGR (`\x1b[<b;x;yM/m`) and legacy X10 (`\x1b[M` + 3 bytes)
+  events, including motion reports, become `mouse:` input tokens.
+  Left press starts a drag selection in document coordinates; dragging updates
+  and auto-scrolls it, and release keeps the highlight. A press and release on
+  the same cell is a click: it follows a link using the same rectangles as
+  keyboard focus, or clears focus. A left click on the URL bar opens the URL
+  prompt, toolbar buttons act on click, right click goes back, and the wheel
+  scrolls three lines. `Esc` clears the selection. Selected text is
+  highlight-only for now; clipboard copy is undecided.
+- **Forms:** clicking a text/search/email/URL/tel/number/password input or a
+  textarea focuses it and shows a cursor; typing edits the value, Backspace
+  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Submit buttons also
+  submit on click. GET forms build a query from named fields (including hidden
+  inputs); POST forms send `application/x-www-form-urlencoded` bodies. Both
+  navigate to the resolved action, and reload reuses the last method/body.
+  Focusing/blurring fires `change`, editing fires `input`, and
+  submitting fires `submit` before navigation. JS exposes `value`, `checked`
+  and `form` on elements. Editable fields use a prominent light-blue background
+  with bold text; the focused field switches to a solid blue background with
+  white text, and its placeholder/hint disappears while focused.
+- **Footer:** shows status/link target on the left and current resident memory
+  on the right (`MEM 18 MB`), with the scroll percentage pinned at the far
+  right edge. The readout refreshes every two seconds and drops before the
+  percentage on narrow terminals. Memory is `/proc/self/statm` RSS on Linux
+  with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
+  while the JS console is open, so terminal selection is not disturbed.
+- **History:** a URL string stack with forward truncation; fragment-only links
+  scroll within the page instead of pushing history.
+- **Loading:** navigation runs asynchronously so the UI stays responsive.
+  `Esc` cancels the in-flight page, stylesheet, script and image requests and
+  shows “Stopped loading”. Late results from canceled navigations are ignored
+  by sequence number. Loading another URL cancels the previous load.
+- **Refused schemes:** `javascript:`, `mailto:` and `tel:` links show a status
+  message.
+- **URL input rules:** opening the URL prompt (`o` or clicking the URL field)
+  prefills the current URL and selects it all, so typing replaces it like a
+  normal browser address bar; Backspace clears the selection first. The prompt
+  has a real cursor: Left/Right, Home/End move it, Backspace/Delete remove
+  around it, Ctrl-A selects all, Ctrl-K deletes to the end, Ctrl-U clears and
+  Ctrl-W deletes the previous word. The caret is an overlay block cursor, not
+  an inserted cell, so moving it never shifts the URL text. Existing local paths become `file://`;
+  bare host-like input becomes `https://`; `host:port` becomes `http://`;
+  relative references against a base only for `/`, `./`, `../`, `#`, `?`.
+- **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
+  a `<pre>`); binaries are never rendered as HTML.
+- **JavaScript scope:** classic inline and external scripts run in document
+  order after load and before layout. DOM subset: `getElementById`,
+  `querySelector(All)`, `getElementsByTagName`, `createElement`,
+  `createTextNode`, attributes, `textContent`/`innerText`/`innerHTML`,
+  `classList`, `style` (common properties plus `setProperty`/`cssText`),
+  `appendChild`/`removeChild`/`replaceChildren`, `children`/`parentNode`, and
+  `document.title`/`URL`.
+- **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
+  language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
+  `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events and
+  `console`. `Image`/`Audio` construct DOM elements. `document` exposes
+  `location`, visibility state, and image elements expose `src`/`alt`/`width`/
+  `height`/`complete`/`natural*`. `URL`/`URLSearchParams`,
+  `document.currentScript`/`baseURI`, `document.write`/`writeln`,
+  `document.cookie` (in-memory per page), and in-memory
+  `localStorage`/`sessionStorage` are available. `XMLHttpRequest` supports
+  basic same-origin HTTP methods, headers, `responseText`/`response` (text/
+  json/arraybuffer), status and callbacks. Cross-origin requests and redirects
+  are blocked (no CORS). It executes synchronously even when `async=true` and
+  does not implement streaming, upload progress or timeouts. `<noscript>` is removed before
+  styles and scripts are collected when JS is enabled, so no-JS styles/scripts
+  cannot affect the JS page. `console.*` and uncaught errors append to a
+  bounded JS log. Module scripts remain unsupported, so globals defined only by
+  modules (for example a third-party `google` object) stay undefined.
+- **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
+  block script execution until answered. Alert closes on Enter/Space/Esc;
+  confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text
+  editing keys as the URL bar. In non-interactive/dump runs, alert returns,
+  confirm returns false and prompt returns null. Dialogs use keyboard input
+  (mouse is not handled while modal).
+- **JS console view:** `!` opens a plain-text console in the viewport and
+  disables mouse reporting so the terminal's own selection/copy works. Timers
+  and timer-driven redraws pause while it is open, so a terminal selection is
+  not cleared while copying. `j/k` scroll, `Esc`/`!` close, `q` quits. The full
+  error text is kept there even when the footer status is truncated.
+- **JavaScript events and timers:** `addEventListener`/`removeEventListener`
+  on nodes, `document` and `window`; bubbling `click`; inline `onclick`
+  attributes and the `onclick` property; `DOMContentLoaded` and `load`.
+  `preventDefault()` suppresses link navigation. `setTimeout`/`setInterval`
+  are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
+  messages and `alert` appear in the footer.
+- **JavaScript safety:** every script and callback runs under a 2-second goja
+  interrupt watchdog. Timer count and per-tick callbacks are capped. Script
+  errors surface as footer status. Navigation via `location.href`,
+  `location.assign`/`replace`/`reload` is queued until the script or callback
+  finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
+  are followed immediately. Storage and `document.cookie` are in-memory only
+  (not persisted or attached to HTTP requests). `XMLHttpRequest` uses the
+  browser's cookie jar and User-Agent but is synchronous under the hood. There
+  is no `fetch`, CSP or module loading; `history.back`/`forward` are stubs.
+- **Dump mode with JS:** `-dump` runs scripts and `DOMContentLoaded`/`load`
+  synchronously so output reflects DOM changes; timers do not run in dump mode.
+
+## 6. Networking / resources
+
+- Cookie jar and redirects via `net/http`; the page’s final URL is kept for
+  relative links and history.
+- Page/resource cap: 12 MB. Local files are read with a `LimitReader`, only
+  regular files are accepted (no `/dev/*`/FIFOs), and data URIs are rejected
+  when the encoded or decoded size exceeds the cap. Images are rejected before
+  decoding when they exceed 25 megapixels, to avoid decompression bombs.
+- **JS memory budget:** each guarded script/callback has a 2-second CPU timeout
+  and a best-effort heap-delta watchdog (256 MB above its starting heap);
+  exceeding it interrupts the script with an error.
+- **Layout budget:** layout stops after 250k fragments or 200k document rows,
+  bounding memory/CPU for pathological or generated documents.
+- **Same-origin XHR:** JavaScript `XMLHttpRequest` may only request the page's
+  own scheme/host/port (default ports normalized). Cross-origin requests and
+  cross-origin redirects fail with status 0; no CORS is implemented. Cookies
+  therefore cannot be read cross-site through XHR.
+- **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
+  only when the document itself was loaded from `file:`. Remote (http/https/
+  data) documents cannot load file resources, navigate the viewport to `file:`
+  URLs, or XHR local files. Local documents retain access to local resources.
+- Charset from Content-Type, falling back to `<meta charset>` sniffing.
+- Stylesheets from `<style>`, `<link rel=stylesheet>`, and inline styles;
+  `@import` is not supported. Parsing is cancellable and capped at 4 MiB of
+  source, 50k rules, 256 KiB per declaration block, 4 KiB per selector and
+  1 second of parse time; repeated selector text is parsed once per sheet.
+  This bounds CPU/GC cost on generated or hostile CSS.
+- Images load concurrently (max 6) and are cached per resolved URL for reloads.
+- Blocked responses are replaced with a locally generated “Site blocked” page;
+  they do not run the site’s challenge scripts or load its assets.
+- Default User-Agent: a Firefox-like token with the project identity appended:
+  **`Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MOB3/1.0 (+terminal)`**.
+  UA-sniffing sites (notably Google) otherwise serve basic/no-JavaScript pages.
+  `-ua` overrides it. Keep this string documented in `README.md` and
+  `AGENTS.md` whenever it changes.
+- HTTPS uses Go’s TLS; there is no certificate UI or proxy configuration UI.
+
+## 7. Build, test and compatibility
+
+- `make` = `mkdir -p bin && CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o bin/mob3 ./cmd/mob3`
+- Dependencies are vendored in `vendor/`; `make vendor` regenerates it and the
+  tree must build without network access. `vendor/` is committed, never cleaned.
+- Build output lives in `bin/` (ignored by git); `make clean` removes `bin/`.
+- `Dockerfile` is a multi-stage build: `golang:1.27-bookworm` compiles the
+  vendored static binary, and `gcr.io/distroless/static-debian12:nonroot` runs
+  it as a non-root user with CA certificates. The build stage copies only
+  `go.mod`, `go.sum`, `vendor/`, `cmd/` and `internal/`; do not use `COPY . .` or
+  a `.dockerignore`. `make docker` builds `mob3`, and the image includes
+  `LICENSE` and `THIRD_PARTY_NOTICES` under `/usr/share/doc/mob3`.
+- `make test` = `go test -mod=vendor ./...`; tests must not require network
+  access.
+- Binaries and test/coverage output are covered by `.gitignore`; keep it in sync
+  when the layout or build output changes.
+- `go vet ./...` must stay clean, and `gofmt` is applied to project files before
+  handing work back. Do not reformat files under `vendor/`.
+- Interactive mode is Linux-only (`term_linux.go`); other platforms fall back to
+  dump output. The project must still cross-compile for Darwin and Windows.
+- Keep the binary out of layout decisions: it may be committed/present locally,
+  but `make clean` removes it.
+- Pull requests run `.github/workflows/pr.yml` on open, synchronize, reopen and
+  edit. The `CLA` job requires the exact statement
+  `I have read and agree to the MOB³ Contributor License Agreement.` in the PR
+  description; the `Test` job runs gofmt, `go vet` and tests.
+- Releases are built by `.github/workflows/release.yml` on any `v*` tag push,
+  not on `release: published`, because release-triggered workflows run from the
+  default branch. The workflow checks gofmt, `go vet` and tests first, then
+  builds eight targets with vendored dependencies and `CGO_ENABLED=0`: Linux
+  386/amd64/armv6/armv7/arm64, macOS amd64/arm64 and Windows amd64.
+- Release assets are named `mob3_<tag>_<os>_<platform>.tar.gz` (`.zip` on
+  Windows) and include `SHA256SUMS`. Linux and macOS archives contain `mob3`;
+  the Windows archive contains `mob3.exe`. The release job verifies that exactly
+  eight archives were produced, waits up to five minutes for the GitHub release
+  to exist, and uploads with `--clobber` so re-runs replace assets.
+- Release jobs use native runners (Ubuntu, macOS, Windows) so signing tools are
+  available. Signing is optional and driven by repository secrets; missing
+  secrets publish unsigned archives rather than failing the release. macOS uses
+  a Developer ID certificate plus `codesign` and optional `notarytool`
+  notarization from `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`,
+  `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGNING_IDENTITY` (first valid identity when
+  unset), `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID` and
+  `MACOS_NOTARY_PASSWORD`. Windows uses Authenticode via
+  `Set-AuthenticodeSignature` from `WINDOWS_CERT_PFX_BASE64` and
+  `WINDOWS_CERT_PASSWORD`.
+
+## 8. Known limitations (accepted)
+
+- JavaScript is a practical subset: no `fetch`, modules or CSP; storage and
+  `document.cookie` are in-memory only and do not persist or reach HTTP
+  requests. `XMLHttpRequest` is synchronous, same-origin-only and lacks
+  streaming/upload progress. `document.write` is supported for document
+  fragments. JS history navigation is stubbed. Plain same-origin `location`
+  redirects and meta refresh work; remote pages cannot navigate to `file:`.
+  Apps requiring missing APIs (for example Google search) may still show their
+  no-JavaScript fallback.
+- Cross-origin scripts/stylesheets/images still load like a normal browser and
+  share the cookie jar (third-party requests), with no CSP. This is a separate
+  residual risk from XHR; do not treat MOB³ as a security boundary.
+- Browser checks and anti-bot/firewall blocks cannot be completed. On
+  401/403/429/503 responses, MOB³ looks for Cloudflare, CAPTCHA,
+  DataDome/PerimeterX, Imperva/Sucuri, “verify you are human”, “unusual
+  traffic” and access-denied signatures and shows a generic “Site blocked”
+  page with the detected reason, HTTP status and URL. Challenge scripts are
+  never executed; sites behind such protection are not usable.
+- No tabs or downloads. Forms support editable text fields and urlencoded
+  GET/POST submission; multipart/file uploads, selects and checkbox/radio
+  toggling are not implemented. Mouse support covers click-to-follow,
+  drag selection (highlight only), the URL prompt, right-click back and wheel
+  scrolling. There is no clipboard copy yet.
+- Graphics-protocol detection is environment-based, not an active terminal
+  query; users may need `-graphics` in unusual setups.
+- No font files; no real text scaling outside kitty’s `OSC 66`.
+- Flexbox supports basic rows only (no wrap/justify/align/order); grid, floats
+  and absolute positioning are approximated as block flow.
+- SVG support is partial: paths, shapes, gradients and common transforms work,
+  but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
+  missing. Inline SVG falls back to an accessible label if rasterization fails.
+  WebP is still unsupported.
+- No CSS variables, animations, transitions, generated content, `@import`, or
+  background images.
+- Modern CSS-heavy sites may look rough; content-focused pages, docs, and old
+  HTML render best.
+- Interactive mode needs a real Linux terminal.
+
+## 9. Change protocol for agents
+
+1. **Ask before deciding**, one question at a time, and ask again if a
+   previously unanswered question still matters.
+2. **Update this file first** (or in the same change) whenever the user gives a
+   new important requirement, changes a previous decision, or chooses between
+   alternatives. Fold it into the section it governs as the rule in force; do
+   not append a dated history entry and drop what it supersedes. Update
+   `README.md` for any user-visible change in the same edit.
+3. **Docs are deferred.** There is no `docs/` tree for now; do not create or
+   maintain a documentation mirror until the user asks for one.
+4. Keep the “Known limitations” section honest; remove items only when actually
+   implemented.
+5. Add or update tests in the same change as the behavior, then run `gofmt`,
+   `go vet ./...`, and `go test ./...` before handing work back.
+6. Never introduce external Go modules or cgo without an explicit user change
+   to section 2. `github.com/dop251/goja` is the only currently approved
+   third-party module.
+7. Keep the README user-facing; keep this file decision-facing.
+8. End every completed change with a short one-line commit message (do not
+   create the commit unless the user asks).

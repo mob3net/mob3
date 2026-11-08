@@ -1,0 +1,10 @@
+# Build output
+/bin/
+
+# Go test and coverage artifacts
+*.test
+*.out
+coverage.html
+
+# Editor/OS noise
+.DS_Store

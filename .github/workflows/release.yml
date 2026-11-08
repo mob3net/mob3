@@ -1,0 +1,310 @@
+# Publish the platform binaries on a release.
+#
+# A `v*` tag builds every released platform and attaches one archive per
+# platform plus a `SHA256SUMS` file to the GitHub release for that tag. Linux
+# and macOS get `.tar.gz`, Windows gets `.zip` — the same convention Go uses
+# for its own releases, and the one each platform handles natively. This is
+# triggered by the tag rather than by `release: published` on purpose: GitHub
+# runs release-triggered workflows from the default branch, so a workflow that
+# lives on `main` would not run until it reached `main`. A tag runs the
+# workflow from the tagged commit.
+#
+# Publishing a release in the web interface creates the tag and the release
+# together, and the order is not guaranteed. The job builds first and then
+# waits for the release to appear before uploading, so either order works. A
+# tag that never gets a release fails after five minutes instead of hanging.
+#
+# The archives are named `mob3_<tag>_<os>_<platform>.tar.gz` (`zip` on
+# Windows), for example `mob3_v1.0.0_linux_armv6.tar.gz`. `armv6` and `armv7`
+# are spelled out because a slash is not allowed in an asset name. The Windows
+# archive holds `mob3.exe`; every other archive holds `mob3`.
+#
+# Windows and macOS signing is optional and only runs when the corresponding
+# repository secrets are configured. Without them the archives are published
+# unsigned. See AGENTS.md for the secret names and README.md for the user-facing
+# install instructions.
+
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOFLAGS: "-mod=vendor"
+  GOPROXY: "off"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # A tag push does not run any other check, so check first: a tag with a
+      # broken tree must not publish binaries.
+      - name: Formatting
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests
+        run: go test ./... -count=1
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.platform }}
+    needs: test
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: 386
+            platform: 386
+            ext: ""
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            platform: amd64
+            ext: ""
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm
+            goarm: "6"
+            platform: armv6
+            ext: ""
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm
+            goarm: "7"
+            platform: armv7
+            ext: ""
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            platform: arm64
+            ext: ""
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+            platform: amd64
+            ext: ""
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            platform: arm64
+            ext: ""
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            platform: amd64
+            ext: ".exe"
+
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+      MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+      MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/stage
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+            -ldflags "-s -w" -o "dist/stage/mob3${EXT}" ./cmd/mob3
+
+      - name: Sign macOS binary (optional)
+        if: matrix.goos == 'darwin' && env.MACOS_CERT_P12_BASE64 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          cert="$RUNNER_TEMP/cert.p12"
+          trap 'security delete-keychain "$keychain" 2>/dev/null || true; rm -f "$cert"' EXIT
+
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 --decode > "$cert"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain"
+          security import "$cert" -k "$keychain" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$MACOS_KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+
+          identity="${MACOS_SIGNING_IDENTITY:-}"
+          if [ -z "$identity" ]; then
+            identity="$(security find-identity -v -p codesigning "$keychain" | awk '/^[[:space:]]*[0-9]+\)/ {print $2; exit}')"
+          fi
+          if [ -z "$identity" ]; then
+            echo "No code-signing identity found in the imported certificate." >&2
+            exit 1
+          fi
+
+          codesign --force --options runtime --timestamp \
+            --keychain "$keychain" --sign "$identity" dist/stage/mob3
+          codesign --verify --strict --verbose=2 dist/stage/mob3
+
+      - name: Sign Windows binary (optional)
+        if: matrix.goos == 'windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfx,
+              [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64)
+            )
+            $password = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfx `
+              -CertStoreLocation Cert:\CurrentUser\My -Password $password
+            $signature = Set-AuthenticodeSignature `
+              -FilePath "dist/stage/mob3.exe" `
+              -Certificate $cert `
+              -HashAlgorithm SHA256 `
+              -TimestampServer "http://timestamp.digicert.com"
+            if ($signature.Status -ne "Valid") {
+              throw "Signing failed: $($signature.StatusMessage)"
+            }
+          } finally {
+            Remove-Item -Force -ErrorAction SilentlyContinue $pfx
+          }
+
+      - name: Package archive (Unix)
+        if: matrix.goos != 'windows'
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          archive="$PWD/dist/mob3_${VERSION}_${GOOS}_${PLATFORM}.tar.gz"
+          tar -C dist/stage -czf "$archive" mob3
+
+      - name: Package archive (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          $archive = Join-Path $PWD "dist/mob3_${env:VERSION}_windows_amd64.zip"
+          Compress-Archive -Path "dist/stage/mob3.exe" -DestinationPath $archive
+
+      - name: Notarize macOS binary (optional)
+        # notarytool accepts a zip, dmg or pkg, not the tar.gz we distribute.
+        # The ticket for a bare executable cannot be stapled, so submit a
+        # temporary zip holding the signed binary and ship the tar.gz.
+        if: matrix.goos == 'darwin' && env.MACOS_CERT_P12_BASE64 != '' && env.MACOS_NOTARY_APPLE_ID != '' && env.MACOS_NOTARY_TEAM_ID != '' && env.MACOS_NOTARY_PASSWORD != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmpzip="$RUNNER_TEMP/mob3.zip"
+          trap 'rm -f "$tmpzip"' EXIT
+          ditto -c -k --keepParent dist/stage/mob3 "$tmpzip"
+          xcrun notarytool submit "$tmpzip" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD" \
+            --wait
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.goos }}-${{ matrix.platform }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 5
+
+  release:
+    name: Attach archives to release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: archive-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify archives
+        # Both formats must reach the release: a glob left over from an earlier
+        # layout once uploaded only the Windows zip while SHA256SUMS named all
+        # eight archives.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/*.tar.gz dist/*.zip)
+          if [ "${#archives[@]}" -ne 8 ]; then
+            echo "expected 8 archives, found ${#archives[@]}:" >&2
+            ls -l dist >&2
+            exit 1
+          fi
+
+      - name: Checksums
+        run: cd dist && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS
+
+      - name: Wait for the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          for _ in $(seq 1 60); do
+            if gh release view "$VERSION" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Release $VERSION was not found after five minutes." >&2
+          exit 1
+
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        # --clobber makes a re-run replace the assets instead of failing.
+        # Both archive formats: tar.gz for Linux/macOS and zip for Windows.
+        run: gh release upload "$VERSION" dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
