@@ -19,6 +19,10 @@ images inline with kitty or iTerm2 graphics, falling back to half-block art.
 JavaScript runs through the pure-Go goja engine; there are no other third-party
 modules. Requires Go 1.27 or newer. The project page is <https://mob3.net>.
 
+MOB³ keeps history, cookies, storage and caches in memory only; nothing is
+saved when it exits. The only file it writes is the optional `-cpuprofile`
+output.
+
 Try it with Docker:
 
 ```
@@ -278,6 +282,9 @@ MOB³ is a cell-based renderer, not a pixel browser:
   locale data. JS history navigation is stubbed. `location` redirects and meta
   refresh work. JS-heavy apps that require missing APIs (for example Google
   search) may still show their no-JavaScript fallback.
+- Nothing is persisted: history, cookies, JS storage and the image cache are
+  in-memory only and disappear on exit. The optional `-cpuprofile` file is the
+  only disk write; there are no config, history, cookie, cache or log files.
 - Remote pages cannot load `file:` resources, navigate to `file:` URLs, or XHR
   local files. Local `file:` pages can still load local resources.
 - Flexbox supports basic rows only; grid, floats and absolute positioning are

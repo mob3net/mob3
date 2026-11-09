@@ -61,6 +61,15 @@ written in Go
   it is not audited. This warning must stay prominent in `README.md` and on the
   built-in start and help pages. Never present it as safe for passwords,
   accounts, payments or confidential data.
+- **No persistence.** The running browser must not create or update
+  configuration, history, cookie, cache, log or download files; closing MOB³
+  saves nothing. History, cookies, `localStorage`/`sessionStorage`, the image
+  cache and all JS state live in memory only. The only file write is the path
+  given to `-cpuprofile`. Disk reads are limited to explicit local `file:` pages
+  and their local resources, plus `/proc/self/statm` for the Linux memory
+  footer; OS-level reads performed by Go's TLS, DNS and timezone libraries are
+  not application storage. Do not add automatic disk caching or restore-on-start
+  behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
   `github.com/srwiley/oksvg` + `github.com/srwiley/rasterx` (user-requested SVG

@@ -716,6 +716,9 @@ th { color: #57606a; }
 </style></head><body>
 <h1>MOB³ Help</h1>
 <p class="muted">A small terminal browser. Keys are vim-first.</p>
+<p class="muted">MOB³ keeps history, cookies, storage and caches in memory only.
+Nothing is saved when it exits; the optional <b>-cpuprofile</b> file is the only
+disk write.</p>
 
 <h2>Command line</h2>
 <p><b>mob3 [flags] [url|file]</b> opens the start page with no arguments.</p>
@@ -812,6 +815,7 @@ a { color:#0645ad; text-decoration:underline; }
 <body>
 <div class="logo">MOB³</div>
 <p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
+<p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is saved when MOB³ exits. The only file it writes is the optional <span class="k">-cpuprofile</span> output.</p>
 <p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and shows images inline with kitty or iTerm2 graphics, falling back to half-block art.</p>
 <h3>Getting started</h3>
 <ul>
