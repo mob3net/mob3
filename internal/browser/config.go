@@ -39,6 +39,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-width", Value: get("-width", strconv.Itoa(b.width)), Note: "startup"},
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
+		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},

@@ -163,6 +163,7 @@ const (
 	headerHelp
 	headerConfig
 	headerConsole
+	headerReader
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -369,9 +370,6 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
-	b.reader = false
-	b.readerRoot = nil
-	b.readerSavedScroll = 0
 	if res.err != nil {
 		b.status = "Error: " + res.err.Error()
 		if b.page == nil {
@@ -405,6 +403,16 @@ func (b *Browser) finishLoad(res loadResult) {
 	if b.consumePendingJS() {
 		return
 	}
+	b.readerRoot = nil
+	b.readerSavedScroll = 0
+	readerFailed := false
+	if b.reader {
+		if root, ok := extractReaderPage(page.Root, page.Title); ok {
+			b.readerRoot = root
+		} else {
+			readerFailed = true
+		}
+	}
 	b.rebuild()
 	b.scroll = 0
 	b.focus = -1
@@ -417,6 +425,8 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.status = moduleUnsupportedStatus
 	} else if b.layout != nil && b.layout.Truncated {
 		b.status = layoutTruncatedStatus
+	} else if readerFailed {
+		b.status = "Reader mode unavailable"
 	}
 	if res.push {
 		b.pushHistory(page.URL.String())
@@ -1601,8 +1611,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
 					continue
 				}
-				if hit.kind == headerConsole {
+				switch hit.kind {
+				case headerConsole:
 					b.toggleConsole()
+					return false
+				case headerReader:
+					b.toggleReader()
 					return false
 				}
 			}
@@ -2202,21 +2216,35 @@ func (b *Browser) draw() {
 		} else {
 			fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
 			leftText := b.footerLeft()
-			icon := ">_"
-			iconW := stringWidth(icon)
-			showIcon := w >= 6
+			consoleIcon := ">_"
+			consoleW := stringWidth(consoleIcon)
+			showConsole := w >= 6
 			reserve := 0
-			if showIcon {
-				reserve = iconW + 2
+			consoleX := w - consoleW
+			if showConsole {
+				reserve += consoleW + 2
 			}
 			rightText := b.footerRight(w - reserve)
 			avail := w - stringWidth(rightText) - reserve
 			if avail < 8 {
-				pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-				rightText = truncateWidth(pctText, w-reserve)
-				if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w-reserve {
-					rightText = jsErrorShort + "  " + pctText
+				width := w - reserve
+				shortPct := strings.TrimSpace(fmt.Sprintf("%3d%%", b.scrollPercent()))
+				reader := b.readerStatusText()
+				compact := reader + " " + shortPct
+				if b.jsErr && stringWidth(jsErrorShort+"  "+compact) <= width {
+					compact = jsErrorShort + "  " + compact
 				}
+				if stringWidth(compact) > width {
+					switch {
+					case stringWidth(reader) <= width:
+						compact = reader
+					case b.jsErr && stringWidth(jsErrorShort+"  "+shortPct) <= width:
+						compact = jsErrorShort + "  " + shortPct
+					default:
+						compact = shortPct
+					}
+				}
+				rightText = truncateWidth(compact, width)
 				avail = w - stringWidth(rightText) - reserve
 			}
 			if avail < 0 {
@@ -2239,12 +2267,24 @@ func (b *Browser) draw() {
 			}
 			g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
 			if rightText != "" {
-				g.Text(w-reserve-stringWidth(rightText), fy, rightText, fs, footerFG)
+				rightX := w - reserve - stringWidth(rightText)
+				g.Text(rightX, fy, rightText, fs, footerFG)
+				label := b.readerStatusText()
+				if i := strings.Index(rightText, label); i >= 0 {
+					lx := rightX + stringWidth(rightText[:i])
+					lw := stringWidth(label)
+					labelStyle := fs
+					if b.reader {
+						labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+					}
+					g.Text(lx, fy, label, labelStyle, labelStyle.Color)
+					b.footerHits = append(b.footerHits, headerHit{kind: headerReader, x: lx, y: fy, w: lw, h: 1})
+				}
 			}
-			if showIcon {
+			if showConsole {
 				iconStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
-				g.Text(w-iconW, fy, icon, iconStyle, iconStyle.Color)
-				b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: fy, w: iconW, h: 1})
+				g.Text(consoleX, fy, consoleIcon, iconStyle, iconStyle.Color)
+				b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: consoleX, y: fy, w: consoleW, h: 1})
 			}
 		}
 	}
@@ -2401,26 +2441,49 @@ const (
 	jsErrorShort = "JS: Error"
 )
 
+func (b *Browser) readerStatusText() string {
+	if b.reader {
+		return "Reader on"
+	}
+	return "Reader off"
+}
+
 // footerRight builds the right-aligned footer text: an optional JS error hint,
-// resident memory and the scroll percentage.
+// the reader-mode state, resident memory and the scroll percentage.
 func (b *Browser) footerRight(width int) string {
 	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-	withMem := b.usage.footer() + "   " + pctText
+	reader := b.readerStatusText()
+	withMem := reader + "   " + b.usage.footer() + "   " + pctText
 	if b.jsErr {
 		withMem = jsErrorHint + "   " + withMem
 	}
 	if stringWidth(withMem) <= width-8 {
 		return withMem
 	}
-	noMem := pctText
+	noMem := reader + "   " + pctText
 	if b.jsErr {
-		noMem = jsErrorHint + "   " + pctText
+		noMem = jsErrorHint + "   " + noMem
 	}
-	if stringWidth(noMem) <= width {
+	if stringWidth(noMem) <= width-8 {
 		return noMem
+	}
+	if b.jsErr {
+		short := jsErrorShort + "  " + reader + "  " + pctText
+		if stringWidth(short) <= width {
+			return short
+		}
 	}
 	if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= width {
 		return jsErrorShort + "  " + pctText
+	}
+	if stringWidth(reader+"   "+pctText) <= width {
+		return reader + "   " + pctText
+	}
+	if shortPct := strings.TrimSpace(pctText); stringWidth(reader+" "+shortPct) <= width {
+		return reader + " " + shortPct
+	}
+	if stringWidth(reader) <= width {
+		return reader
 	}
 	return truncateWidth(pctText, width)
 }

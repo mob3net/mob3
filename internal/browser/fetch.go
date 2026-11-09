@@ -940,6 +940,7 @@ disk write.</p>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
+<tr><td><b>-reader</b></td><td>start in reader mode</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
@@ -997,11 +998,15 @@ boundaries and wrapped lines. In the JS console, press <b>/</b> while the
 lines.</p>
 
 <h2>Reader mode</h2>
-<p>Press <b>R</b> to extract the main article from the current page and show it
-in a narrow reading column with navigation, sidebars, forms and other page
-chrome removed. Press <b>R</b> again to return to the normal page and its
-previous scroll position. Reader mode is a snapshot of the live page and is
-cleared when you navigate or reload.</p>
+<p>Press <b>R</b> or click the <b>Reader on</b>/<b>Reader off</b> label in the
+footer to extract the main article from the current page and show it in a
+narrow reading column with navigation, sidebars, images, forms and other page
+chrome removed. Press <b>R</b> or click the label again to return to the normal
+page and its previous scroll position. Reader mode stays enabled when you navigate or reload: each
+new page is extracted automatically, and a page with no usable article is shown
+normally while the preference remains on. Start MOB³ with <b>-reader</b> to
+enable reader mode from the first page. Reader mode is a snapshot of the live
+page.</p>
 
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
@@ -1033,6 +1038,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
+<tr><td>click the footer <b>Reader on</b>/<b>Reader off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>

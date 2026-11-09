@@ -351,16 +351,22 @@ Standard Go layout:
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`.
-- **Reader mode:** `R` toggles an extracted article view for the current page.
-  Extraction runs on the live DOM, prefers `<article>`/`<main>`/`role=main`,
-  scores other prose containers, drops nav/sidebar/footer/forms/scripts and
-  common junk-class subtrees, strips page CSS, and renders a filtered clone in
-  a centered `max-width:600px` column. The original page tree, URL and history
-  are untouched; toggling off restores the previous scroll position, and any
-  navigation or reload clears reader mode. Failed extraction leaves the page
-  unchanged with `Reader mode unavailable`. Reader mode is a snapshot: live JS
-  mutations are not reflected until it is toggled off, and interactive controls
-  are not available.
+- **Reader mode:** `R` or the footer `Reader on`/`Reader off` label toggles an
+  extracted article view. Extraction runs on the live DOM, prefers
+  `<article>`/`<main>`/`role=main`, scores other prose containers, drops
+  nav/sidebar/footer/forms/scripts and common junk-class subtrees, strips page
+  CSS, and renders a filtered clone in a centered `max-width:600px` column.
+  Images are removed entirely, including `alt` text and `[image: ...]` labels;
+  only text, headings, links, lists, tables, quotes and code remain. The
+  original page tree, URL and history are untouched. Reader mode stays enabled
+  across navigation and reload until `R` or the icon is used again: each new
+  page is extracted automatically, and a page with no usable article is shown
+  normally with `Reader mode unavailable` while the preference remains on.
+  Toggling off restores the normal page and its previous scroll position.
+  `-reader` starts with the preference on, including `-dump` mode, which prints
+  the extracted view when one is available. Reader mode is a snapshot: live JS
+  mutations are not reflected while it is active, and interactive controls are
+  not available.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
@@ -391,8 +397,10 @@ Standard Go layout:
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `>_` icon toggles the
-  JS console (and closes it while open), and the wheel scrolls three lines. Long pages show a scrollbar
+  mouse forward button goes forward, clicking the footer `Reader on`/`Reader
+  off` label toggles reader mode, clicking the footer `>_` icon toggles the JS
+  console (and closes it while open), and the wheel scrolls three lines. Long
+  pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
   clears the selection. `y` copies the selected page text through the terminal
   OSC 52 clipboard sequence and then clears the highlight (subject to
@@ -417,10 +425,11 @@ Standard Go layout:
   focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
-  (`MEM 18 MB`), the scroll percentage and a clickable `>_` console icon pinned
-  to the far right edge. The icon toggles the JS console and stays visible and
-  clickable inside the console view. Status text is amber and bold for
-  warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
+  (`MEM 18 MB`), the scroll percentage, a clickable `Reader on`/`Reader off`
+  label before the memory readout and a clickable `>_` console icon pinned to
+  the far right edge. The reader label is blue and bold while reader mode is
+  on; the console icon toggles the JS console and stays visible and clickable
+  inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
   for successful copy messages. The error hint clears
@@ -751,8 +760,8 @@ Standard Go layout:
   missing. Inline SVG falls back to an accessible label if rasterization fails.
   WebP is still unsupported.
 - Reader mode is heuristic: unusual layouts can lose content or retain
-  clutter, it renders a snapshot rather than live JS updates, and forms and
-  other interactive controls are removed.
+  clutter, it renders a snapshot rather than live JS updates, and images,
+  forms and other interactive controls are removed.
 - No CSS variables, animations, transitions, generated content, `@import`, or
   background images. `<dialog>` open state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or

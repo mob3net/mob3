@@ -33,8 +33,11 @@ func TestExtractReaderArticle(t *testing.T) {
 	if got := root.FindFirst("a").Attr("href"); got != "/next" {
 		t.Fatalf("link href = %q", got)
 	}
-	if got := root.FindFirst("img").Attr("src"); got != "/pic.png" {
-		t.Fatalf("image src = %q", got)
+	if root.FindFirst("img") != nil {
+		t.Fatal("image survived extraction")
+	}
+	if strings.Contains(root.TextContent(), "A picture") || strings.Contains(root.TextContent(), "[image:") {
+		t.Fatal("image alt text survived extraction")
 	}
 	p := root.FindFirst("p")
 	if p.Attr("class") != "" || p.Attr("style") != "" {
@@ -100,6 +103,10 @@ func TestExtractReaderNoContent(t *testing.T) {
 	if _, ok := extractReaderPage(doc, ""); ok {
 		t.Fatal("extraction accepted a page with no article content")
 	}
+	images := ParseHTML(`<html><body><article><img src="/only.png" alt="Only image"></article></body></html>`)
+	if _, ok := extractReaderPage(images, "Images"); ok {
+		t.Fatal("extraction accepted an image-only page")
+	}
 }
 
 func TestReaderToggle(t *testing.T) {
@@ -146,7 +153,7 @@ func TestReaderToggle(t *testing.T) {
 	}
 }
 
-func TestReaderResetsOnNavigation(t *testing.T) {
+func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	doc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("Old article text. ", 20) + `</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/old")
@@ -159,13 +166,83 @@ func TestReaderResetsOnNavigation(t *testing.T) {
 	}
 
 	nextURL, _ := url.Parse("https://example.com/new")
-	nextDoc := ParseHTML(`<html><body><p>New page</p></body></html>`)
+	nextDoc := ParseHTML(`<html><body><article><p>` +
+		strings.Repeat("New article text. ", 20) + `</p></article></body></html>`)
 	b.finishLoad(loadResult{
 		page: &Page{URL: nextURL, Base: nextURL, Root: nextDoc, Title: "New"},
 		u:    nextURL,
 	})
+	if !b.reader || b.readerRoot == nil {
+		t.Fatal("reader mode did not survive navigation")
+	}
+	if text := strings.Join(strings.Fields(layoutText(b.layout)), " "); !strings.Contains(text, "New article text") {
+		t.Fatalf("new reader layout = %q", text)
+	}
+
+	emptyURL, _ := url.Parse("https://example.com/empty")
+	emptyDoc := ParseHTML(`<html><body><nav>Menu only</nav></body></html>`)
+	b.finishLoad(loadResult{
+		page: &Page{URL: emptyURL, Base: emptyURL, Root: emptyDoc, Title: "Empty"},
+		u:    emptyURL,
+	})
+	if !b.reader || b.readerRoot != nil {
+		t.Fatal("reader preference did not survive an unavailable page")
+	}
+	if b.status != "Reader mode unavailable" {
+		t.Fatalf("status = %q", b.status)
+	}
+
+	lastURL, _ := url.Parse("https://example.com/last")
+	lastDoc := ParseHTML(`<html><body><article><p>` +
+		strings.Repeat("Last article text. ", 20) + `</p></article></body></html>`)
+	b.finishLoad(loadResult{
+		page: &Page{URL: lastURL, Base: lastURL, Root: lastDoc, Title: "Last"},
+		u:    lastURL,
+	})
+	if !b.reader || b.readerRoot == nil {
+		t.Fatal("reader mode did not resume on the next article")
+	}
+	b.HandleKey("R")
 	if b.reader || b.readerRoot != nil {
-		t.Fatal("reader state survived navigation")
+		t.Fatal("R did not turn reader mode off")
+	}
+}
+
+func TestReaderFooterLabel(t *testing.T) {
+	doc := ParseHTML(`<html><body><article><p>` +
+		strings.Repeat("Reader icon article text. ", 20) + `</p></article></body></html>`)
+	u, _ := url.Parse("https://example.com/article")
+	b := NewBrowser(80, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
+	b.rebuild()
+	drawQuiet(b)
+
+	var readerHit, consoleHit *headerHit
+	for i := range b.footerHits {
+		switch b.footerHits[i].kind {
+		case headerReader:
+			readerHit = &b.footerHits[i]
+		case headerConsole:
+			consoleHit = &b.footerHits[i]
+		}
+	}
+	if readerHit == nil {
+		t.Fatalf("reader label has no click region: %+v", b.footerHits)
+	}
+	if consoleHit != nil && readerHit.x+readerHit.w >= consoleHit.x {
+		t.Fatalf("reader label overlaps console icon: %+v %+v", *readerHit, *consoleHit)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
+	})
+	if !b.reader {
+		t.Fatal("clicking the reader label did not enable reader mode")
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
+	})
+	if b.reader {
+		t.Fatal("clicking the reader label did not disable reader mode")
 	}
 }
 

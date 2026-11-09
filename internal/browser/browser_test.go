@@ -117,7 +117,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	}
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
-	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-ignore-blocks",
+	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua",
 		"-search", "-cpuprofile", "-version", "startup"} {
 		if !strings.Contains(text, want) {
@@ -1265,11 +1265,19 @@ func TestJSErrorHintInFooter(t *testing.T) {
 		t.Fatal("JS error was not recorded")
 	}
 	right := b.footerRight(80)
-	if !strings.Contains(right, jsErrorHint) || !strings.Contains(right, "MEM 18 MB") {
+	if !strings.Contains(right, jsErrorHint) || !strings.Contains(right, "MEM 18 MB") ||
+		!strings.Contains(right, "Reader off") {
 		t.Fatalf("footer right = %q", right)
 	}
-	if strings.Index(right, "JS: Error") > strings.Index(right, "MEM") {
-		t.Fatalf("error hint is not before memory: %q", right)
+	if strings.Index(right, "JS: Error") > strings.Index(right, "Reader off") {
+		t.Fatalf("error hint is not before reader state: %q", right)
+	}
+	if strings.Index(right, "Reader off") > strings.Index(right, "MEM") {
+		t.Fatalf("reader state is not before memory: %q", right)
+	}
+	b.reader = true
+	if got := b.footerRight(80); !strings.Contains(got, "Reader on") {
+		t.Fatalf("reader-on footer = %q", got)
 	}
 	if narrow := b.footerRight(24); !strings.HasPrefix(narrow, jsErrorShort) {
 		t.Fatalf("narrow footer = %q", narrow)

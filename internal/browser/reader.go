@@ -19,7 +19,6 @@ p { margin:10px 0; }
 ul, ol { margin:10px 0; }
 blockquote { margin:12px 16px; }
 pre { margin:12px 0; }
-img { margin:8px 0; }
 `)
 
 // readerStats is the text profile used to rank candidate article containers.
@@ -67,7 +66,7 @@ var readerBlockTags = map[string]bool{
 	"dfn": true, "div": true, "dl": true, "dt": true, "em": true,
 	"figcaption": true, "figure": true, "h1": true, "h2": true,
 	"h3": true, "h4": true, "h5": true, "h6": true, "hr": true,
-	"i": true, "img": true, "ins": true, "kbd": true, "li": true,
+	"i": true, "ins": true, "kbd": true, "li": true,
 	"main": true, "mark": true, "ol": true, "p": true, "pre": true,
 	"q": true, "s": true, "samp": true, "section": true, "small": true,
 	"span": true, "strong": true, "sub": true, "summary": true,
@@ -311,13 +310,6 @@ func appendReaderChildren(dst, src *Node, depth int) {
 				cc.Attrs = append(cc.Attrs, Attr{Key: at.Key, Value: at.Value})
 			}
 		}
-		if c.Tag == "img" {
-			cc.Img = c.Img
-			cc.ImgSrc = c.ImgSrc
-			cc.ImgFailed = c.ImgFailed
-			cc.Value = c.Value
-			cc.ValueSet = c.ValueSet
-		}
 		appendReaderChildren(cc, c, depth+1)
 		dst.Children = append(dst.Children, cc)
 	}
@@ -326,9 +318,6 @@ func appendReaderChildren(dst, src *Node, depth int) {
 func readerContentEmpty(article *Node) bool {
 	if article == nil {
 		return true
-	}
-	if article.FindFirst("img") != nil {
-		return false
 	}
 	return utf8.RuneCountInString(strings.TrimSpace(article.TextContent())) < 40
 }

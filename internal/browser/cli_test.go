@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,6 +53,34 @@ func TestRunDump(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte("hello from file")) {
 		t.Fatalf("dump output = %q", out)
+	}
+}
+
+func TestRunDumpReader(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "article.html")
+	src := `<html><body>
+		<nav>Site navigation</nav>
+		<article><h1>Reader article</h1>
+		<p>` + strings.Repeat("Reader mode text. ", 20) + `</p>
+		<img src="/pic.png" alt="A picture">
+		</article>
+	</body></html>`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-reader", path})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if !bytes.Contains(out, []byte("Reader mode text")) {
+		t.Fatalf("reader dump missing article: %q", out)
+	}
+	if bytes.Contains(out, []byte("Site navigation")) {
+		t.Fatalf("reader dump kept navigation: %q", out)
+	}
+	if bytes.Contains(out, []byte("A picture")) {
+		t.Fatalf("reader dump kept image alt text: %q", out)
 	}
 }
 
