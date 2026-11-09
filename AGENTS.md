@@ -39,7 +39,10 @@ written in Go
 - **Commit messages.** End every completed change with a short, one-line commit
   message summarizing the work. Do not commit unless explicitly asked; just
   provide the message.
-- **Documentation split.** Keep `README.md` user-facing; keep this file
+- **Documentation split.** Keep `README.md` short and user-facing: the basics,
+  how to run (including Docker) and what sites/features to expect. Detailed
+  flags live in `mob3 -h`, and keys/mouse/forms live in the in-app `about:help`
+  page; do not duplicate those lists in the README. Keep this file
   decision-facing;
 
 ## 2. Non-negotiable constraints
