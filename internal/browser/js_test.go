@@ -666,6 +666,30 @@ func TestJSPerformanceTiming(t *testing.T) {
 	}
 }
 
+func TestJSDocumentImplementation(t *testing.T) {
+	page := newJSPage(`<html><body><p id="keep">x</p></body></html>`, `
+		var d = document.implementation.createHTMLDocument("made");
+		d.body.innerHTML = "<form></form><form></form>";
+		var feature = document.implementation.hasFeature(
+			"http://www.w3.org/TR/SVG11/feature#BasicStructure", "1.1");
+		document.title = [
+			feature,
+			d.body.childNodes.length,
+			d.documentElement.ownerDocument.defaultView === window,
+			document.defaultView === window,
+			d.title
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "true,2,true,true,made" {
+		t.Fatalf("title = %q", page.Title)
+	}
+	if page.Root.FindFirst("p") == nil {
+		t.Fatal("detached document mutated the page")
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),

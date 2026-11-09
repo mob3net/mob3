@@ -856,6 +856,79 @@ func (j *jsRuntime) newImageData(w, h int) *goja.Object {
 	return img
 }
 
+// implementationObject backs document.implementation. hasFeature reports true
+// for legacy feature checks (Raphael uses it for SVG detection), and
+// createHTMLDocument returns a detached document for jQuery-style parsing.
+func (j *jsRuntime) implementationObject() *goja.Object {
+	imp := j.vm.NewObject()
+	j.method(imp, "hasFeature", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(true) })
+	j.method(imp, "createHTMLDocument", func(call goja.FunctionCall) goja.Value {
+		return j.newDetachedDocument(call.Argument(0).String())
+	})
+	j.method(imp, "createDocument", func(goja.FunctionCall) goja.Value {
+		return j.newDetachedDocument("")
+	})
+	return imp
+}
+
+func (j *jsRuntime) newDetachedDocument(title string) *goja.Object {
+	html := &Node{Type: ElementNode, Tag: "html"}
+	head := &Node{Type: ElementNode, Tag: "head", Parent: html}
+	body := &Node{Type: ElementNode, Tag: "body", Parent: html}
+	html.Children = []*Node{head, body}
+	if title != "" {
+		titleNode := &Node{Type: ElementNode, Tag: "title", Parent: head}
+		titleNode.Children = []*Node{{Type: TextNode, Text: title, Parent: titleNode}}
+		head.Children = append(head.Children, titleNode)
+	}
+	doc := j.vm.NewObject()
+	_ = doc.Set("nodeType", 9)
+	_ = doc.Set("nodeName", "#document")
+	j.accessor(doc, "documentElement", func() goja.Value { return j.wrap(html) }, nil)
+	j.accessor(doc, "head", func() goja.Value { return j.wrap(head) }, nil)
+	j.accessor(doc, "body", func() goja.Value { return j.wrap(body) }, nil)
+	j.accessor(doc, "defaultView", func() goja.Value { return j.winObj }, nil)
+	j.accessor(doc, "title", func() goja.Value { return j.vm.ToValue(title) }, nil)
+	_ = doc.Set("implementation", j.implementationObject())
+	j.method(doc, "createElement", func(call goja.FunctionCall) goja.Value {
+		tag := strings.ToLower(strings.TrimSpace(call.Argument(0).String()))
+		if tag == "" {
+			tag = "div"
+		}
+		return j.wrap(&Node{Type: ElementNode, Tag: tag})
+	})
+	j.method(doc, "createElementNS", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(&Node{Type: ElementNode, Tag: strings.ToLower(call.Argument(1).String())})
+	})
+	j.method(doc, "createTextNode", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+	})
+	j.method(doc, "createComment", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+	})
+	j.method(doc, "createDocumentFragment", func(goja.FunctionCall) goja.Value {
+		return j.wrap(&Node{Type: ElementNode, Tag: "#fragment"})
+	})
+	j.method(doc, "getElementById", func(call goja.FunctionCall) goja.Value {
+		id := call.Argument(0).String()
+		var found *Node
+		html.FindAll(func(x *Node) bool {
+			if found == nil && attrValue(x, "id") == id {
+				found = x
+				return true
+			}
+			return false
+		})
+		return j.wrap(found)
+	})
+	j.method(doc, "getElementsByTagName", func(call goja.FunctionCall) goja.Value {
+		tag := strings.ToLower(call.Argument(0).String())
+		nodes := html.FindAll(func(x *Node) bool { return tag == "*" || x.Tag == tag })
+		return j.nodeArray(nodes)
+	})
+	return doc
+}
+
 func (j *jsRuntime) documentObject() *goja.Object {
 	o := j.vm.NewObject()
 	root := j.page.Root
@@ -873,6 +946,8 @@ func (j *jsRuntime) documentObject() *goja.Object {
 	j.accessor(o, "documentElement", func() goja.Value { return j.wrap(html) }, nil)
 	j.accessor(o, "body", func() goja.Value { return j.wrap(body) }, nil)
 	j.accessor(o, "head", func() goja.Value { return j.wrap(head) }, nil)
+	j.accessor(o, "defaultView", func() goja.Value { return j.winObj }, nil)
+	_ = o.Set("implementation", j.implementationObject())
 	j.accessor(o, "title", func() goja.Value {
 		if title == nil {
 			return j.vm.ToValue("")

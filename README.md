@@ -238,7 +238,9 @@ the URL; the block caret overlays text without shifting it.
   and modal `alert`/`confirm`/`prompt` dialogs. Event constructors
   (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends),
   `document.createEvent` and `dispatchEvent` with bubbling are available.
-  Includes `URL`/`URLSearchParams`,
+  `document.defaultView`, `ownerDocument` and
+  `document.implementation` (`hasFeature`/`createHTMLDocument`) back common
+  library feature detection. Includes `URL`/`URLSearchParams`,
   `document.currentScript`/`write`, in-memory storage and a session cookie jar
   shared by `document.cookie`, HTTP requests, XHR and fetch,
   `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,
