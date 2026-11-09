@@ -117,7 +117,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	}
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
-	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-ignore-blocks",
+	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua",
 		"-search", "-cpuprofile", "-version", "startup"} {
 		if !strings.Contains(text, want) {

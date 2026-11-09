@@ -40,6 +40,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
+		{Flag: "-dark", Value: onOff(b.dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},

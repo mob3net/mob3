@@ -131,6 +131,7 @@ Standard Go layout:
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
+| `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
@@ -329,8 +330,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
-  reader mode, `o` URL prompt, `/` find in page, `n`/`N` next/previous find
-  match, `u` show URL,
+  reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
+  `n`/`N` next/previous find match, `u` show URL,
   `y` copy selected page text and clear the highlight,
   `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
@@ -351,6 +352,12 @@ Standard Go layout:
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`.
+- **Dark mode:** `D` or the footer `Dark on`/`Dark off` label toggles a
+  post-layout palette remap for every page. Light backgrounds become dark,
+  dark text becomes light, and hues are preserved for links, headings and
+  accents; images are left unchanged. The preference persists across
+  navigation and reload, and `-dark` starts with it enabled, including in
+  `-dump` mode. It also applies on top of reader mode.
 - **Reader mode:** `R` or the footer `Reader on`/`Reader off` label toggles an
   extracted article view. Extraction runs on the live DOM, prefers
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops
@@ -397,10 +404,10 @@ Standard Go layout:
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `Reader on`/`Reader
-  off` label toggles reader mode, clicking the footer `>_` icon toggles the JS
-  console (and closes it while open), and the wheel scrolls three lines. Long
-  pages show a scrollbar
+  mouse forward button goes forward, clicking the footer `Dark on`/`Dark off`
+  or `Reader on`/`Reader off` labels toggles those modes, clicking the footer
+  `>_` icon toggles the JS console (and closes it while open), and the wheel
+  scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
   clears the selection. `y` copies the selected page text through the terminal
   OSC 52 clipboard sequence and then clears the highlight (subject to
@@ -425,11 +432,11 @@ Standard Go layout:
   focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
-  (`MEM 18 MB`), the scroll percentage, a clickable `Reader on`/`Reader off`
-  label before the memory readout and a clickable `>_` console icon pinned to
-  the far right edge. The reader label is blue and bold while reader mode is
-  on; the console icon toggles the JS console and stays visible and clickable
-  inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
+  (`MEM 18 MB`), the scroll percentage, clickable `Dark on`/`Dark off` and
+  `Reader on`/`Reader off` labels before the memory readout, and a clickable
+  `>_` console icon pinned to the far right edge. Each label is blue and bold
+  while its mode is on; the console icon toggles the JS console and stays
+  visible and clickable inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
   for successful copy messages. The error hint clears

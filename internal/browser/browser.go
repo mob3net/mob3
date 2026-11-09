@@ -50,6 +50,9 @@ type Browser struct {
 	readerRoot        *Node
 	readerSavedScroll int
 
+	// Dark mode remaps the rendered page palette.
+	dark bool
+
 	// History and bookmarks.
 	history   []string
 	histIdx   int
@@ -164,6 +167,7 @@ const (
 	headerConfig
 	headerConsole
 	headerReader
+	headerDark
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -547,7 +551,11 @@ func (b *Browser) rebuild() {
 	if b.reader && b.readerRoot != nil {
 		root, author = b.readerRoot, readerRules
 	}
-	b.layout = BuildLayoutDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
+	if b.dark {
+		b.layout = BuildLayoutDarkDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
+	} else {
+		b.layout = BuildLayoutDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
+	}
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	b.reindexFind()
@@ -592,6 +600,15 @@ func (b *Browser) toggleReader() {
 	b.clearSelection()
 	b.rebuild()
 	b.status = "Reader mode — R to exit"
+}
+
+func (b *Browser) toggleDark() {
+	b.dark = !b.dark
+	b.rebuild()
+	b.status = "Dark mode on"
+	if !b.dark {
+		b.status = "Dark mode off"
+	}
 }
 
 func (b *Browser) resize(w, h int) {
@@ -1618,6 +1635,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				case headerReader:
 					b.toggleReader()
 					return false
+				case headerDark:
+					b.toggleDark()
+					return false
 				}
 			}
 		}
@@ -1766,6 +1786,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.reload()
 	case "R":
 		b.toggleReader()
+	case "D":
+		b.toggleDark()
 	case "o":
 		b.openURLPrompt()
 	case "u":
@@ -2229,15 +2251,20 @@ func (b *Browser) draw() {
 			if avail < 8 {
 				width := w - reserve
 				shortPct := strings.TrimSpace(fmt.Sprintf("%3d%%", b.scrollPercent()))
+				dark := b.darkStatusText()
 				reader := b.readerStatusText()
-				compact := reader + " " + shortPct
+				compact := dark + " " + reader + " " + shortPct
 				if b.jsErr && stringWidth(jsErrorShort+"  "+compact) <= width {
 					compact = jsErrorShort + "  " + compact
 				}
 				if stringWidth(compact) > width {
 					switch {
-					case stringWidth(reader) <= width:
-						compact = reader
+					case stringWidth(dark+" "+reader+" "+shortPct) <= width:
+						compact = dark + " " + reader + " " + shortPct
+					case stringWidth(dark+" "+shortPct) <= width:
+						compact = dark + " " + shortPct
+					case stringWidth(reader+" "+shortPct) <= width:
+						compact = reader + " " + shortPct
 					case b.jsErr && stringWidth(jsErrorShort+"  "+shortPct) <= width:
 						compact = jsErrorShort + "  " + shortPct
 					default:
@@ -2269,16 +2296,27 @@ func (b *Browser) draw() {
 			if rightText != "" {
 				rightX := w - reserve - stringWidth(rightText)
 				g.Text(rightX, fy, rightText, fs, footerFG)
-				label := b.readerStatusText()
-				if i := strings.Index(rightText, label); i >= 0 {
+				labels := []struct {
+					text string
+					kind headerKind
+					on   bool
+				}{
+					{b.darkStatusText(), headerDark, b.dark},
+					{b.readerStatusText(), headerReader, b.reader},
+				}
+				for _, label := range labels {
+					i := strings.Index(rightText, label.text)
+					if i < 0 {
+						continue
+					}
 					lx := rightX + stringWidth(rightText[:i])
-					lw := stringWidth(label)
+					lw := stringWidth(label.text)
 					labelStyle := fs
-					if b.reader {
+					if label.on {
 						labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
 					}
-					g.Text(lx, fy, label, labelStyle, labelStyle.Color)
-					b.footerHits = append(b.footerHits, headerHit{kind: headerReader, x: lx, y: fy, w: lw, h: 1})
+					g.Text(lx, fy, label.text, labelStyle, labelStyle.Color)
+					b.footerHits = append(b.footerHits, headerHit{kind: label.kind, x: lx, y: fy, w: lw, h: 1})
 				}
 			}
 			if showConsole {
@@ -2448,19 +2486,28 @@ func (b *Browser) readerStatusText() string {
 	return "Reader off"
 }
 
+func (b *Browser) darkStatusText() string {
+	if b.dark {
+		return "Dark on"
+	}
+	return "Dark off"
+}
+
 // footerRight builds the right-aligned footer text: an optional JS error hint,
-// the reader-mode state, resident memory and the scroll percentage.
+// dark and reader state, resident memory and the scroll percentage.
 func (b *Browser) footerRight(width int) string {
 	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
+	dark := b.darkStatusText()
 	reader := b.readerStatusText()
-	withMem := reader + "   " + b.usage.footer() + "   " + pctText
+	labels := dark + "   " + reader
+	withMem := labels + "   " + b.usage.footer() + "   " + pctText
 	if b.jsErr {
 		withMem = jsErrorHint + "   " + withMem
 	}
 	if stringWidth(withMem) <= width-8 {
 		return withMem
 	}
-	noMem := reader + "   " + pctText
+	noMem := labels + "   " + pctText
 	if b.jsErr {
 		noMem = jsErrorHint + "   " + noMem
 	}
@@ -2468,19 +2515,29 @@ func (b *Browser) footerRight(width int) string {
 		return noMem
 	}
 	if b.jsErr {
-		short := jsErrorShort + "  " + reader + "  " + pctText
+		short := jsErrorShort + "  " + labels + "  " + pctText
 		if stringWidth(short) <= width {
 			return short
 		}
 	}
-	if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= width {
-		return jsErrorShort + "  " + pctText
+	if stringWidth(labels+"   "+pctText) <= width {
+		return labels + "   " + pctText
 	}
-	if stringWidth(reader+"   "+pctText) <= width {
-		return reader + "   " + pctText
+	shortPct := strings.TrimSpace(pctText)
+	if b.jsErr && stringWidth(jsErrorShort+"  "+shortPct) <= width {
+		return jsErrorShort + "  " + shortPct
 	}
-	if shortPct := strings.TrimSpace(pctText); stringWidth(reader+" "+shortPct) <= width {
+	if stringWidth(dark+" "+reader+" "+shortPct) <= width {
+		return dark + " " + reader + " " + shortPct
+	}
+	if stringWidth(dark+" "+shortPct) <= width {
+		return dark + " " + shortPct
+	}
+	if stringWidth(reader+" "+shortPct) <= width {
 		return reader + " " + shortPct
+	}
+	if stringWidth(dark) <= width {
+		return dark
 	}
 	if stringWidth(reader) <= width {
 		return reader

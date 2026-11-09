@@ -941,6 +941,7 @@ disk write.</p>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
 <tr><td><b>-reader</b></td><td>start in reader mode</td></tr>
+<tr><td><b>-dark</b></td><td>start in dark mode</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
@@ -970,7 +971,8 @@ disk write.</p>
 <tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
-<tr><td><b>R</b></td><td>toggle reader mode for the current page</td></tr>
+<tr><td><b>R</b></td><td>toggle reader mode</td></tr>
+<tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; arrows/Home/End/Delete edit it)</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
@@ -1008,6 +1010,12 @@ normally while the preference remains on. Start MOB³ with <b>-reader</b> to
 enable reader mode from the first page. Reader mode is a snapshot of the live
 page.</p>
 
+<h2>Dark mode</h2>
+<p>Press <b>D</b> or click the <b>Dark on</b>/<b>Dark off</b> label in the footer
+to remap page backgrounds, text, links and borders to a dark palette. Images
+keep their original colors. Start MOB³ with <b>-dark</b> to enable dark mode
+from the first page. Dark mode stays enabled when you navigate or reload.</p>
+
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
 which lists this session's pages as links, most recent first. The
@@ -1038,6 +1046,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
+<tr><td>click the footer <b>Dark on</b>/<b>Dark off</b> label</td><td>toggle dark mode</td></tr>
 <tr><td>click the footer <b>Reader on</b>/<b>Reader off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>

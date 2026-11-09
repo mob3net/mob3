@@ -103,6 +103,16 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
+	return buildLayout(root, author, width, bigText, false, deadline)
+}
+
+// BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
+// to page, text, border and background colors after layout.
+func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
+	return buildLayout(root, author, width, bigText, true, deadline)
+}
+
+func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadline time.Time) *Layout {
 	if width < 1 {
 		width = 1
 	}
@@ -143,6 +153,9 @@ func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, dea
 		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
 	}
 	out.buildLinks()
+	if dark {
+		applyDarkLayout(out)
+	}
 	return out
 }
 

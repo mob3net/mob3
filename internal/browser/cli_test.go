@@ -84,6 +84,29 @@ func TestRunDumpReader(t *testing.T) {
 	}
 }
 
+func TestRunDumpDarkChangesPalette(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "page.html")
+	src := `<html><body><p>Dark palette text</p></body></html>`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lightCode, light := runCaptured(t, []string{"-dump", "-color", path})
+	if lightCode != 0 {
+		t.Fatalf("light exit code = %d", lightCode)
+	}
+	darkCode, dark := runCaptured(t, []string{"-dump", "-color", "-dark", path})
+	if darkCode != 0 {
+		t.Fatalf("dark exit code = %d", darkCode)
+	}
+	if !bytes.Contains(dark, []byte("Dark palette text")) {
+		t.Fatalf("dark dump missing page text: %q", dark)
+	}
+	if bytes.Equal(light, dark) {
+		t.Fatal("-dark did not change the rendered palette")
+	}
+}
+
 func TestRunBookmarks(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bookmarks.html")

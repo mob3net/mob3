@@ -24,6 +24,7 @@ func Run(args []string) int {
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	reader := fs.Bool("reader", false, "start in reader mode")
+	dark := fs.Bool("dark", false, "start in dark mode")
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
@@ -94,14 +95,14 @@ func Run(args []string) int {
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, jsMemLimit)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit)
 	}
 
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, jsMemLimit)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -113,6 +114,7 @@ func Run(args []string) int {
 	b := NewBrowser(w, h)
 	b.setLoader(loader)
 	b.reader = *reader
+	b.dark = *dark
 	b.home = *home
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
@@ -208,7 +210,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader bool, jsMemLimit int64) int {
+func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark bool, jsMemLimit int64) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -233,7 +235,12 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 			root, author = extracted, readerRules
 		}
 	}
-	layout := BuildLayoutDeadline(root, author, width, false, time.Now().Add(maxFrameTime))
+	var layout *Layout
+	if dark {
+		layout = BuildLayoutDarkDeadline(root, author, width, false, time.Now().Add(maxFrameTime))
+	} else {
+		layout = BuildLayoutDeadline(root, author, width, false, time.Now().Add(maxFrameTime))
+	}
 	height := layout.Height
 	if height < 1 {
 		height = 1

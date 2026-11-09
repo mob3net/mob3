@@ -68,6 +68,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   launch): extracts the main article into a narrow, chrome-free text column,
   stays enabled across navigation, and restores the normal page and scroll
   position when toggled off.
+- Dark mode (`D`, the footer `Dark on`/`Dark off` label, or `-dark` at launch):
+  remaps page backgrounds, text, links and borders to a dark palette; images
+  keep their original colors.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.
@@ -87,7 +90,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   on ES modules show a status-bar warning that modules are unsupported.
 - Reader mode is heuristic: it can pick too little or too much content on
   unusual layouts, shows a snapshot rather than live updates, and removes
-  images, forms and other interactive controls.
+  images, forms and other interactive controls. Dark mode keeps images in
+  their original colors and approximates some author color schemes.
 - Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX,
   Imperva/Sucuri, access-denied pages) are generally not usable. A “Site
   blocked” page is shown instead.
