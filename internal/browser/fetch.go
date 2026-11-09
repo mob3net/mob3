@@ -891,6 +891,7 @@ disk write.</p>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
+<tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
 <tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>

@@ -24,6 +24,7 @@ func Run(args []string) int {
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
+	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	cpuProfile := fs.String("cpuprofile", "", "write a CPU profile to this file")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
@@ -58,7 +59,10 @@ func Run(args []string) int {
 		}
 	}
 
-	start := "about:start"
+	start := *home
+	if strings.TrimSpace(start) == "" {
+		start = "about:home"
+	}
 	if fs.NArg() > 0 {
 		start = fs.Arg(0)
 	}
@@ -103,6 +107,10 @@ func Run(args []string) int {
 	}
 	b := NewBrowser(w, h)
 	b.setLoader(loader)
+	b.home = *home
+	if strings.TrimSpace(b.home) == "" {
+		b.home = "about:home"
+	}
 	b.color = !*noColor
 	b.noJS = *noJS
 	b.jsMemLimit = jsMemLimit

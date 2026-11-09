@@ -27,9 +27,11 @@ type Browser struct {
 	jsErr         bool
 	status        string
 
+	// History and bookmarks.
 	history []string
 	histIdx int
 	histMu  sync.RWMutex
+	home    string
 
 	prompt          bool
 	promptText      string
@@ -95,6 +97,7 @@ type headerKind int
 const (
 	headerBack headerKind = iota
 	headerReload
+	headerHome
 	headerBookmarks
 	headerHistory
 	headerURL
@@ -120,6 +123,7 @@ func NewBrowser(w, h int) *Browser {
 		loader: NewLoader(), width: w, height: h, focus: -1, hover: -1, histIdx: -1,
 		jsMemLimit: defaultJSMemoryLimit,
 		loadCh:     make(chan loadResult, 1),
+		home:       "about:home",
 	}
 	b.setLoader(b.loader)
 	return b
@@ -1166,6 +1170,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				b.back()
 			case headerReload:
 				b.reload()
+			case headerHome:
+				target := b.home
+				if target == "" {
+					target = "about:home"
+				}
+				b.Navigate(target, true)
 			case headerBookmarks:
 				b.Navigate("about:bookmarks", true)
 			case headerHistory:
@@ -1516,12 +1526,13 @@ func (b *Browser) draw() {
 		}
 
 		backLabel, reloadLabel, helpLabel := " ← Back ", " ⟳ Reload ", " ? Help "
+		homeLabel := " ⌂ Home "
 		historyLabel := " ≡ History "
 		bookmarksLabel := " ★ Bookmarks "
 		if w < 40 {
-			backLabel, reloadLabel = " ← ", " ⟳ "
+			backLabel, reloadLabel, homeLabel = " ← ", " ⟳ ", " ⌂ "
 		}
-		if w < 60 {
+		if w < 80 {
 			helpLabel, historyLabel, bookmarksLabel = " ? ", " ≡ ", " ★ "
 		}
 		fieldBG := urlBG
@@ -1564,6 +1575,9 @@ func (b *Browser) draw() {
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
+			}
+			if w >= 12 {
+				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
 			helpW, historyW, bookmarksW := 0, 0, 0
 			if w >= 6 {
@@ -1610,6 +1624,9 @@ func (b *Browser) draw() {
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
+			}
+			if w >= 12 {
+				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
 			helpW, historyW, bookmarksW := 0, 0, 0
 			if w >= 6 {

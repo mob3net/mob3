@@ -25,7 +25,8 @@ nothing.
 docker run --rm -it ghcr.io/mob3net/mob3
 ```
 
-With no URL, MOB³ opens `about:start`.
+With no URL, MOB³ opens `about:home` (the start page). Use `-home` to point it
+somewhere else.
 
 ## Development
 

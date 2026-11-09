@@ -27,15 +27,16 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 6 {
+	if len(b.headerHits) != 7 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
-	bookW := stringWidth(" ★ Bookmarks ")
-	histW := stringWidth(" ≡ History ")
-	helpW := stringWidth(" ? Help ")
+	bookW := stringWidth(" ★ ")
+	histW := stringWidth(" ≡ ")
+	helpW := stringWidth(" ? ")
 	want := []headerHit{
 		{headerBack, 0, 0, 8, 1},
 		{headerReload, 8, 0, 10, 1},
+		{headerHome, 18, 0, 8, 1},
 		{headerBookmarks, b.width - helpW - histW - bookW, 0, bookW, 1},
 		{headerHistory, b.width - helpW - histW, 0, histW, 1},
 		{headerHelp, b.width - helpW, 0, helpW, 1},
@@ -46,7 +47,7 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[4].x+b.headerHits[4].w != b.width {
+	if b.headerHits[5].x+b.headerHits[5].w != b.width {
 		t.Error("help is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
@@ -57,12 +58,12 @@ func TestHeaderHitRegions(t *testing.T) {
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
 	drawQuiet(b)
-	if len(b.headerHits) != 4 || b.headerHits[0].kind != headerBookmarks ||
-		b.headerHits[1].kind != headerHistory || b.headerHits[2].kind != headerHelp ||
-		b.headerHits[3].kind != headerURL {
+	if len(b.headerHits) != 5 || b.headerHits[0].kind != headerHome ||
+		b.headerHits[1].kind != headerBookmarks || b.headerHits[2].kind != headerHistory ||
+		b.headerHits[3].kind != headerHelp || b.headerHits[4].kind != headerURL {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[2].x+b.headerHits[2].w != b.width {
+	if b.headerHits[3].x+b.headerHits[3].w != b.width {
 		t.Error("narrow help is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
@@ -576,7 +577,18 @@ func TestHeaderClicks(t *testing.T) {
 		t.Fatal("help button did not navigate")
 	}
 
-	b.HandleMouse(MouseEvent{Button: 0, X: 45, Y: 1, Press: true})
+	b.home = "https://example.com/home"
+	b.HandleMouse(MouseEvent{Button: 0, X: 20, Y: 1, Press: true})
+	select {
+	case target := <-targetCh:
+		if target != "https://example.com/home" {
+			t.Fatalf("home target = %q", target)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("home button did not navigate")
+	}
+
+	b.HandleMouse(MouseEvent{Button: 0, X: 55, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "about:history" {
@@ -586,7 +598,7 @@ func TestHeaderClicks(t *testing.T) {
 		t.Fatal("history button did not navigate")
 	}
 
-	b.HandleMouse(MouseEvent{Button: 0, X: 30, Y: 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: 52, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "about:bookmarks" {

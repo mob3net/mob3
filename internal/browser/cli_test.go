@@ -75,6 +75,16 @@ func TestRunBookmarks(t *testing.T) {
 	}
 }
 
+func TestRunHome(t *testing.T) {
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-home", "about:help"})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if !bytes.Contains(out, []byte("MOB³ Help")) {
+		t.Fatalf("home dump output = %q", out)
+	}
+}
+
 func TestRunMissingFile(t *testing.T) {
 	code, _ := runCaptured(t, []string{"-dump", filepath.Join(t.TempDir(), "missing.html")})
 	if code != 1 {
