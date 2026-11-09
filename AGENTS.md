@@ -214,9 +214,11 @@ Standard Go layout:
   characters. Table borders use a collapsed 1-cell grid.
 - **Inline background/space handling:** inter-word spaces are emitted as text
   fragments so backgrounds, link focus highlighting and link rectangles are
-  continuous. Inline and inline-block backgrounds (nav links, buttons) are
-  painted behind their text fragments; block backgrounds are painted once with
-  the box.
+  continuous. A collapsed space takes the style and node of the text node that
+  contains the whitespace, not the following word, so a link never absorbs or
+  underlines the space before it. Inline and inline-block backgrounds (nav
+  links, buttons) are painted behind their text fragments; block backgrounds
+  are painted once with the box.
 - **Contrast fallback:** when resolved text and effective background colors are
   too close (for example white text whose background came from an unsupported
   gradient or CSS variable), foreground switches to near-black on light

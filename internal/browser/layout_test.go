@@ -329,6 +329,40 @@ func TestLinkRects(t *testing.T) {
 	}
 }
 
+func TestLinkSpaceStaysOutsideLink(t *testing.T) {
+	ly := build(`<p>Dark theme for <a href="/gnome">GNOME</a></p>`, 60)
+	if len(ly.Links) != 1 {
+		t.Fatalf("links = %d, want 1", len(ly.Links))
+	}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText || f.Text != "GNOME" {
+			continue
+		}
+		if f.Link != ly.Links[0] {
+			t.Fatal("GNOME fragment is not part of the link")
+		}
+		if got := ly.Links[0].Rects[0].W; got != stringWidth("GNOME") {
+			t.Fatalf("link rect width = %d, want %d", got, stringWidth("GNOME"))
+		}
+		if i == 0 {
+			t.Fatal("no space before the link fragment")
+		}
+		prev := &ly.Frags[i-1]
+		if prev.Kind != fragText || strings.TrimSpace(prev.Text) != "" {
+			t.Fatalf("previous fragment = %q", prev.Text)
+		}
+		if prev.Link != nil {
+			t.Fatal("leading space was attached to the link")
+		}
+		if prev.Style != nil && prev.Style.Underline {
+			t.Fatal("leading space is underlined")
+		}
+		return
+	}
+	t.Fatal("GNOME text fragment not found")
+}
+
 func TestTableColumnsAndCells(t *testing.T) {
 	ly := build(`<table><tr><th>Name</th><th>Value</th></tr><tr><td>alpha</td><td>1</td></tr></table>`, 40)
 	var texts []string

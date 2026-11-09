@@ -920,14 +920,16 @@ type inlineItem struct {
 }
 
 type inlineCtx struct {
-	l         *layouter
-	x, y      int
-	maxW      int
-	imageCapW int
-	base      *Style
-	items     []inlineItem
-	curW      int
-	space     bool
+	l          *layouter
+	x, y       int
+	maxW       int
+	imageCapW  int
+	base       *Style
+	items      []inlineItem
+	curW       int
+	space      bool
+	spaceStyle *Style
+	spaceNode  *Node
 }
 
 func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
@@ -1068,6 +1070,9 @@ func (c *inlineCtx) addText(s string, st *Style, node *Node) {
 				c.addWord(s[start:i], st, node)
 				start = -1
 			}
+			if !c.space {
+				c.spaceStyle, c.spaceNode = st, node
+			}
 			c.space = true
 			continue
 		}
@@ -1129,15 +1134,20 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 	nowrap := st.WhiteSpace == "nowrap"
 	spaceW := c.charW(' ', st)
 	if c.space {
+		spaceStyle, spaceNode := c.spaceStyle, c.spaceNode
+		if spaceStyle == nil {
+			spaceStyle = st
+		}
 		if c.curW > 0 {
 			if !nowrap && c.curW+spaceW+width > c.maxW {
 				c.flush()
 			} else {
-				c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: st, node: node})
+				c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 				c.curW += spaceW
 			}
 		}
 		c.space = false
+		c.spaceStyle, c.spaceNode = nil, nil
 	}
 	if width > c.maxW && !nowrap {
 		for _, r := range w {
@@ -1422,14 +1432,19 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	nowrap := it.style != nil && it.style.WhiteSpace == "nowrap"
 	spaceW := c.charW(' ', it.style)
 	if c.space && c.curW > 0 {
+		spaceStyle, spaceNode := c.spaceStyle, c.spaceNode
+		if spaceStyle == nil {
+			spaceStyle = it.style
+		}
 		if !nowrap && c.curW+spaceW+it.w > c.maxW {
 			c.flush()
 		} else {
-			c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: it.style, node: it.node})
+			c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 			c.curW += spaceW
 		}
 	}
 	c.space = false
+	c.spaceStyle, c.spaceNode = nil, nil
 	if !nowrap && c.curW > 0 && c.curW+it.w > c.maxW {
 		c.flush()
 	}
@@ -1504,6 +1519,7 @@ func (c *inlineCtx) flush() {
 	c.items = c.items[:0]
 	c.curW = 0
 	c.space = false
+	c.spaceStyle, c.spaceNode = nil, nil
 }
 
 const maxImageRows = 24
