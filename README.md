@@ -18,7 +18,7 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 ## Try it with Docker:
 
 ```
-docker run --rm -it ghcr.io/mob3net/mob3
+docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
 ```
 
 With no URL, MOB³ opens `about:home` (the start page). Use `-home` to point it
