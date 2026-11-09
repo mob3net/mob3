@@ -253,10 +253,12 @@ Standard Go layout:
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `⟳ Reload`, `⌂ Home`, the page title, and `★ Bookmarks` / `≡ History` /
-  `? Help` pinned to the far right; the URL row is a full-width field that
-  becomes the editable `Open: …` prompt with a cursor marker while the prompt
-  is open. The toolbar row uses a subtle horizontal gradient.
+  `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` / `? Help`
+  pinned to the far right; forward, reload and home are icon-only. The URL row
+  is a full-width field that becomes the editable `Open: …` prompt with a
+  cursor marker while the prompt is open. The toolbar row uses a subtle
+  horizontal gradient. The page title is centered in the space between the left
+  and right buttons and uses a bold amber color for prominence.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
@@ -266,13 +268,13 @@ Standard Go layout:
   `about:bookmarks` lists bookmarks imported with `-bookmarks FILE` (Netscape
   HTML export), grouped by flattened folder path. Both pages are opened from
   the toolbar buttons and are memory-only; nothing is persisted.
-- **Toolbar responsiveness:** full labels at 80+ columns for the right-side
-  Bookmarks/History/Help buttons; at narrower widths they fall back to `★`,
-  `≡`, `?`. Back/reload/home keep full labels from 40 columns and use `←`,
-  `⟳`, `⌂` below that. Below 24 columns hide back/reload so the URL field stays
-  usable; below 18 hide bookmarks; below 12 hide history; below 6 hide help.
-  Every toolbar item is clickable via per-frame button hit regions including
-  the row coordinate.
+- **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
+  (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
+  Bookmarks/history/help use full labels at 80+ columns and icons below. Below
+  24 columns hide back/forward/reload so the URL field stays usable; home
+  remains visible down to 12 columns; below 18 hide bookmarks; below 12 hide
+  history; below 6 hide help. Every toolbar item is clickable via per-frame
+  button hit regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,

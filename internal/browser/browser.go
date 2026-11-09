@@ -96,6 +96,7 @@ type headerKind int
 
 const (
 	headerBack headerKind = iota
+	headerForward
 	headerReload
 	headerHome
 	headerBookmarks
@@ -1168,6 +1169,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			switch hit.kind {
 			case headerBack:
 				b.back()
+			case headerForward:
+				b.forward()
 			case headerReload:
 				b.reload()
 			case headerHome:
@@ -1525,14 +1528,14 @@ func (b *Browser) draw() {
 			g.FillHGradient(0, 0, w, 1, RGB(0x1f, 0x29, 0x37), RGB(0x31, 0x43, 0x5c))
 		}
 
-		backLabel, reloadLabel, helpLabel := " ← Back ", " ⟳ Reload ", " ? Help "
-		homeLabel := " ⌂ Home "
+		backLabel, helpLabel := " ← Back ", " ? Help "
+		forwardLabel := " → "
+		reloadLabel := " ⟳ "
+		homeLabel := " ⌂ "
 		historyLabel := " ≡ History "
 		bookmarksLabel := " ★ Bookmarks "
-		if w < 40 {
-			backLabel, reloadLabel, homeLabel = " ← ", " ⟳ ", " ⌂ "
-		}
 		if w < 80 {
+			backLabel = " ← "
 			helpLabel, historyLabel, bookmarksLabel = " ? ", " ≡ ", " ★ "
 		}
 		fieldBG := urlBG
@@ -1574,9 +1577,10 @@ func (b *Browser) draw() {
 			x := 0
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
+				x = b.drawHeaderButton(g, x, 0, forwardLabel, headerForward, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
-			}
-			if w >= 12 {
+				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
+			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
 			helpW, historyW, bookmarksW := 0, 0, 0
@@ -1605,8 +1609,11 @@ func (b *Browser) draw() {
 			if b.page != nil && b.page.Title != "" {
 				title = b.page.Title
 			}
-			if room := bookX - x; room > 1 {
-				g.Text(x, 0, fitWidth(" "+title, room), hs, headerFG)
+			if room := bookX - x; room > 0 {
+				titleFG := RGB(0xff, 0xd7, 0x66)
+				titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
+				tx, label := centeredLabel(x, room, title)
+				g.Text(tx, 0, label, titleStyle, titleFG)
 			}
 			if bookmarksW > 0 {
 				b.drawHeaderButton(g, bookX, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
@@ -1623,9 +1630,10 @@ func (b *Browser) draw() {
 			x := 0
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
+				x = b.drawHeaderButton(g, x, 0, forwardLabel, headerForward, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
-			}
-			if w >= 12 {
+				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
+			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
 			helpW, historyW, bookmarksW := 0, 0, 0
@@ -1823,6 +1831,17 @@ func (b *Browser) footerRight(width int) string {
 		return jsErrorShort + "  " + pctText
 	}
 	return truncateWidth(pctText, width)
+}
+
+// centeredLabel fits label into room cells and returns the starting cell plus
+// the fitted text, centered within [x, x+room).
+func centeredLabel(x, room int, label string) (int, string) {
+	if room < 1 {
+		return x, ""
+	}
+	label = truncateWidth(label, room)
+	pad := (room - stringWidth(label)) / 2
+	return x + pad, label
 }
 
 // EscapeHTML escapes text for error pages.

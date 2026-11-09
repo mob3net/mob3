@@ -27,16 +27,17 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 7 {
+	if len(b.headerHits) != 8 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
 	bookW := stringWidth(" ★ ")
 	histW := stringWidth(" ≡ ")
 	helpW := stringWidth(" ? ")
 	want := []headerHit{
-		{headerBack, 0, 0, 8, 1},
-		{headerReload, 8, 0, 10, 1},
-		{headerHome, 18, 0, 8, 1},
+		{headerBack, 0, 0, 3, 1},
+		{headerForward, 3, 0, 3, 1},
+		{headerReload, 6, 0, 3, 1},
+		{headerHome, 9, 0, 3, 1},
 		{headerBookmarks, b.width - helpW - histW - bookW, 0, bookW, 1},
 		{headerHistory, b.width - helpW - histW, 0, histW, 1},
 		{headerHelp, b.width - helpW, 0, helpW, 1},
@@ -47,11 +48,39 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[5].x+b.headerHits[5].w != b.width {
+	if b.headerHits[6].x+b.headerHits[6].w != b.width {
 		t.Error("help is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
 		t.Errorf("viewport top = %d, want 2 for a two-row bar", top)
+	}
+}
+
+func TestHeaderWideIcons(t *testing.T) {
+	b := NewBrowser(100, 10)
+	drawQuiet(b)
+	widths := map[headerKind]int{}
+	for _, hit := range b.headerHits {
+		widths[hit.kind] = hit.w
+	}
+	if widths[headerForward] != stringWidth(" → ") || widths[headerHome] != stringWidth(" ⌂ ") ||
+		widths[headerReload] != stringWidth(" ⟳ ") {
+		t.Fatalf("forward/reload/home widths = %d/%d/%d",
+			widths[headerForward], widths[headerReload], widths[headerHome])
+	}
+	if widths[headerBack] != stringWidth(" ← Back ") {
+		t.Fatalf("back width = %d", widths[headerBack])
+	}
+}
+
+func TestCenteredLabel(t *testing.T) {
+	x, s := centeredLabel(10, 21, "abc")
+	if x != 19 || s != "abc" {
+		t.Fatalf("centeredLabel = %d,%q", x, s)
+	}
+	x, s = centeredLabel(10, 2, "abcdef")
+	if x != 10 || s != "ab" {
+		t.Fatalf("truncated centeredLabel = %d,%q", x, s)
 	}
 }
 
@@ -529,14 +558,14 @@ func TestScrollRepaintsChrome(t *testing.T) {
 	if b.prev[0] == "stale header" {
 		t.Fatal("scrolling did not force the header to be repainted")
 	}
-	if !strings.Contains(b.prev[0], "Back") {
+	if !strings.Contains(b.prev[0], "←") {
 		t.Fatalf("header line = %q", b.prev[0])
 	}
 
 	// The chrome is rewritten even when nothing changed.
 	b.prev[0] = "stale header"
 	drawQuiet(b)
-	if b.prev[0] == "stale header" || !strings.Contains(b.prev[0], "Back") {
+	if b.prev[0] == "stale header" || !strings.Contains(b.prev[0], "←") {
 		t.Fatal("unchanged header was not repainted")
 	}
 }
@@ -558,6 +587,10 @@ func TestHeaderClicks(t *testing.T) {
 	if b.status != "No previous page" {
 		t.Fatalf("back button status = %q", b.status)
 	}
+	b.HandleMouse(MouseEvent{Button: 0, X: 4, Y: 1, Press: true})
+	if b.status != "No next page" {
+		t.Fatalf("forward button status = %q", b.status)
+	}
 
 	targetCh := make(chan string, 1)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -578,7 +611,7 @@ func TestHeaderClicks(t *testing.T) {
 	}
 
 	b.home = "https://example.com/home"
-	b.HandleMouse(MouseEvent{Button: 0, X: 20, Y: 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: 10, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "https://example.com/home" {
