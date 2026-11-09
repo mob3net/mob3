@@ -947,6 +947,7 @@ exits.</p>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open the JS console</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
+<tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
 </table>
 
 <h2>Forms</h2>

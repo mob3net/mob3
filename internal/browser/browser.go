@@ -70,6 +70,8 @@ type Browser struct {
 
 	lastScroll int
 	usage      procUsage
+	scrollBar  *scrollBarInfo
+	scrollDrag bool
 
 	headerHits []headerHit
 	footerHits []headerHit
@@ -92,6 +94,12 @@ type loadResult struct {
 
 // cellPos is a cell in document coordinates (row 0 is the top of the page).
 type cellPos struct{ X, Y int }
+
+// scrollBarInfo records the page scrollbar track/thumb for mouse hit testing.
+type scrollBarInfo struct {
+	trackTop, trackH int
+	thumbTop, thumbH int
+}
 
 type headerKind int
 
@@ -491,6 +499,53 @@ func (b *Browser) scrollBy(n int) {
 	if !strings.HasPrefix(b.status, "HTTP ") && !strings.HasPrefix(b.status, "Error") {
 		b.status = ""
 	}
+}
+
+// drawScrollBar paints the page scrollbar on the rightmost content column.
+func (b *Browser) drawScrollBar(g *Grid, top, bottom int) {
+	b.scrollBar = nil
+	max := b.maxScroll()
+	vh := bottom - top
+	if max <= 0 || vh < 2 || g.W < 2 {
+		return
+	}
+	thumbH := vh * vh / (vh + max)
+	if thumbH < 1 {
+		thumbH = 1
+	}
+	if thumbH > vh {
+		thumbH = vh
+	}
+	thumbTop := top
+	if vh > thumbH {
+		thumbTop = top + (vh-thumbH)*b.scroll/max
+	}
+	g.Fill(g.W-1, top, 1, vh, RGB(0xdd, 0xe3, 0xea))
+	g.Fill(g.W-1, thumbTop, 1, thumbH, RGB(0x7a, 0x8a, 0x9a))
+	b.scrollBar = &scrollBarInfo{trackTop: top, trackH: vh, thumbTop: thumbTop, thumbH: thumbH}
+}
+
+// scrollBarTo maps a track row to a scroll position, centering the thumb.
+func (b *Browser) scrollBarTo(y int) {
+	info := b.scrollBar
+	if info == nil {
+		return
+	}
+	max := b.maxScroll()
+	rel := y - info.trackTop - info.thumbH/2
+	span := info.trackH - info.thumbH
+	if span <= 0 || max <= 0 {
+		b.scrollBy(-b.scroll)
+		return
+	}
+	if rel < 0 {
+		rel = 0
+	}
+	if rel > span {
+		rel = span
+	}
+	target := rel * max / span
+	b.scrollBy(target - b.scroll)
 }
 
 func (b *Browser) focusedLink() *LinkInfo {
@@ -1216,6 +1271,25 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		return false
 	}
 	top, bottom := b.viewport()
+	if info := b.scrollBar; info != nil && x == b.width-1 && y >= info.trackTop && y < info.trackTop+info.trackH {
+		if ev.Press && ev.Button == 0 {
+			b.scrollDrag = true
+			b.scrollBarTo(y)
+			return false
+		}
+		if ev.Motion && b.scrollDrag {
+			b.scrollBarTo(y)
+			return false
+		}
+	}
+	if b.scrollDrag {
+		if ev.Motion {
+			b.scrollBarTo(y)
+			return false
+		}
+		b.scrollDrag = false
+		return false
+	}
 	if ev.Motion {
 		if b.selecting {
 			b.updateSelection(x, y, top, bottom)
@@ -1523,6 +1597,7 @@ func (b *Browser) draw() {
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
 	b.paintSelection(g, top, bottom)
+	b.drawScrollBar(g, top, bottom)
 
 	headerBG := RGB(0x1f, 0x29, 0x37)
 	footerBG := RGB(0xea, 0xee, 0xf2)

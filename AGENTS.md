@@ -309,7 +309,8 @@ Standard Go layout:
   clears focus. A left click on the URL bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
   mouse forward button goes forward, clicking the footer `>_` icon opens the
-  JS console, and the wheel scrolls three lines. `Esc`
+  JS console, and the wheel scrolls three lines. Long pages show a scrollbar
+  on the right edge: click or drag it to jump through the document. `Esc`
   clears the selection. Selected text is highlight-only for now; clipboard
   copy is undecided.
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a

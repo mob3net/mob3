@@ -548,6 +548,44 @@ func TestFooterUsageDropsOnNarrow(t *testing.T) {
 	}
 }
 
+func TestPageScrollbarMouse(t *testing.T) {
+	b := NewBrowser(20, 10)
+	b.layout = &Layout{Height: 100}
+	drawQuiet(b)
+	if b.scrollBar == nil {
+		t.Fatal("no scrollbar for a long page")
+	}
+	info := b.scrollBar
+	if info.trackTop != 2 || info.trackH != 7 {
+		t.Fatalf("scrollbar track = %+v", info)
+	}
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true})
+	if b.scroll != b.maxScroll() || b.scroll == 0 {
+		t.Fatalf("bottom click scroll = %d, max = %d", b.scroll, b.maxScroll())
+	}
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
+	if b.scroll != 0 {
+		t.Fatalf("top click scroll = %d", b.scroll)
+	}
+
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false})
+	if b.scroll != b.maxScroll() {
+		t.Fatalf("drag scroll = %d, max = %d", b.scroll, b.maxScroll())
+	}
+	if b.scrollDrag {
+		t.Fatal("scrollbar drag did not end")
+	}
+
+	short := NewBrowser(20, 10)
+	short.layout = &Layout{Height: 5}
+	drawQuiet(short)
+	if short.scrollBar != nil {
+		t.Fatal("scrollbar shown for a page that fits")
+	}
+}
+
 func TestFooterConsoleIcon(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.layout = &Layout{Height: 100}
