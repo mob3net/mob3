@@ -202,7 +202,9 @@ head, script, style, title, meta, link, base, template, param, source, track { d
 div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, blockquote, pre,
 table, thead, tbody, tfoot, tr, td, th, form, fieldset, legend, figure,
 figcaption, header, footer, nav, main, section, article, aside, address,
-hr, center, details, summary, dialog, hgroup, search { display:block; }
+hr, center, details, summary, hgroup, search { display:block; }
+dialog { display:none; }
+dialog[open] { display:block; }
 p { margin:8px 0; }
 h1 { font-size:32px; font-weight:bold; margin:8px 0; }
 h2 { font-size:24px; font-weight:bold; margin:8px 0; }

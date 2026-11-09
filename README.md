@@ -60,8 +60,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
   for speed.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
-  handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
-  storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
+  handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
+  same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
   the full console, with top tabs for logs (including the `>` input row and
   its Up/Down history), requests, storage and the raw page HTML.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,

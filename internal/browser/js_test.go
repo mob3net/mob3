@@ -93,6 +93,31 @@ func TestJSDOMInsertBefore(t *testing.T) {
 	}
 }
 
+func TestJSDialogElement(t *testing.T) {
+	page := newJSPage(`<html><body><dialog id="d"><p>body</p></dialog></body></html>`, `
+		var d = document.getElementById("d");
+		var closes = 0;
+		d.addEventListener("close", function () { closes++; });
+		var initiallyOpen = d.open;
+		d.showModal();
+		var opened = d.open;
+		d.close("dismissed");
+		var closed = d.open;
+		var returnValue = d.returnValue;
+		d.show();
+		var reopened = d.open;
+		d.removeAttribute("open");
+		document.title = [initiallyOpen, opened, closed, returnValue,
+			reopened, closes, d.open, d.returnValue].join("|");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "false|true|false|dismissed|true|1|false|dismissed"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
+	}
+}
+
 func TestJSWebAPIs(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `
 		var u = new URL("/search?q=x", "https://example.com/base");

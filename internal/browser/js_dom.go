@@ -150,6 +150,7 @@ func cloneNode(n *Node, deep bool) *Node {
 	c.ImgFailed = n.ImgFailed
 	c.Value = n.Value
 	c.ValueSet = n.ValueSet
+	c.DialogReturnValue = n.DialogReturnValue
 	if deep {
 		for _, ch := range n.Children {
 			cc := cloneNode(ch, true)
@@ -303,6 +304,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 	j.accessor(o, "naturalHeight", func() goja.Value { return j.vm.ToValue(0) }, nil)
 	if n.Tag == "canvas" {
 		j.initCanvasObject(o, n)
+	}
+	if n.Tag == "dialog" {
+		j.initDialogObject(o, n)
 	}
 	vw, vh := j.b.width*8, j.b.height*16
 	metric := func(viewportValue int) func() goja.Value {
@@ -855,6 +859,46 @@ func (j *jsRuntime) newImageData(w, h int) *goja.Object {
 	}
 	_ = img.Set("data", data)
 	return img
+}
+
+// initDialogObject adds the HTMLDialogElement subset pages use to open and
+// dismiss dialogs. MOB³ does not paint a modal backdrop, but tracking the open
+// state keeps the UA dialog rules and close events working.
+func (j *jsRuntime) initDialogObject(o *goja.Object, n *Node) {
+	j.accessor(o, "open", func() goja.Value {
+		return j.vm.ToValue(n.HasAttr("open"))
+	}, func(v goja.Value) {
+		if v.ToBoolean() {
+			setAttr(n, "open", "")
+		} else {
+			removeAttr(n, "open")
+		}
+		j.markDirty()
+	})
+	j.accessor(o, "returnValue", func() goja.Value {
+		return j.vm.ToValue(n.DialogReturnValue)
+	}, func(v goja.Value) {
+		n.DialogReturnValue = v.String()
+	})
+	open := func(goja.FunctionCall) goja.Value {
+		setAttr(n, "open", "")
+		j.markDirty()
+		return goja.Undefined()
+	}
+	j.method(o, "show", open)
+	j.method(o, "showModal", open)
+	j.method(o, "close", func(call goja.FunctionCall) goja.Value {
+		if !n.HasAttr("open") {
+			return goja.Undefined()
+		}
+		if v := call.Argument(0); !goja.IsUndefined(v) && !goja.IsNull(v) {
+			n.DialogReturnValue = v.String()
+		}
+		removeAttr(n, "open")
+		j.markDirty()
+		j.fireNodeEvent(n, "close")
+		return goja.Undefined()
+	})
 }
 
 // implementationObject backs document.implementation. hasFeature reports true

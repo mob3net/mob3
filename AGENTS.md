@@ -455,7 +455,9 @@ Standard Go layout:
   `document.title`/`URL`. Element wrappers use constructor prototypes, so
   `instanceof HTMLElement`, `instanceof HTMLScriptElement`, `instanceof Node`
   and similar checks work; document, text, SVG, `CharacterData` and common HTML
-  element constructors are exposed globally and on `window`.
+  element constructors are exposed globally and on `window`. `<dialog>`
+  elements expose `open`, `returnValue`, `show()`, `showModal()` and `close()`;
+  only dialogs with the `open` attribute render, and `close()` fires `close`.
 - **Events:** `Event`, `CustomEvent`, `UIEvent`, `MouseEvent`, `KeyboardEvent`,
   `FocusEvent`, `InputEvent`, `PointerEvent`, `ErrorEvent`, `MessageEvent` and
   `ProgressEvent` constructors exist; `document.createEvent` returns the
@@ -734,7 +736,9 @@ Standard Go layout:
   missing. Inline SVG falls back to an accessible label if rasterization fails.
   WebP is still unsupported.
 - No CSS variables, animations, transitions, generated content, `@import`, or
-  background images.
+  background images. `<dialog>` open state controls rendering, but modal
+  dialogs are laid out in normal block flow without a backdrop, focus trap or
+  top-layer stacking.
 - Modern CSS-heavy sites may look rough; content-focused pages, docs, and old
   HTML render best.
 - Interactive mode needs a real Linux or macOS terminal. Windows is not a build
@@ -784,6 +788,8 @@ Works well:
   `document.cookie`.
 - Canvas: `getContext("2d")` is a no-op context with the common method surface;
   no pixels and no WebGL.
+- Native `<dialog>` open/close state: `open`, `returnValue`, `show()`,
+  `showModal()` and `close()`.
 - Compatibility shims (`js_compat.go`): `dataset`, `outerHTML`,
   `insertAdjacentElement/Text`, `getAttributeNames`, `toggleAttribute`,
   `compareDocumentPosition`, `normalize`, `focus`/`blur`/`scrollIntoView`,

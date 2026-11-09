@@ -44,6 +44,9 @@ type Node struct {
 	ValueSet     bool
 	InputFocused bool
 
+	// HTMLDialogElement state.
+	DialogReturnValue string
+
 	// Cached class attribute split, reused by selector matching. The raw value
 	// is kept so mutations invalidate the cache without explicit bookkeeping.
 	classRaw    string
