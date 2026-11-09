@@ -21,7 +21,7 @@ func Run(args []string) int {
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
 	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
-	graphics := fs.String("graphics", "auto", "image protocol: auto, kitty, iterm or blocks")
+	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
@@ -69,8 +69,10 @@ func Run(args []string) int {
 	}
 
 	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
+	graphicsMode := ParseGraphicsMode(*graphics)
 	loader := NewLoader()
 	loader.noScripts = *noJS
+	loader.noImages = graphicsMode == GraphicsNone
 	loader.searchURL = *search
 	loader.ignoreBlocks = *ignoreBlocks
 	if *bookmarks != "" {
@@ -138,7 +140,7 @@ func Run(args []string) int {
 		b.noBigText = true
 	}
 	cellW, cellH, _ := terminalCellPixels(os.Stdout)
-	b.gfx = NewGFXRenderer(ParseGraphicsMode(*graphics), cellW, cellH)
+	b.gfx = NewGFXRenderer(graphicsMode, cellW, cellH)
 
 	_, _ = os.Stdout.WriteString("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J\x1b[?1000h\x1b[?1003h\x1b[?1006h")
 	cleanup := func() {

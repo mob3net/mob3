@@ -15,7 +15,6 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 > accounts, enter passwords, make payments, or handle confidential data. Use it
 > at your own risk.
 
-
 ## Try it with Docker:
 
 ```
@@ -57,8 +56,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and
   basic flex rows.
-- PNG/JPEG/GIF/SVG/data-URI images, with kitty or iTerm2 inline graphics and a
-  half-block art fallback.
+- PNG/JPEG/GIF/SVG/data-URI images when enabled with `-graphics` (`auto`,
+  `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
+  for speed.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
   storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens

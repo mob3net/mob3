@@ -37,7 +37,7 @@ func (b *Browser) configItems() []configItem {
 	return []configItem{
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
 		{Flag: "-width", Value: get("-width", strconv.Itoa(b.width)), Note: "startup"},
-		{Flag: "-graphics", Value: get("-graphics", "auto"), Note: "startup"},
+		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},

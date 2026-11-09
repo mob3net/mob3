@@ -79,8 +79,12 @@ type Loader struct {
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
-	imgMu        sync.Mutex
-	imgs         map[string]image.Image
+	// noImages skips external image downloads and inline SVG rasterization.
+	// It is the default so the browser stays fast; -graphics=none keeps it,
+	// and any other graphics mode turns it off.
+	noImages bool
+	imgMu    sync.Mutex
+	imgs     map[string]image.Image
 
 	reqMu    sync.Mutex
 	reqGen   int
@@ -195,8 +199,9 @@ func NewLoader() *Loader {
 		ResponseHeaderTimeout: 20 * time.Second,
 	}
 	return &Loader{
-		imgs:    make(map[string]image.Image),
-		cookies: jar,
+		imgs:     make(map[string]image.Image),
+		cookies:  jar,
+		noImages: true,
 		client: &http.Client{
 			Jar:       jar,
 			Transport: tr,
@@ -819,6 +824,9 @@ func firstSrcset(v string) string {
 }
 
 func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allowFile bool) {
+	if l.noImages {
+		return
+	}
 	ctx = withRequestKind(ctx, "img")
 	imgs := root.FindAll(func(n *Node) bool {
 		return n.Tag == "img" && (n.Attr("src") != "" || n.Attr("srcset") != "")
@@ -919,7 +927,7 @@ disk write.</p>
 <tr><th>Option</th><th>Description</th></tr>
 <tr><td><b>-dump</b></td><td>render the page to stdout and exit</td></tr>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
-<tr><td><b>-graphics</b> string</td><td>image protocol: auto, kitty, iterm or blocks (default "auto")</td></tr>
+<tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
@@ -1108,7 +1116,7 @@ a { color:#0645ad; text-decoration:underline; }
 <div class="logo">MOB³</div>
 <p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
 <p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is saved when MOB³ exits. The only file it writes is the optional <span class="k">-cpuprofile</span> output.</p>
-<p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and shows images inline with kitty or iTerm2 graphics, falling back to half-block art.</p>
+<p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and can show images inline with kitty or iTerm2 graphics, or half-block art. Images are off by default for speed; pass <b>-graphics auto</b> or <b>-graphics blocks</b> to enable them.</p>
 <h3>Getting started</h3>
 <ul>
 <li>Press <b>o</b> and type a URL, then Enter.</li>
@@ -1122,7 +1130,7 @@ a { color:#0645ad; text-decoration:underline; }
 <ul>
 <li>HTML with headings, paragraphs, lists, tables, links, forms (read-only), images.</li>
 <li>CSS: colors, fonts, margins, padding, borders, backgrounds, widths, text alignment, descendant/child selectors, attribute selectors, <span class="k">:first-child</span> and friends.</li>
-<li>Images are decoded and drawn inline with kitty/iTerm2 graphics, with color half-block art as a fallback.</li>
+<li>Images are off by default. Enable them with <b>-graphics auto</b>, <b>-graphics kitty</b>, <b>-graphics iterm</b> or <b>-graphics blocks</b> for half-block art.</li>
 <li>JavaScript runs with goja: DOM updates, click handlers and timers. Use <span class="k">-no-js</span> to turn it off.</li>
 </ul>
 </body></html>`

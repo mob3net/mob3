@@ -10,8 +10,8 @@ import (
 func TestParseGraphicsMode(t *testing.T) {
 	cases := map[string]GraphicsMode{
 		"auto": GraphicsAuto, "": GraphicsAuto, "kitty": GraphicsKitty,
-		"iTerm2": GraphicsITerm, "blocks": GraphicsBlocks, "off": GraphicsBlocks,
-		"nonsense": GraphicsAuto,
+		"iTerm2": GraphicsITerm, "blocks": GraphicsBlocks, "off": GraphicsNone,
+		"none": GraphicsNone, "nonsense": GraphicsAuto,
 	}
 	for in, want := range cases {
 		if got := ParseGraphicsMode(in); got != want {
@@ -21,6 +21,9 @@ func TestParseGraphicsMode(t *testing.T) {
 }
 
 func TestDetectGraphics(t *testing.T) {
+	if got := DetectGraphics(GraphicsNone); got != GraphicsNone {
+		t.Errorf("none = %v, want none", got)
+	}
 	for _, k := range []string{"TMUX", "ZELLIJ", "KITTY_WINDOW_ID", "WEZTERM_PANE", "GHOSTTY_RESOURCES_DIR", "LC_TERMINAL", "TERM_PROGRAM"} {
 		t.Setenv(k, "")
 	}
@@ -238,11 +241,35 @@ func TestSerializeSVGRestoresCamelCase(t *testing.T) {
 	}
 }
 
+func TestInlineSVGSkippedByDefault(t *testing.T) {
+	root := ParseHTML(`<html><body><svg width="20" height="20" aria-label="logo">
+		<rect width="10" height="10" fill="#00ff00"/>
+	</svg></body></html>`)
+	loader := NewLoader()
+	loader.loadInlineSVGs(root)
+	svg := root.FindFirst("svg")
+	if svg == nil || svg.Img != nil {
+		t.Fatal("inline SVG was rasterized even though images are disabled")
+	}
+	ly := BuildLayout(root, nil, 40)
+	var text strings.Builder
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			text.WriteString(f.Text)
+		}
+	}
+	if !strings.Contains(text.String(), "logo") {
+		t.Fatalf("inline SVG label fallback missing: %q", text.String())
+	}
+}
+
 func TestInlineSVGDecoded(t *testing.T) {
 	root := ParseHTML(`<html><body><svg width="20" height="20" viewBox="0 0 10 10">
 		<rect width="10" height="10" fill="#00ff00"/>
 	</svg></body></html>`)
-	NewLoader().loadInlineSVGs(root)
+	loader := NewLoader()
+	loader.noImages = false
+	loader.loadInlineSVGs(root)
 	svg := root.FindFirst("svg")
 	if svg == nil || svg.Img == nil {
 		t.Fatal("inline SVG was not rasterized")

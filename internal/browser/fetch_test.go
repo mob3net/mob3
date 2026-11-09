@@ -265,7 +265,9 @@ func TestLocalPageCanLoadLocalFiles(t *testing.T) {
 	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png"></body></html>`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	page, err := NewLoader().Load("file://"+htmlPath, nil)
+	loader := NewLoader()
+	loader.noImages = false
+	page, err := loader.Load("file://"+htmlPath, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,6 +279,7 @@ func TestLocalPageCanLoadLocalFiles(t *testing.T) {
 
 func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 	loader := NewLoader()
+	loader.noImages = false
 	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
@@ -460,6 +463,7 @@ func TestLoadLocalPageWithImage(t *testing.T) {
 	htmlPath := filepath.Join(dir, "p.html")
 	os.WriteFile(htmlPath, []byte(`<html><head><title>T</title></head><body><p>hi</p><img src="p.png"></body></html>`), 0o644)
 	loader := NewLoader()
+	loader.noImages = false
 	page, err := loader.Load("file://"+htmlPath, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -480,6 +484,47 @@ func TestLoadLocalPageWithImage(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("image fragment missing or wrong size")
+	}
+}
+
+func TestImagesDisabledByDefault(t *testing.T) {
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "p.png")
+	f, err := os.Create(imgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	f.Close()
+	htmlPath := filepath.Join(dir, "page.html")
+	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png" alt="logo"></body></html>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewLoader()
+	page, err := loader.Load("file://"+htmlPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img := page.Root.FindFirst("img"); img == nil || img.Img != nil {
+		t.Fatal("image was loaded even though images are disabled by default")
+	}
+	for _, r := range loader.requestSnapshot() {
+		if r.Kind == "img" {
+			t.Fatalf("image request was made: %+v", r)
+		}
+	}
+	ly := BuildLayout(page.Root, page.Author, 40)
+	var text strings.Builder
+	for _, fr := range ly.Frags {
+		if fr.Kind == fragText {
+			text.WriteString(fr.Text)
+		}
+	}
+	if !strings.Contains(text.String(), "[image: logo]") {
+		t.Fatalf("alt fallback missing from layout: %q", text.String())
 	}
 }
 

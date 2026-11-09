@@ -98,9 +98,11 @@ written in Go
 - **Terminal-only presentation.** There is no GUI toolkit and no native
   window. All output is ANSI/Unicode in the terminal, and a terminal cell is
   the layout unit.
-- **Images.** Native terminal graphics come first — kitty graphics protocol,
-  then iTerm2 inline images — with colored half-block art (`▀`/`▄`) as the
-  fallback. No sixel.
+- **Images.** Images are disabled by default for speed (`-graphics=none`):
+  external image downloads and inline SVG rasterization are skipped, leaving
+  `alt` text or labels. When enabled, native terminal graphics come first —
+  kitty graphics protocol, then iTerm2 inline images — with colored half-block
+  art (`▀`/`▄`) as the fallback. No sixel.
 - Keep it bare-bones but functional: real fetching, parsing, layout, rendering,
   navigation and scrolling.
 
@@ -229,7 +231,10 @@ Standard Go layout:
   are skipped.
 - **Lists:** markers rendered in the list padding area; disc/circle/square,
   decimal, alpha and roman styles.
-- **Images:** intrinsic size in CSS px → cells; CSS/HTML width/height honored;
+- **Images:** disabled by default (`-graphics=none`); no image requests are
+  made and inline SVG is not rasterized, so `alt` text or labels are shown.
+  When images are enabled, intrinsic size in CSS px → cells; CSS/HTML
+  width/height honored;
   aspect ratio preserved; display is capped at 60% of the viewport width and
   24 rows, preserving the ratio; transparency composited over the underlying
   cell;
@@ -245,9 +250,10 @@ Standard Go layout:
   cropped to the visible cell rows. A focused linked image loses its border
   highlight because inline graphics paint above text; the footer still shows
   the target.
-- **Graphics protocol preference:** kitty first, then iTerm2, then half-block
-  art. Selected automatically from environment variables and overridable with
-  `-graphics=auto|kitty|iterm|blocks`. Under tmux/screen/zellij auto-detection
+- **Graphics protocol preference:** default is `none` (no image loading or
+  drawing, for speed). When enabled with `-graphics=auto|kitty|iterm|blocks`,
+  kitty comes first, then iTerm2, then half-block art. Auto is selected from
+  environment variables. Under tmux/screen/zellij auto-detection
   falls back to half-block art because the multiplexer consumes graphics
   escapes unless passthrough is configured.
 - **Graphics encoding:** images are transmitted as PNG (kitty `f=100`, base64;
@@ -260,7 +266,7 @@ Standard Go layout:
   saves/restores the cursor around an inline image sized in cells with
   `preserveAspectRatio=0`. Source images are downscaled to about the terminal
   cell size (default 8×16 px) before encoding. Dump mode always uses half-block
-  art.
+  art for the images that were loaded.
 - **Output robustness:** interactive mode disables terminal autowrap
   (`\x1b[?7l`) and restores it on exit, clips double-width glyphs that would
   cross the right edge, repaints the toolbar and footer every frame, and forces

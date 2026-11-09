@@ -678,6 +678,8 @@ type GraphicsMode int
 const (
 	// GraphicsAuto detects the best protocol from the environment.
 	GraphicsAuto GraphicsMode = iota
+	// GraphicsNone loads and draws no images, which is the fastest default.
+	GraphicsNone
 	// GraphicsBlocks always uses Unicode half-block art.
 	GraphicsBlocks
 	// GraphicsKitty uses the kitty graphics protocol.
@@ -691,7 +693,9 @@ func ParseGraphicsMode(s string) GraphicsMode {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "", "auto":
 		return GraphicsAuto
-	case "blocks", "block", "terminal", "text", "none", "off":
+	case "none", "off", "no", "disabled":
+		return GraphicsNone
+	case "blocks", "block", "terminal", "text":
 		return GraphicsBlocks
 	case "kitty":
 		return GraphicsKitty
@@ -1161,6 +1165,9 @@ func decodeSVG(data []byte) (image.Image, error) {
 // loadInlineSVGs rasterizes inline <svg> elements into their Node.Img field so
 // layout can treat them as images.
 func (l *Loader) loadInlineSVGs(root *Node) {
+	if l.noImages {
+		return
+	}
 	nodes := root.FindAll(func(n *Node) bool { return n.Tag == "svg" })
 	for _, n := range nodes {
 		if n.Img != nil || n.ImgFailed {
