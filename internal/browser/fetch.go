@@ -966,10 +966,11 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>
+<tr><td>click/drag in the URL prompt</td><td>place the caret / select text</td></tr>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
-<tr><td>click the footer &gt;_ icon</td><td>open the JS console</td></tr>
+<tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console pane</td><td>switch panes; Shift-drag selects text</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
@@ -1006,8 +1007,9 @@ supported.</p>
 current page's requests. The view splits into the console log on top and a
 Requests pane at the bottom. Click either pane (or use <b>Tab</b>) to make it
 active; the active pane's heading turns blue. <b>j</b>/<b>k</b> and the wheel
-scroll the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b> or
-<b>!</b> closes, and <b>q</b> quits. Request URLs are shown as plain text (not
+scroll the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b>,
+<b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b> quits. Request
+URLs are shown as plain text (not
 clickable). Because clicking is used to switch panes, use <b>Shift</b>-drag for
 terminal text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal

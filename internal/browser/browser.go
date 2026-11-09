@@ -52,6 +52,10 @@ type Browser struct {
 	promptText      string
 	promptCursor    int
 	promptSelectAll bool
+	promptSelStart  int
+	promptSelEnd    int
+	promptDragStart int
+	promptDragging  bool
 
 	color   bool
 	prev    []string
@@ -946,7 +950,9 @@ func (b *Browser) openURLPrompt() {
 		b.promptText = b.url.String()
 	}
 	b.promptCursor = len(b.promptText)
-	b.promptSelectAll = true
+	b.promptSelStart, b.promptSelEnd = 0, len(b.promptText)
+	b.promptSelectAll = len(b.promptText) > 0
+	b.promptDragging = false
 	b.status = ""
 }
 
@@ -981,13 +987,11 @@ func (b *Browser) handlePromptKey(k string) bool {
 	if cur > len(text) {
 		cur = len(text)
 	}
+	selStart, selEnd, hasSel := b.promptSelectionBounds()
 	switch k {
 	case "enter":
 		text = strings.TrimSpace(text)
-		b.prompt = false
-		b.promptText = ""
-		b.promptCursor = 0
-		b.promptSelectAll = false
+		b.closeURLPrompt()
 		if text != "" {
 			b.Navigate(text, true)
 		}
@@ -997,46 +1001,47 @@ func (b *Browser) handlePromptKey(k string) bool {
 		b.status = exitHint
 		return false
 	case "left":
-		if b.promptSelectAll {
-			cur = 0
-			b.promptSelectAll = false
+		if hasSel {
+			cur = selStart
+			b.clearPromptSelection()
 		} else {
 			cur = prevRuneBoundary(text, cur)
 		}
 	case "right":
-		if b.promptSelectAll {
-			cur = len(text)
-			b.promptSelectAll = false
+		if hasSel {
+			cur = selEnd
+			b.clearPromptSelection()
 		} else {
 			cur = nextRuneBoundary(text, cur)
 		}
 	case "home":
 		cur = 0
-		b.promptSelectAll = false
+		b.clearPromptSelection()
 	case "end":
 		cur = len(text)
-		b.promptSelectAll = false
+		b.clearPromptSelection()
 	case "ctrl-a":
-		b.promptSelectAll = true
 		cur = len(text)
+		b.promptSelStart, b.promptSelEnd = 0, len(text)
+		b.promptSelectAll = len(text) > 0
 	case "ctrl-e":
 		cur = len(text)
-		b.promptSelectAll = false
+		b.clearPromptSelection()
 	case "backspace":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
+		if hasSel {
+			text = text[:selStart] + text[selEnd:]
+			cur = selStart
+			b.clearPromptSelection()
 		} else if cur > 0 {
 			prev := prevRuneBoundary(text, cur)
 			text = text[:prev] + text[cur:]
 			cur = prev
 		}
 	case "delete":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
+		if hasSel {
+			text = text[:selStart] + text[selEnd:]
+			cur = selStart
+			b.clearPromptSelection()
 		} else if cur < len(text) {
 			next := nextRuneBoundary(text, cur)
 			text = text[:cur] + text[next:]
@@ -1044,20 +1049,20 @@ func (b *Browser) handlePromptKey(k string) bool {
 	case "ctrl-u":
 		text = ""
 		cur = 0
-		b.promptSelectAll = false
+		b.clearPromptSelection()
 	case "ctrl-k":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
+		if hasSel {
+			text = text[:selStart] + text[selEnd:]
+			cur = selStart
+			b.clearPromptSelection()
 		} else {
 			text = text[:cur]
 		}
 	case "ctrl-w":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
+		if hasSel {
+			text = text[:selStart] + text[selEnd:]
+			cur = selStart
+			b.clearPromptSelection()
 			break
 		}
 		before := strings.TrimRight(text[:cur], " ")
@@ -1068,19 +1073,16 @@ func (b *Browser) handlePromptKey(k string) bool {
 		text = text[:cut] + text[cur:]
 		cur = cut
 	case "ctrl-c":
-		b.prompt = false
-		b.promptText = ""
-		b.promptCursor = 0
-		b.promptSelectAll = false
+		b.closeURLPrompt()
 		return false
 	default:
 		if utf8.RuneCountInString(k) == 1 {
 			r, _ := utf8.DecodeRuneInString(k)
 			if r >= 32 && r != 127 {
-				if b.promptSelectAll {
-					text = k
-					cur = len(k)
-					b.promptSelectAll = false
+				if hasSel {
+					text = text[:selStart] + k + text[selEnd:]
+					cur = selStart + len(k)
+					b.clearPromptSelection()
 				} else {
 					text = text[:cur] + k + text[cur:]
 					cur += len(k)
@@ -1101,7 +1103,198 @@ func (b *Browser) closeURLPrompt() {
 	b.prompt = false
 	b.promptText = ""
 	b.promptCursor = 0
+	b.clearPromptSelection()
+	b.promptDragging = false
+}
+
+// promptSelectionBounds returns the selected byte range, normalized, and
+// whether a non-empty selection exists.
+func (b *Browser) promptSelectionBounds() (int, int, bool) {
+	text := b.promptText
+	if b.promptSelectAll {
+		if len(text) == 0 {
+			return 0, 0, false
+		}
+		return 0, len(text), true
+	}
+	a, c := b.promptSelStart, b.promptSelEnd
+	if a < 0 {
+		a = 0
+	}
+	if c < 0 {
+		c = 0
+	}
+	if a > len(text) {
+		a = len(text)
+	}
+	if c > len(text) {
+		c = len(text)
+	}
+	if a > c {
+		a, c = c, a
+	}
+	return a, c, a != c
+}
+
+// setPromptSelection selects a byte range for a mouse drag.
+func (b *Browser) setPromptSelection(start, end int) {
+	text := b.promptText
+	if start < 0 {
+		start = 0
+	}
+	if end < 0 {
+		end = 0
+	}
+	if start > len(text) {
+		start = len(text)
+	}
+	if end > len(text) {
+		end = len(text)
+	}
+	if start > end {
+		start, end = end, start
+	}
+	b.promptSelStart, b.promptSelEnd = start, end
 	b.promptSelectAll = false
+}
+
+func (b *Browser) clearPromptSelection() {
+	b.promptSelectAll = false
+	b.promptSelStart = 0
+	b.promptSelEnd = 0
+}
+
+// promptWindow returns the visible rune range for the URL text and the cursor
+// rune position. cur is -1 for the full-selection view, which shows the tail of
+// a long URL without a cursor.
+func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []rune, start, end, cur int) {
+	runes = []rune(text)
+	if contentW < 1 {
+		return runes, 0, 0, 0
+	}
+	if selectAll {
+		visible := text
+		if stringWidth(visible) > contentW {
+			visible = tailWidth(visible, contentW)
+		}
+		start = len(runes) - utf8.RuneCountInString(visible)
+		return runes, start, len(runes), -1
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor > len(text) {
+		cursor = len(text)
+	}
+	cur = utf8.RuneCountInString(text[:cursor])
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(runes) {
+		cur = len(runes)
+	}
+	start = cur
+	used := 0
+	for start > 0 {
+		rw := runeWidth(runes[start-1])
+		if used+rw > contentW-1 {
+			break
+		}
+		used += rw
+		start--
+	}
+	after := cur
+	if cur < len(runes) {
+		after = cur + 1
+	}
+	used++
+	end = after
+	for end < len(runes) {
+		rw := runeWidth(runes[end])
+		if used+rw > contentW {
+			break
+		}
+		used += rw
+		end++
+	}
+	return runes, start, end, cur
+}
+
+func runeIndexToByte(runes []rune, i int) int {
+	if i <= 0 {
+		return 0
+	}
+	if i > len(runes) {
+		i = len(runes)
+	}
+	return len(string(runes[:i]))
+}
+
+// promptOffsetAt maps a cell inside the URL field to a byte offset in the
+// prompt text, using the same visible window that is currently drawn.
+func (b *Browser) promptOffsetAt(x, width int) int {
+	prefixW := stringWidth(" Open: ")
+	contentW := width - prefixW
+	if contentW < 1 {
+		return 0
+	}
+	rel := x - prefixW
+	if rel <= 0 {
+		return 0
+	}
+	runes, start, end, cur := promptWindow(b.promptText, b.promptCursor, contentW, b.promptSelectAll)
+	used := 0
+	for i := start; i < end; i++ {
+		if i == cur {
+			if rel < used+1 {
+				return runeIndexToByte(runes, i)
+			}
+			used++
+			continue
+		}
+		rw := runeWidth(runes[i])
+		if rel < used+rw {
+			return runeIndexToByte(runes, i)
+		}
+		used += rw
+	}
+	return runeIndexToByte(runes, end)
+}
+
+// drawPromptSelection draws the URL prompt text with the current non-global
+// mouse/keyboard selection highlighted.
+func (b *Browser) drawPromptSelection(g *Grid, x, y, width int, st *Style, fg, bg Color) {
+	prefix := " Open: "
+	prefixW := stringWidth(prefix)
+	g.Text(x, y, prefix, st, fg)
+	contentW := width - prefixW
+	if contentW < 1 {
+		return
+	}
+	runes, start, end, cur := promptWindow(b.promptText, b.promptCursor, contentW, false)
+	selStart, selEnd, hasSel := b.promptSelectionBounds()
+	ss := utf8.RuneCountInString(b.promptText[:selStart])
+	se := utf8.RuneCountInString(b.promptText[:selEnd])
+	selBG := RGB(0x2f, 0x6f, 0xbf)
+	cursorFG := RGB(0xff, 0xff, 0xff)
+	cursorBG := RGB(0x2f, 0x6f, 0xbf)
+	xx := x + prefixW
+	for i := start; i < end; i++ {
+		if i == cur {
+			g.Put(xx, y, ' ', st, cursorFG, cursorBG)
+			xx++
+			continue
+		}
+		charBG := bg
+		if hasSel && i >= ss && i < se {
+			charBG = selBG
+		}
+		g.Put(xx, y, runes[i], st, fg, charBG)
+		xx += runeWidth(runes[i])
+	}
+	if cur == len(runes) && cur >= start {
+		g.Put(xx, y, ' ', st, cursorFG, cursorBG)
+	}
 }
 
 // promptParts splits the visible URL field around the cursor. The cursor is an
@@ -1317,17 +1510,42 @@ func (b *Browser) clickContent(x, docY int) {
 // browser should quit.
 func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if b.prompt {
-		// Clicking the URL field keeps editing; a press anywhere else closes
-		// the prompt like Escape. Motion and wheel events are ignored.
-		if ev.Motion || ev.Wheel != 0 || !ev.Press {
-			return false
-		}
 		x := ev.X - 1
 		y := ev.Y - 1
-		for _, hit := range b.headerHits {
-			if hit.kind == headerURL && x >= hit.x && x < hit.x+hit.w && y >= hit.y && y < hit.y+hit.h {
-				return false
+		if ev.Wheel != 0 {
+			return false
+		}
+		urlHit := func() (headerHit, bool) {
+			for _, hit := range b.headerHits {
+				if hit.kind == headerURL && x >= hit.x && x < hit.x+hit.w && y >= hit.y && y < hit.y+hit.h {
+					return hit, true
+				}
 			}
+			return headerHit{}, false
+		}
+		if ev.Motion {
+			if b.promptDragging {
+				if hit, ok := urlHit(); ok {
+					off := b.promptOffsetAt(x-hit.x, hit.w)
+					b.setPromptSelection(b.promptDragStart, off)
+					b.promptCursor = off
+					b.status = ""
+				}
+			}
+			return false
+		}
+		if !ev.Press {
+			b.promptDragging = false
+			return false
+		}
+		if hit, ok := urlHit(); ok {
+			off := b.promptOffsetAt(x-hit.x, hit.w)
+			b.clearPromptSelection()
+			b.promptCursor = off
+			b.promptDragStart = off
+			b.promptDragging = ev.Button == MouseButtonLeft
+			b.status = ""
+			return false
 		}
 		b.closeURLPrompt()
 		b.status = exitHint
@@ -1796,16 +2014,20 @@ func (b *Browser) draw() {
 			}
 			g.Fill(x, y, width, 1, fieldBG)
 			if b.prompt {
-				head, at, tail, show := promptParts(" Open: ", b.promptText, b.promptCursor, b.promptSelectAll, width)
-				g.Text(x, y, head, hs, headerFG)
-				cx := x + stringWidth(head)
-				if show {
-					cursorFG := RGB(0xff, 0xff, 0xff)
-					cursorBG := RGB(0x2f, 0x6f, 0xbf)
-					g.Put(cx, y, at, &Style{Bold: true}, cursorFG, cursorBG)
-					cx++
+				if b.promptSelectAll {
+					head, at, tail, show := promptParts(" Open: ", b.promptText, b.promptCursor, true, width)
+					g.Text(x, y, head, hs, headerFG)
+					cx := x + stringWidth(head)
+					if show {
+						cursorFG := RGB(0xff, 0xff, 0xff)
+						cursorBG := RGB(0x2f, 0x6f, 0xbf)
+						g.Put(cx, y, at, &Style{Bold: true}, cursorFG, cursorBG)
+						cx++
+					}
+					g.Text(cx, y, tail, hs, headerFG)
+				} else {
+					b.drawPromptSelection(g, x, y, width, hs, headerFG, fieldBG)
 				}
-				g.Text(cx, y, tail, hs, headerFG)
 			} else {
 				u := ""
 				if b.url != nil {

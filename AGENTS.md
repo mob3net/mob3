@@ -312,7 +312,9 @@ Standard Go layout:
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
   Clicking the URL field keeps the prompt open; a press anywhere else closes
-  it the same way Escape does.
+  it the same way Escape does. Inside the prompt, a click places the caret and
+  a mouse drag selects a text range that typing, Backspace/Delete, Ctrl-K and
+  Ctrl-W replace or remove.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
@@ -338,11 +340,12 @@ Standard Go layout:
   and release keeps the highlight. A press and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus. While the URL prompt is open, a click on its field keeps it
-  open and a click anywhere else closes it. A left click on the URL bar opens
+  open and a click anywhere else closes it; clicking inside it positions the
+  caret, and dragging selects URL text. A left click on the URL bar opens
   the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `>_` icon opens the
-  JS console, and the wheel scrolls three lines. Long pages show a scrollbar
+  mouse forward button goes forward, clicking the footer `>_` icon toggles the
+  JS console (and closes it while open), and the wheel scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
   clears the selection. Selected text is highlight-only for now; clipboard
   copy is undecided.
@@ -364,7 +367,8 @@ Standard Go layout:
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
   (`MEM 18 MB`), the scroll percentage and a clickable `>_` console icon pinned
-  to the far right edge. The icon toggles the JS console. The error hint clears
+  to the far right edge. The icon toggles the JS console and stays visible and
+  clickable inside the console view. The error hint clears
   when the JS console opens or a new page loads, and drops before memory on
   narrow terminals. The readout refreshes every two seconds.
   Memory is `/proc/self/statm` RSS on Linux
@@ -383,7 +387,9 @@ Standard Go layout:
   normal browser address bar; Backspace clears the selection first. The prompt
   has a real cursor: Left/Right, Home/End move it, Backspace/Delete remove
   around it, Ctrl-A selects all, Ctrl-K deletes to the end, Ctrl-U clears and
-  Ctrl-W deletes the previous word. The caret is an overlay block cursor, not
+  Ctrl-W deletes the previous word. A mouse click places the caret and a drag
+  selects a byte range; the same editing keys replace or remove that selection.
+  The caret is an overlay block cursor, not
   an inserted cell, so moving it never shifts the URL text. Existing local paths become `file://`;
   bare host-like input becomes `https://`; `host:port` becomes `http://`;
   relative references against a base only for `/`, `./`, `../`, `#`, `?`.
@@ -461,7 +467,9 @@ Standard Go layout:
   active pane (plain terminal drag-selection needs the Shift override). `Tab`
   also switches which pane `j/k`/`g/G` and the wheel scroll, while the heading
   of the active pane (the logs title or the Requests separator) is highlighted
-  blue. `Esc`/`!` close and `q` quits.
+  blue. `Esc`/`!` close and `q` quits. The footer keeps its clickable `>_`
+  icon while the console is open; clicking it closes the console the same way
+  `Esc` does (including the usual exit hint).
   Requests list status, method, size, kind and URL (plain text, not clickable)
   for the page, CSS, scripts, images, `fetch` and XHR; the list is in memory
   only, resets on navigation and is capped at the latest 512 entries. Timers

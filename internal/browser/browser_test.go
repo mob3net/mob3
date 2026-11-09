@@ -1479,6 +1479,33 @@ func TestConsoleClickSwitchesPane(t *testing.T) {
 	}
 }
 
+func TestConsoleFooterIconClosesConsole(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	if !strings.HasSuffix(b.prev[19], ">_") {
+		t.Fatalf("console footer missing >_ icon: %q", b.prev[19])
+	}
+	found := false
+	for _, hit := range b.footerHits {
+		if hit.kind == headerConsole && hit.y == 19 && hit.x+hit.w == 60 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("console footer icon has no click region: %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 60, Y: 20, Press: true})
+	})
+	if b.consoleOpen {
+		t.Fatal("clicking the footer icon left the console open")
+	}
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want %q", b.status, exitHint)
+	}
+}
+
 func TestConsoleActivePaneHeadingHighlight(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.color = true
@@ -1613,5 +1640,52 @@ func TestClickInURLPromptKeepsItOpen(t *testing.T) {
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 2, Press: true})
 	if !b.prompt {
 		t.Fatal("click on the URL field closed the prompt")
+	}
+}
+
+func TestURLPromptMouseDragSelectsText(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.url = mustParse(t, "https://example.com/page")
+	b.layout = &Layout{Height: 10}
+	b.openURLPrompt()
+	drawQuiet(b)
+
+	prefixW := stringWidth(" Open: ")
+	startX := prefixW + 5 + 1 // 1-based terminal X
+	endX := prefixW + 10 + 1
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: startX, Y: 2, Press: true})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: endX, Y: 2, Motion: true})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: endX, Y: 2, Press: false})
+	if b.promptSelStart != 5 || b.promptSelEnd != 10 {
+		t.Fatalf("selection = %d..%d, want 5..10", b.promptSelStart, b.promptSelEnd)
+	}
+	if b.promptSelectAll {
+		t.Fatal("drag selection was treated as select-all")
+	}
+	want := b.promptText[:5] + "X" + b.promptText[10:]
+	b.HandleKey("X")
+	if b.promptText != want {
+		t.Fatalf("typing over drag selection = %q, want %q", b.promptText, want)
+	}
+	if b.promptSelStart != b.promptSelEnd {
+		t.Fatal("typing did not clear the drag selection")
+	}
+}
+
+func TestURLPromptMouseClickPlacesCursor(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.url = mustParse(t, "https://example.com/page")
+	b.layout = &Layout{Height: 10}
+	b.openURLPrompt()
+	drawQuiet(b)
+
+	prefixW := stringWidth(" Open: ")
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: prefixW + 4 + 1, Y: 2, Press: true})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: prefixW + 4 + 1, Y: 2, Press: false})
+	if b.promptCursor != 4 {
+		t.Fatalf("cursor = %d, want 4", b.promptCursor)
+	}
+	if b.promptSelStart != b.promptSelEnd {
+		t.Fatal("click created a selection")
 	}
 }

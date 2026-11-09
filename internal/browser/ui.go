@@ -48,6 +48,15 @@ func (b *Browser) toggleConsole() {
 	b.draw()
 }
 
+// closeConsole closes the console like Escape does, leaving the usual exit hint.
+func (b *Browser) closeConsole() {
+	if !b.consoleOpen {
+		return
+	}
+	b.status = exitHint
+	b.toggleConsole()
+}
+
 func (b *Browser) handleConsoleKey(k string) bool {
 	scroll := func(delta int) {
 		if b.consolePane == 1 {
@@ -269,6 +278,15 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 		return
 	}
 	if y == l.footerY {
+		for _, hit := range b.footerHits {
+			if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
+				continue
+			}
+			if hit.kind == headerConsole {
+				b.closeConsole()
+				return
+			}
+		}
 		return
 	}
 	b.consolePane = l.paneAt(y)
@@ -286,6 +304,7 @@ func (b *Browser) drawConsole(w, h int) {
 		headerBG = activeBG
 	}
 	g.Fill(0, 0, w, 1, headerBG)
+	b.footerHits = b.footerHits[:0]
 	if h >= 2 {
 		g.Fill(0, h-1, w, 1, ftrBG)
 	}
@@ -328,9 +347,24 @@ func (b *Browser) drawConsole(w, h int) {
 		drawPane(reqs, b.reqScroll, l.sepY+1, l.reqRows)
 	}
 	if h >= 2 {
+		icon := ">_"
+		iconW := stringWidth(icon)
+		reserve := 0
+		if w >= 6 {
+			reserve = iconW + 2
+		}
+		hintW := w - reserve
+		if hintW < 1 {
+			hintW = 1
+		}
 		hint := " Tab/click: switch · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
-		g.Text(0, h-1, padWidth(truncateWidth(hint, w), w),
+		g.Text(0, h-1, padWidth(truncateWidth(hint, hintW), hintW),
 			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
+		if reserve > 0 {
+			iconStyle := &Style{Bold: true, Color: RGB(0x8a, 0xc4, 0xff), FontSize: 16, LineHeight: 1}
+			g.Text(w-iconW, h-1, icon, iconStyle, iconStyle.Color)
+			b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: h - 1, w: iconW, h: 1})
+		}
 	}
 	b.flushGrid(g, nil)
 }
