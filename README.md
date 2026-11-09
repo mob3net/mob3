@@ -1,23 +1,20 @@
+# MOB³ is a compact, self-contained browser for the terminal
+
+Written in Go, it combines its own HTML parser, CSS cascade and layout engine, ANSI renderer and pure-Go JavaScript runtime to display real web pages, including inline images, without a GUI toolkit or persistent profile. History, cookies, storage and caches live in memory only: closing MOB³ saves nothing.
+
+
 <p align="center">
   <img width="400" alt="image" src="https://interactive32.com/images/mob3.png?ref=github.com/mob3net/mob3" />
 </p>
 
-
-# MOB³ - Because browsers got too complicated
-
-> **⚠ Warning: MOB³ is not a secure browser in any way.**
+## Warning
+> **MOB³ is not a secure browser in any way.**
 > It has no sandboxing, process isolation, site isolation, CSP enforcement,
 > certificate UI or security hardening, and it has not been audited. Page
 > JavaScript runs in a hobby-grade engine. Do not use MOB³ to log in to
 > accounts, enter passwords, make payments, or handle confidential data. Use it
 > at your own risk.
 
-MOB³ is a small web browser for the terminal, written in Go. It fetches pages
-over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and shows
-images inline. JavaScript runs through a built-in pure-Go engine.
-
-History, cookies, storage and caches live in memory only: closing MOB³ saves
-nothing.
 
 ## Try it with Docker:
 
