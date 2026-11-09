@@ -433,8 +433,8 @@ Standard Go layout:
   handing work back. Do not reformat files under `vendor/`.
 - Interactive mode is supported on Linux (`term_linux.go`) and macOS
   (`term_darwin.go`), sharing key decoding from `term_unix.go`; other platforms
-  fall back to dump output. The project must still cross-compile for Darwin and
-  Windows.
+  fall back to dump output. Windows is not a build target; Windows users run
+  the Linux binary under WSL.
 - Keep the binary out of layout decisions: it may be committed/present locally,
   but `make clean` removes it.
 - The Git tag (`vX.Y.Z`) is the release version source of truth.
@@ -460,14 +460,13 @@ Standard Go layout:
 - Releases are built by `.github/workflows/release.yml` on any `v*` tag push,
   not on `release: published`, because release-triggered workflows run from the
   default branch. The workflow checks gofmt, `go vet` and tests first, then
-  builds eight targets with vendored dependencies and `CGO_ENABLED=0`: Linux
-  386/amd64/armv6/armv7/arm64, macOS amd64/arm64 and Windows amd64.
-- Release assets are named `mob3_<tag>_<os>_<platform>.tar.gz` (`.zip` on
-  Windows) and include `SHA256SUMS`. Linux and macOS archives contain `mob3`;
-  the Windows archive contains `mob3.exe`. The release job verifies that exactly
-  eight archives were produced, creates the GitHub release from the tag with
-  generated notes when it is missing, and uploads with `--clobber` so re-runs
-  replace assets. The release job checks out full history so
+  builds seven targets with vendored dependencies and `CGO_ENABLED=0`: Linux
+  386/amd64/armv6/armv7/arm64 and macOS amd64/arm64.
+- Release assets are named `mob3_<tag>_<os>_<platform>.tar.gz` and include
+  `SHA256SUMS`. Every archive contains `mob3`. The release job verifies that
+  exactly seven archives were produced, creates the GitHub release from the tag
+  with generated notes when it is missing, and uploads with `--clobber` so
+  re-runs replace assets. The release job checks out full history so
   `gh release create --generate-notes` can find tags.
 - `.github/workflows/docker.yml` runs after the `Release binaries` workflow
   completes successfully (`workflow_run`) and publishes a multi-arch image to
@@ -476,16 +475,14 @@ Standard Go layout:
   It resolves the tag from the triggering run and uses `GITHUB_TOKEN` with
   `packages: write`. The first GHCR package is private by default; making it
   public is a manual repository setting.
-- Release jobs use native runners (Ubuntu, macOS, Windows) so signing tools are
+- Release jobs use native runners (Ubuntu, macOS) so signing tools are
   available. Signing is optional and driven by repository secrets; missing
   secrets publish unsigned archives rather than failing the release. macOS uses
   a Developer ID certificate plus `codesign` and optional `notarytool`
   notarization from `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`,
   `MACOS_KEYCHAIN_PASSWORD`, `MACOS_SIGNING_IDENTITY` (first valid identity when
   unset), `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID` and
-  `MACOS_NOTARY_PASSWORD`. Windows uses Authenticode via
-  `Set-AuthenticodeSignature` from `WINDOWS_CERT_PFX_BASE64` and
-  `WINDOWS_CERT_PASSWORD`.
+  `MACOS_NOTARY_PASSWORD`.
 
 ## 8. Known limitations (accepted)
 
@@ -524,8 +521,8 @@ Standard Go layout:
   background images.
 - Modern CSS-heavy sites may look rough; content-focused pages, docs, and old
   HTML render best.
-- Interactive mode needs a real Linux or macOS terminal; Windows runs in dump
-  mode.
+- Interactive mode needs a real Linux or macOS terminal. Windows is not a build
+  target; use WSL.
 
 ## 9. Change protocol for agents
 

@@ -49,8 +49,8 @@ mkdir -p bin && CGO_ENABLED=0 go build -o bin/mob3 ./cmd/mob3
 
 The result is a single static binary. Dependencies are vendored under
 `vendor/`, so the build needs no network access. Interactive mode runs on Linux
-and macOS terminals; Windows currently uses dump mode. When stdin/stdout are
-not a terminal, MOB³ automatically falls back to dump mode.
+and macOS terminals. Windows is not a build target; use WSL. When stdin/stdout
+are not a terminal, MOB³ automatically falls back to dump mode.
 
 ## Versioning
 
@@ -115,12 +115,11 @@ plus a `SHA256SUMS` file to the GitHub release for that tag:
 
 - Linux: 386, amd64, armv6, armv7 and arm64 (`.tar.gz`)
 - macOS: amd64 and arm64 (`.tar.gz`)
-- Windows: amd64 (`.zip`)
 
-Assets are named `mob3_<tag>_<os>_<platform>.tar.gz` (or `.zip` on Windows),
-for example `mob3_v1.0.0_linux_armv6.tar.gz`. Extract the archive and run
-`./mob3` (`mob3.exe` on Windows). Windows and macOS binaries are code-signed
-when release signing is configured; otherwise they are published unsigned.
+Assets are named `mob3_<tag>_<os>_<platform>.tar.gz`, for example
+`mob3_v1.0.0_linux_armv6.tar.gz`. Extract the archive and run `./mob3`. macOS
+binaries are code-signed when release signing is configured; otherwise they are
+published unsigned.
 
 Pushing the tag is enough: if no GitHub release exists for it, the workflow
 creates one with generated notes, then attaches the archives. You can still
@@ -292,7 +291,8 @@ MOB³ is a cell-based renderer, not a pixel browser:
 - No tabs or downloads. Forms support text entry and urlencoded GET/POST;
   multipart forms, selects, file uploads and checkbox/radio toggling are not
   supported. No certificate or proxy UI.
-- Interactive mode requires a Linux or macOS terminal; Windows supports `-dump`.
+- Interactive mode requires a Linux or macOS terminal. Windows is not supported
+  directly; use WSL.
 
 ## Tests
 

@@ -2,27 +2,26 @@
 #
 # A `v*` tag builds every released platform and attaches one archive per
 # platform plus a `SHA256SUMS` file to the GitHub release for that tag. Linux
-# and macOS get `.tar.gz`, Windows gets `.zip` — the same convention Go uses
-# for its own releases, and the one each platform handles natively. This is
-# triggered by the tag rather than by `release: published` on purpose: GitHub
-# runs release-triggered workflows from the default branch, so a workflow that
-# lives on `main` would not run until it reached `main`. A tag runs the
-# workflow from the tagged commit.
+# and macOS archives are `.tar.gz`, the same convention Go uses for its own
+# releases. This is triggered by the tag rather than by `release: published` on
+# purpose: GitHub runs release-triggered workflows from the default branch, so
+# a workflow that lives on `main` would not run until it reached `main`. A tag
+# runs the workflow from the tagged commit.
 #
 # Publishing a release in the web interface creates the tag and the release
 # together, and the order is not guaranteed. The job builds first and creates
 # the release from the tag with generated notes if it does not exist yet, then
 # uploads the archives. A tag push on its own is therefore enough.
 #
-# The archives are named `mob3_<tag>_<os>_<platform>.tar.gz` (`zip` on
-# Windows), for example `mob3_v1.0.0_linux_armv6.tar.gz`. `armv6` and `armv7`
-# are spelled out because a slash is not allowed in an asset name. The Windows
-# archive holds `mob3.exe`; every other archive holds `mob3`.
+# The archives are named `mob3_<tag>_<os>_<platform>.tar.gz`, for example
+# `mob3_v1.0.0_linux_armv6.tar.gz`. `armv6` and `armv7` are spelled out because
+# a slash is not allowed in an asset name. Windows is not a build target; use
+# WSL.
 #
-# Windows and macOS signing is optional and only runs when the corresponding
-# repository secrets are configured. Without them the archives are published
-# unsigned. See AGENTS.md for the secret names and README.md for the user-facing
-# install instructions.
+# macOS signing is optional and only runs when the corresponding repository
+# secrets are configured. Without them the archives are published unsigned.
+# See AGENTS.md for the secret names and README.md for the user-facing install
+# instructions.
 
 name: Release binaries
 
@@ -82,44 +81,32 @@ jobs:
             goos: linux
             goarch: 386
             platform: 386
-            ext: ""
           - runner: ubuntu-latest
             goos: linux
             goarch: amd64
             platform: amd64
-            ext: ""
           - runner: ubuntu-latest
             goos: linux
             goarch: arm
             goarm: "6"
             platform: armv6
-            ext: ""
           - runner: ubuntu-latest
             goos: linux
             goarch: arm
             goarm: "7"
             platform: armv7
-            ext: ""
           - runner: ubuntu-latest
             goos: linux
             goarch: arm64
             platform: arm64
-            ext: ""
           - runner: macos-latest
             goos: darwin
             goarch: amd64
             platform: amd64
-            ext: ""
           - runner: macos-latest
             goos: darwin
             goarch: arm64
             platform: arm64
-            ext: ""
-          - runner: windows-latest
-            goos: windows
-            goarch: amd64
-            platform: amd64
-            ext: ".exe"
 
     runs-on: ${{ matrix.runner }}
     env:
@@ -130,8 +117,6 @@ jobs:
       MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
       MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
       MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
-      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -147,14 +132,13 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
-          EXT: ${{ matrix.ext }}
           VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist/stage
           CGO_ENABLED=0 go build -trimpath -buildvcs=false \
             -ldflags "-s -w -X browser/internal/browser.Version=${VERSION}" \
-            -o "dist/stage/mob3${EXT}" ./cmd/mob3
+            -o dist/stage/mob3 ./cmd/mob3
 
       - name: Sign macOS binary (optional)
         if: matrix.goos == 'darwin' && env.MACOS_CERT_P12_BASE64 != ''
@@ -188,34 +172,7 @@ jobs:
             --keychain "$keychain" --sign "$identity" dist/stage/mob3
           codesign --verify --strict --verbose=2 dist/stage/mob3
 
-      - name: Sign Windows binary (optional)
-        if: matrix.goos == 'windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
-          try {
-            [IO.File]::WriteAllBytes(
-              $pfx,
-              [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64)
-            )
-            $password = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
-            $cert = Import-PfxCertificate -FilePath $pfx `
-              -CertStoreLocation Cert:\CurrentUser\My -Password $password
-            $signature = Set-AuthenticodeSignature `
-              -FilePath "dist/stage/mob3.exe" `
-              -Certificate $cert `
-              -HashAlgorithm SHA256 `
-              -TimestampServer "http://timestamp.digicert.com"
-            if ($signature.Status -ne "Valid") {
-              throw "Signing failed: $($signature.StatusMessage)"
-            }
-          } finally {
-            Remove-Item -Force -ErrorAction SilentlyContinue $pfx
-          }
-
-      - name: Package archive (Unix)
-        if: matrix.goos != 'windows'
+      - name: Package archive
         shell: bash
         env:
           VERSION: ${{ github.ref_name }}
@@ -225,15 +182,6 @@ jobs:
           set -euo pipefail
           archive="$PWD/dist/mob3_${VERSION}_${GOOS}_${PLATFORM}.tar.gz"
           tar -C dist/stage -czf "$archive" mob3
-
-      - name: Package archive (Windows)
-        if: matrix.goos == 'windows'
-        shell: pwsh
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: |
-          $archive = Join-Path $PWD "dist/mob3_${env:VERSION}_windows_amd64.zip"
-          Compress-Archive -Path "dist/stage/mob3.exe" -DestinationPath $archive
 
       - name: Notarize macOS binary (optional)
         # notarytool accepts a zip, dmg or pkg, not the tar.gz we distribute.
@@ -255,9 +203,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.goos }}-${{ matrix.platform }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
+          path: dist/*.tar.gz
           if-no-files-found: error
           retention-days: 5
 
@@ -278,21 +224,18 @@ jobs:
           merge-multiple: true
 
       - name: Verify archives
-        # Both formats must reach the release: a glob left over from an earlier
-        # layout once uploaded only the Windows zip while SHA256SUMS named all
-        # eight archives.
         run: |
           set -euo pipefail
           shopt -s nullglob
-          archives=(dist/*.tar.gz dist/*.zip)
-          if [ "${#archives[@]}" -ne 8 ]; then
-            echo "expected 8 archives, found ${#archives[@]}:" >&2
+          archives=(dist/*.tar.gz)
+          if [ "${#archives[@]}" -ne 7 ]; then
+            echo "expected 7 archives, found ${#archives[@]}:" >&2
             ls -l dist >&2
             exit 1
           fi
 
       - name: Checksums
-        run: cd dist && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS
+        run: cd dist && sha256sum ./*.tar.gz > SHA256SUMS
 
       - name: Ensure the release exists
         env:
@@ -312,5 +255,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         # --clobber makes a re-run replace the assets instead of failing.
-        # Both archive formats: tar.gz for Linux/macOS and zip for Windows.
-        run: gh release upload "$VERSION" dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
+        run: gh release upload "$VERSION" dist/*.tar.gz dist/SHA256SUMS --clobber
