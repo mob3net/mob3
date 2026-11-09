@@ -1855,3 +1855,39 @@ func TestFooterStatusColors(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `console.log("fresh");`)
+	b := NewBrowser(40, 10)
+	b.jsLog = []string{"[error] old"}
+	b.jsErr = true
+	b.consoleText = "draft"
+	b.consoleCursor = 5
+	b.consoleScroll = 3
+	b.consolePane = 2
+	withQuietStdout(t, func() {
+		b.finishLoad(loadResult{page: page, u: page.URL})
+	})
+	if len(b.jsLog) != 1 || !strings.Contains(b.jsLog[0], "fresh") {
+		t.Fatalf("console log = %v, want only the new page log", b.jsLog)
+	}
+	if b.jsErr {
+		t.Fatal("JS error state survived navigation")
+	}
+	if b.consoleText != "" || b.consoleCursor != 0 || b.consoleScroll != 0 || b.consolePane != 0 {
+		t.Fatalf("console input state survived navigation: %q cursor=%d scroll=%d pane=%d",
+			b.consoleText, b.consoleCursor, b.consoleScroll, b.consolePane)
+	}
+}
+
+func TestConsoleKeepsLogOnFailedNavigation(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(40, 10)
+	b.jsLog = []string{"[error] old"}
+	withQuietStdout(t, func() {
+		b.finishLoad(loadResult{err: errors.New("boom"), u: u})
+	})
+	if len(b.jsLog) != 1 || b.jsLog[0] != "[error] old" {
+		t.Fatalf("failed navigation cleared the log: %v", b.jsLog)
+	}
+}

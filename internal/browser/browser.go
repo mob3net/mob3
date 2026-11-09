@@ -363,6 +363,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.Navigate(target, true)
 		return
 	}
+	b.resetConsole()
 	b.startJS(page)
 	if b.consumePendingJS() {
 		return

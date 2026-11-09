@@ -1031,9 +1031,10 @@ press <b>Enter</b> to run it; the result appears in the console log.
 <b>j</b>/<b>k</b> and the wheel scroll the focused log/Requests pane,
 <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b>, <b>!</b> or the footer
 <b>&gt;_</b> icon closes, and <b>q</b> quits when the input row is not focused.
-Request URLs are shown as plain text (not clickable). Because clicking is used
-to switch panes, use <b>Shift</b>-drag for terminal text selection and copy
-while the console is open.</p>
+Request URLs are shown as plain text (not clickable). The JS log and input draft
+reset when a new page loads successfully; a failed load keeps the old log.
+Because clicking is used to switch panes, use <b>Shift</b>-drag for terminal
+text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
 dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
 

@@ -485,6 +485,8 @@ Standard Go layout:
   Requests pane has focus (`q` is literal text while typing). The footer keeps
   its clickable `>_` icon while the console is open; clicking it closes the
   console the same way `Esc` does (including the usual exit hint).
+  The JS log and input draft reset when a new page is successfully applied,
+  before that page's scripts run; failed loads keep the previous page's log.
   Requests list status, method, size, kind and URL (plain text, not clickable)
   for the page, CSS, scripts, images, `fetch` and XHR; the list is in memory
   only, resets on navigation and is capped at the latest 512 entries. Timers

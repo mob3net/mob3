@@ -246,6 +246,18 @@ func (b *Browser) runConsoleInput() {
 	b.consoleScroll = 0
 }
 
+// resetConsole clears the JS log and input for a newly loaded page. It is
+// called before the new page's scripts run so stale errors cannot mix with the
+// fresh document.
+func (b *Browser) resetConsole() {
+	b.jsLog = nil
+	b.jsErr = false
+	b.consoleText = ""
+	b.consoleCursor = 0
+	b.consoleScroll = 0
+	b.consolePane = 0
+}
+
 func (b *Browser) consoleLines(width int) []string {
 	if width < 1 {
 		width = 1
