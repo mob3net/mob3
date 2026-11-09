@@ -258,8 +258,20 @@ func (b *Browser) drawConsole(w, h int) {
 		if b.consolePane == 1 {
 			hint = " Tab: logs · j/k: scroll requests · g/G: ends · q: quit · Esc: close "
 		}
-		g.Text(0, h-1, padWidth(truncateWidth(hint, w), w),
+		closeW := 0
+		if w >= 2 {
+			closeW = 1
+		}
+		hintW := w - closeW
+		if hintW < 1 {
+			hintW = 1
+		}
+		g.Text(0, h-1, padWidth(truncateWidth(hint, hintW), hintW),
 			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
+		if closeW > 0 {
+			closeFG := RGB(0xff, 0x9a, 0x9a)
+			g.Text(w-1, h-1, "X", &Style{Bold: true, Color: closeFG, FontSize: 16, LineHeight: 1}, closeFG)
+		}
 	}
 	b.flushGrid(g, nil)
 }

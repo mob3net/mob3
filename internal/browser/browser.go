@@ -72,6 +72,7 @@ type Browser struct {
 	usage      procUsage
 
 	headerHits []headerHit
+	footerHits []headerHit
 
 	selAnchor cellPos
 	selCursor cellPos
@@ -103,6 +104,7 @@ const (
 	headerHistory
 	headerURL
 	headerHelp
+	headerConsole
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -1195,6 +1197,24 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		}
 		return false
 	}
+	if y == b.height-1 {
+		if ev.Motion {
+			b.hover = -1
+			return false
+		}
+		if ev.Press {
+			for _, hit := range b.footerHits {
+				if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
+					continue
+				}
+				if hit.kind == headerConsole {
+					b.toggleConsole()
+					return false
+				}
+			}
+		}
+		return false
+	}
 	top, bottom := b.viewport()
 	if ev.Motion {
 		if b.selecting {
@@ -1516,6 +1536,7 @@ func (b *Browser) draw() {
 			rows = 1
 		}
 		b.headerHits = b.headerHits[:0]
+		b.footerHits = b.footerHits[:0]
 		hs := &Style{Bold: true, Color: headerFG, FontSize: 16, LineHeight: 1}
 		us := &Style{Color: headerFG, FontSize: 16, LineHeight: 1}
 		btnBG := RGB(0x2b, 0x3a, 0x4c)
@@ -1685,22 +1706,34 @@ func (b *Browser) draw() {
 		g.Fill(0, fy, w, 1, footerBG)
 		fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
 		leftText := b.footerLeft()
-		rightText := b.footerRight(w)
-		avail := w - stringWidth(rightText)
+		icon := ">_"
+		iconW := stringWidth(icon)
+		showIcon := w >= 6
+		reserve := 0
+		if showIcon {
+			reserve = iconW + 2
+		}
+		rightText := b.footerRight(w - reserve)
+		avail := w - stringWidth(rightText) - reserve
 		if avail < 8 {
 			pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-			rightText = truncateWidth(pctText, w)
-			if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w {
+			rightText = truncateWidth(pctText, w-reserve)
+			if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w-reserve {
 				rightText = jsErrorShort + "  " + pctText
 			}
-			avail = w - stringWidth(rightText)
+			avail = w - stringWidth(rightText) - reserve
 		}
 		if avail < 0 {
 			avail = 0
 		}
 		g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), fs, footerFG)
 		if rightText != "" {
-			g.Text(w-stringWidth(rightText), fy, rightText, fs, footerFG)
+			g.Text(w-reserve-stringWidth(rightText), fy, rightText, fs, footerFG)
+		}
+		if showIcon {
+			iconStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+			g.Text(w-iconW, fy, icon, iconStyle, iconStyle.Color)
+			b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: fy, w: iconW, h: 1})
 		}
 	}
 

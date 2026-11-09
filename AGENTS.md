@@ -308,7 +308,8 @@ Standard Go layout:
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus. A left click on the URL bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, and the wheel scrolls three lines. `Esc`
+  mouse forward button goes forward, clicking the footer `>_` icon opens the
+  JS console, and the wheel scrolls three lines. `Esc`
   clears the selection. Selected text is highlight-only for now; clipboard
   copy is undecided.
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
@@ -324,9 +325,10 @@ Standard Go layout:
   white text, and its placeholder/hint disappears while focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
-  (`MEM 18 MB`) and the scroll percentage pinned at the far right edge. The
-  error hint clears when the JS console opens or a new page loads, and drops
-  before memory on narrow terminals. The readout refreshes every two seconds.
+  (`MEM 18 MB`), the scroll percentage and a clickable `>_` console icon pinned
+  to the far right edge. The icon toggles the JS console. The error hint clears
+  when the JS console opens or a new page loads, and drops before memory on
+  narrow terminals. The readout refreshes every two seconds.
   Memory is `/proc/self/statm` RSS on Linux
   with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
   while the JS console is open, so terminal selection is not disturbed.
@@ -424,7 +426,9 @@ Standard Go layout:
   is capped at the latest 512 entries. Timers and timer-driven redraws pause
   while the console is open, so a terminal selection is not cleared while
   copying. The full error text is kept there; the footer only carries a short
-  `JS: Error (! console)` hint.
+  `JS: Error (! console)` hint. A red `X` at the console's bottom-right is a
+  visual close indicator; mouse reporting stays off, so close with `Esc`, `!`
+  or `q`.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`
   attributes and the `onclick` property; `DOMContentLoaded` and `load`.

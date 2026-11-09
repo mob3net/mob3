@@ -463,7 +463,7 @@ func TestFooterPercentFarRight(t *testing.T) {
 	b.scroll = 50
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	if !strings.HasSuffix(line, "50%") {
+	if !strings.Contains(line, "50%") || !strings.HasSuffix(line, ">_") {
 		t.Fatalf("footer = %q", line)
 	}
 }
@@ -543,8 +543,30 @@ func TestFooterUsageDropsOnNarrow(t *testing.T) {
 	if strings.Contains(line, "MEM") {
 		t.Fatalf("narrow footer still shows usage: %q", line)
 	}
-	if !strings.HasSuffix(line, "0%") {
+	if !strings.Contains(line, "0%") || !strings.HasSuffix(line, ">_") {
 		t.Fatalf("narrow footer = %q", line)
+	}
+}
+
+func TestFooterConsoleIcon(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.layout = &Layout{Height: 100}
+	drawQuiet(b)
+	var hit *headerHit
+	for i := range b.footerHits {
+		if b.footerHits[i].kind == headerConsole {
+			hit = &b.footerHits[i]
+			break
+		}
+	}
+	if hit == nil || hit.x+hit.w != b.width {
+		t.Fatalf("console hit = %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: 0, X: hit.x + 1, Y: hit.y + 1, Press: true})
+	})
+	if !b.consoleOpen {
+		t.Fatal("clicking the console icon did not open the console")
 	}
 }
 
@@ -1071,6 +1093,9 @@ func TestConsoleRequestPane(t *testing.T) {
 
 	b.consoleOpen = true
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	if line := b.prev[len(b.prev)-1]; !strings.HasSuffix(line, "X") {
+		t.Fatalf("console footer = %q, want trailing X", line)
+	}
 	b.handleConsoleKey("tab")
 	if b.consolePane != 1 {
 		t.Fatalf("console pane = %d, want requests", b.consolePane)
