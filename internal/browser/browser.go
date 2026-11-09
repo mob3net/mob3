@@ -289,6 +289,11 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	if method == "" {
 		method = http.MethodGet
 	}
+	if isAboutConfigURL(u) && b.reader {
+		b.status = "Config is not available in reader mode — press R to turn it off"
+		b.draw()
+		return
+	}
 	if isAboutConfigURL(u) {
 		b.clearInputFocus()
 		b.stopJS()
@@ -573,6 +578,10 @@ func (b *Browser) rebuild() {
 // toggleReader switches between the page and an extracted article view without
 // touching history or the live page DOM.
 func (b *Browser) toggleReader() {
+	if !b.reader && isAboutConfigURL(b.url) {
+		b.status = "Reader mode is unavailable on the config page"
+		return
+	}
 	if b.page == nil || b.page.Root == nil {
 		b.status = "Reader mode unavailable"
 		return
@@ -2452,6 +2461,8 @@ func statusLevelFor(s string) statusLevel {
 		strings.HasPrefix(s, "Site blocked"),
 		strings.HasPrefix(s, "HTTP "),
 		strings.HasPrefix(s, "Blocked local file navigation"),
+		strings.HasPrefix(s, "Config is not available in reader mode"),
+		s == "Reader mode is unavailable on the config page",
 		strings.HasPrefix(s, "External protocol:"),
 		s == "JavaScript links are not supported",
 		s == "Invalid JavaScript URL",

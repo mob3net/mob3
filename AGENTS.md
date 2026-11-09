@@ -373,9 +373,11 @@ Standard Go layout:
   normally with `Reader mode unavailable` while the preference remains on.
   Toggling off restores the normal page and its previous scroll position.
   `-reader` starts with the preference on, including `-dump` mode, which prints
-  the extracted view when one is available. Reader mode is a snapshot: live JS
-  mutations are not reflected while it is active, and interactive controls are
-  not available.
+  the extracted view when one is available. `about:config` is unavailable while
+  reader mode is on: opening it keeps the current page and shows the warning
+  `Config is not available in reader mode — press R to turn it off`. Reader
+  mode is a snapshot: live JS mutations are not reflected while it is active,
+  and interactive controls are not available.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`

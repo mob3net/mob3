@@ -1007,8 +1007,9 @@ chrome removed. Press <b>R</b> or click the label again to return to the normal
 page and its previous scroll position. Reader mode stays enabled when you navigate or reload: each
 new page is extracted automatically, and a page with no usable article is shown
 normally while the preference remains on. Start MOB³ with <b>-reader</b> to
-enable reader mode from the first page. Reader mode is a snapshot of the live
-page.</p>
+enable reader mode from the first page. The config page is unavailable while
+reader mode is on; turn reader mode off first. Reader mode is a snapshot of the
+live page.</p>
 
 <h2>Dark mode</h2>
 <p>Press <b>D</b> or click the <b>Dark on</b>/<b>Dark off</b> label in the footer

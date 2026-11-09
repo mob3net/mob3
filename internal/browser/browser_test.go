@@ -214,6 +214,38 @@ func TestConfigNavigation(t *testing.T) {
 	}
 }
 
+func TestConfigBlockedInReaderMode(t *testing.T) {
+	b := NewBrowser(80, 10)
+	u := mustParse(t, "https://example.com/article")
+	b.page = &Page{URL: u, Base: u, Title: "Article"}
+	b.url = u
+	b.reader = true
+	oldPage := b.page
+	withQuietStdout(t, func() { b.Navigate("about:config", true) })
+	if b.page != oldPage {
+		t.Fatal("config navigation replaced the page in reader mode")
+	}
+	want := "Config is not available in reader mode — press R to turn it off"
+	if b.status != want {
+		t.Fatalf("status = %q, want %q", b.status, want)
+	}
+	if statusLevelFor(b.status) != statusWarning {
+		t.Fatal("reader-mode config notice is not a warning")
+	}
+
+	cfg := NewBrowser(80, 10)
+	cfgURL := mustParse(t, "about:config")
+	cfg.page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
+	cfg.url = cfgURL
+	cfg.HandleKey("R")
+	if cfg.reader {
+		t.Fatal("reader mode was enabled on the config page")
+	}
+	if cfg.status != "Reader mode is unavailable on the config page" {
+		t.Fatalf("status = %q", cfg.status)
+	}
+}
+
 func TestToggleCheckbox(t *testing.T) {
 	b := NewBrowser(40, 10)
 	n := &Node{Type: ElementNode, Tag: "input", Attrs: []Attr{{Key: "type", Value: "checkbox"}, {Key: "name", Value: "x"}}}
