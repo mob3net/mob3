@@ -387,7 +387,10 @@ Standard Go layout:
   deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a
   checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
   select cycles its options. Submit
-  buttons also submit on click. GET forms build a query from named fields
+  buttons run their `click` handler and then submit their form on release
+  unless the handler prevents default; `type=button`/`type=reset` buttons and
+  buttons outside a form only run their click handlers. GET forms build a query
+  from named fields
   (including hidden inputs, checked checkboxes/radios and selects); POST forms
   send `application/x-www-form-urlencoded` bodies. Both
   navigate to the resolved action, and reload reuses the last method/body.

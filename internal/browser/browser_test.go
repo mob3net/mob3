@@ -561,6 +561,93 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 }
 
+func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
+	page := newJSPage(`<html><body><p>intro</p><button id="b" type="button">Got it</button><p id="out">visible</p></body></html>`,
+		`document.getElementById("b").addEventListener("click", function () {
+			document.getElementById("out").textContent = "hidden";
+		});`)
+	b := NewBrowser(60, 10)
+	b.page = page
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+
+	btn := page.Root.FindFirst("button")
+	if btn == nil {
+		t.Fatal("button not found")
+	}
+	var field *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Node == btn {
+			field = &b.layout.Frags[i]
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("button fragment not laid out")
+	}
+	top, _ := b.viewport()
+	x := field.X + 1
+	y := top + field.Y - b.scroll + 1
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
+	})
+	if got := findByID(page.Root, "out"); got != nil {
+		if got.TextContent() != "hidden" {
+			t.Fatalf("click handler did not run, text = %q", got.TextContent())
+		}
+	} else {
+		t.Fatal("output paragraph missing")
+	}
+}
+
+func TestMouseClickSubmitButton(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go" method="get">
+		<input name="q" value="x"><button type="submit">Go</button>
+	</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.rebuild()
+	btn := doc.FindFirst("button")
+	if btn == nil {
+		t.Fatal("button not found")
+	}
+	var field *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Node == btn {
+			field = &b.layout.Frags[i]
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("button fragment not laid out")
+	}
+	targetCh := make(chan string, 1)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		select {
+		case targetCh <- target:
+		default:
+		}
+		return &Page{URL: u, Base: u, Root: ParseHTML("<html></html>")}, nil
+	}
+	top, _ := b.viewport()
+	x := field.X + 1
+	y := top + field.Y - b.scroll + 1
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
+	})
+	select {
+	case target := <-targetCh:
+		if !strings.Contains(target, "/go?") || !strings.Contains(target, "q=x") {
+			t.Fatalf("submitted URL = %q", target)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("clicking the submit button did not submit the form")
+	}
+}
+
 func TestFormPOSTSubmission(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/submit" method="post">
 		<input type="hidden" name="hl" value="en">

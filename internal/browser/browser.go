@@ -846,13 +846,17 @@ func isSubmitControl(n *Node) bool {
 		return false
 	}
 	if n.Tag == "button" {
-		return true
+		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
+		case "", "submit":
+			return true
+		}
+		return false
 	}
 	if n.Tag != "input" {
 		return false
 	}
 	switch strings.ToLower(n.Attr("type")) {
-	case "submit", "button", "reset", "image":
+	case "submit", "image":
 		return true
 	}
 	return false
@@ -1433,16 +1437,22 @@ func (b *Browser) clickContent(x, docY int) {
 		b.followFocused()
 		return
 	}
-	if b.js != nil {
-		if n := b.nodeAt(x, docY); n != nil {
-			b.js.dispatchClick(n)
-			if b.js.consumeDirty() {
-				b.rebuild()
-			}
+	n := b.nodeAt(x, docY)
+	prevented := false
+	if b.js != nil && n != nil {
+		prevented = b.js.dispatchClick(n)
+		if b.js.consumeDirty() {
+			b.rebuild()
 		}
-		if b.consumePendingJS() {
-			return
-		}
+	}
+	if b.consumePendingJS() {
+		return
+	}
+	// Submit-style controls act on release so click handlers on the button run
+	// first, and type=button/reset controls are not mistaken for submits.
+	if n != nil && isSubmitControl(n) && !prevented {
+		b.submitNode(n)
+		return
 	}
 	b.focus = -1
 	b.status = ""
@@ -1608,10 +1618,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					if isTextInput(n) {
 						b.selecting = false
 						b.setInputFocus(n)
-						return false
-					}
-					if isSubmitControl(n) {
-						b.submitNode(n)
 						return false
 					}
 				}
