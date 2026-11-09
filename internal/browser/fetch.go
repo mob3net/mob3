@@ -935,6 +935,7 @@ disk write.</p>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; arrows/Home/End/Delete edit it)</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
+<tr><td><b>y</b></td><td>copy the selected page text and clear the highlight (OSC 52)</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
@@ -961,7 +962,7 @@ Nothing is saved after MOB³ exits.</p>
 <table>
 <tr><th>Input</th><th>Action</th></tr>
 <tr><td>hover a link</td><td>show its target in the footer</td></tr>
-<tr><td>drag over page text</td><td>select it; release keeps the highlight</td></tr>
+<tr><td>drag over page text</td><td>select it; <b>y</b> copies and clears it</td></tr>
 <tr><td>click a link</td><td>follow it</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>

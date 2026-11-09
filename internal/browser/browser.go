@@ -2,7 +2,9 @@ package browser
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -25,6 +27,7 @@ const (
 	jsRedrawInterval = 250 * time.Millisecond
 
 	layoutTruncatedStatus = "Page truncated (layout limit)"
+	maxClipboardBytes     = 100 * 1024
 )
 
 // Browser holds navigation and view state.
@@ -53,6 +56,7 @@ type Browser struct {
 	promptCursor    int
 	promptSelectAll bool
 	skipDraw        bool
+	clipboardWriter io.Writer
 
 	color   bool
 	prev    []string
@@ -1659,6 +1663,8 @@ func (b *Browser) HandleKey(k string) bool {
 		if b.url != nil {
 			b.status = b.url.String()
 		}
+	case "y":
+		b.copySelection()
 	case "esc":
 		b.focus = -1
 		b.clearSelection()
@@ -1765,12 +1771,47 @@ func (b *Browser) selectedText() string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+// copySelection sends the selected page text to the terminal clipboard with
+// OSC 52. Terminals and multiplexers must support it for the copy to arrive.
+func (b *Browser) copySelection() {
+	text := b.selectedText()
+	if text == "" {
+		b.status = "No selection"
+		return
+	}
+	truncated := false
+	if len(text) > maxClipboardBytes {
+		cut := maxClipboardBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = text[:cut]
+		truncated = true
+	}
+	payload := base64.StdEncoding.EncodeToString([]byte(text))
+	w := b.clipboardWriter
+	if w == nil {
+		w = os.Stdout
+	}
+	if _, err := fmt.Fprintf(w, "\x1b]52;c;%s\x07", payload); err != nil {
+		b.status = "Copy failed"
+		return
+	}
+	n := utf8.RuneCountInString(text)
+	if truncated {
+		b.status = fmt.Sprintf("Copied %d chars (truncated)", n)
+	} else {
+		b.status = fmt.Sprintf("Copied %d chars", n)
+	}
+	b.clearSelection()
+}
+
 func (b *Browser) selectionSummary() string {
 	n := utf8.RuneCountInString(b.selectedText())
 	if n == 0 {
 		return "Selection"
 	}
-	return fmt.Sprintf("Selected %d chars", n)
+	return fmt.Sprintf("Selected %d chars (y copies)", n)
 }
 
 // paintSelection highlights selected cells in the content viewport.

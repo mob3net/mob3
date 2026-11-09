@@ -309,7 +309,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `o` URL
-  prompt, `u` show URL, `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
+  prompt, `u` show URL, `y` copy selected page text and clear the highlight,
+  `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
@@ -349,8 +350,9 @@ Standard Go layout:
   mouse forward button goes forward, clicking the footer `>_` icon toggles the
   JS console (and closes it while open), and the wheel scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
-  clears the selection. Selected text is highlight-only for now; clipboard
-  copy is undecided.
+  clears the selection. `y` copies the selected page text through the terminal
+  OSC 52 clipboard sequence and then clears the highlight (subject to
+  terminal/multiplexer support).
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
   deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a
@@ -657,8 +659,10 @@ Standard Go layout:
 - No tabs or downloads. Forms support editable text fields, checkbox/radio
   toggling, click-to-cycle selects and urlencoded GET/POST submission;
   multipart/file uploads are not implemented. Mouse support covers
-  click-to-follow, drag selection (highlight only), the URL prompt, right-click
-  back and wheel scrolling. There is no clipboard copy yet.
+  click-to-follow, page drag selection, the URL prompt, right-click back and
+  wheel scrolling. `y` copies selected page text through OSC 52; terminal-native
+  Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API
+  remains unsupported.
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.

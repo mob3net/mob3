@@ -1,7 +1,9 @@
 package browser
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"image"
 	"net/url"
@@ -1695,5 +1697,43 @@ func TestShiftMouseTokenRoundTrip(t *testing.T) {
 	got, ok := ParseMouseToken(mouseToken(want))
 	if !ok || got != want {
 		t.Fatalf("round trip = %+v, %v; want %+v", got, ok, want)
+	}
+}
+
+func TestCopySelectionUsesOSC52(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
+	b.selAnchor = cellPos{X: 0, Y: 0}
+	b.selCursor = cellPos{X: 4, Y: 0}
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	b.HandleKey("y")
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || string(decoded) != "hello" {
+		t.Fatalf("clipboard text = %q, %v", decoded, err)
+	}
+	if b.status != "Copied 5 chars" {
+		t.Fatalf("status = %q", b.status)
+	}
+	if b.hasSelection() {
+		t.Fatal("copy did not clear the selection")
+	}
+}
+
+func TestCopySelectionWithoutSelection(t *testing.T) {
+	b := NewBrowser(40, 10)
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	b.HandleKey("y")
+	if buf.Len() != 0 {
+		t.Fatalf("wrote clipboard data without a selection: %q", buf.String())
+	}
+	if b.status != "No selection" {
+		t.Fatalf("status = %q", b.status)
 	}
 }
