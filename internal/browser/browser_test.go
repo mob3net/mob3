@@ -27,13 +27,16 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 4 {
+	if len(b.headerHits) != 5 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
+	histW := stringWidth(" ≡ History ")
+	helpW := stringWidth(" ? Help ")
 	want := []headerHit{
 		{headerBack, 0, 0, 8, 1},
 		{headerReload, 8, 0, 10, 1},
-		{headerHelp, 52, 0, 8, 1},
+		{headerHistory, b.width - helpW - histW, 0, histW, 1},
+		{headerHelp, b.width - helpW, 0, helpW, 1},
 		{headerURL, 0, 1, 60, 1},
 	}
 	for i := range want {
@@ -41,7 +44,7 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[2].x+b.headerHits[2].w != b.width {
+	if b.headerHits[3].x+b.headerHits[3].w != b.width {
 		t.Error("help is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
@@ -52,10 +55,11 @@ func TestHeaderHitRegions(t *testing.T) {
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
 	drawQuiet(b)
-	if len(b.headerHits) != 2 || b.headerHits[0].kind != headerHelp || b.headerHits[1].kind != headerURL {
+	if len(b.headerHits) != 3 || b.headerHits[0].kind != headerHistory ||
+		b.headerHits[1].kind != headerHelp || b.headerHits[2].kind != headerURL {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[0].x+b.headerHits[0].w != b.width {
+	if b.headerHits[1].x+b.headerHits[1].w != b.width {
 		t.Error("narrow help is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
@@ -567,6 +571,86 @@ func TestHeaderClicks(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("help button did not navigate")
+	}
+
+	b.HandleMouse(MouseEvent{Button: 0, X: 45, Y: 1, Press: true})
+	select {
+	case target := <-targetCh:
+		if target != "about:history" {
+			t.Fatalf("history target = %q", target)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("history button did not navigate")
+	}
+}
+
+func TestHistoryRecordsSession(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Title: u.Path, Root: ParseHTML("<html><body>ok</body></html>")}, nil
+	}
+	navigate := func(target string) {
+		b.Navigate(target, true)
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("navigation to %s did not finish", target)
+		}
+	}
+	navigate("https://example.com/a")
+	navigate("https://example.com/b")
+
+	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := page.Root.TextContent()
+	if !strings.Contains(text, "https://example.com/a") || !strings.Contains(text, "https://example.com/b") {
+		t.Fatalf("history text = %q", text)
+	}
+	if !strings.Contains(text, "(current)") {
+		t.Fatal("current entry was not marked")
+	}
+}
+
+func TestHistoryPage(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.history = []string{"https://example.com/a", "about:start"}
+	b.histIdx = 1
+	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Title != "History — MOB³" {
+		t.Fatalf("title = %q", page.Title)
+	}
+	text := page.Root.TextContent()
+	if !strings.Contains(text, "https://example.com/a") || !strings.Contains(text, "about:start") {
+		t.Fatalf("history text = %q", text)
+	}
+	if !strings.Contains(text, "(current)") {
+		t.Fatal("current entry was not marked")
+	}
+	links := 0
+	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "a" }) {
+		if n.Attr("href") != "" {
+			links++
+		}
+	}
+	if links != 2 {
+		t.Fatalf("history links = %d", links)
+	}
+
+	empty := NewBrowser(60, 10)
+	p2, err := empty.loader.LoadContext(context.Background(), "about:history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(p2.Root.TextContent(), "No pages in this session") {
+		t.Fatalf("empty history = %q", p2.Root.TextContent())
 	}
 }
 

@@ -65,8 +65,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
   storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
   the full console.
-- Keyboard and mouse navigation, history, scrolling, focus, link hover
-  targets in the footer, and text selection.
+- Keyboard and mouse navigation, history (including a top-right History page
+  listing the session's links), scrolling, focus, link hover targets in the
+  footer, and text selection.
 
 **Rough edges**
 

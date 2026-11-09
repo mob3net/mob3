@@ -93,7 +93,7 @@ func Run(args []string) int {
 		w = *widthFlag
 	}
 	b := NewBrowser(w, h)
-	b.loader = loader
+	b.setLoader(loader)
 	b.color = !*noColor
 	b.noJS = *noJS
 	b.jsMemLimit = jsMemLimit

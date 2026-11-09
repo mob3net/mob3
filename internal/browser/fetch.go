@@ -69,6 +69,8 @@ type Loader struct {
 	userAgent string
 	searchURL string
 	noScripts bool
+	// historyFn supplies the in-memory session history for about:history.
+	historyFn func() ([]string, int)
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
@@ -391,6 +393,13 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		doc = "<html><body></body></html>"
 	case "about:help":
 		doc = helpPageHTML
+	case "about:history":
+		var urls []string
+		current := -1
+		if l.historyFn != nil {
+			urls, current = l.historyFn()
+		}
+		doc = historyPageHTML(urls, current)
 	default:
 		doc = startPageHTML
 	}
@@ -399,8 +408,11 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		removeNoscript(root)
 	}
 	title := "MOB³"
-	if u.String() == "about:help" {
+	switch u.String() {
+	case "about:help":
 		title = "Help — MOB³"
+	case "about:history":
+		title = "History — MOB³"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, Status: 200}
 	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
@@ -787,6 +799,11 @@ disk write.</p>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit</td></tr>
 </table>
 
+<h2>History</h2>
+<p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
+which lists this session's pages as links, most recent first. Nothing is
+saved after MOB³ exits.</p>
+
 <h2>Mouse</h2>
 <table>
 <tr><th>Input</th><th>Action</th></tr>
@@ -826,6 +843,51 @@ dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>
 
 <p><a href="about:start">Back to the start page</a></p>
 </body></html>`
+
+// historyPageHTML renders the in-memory session history as clickable links.
+func historyPageHTML(urls []string, current int) string {
+	var b strings.Builder
+	b.WriteString(`<!DOCTYPE html><html><head><title>History</title>
+<style>
+body { margin: 16px; max-width: 900px; }
+h1 { font-size: 32px; }
+li { margin: 6px 0; }
+</style></head><body>
+<h1>Session history</h1>
+<p>Pages visited in this session, most recent first. History is kept in
+memory only and disappears when MOB³ exits.</p>
+`)
+	const limit = 50
+	start := 0
+	if len(urls) > limit {
+		start = len(urls) - limit
+	}
+	count := 0
+	for i := len(urls) - 1; i >= start; i-- {
+		raw := urls[i]
+		if raw == "" || raw == "about:history" {
+			continue
+		}
+		count++
+		b.WriteString(`<li><a href="`)
+		b.WriteString(EscapeHTML(raw))
+		b.WriteString(`">`)
+		b.WriteString(EscapeHTML(raw))
+		b.WriteString(`</a>`)
+		if i == current {
+			b.WriteString(` <b>(current)</b>`)
+		}
+		b.WriteString(`</li>`)
+	}
+	if count == 0 {
+		b.WriteString(`<p>No pages in this session yet.</p>`)
+	}
+	if len(urls) > limit {
+		b.WriteString(`<p>Only the most recent 50 entries are shown.</p>`)
+	}
+	b.WriteString(`</body></html>`)
+	return b.String()
+}
 
 const startPageHTML = `<!DOCTYPE html>
 <html><head><title>MOB³</title>

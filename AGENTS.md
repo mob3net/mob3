@@ -252,14 +252,19 @@ Standard Go layout:
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `⟳ Reload`, the page title, and `? Help` pinned to the far right; the URL row
-  is a full-width field that becomes the editable `Open: …` prompt with a
-  cursor marker while the prompt is open. The toolbar row uses a subtle
-  horizontal gradient.
+  `⟳ Reload`, the page title, and `≡ History` / `? Help` pinned to the far
+  right; the URL row is a full-width field that becomes the editable
+  `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
+  row uses a subtle horizontal gradient.
+- **History:** `about:history` lists the session's URLs as clickable links,
+  most recent first, marks the current entry, caps the list at the latest 50
+  and is generated on demand from the in-memory history (nothing persisted).
+  The toolbar History button opens it.
 - **Toolbar responsiveness:** full labels at 40+ columns; at narrower widths
-  fall back to `←`, `⟳`, `?`; below 24 columns hide back/reload so the URL
-  field stays usable; below 6 columns hide help. Every toolbar item is
-  clickable via per-frame button hit regions including the row coordinate.
+  fall back to `←`, `⟳`, `≡`, `?`; below 24 columns hide back/reload so the URL
+  field stays usable; below 12 columns hide history; below 6 columns hide
+  help. Every toolbar item is clickable via per-frame button hit regions
+  including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,

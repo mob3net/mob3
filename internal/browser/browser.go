@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -28,6 +29,7 @@ type Browser struct {
 
 	history []string
 	histIdx int
+	histMu  sync.RWMutex
 
 	prompt          bool
 	promptText      string
@@ -91,6 +93,7 @@ type headerKind int
 const (
 	headerBack headerKind = iota
 	headerReload
+	headerHistory
 	headerURL
 	headerHelp
 )
@@ -110,11 +113,29 @@ func NewBrowser(w, h int) *Browser {
 	if h < 5 {
 		h = 24
 	}
-	return &Browser{
+	b := &Browser{
 		loader: NewLoader(), width: w, height: h, focus: -1, hover: -1, histIdx: -1,
 		jsMemLimit: defaultJSMemoryLimit,
 		loadCh:     make(chan loadResult, 1),
 	}
+	b.setLoader(b.loader)
+	return b
+}
+
+// setLoader installs a loader and wires it to this browser's session history so
+// about:history reflects the current browser even when the CLI replaces the
+// default loader.
+func (b *Browser) setLoader(l *Loader) {
+	b.loader = l
+	if l != nil {
+		l.historyFn = b.historySnapshot
+	}
+}
+
+func (b *Browser) historySnapshot() ([]string, int) {
+	b.histMu.RLock()
+	defer b.histMu.RUnlock()
+	return append([]string(nil), b.history...), b.histIdx
 }
 
 // searchTemplate returns the configured search URL template.
@@ -354,6 +375,8 @@ func metaRefreshTarget(page *Page) string {
 }
 
 func (b *Browser) pushHistory(u string) {
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
 	if b.histIdx >= 0 && b.histIdx < len(b.history) && b.history[b.histIdx] == u {
 		return
 	}
@@ -365,21 +388,29 @@ func (b *Browser) pushHistory(u string) {
 }
 
 func (b *Browser) back() {
+	b.histMu.Lock()
 	if b.histIdx <= 0 {
+		b.histMu.Unlock()
 		b.status = "No previous page"
 		return
 	}
 	b.histIdx--
-	b.Navigate(b.history[b.histIdx], false)
+	u := b.history[b.histIdx]
+	b.histMu.Unlock()
+	b.Navigate(u, false)
 }
 
 func (b *Browser) forward() {
+	b.histMu.Lock()
 	if b.histIdx < 0 || b.histIdx+1 >= len(b.history) {
+		b.histMu.Unlock()
 		b.status = "No next page"
 		return
 	}
 	b.histIdx++
-	b.Navigate(b.history[b.histIdx], false)
+	u := b.history[b.histIdx]
+	b.histMu.Unlock()
+	b.Navigate(u, false)
 }
 
 func (b *Browser) reload() {
@@ -1129,6 +1160,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				b.back()
 			case headerReload:
 				b.reload()
+			case headerHistory:
+				b.Navigate("about:history", true)
 			case headerHelp:
 				b.Navigate("about:help", true)
 			case headerURL:
@@ -1475,8 +1508,10 @@ func (b *Browser) draw() {
 		}
 
 		backLabel, reloadLabel, helpLabel := " ← Back ", " ⟳ Reload ", " ? Help "
+		historyLabel := " ≡ History "
 		if w < 40 {
 			backLabel, reloadLabel, helpLabel = " ← ", " ⟳ ", " ? "
+			historyLabel = " ≡ "
 		}
 		fieldBG := urlBG
 		if b.prompt {
@@ -1519,22 +1554,33 @@ func (b *Browser) draw() {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
 			}
-			helpW := 0
+			helpW, historyW := 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
-				if x+helpW > w {
-					helpW = 0
-				}
 			}
+			if w >= 12 {
+				historyW = stringWidth(historyLabel)
+			}
+			if x+helpW > w {
+				helpW = 0
+			}
+			if x+helpW+historyW > w {
+				historyW = 0
+			}
+			helpX := w - helpW
+			histX := helpX - historyW
 			title := "MOB³"
 			if b.page != nil && b.page.Title != "" {
 				title = b.page.Title
 			}
-			if room := w - x - helpW; room > 1 {
+			if room := histX - x; room > 1 {
 				g.Text(x, 0, fitWidth(" "+title, room), hs, headerFG)
 			}
+			if historyW > 0 {
+				b.drawHeaderButton(g, histX, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
+			}
 			if helpW > 0 {
-				b.drawHeaderButton(g, w-helpW, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
+				b.drawHeaderButton(g, helpX, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
 			}
 			// URL row.
 			drawField(0, 1, w)
@@ -1544,19 +1590,32 @@ func (b *Browser) draw() {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
 			}
-			helpW := 0
+			helpW, historyW := 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
-				if x+helpW > w {
-					helpW = 0
-				}
 			}
-			urlW := w - x - helpW
+			if w >= 12 {
+				historyW = stringWidth(historyLabel)
+			}
+			if x+helpW > w {
+				helpW = 0
+			}
+			if x+helpW+historyW > w {
+				historyW = 0
+			}
+			urlW := w - x - helpW - historyW
+			if urlW < 1 {
+				historyW = 0
+				urlW = w - x - helpW
+			}
 			if urlW < 1 {
 				helpW = 0
 				urlW = w - x
 			}
 			drawField(x, 0, urlW)
+			if historyW > 0 {
+				b.drawHeaderButton(g, w-helpW-historyW, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
+			}
 			if helpW > 0 {
 				b.drawHeaderButton(g, w-helpW, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
 			}
