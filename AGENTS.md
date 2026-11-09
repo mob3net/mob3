@@ -274,6 +274,15 @@ Standard Go layout:
   to normal line diffing once drawn, so periodic memory/JS redraws do not wipe
   a terminal-native selection over it. A stray terminal wrap or scroll must
   never leave the chrome stale.
+- **Terminal-output safety:** all page/network-derived text reaches the screen
+  through `Grid.Put`/`Grid.Text`, which drop C0/C1 control runes (including
+  ESC, BEL and C1 CSI/OSC bytes) so text cannot start a terminal escape
+  sequence. The console strips controls again at ingestion for JS logs, request
+  URLs, storage values and the HTML section, and kitty OSC 66 scaled text is
+  stripped explicitly. Dump-mode loader errors are stripped before writing to
+  stderr. The only raw escapes written are app-generated ANSI styling, mouse
+  mode, clipboard OSC 52 (base64 payload), kitty/iTerm2 image protocols and
+  OSC 66.
 - **Dump rendering:** prints the whole document height (capped at 20,000 rows),
   no browser chrome. Color is automatic on a TTY, forced by `-color`, disabled
   by `-no-color`.

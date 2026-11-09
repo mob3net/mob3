@@ -331,7 +331,7 @@ func (b *Browser) consoleLines(width int) []string {
 	var out []string
 	for _, entry := range b.jsLog {
 		for _, raw := range strings.Split(entry, "\n") {
-			raw = expandTabs(strings.TrimRight(raw, "\r"))
+			raw = stripTerminalControls(expandTabs(strings.TrimRight(raw, "\r")))
 			if raw == "" {
 				out = append(out, "")
 				continue
@@ -393,9 +393,9 @@ func (b *Browser) requestLines() []string {
 		if kind == "" {
 			kind = "req"
 		}
-		line := fmt.Sprintf("%3s %-5s %6s %-5s %s", status, r.Method, size, kind, r.URL)
+		line := fmt.Sprintf("%3s %-5s %6s %-5s %s", status, r.Method, size, kind, stripTerminalControls(r.URL))
 		if r.Err != "" {
-			line += "  " + r.Err
+			line += "  " + stripTerminalControls(r.Err)
 		}
 		out = append(out, line)
 	}
@@ -489,7 +489,7 @@ func (b *Browser) htmlLines(width int) []string {
 	}
 	var out []string
 	for _, raw := range strings.Split(src, "\n") {
-		raw = expandTabs(strings.TrimRight(raw, "\r"))
+		raw = stripTerminalControls(expandTabs(strings.TrimRight(raw, "\r")))
 		if raw == "" {
 			out = append(out, "")
 			continue
@@ -530,6 +530,7 @@ func sanitizeStorageText(s string) string {
 	s = strings.ReplaceAll(s, "\n", "\\n")
 	s = strings.ReplaceAll(s, "\r", "\\r")
 	s = strings.ReplaceAll(s, "\t", "\\t")
+	s = stripTerminalControls(s)
 	if r := []rune(s); len(r) > 4096 {
 		s = string(r[:4096]) + "…"
 	}

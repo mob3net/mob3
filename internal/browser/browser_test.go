@@ -1681,6 +1681,67 @@ func TestConsolePausesTimers(t *testing.T) {
 	}
 }
 
+func TestPageContentCannotInjectTerminalControls(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	root := ParseHTML("<html><head><title>evil\x1b]52;c;x\x07</title></head><body><p>hi\x1b[2Jthere</p></body></html>")
+	page := &Page{URL: u, Base: u, Root: root, Title: "evil\x1b]52;c;x\x07", RawHTML: "<html>\x1b]0;pwn\x07</html>"}
+	b := NewBrowser(60, 20)
+	b.page = page
+	b.url = u
+	b.layout = BuildLayout(page.Root, nil, 60)
+	withQuietStdout(t, func() { b.draw() })
+	joined := strings.Join(b.prev, "\n")
+	for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\x1b]0", "\u009b"} {
+		if strings.Contains(joined, bad) {
+			t.Fatalf("page content injected terminal control %q: %q", bad, joined)
+		}
+	}
+	if !strings.Contains(joined, "there") {
+		t.Fatalf("page text was lost: %q", joined)
+	}
+}
+
+func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.color = true
+	b.consoleOpen = true
+	b.jsLog = []string{"[log] \x1b]52;c;evil\x07\x1b[2J"}
+	b.page = &Page{RawHTML: "<html>\x1b]0;pwn\x07</html>"}
+	check := func(where string) {
+		joined := strings.Join(b.prev, "\n")
+		for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\x1b]0", "\u009b"} {
+			if strings.Contains(joined, bad) {
+				t.Fatalf("%s injected terminal control %q: %q", where, bad, joined)
+			}
+		}
+	}
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	check("log")
+
+	gen := b.loader.beginPage()
+	id, ok := b.loader.startRequest(gen, "GET", "https://example.com/\x1b]52;c;evil\x07", "doc")
+	if !ok {
+		t.Fatal("request was not started")
+	}
+	b.loader.finishRequest(id, gen, 200, 1, 0, nil)
+	b.selectConsolePane(consoleRequests)
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	check("request")
+
+	b.js = &jsRuntime{
+		b:                  b,
+		storageLocalData:   map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"},
+		storageSessionData: map[string]string{},
+	}
+	b.selectConsolePane(consoleStorage)
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	check("storage")
+
+	b.selectConsolePane(consoleHTML)
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	check("HTML")
+}
+
 func TestDialogRendering(t *testing.T) {
 	b := NewBrowser(60, 15)
 	b.dialog = &jsDialog{kind: "confirm", message: "Continue with this action?"}

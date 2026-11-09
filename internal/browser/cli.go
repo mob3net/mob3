@@ -215,7 +215,7 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 	}
 	page, err := loader.Load(target, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: %s\n", stripTerminalControls(err.Error()))
 		return 1
 	}
 	if !noJS {

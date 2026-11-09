@@ -115,6 +115,23 @@ func TestBigTextStripsControls(t *testing.T) {
 	}
 }
 
+func TestGridDropsTerminalControls(t *testing.T) {
+	g := NewGrid(40, 2, RGB(0, 0, 0), RGB(255, 255, 255))
+	g.Text(0, 0, "safe\x1b]52;c;evil\x07\x1b[2Jafter", &Style{}, RGB(0, 0, 0))
+	joined := strings.Join(g.Lines(true), "\n")
+	for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\u009b"} {
+		if strings.Contains(joined, bad) {
+			t.Fatalf("terminal control %q leaked into output: %q", bad, joined)
+		}
+	}
+	if !strings.Contains(joined, "safe") || !strings.Contains(joined, "after") {
+		t.Fatalf("ordinary text was lost: %q", joined)
+	}
+	if plain := strings.Join(g.Lines(false), "\n"); strings.Contains(plain, "\x1b") {
+		t.Fatalf("no-color output contains an escape: %q", plain)
+	}
+}
+
 func TestBigTextPaint(t *testing.T) {
 	ly := &Layout{Height: 4, Frags: []Frag{
 		{Kind: fragText, X: 0, Y: 0, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, Bold: true, LineHeight: 1}},
