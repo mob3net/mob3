@@ -970,9 +970,8 @@ supported.</p>
 current page's requests. The view splits into the console log on top and a
 Requests pane at the bottom. <b>Tab</b> switches panes, <b>j</b>/<b>k</b> scroll
 the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b> or <b>!</b>
-closes, and <b>q</b> quits. Terminal mouse selection and copy work normally
-while it is open; the red <b>X</b> at the bottom-right is a close indicator
-(mouse is disabled, so use <b>Esc</b>, <b>!</b> or <b>q</b>).</p>
+closes, and <b>q</b> quits. Request URLs are shown as plain text (not
+clickable). Terminal mouse selection and copy work normally while it is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
 dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
 

@@ -1084,7 +1084,8 @@ func TestConsoleRequestPane(t *testing.T) {
 	b.loader.finishRequest(id, gen, 200, 2048, 10*time.Millisecond, nil)
 	lines := b.requestLines()
 	if len(lines) != 1 || !strings.Contains(lines[0], "200") ||
-		!strings.Contains(lines[0], "2.0K") || !strings.Contains(lines[0], "a.css") {
+		!strings.Contains(lines[0], "2.0K") || !strings.Contains(lines[0], "css") ||
+		!strings.Contains(lines[0], "https://example.com/a.css") {
 		t.Fatalf("request lines = %q", lines)
 	}
 	if got := humanSize(512); got != "512B" {
@@ -1093,9 +1094,6 @@ func TestConsoleRequestPane(t *testing.T) {
 
 	b.consoleOpen = true
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
-	if line := b.prev[len(b.prev)-1]; !strings.HasSuffix(line, "X") {
-		t.Fatalf("console footer = %q, want trailing X", line)
-	}
 	b.handleConsoleKey("tab")
 	if b.consolePane != 1 {
 		t.Fatalf("console pane = %d, want requests", b.consolePane)
@@ -1107,6 +1105,20 @@ func TestConsoleRequestPane(t *testing.T) {
 	b.handleConsoleKey("G")
 	if b.reqScroll != 0 {
 		t.Fatalf("request scroll after G = %d", b.reqScroll)
+	}
+}
+
+func TestConsoleScrollReachesFirstWrappedLine(t *testing.T) {
+	b := NewBrowser(40, 20)
+	b.jsLog = []string{strings.Repeat("x", 400)}
+	b.consoleOpen = true
+	b.handleConsoleKey("g")
+	want := len(b.consoleLines(b.width - 2))
+	if b.consoleScroll != want {
+		t.Fatalf("console scroll = %d, want %d", b.consoleScroll, want)
+	}
+	if want <= 1 {
+		t.Fatalf("test line did not wrap: %d lines", want)
 	}
 }
 
