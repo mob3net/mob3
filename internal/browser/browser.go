@@ -993,10 +993,7 @@ func (b *Browser) handlePromptKey(k string) bool {
 		}
 		return false
 	case "esc":
-		b.prompt = false
-		b.promptText = ""
-		b.promptCursor = 0
-		b.promptSelectAll = false
+		b.closeURLPrompt()
 		b.status = exitHint
 		return false
 	case "left":
@@ -1097,6 +1094,14 @@ func (b *Browser) handlePromptKey(k string) bool {
 	}
 	b.promptCursor = cur
 	return false
+}
+
+// closeURLPrompt dismisses the URL prompt and clears its editing state.
+func (b *Browser) closeURLPrompt() {
+	b.prompt = false
+	b.promptText = ""
+	b.promptCursor = 0
+	b.promptSelectAll = false
 }
 
 // promptParts splits the visible URL field around the cursor. The cursor is an
@@ -1312,6 +1317,20 @@ func (b *Browser) clickContent(x, docY int) {
 // browser should quit.
 func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if b.prompt {
+		// Clicking the URL field keeps editing; a press anywhere else closes
+		// the prompt like Escape. Motion and wheel events are ignored.
+		if ev.Motion || ev.Wheel != 0 || !ev.Press {
+			return false
+		}
+		x := ev.X - 1
+		y := ev.Y - 1
+		for _, hit := range b.headerHits {
+			if hit.kind == headerURL && x >= hit.x && x < hit.x+hit.w && y >= hit.y && y < hit.y+hit.h {
+				return false
+			}
+		}
+		b.closeURLPrompt()
+		b.status = exitHint
 		return false
 	}
 	if b.consoleOpen {

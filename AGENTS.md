@@ -311,6 +311,8 @@ Standard Go layout:
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
+  Clicking the URL field keeps the prompt open; a press anywhere else closes
+  it the same way Escape does.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
@@ -335,7 +337,9 @@ Standard Go layout:
   selection in document coordinates; dragging updates and auto-scrolls it,
   and release keeps the highlight. A press and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
-  clears focus. A left click on the URL bar opens the URL prompt, toolbar
+  clears focus. While the URL prompt is open, a click on its field keeps it
+  open and a click anywhere else closes it. A left click on the URL bar opens
+  the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
   mouse forward button goes forward, clicking the footer `>_` icon opens the
   JS console, and the wheel scrolls three lines. Long pages show a scrollbar

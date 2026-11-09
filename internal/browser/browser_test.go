@@ -1589,3 +1589,29 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 		t.Fatal("layout was not rebuilt after the interval")
 	}
 }
+
+func TestClickOutsideURLPromptClosesIt(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.layout = &Layout{Height: 10}
+	b.openURLPrompt()
+	drawQuiet(b)
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 5, Press: true})
+	if b.prompt {
+		t.Fatal("click outside the URL field left the prompt open")
+	}
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want %q", b.status, exitHint)
+	}
+}
+
+func TestClickInURLPromptKeepsItOpen(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.layout = &Layout{Height: 10}
+	b.openURLPrompt()
+	drawQuiet(b)
+	// Row 2 (1-based) is the URL field on a normal header.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 2, Press: true})
+	if !b.prompt {
+		t.Fatal("click on the URL field closed the prompt")
+	}
+}
