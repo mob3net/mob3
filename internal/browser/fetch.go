@@ -1022,19 +1022,24 @@ supported.</p>
 </form>
 
 <h2>JavaScript console</h2>
-<p>Press <b>!</b> to see <b>console</b> output, full script errors and the
-current page's requests. The view splits into the console log on top, a
-Requests pane, and a JavaScript input row at the bottom. Click a pane (or use
-<b>Tab</b>/<b>Shift-Tab</b>) to make it active; the active heading turns blue.
-Press <b>i</b> or <b>Enter</b> to focus the input row, type an expression and
-press <b>Enter</b> to run it; the result appears in the console log.
-<b>j</b>/<b>k</b> and the wheel scroll the focused log/Requests pane,
-<b>g</b>/<b>G</b> jump to the ends, <b>Esc</b>, <b>!</b> or the footer
-<b>&gt;_</b> icon closes, and <b>q</b> quits when the input row is not focused.
-Request URLs are shown as plain text (not clickable). The JS log and input draft
-reset when a new page loads successfully; a failed load keeps the old log.
-Because clicking is used to switch panes, use <b>Shift</b>-drag for terminal
-text selection and copy while the console is open.</p>
+<p>Press <b>!</b> to see <b>console</b> output, full script errors, the
+current page's requests and its in-memory storage. The view stacks four
+collapsible sections: <b>JavaScript logs</b>, <b>Requests</b>,
+<b>JavaScript input</b> and <b>Storage</b>. The logs are open by default;
+click a section heading (or use <b>Tab</b>/<b>Shift-Tab</b>) to expand it and
+collapse the others. The open heading turns blue.
+Press <b>i</b> or <b>Enter</b> to focus the input section, type an expression
+and press <b>Enter</b> to run it; the result appears in the logs and the logs
+section opens to show it. <b>j</b>/<b>k</b> and the wheel scroll the open
+logs/Requests/Storage section, <b>g</b>/<b>G</b> jump to the ends,
+<b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
+quits while the input section is not focused.
+Request URLs are shown as plain text (not clickable). Storage lists the
+current page's cookies (including HttpOnly cookies, marked) plus its
+localStorage and sessionStorage entries. The JS log and input draft reset when
+a new page loads successfully; a failed load keeps the old log.
+Because clicking is used to switch sections, use <b>Shift</b>-drag for
+terminal text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
 dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
 
@@ -1128,19 +1133,35 @@ a { color:#0645ad; text-decoration:underline; }
 type cookieJar struct {
 	all     http.CookieJar
 	visible http.CookieJar
+	// httpOnly remembers which stored cookies came from an HttpOnly
+	// response. net/http's jar drops the flag on read, but the console's
+	// storage inspector still wants to mark them.
+	httpOnly map[string]struct{}
 }
 
 func newCookieJar() *cookieJar {
 	options := &cookiejar.Options{PublicSuffixList: publicsuffix.List}
 	all, _ := cookiejar.New(options)
 	visible, _ := cookiejar.New(options)
-	return &cookieJar{all: all, visible: visible}
+	return &cookieJar{all: all, visible: visible, httpOnly: make(map[string]struct{})}
+}
+
+func cookieDisplayKey(name, value string) string {
+	return name + "\x00" + value
 }
 
 func (j *cookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	j.all.SetCookies(u, cookies)
 	visible := make([]*http.Cookie, 0, len(cookies))
 	for _, c := range cookies {
+		key := cookieDisplayKey(c.Name, c.Value)
+		if c.MaxAge < 0 {
+			delete(j.httpOnly, key)
+		} else if c.HttpOnly {
+			j.httpOnly[key] = struct{}{}
+		} else {
+			delete(j.httpOnly, key)
+		}
 		if c.HttpOnly {
 			// A server may replace a JS-visible cookie with an HttpOnly one.
 			// Remove any previous visible entry with the same identity.
@@ -1165,6 +1186,21 @@ func (j *cookieJar) Cookies(u *url.URL) []*http.Cookie {
 
 func (j *cookieJar) documentCookies(u *url.URL) []*http.Cookie {
 	return j.visible.Cookies(u)
+}
+
+// cookiesForDisplay returns every cookie that applies to u, with HttpOnly
+// restored for the storage inspector.
+func (j *cookieJar) cookiesForDisplay(u *url.URL) []*http.Cookie {
+	cookies := j.all.Cookies(u)
+	out := make([]*http.Cookie, 0, len(cookies))
+	for _, c := range cookies {
+		cp := *c
+		if _, ok := j.httpOnly[cookieDisplayKey(c.Name, c.Value)]; ok {
+			cp.HttpOnly = true
+		}
+		out = append(out, &cp)
+	}
+	return out
 }
 
 // setDocumentCookie applies a document.cookie assignment. JavaScript cannot

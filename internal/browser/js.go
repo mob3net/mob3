@@ -43,9 +43,11 @@ type jsRuntime struct {
 	pendingNav    string
 	dialogActive  atomic.Bool
 
-	storageLocal   *goja.Object
-	storageSession *goja.Object
-	currentScript  *goja.Object
+	storageLocal       *goja.Object
+	storageSession     *goja.Object
+	storageLocalData   map[string]string
+	storageSessionData map[string]string
+	currentScript      *goja.Object
 
 	nodeListeners map[*Node]map[string][]jsListener
 	propListeners map[*Node]map[string]jsListener
@@ -111,8 +113,10 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j.installEventConstructors()
 	j.installIntl()
 	j.installFetch()
-	j.storageLocal = j.storageObject(make(map[string]string))
-	j.storageSession = j.storageObject(make(map[string]string))
+	j.storageLocalData = make(map[string]string)
+	j.storageSessionData = make(map[string]string)
+	j.storageLocal = j.storageObject(j.storageLocalData)
+	j.storageSession = j.storageObject(j.storageSessionData)
 	j.navObj = j.navigatorObject()
 	j.perfObj = j.performanceObject()
 	j.locObj = j.locationObject()

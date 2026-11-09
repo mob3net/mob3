@@ -62,14 +62,16 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
   storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
-  the full console, where the `>` row runs JavaScript expressions.
+  the full console, with collapsible logs, requests, a `>` row for JavaScript
+  expressions and a storage inspector.
 - Browser-style toolbar with back/forward/reload/home, bookmarks/history/help
   buttons, a config gear and a centered page title.
 - Keyboard and mouse navigation, a draggable page scrollbar, history (including
   a top-right History page
   listing the session's links), bookmarks imported with `-bookmarks` from a
   Netscape HTML export, scrolling, focus, link hover targets in the footer,
-  text selection, and a `!` console with the current page's request log.
+  text selection, and a `!` console with the current page's request log,
+  cookies and in-memory storage.
 
 **Rough edges**
 

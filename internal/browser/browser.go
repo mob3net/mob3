@@ -86,7 +86,8 @@ type Browser struct {
 	consoleOpen   bool
 	consoleScroll int
 	reqScroll     int
-	consolePane   int // 0 = JS log, 1 = requests, 2 = JS input
+	storageScroll int
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = JS input, 3 = storage
 	consoleText   string
 	consoleCursor int
 	jsLog         []string
