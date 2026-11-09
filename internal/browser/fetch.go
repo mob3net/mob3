@@ -1006,7 +1006,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
-<tr><td>click a console pane</td><td>switch panes; Shift-drag selects text</td></tr>
+<tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
@@ -1039,12 +1039,11 @@ supported.</p>
 
 <h2>JavaScript console</h2>
 <p>Press <b>!</b> to see <b>console</b> output, full script errors, the
-current page's requests, its in-memory storage and the raw page HTML. The view
-stacks four collapsible sections: <b>JavaScript logs</b>, <b>Requests</b>,
-<b>Storage</b> and <b>HTML</b>. The logs are open by default and contain
-the <b>&gt;</b> JavaScript input row at the bottom. Click a section heading (or
-use <b>Tab</b>/<b>Shift-Tab</b>) to expand it and collapse the others. The open
-heading turns blue.
+current page's requests, its in-memory storage and the raw page HTML. A one-row
+menu at the top has four tabs: <b>JS logs</b>, <b>Requests</b>, <b>Storage</b>
+and <b>HTML</b>. The logs tab is active by default and contains the
+<b>&gt;</b> JavaScript input row at the bottom of its body. Click a tab (or use
+<b>Tab</b>/<b>Shift-Tab</b>) to switch sections. The active tab is blue.
 Press <b>i</b> or <b>Enter</b>, or click the <b>&gt;</b> row, to focus the
 input, type an expression and press <b>Enter</b> to run it; the result appears
 in the logs above the input. <b>Up</b>/<b>Down</b> recall earlier expressions

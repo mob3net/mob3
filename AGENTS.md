@@ -486,15 +486,14 @@ Standard Go layout:
   editing keys as the URL bar. In non-interactive/dump runs, alert returns,
   confirm returns false and prompt returns null. Dialogs use keyboard input
   (mouse is not handled while modal).
-- **JS console view:** `!` opens a plain-text console in the viewport. The
-  view stacks four collapsible sections: JavaScript logs, Requests, Storage and
-  HTML. Each section has a one-row heading and only the open section shows
-  a body; the logs section is open by default. The JavaScript input row is part
-  of the logs section, pinned to the bottom of its body. Clicking a heading
-  opens that section and collapses the others, and `Tab`/`Shift-Tab` cycle
-  through the same four sections. The heading of the open section is
-  highlighted blue. Mouse reporting stays enabled so sections and the input row
-  can be clicked (plain terminal drag-selection needs the Shift override).
+- **JS console view:** `!` opens a plain-text console in the viewport. A
+  one-row menu at the top has four tabs: JavaScript logs, Requests, Storage and
+  HTML. The active tab is highlighted blue; only its section body is shown
+  below the menu, and the logs tab is active by default. The JavaScript input
+  row is part of the logs body, pinned to its bottom. Clicking a tab switches
+  sections, and `Tab`/`Shift-Tab` cycle through the same four tabs. Mouse
+  reporting stays enabled so tabs and the input row can be clicked (plain
+  terminal drag-selection needs the Shift override).
   `i` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
   usual JS timeout/memory guards. The input row keeps its gray background while

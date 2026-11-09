@@ -537,11 +537,10 @@ func sanitizeStorageText(s string) string {
 	return s
 }
 
-// consoleLayout describes the stacked console sections: each section has a
-// one-row heading and only the open section gets a body.
+// consoleLayout describes the console menu row and the active section body.
 type consoleLayout struct {
-	headerY  [consoleSectionCount]int
-	bodyY    int // -1 when the open section has no body
+	tabsY    int
+	bodyY    int // -1 when there is no body
 	bodyRows int
 	inputY   int // -1 unless the logs section is open with an input row
 	open     int
@@ -549,10 +548,7 @@ type consoleLayout struct {
 }
 
 func newConsoleLayout(h, open int) consoleLayout {
-	l := consoleLayout{bodyY: -1, inputY: -1, open: open, footerY: -1}
-	for i := range l.headerY {
-		l.headerY[i] = -1
-	}
+	l := consoleLayout{tabsY: -1, bodyY: -1, inputY: -1, open: open, footerY: -1}
 	if open < 0 || open >= consoleSectionCount {
 		open = consoleLogs
 		l.open = open
@@ -570,25 +566,11 @@ func newConsoleLayout(h, open int) consoleLayout {
 	if avail <= 0 {
 		return l
 	}
-	// Keep every heading visible when there is room for a few body rows.
-	// On very short terminals show only the open section's heading so the
-	// expanded content stays usable.
-	if avail >= 7 {
-		bodyRows := avail - consoleSectionCount
-		y := 0
-		for i := 0; i < consoleSectionCount; i++ {
-			l.headerY[i] = y
-			y++
-			if i == open {
-				l.bodyY = y
-				l.bodyRows = bodyRows
-				y += bodyRows
-			}
-		}
-	} else {
-		l.headerY[open] = 0
-		l.bodyY = 1
-		l.bodyRows = avail - 1
+	l.tabsY = 0
+	l.bodyY = 1
+	l.bodyRows = avail - 1
+	if l.bodyRows < 0 {
+		l.bodyRows = 0
 	}
 	if open == consoleLogs && l.bodyRows > 0 {
 		l.inputY = l.bodyY + l.bodyRows - 1
@@ -596,20 +578,51 @@ func newConsoleLayout(h, open int) consoleLayout {
 	return l
 }
 
-// paneAt returns the section whose heading or body sits on row y, or -1.
-func (l consoleLayout) paneAt(y int) int {
-	for i, hy := range l.headerY {
-		if hy >= 0 && y == hy {
-			return i
-		}
+// consoleTabTitles returns the top-menu labels for the console sections.
+func (b *Browser) consoleTabTitles() [consoleSectionCount]string {
+	reqCount := 0
+	if b.loader != nil {
+		reqCount = b.loader.requestCount()
 	}
-	if l.bodyY >= 0 && l.bodyRows > 0 && y >= l.bodyY && y < l.bodyY+l.bodyRows {
-		return l.open
+	return [consoleSectionCount]string{
+		fmt.Sprintf(" JS logs (%d) ", len(b.jsLog)),
+		fmt.Sprintf(" Requests (%d) ", reqCount),
+		" Storage ",
+		" HTML ",
 	}
-	return -1
 }
 
-// handleConsoleMouse opens the clicked section and scrolls the open section
+// drawConsoleTabs paints the top menu and records clickable tab regions.
+func (b *Browser) drawConsoleTabs(g *Grid, y, w int, normal, active Color, st *Style, fg Color) {
+	b.consoleTabHits = b.consoleTabHits[:0]
+	if y < 0 || w < 1 {
+		return
+	}
+	titles := b.consoleTabTitles()
+	x := 0
+	for pane, title := range titles {
+		if x >= w {
+			break
+		}
+		tabW := stringWidth(title)
+		if tabW > w-x {
+			tabW = w - x
+		}
+		tabBG := normal
+		if pane == b.consolePane {
+			tabBG = active
+		}
+		g.Fill(x, y, tabW, 1, tabBG)
+		g.Text(x, y, truncateWidth(title, tabW), st, fg)
+		b.consoleTabHits = append(b.consoleTabHits, consoleTabHit{pane: pane, x: x, w: tabW})
+		x += tabW
+	}
+	if x < w {
+		g.Fill(x, y, w-x, 1, normal)
+	}
+}
+
+// handleConsoleMouse opens the clicked tab and scrolls the active section
 // under the wheel. Plain left clicks only; dragging is left to the terminal.
 func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	if b.width < 1 || b.height < 1 {
@@ -622,15 +635,17 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	}
 	l := newConsoleLayout(b.height, b.consolePane)
 	if ev.Wheel != 0 {
-		pane := l.paneAt(y)
-		if pane < 0 || pane != b.consolePane || (pane == consoleLogs && y == l.inputY) {
+		if l.bodyY < 0 || y < l.bodyY || y >= l.bodyY+l.bodyRows {
+			return
+		}
+		if b.consolePane == consoleLogs && y == l.inputY {
 			return
 		}
 		step := -3
 		if ev.Wheel < 0 {
 			step = 3
 		}
-		b.scrollConsolePane(pane, step)
+		b.scrollConsolePane(b.consolePane, step)
 		return
 	}
 	if ev.Motion || !ev.Press || ev.Button != 0 {
@@ -648,16 +663,23 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 		}
 		return
 	}
-	pane := l.paneAt(y)
-	if pane < 0 {
+	if y == l.tabsY {
+		for _, hit := range b.consoleTabHits {
+			if x >= hit.x && x < hit.x+hit.w {
+				b.selectConsolePane(hit.pane)
+				b.consoleEdit = false
+				return
+			}
+		}
 		return
 	}
-	b.selectConsolePane(pane)
-	b.consoleEdit = pane == consoleLogs && y == l.inputY
-	if b.consoleEdit {
-		b.consoleCursor = len(b.consoleText)
-		b.consoleHistAt = len(b.consoleHist)
-		b.consoleDraft = ""
+	if l.bodyY >= 0 && y >= l.bodyY && y < l.bodyY+l.bodyRows {
+		b.consoleEdit = b.consolePane == consoleLogs && y == l.inputY
+		if b.consoleEdit {
+			b.consoleCursor = len(b.consoleText)
+			b.consoleHistAt = len(b.consoleHist)
+			b.consoleDraft = ""
+		}
 	}
 }
 
@@ -674,36 +696,8 @@ func (b *Browser) drawConsole(w, h int) {
 	}
 	l := newConsoleLayout(h, b.consolePane)
 	reqs := b.requestLines()
-	reqCount := 0
-	if b.loader != nil {
-		reqCount = b.loader.requestCount()
-	}
 	headStyle := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	for pane := 0; pane < consoleSectionCount; pane++ {
-		y := l.headerY[pane]
-		if y < 0 {
-			continue
-		}
-		headerBG := hdrBG
-		marker := "▸ "
-		if pane == b.consolePane {
-			headerBG = activeBG
-			marker = "▾ "
-		}
-		g.Fill(0, y, w, 1, headerBG)
-		var title string
-		switch pane {
-		case consoleLogs:
-			title = fmt.Sprintf(" %sJavaScript logs (%d) ", marker, len(b.jsLog))
-		case consoleRequests:
-			title = fmt.Sprintf(" %sRequests (%d) ", marker, reqCount)
-		case consoleStorage:
-			title = " " + marker + "Storage "
-		case consoleHTML:
-			title = " " + marker + "HTML "
-		}
-		g.Text(0, y, padWidth(truncateWidth(title, w), w), headStyle, fg)
-	}
+	b.drawConsoleTabs(g, l.tabsY, w, hdrBG, activeBG, headStyle, fg)
 
 	style := &Style{Color: fg, FontSize: 16, LineHeight: 1}
 	drawPane := func(items []string, scroll, y, rows int) {

@@ -1446,9 +1446,9 @@ func TestConsoleRequestsHeaderCountsRealRequests(t *testing.T) {
 	b.loader.beginPage()
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	l := newConsoleLayout(20, consoleLogs)
-	line := b.prev[l.headerY[consoleRequests]]
+	line := b.prev[l.tabsY]
 	if !strings.Contains(line, "Requests (0)") {
-		t.Fatalf("empty request header = %q, want Requests (0)", line)
+		t.Fatalf("empty request tab = %q, want Requests (0)", line)
 	}
 }
 
@@ -1487,11 +1487,11 @@ func TestConsoleOnlyOpenSectionHasBody(t *testing.T) {
 		t.Fatal("logs body was rendered while requests was open")
 	}
 	l := newConsoleLayout(20, consoleRequests)
-	if !strings.Contains(b.prev[l.headerY[consoleLogs]], "JavaScript logs") {
-		t.Fatalf("closed logs heading missing: %q", b.prev[l.headerY[consoleLogs]])
+	if !strings.Contains(b.prev[l.tabsY], "JS logs") {
+		t.Fatalf("logs tab missing: %q", b.prev[l.tabsY])
 	}
-	if !strings.Contains(b.prev[l.headerY[consoleRequests]], "Requests") {
-		t.Fatalf("open requests heading missing: %q", b.prev[l.headerY[consoleRequests]])
+	if !strings.Contains(b.prev[l.tabsY], "Requests") {
+		t.Fatalf("requests tab missing: %q", b.prev[l.tabsY])
 	}
 }
 
@@ -1553,19 +1553,26 @@ func TestConsoleHTMLOpensAtTop(t *testing.T) {
 func TestConsoleClickSwitchesPane(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	l := newConsoleLayout(20, consoleLogs)
-	if l.headerY[consoleRequests] < 0 {
-		t.Fatal("expected a requests heading")
+	tabX := func(pane int) int {
+		for _, hit := range b.consoleTabHits {
+			if hit.pane == pane {
+				return hit.x + 1
+			}
+		}
+		t.Fatalf("no clickable tab for pane %d", pane)
+		return 0
 	}
-	// The default open section is the JavaScript log body.
+	// Clicking the log body keeps the logs section open.
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.bodyY + 1, Press: true})
 	if b.consolePane != consoleLogs {
 		t.Fatalf("console pane after log click = %d, want logs", b.consolePane)
 	}
-	// Clicking the Requests heading collapses the logs and opens requests.
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.headerY[consoleRequests] + 1, Press: true})
+	// Clicking the Requests tab opens requests.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: tabX(consoleRequests), Y: l.tabsY + 1, Press: true})
 	if b.consolePane != consoleRequests {
-		t.Fatalf("console pane after heading click = %d, want requests", b.consolePane)
+		t.Fatalf("console pane after tab click = %d, want requests", b.consolePane)
 	}
 	// A body row in the requests section keeps it open.
 	reqLayout := newConsoleLayout(20, consoleRequests)
@@ -1576,10 +1583,10 @@ func TestConsoleClickSwitchesPane(t *testing.T) {
 	if b.consolePane != consoleRequests {
 		t.Fatalf("console pane after request click = %d, want requests", b.consolePane)
 	}
-	// Clicking the top heading returns to the logs section.
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 1, Press: true})
+	// Clicking the Logs tab returns to the logs section.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: tabX(consoleLogs), Y: l.tabsY + 1, Press: true})
 	if b.consolePane != consoleLogs {
-		t.Fatalf("console pane after heading click = %d, want logs", b.consolePane)
+		t.Fatalf("console pane after tab click = %d, want logs", b.consolePane)
 	}
 }
 
@@ -1610,30 +1617,32 @@ func TestConsoleFooterIconClosesConsole(t *testing.T) {
 	}
 }
 
-func TestConsoleActivePaneHeadingHighlight(t *testing.T) {
+func TestConsoleTabsHighlightActiveSection(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.color = true
-	b.consoleOpen = true
-	blue := "48;2;47;111;191"
-	l := newConsoleLayout(20, consoleLogs)
-
-	withQuietStdout(t, func() { b.drawConsole(60, 20) })
-	if !strings.Contains(b.prev[l.headerY[consoleLogs]], blue) {
-		t.Fatalf("logs heading not highlighted while active: %q", b.prev[l.headerY[consoleLogs]])
+	normal := RGB(0x1f, 0x29, 0x37)
+	active := RGB(0x2f, 0x6f, 0xbf)
+	style := &Style{Bold: true, Color: RGB(0xdd, 0xe6, 0xee), FontSize: 16, LineHeight: 1}
+	check := func() {
+		g := NewGrid(60, 1, RGB(0, 0, 0), RGB(0, 0, 0))
+		b.drawConsoleTabs(g, 0, 60, normal, active, style, RGB(0xdd, 0xe6, 0xee))
+		seen := 0
+		for _, hit := range b.consoleTabHits {
+			want := normal
+			if hit.pane == b.consolePane {
+				want = active
+			}
+			if got := g.Cells[hit.x].BG; got != want {
+				t.Fatalf("tab %d background = %+v, want %+v", hit.pane, got, want)
+			}
+			seen++
+		}
+		if seen != consoleSectionCount {
+			t.Fatalf("tab hits = %d, want %d", seen, consoleSectionCount)
+		}
 	}
-	if strings.Contains(b.prev[l.headerY[consoleRequests]], blue) {
-		t.Fatalf("requests heading highlighted while inactive: %q", b.prev[l.headerY[consoleRequests]])
-	}
-
+	check()
 	b.consolePane = consoleRequests
-	l = newConsoleLayout(20, consoleRequests)
-	withQuietStdout(t, func() { b.drawConsole(60, 20) })
-	if strings.Contains(b.prev[l.headerY[consoleLogs]], blue) {
-		t.Fatalf("logs heading still highlighted while inactive: %q", b.prev[l.headerY[consoleLogs]])
-	}
-	if !strings.Contains(b.prev[l.headerY[consoleRequests]], blue) {
-		t.Fatalf("requests heading not highlighted while active: %q", b.prev[l.headerY[consoleRequests]])
-	}
+	check()
 }
 
 func TestConsoleMouseWheelScrollsHoveredPane(t *testing.T) {
@@ -1645,9 +1654,16 @@ func TestConsoleMouseWheelScrollsHoveredPane(t *testing.T) {
 	if b.reqScroll != 3 || b.consoleScroll != 0 {
 		t.Fatalf("wheel scroll = logs %d, requests %d", b.consoleScroll, b.reqScroll)
 	}
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 1, Press: true})
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	logsX := 1
+	for _, hit := range b.consoleTabHits {
+		if hit.pane == consoleLogs {
+			logsX = hit.x + 1
+		}
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: logsX, Y: l.tabsY + 1, Press: true})
 	if b.consolePane != consoleLogs {
-		t.Fatalf("console pane after logs heading = %d, want logs", b.consolePane)
+		t.Fatalf("console pane after logs tab = %d, want logs", b.consolePane)
 	}
 	b.HandleMouse(MouseEvent{X: 5, Y: 2, Wheel: -1})
 	if b.reqScroll != 3 || b.consoleScroll != 3 {
@@ -2004,8 +2020,8 @@ func TestConsoleInputRowStaysGrayWhenFocused(t *testing.T) {
 	if strings.Contains(b.prev[l.inputY], activeBlue) {
 		t.Fatalf("input row turned blue when focused: %q", b.prev[l.inputY])
 	}
-	if !strings.Contains(b.prev[l.headerY[consoleLogs]], activeBlue) {
-		t.Fatalf("logs heading is not highlighted: %q", b.prev[l.headerY[consoleLogs]])
+	if !strings.Contains(b.prev[l.tabsY], activeBlue) {
+		t.Fatalf("logs tab is not highlighted: %q", b.prev[l.tabsY])
 	}
 }
 

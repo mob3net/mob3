@@ -109,8 +109,9 @@ type Browser struct {
 	scrollBar  *scrollBarInfo
 	scrollDrag bool
 
-	headerHits []headerHit
-	footerHits []headerHit
+	headerHits     []headerHit
+	footerHits     []headerHit
+	consoleTabHits []consoleTabHit
 
 	selAnchor cellPos
 	selCursor cellPos
@@ -157,6 +158,12 @@ type headerHit struct {
 	kind headerKind
 	x, y int
 	w, h int
+}
+
+// consoleTabHit is a clickable console menu tab.
+type consoleTabHit struct {
+	pane int
+	x, w int
 }
 
 // NewBrowser creates a browser with a viewport size.
