@@ -95,6 +95,7 @@ type headerKind int
 const (
 	headerBack headerKind = iota
 	headerReload
+	headerBookmarks
 	headerHistory
 	headerURL
 	headerHelp
@@ -1165,6 +1166,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				b.back()
 			case headerReload:
 				b.reload()
+			case headerBookmarks:
+				b.Navigate("about:bookmarks", true)
 			case headerHistory:
 				b.Navigate("about:history", true)
 			case headerHelp:
@@ -1514,9 +1517,12 @@ func (b *Browser) draw() {
 
 		backLabel, reloadLabel, helpLabel := " ← Back ", " ⟳ Reload ", " ? Help "
 		historyLabel := " ≡ History "
+		bookmarksLabel := " ★ Bookmarks "
 		if w < 40 {
-			backLabel, reloadLabel, helpLabel = " ← ", " ⟳ ", " ? "
-			historyLabel = " ≡ "
+			backLabel, reloadLabel = " ← ", " ⟳ "
+		}
+		if w < 60 {
+			helpLabel, historyLabel, bookmarksLabel = " ? ", " ≡ ", " ★ "
 		}
 		fieldBG := urlBG
 		if b.prompt {
@@ -1559,12 +1565,15 @@ func (b *Browser) draw() {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
 			}
-			helpW, historyW := 0, 0
+			helpW, historyW, bookmarksW := 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
 			}
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
+			}
+			if w >= 18 {
+				bookmarksW = stringWidth(bookmarksLabel)
 			}
 			if x+helpW > w {
 				helpW = 0
@@ -1572,14 +1581,21 @@ func (b *Browser) draw() {
 			if x+helpW+historyW > w {
 				historyW = 0
 			}
+			if x+helpW+historyW+bookmarksW > w {
+				bookmarksW = 0
+			}
 			helpX := w - helpW
 			histX := helpX - historyW
+			bookX := histX - bookmarksW
 			title := "MOB³"
 			if b.page != nil && b.page.Title != "" {
 				title = b.page.Title
 			}
-			if room := histX - x; room > 1 {
+			if room := bookX - x; room > 1 {
 				g.Text(x, 0, fitWidth(" "+title, room), hs, headerFG)
+			}
+			if bookmarksW > 0 {
+				b.drawHeaderButton(g, bookX, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
 			}
 			if historyW > 0 {
 				b.drawHeaderButton(g, histX, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
@@ -1595,12 +1611,15 @@ func (b *Browser) draw() {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
 			}
-			helpW, historyW := 0, 0
+			helpW, historyW, bookmarksW := 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
 			}
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
+			}
+			if w >= 18 {
+				bookmarksW = stringWidth(bookmarksLabel)
 			}
 			if x+helpW > w {
 				helpW = 0
@@ -1608,7 +1627,14 @@ func (b *Browser) draw() {
 			if x+helpW+historyW > w {
 				historyW = 0
 			}
-			urlW := w - x - helpW - historyW
+			if x+helpW+historyW+bookmarksW > w {
+				bookmarksW = 0
+			}
+			urlW := w - x - helpW - historyW - bookmarksW
+			if urlW < 1 {
+				bookmarksW = 0
+				urlW = w - x - helpW - historyW
+			}
 			if urlW < 1 {
 				historyW = 0
 				urlW = w - x - helpW
@@ -1618,6 +1644,9 @@ func (b *Browser) draw() {
 				urlW = w - x
 			}
 			drawField(x, 0, urlW)
+			if bookmarksW > 0 {
+				b.drawHeaderButton(g, w-helpW-historyW-bookmarksW, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
+			}
 			if historyW > 0 {
 				b.drawHeaderButton(g, w-helpW-historyW, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
 			}

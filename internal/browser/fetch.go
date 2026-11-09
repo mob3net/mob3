@@ -71,6 +71,7 @@ type Loader struct {
 	noScripts bool
 	// historyFn supplies the in-memory session history for about:history.
 	historyFn func() ([]string, int)
+	bookmarks []Bookmark
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
@@ -503,6 +504,8 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 			urls, current = l.historyFn()
 		}
 		doc = historyPageHTML(urls, current)
+	case "about:bookmarks":
+		doc = bookmarksPageHTML(l.bookmarks)
 	default:
 		doc = startPageHTML
 	}
@@ -516,6 +519,8 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		title = "Help — MOB³"
 	case "about:history":
 		title = "History — MOB³"
+	case "about:bookmarks":
+		title = "Bookmarks — MOB³"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, Status: 200}
 	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
@@ -885,6 +890,7 @@ disk write.</p>
 <tr><td><b>-graphics</b> string</td><td>image protocol: auto, kitty, iterm or blocks (default "auto")</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
+<tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
@@ -919,10 +925,13 @@ disk write.</p>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit</td></tr>
 </table>
 
-<h2>History</h2>
+<h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
-which lists this session's pages as links, most recent first. Nothing is
-saved after MOB³ exits.</p>
+which lists this session's pages as links, most recent first. The
+<b>★ Bookmarks</b> button opens <b>about:bookmarks</b>; start MOB³ with
+<b>-bookmarks file.html</b> to import a Netscape bookmark export (the HTML
+format used by Chrome, Firefox, Safari and Edge). Nothing is saved after MOB³
+exits.</p>
 
 <h2>Mouse</h2>
 <table>

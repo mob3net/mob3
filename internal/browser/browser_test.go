@@ -27,14 +27,16 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 5 {
+	if len(b.headerHits) != 6 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
+	bookW := stringWidth(" ★ Bookmarks ")
 	histW := stringWidth(" ≡ History ")
 	helpW := stringWidth(" ? Help ")
 	want := []headerHit{
 		{headerBack, 0, 0, 8, 1},
 		{headerReload, 8, 0, 10, 1},
+		{headerBookmarks, b.width - helpW - histW - bookW, 0, bookW, 1},
 		{headerHistory, b.width - helpW - histW, 0, histW, 1},
 		{headerHelp, b.width - helpW, 0, helpW, 1},
 		{headerURL, 0, 1, 60, 1},
@@ -44,7 +46,7 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[3].x+b.headerHits[3].w != b.width {
+	if b.headerHits[4].x+b.headerHits[4].w != b.width {
 		t.Error("help is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
@@ -55,11 +57,12 @@ func TestHeaderHitRegions(t *testing.T) {
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
 	drawQuiet(b)
-	if len(b.headerHits) != 3 || b.headerHits[0].kind != headerHistory ||
-		b.headerHits[1].kind != headerHelp || b.headerHits[2].kind != headerURL {
+	if len(b.headerHits) != 4 || b.headerHits[0].kind != headerBookmarks ||
+		b.headerHits[1].kind != headerHistory || b.headerHits[2].kind != headerHelp ||
+		b.headerHits[3].kind != headerURL {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[1].x+b.headerHits[1].w != b.width {
+	if b.headerHits[2].x+b.headerHits[2].w != b.width {
 		t.Error("narrow help is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
@@ -582,6 +585,16 @@ func TestHeaderClicks(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("history button did not navigate")
 	}
+
+	b.HandleMouse(MouseEvent{Button: 0, X: 30, Y: 1, Press: true})
+	select {
+	case target := <-targetCh:
+		if target != "about:bookmarks" {
+			t.Fatalf("bookmarks target = %q", target)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("bookmarks button did not navigate")
+	}
 }
 
 func TestHistoryRecordsSession(t *testing.T) {
@@ -613,6 +626,46 @@ func TestHistoryRecordsSession(t *testing.T) {
 	}
 	if !strings.Contains(text, "(current)") {
 		t.Fatal("current entry was not marked")
+	}
+}
+
+func TestParseBookmarks(t *testing.T) {
+	data := `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+<DT><H3>Work</H3>
+<DL><p>
+<DT><A HREF="https://a.example/">A &amp; B</A>
+<DT><A HREF="https://b.example/">B</A>
+</DL><p>
+<DT><A HREF="https://c.example/">C</A>
+</DL>`
+	marks := parseBookmarks([]byte(data))
+	if len(marks) != 3 {
+		t.Fatalf("bookmarks = %+v", marks)
+	}
+	if marks[0].Title != "A & B" || marks[0].URL != "https://a.example/" || marks[0].Folder != "Work" {
+		t.Errorf("first bookmark = %+v", marks[0])
+	}
+	if marks[1].Folder != "Work" {
+		t.Errorf("second folder = %q", marks[1].Folder)
+	}
+	if marks[2].Folder != "" || marks[2].URL != "https://c.example/" {
+		t.Errorf("root bookmark = %+v", marks[2])
+	}
+}
+
+func TestBookmarksPage(t *testing.T) {
+	html := bookmarksPageHTML([]Bookmark{
+		{Title: "A & B", URL: "https://a.example/?x=1&y=2", Folder: "Work"},
+		{Title: "Root", URL: "https://c.example/"},
+	})
+	if !strings.Contains(html, "Work") || !strings.Contains(html, "A &amp; B") ||
+		!strings.Contains(html, "https://a.example/?x=1&amp;y=2") {
+		t.Fatalf("page = %s", html)
+	}
+	empty := bookmarksPageHTML(nil)
+	if !strings.Contains(empty, "No bookmarks imported") {
+		t.Fatalf("empty page = %s", empty)
 	}
 }
 

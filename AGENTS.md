@@ -69,10 +69,10 @@ written in Go
   saves nothing. History, cookies, `localStorage`/`sessionStorage`, the image
   cache and all JS state live in memory only. The only file write is the path
   given to `-cpuprofile`. Disk reads are limited to explicit local `file:` pages
-  and their local resources, plus `/proc/self/statm` for the Linux memory
-  footer; OS-level reads performed by Go's TLS, DNS and timezone libraries are
-  not application storage. Do not add automatic disk caching or restore-on-start
-  behavior.
+  and their local resources, an explicitly passed `-bookmarks` file, plus
+  `/proc/self/statm` for the Linux memory footer; OS-level reads performed by
+  Go's TLS, DNS and timezone libraries are not application storage. Do not add
+  automatic disk caching or restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
   `github.com/srwiley/oksvg` + `github.com/srwiley/rasterx` (user-requested SVG
@@ -122,7 +122,8 @@ Standard Go layout:
 | `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
-| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
@@ -252,19 +253,21 @@ Standard Go layout:
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `⟳ Reload`, the page title, and `≡ History` / `? Help` pinned to the far
-  right; the URL row is a full-width field that becomes the editable
-  `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
-  row uses a subtle horizontal gradient.
-- **History:** `about:history` lists the session's URLs as clickable links,
-  most recent first, marks the current entry, caps the list at the latest 50
-  and is generated on demand from the in-memory history (nothing persisted).
-  The toolbar History button opens it.
-- **Toolbar responsiveness:** full labels at 40+ columns; at narrower widths
-  fall back to `←`, `⟳`, `≡`, `?`; below 24 columns hide back/reload so the URL
-  field stays usable; below 12 columns hide history; below 6 columns hide
-  help. Every toolbar item is clickable via per-frame button hit regions
-  including the row coordinate.
+  `⟳ Reload`, the page title, and `★ Bookmarks` / `≡ History` / `? Help`
+  pinned to the far right; the URL row is a full-width field that becomes the
+  editable `Open: …` prompt with a cursor marker while the prompt is open. The
+  toolbar row uses a subtle horizontal gradient.
+- **History and bookmarks:** `about:history` lists the session's URLs as
+  clickable links, most recent first, marks the current entry, caps the list at
+  the latest 50 and is generated on demand from in-memory history.
+  `about:bookmarks` lists bookmarks imported with `-bookmarks FILE` (Netscape
+  HTML export), grouped by flattened folder path. Both pages are opened from
+  the toolbar buttons and are memory-only; nothing is persisted.
+- **Toolbar responsiveness:** full labels at 60+ columns; at narrower widths
+  fall back to `←`, `⟳`, `★`, `≡`, `?`; below 24 columns hide back/reload so
+  the URL field stays usable; below 18 columns hide bookmarks; below 12 hide
+  history; below 6 hide help. Every toolbar item is clickable via per-frame
+  button hit regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
