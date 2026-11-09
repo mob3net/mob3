@@ -218,7 +218,7 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
 	}
-	layout := BuildLayout(page.Root, page.Author, width)
+	layout := BuildLayoutDeadline(page.Root, page.Author, width, false, time.Now().Add(maxFrameTime))
 	height := layout.Height
 	if height < 1 {
 		height = 1

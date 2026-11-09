@@ -287,14 +287,27 @@ func (b *Browser) runJSTimers() bool {
 		// timer-driven redraws would clear the terminal selection.
 		return false
 	}
-	ran := b.js.tick(time.Now())
-	if !ran {
+	now := time.Now()
+	b.js.tick(now)
+	if b.consumePendingJS() {
 		return false
 	}
-	if b.js.consumeDirty() {
-		b.rebuild()
+	if !b.js.dirty {
+		return false
 	}
-	return !b.consumePendingJS()
+	// Coalesce timer-driven rebuilds. A page whose timers fire every 50 ms
+	// must not force a full style+layout pass at the same rate; waiting twice
+	// as long as the previous rebuild caps timer redraws at about half a core.
+	wait := jsRedrawInterval
+	if 2*b.lastBuild > wait {
+		wait = 2 * b.lastBuild
+	}
+	if !b.lastRebuild.IsZero() && now.Sub(b.lastRebuild) < wait {
+		return false
+	}
+	b.js.consumeDirty()
+	b.rebuild()
+	return true
 }
 
 func (j *jsRuntime) markDirty() {

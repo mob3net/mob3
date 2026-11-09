@@ -43,6 +43,12 @@ type Node struct {
 	Value        string
 	ValueSet     bool
 	InputFocused bool
+
+	// Cached class attribute split, reused by selector matching. The raw value
+	// is kept so mutations invalidate the cache without explicit bookkeeping.
+	classRaw    string
+	classList   []string
+	classCached bool
 }
 
 // Attr returns the value of an attribute, case-insensitively for the key.
@@ -71,13 +77,25 @@ func (n *Node) HasAttr(key string) bool {
 	return false
 }
 
-// ClassList splits the class attribute.
+// ClassList splits the class attribute. The result is cached until the
+// attribute value changes; selector matching calls this for every rule and
+// element, so re-splitting the string there is expensive.
 func (n *Node) ClassList() []string {
-	v := n.Attr("class")
-	if v == "" {
+	if n == nil {
 		return nil
 	}
-	return strings.Fields(v)
+	v := n.Attr("class")
+	if n.classCached && n.classRaw == v {
+		return n.classList
+	}
+	n.classRaw = v
+	n.classCached = true
+	if v == "" {
+		n.classList = nil
+	} else {
+		n.classList = strings.Fields(v)
+	}
+	return n.classList
 }
 
 // IsElement reports whether n is an element with the given tag.

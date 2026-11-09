@@ -92,7 +92,10 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   preserving their aspect ratio.
 - No tabs, downloads, clipboard copy or multipart/file uploads.
 - Very large pages, stylesheets and images are capped to keep memory and CPU
-  bounded.
+  bounded. Style and layout also run under a time budget, so a pathological
+  page is shown partially with a truncation notice instead of freezing the
+  browser. Pages whose timers update the DOM are redrawn a few times per
+  second rather than continuously.
 
 ## Contributing
 

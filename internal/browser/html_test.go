@@ -89,3 +89,18 @@ func TestMalformedMarkupRecovers(t *testing.T) {
 		t.Fatal("paragraphs should stay in div")
 	}
 }
+
+func TestClassListCacheInvalidates(t *testing.T) {
+	n := &Node{Type: ElementNode, Tag: "div", Attrs: []Attr{{Key: "class", Value: "a b"}}}
+	if got := strings.Join(n.ClassList(), ","); got != "a,b" {
+		t.Fatalf("class list = %q", got)
+	}
+	n.Attrs[0].Value = "c d"
+	if got := strings.Join(n.ClassList(), ","); got != "c,d" {
+		t.Fatalf("cached class list = %q after mutation", got)
+	}
+	n.Attrs = []Attr{{Key: "class", Value: "e"}}
+	if got := strings.Join(n.ClassList(), ","); got != "e" {
+		t.Fatalf("class list = %q after attribute replacement", got)
+	}
+}

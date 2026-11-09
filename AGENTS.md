@@ -153,7 +153,15 @@ Standard Go layout:
   min/max-width (and device-width), and range syntax such as `(width>=960px)`
   work; `print` never matches; unsupported
   features such as `prefers-color-scheme: dark` do not match. This keeps
-  desktop/mobile duplicates from rendering at the same time.
+  desktop/mobile duplicates from rendering at the same time. Media-query
+  results and element class lists are cached for a style pass, so repeated
+  rebuilds do not re-parse them for every rule and element.
+- **Frame budget:** style computation and layout share a cooperative 2-second
+  deadline per rebuild. Rule matching and the block/inline/table/flex/grid
+  layout entry points check it; expiry produces a partial layout with
+  `Layout.Truncated` set and the status `Page truncated (layout limit)`. This
+  is the safety net against pathological pages, alongside the fragment/row
+  limits.
 - **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
   shrink-to-fit items and `gap`/`column-gap`. Items keep at least their
@@ -462,7 +470,11 @@ Standard Go layout:
   `preventDefault()` suppresses link navigation. `setTimeout`/`setInterval`
   are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
   messages go to the `!` console, `console.error` sets the footer hint, and
-  `alert` appears in the footer.
+  `alert` appears in the footer. Timer callbacks that dirty the DOM do not
+  rebuild on every tick: timer-driven rebuilds are coalesced to at most once
+  per `max(250 ms, 2× the previous rebuild time)`, so a page whose timers fire
+  every 50 ms cannot consume every core with full style/layout passes.
+  User-input redraws remain immediate.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
   disables). Timer count and per-tick callbacks are capped. Script
@@ -494,8 +506,10 @@ Standard Go layout:
   default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
   the CPU timeout in place). Exceeding the budget interrupts the script with an
   error.
-- **Layout budget:** layout stops after 250k fragments or 200k document rows,
-  bounding memory/CPU for pathological or generated documents.
+- **Layout budget:** style and layout stop after a 2-second cooperative
+  deadline, and layout also stops after 250k fragments or 200k document rows,
+  bounding CPU and memory for pathological or generated documents. The frame
+  is rendered partially and marked truncated when a limit is hit.
 - **Same-origin XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` may
   only request the page's own scheme/host/port (default ports normalized).
   Cross-origin requests and cross-origin redirects fail; no CORS is

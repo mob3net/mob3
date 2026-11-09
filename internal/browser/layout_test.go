@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"time"
 )
 
 func build(src string, width int) *Layout {
@@ -506,5 +507,27 @@ func TestTextTransform(t *testing.T) {
 	}
 	if got := expandTabs("a\tb"); got != "a   b" {
 		t.Errorf("tabs = %q", got)
+	}
+}
+
+func TestBuildLayoutDeadlineTruncates(t *testing.T) {
+	doc := ParseHTML(`<html><body><p id="p">hello</p><div>world</div></body></html>`)
+	rules := ParseStylesheet(`p { color: red }`)
+	ly := BuildLayoutDeadline(doc, rules, 40, false, time.Now().Add(-time.Millisecond))
+	if !ly.Truncated {
+		t.Fatal("expired layout was not marked truncated")
+	}
+	for _, n := range doc.FindAll(func(*Node) bool { return true }) {
+		if n.Style == nil {
+			t.Fatalf("element %q has no style after truncated styling", n.Tag)
+		}
+	}
+}
+
+func TestBuildLayoutWithoutDeadlineComplete(t *testing.T) {
+	doc := ParseHTML(`<html><body><p>hello</p></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	if ly.Truncated {
+		t.Fatal("small layout was unexpectedly truncated")
 	}
 }

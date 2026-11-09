@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -53,6 +54,9 @@ type Layout struct {
 	PageBG Color
 	Body   *Node
 	HTML   *Node
+
+	// Truncated reports that a resource or time limit stopped layout early.
+	Truncated bool
 }
 
 const (
@@ -66,6 +70,21 @@ type layouter struct {
 	frags     []Frag
 	bigText   bool
 	truncated bool
+	deadline  time.Time
+	expired   bool
+}
+
+// outOfTime reports whether the layout pass has exceeded its deadline. The
+// flag is sticky so recursive callers unwind instead of starting new work.
+func (l *layouter) outOfTime() bool {
+	if l.expired {
+		return true
+	}
+	if !l.deadline.IsZero() && time.Now().After(l.deadline) {
+		l.expired = true
+		l.truncated = true
+	}
+	return l.expired
 }
 
 // BuildLayout computes styles, runs block/inline layout, and gathers links.
@@ -77,12 +96,22 @@ func BuildLayout(root *Node, author []Rule, width int) *Layout {
 // bigText is true, runs larger than the base font get extra cell width and
 // line height, matching the kitty text-sizing protocol.
 func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout {
+	return BuildLayoutDeadline(root, author, width, bigText, time.Time{})
+}
+
+// BuildLayoutDeadline is BuildLayoutBig with a cooperative time budget shared
+// by style computation and layout. A zero deadline means no limit. When the
+// budget runs out the returned layout is partial and Truncated is set.
+func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
 	if width < 1 {
 		width = 1
 	}
-	engine := newStyleEngine(author, width*cellW)
+	engine := newStyleEngineDeadline(author, width*cellW, deadline)
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText}
+	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline}
+	if engine.expired {
+		l.truncated = true
+	}
 	html := root.FindFirst("html")
 	if html != nil {
 		l.block(html, 0, 0, width)
@@ -111,13 +140,16 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 	}
 	out := &Layout{
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
-		PageBG: pageBG, Body: body, HTML: html,
+		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
 	}
 	out.buildLinks()
 	return out
 }
 
 func (l *layouter) addFill(x, y, w, h int, c Color) {
+	if l.outOfTime() {
+		return
+	}
 	if w <= 0 || h <= 0 || !c.Set || c.A == 0 {
 		return
 	}
@@ -129,6 +161,9 @@ func (l *layouter) addFill(x, y, w, h int, c Color) {
 }
 
 func (l *layouter) addText(x, y int, s string, st *Style, n *Node) {
+	if l.outOfTime() {
+		return
+	}
 	if s == "" || st == nil {
 		return
 	}
@@ -225,6 +260,9 @@ func (l *layouter) isBlock(n *Node) bool {
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
+	if l.outOfTime() {
+		return 0
+	}
 	if l.truncated || y > maxLayoutRows {
 		l.truncated = true
 		return 0
@@ -539,6 +577,9 @@ func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
 }
 
 func (l *layouter) grid(n *Node, x, y, availW int) int {
+	if l.outOfTime() {
+		return 0
+	}
 	st := n.Style
 	if st == nil {
 		return l.flow(n, x, y, availW)
@@ -630,6 +671,9 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 }
 
 func (l *layouter) flexRow(n *Node, x, y, availW int) int {
+	if l.outOfTime() {
+		return 0
+	}
 	var items []*Node
 	for _, c := range n.Children {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display != "none" {
@@ -810,6 +854,9 @@ func roman(n int) string {
 // flow lays out a block's children: consecutive inline content is grouped into
 // anonymous inline blocks, block-level children stack vertically.
 func (l *layouter) flow(parent *Node, x, y, width int) int {
+	if l.outOfTime() {
+		return 0
+	}
 	cur := y
 	var inline []*Node
 	flush := func() {
@@ -871,6 +918,9 @@ type inlineCtx struct {
 }
 
 func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
+	if l.outOfTime() {
+		return 0
+	}
 	if l.truncated || y > maxLayoutRows {
 		l.truncated = true
 		return 0
@@ -1519,6 +1569,9 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 
 // table lays out a display:table subtree with collapsed one-cell grid borders.
 func (l *layouter) table(n *Node, x, y, availW int) int {
+	if l.outOfTime() {
+		return 0
+	}
 	if l.truncated || y > maxLayoutRows {
 		l.truncated = true
 		return 0

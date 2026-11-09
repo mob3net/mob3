@@ -10,7 +10,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
+)
+
+const (
+	// maxFrameTime bounds the style+layout work for one rebuild. A page that
+	// cannot render within this budget produces a partial layout instead of
+	// freezing the UI.
+	maxFrameTime = 2 * time.Second
+	// jsRedrawInterval is the minimum gap between timer-driven rebuilds. The
+	// previous rebuild cost is added so a slow page cannot spend all its time
+	// re-laying out from timers.
+	jsRedrawInterval = 250 * time.Millisecond
+
+	layoutTruncatedStatus = "Page truncated (layout limit)"
 )
 
 // Browser holds navigation and view state.
@@ -58,6 +72,9 @@ type Browser struct {
 	lastMethod      string
 	lastBody        []byte
 	lastContentType string
+
+	lastRebuild time.Time
+	lastBuild   time.Duration
 
 	inputFocus    *Node
 	consoleOpen   bool
@@ -350,6 +367,8 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.status = "Site blocked — browser check not supported"
 	} else if page.Status >= 400 {
 		b.status = fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
+	} else if b.layout != nil && b.layout.Truncated {
+		b.status = layoutTruncatedStatus
 	}
 	if res.push {
 		b.pushHistory(page.URL.String())
@@ -464,8 +483,18 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	start := time.Now()
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
-	b.layout = BuildLayoutBig(b.page.Root, b.page.Author, b.width, b.bigText)
+	b.layout = BuildLayoutDeadline(b.page.Root, b.page.Author, b.width, b.bigText, start.Add(maxFrameTime))
+	b.lastBuild = time.Since(start)
+	b.lastRebuild = time.Now()
+	if b.layout.Truncated {
+		if b.status == "" {
+			b.status = layoutTruncatedStatus
+		}
+	} else if b.status == layoutTruncatedStatus {
+		b.status = ""
+	}
 	b.hover = -1
 	b.clampScroll()
 }

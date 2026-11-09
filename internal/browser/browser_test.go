@@ -1554,3 +1554,38 @@ func TestDialogRendering(t *testing.T) {
 		t.Fatalf("dialog not rendered: %q", text)
 	}
 }
+
+func TestTimerRedrawsAreCoalesced(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out">before</p></body></html>`, `
+		setInterval(function () {
+			document.getElementById("out").textContent = String(Date.now());
+		}, 10);
+	`)
+	b := NewBrowser(60, 15)
+	b.page = page
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	first := b.layout
+	b.lastBuild = 100 * time.Millisecond
+	b.lastRebuild = time.Now()
+	time.Sleep(25 * time.Millisecond)
+	if b.runJSTimers() {
+		t.Fatal("timer rebuilt inside the coalescing interval")
+	}
+	if b.layout != first {
+		t.Fatal("layout changed inside the coalescing interval")
+	}
+	if !b.js.dirty {
+		t.Fatal("dirty flag was cleared before the deferred rebuild")
+	}
+	b.lastRebuild = time.Now().Add(-time.Second)
+	if !b.runJSTimers() {
+		t.Fatal("deferred timer rebuild did not run after the interval")
+	}
+	if b.js.dirty {
+		t.Fatal("dirty flag was not cleared after rebuilding")
+	}
+	if b.layout == first {
+		t.Fatal("layout was not rebuilt after the interval")
+	}
+}

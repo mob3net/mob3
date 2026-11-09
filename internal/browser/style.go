@@ -1038,6 +1038,9 @@ type styleEngine struct {
 	ua         []Rule
 	author     []Rule
 	viewportPx int
+	deadline   time.Time
+	media      map[string]bool
+	expired    bool
 }
 
 // uaRules is parsed once; rebuilding layout must not re-parse the UA sheet.
@@ -1045,6 +1048,43 @@ var uaRules = ParseStylesheet(uaStylesheet)
 
 func newStyleEngine(author []Rule, viewportPx int) *styleEngine {
 	return &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx}
+}
+
+func newStyleEngineDeadline(author []Rule, viewportPx int, deadline time.Time) *styleEngine {
+	e := newStyleEngine(author, viewportPx)
+	e.deadline = deadline
+	return e
+}
+
+// outOfTime reports whether the style pass has exceeded its deadline. Once
+// expired, the remaining tree is only given inherited styles so layout can
+// still produce a partial page without doing unbounded selector work.
+func (e *styleEngine) outOfTime() bool {
+	if e.expired {
+		return true
+	}
+	if !e.deadline.IsZero() && time.Now().After(e.deadline) {
+		e.expired = true
+	}
+	return e.expired
+}
+
+// mediaMatches caches media query evaluation for the duration of one style
+// pass. The same handful of queries is otherwise re-parsed for every element
+// and rule.
+func (e *styleEngine) mediaMatches(query string) bool {
+	if query == "" {
+		return true
+	}
+	if v, ok := e.media[query]; ok {
+		return v
+	}
+	v := mediaMatches(query, e.viewportPx)
+	if e.media == nil {
+		e.media = make(map[string]bool)
+	}
+	e.media[query] = v
+	return v
 }
 
 func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
@@ -1065,13 +1105,15 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 			return
 		}
 		st := inheritStyle(parent)
-		applyMatching(e.ua, n, st, parent, e.viewportPx)
-		ApplyPresentationAttrs(n, st)
-		applyMatching(e.author, n, st, parent, e.viewportPx)
-		if inline := n.Attr("style"); inline != "" {
-			decls := ParseDeclarations(inline)
-			applyDecls(st, decls, parent, false, parentSize(parent))
-			applyDecls(st, decls, parent, true, parentSize(parent))
+		if !e.outOfTime() {
+			e.applyMatching(e.ua, n, st, parent)
+			ApplyPresentationAttrs(n, st)
+			e.applyMatching(e.author, n, st, parent)
+			if inline := n.Attr("style"); inline != "" {
+				decls := ParseDeclarations(inline)
+				applyDecls(st, decls, parent, false, parentSize(parent))
+				applyDecls(st, decls, parent, true, parentSize(parent))
+			}
 		}
 		// Common screen-reader-only pattern: a 1px clipped box. Rendering it
 		// would produce one character per line, so hide it.
@@ -1089,10 +1131,13 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 	return styles
 }
 
-func applyMatching(rules []Rule, n *Node, st *Style, parent *Style, viewportPx int) {
+func (e *styleEngine) applyMatching(rules []Rule, n *Node, st *Style, parent *Style) {
 	var matched []Rule
-	for _, r := range rules {
-		if r.Media != "" && !mediaMatches(r.Media, viewportPx) {
+	for i, r := range rules {
+		if i&63 == 0 && e.outOfTime() {
+			break
+		}
+		if r.Media != "" && !e.mediaMatches(r.Media) {
 			continue
 		}
 		if r.Selector.Match(n) {
