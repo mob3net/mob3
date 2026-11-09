@@ -108,35 +108,31 @@ Standard Go layout:
 - `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
   exits with its status.
 - `internal/browser/` — package `browser` with the engine, CLI loop and tests.
-  No `internal` package is imported from outside this module.
+  No `internal` package is imported from outside this module. Keep the folder
+  consolidated by subsystem rather than one file per small feature; platform
+  code stays in its `term_*`/`signals_*` files.
 
 | File | Decision / responsibility |
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `css.go` | Hand-written CSS rule/selector/declaration parser. Supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
-| `style.go` | Computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. |
-| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates. |
-| `paint.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support. |
-| `graphics.go` | Kitty and iTerm2 inline-image protocols, terminal capability detection, PNG encoding/downscaling, placement cache. |
-| `mouse.go` | Mouse event type, SGR/X10 decoding helpers and click-to-link hit testing support. |
-| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache. |
-| `cookies.go` | In-memory session cookie jar with public-suffix checking and a separate HttpOnly-hidden view for `document.cookie`. |
-| `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation. |
-| `version.go` | Build-time version string reported by `-version`; default `dev`. |
-| `usage.go` | Process resident-memory sampling for the footer. |
-| `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
+| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
+| `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
+| `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
+| `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
-| `js_elements.go` | HTML element constructor globals and prototype chains for `instanceof` checks. |
-| `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs. |
-| `js_fetch.go` | Promise-based same-origin `fetch`, plus `Headers`, `Request` and `Response`. |
+| `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
+| `js_web.go` | `URL`/`URLSearchParams`, promise-based same-origin `fetch` with `Headers`/`Request`/`Response`, and same-origin `XMLHttpRequest`. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
-| `cli.go` | `Run`: flags, dump mode, interactive event loop. |
+| `cli.go` | `Run`: flags, dump mode, interactive event loop, and the build-time `Version` string reported by `-version`; default `dev`. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. |
 
 ## 4. Rendering and layout
