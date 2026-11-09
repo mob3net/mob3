@@ -306,10 +306,12 @@ Standard Go layout:
   and `form` on elements. Editable fields use a prominent light-blue background
   with bold text; the focused field switches to a solid blue background with
   white text, and its placeholder/hint disappears while focused.
-- **Footer:** shows the hovered link target or status on the left and current resident memory
-  on the right (`MEM 18 MB`), with the scroll percentage pinned at the far
-  right edge. The readout refreshes every two seconds and drops before the
-  percentage on narrow terminals. Memory is `/proc/self/statm` RSS on Linux
+- **Footer:** shows the hovered link target or status on the left and, on the
+  right, an optional `JS: Error (! console)` hint, current resident memory
+  (`MEM 18 MB`) and the scroll percentage pinned at the far right edge. The
+  error hint clears when the JS console opens or a new page loads, and drops
+  before memory on narrow terminals. The readout refreshes every two seconds.
+  Memory is `/proc/self/statm` RSS on Linux
   with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
   while the JS console is open, so terminal selection is not disturbed.
 - **History:** a URL string stack with forward truncation; fragment-only links
@@ -400,18 +402,22 @@ Standard Go layout:
 - **JS console view:** `!` opens a plain-text console in the viewport and
   disables mouse reporting so the terminal's own selection/copy works. Timers
   and timer-driven redraws pause while it is open, so a terminal selection is
-  not cleared while copying. `j/k` scroll, `Esc`/`!` close, `q` quits. The full
-  error text is kept there even when the footer status is truncated.
+  not cleared while copying. `j/k` scroll, `Esc`/`!` close, `q` quits. The
+  full error text is kept there; the footer only carries a short
+  `JS: Error (! console)` hint.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`
   attributes and the `onclick` property; `DOMContentLoaded` and `load`.
   `preventDefault()` suppresses link navigation. `setTimeout`/`setInterval`
   are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
-  messages and `alert` appear in the footer.
+  messages go to the `!` console, `console.error` sets the footer hint, and
+  `alert` appears in the footer.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
   disables). Timer count and per-tick callbacks are capped. Script
-  errors surface as footer status. Navigation via `location.href`,
+  errors set the right-side `JS: Error (! console)` footer hint and are logged
+  for the `!` console; they do not replace the left status text. Navigation via
+  `location.href`,
   `location.assign`/`replace`/`reload` is queued until the script or callback
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
   are followed immediately. Storage and the cookie jar are in-memory only and

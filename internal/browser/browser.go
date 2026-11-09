@@ -23,6 +23,7 @@ type Browser struct {
 	scroll        int
 	focus         int
 	hover         int
+	jsErr         bool
 	status        string
 
 	history []string
@@ -249,6 +250,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	if res.seq != b.loadSeq {
 		return
 	}
+	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
 	if res.err != nil {
@@ -1557,17 +1559,14 @@ func (b *Browser) draw() {
 		g.Fill(0, fy, w, 1, footerBG)
 		fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
 		leftText := b.footerLeft()
-		pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-		rightText := b.usage.footer() + "   " + pctText
-		if stringWidth(rightText) > w-8 {
-			rightText = pctText
-		}
-		if stringWidth(rightText) > w {
-			rightText = truncateWidth(pctText, w)
-		}
+		rightText := b.footerRight(w)
 		avail := w - stringWidth(rightText)
 		if avail < 8 {
+			pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
 			rightText = truncateWidth(pctText, w)
+			if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w {
+				rightText = jsErrorShort + "  " + pctText
+			}
 			avail = w - stringWidth(rightText)
 		}
 		if avail < 0 {
@@ -1677,6 +1676,35 @@ func (b *Browser) footerLeft() string {
 		return " → " + b.resolveHref(li.Href)
 	}
 	return " Ready"
+}
+
+const (
+	jsErrorHint  = "JS: Error (! console)"
+	jsErrorShort = "JS: Error"
+)
+
+// footerRight builds the right-aligned footer text: an optional JS error hint,
+// resident memory and the scroll percentage.
+func (b *Browser) footerRight(width int) string {
+	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
+	withMem := b.usage.footer() + "   " + pctText
+	if b.jsErr {
+		withMem = jsErrorHint + "   " + withMem
+	}
+	if stringWidth(withMem) <= width-8 {
+		return withMem
+	}
+	noMem := pctText
+	if b.jsErr {
+		noMem = jsErrorHint + "   " + pctText
+	}
+	if stringWidth(noMem) <= width {
+		return noMem
+	}
+	if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= width {
+		return jsErrorShort + "  " + pctText
+	}
+	return truncateWidth(pctText, width)
 }
 
 // EscapeHTML escapes text for error pages.

@@ -63,7 +63,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   half-block art fallback.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
-  storage/cookies.
+  storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
+  the full console.
 - Keyboard and mouse navigation, history, scrolling, focus, link hover
   targets in the footer, and text selection.
 

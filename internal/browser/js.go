@@ -318,7 +318,6 @@ func (j *jsRuntime) reportError(err error) {
 		msg = "JavaScript error"
 	}
 	j.b.logJS("error", msg)
-	j.b.status = "JS: " + truncateWidth(msg, 120) + "  (! console)"
 }
 
 func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
@@ -569,7 +568,6 @@ func (j *jsRuntime) consoleObject() *goja.Object {
 			}
 			msg := strings.Join(parts, " ")
 			j.b.logJS(level, msg)
-			j.b.status = "JS " + level + ": " + truncateWidth(msg, 120) + "  (! console)"
 			return goja.Undefined()
 		}
 	}

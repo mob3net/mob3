@@ -16,6 +16,12 @@ func (b *Browser) logJS(kind, msg string) {
 	if len(b.jsLog) > 200 {
 		b.jsLog = b.jsLog[len(b.jsLog)-200:]
 	}
+	if kind == "error" {
+		b.jsErr = true
+		if strings.HasPrefix(b.status, "JS:") {
+			b.status = ""
+		}
+	}
 }
 
 func setMouseReporting(on bool) {
@@ -30,6 +36,9 @@ func (b *Browser) toggleConsole() {
 	b.consoleOpen = !b.consoleOpen
 	b.consoleScroll = 0
 	b.prev = nil
+	if b.consoleOpen {
+		b.jsErr = false
+	}
 	// With reporting off the terminal's own selection/copy works, so errors
 	// and logs can be copied normally.
 	setMouseReporting(!b.consoleOpen)

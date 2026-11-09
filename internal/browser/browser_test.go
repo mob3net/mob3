@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"strings"
@@ -604,6 +605,60 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 	case <-b.loadCh:
 		t.Fatal("retry without a URL started a load")
 	default:
+	}
+}
+
+func TestJSErrorHintInFooter(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.usage = procUsage{rss: 18 << 20}
+	if strings.Contains(b.footerRight(80), "JS: Error") {
+		t.Fatal("error hint shown without a JS error")
+	}
+	b.logJS("error", "TypeError: boom")
+	if !b.jsErr {
+		t.Fatal("JS error was not recorded")
+	}
+	right := b.footerRight(80)
+	if !strings.Contains(right, jsErrorHint) || !strings.Contains(right, "MEM 18 MB") {
+		t.Fatalf("footer right = %q", right)
+	}
+	if strings.Index(right, "JS: Error") > strings.Index(right, "MEM") {
+		t.Fatalf("error hint is not before memory: %q", right)
+	}
+	if narrow := b.footerRight(24); !strings.HasPrefix(narrow, jsErrorShort) {
+		t.Fatalf("narrow footer = %q", narrow)
+	}
+}
+
+func TestJSConsoleDoesNotUseFooterText(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		console.log("noise");
+		console.warn("warning");
+		console.error("boom");
+	`)
+	b := NewBrowser(80, 10)
+	b.startJS(page)
+	if b.status != "" {
+		t.Fatalf("console output set footer status: %q", b.status)
+	}
+	if !b.jsErr {
+		t.Fatal("console.error did not set the footer hint")
+	}
+}
+
+func TestJSReportErrorUsesFooterHint(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.status = "keep me"
+	j := &jsRuntime{b: b}
+	j.reportError(errors.New("boom"))
+	if b.status != "keep me" {
+		t.Fatalf("status = %q", b.status)
+	}
+	if !b.jsErr {
+		t.Fatal("reportError did not set the footer hint")
+	}
+	if len(b.jsLog) == 0 || !strings.Contains(b.jsLog[0], "boom") {
+		t.Fatalf("log = %v", b.jsLog)
 	}
 }
 
