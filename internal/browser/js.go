@@ -58,6 +58,12 @@ type jsRuntime struct {
 	eventCtors     map[string]*goja.Object
 	canvasContexts map[*Node]goja.Value
 
+	selection *goja.Object
+	ranges    map[*goja.Object]*jsRange
+	blobs     map[*goja.Object]*blobData
+	blobURLs  map[string]*goja.Object
+	blobSeq   int64
+
 	timers   map[int]*jsTimer
 	nextID   int
 	dirty    bool
@@ -96,6 +102,9 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		nextID:         1,
 		headerObjs:     make(map[*goja.Object]map[string][]string),
 		canvasContexts: make(map[*Node]goja.Value),
+		ranges:         make(map[*goja.Object]*jsRange),
+		blobs:          make(map[*goja.Object]*blobData),
+		blobURLs:       make(map[string]*goja.Object),
 	}
 	j.start = time.Now()
 	j.installElementConstructors()
@@ -212,6 +221,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 			_ = j.winObj.Set(name, v)
 		}
 	}
+	j.installCompat()
 	return j
 }
 

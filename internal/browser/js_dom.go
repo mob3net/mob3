@@ -715,6 +715,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
+	j.installElementCompat(o, n)
 }
 
 func (j *jsRuntime) nodeArray(nodes []*Node) goja.Value {
@@ -1299,6 +1300,7 @@ func (j *jsRuntime) documentObject() *goja.Object {
 		j.removeListener(j.docListeners, call.Argument(0).String(), call.Argument(1))
 		return goja.Undefined()
 	})
+	j.installDocumentCompat(o, root)
 	return o
 }
 

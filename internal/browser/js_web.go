@@ -251,6 +251,10 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 		_ = reject(j.vm.NewTypeError(msg))
 		return j.vm.ToValue(p)
 	}
+	failAbort := func() goja.Value {
+		_ = reject(j.abortError())
+		return j.vm.ToValue(p)
+	}
 	input := call.Argument(0)
 	init := jsObject(call.Argument(1))
 	target := ""
@@ -280,6 +284,9 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 		}
 		if b := init.Get("body"); b != nil && !goja.IsUndefined(b) && !goja.IsNull(b) {
 			body = b.String()
+		}
+		if sig := jsObject(init.Get("signal")); sig != nil && j.eventFlag(sig, "aborted") {
+			return failAbort()
 		}
 	}
 	base := j.page.Base

@@ -715,6 +715,174 @@ func TestJSGetComputedStyle(t *testing.T) {
 	}
 }
 
+func TestJSDOMCompatTier(t *testing.T) {
+	page := newJSPage(`<html><body><p id="t">hello world</p></body></html>`, `
+		var el = document.createElement("div");
+		el.dataset.userId = "42";
+		var read = el.dataset.userId;
+		el.setAttribute("data-x", "y");
+		var names = el.getAttributeNames().sort().join("|");
+		el.toggleAttribute("hidden");
+		var added = el.hasAttribute("hidden");
+		el.toggleAttribute("hidden");
+		var removed = !el.hasAttribute("hidden");
+		document.body.appendChild(el);
+		var s = document.createElement("span");
+		el.insertAdjacentElement("beforebegin", s);
+		var b = document.createElement("b");
+		b.textContent = "t";
+		el.insertAdjacentElement("beforeend", b);
+		var html = el.outerHTML;
+		var pos = el.compareDocumentPosition(s);
+		el.appendChild(document.createTextNode("a"));
+		el.appendChild(document.createTextNode("b"));
+		el.normalize();
+		var kids = el.childNodes.length;
+		document.title = [
+			read, names, added, removed, pos,
+			html.indexOf("<b>t</b>") >= 0, kids,
+			el.getClientRects().length
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "42,data-user-id|data-x,true,true,2,true,2,1" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSTreeWalkerAndRange(t *testing.T) {
+	page := newJSPage(`<html><body><p id="t">hello world</p></body></html>`, `
+		var root = document.createElement("div");
+		root.innerHTML = "<p>a</p><span>b</span>";
+		document.body.appendChild(root);
+		var names = [];
+		var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+		var n;
+		while ((n = w.nextNode())) names.push(n.tagName);
+		var names2 = [];
+		var it = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+		while ((n = it.nextNode())) names2.push(n.tagName);
+		var r = document.createRange();
+		r.selectNodeContents(document.getElementById("t"));
+		var sel = document.getSelection();
+		sel.removeAllRanges();
+		sel.addRange(r);
+		document.title = [
+			names.join("|"), names2.join("|"),
+			r.toString(), sel.rangeCount, sel.isCollapsed, sel.toString()
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "P|SPAN,DIV|P|SPAN,hello world,1,false,hello world" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSTextCryptoAndClone(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var enc = new TextEncoder();
+		var dec = new TextDecoder();
+		var bytes = enc.encode("héllo");
+		var back = dec.decode(bytes);
+		var arr = new Uint8Array(4);
+		crypto.getRandomValues(arr);
+		var uuid = crypto.randomUUID();
+		var src = { a: 1, b: [1, 2] };
+		src.self = src;
+		var c = structuredClone(src);
+		var distinct = !crypto.getRandomValues(new Uint8Array(4)).every(function (v, i) { return v === arr[i]; });
+		document.title = [
+			back, bytes.length, uuid.length, c.a, c.b[1], c.self === c, distinct
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "héllo,6,36,1,2,true,true" && page.Title != "héllo,6,36,1,2,true,false" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSAbortController(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var ac = new AbortController();
+		var fired = "";
+		ac.signal.addEventListener("abort", function (e) { fired = e.type; });
+		var before = ac.signal.aborted;
+		ac.abort();
+		document.title = [before, ac.signal.aborted, fired, ac.signal.reason.name].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "false,true,abort,AbortError" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSFetchAborted(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var ac = new AbortController();
+		ac.abort();
+		fetch("/never", { signal: ac.signal }).then(
+			function () { document.title = "resolved"; },
+			function (e) { document.title = "rejected:" + e.name; }
+		);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "rejected:AbortError" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSBlobFileReaderFormData(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var blob = new Blob(["hi"], { type: "text/plain" });
+		var fd = new FormData();
+		fd.append("a", "1");
+		fd.append("b", "2");
+		fd.set("a", "3");
+		var entries = [];
+		fd.forEach(function (v, k) { entries.push(k + "=" + v); });
+		var url = URL.createObjectURL(blob);
+		var fr = new FileReader();
+		fr.onload = function () {
+			document.title = [
+				blob.size, blob.type, fd.get("a"), fd.getAll("a").length,
+				fd.has("b"), entries.join("|"),
+				url.indexOf("blob:mob3/") === 0, fr.result,
+				blob.slice(0, 1).size
+			].join(",");
+		};
+		fr.readAsText(blob);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	b.js.tick(time.Now().Add(time.Second))
+	if page.Title != "2,text/plain,3,1,true,a=3|b=2,true,hi,1" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSFocusAndMicrotask(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var input = document.createElement("input");
+		document.body.appendChild(input);
+		input.focus();
+		var focused = document.activeElement === input;
+		input.blur();
+		var blurred = document.activeElement !== input;
+		queueMicrotask(function () { document.title = [focused, blurred].join(","); });
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	b.js.tick(time.Now().Add(time.Second))
+	if page.Title != "true,true" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),

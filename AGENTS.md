@@ -125,6 +125,7 @@ Standard Go layout:
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
+| `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based same-origin `fetch` with `Headers`/`Request`/`Response`, and same-origin `XMLHttpRequest`. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
@@ -375,7 +376,8 @@ Standard Go layout:
   available with `Headers`, `Request` and `Response`; it follows the same
   same-origin rule, resolves a promise, and supports `text`, `json`,
   `arrayBuffer` and `blob` bodies. It is likewise synchronous under the hood
-  and has no streaming, abort controller or upload progress. `Intl` provides
+  and has no streaming or upload progress; a basic `AbortController` only
+  rejects a fetch that has not started. `Intl` provides
   an English-only practical subset: `NumberFormat`, `DateTimeFormat`,
   `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`,
   `getCanonicalLocales` and `supportedValuesOf`, without full CLDR locale
@@ -538,7 +540,8 @@ Standard Go layout:
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and lack
-  streaming/upload progress; `fetch` has no abort controller. `Intl` is an
+  streaming/upload progress; `AbortController` only cancels fetches that have
+  not started. `Intl` is an
   English-only subset without full CLDR locale data. `document.write` is
   supported for document fragments. JS history navigation is stubbed. Plain
   same-origin `location` redirects and meta refresh work; remote pages cannot
@@ -601,3 +604,64 @@ Standard Go layout:
 7. Keep the README user-facing; keep this file decision-facing.
 8. End every completed change with a short one-line commit message (do not
    create the commit unless the user asks).
+
+## 10. JavaScript/web API compatibility reference
+
+MOB³ targets core DOM plus jQuery-era libraries, not a modern browser
+platform. Keep this list current when the JS surface changes.
+
+Works well:
+- goja language level: ES5.1 plus much of ES6 (classes, arrows, generators,
+  async/await, Promise, Map/Set, Symbol, Proxy, typed arrays).
+- DOM core: tree queries and mutation, attributes, `classList`, inline
+  `style`, `textContent`/`innerText`/`innerHTML`, cloning, selectors,
+  `getBoundingClientRect` (coarse), `getComputedStyle`, `ownerDocument`,
+  `defaultView`, `document.implementation`.
+- Events: Event/CustomEvent/UI/Mouse/Keyboard/Focus/Input/Pointer/Error/
+  Message/Progress constructors, `createEvent`, bubbling `dispatchEvent`,
+  `preventDefault`, `element.click()`.
+- Network: same-origin `fetch`, `Headers`/`Request`/`Response`, same-origin
+  `XMLHttpRequest`, cookies, `URL`/`URLSearchParams`.
+- Storage: in-memory `localStorage`/`sessionStorage` and `document.cookie`.
+- Canvas: `getContext("2d")` is a no-op context with the common method surface;
+  no pixels and no WebGL.
+- Compatibility shims (`js_compat.go`): `dataset`, `outerHTML`,
+  `insertAdjacentElement/Text`, `getAttributeNames`, `toggleAttribute`,
+  `compareDocumentPosition`, `normalize`, `focus`/`blur`/`scrollIntoView`,
+  `getClientRects`, `Range`/`Selection`/`getSelection`,
+  `createTreeWalker`/`createNodeIterator`, `TextEncoder`/`TextDecoder`,
+  `crypto.getRandomValues`/`randomUUID`, `structuredClone`, `AbortController`/
+  `AbortSignal`, `Blob`/`File`/`FileReader`, `FormData`, `URL.createObjectURL`
+  and `queueMicrotask`.
+
+Intentional limits of the shims:
+- `structuredClone` covers primitives, plain objects, arrays, Date, Map, Set
+  and ArrayBuffer; typed arrays become plain arrays. Functions throw.
+- `AbortController` only rejects a `fetch` that has not started yet; requests
+  are synchronous under the hood and cannot be cancelled mid-flight.
+- `FormData` and Blob object URLs are in-memory only. Multipart uploads, Blob
+  image loading and request-body streaming are not implemented.
+- `MutationObserver` is a no-op, `MessageChannel` is timer-backed,
+  `getSelection`/`Range` are informational, and `TreeWalker` rebuilds the
+  preorder list on each step.
+- Measurement APIs are approximate: scripts run before layout, so
+  `getComputedStyle` and rectangles may reflect defaults until after load.
+- Dynamically inserted `<script>` elements do not execute; modules, `defer`
+  and `async` are ignored.
+
+Known unsupported families (do not present these as available):
+- Platform: WebAssembly, Workers/SharedWorker/ServiceWorker, WebSocket,
+  EventSource, IndexedDB, Cache API, WebAudio, WebGL, WebRTC, Notifications,
+  geolocation, clipboard, permissions, mediaDevices, PaymentRequest.
+- DOM: Shadow DOM/`attachShadow`, custom elements registry, real
+  Intersection/Resize/Performance observers, iframe browsing contexts,
+  `<template>.content`, video/audio playback.
+- Network/browser: streaming fetch, upload progress, CORS, `sendBeacon`,
+  full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
+  are stubs), multipart forms.
+- CSS/layout: grid, floats, absolute positioning, CSS variables, animations,
+  transitions, generated content, `@import`, background images, full flexbox.
+
+Do not add a stub just to silence an error when a library would then depend on
+behavior MOB³ cannot provide; document it here instead or implement the real
+subset.

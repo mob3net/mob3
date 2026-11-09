@@ -241,8 +241,11 @@ the URL; the block caret overlays text without shifting it.
   `document.defaultView`, `ownerDocument` and
   `document.implementation` (`hasFeature`/`createHTMLDocument`) back common
   library feature detection, and `getComputedStyle` exposes resolved
-  display/font/box values with `getPropertyValue`. Includes
-  `URL`/`URLSearchParams`,
+  display/font/box values with `getPropertyValue`. Compatibility shims cover
+  `dataset`, `outerHTML`, `insertAdjacent*`, Range/Selection, TreeWalker,
+  `TextEncoder`/`TextDecoder`, `crypto`, `structuredClone`,
+  `AbortController`, Blob/File/FileReader, FormData and URL object URLs.
+  Includes `URL`/`URLSearchParams`,
   `document.currentScript`/`write`, in-memory storage and a session cookie jar
   shared by `document.cookie`, HTTP requests, XHR and fetch,
   `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,
@@ -294,9 +297,12 @@ MOB³ is a cell-based renderer, not a pixel browser:
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are same-origin-only (cross-origin
   requests/redirects are blocked), synchronous under the hood, and lack
-  streaming/upload progress; `fetch` has no abort controller. `Intl` is an
-  English-only subset without full CLDR locale data. JS history navigation is
-  stubbed. `location` redirects and meta refresh work. JS-heavy apps that
+  streaming/upload progress; a basic `AbortController` only cancels fetches
+  before they start. `Intl` is an English-only subset without full CLDR locale
+  data. JS history navigation is stubbed. `location` redirects and meta
+  refresh work. Unsupported platform APIs include WebAssembly, workers,
+  WebSockets, IndexedDB, service workers, WebGL, WebAudio, Shadow DOM/custom
+  elements, real observers, iframe contexts and video/audio playback. JS-heavy apps that
   require missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
 - Nothing is persisted: history, cookies, JS storage and the image cache are
