@@ -26,8 +26,9 @@ const (
 	// re-laying out from timers.
 	jsRedrawInterval = 250 * time.Millisecond
 
-	layoutTruncatedStatus = "Page truncated (layout limit)"
-	maxClipboardBytes     = 100 * 1024
+	layoutTruncatedStatus   = "Page truncated (layout limit)"
+	moduleUnsupportedStatus = "Page requires ES modules (unsupported)"
+	maxClipboardBytes       = 100 * 1024
 )
 
 // Browser holds navigation and view state.
@@ -374,6 +375,8 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.status = "Site blocked — browser check not supported"
 	} else if page.Status >= 400 {
 		b.status = fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
+	} else if page.HasModules {
+		b.status = moduleUnsupportedStatus
 	} else if b.layout != nil && b.layout.Truncated {
 		b.status = layoutTruncatedStatus
 	}
@@ -2114,7 +2117,22 @@ func (b *Browser) draw() {
 		if avail < 0 {
 			avail = 0
 		}
-		g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), fs, footerFG)
+		leftStyle := fs
+		leftColor := footerFG
+		if b.status != "" && b.hoveredLink() == nil {
+			switch statusLevelFor(b.status) {
+			case statusWarning:
+				leftColor = RGB(0x9a, 0x5b, 0x00)
+				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+			case statusError:
+				leftColor = RGB(0xb3, 0x1d, 0x1d)
+				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+			case statusSuccess:
+				leftColor = RGB(0x17, 0x6b, 0x35)
+				leftStyle = &Style{Color: leftColor, FontSize: 16, LineHeight: 1}
+			}
+		}
+		g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
 		if rightText != "" {
 			g.Text(w-reserve-stringWidth(rightText), fy, rightText, fs, footerFG)
 		}
@@ -2223,6 +2241,40 @@ func (b *Browser) scrollPercent() int {
 		pct = 100
 	}
 	return pct
+}
+
+type statusLevel int
+
+const (
+	statusNormal statusLevel = iota
+	statusWarning
+	statusError
+	statusSuccess
+)
+
+// statusLevelFor classifies footer status text so warnings and errors stand
+// out without every caller having to tag its message.
+func statusLevelFor(s string) statusLevel {
+	switch {
+	case strings.HasPrefix(s, "Error:"),
+		strings.HasPrefix(s, "Invalid URL:"),
+		s == "Invalid form action",
+		s == "Copy failed":
+		return statusError
+	case strings.HasPrefix(s, "Copied "):
+		return statusSuccess
+	case s == moduleUnsupportedStatus,
+		s == layoutTruncatedStatus,
+		strings.HasPrefix(s, "Site blocked"),
+		strings.HasPrefix(s, "HTTP "),
+		strings.HasPrefix(s, "Blocked local file navigation"),
+		strings.HasPrefix(s, "External protocol:"),
+		s == "JavaScript links are not supported",
+		s == "Invalid JavaScript URL",
+		s == "JavaScript history navigation is not supported":
+		return statusWarning
+	}
+	return statusNormal
 }
 
 func (b *Browser) footerLeft() string {

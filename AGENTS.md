@@ -372,7 +372,11 @@ Standard Go layout:
   right, an optional `JS: Error (! console)` hint, current resident memory
   (`MEM 18 MB`), the scroll percentage and a clickable `>_` console icon pinned
   to the far right edge. The icon toggles the JS console and stays visible and
-  clickable inside the console view. The error hint clears
+  clickable inside the console view. Status text is amber and bold for
+  warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
+  errors, blocked local navigation, unsupported protocols/JS links), red and
+  bold for errors (`Error:`, invalid URL/form action, copy failure), and green
+  for successful copy messages. The error hint clears
   when the JS console opens or a new page loads, and drops before memory on
   narrow terminals. The readout refreshes every two seconds.
   Memory is `/proc/self/statm` RSS on Linux
@@ -635,7 +639,10 @@ Standard Go layout:
 
 ## 8. Known limitations (accepted)
 
-- JavaScript is a practical subset: modules and CSP are unsupported; storage
+- JavaScript is a practical subset: modules and CSP are unsupported. A page
+  containing `<script type="module">` is shown with the status
+  `Page requires ES modules (unsupported)` so an SPA boot/loading screen does
+  not look like a hang; the module scripts are still skipped. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and lack

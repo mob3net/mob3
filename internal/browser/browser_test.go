@@ -1808,3 +1808,50 @@ func TestConsoleClickInputRowFocusesIt(t *testing.T) {
 		t.Fatalf("console pane = %d, want input", b.consolePane)
 	}
 }
+
+func TestHasModuleScripts(t *testing.T) {
+	doc := ParseHTML(`<html><head><script type="module" src="app.js"></script><script>1</script></head></html>`)
+	if !hasModuleScripts(doc) {
+		t.Fatal("module script was not detected")
+	}
+	if hasModuleScripts(ParseHTML(`<html><head><script type="text/javascript">1</script></head></html>`)) {
+		t.Fatal("classic script was reported as a module")
+	}
+}
+
+func TestModulePageShowsStatusWarning(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	page := &Page{
+		URL: u, Base: u, Status: 200, Title: "FileGator", HasModules: true,
+		Root: ParseHTML(`<html><body><p>Loading...</p></body></html>`),
+	}
+	b := NewBrowser(40, 10)
+	withQuietStdout(t, func() { b.finishLoad(loadResult{page: page, u: u}) })
+	if b.status != moduleUnsupportedStatus {
+		t.Fatalf("status = %q, want %q", b.status, moduleUnsupportedStatus)
+	}
+}
+
+func TestFooterStatusColors(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.color = true
+	b.layout = &Layout{Height: 10}
+	cases := []struct {
+		status string
+		code   string
+	}{
+		{moduleUnsupportedStatus, "38;2;154;91;0"},
+		{layoutTruncatedStatus, "38;2;154;91;0"},
+		{"HTTP 404 Not Found", "38;2;154;91;0"},
+		{"Error: boom", "38;2;179;29;29"},
+		{"Copied 3 chars", "38;2;23;107;53"},
+	}
+	for _, tc := range cases {
+		b.status = tc.status
+		drawQuiet(b)
+		line := b.prev[len(b.prev)-1]
+		if !strings.Contains(line, tc.code) {
+			t.Errorf("status %q footer = %q, want color %s", tc.status, line, tc.code)
+		}
+	}
+}

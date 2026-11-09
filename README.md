@@ -77,7 +77,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 **Rough edges**
 
 - Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show
-  a partial page, a blank page or their no-JavaScript fallback.
+  a partial page, a blank page or their no-JavaScript fallback. Pages that rely
+  on ES modules show a status-bar warning that modules are unsupported.
 - Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX,
   Imperva/Sucuri, access-denied pages) are generally not usable. A “Site
   blocked” page is shown instead.

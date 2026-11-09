@@ -50,6 +50,7 @@ type Page struct {
 	Title       string
 	Author      []Rule
 	Scripts     []Script
+	HasModules  bool
 	Status      int
 	Blocked     bool
 	BlockReason string
@@ -376,6 +377,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	page.Author = l.collectStylesheets(ctx, root, page.Base, allowFile)
 	if !l.noScripts {
 		page.Scripts = l.collectScripts(ctx, root, page.Base, allowFile)
+		page.HasModules = hasModuleScripts(root)
 	}
 	l.loadInlineSVGs(root)
 	l.loadImages(ctx, root, page.Base, allowFile)
@@ -443,6 +445,21 @@ MOB³ is not a secure browser, so only do this if you trust the site.</p>
 direct or alternative URL, or open it in a full browser.</p>
 <p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>
 </body></html>`
+}
+
+// hasModuleScripts reports whether the document contains an ES module script.
+// MOB³ does not execute modules, so the status bar warns instead of leaving a
+// boot/loading screen looking like a hang.
+func hasModuleScripts(root *Node) bool {
+	if root == nil {
+		return false
+	}
+	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "script" }) {
+		if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "module") {
+			return true
+		}
+	}
+	return false
 }
 
 // collectScripts gathers inline and external JavaScript in document order.
