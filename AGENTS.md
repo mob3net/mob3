@@ -126,8 +126,9 @@ Standard Go layout:
 | `version.go` | Build-time version string reported by `-version`; default `dev`. |
 | `usage.go` | Process resident-memory sampling for the footer. |
 | `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
-| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists. |
+| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_elements.go` | HTML element constructor globals and prototype chains for `instanceof` checks. |
+| `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs. |
 | `js_fetch.go` | Promise-based same-origin `fetch`, plus `Headers`, `Request` and `Response`. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
@@ -345,8 +346,18 @@ Standard Go layout:
   `appendChild`/`removeChild`/`replaceChildren`, `children`/`parentNode`, and
   `document.title`/`URL`. Element wrappers use constructor prototypes, so
   `instanceof HTMLElement`, `instanceof HTMLScriptElement`, `instanceof Node`
-  and similar checks work; document, text and common HTML element constructors
-  are exposed globally and on `window`.
+  and similar checks work; document, text, SVG, `CharacterData` and common HTML
+  element constructors are exposed globally and on `window`.
+- **Events:** `Event`, `CustomEvent`, `UIEvent`, `MouseEvent`, `KeyboardEvent`,
+  `FocusEvent`, `InputEvent`, `PointerEvent`, `ErrorEvent`, `MessageEvent` and
+  `ProgressEvent` constructors exist; `document.createEvent` returns the
+  matching type with `initEvent`/`initCustomEvent`/`initMouseEvent`, and
+  `dispatchEvent` (with bubbling and `preventDefault`) works on elements,
+  `document` and `window`. `element.click()` dispatches a click. `NodeFilter`,
+  `Node.*` constants and `performance.timing`/`navigation` are present.
+  `MessageChannel` delivers `postMessage` through the timer queue;
+  `MutationObserver` is a no-op observer. Canvas `getContext("2d")` returns a
+  no-op context (no pixel buffer); WebGL returns `null`.
 - **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
   `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events and
@@ -530,8 +541,11 @@ Standard Go layout:
   English-only subset without full CLDR locale data. `document.write` is
   supported for document fragments. JS history navigation is stubbed. Plain
   same-origin `location` redirects and meta refresh work; remote pages cannot
-  navigate to `file:`. Apps requiring missing APIs (for example Google search)
-  may still show their no-JavaScript fallback.
+  navigate to `file:`. Canvas is a feature-detection stub with no pixels or
+  WebGL, `MutationObserver` never reports mutations, `TreeWalker` and the custom
+  elements registry are absent, and `MessageChannel` delivery is timer-based.
+  Apps requiring missing APIs (for example Google search) may still show their
+  no-JavaScript fallback.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.

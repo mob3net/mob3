@@ -25,9 +25,11 @@ func (j *jsRuntime) installElementConstructors() {
 	var NodeC = ctor("Node");
 	var ElementC = ctor("Element", NodeC);
 	var HTMLElementC = ctor("HTMLElement", ElementC);
+	var SVGElementC = ctor("SVGElement", ElementC);
 	var DocumentC = ctor("Document", NodeC);
 	var HTMLDocumentC = ctor("HTMLDocument", DocumentC);
-	var TextC = ctor("Text", NodeC);
+	var CharacterDataC = ctor("CharacterData", NodeC);
+	var TextC = ctor("Text", CharacterDataC);
 	var CommentC = ctor("Comment", TextC);
 	var DocumentFragmentC = ctor("DocumentFragment", NodeC);
 	var tags = {
@@ -63,7 +65,7 @@ func (j *jsRuntime) installElementConstructors() {
 	for (var tag in tags) {
 		var name = tags[tag];
 		if (!globalThis[name]) {
-			ctor(name, HTMLElementC);
+			ctor(name, tag === "svg" ? SVGElementC : HTMLElementC);
 		}
 		protos[tag] = globalThis[name].prototype;
 	}
@@ -71,7 +73,7 @@ func (j *jsRuntime) installElementConstructors() {
 	globalThis.__mob3ElementProto = HTMLElementC.prototype;
 	globalThis.__mob3TextProto = TextC.prototype;
 	globalThis.__mob3DocumentProto = HTMLDocumentC.prototype;
-	var names = ["Node", "Element", "HTMLElement", "Document", "HTMLDocument", "Text", "Comment", "DocumentFragment"];
+	var names = ["Node", "Element", "HTMLElement", "SVGElement", "Document", "HTMLDocument", "CharacterData", "Text", "Comment", "DocumentFragment"];
 	for (var tag2 in tags) {
 		if (names.indexOf(tags[tag2]) < 0) {
 			names.push(tags[tag2]);

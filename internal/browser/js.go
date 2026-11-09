@@ -55,6 +55,9 @@ type jsRuntime struct {
 
 	selectors map[string][]*Selector
 
+	eventCtors     map[string]*goja.Object
+	canvasContexts map[*Node]goja.Value
+
 	timers   map[int]*jsTimer
 	nextID   int
 	dirty    bool
@@ -79,22 +82,24 @@ type jsTimer struct {
 
 func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j := &jsRuntime{
-		b:             b,
-		vm:            goja.New(),
-		page:          page,
-		nodes:         make(map[*Node]*goja.Object),
-		rev:           make(map[*goja.Object]*Node),
-		nodeListeners: make(map[*Node]map[string][]jsListener),
-		propListeners: make(map[*Node]map[string]jsListener),
-		docListeners:  make(map[string][]jsListener),
-		winListeners:  make(map[string][]jsListener),
-		selectors:     make(map[string][]*Selector),
-		timers:        make(map[int]*jsTimer),
-		nextID:        1,
-		headerObjs:    make(map[*goja.Object]map[string][]string),
+		b:              b,
+		vm:             goja.New(),
+		page:           page,
+		nodes:          make(map[*Node]*goja.Object),
+		rev:            make(map[*goja.Object]*Node),
+		nodeListeners:  make(map[*Node]map[string][]jsListener),
+		propListeners:  make(map[*Node]map[string]jsListener),
+		docListeners:   make(map[string][]jsListener),
+		winListeners:   make(map[string][]jsListener),
+		selectors:      make(map[string][]*Selector),
+		timers:         make(map[int]*jsTimer),
+		nextID:         1,
+		headerObjs:     make(map[*goja.Object]map[string][]string),
+		canvasContexts: make(map[*Node]goja.Value),
 	}
 	j.start = time.Now()
 	j.installElementConstructors()
+	j.installEventConstructors()
 	j.installIntl()
 	j.installFetch()
 	j.storageLocal = j.storageObject(make(map[string]string))
@@ -335,6 +340,21 @@ func (j *jsRuntime) performanceObject() *goja.Object {
 	_ = o.Set("getEntries", j.vm.ToValue(empty))
 	_ = o.Set("getEntriesByType", j.vm.ToValue(empty))
 	_ = o.Set("getEntriesByName", j.vm.ToValue(empty))
+	start := float64(j.start.UnixMilli())
+	timing := j.vm.NewObject()
+	for _, name := range []string{
+		"navigationStart", "fetchStart", "domainLookupStart", "domainLookupEnd",
+		"connectStart", "connectEnd", "requestStart", "responseStart",
+		"responseEnd", "domLoading", "domInteractive", "domContentLoadedEventStart",
+		"domContentLoadedEventEnd", "domComplete", "loadEventStart", "loadEventEnd",
+	} {
+		_ = timing.Set(name, start)
+	}
+	_ = o.Set("timing", timing)
+	navigation := j.vm.NewObject()
+	_ = navigation.Set("type", 0)
+	_ = navigation.Set("redirectCount", 0)
+	_ = o.Set("navigation", navigation)
 	return o
 }
 
@@ -606,6 +626,9 @@ func (j *jsRuntime) windowObject() *goja.Object {
 		j.removeListener(j.winListeners, call.Argument(0).String(), call.Argument(1))
 		return goja.Undefined()
 	}))
+	_ = o.Set("dispatchEvent", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(j.dispatchWindowEvent(call.Argument(0)))
+	}))
 	_ = o.DefineAccessorProperty("onload", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
 		if j.winOnLoad == nil {
 			return goja.Null()
@@ -711,7 +734,9 @@ func (j *jsRuntime) addListener(m *map[string][]jsListener, typ string, fnVal, o
 	once := false
 	if opts != nil && !goja.IsUndefined(opts) && !goja.IsNull(opts) {
 		if o, ok := opts.(*goja.Object); ok {
-			once = o.Get("once").ToBoolean()
+			if v := o.Get("once"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+				once = v.ToBoolean()
+			}
 		}
 	}
 	(*m)[typ] = append((*m)[typ], jsListener{value: fnVal, call: fn, once: once})
@@ -877,7 +902,11 @@ func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj goja.Value, ev *js
 	}
 	res, ok := j.call(fn, j.wrap(n), evObj)
 	if ok && res != nil && !goja.IsUndefined(res) && !res.ToBoolean() {
-		ev.prevented = true
+		if ev != nil {
+			ev.prevented = true
+		} else if o, ok := evObj.(*goja.Object); ok {
+			_ = o.Set("defaultPrevented", true)
+		}
 	}
 }
 

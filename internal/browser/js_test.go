@@ -562,6 +562,110 @@ func TestJSMemoryLimitZeroDisables(t *testing.T) {
 	}
 }
 
+func TestJSListenerOptionsWithoutOnce(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var n = 0;
+		function bump() { n++; }
+		document.addEventListener("tick", bump, { capture: true });
+		document.dispatchEvent(new Event("tick"));
+		document.title = "n" + n;
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "n1" {
+		t.Fatalf("title = %q, want n1", page.Title)
+	}
+}
+
+func TestJSCreateEvent(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var e = document.createEvent("Event");
+		e.initEvent("foo", true, true);
+		e.preventDefault();
+		var d = document.createEvent("CustomEvent");
+		d.initCustomEvent("bar", false, false, 42);
+		var m = document.createEvent("MouseEvent");
+		m.initMouseEvent("click", true, true, null, 0, 1, 2, 3, 4, false, false, false, false, 0, null);
+		var t = document.createTextNode("x");
+		document.title = [
+			e.defaultPrevented ? "1" : "0",
+			e instanceof Event ? "1" : "0",
+			d.detail,
+			m.clientX + ":" + m.clientY,
+			t instanceof CharacterData ? "1" : "0"
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "1,1,42,3:4,1" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSDispatchEventBubbles(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var log = "";
+		document.addEventListener("custom", function (e) { log += "d" + e.detail; });
+		document.body.addEventListener("custom", function () { log += "b"; });
+		var el = document.createElement("div");
+		document.body.appendChild(el);
+		el.addEventListener("custom", function () { log += "t"; });
+		el.dispatchEvent(new CustomEvent("custom", { bubbles: true, detail: 3 }));
+		el.dispatchEvent(new CustomEvent("custom", { bubbles: false, detail: 4 }));
+		document.title = log;
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "tbd3t" {
+		t.Fatalf("title = %q, want tbd3t", page.Title)
+	}
+}
+
+func TestJSCanvasGetContext(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var c = document.createElement("canvas");
+		var ctx = c.getContext("2d");
+		var img = ctx.getImageData(0, 0, 2, 3);
+		var missing = c.getContext("webgl");
+		ctx.fillStyle = "red";
+		ctx.fillRect(0, 0, 1, 1);
+		document.title = [!!ctx, missing === null, img.width, img.height, img.data.length, c.width, ctx.fillStyle].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "true,true,2,3,24,300,red" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSMessageChannel(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var mc = new MessageChannel();
+		mc.port2.onmessage = function (e) { document.title = "got" + e.data; };
+		mc.port1.postMessage(7);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "got" && !b.js.tick(time.Now().Add(time.Second)) {
+		t.Fatal("message timer did not fire")
+	}
+	if page.Title != "got7" {
+		t.Fatalf("title = %q, want got7", page.Title)
+	}
+}
+
+func TestJSPerformanceTiming(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		document.title = typeof performance.timing.responseStart + ":" +
+			typeof performance.navigation.type + ":" + performance.timing.responseStart;
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if !strings.HasPrefix(page.Title, "number:number:") {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),
