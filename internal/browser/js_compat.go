@@ -1165,7 +1165,7 @@ func (j *jsRuntime) newTreeWalker(root *Node, whatToShow, filter goja.Value, ite
 			cur = n
 		}
 	})
-	j.accessor(o, "whatToShow", func() goja.Value { return j.vm.ToValue(0xFFFFFFFF) }, nil)
+	j.accessor(o, "whatToShow", func() goja.Value { return j.vm.ToValue(int64(0xFFFFFFFF)) }, nil)
 	_ = o.Set("filter", filter)
 	_ = o.Set("expandEntityReferences", false)
 	j.method(o, "nextNode", func(goja.FunctionCall) goja.Value {
