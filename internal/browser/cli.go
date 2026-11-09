@@ -82,6 +82,7 @@ func Run(args []string) int {
 			return 1
 		}
 		loader.bookmarks = marks
+		loader.bookmarksSet = true
 	}
 	if *ua != "" {
 		loader.userAgent = *ua

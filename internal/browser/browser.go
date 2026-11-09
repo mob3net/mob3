@@ -96,6 +96,13 @@ type Browser struct {
 	consoleHistAt int
 	consoleDraft  string
 
+	findActive  bool
+	findText    string
+	findCursor  int
+	findScope   int
+	findMatches []findMatch
+	findIdx     int
+
 	htmlPage  *Page
 	htmlWidth int
 	htmlCache []string
@@ -198,6 +205,11 @@ func (b *Browser) historySnapshot() ([]string, int) {
 	b.histMu.RLock()
 	defer b.histMu.RUnlock()
 	return append([]string(nil), b.history...), b.histIdx
+}
+
+// hasBookmarks reports whether a bookmark file was supplied to the browser.
+func (b *Browser) hasBookmarks() bool {
+	return b.loader != nil && (b.loader.bookmarksSet || len(b.loader.bookmarks) > 0)
 }
 
 // searchTemplate returns the configured search URL template.
@@ -516,6 +528,7 @@ func (b *Browser) rebuild() {
 	b.layout = BuildLayoutDeadline(b.page.Root, b.page.Author, b.width, b.bigText, start.Add(maxFrameTime))
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
+	b.reindexFind()
 	if b.layout.Truncated {
 		if b.status == "" {
 			b.status = layoutTruncatedStatus
@@ -1640,9 +1653,16 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.prompt {
 		return b.handlePromptKey(k)
 	}
+	if b.findActive {
+		return b.handleFindKey(k)
+	}
 
 	if b.inputFocus != nil {
 		return b.handleInputKey(k)
+	}
+	if k == "/" {
+		b.openFind(findScopePage)
+		return false
 	}
 	if k == "esc" && b.loading {
 		b.stopLoading()
@@ -1686,9 +1706,20 @@ func (b *Browser) HandleKey(k string) bool {
 		if b.url != nil {
 			b.status = b.url.String()
 		}
+	case "n":
+		if b.findText != "" && b.findScope == findScopePage {
+			b.findNext(1)
+		}
+	case "N":
+		if b.findText != "" && b.findScope == findScopePage {
+			b.findNext(-1)
+		}
 	case "y":
 		b.copySelection()
 	case "esc":
+		if b.findText != "" {
+			b.clearFind()
+		}
 		b.focus = -1
 		b.clearSelection()
 		b.status = exitHint
@@ -1911,6 +1942,7 @@ func (b *Browser) draw() {
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
 	b.paintSelection(g, top, bottom)
+	b.paintFindPage(g, top, bottom)
 	b.drawScrollBar(g, top, bottom)
 
 	headerBG := RGB(0x1f, 0x29, 0x37)
@@ -2002,7 +2034,7 @@ func (b *Browser) draw() {
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
 			}
-			if w >= 18 {
+			if w >= 18 && b.hasBookmarks() {
 				bookmarksW = stringWidth(bookmarksLabel)
 			}
 			for x+helpW+historyW+bookmarksW+configW > w {
@@ -2063,7 +2095,7 @@ func (b *Browser) draw() {
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
 			}
-			if w >= 18 {
+			if w >= 18 && b.hasBookmarks() {
 				bookmarksW = stringWidth(bookmarksLabel)
 			}
 			for x+helpW+historyW+bookmarksW+configW > w {
@@ -2113,51 +2145,55 @@ func (b *Browser) draw() {
 		// Footer.
 		fy := h - 1
 		g.Fill(0, fy, w, 1, footerBG)
-		fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
-		leftText := b.footerLeft()
-		icon := ">_"
-		iconW := stringWidth(icon)
-		showIcon := w >= 6
-		reserve := 0
-		if showIcon {
-			reserve = iconW + 2
-		}
-		rightText := b.footerRight(w - reserve)
-		avail := w - stringWidth(rightText) - reserve
-		if avail < 8 {
-			pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-			rightText = truncateWidth(pctText, w-reserve)
-			if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w-reserve {
-				rightText = jsErrorShort + "  " + pctText
+		if b.findActive {
+			b.drawFindBar(g, fy, w)
+		} else {
+			fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
+			leftText := b.footerLeft()
+			icon := ">_"
+			iconW := stringWidth(icon)
+			showIcon := w >= 6
+			reserve := 0
+			if showIcon {
+				reserve = iconW + 2
 			}
-			avail = w - stringWidth(rightText) - reserve
-		}
-		if avail < 0 {
-			avail = 0
-		}
-		leftStyle := fs
-		leftColor := footerFG
-		if b.status != "" && b.hoveredLink() == nil {
-			switch statusLevelFor(b.status) {
-			case statusWarning:
-				leftColor = RGB(0x9a, 0x5b, 0x00)
-				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-			case statusError:
-				leftColor = RGB(0xb3, 0x1d, 0x1d)
-				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-			case statusSuccess:
-				leftColor = RGB(0x17, 0x6b, 0x35)
-				leftStyle = &Style{Color: leftColor, FontSize: 16, LineHeight: 1}
+			rightText := b.footerRight(w - reserve)
+			avail := w - stringWidth(rightText) - reserve
+			if avail < 8 {
+				pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
+				rightText = truncateWidth(pctText, w-reserve)
+				if b.jsErr && stringWidth(jsErrorShort+"  "+pctText) <= w-reserve {
+					rightText = jsErrorShort + "  " + pctText
+				}
+				avail = w - stringWidth(rightText) - reserve
 			}
-		}
-		g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
-		if rightText != "" {
-			g.Text(w-reserve-stringWidth(rightText), fy, rightText, fs, footerFG)
-		}
-		if showIcon {
-			iconStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
-			g.Text(w-iconW, fy, icon, iconStyle, iconStyle.Color)
-			b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: fy, w: iconW, h: 1})
+			if avail < 0 {
+				avail = 0
+			}
+			leftStyle := fs
+			leftColor := footerFG
+			if b.status != "" && b.hoveredLink() == nil {
+				switch statusLevelFor(b.status) {
+				case statusWarning:
+					leftColor = RGB(0x9a, 0x5b, 0x00)
+					leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+				case statusError:
+					leftColor = RGB(0xb3, 0x1d, 0x1d)
+					leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+				case statusSuccess:
+					leftColor = RGB(0x17, 0x6b, 0x35)
+					leftStyle = &Style{Color: leftColor, FontSize: 16, LineHeight: 1}
+				}
+			}
+			g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
+			if rightText != "" {
+				g.Text(w-reserve-stringWidth(rightText), fy, rightText, fs, footerFG)
+			}
+			if showIcon {
+				iconStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+				g.Text(w-iconW, fy, icon, iconStyle, iconStyle.Color)
+				b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: fy, w: iconW, h: 1})
+			}
 		}
 	}
 

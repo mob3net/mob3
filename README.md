@@ -64,9 +64,11 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
   the full console, with top tabs for logs (including the `>` input row and
   its Up/Down history), requests, storage and the raw page HTML.
-- Browser-style toolbar with back/forward/reload/home, bookmarks/history/help
-  buttons, a config gear and a centered page title.
-- Keyboard and mouse navigation, a draggable page scrollbar, history (including
+- Browser-style toolbar with back/forward/reload/home, history/help buttons,
+  a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
+  page title.
+- Keyboard and mouse navigation, `/` incremental find with highlighted matches
+  (also in the console HTML tab), a draggable page scrollbar, history (including
   a top-right History page
   listing the session's links), bookmarks imported with `-bookmarks` from a
   Netscape HTML export, scrolling, focus, link hover targets in the footer,

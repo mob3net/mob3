@@ -47,6 +47,9 @@ func setMouseReporting(on bool) {
 
 func (b *Browser) toggleConsole() {
 	b.consoleOpen = !b.consoleOpen
+	if !b.consoleOpen && b.findScope == findScopeHTML {
+		b.clearFind()
+	}
 	b.consoleScroll = 0
 	b.reqScroll = 0
 	b.storageScroll = 0
@@ -75,8 +78,15 @@ func (b *Browser) closeConsole() {
 }
 
 func (b *Browser) handleConsoleKey(k string) bool {
+	if b.findActive {
+		return b.handleFindKey(k)
+	}
 	if b.consoleEdit {
 		return b.handleConsoleInputKey(k)
+	}
+	if k == "/" && b.consolePane == consoleHTML {
+		b.openFind(findScopeHTML)
+		return false
 	}
 	switch k {
 	case "esc":
@@ -92,6 +102,14 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		b.consoleCyclePane(-1)
 	case "i", "enter":
 		b.focusConsoleInput()
+	case "n":
+		if b.findText != "" && b.findScope == findScopeHTML {
+			b.findNext(1)
+		}
+	case "N":
+		if b.findText != "" && b.findScope == findScopeHTML {
+			b.findNext(-1)
+		}
 	case "k", "up":
 		b.scrollConsolePane(b.consolePane, 1)
 	case "j", "down":
@@ -158,6 +176,9 @@ func (b *Browser) selectConsolePane(pane int) {
 	}
 	if pane == consoleHTML && b.consolePane != consoleHTML {
 		b.htmlScroll = len(b.htmlLines(b.width - 2))
+	}
+	if b.findActive && b.findScope == findScopeHTML && pane != consoleHTML {
+		b.findActive = false
 	}
 	b.consolePane = pane
 }
@@ -322,6 +343,7 @@ func (b *Browser) resetConsole() {
 	b.consoleEdit = false
 	b.consoleHistAt = len(b.consoleHist)
 	b.consoleDraft = ""
+	b.clearFind()
 }
 
 func (b *Browser) consoleLines(width int) []string {
@@ -683,6 +705,23 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	}
 }
 
+func paneStart(total, scroll, rows int) int {
+	if rows < 1 {
+		return 0
+	}
+	start := total - rows - scroll
+	if start < 0 {
+		start = 0
+	}
+	if start > total-rows {
+		start = total - rows
+	}
+	if start < 0 {
+		start = 0
+	}
+	return start
+}
+
 func (b *Browser) drawConsole(w, h int) {
 	fg := RGB(0xdd, 0xe6, 0xee)
 	bg := RGB(0x0f, 0x14, 0x1a)
@@ -704,16 +743,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if rows < 1 {
 			return
 		}
-		start := len(items) - rows - scroll
-		if start < 0 {
-			start = 0
-		}
-		if start > len(items)-rows {
-			start = len(items) - rows
-		}
-		if start < 0 {
-			start = 0
-		}
+		start := paneStart(len(items), scroll, rows)
 		for i := 0; i < rows && start+i < len(items); i++ {
 			g.Text(1, y+i, truncateWidth(items[start+i], w-2), style, fg)
 		}
@@ -725,7 +755,9 @@ func (b *Browser) drawConsole(w, h int) {
 		case consoleStorage:
 			drawPane(b.storageLines(), b.storageScroll, l.bodyY, l.bodyRows)
 		case consoleHTML:
-			drawPane(b.htmlLines(w-2), b.htmlScroll, l.bodyY, l.bodyRows)
+			htmlLines := b.htmlLines(w - 2)
+			drawPane(htmlLines, b.htmlScroll, l.bodyY, l.bodyRows)
+			b.paintFindHTML(g, paneStart(len(htmlLines), b.htmlScroll, l.bodyRows), l.bodyY, l.bodyRows)
 		default:
 			logRows := l.bodyRows
 			if l.inputY >= 0 {
@@ -764,6 +796,11 @@ func (b *Browser) drawConsole(w, h int) {
 		}
 	}
 	if h >= 2 {
+		if b.findActive && b.findScope == findScopeHTML {
+			b.drawFindBar(g, h-1, w)
+			b.flushGrid(g, nil)
+			return
+		}
 		icon := ">_"
 		iconW := stringWidth(icon)
 		reserve := 0

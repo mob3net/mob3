@@ -77,6 +77,9 @@ type Loader struct {
 	// historyFn supplies the in-memory session history for about:history.
 	historyFn func() ([]string, int)
 	bookmarks []Bookmark
+	// bookmarksSet records that -bookmarks was supplied, so the toolbar can
+	// hide its bookmark button when no bookmark file was requested.
+	bookmarksSet bool
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
@@ -967,6 +970,9 @@ disk write.</p>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; arrows/Home/End/Delete edit it)</td></tr>
+<tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
+<tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
+<tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
 <tr><td><b>y</b></td><td>copy the selected page text and clear the highlight (OSC 52)</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
@@ -975,13 +981,25 @@ disk write.</p>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit</td></tr>
 </table>
 
+<h2>Find</h2>
+<p>Press <b>/</b> to open the find bar in the footer. Typing searches
+incrementally and highlights every case-insensitive match; the current match is
+orange. <b>Enter</b> confirms the query and closes the bar, then <b>n</b> and
+<b>N</b> move to the next and previous match, wrapping around. While the bar is
+open, <b>Down</b>/<b>Up</b> also move to the next/previous match. <b>Esc</b>
+closes the bar but keeps the highlights; pressing <b>Esc</b> again clears them.
+Find works on every page, including
+this help page and <b>about:bookmarks</b>. In the JS console, press <b>/</b>
+while the <b>HTML</b> tab is active to search the raw source and jump to
+matching lines.</p>
+
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
 which lists this session's pages as links, most recent first. The
-<b>★ Bookmarks</b> button opens <b>about:bookmarks</b>; start MOB³ with
-<b>-bookmarks file.html</b> to import a Netscape bookmark export (the HTML
-format used by Chrome, Firefox, Safari and Edge). Nothing is saved after MOB³
-exits.</p>
+<b>★ Bookmarks</b> button appears only when MOB³ was started with
+<b>-bookmarks file.html</b>, and opens <b>about:bookmarks</b>. That flag imports
+a Netscape bookmark export (the HTML format used by Chrome, Firefox, Safari and
+Edge). Nothing is saved after MOB³ exits.</p>
 
 <h2>Config</h2>
 <p>The <b>⚙</b> icon in the top bar opens <b>about:config</b>. It lists every

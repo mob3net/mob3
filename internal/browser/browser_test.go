@@ -27,6 +27,7 @@ func drawQuiet(b *Browser) {
 
 func TestHeaderHitRegions(t *testing.T) {
 	b := NewBrowser(60, 10)
+	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	u, _ := url.Parse("https://example.com/a")
 	b.url = u
 	drawQuiet(b)
@@ -59,6 +60,27 @@ func TestHeaderHitRegions(t *testing.T) {
 	}
 	if top, _ := b.viewport(); top != 2 {
 		t.Errorf("viewport top = %d, want 2 for a two-row bar", top)
+	}
+}
+
+func TestBookmarksButtonHiddenWithoutFile(t *testing.T) {
+	b := NewBrowser(100, 10)
+	drawQuiet(b)
+	for _, hit := range b.headerHits {
+		if hit.kind == headerBookmarks {
+			t.Fatalf("bookmarks button shown without -bookmarks: %+v", b.headerHits)
+		}
+	}
+	b.loader.bookmarksSet = true
+	drawQuiet(b)
+	found := false
+	for _, hit := range b.headerHits {
+		if hit.kind == headerBookmarks {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("bookmarks button missing after -bookmarks: %+v", b.headerHits)
 	}
 }
 
@@ -373,6 +395,7 @@ func TestCenteredLabel(t *testing.T) {
 
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
+	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	drawQuiet(b)
 	if len(b.headerHits) != 6 || b.headerHits[0].kind != headerHome ||
 		b.headerHits[1].kind != headerBookmarks || b.headerHits[2].kind != headerHistory ||
@@ -920,6 +943,7 @@ func TestScrollRepaintsChrome(t *testing.T) {
 
 func TestHeaderClicks(t *testing.T) {
 	b := NewBrowser(60, 10)
+	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	u, _ := url.Parse("https://example.com/a")
 	b.url = u
 	drawQuiet(b)

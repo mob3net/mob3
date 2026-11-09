@@ -129,6 +129,7 @@ Standard Go layout:
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
+| `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
@@ -293,7 +294,8 @@ Standard Go layout:
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
   `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` /
   `? Help` / `⚙` pinned to the far right; forward, reload, home and config are
-  icon-only. The URL row is a full-width field that becomes the editable
+  icon-only. The Bookmarks button is hidden unless `-bookmarks` supplied a
+  file. The URL row is a full-width field that becomes the editable
   `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
   row uses a subtle horizontal gradient. The page title is centered in the
   space between the left and right buttons and uses a bold amber color for
@@ -310,11 +312,13 @@ Standard Go layout:
   clickable links, most recent first, marks the current entry, caps the list at
   the latest 50 and is generated on demand from in-memory history.
   `about:bookmarks` lists bookmarks imported with `-bookmarks FILE` (Netscape
-  HTML export), grouped by flattened folder path. Both pages are opened from
-  the toolbar buttons and are memory-only; nothing is persisted.
+  HTML export), grouped by flattened folder path. Both pages are memory-only;
+  nothing is persisted. The Bookmarks toolbar button only appears when the flag
+  supplied a file.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
   Bookmarks/history/help use full labels at 80+ columns and icons below; the
+  bookmarks item is absent when no `-bookmarks` file was supplied; the
   config gear (`⚙`) is always an icon. Below 24 columns hide
   back/forward/reload so the URL field stays usable; home remains visible down
   to 12 columns; below 18 hide bookmarks; below 12 hide history; below 6 hide
@@ -324,7 +328,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `o` URL
-  prompt, `u` show URL, `y` copy selected page text and clear the highlight,
+  prompt, `/` find in page, `n`/`N` next/previous find match, `u` show URL,
+  `y` copy selected page text and clear the highlight,
   `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
@@ -332,6 +337,15 @@ Standard Go layout:
   Clicking the URL field keeps the prompt open; a press anywhere else closes
   it the same way Escape does. Inside the prompt, a click places the caret.
   Shift+drag is left to the terminal for native text selection.
+- **Find:** `/` opens an incremental, case-insensitive find bar in the footer.
+  Every match in the rendered page is highlighted; the current match uses a
+  stronger color. `Enter` confirms the query and closes the bar, after which
+  `n`/`N` navigate matches. While the bar is open, `Down` moves to the next
+  match and `Up` to the previous one, with wrap-around. `Esc` also closes the
+  bar but keeps highlights; a later `Esc` clears them. The same find bar
+  searches the console's HTML tab (`/` while that tab is active), including
+  scrolling to and highlighting matching lines. It works on
+  every rendered page, including `about:help` and `about:bookmarks`.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
