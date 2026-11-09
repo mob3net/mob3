@@ -117,8 +117,10 @@ Standard Go layout:
 | `usage.go` | Process resident-memory sampling for the footer. |
 | `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists. |
-| `term_linux.go` | Linux termios raw mode, window size via ioctl, key/escape-sequence decoding. |
-| `term_stub.go` | Non-Linux build stub; interactive unsupported, dump still works. |
+| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
+| `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
+| `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
+| `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
 | `cli.go` | `Run`: flags, dump mode, interactive event loop. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. |
@@ -429,8 +431,10 @@ Standard Go layout:
   when the layout or build output changes.
 - `go vet ./...` must stay clean, and `gofmt` is applied to project files before
   handing work back. Do not reformat files under `vendor/`.
-- Interactive mode is Linux-only (`term_linux.go`); other platforms fall back to
-  dump output. The project must still cross-compile for Darwin and Windows.
+- Interactive mode is supported on Linux (`term_linux.go`) and macOS
+  (`term_darwin.go`), sharing key decoding from `term_unix.go`; other platforms
+  fall back to dump output. The project must still cross-compile for Darwin and
+  Windows.
 - Keep the binary out of layout decisions: it may be committed/present locally,
   but `make clean` removes it.
 - The Git tag (`vX.Y.Z`) is the release version source of truth.
@@ -520,7 +524,8 @@ Standard Go layout:
   background images.
 - Modern CSS-heavy sites may look rough; content-focused pages, docs, and old
   HTML render best.
-- Interactive mode needs a real Linux terminal.
+- Interactive mode needs a real Linux or macOS terminal; Windows runs in dump
+  mode.
 
 ## 9. Change protocol for agents
 

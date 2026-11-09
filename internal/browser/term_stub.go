@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !darwin
 
 package browser
 
@@ -21,7 +21,7 @@ func isTTY(f *os.File) bool {
 }
 
 func makeRaw(f *os.File) (*termState, error) {
-	return nil, errors.New("interactive mode is only supported on Linux; use -dump")
+	return nil, errors.New("interactive mode is only supported on Linux and macOS; use -dump")
 }
 
 func restoreTerm(f *os.File, st *termState) {}

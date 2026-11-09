@@ -48,8 +48,9 @@ mkdir -p bin && CGO_ENABLED=0 go build -o bin/mob3 ./cmd/mob3
 ```
 
 The result is a single static binary. Dependencies are vendored under
-`vendor/`, so the build needs no network access. When stdin/stdout are not a
-terminal, MOB³ automatically falls back to dump mode.
+`vendor/`, so the build needs no network access. Interactive mode runs on Linux
+and macOS terminals; Windows currently uses dump mode. When stdin/stdout are
+not a terminal, MOB³ automatically falls back to dump mode.
 
 ## Versioning
 
@@ -291,7 +292,7 @@ MOB³ is a cell-based renderer, not a pixel browser:
 - No tabs or downloads. Forms support text entry and urlencoded GET/POST;
   multipart forms, selects, file uploads and checkbox/radio toggling are not
   supported. No certificate or proxy UI.
-- Interactive mode requires a Linux terminal; other platforms support `-dump`.
+- Interactive mode requires a Linux or macOS terminal; Windows supports `-dump`.
 
 ## Tests
 
