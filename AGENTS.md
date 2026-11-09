@@ -282,17 +282,19 @@ Standard Go layout:
   pages with no `<script>` elements.
 - **Focus:** focused links use a yellow background highlight on text and a
   yellow border on images; the focused URL is shown in the footer.
-- **Mouse:** enable click reporting with `\x1b[?1000h`, drag reporting with
-  `\x1b[?1002h`, and SGR extended coordinates with `\x1b[?1006h`; disable all
-  three on exit. SGR (`\x1b[<b;x;yM/m`) and legacy X10 (`\x1b[M` + 3 bytes)
-  events, including motion reports, become `mouse:` input tokens.
-  Left press starts a drag selection in document coordinates; dragging updates
-  and auto-scrolls it, and release keeps the highlight. A press and release on
-  the same cell is a click: it follows a link using the same rectangles as
-  keyboard focus, or clears focus. A left click on the URL bar opens the URL
-  prompt, toolbar buttons act on click, right click goes back, and the wheel
-  scrolls three lines. `Esc` clears the selection. Selected text is
-  highlight-only for now; clipboard copy is undecided.
+- **Mouse:** enable click reporting with `\x1b[?1000h`, all-motion tracking
+  with `\x1b[?1003h` (needed for link hover), and SGR extended coordinates
+  with `\x1b[?1006h`; disable all three on exit. SGR (`\x1b[<b;x;yM/m`) and
+  legacy X10 (`\x1b[M` + 3 bytes) events, including motion reports, become
+  `mouse:` input tokens. Hovering a link shows its resolved target in the
+  footer and clears when the pointer leaves it. Left press starts a drag
+  selection in document coordinates; dragging updates and auto-scrolls it,
+  and release keeps the highlight. A press and release on the same cell is a
+  click: it follows a link using the same rectangles as keyboard focus, or
+  clears focus. A left click on the URL bar opens the URL prompt, toolbar
+  buttons act on click, right click goes back, and the wheel scrolls three
+  lines. `Esc` clears the selection. Selected text is highlight-only for now;
+  clipboard copy is undecided.
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
   deletes, Ctrl-U clears, Enter submits, and Esc finishes. Submit buttons also
@@ -304,7 +306,7 @@ Standard Go layout:
   and `form` on elements. Editable fields use a prominent light-blue background
   with bold text; the focused field switches to a solid blue background with
   white text, and its placeholder/hint disappears while focused.
-- **Footer:** shows status/link target on the left and current resident memory
+- **Footer:** shows the hovered link target or status on the left and current resident memory
   on the right (`MEM 18 MB`), with the scroll percentage pinned at the far
   right edge. The readout refreshes every two seconds and drops before the
   percentage on narrow terminals. Memory is `/proc/self/statm` RSS on Linux

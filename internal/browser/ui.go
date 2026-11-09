@@ -20,9 +20,9 @@ func (b *Browser) logJS(kind, msg string) {
 
 func setMouseReporting(on bool) {
 	if on {
-		_, _ = os.Stdout.WriteString("\x1b[?1000h\x1b[?1002h\x1b[?1006h")
+		_, _ = os.Stdout.WriteString("\x1b[?1000h\x1b[?1003h\x1b[?1006h")
 	} else {
-		_, _ = os.Stdout.WriteString("\x1b[?1002l\x1b[?1000l\x1b[?1006l")
+		_, _ = os.Stdout.WriteString("\x1b[?1003l\x1b[?1000l\x1b[?1006l")
 	}
 }
 

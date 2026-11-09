@@ -104,11 +104,11 @@ func Run(args []string) int {
 	cellW, cellH, _ := terminalCellPixels(os.Stdout)
 	b.gfx = NewGFXRenderer(ParseGraphicsMode(*graphics), cellW, cellH)
 
-	_, _ = os.Stdout.WriteString("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J\x1b[?1000h\x1b[?1002h\x1b[?1006h")
+	_, _ = os.Stdout.WriteString("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J\x1b[?1000h\x1b[?1003h\x1b[?1006h")
 	cleanup := func() {
 		b.cancelLoadNow()
 		var sb strings.Builder
-		sb.WriteString("\x1b[?1002l\x1b[?1000l\x1b[?1006l")
+		sb.WriteString("\x1b[?1003l\x1b[?1000l\x1b[?1006l")
 		b.gfx.Clear(&sb)
 		sb.WriteString("\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l")
 		_, _ = os.Stdout.WriteString(sb.String())

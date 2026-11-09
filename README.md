@@ -64,7 +64,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
   storage/cookies.
-- Keyboard and mouse navigation, history, scrolling, focus and text selection.
+- Keyboard and mouse navigation, history, scrolling, focus, link hover
+  targets in the footer, and text selection.
 
 **Rough edges**
 

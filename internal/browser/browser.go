@@ -22,6 +22,7 @@ type Browser struct {
 	layout        *Layout
 	scroll        int
 	focus         int
+	hover         int
 	status        string
 
 	history []string
@@ -109,7 +110,7 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	return &Browser{
-		loader: NewLoader(), width: w, height: h, focus: -1, histIdx: -1,
+		loader: NewLoader(), width: w, height: h, focus: -1, hover: -1, histIdx: -1,
 		jsMemLimit: defaultJSMemoryLimit,
 		loadCh:     make(chan loadResult, 1),
 	}
@@ -396,6 +397,7 @@ func (b *Browser) rebuild() {
 	}
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
 	b.layout = BuildLayoutBig(b.page.Root, b.page.Author, b.width, b.bigText)
+	b.hover = -1
 	b.clampScroll()
 }
 
@@ -437,6 +439,7 @@ func (b *Browser) clampScroll() {
 }
 
 func (b *Browser) scrollBy(n int) {
+	b.hover = -1
 	b.scroll += n
 	b.clampScroll()
 	if !strings.HasPrefix(b.status, "HTTP ") && !strings.HasPrefix(b.status, "Error") {
@@ -449,6 +452,23 @@ func (b *Browser) focusedLink() *LinkInfo {
 		return nil
 	}
 	return b.layout.Links[b.focus]
+}
+
+func (b *Browser) hoveredLink() *LinkInfo {
+	if b.layout == nil || b.hover < 0 || b.hover >= len(b.layout.Links) {
+		return nil
+	}
+	return b.layout.Links[b.hover]
+}
+
+// updateHover records the link under the pointer in content coordinates for
+// the footer readout.
+func (b *Browser) updateHover(x, y, top, bottom int) {
+	idx := -1
+	if y >= top && y < bottom {
+		idx = b.linkAt(x, b.scroll+(y-top))
+	}
+	b.hover = idx
 }
 
 func (b *Browser) focusStep(delta int) {
@@ -1087,9 +1107,14 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			step = -step
 		}
 		b.scrollBy(step)
+		top, bottom := b.viewport()
+		b.updateHover(x, y, top, bottom)
 		return false
 	}
 	if y < b.headerRows() && b.height >= 2 {
+		if ev.Motion {
+			b.hover = -1
+		}
 		if !ev.Press || ev.Motion {
 			return false
 		}
@@ -1118,6 +1143,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if ev.Motion {
 		if b.selecting {
 			b.updateSelection(x, y, top, bottom)
+		} else {
+			b.updateHover(x, y, top, bottom)
 		}
 		return false
 	}
@@ -1160,6 +1187,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			b.clickContent(x, b.scroll+(y-top))
 		}
 	}
+	b.updateHover(x, y, top, bottom)
 	return false
 }
 
@@ -1639,6 +1667,9 @@ func (b *Browser) scrollPercent() int {
 }
 
 func (b *Browser) footerLeft() string {
+	if li := b.hoveredLink(); li != nil {
+		return " → " + b.resolveHref(li.Href)
+	}
 	if b.status != "" {
 		return " " + b.status
 	}

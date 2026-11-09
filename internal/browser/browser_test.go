@@ -607,6 +607,30 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 	}
 }
 
+func TestMouseHoverShowsLinkInFooter(t *testing.T) {
+	root := ParseHTML(`<html><body><p><a href="/target">target</a></p></body></html>`)
+	u := mustParse(t, "https://example.com/page")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.rebuild()
+	if len(b.layout.Links) == 0 {
+		t.Fatal("no links in layout")
+	}
+	r := b.layout.Links[0].Rects[0]
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{X: r.X + 1, Y: top + r.Y + 1, Motion: true})
+	if b.hover != 0 {
+		t.Fatalf("hover = %d, want 0", b.hover)
+	}
+	if got, want := b.footerLeft(), " → https://example.com/target"; got != want {
+		t.Fatalf("footer = %q, want %q", got, want)
+	}
+	b.HandleMouse(MouseEvent{X: b.width - 1, Y: top + 1, Motion: true})
+	if b.hover != -1 {
+		t.Fatalf("hover = %d after leaving link", b.hover)
+	}
+}
+
 func TestProcUsageFooterRoundsMemory(t *testing.T) {
 	u := procUsage{rss: 18<<20 + 256<<10}
 	if got, want := u.footer(), "MEM 18 MB"; got != want {

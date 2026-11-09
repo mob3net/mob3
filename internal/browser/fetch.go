@@ -790,6 +790,7 @@ disk write.</p>
 <h2>Mouse</h2>
 <table>
 <tr><th>Input</th><th>Action</th></tr>
+<tr><td>hover a link</td><td>show its target in the footer</td></tr>
 <tr><td>drag over page text</td><td>select it; release keeps the highlight</td></tr>
 <tr><td>click a link</td><td>follow it</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
