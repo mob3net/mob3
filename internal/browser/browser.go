@@ -157,6 +157,22 @@ func (b *Browser) Navigate(input string, push bool) {
 }
 
 func (b *Browser) navigateRequest(method, input string, body []byte, contentType string, push bool) {
+	b.navigateRequestForce(method, input, body, contentType, push, false)
+}
+
+// navigateRequestForce is navigateRequest with an optional one-shot block
+// bypass. It backs the "Try anyway" link (about:retry) on the blocked page.
+func (b *Browser) navigateRequestForce(method, input string, body []byte, contentType string, push bool, forceBlocks bool) {
+	if strings.EqualFold(strings.TrimSpace(input), "about:retry") {
+		if b.url == nil {
+			b.status = "Nothing to retry"
+			b.draw()
+			return
+		}
+		input = b.url.String()
+		forceBlocks = true
+		push = false
+	}
 	u, err := ResolveInput(input, b.url, b.searchTemplate())
 	if err != nil {
 		b.status = "Invalid URL: " + err.Error()
@@ -190,6 +206,9 @@ func (b *Browser) navigateRequest(method, input string, body []byte, contentType
 	if load == nil {
 		loader := b.loader
 		load = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+			if forceBlocks {
+				return loader.LoadRequestBypass(ctx, method, target, body, contentType, nil)
+			}
 			return loader.LoadRequest(ctx, method, target, body, contentType, nil)
 		}
 	}

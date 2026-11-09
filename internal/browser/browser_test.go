@@ -569,6 +569,44 @@ func TestHeaderClicks(t *testing.T) {
 	}
 }
 
+func TestTryAnywayRetriesBlockedURL(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.url = mustParse(t, "https://example.com/challenge")
+	var got string
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		got = target
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Root: ParseHTML("<html><body><p>challenge</p></body></html>"), Title: "challenge"}, nil
+	}
+	b.Navigate("about:retry", true)
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("retry did not start a load")
+	}
+	if got != "https://example.com/challenge" {
+		t.Fatalf("retry target = %q", got)
+	}
+	if len(b.history) != 0 {
+		t.Fatalf("retry pushed history: %v", b.history)
+	}
+}
+
+func TestTryAnywayWithoutURL(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.url = nil
+	b.Navigate("about:retry", true)
+	if b.status != "Nothing to retry" {
+		t.Fatalf("status = %q", b.status)
+	}
+	select {
+	case <-b.loadCh:
+		t.Fatal("retry without a URL started a load")
+	default:
+	}
+}
+
 func TestProcUsageFooterRoundsMemory(t *testing.T) {
 	u := procUsage{rss: 18<<20 + 256<<10}
 	if got, want := u.footer(), "MEM 18 MB"; got != want {

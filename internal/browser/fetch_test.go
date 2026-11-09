@@ -23,7 +23,7 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Command line", "-dump", "-width", "-graphics", "-no-js", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Command line", "-dump", "-width", "-graphics", "-no-js", "-ignore-blocks", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
@@ -90,6 +90,59 @@ func TestBlockedChallenge(t *testing.T) {
 	}
 	if !strings.Contains(page.Root.TextContent(), "Cloudflare") {
 		t.Fatal("detected reason missing")
+	}
+	if link := page.Root.FindFirst("a"); link == nil || link.Attr("href") != "about:retry" {
+		t.Fatal("blocked page is missing the Try anyway link")
+	}
+	if !strings.Contains(page.Root.TextContent(), "Try anyway") {
+		t.Fatal("Try anyway label missing")
+	}
+}
+
+func TestBlockedBypass(t *testing.T) {
+	newLoader := func() *Loader {
+		loader := NewLoader()
+		loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			h := make(http.Header)
+			h.Set("Content-Type", "text/html")
+			body := `<html><head><title>Just a moment...</title></head><body>
+				<div id="cf-chl-widget"></div><script>window.challenge = true;</script>
+			</body></html>`
+			return &http.Response{
+				StatusCode: http.StatusForbidden, Status: "403 Forbidden", Header: h,
+				Body: io.NopCloser(strings.NewReader(body)), Request: req,
+			}, nil
+		})}
+		return loader
+	}
+
+	loader := newLoader()
+	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !page.Blocked || len(page.Scripts) != 0 {
+		t.Fatal("default load did not block the challenge")
+	}
+	page, err = loader.LoadRequestBypass(context.Background(), http.MethodGet, "https://example.com/", nil, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Blocked || len(page.Scripts) != 1 {
+		t.Fatalf("bypass load = blocked %v scripts %d", page.Blocked, len(page.Scripts))
+	}
+	if page.Title != "Just a moment..." {
+		t.Fatalf("title = %q", page.Title)
+	}
+
+	global := newLoader()
+	global.ignoreBlocks = true
+	page, err = global.LoadContext(context.Background(), "https://example.com/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Blocked || len(page.Scripts) != 1 {
+		t.Fatalf("ignoreBlocks load = blocked %v scripts %d", page.Blocked, len(page.Scripts))
 	}
 }
 

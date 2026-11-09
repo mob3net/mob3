@@ -22,6 +22,7 @@ func Run(args []string) int {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "auto", "image protocol: auto, kitty, iterm or blocks")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
+	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	cpuProfile := fs.String("cpuprofile", "", "write a CPU profile to this file")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
@@ -65,6 +66,7 @@ func Run(args []string) int {
 	loader := NewLoader()
 	loader.noScripts = *noJS
 	loader.searchURL = *search
+	loader.ignoreBlocks = *ignoreBlocks
 	if *ua != "" {
 		loader.userAgent = *ua
 	}

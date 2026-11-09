@@ -446,8 +446,11 @@ Standard Go layout:
   1 second of parse time; repeated selector text is parsed once per sheet.
   This bounds CPU/GC cost on generated or hostile CSS.
 - Images load concurrently (max 6) and are cached per resolved URL for reloads.
-- Blocked responses are replaced with a locally generated “Site blocked” page;
-  they do not run the site’s challenge scripts or load its assets.
+- Blocked responses are replaced with a locally generated “Site blocked” page
+  with a `about:retry` **Try anyway** link; by default they do not run the
+  site’s challenge scripts or load its assets. Clicking the link re-fetches the
+  page once with block detection disabled, and `-ignore-blocks` disables the
+  detection for all loads.
 - Default User-Agent: **`MOB3/1.0 (+terminal; +https://mob3.net)`**. MOB³ identifies itself
   rather than impersonating another browser; UA-sniffing sites may therefore
   serve simplified or no-JavaScript pages. `-ua` overrides it. Keep this string
@@ -550,7 +553,10 @@ Standard Go layout:
   DataDome/PerimeterX, Imperva/Sucuri, “verify you are human”, “unusual
   traffic” and access-denied signatures and shows a generic “Site blocked”
   page with the detected reason, HTTP status and URL. Challenge scripts are
-  never executed; sites behind such protection are not usable.
+  not executed unless the user follows the page’s one-shot **Try anyway** link
+  or passes `-ignore-blocks`; even then most checks fail, so sites behind such
+  protection are generally not usable. MOB³ is not a security boundary and
+  challenge pages may run arbitrary script once explicitly retried.
 - No tabs or downloads. Forms support editable text fields and urlencoded
   GET/POST submission; multipart/file uploads, selects and checkbox/radio
   toggling are not implemented. Mouse support covers click-to-follow,

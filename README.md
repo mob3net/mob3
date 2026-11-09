@@ -144,6 +144,7 @@ mob3 [flags] [url|file]
   -width int     layout width (default: terminal width or 100)
   -graphics str  auto, kitty, iterm or blocks (default "auto")
   -no-js         disable page JavaScript
+  -ignore-blocks load anti-bot/CAPTCHA pages instead of the blocked page
   -js-memory int  JavaScript heap limit in MB, 0 disables (default 256)
   -text-scale    kitty scaled text: auto or off (default "auto")
   -cpuprofile    write a CPU profile to this file
@@ -313,7 +314,9 @@ MOB³ is a cell-based renderer, not a pixel browser:
 - Browser checks and anti-bot/firewall blocks cannot be completed. Common
   roadblocks (Cloudflare, CAPTCHA, DataDome/PerimeterX, Imperva/Sucuri,
   access-denied pages) show a generic “Site blocked” page with the detected
-  reason instead of running challenge scripts.
+  reason. The page's **Try anyway** link (or `-ignore-blocks`) re-fetches it
+  without block detection and runs its scripts, but the check will usually
+  still fail; MOB³ is not a secure browser.
 - No tabs or downloads. Forms support text entry and urlencoded GET/POST;
   multipart forms, selects, file uploads and checkbox/radio toggling are not
   supported. No certificate or proxy UI.

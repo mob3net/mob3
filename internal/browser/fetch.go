@@ -69,8 +69,11 @@ type Loader struct {
 	userAgent string
 	searchURL string
 	noScripts bool
-	imgMu     sync.Mutex
-	imgs      map[string]image.Image
+	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
+	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
+	ignoreBlocks bool
+	imgMu        sync.Mutex
+	imgs         map[string]image.Image
 }
 
 // NewLoader creates a loader with cookie support and a sane timeout.
@@ -193,6 +196,16 @@ func (l *Loader) LoadContext(ctx context.Context, input string, base *url.URL) (
 // LoadRequest loads a page with an explicit HTTP method and request body.
 // Resources discovered while parsing the response are always fetched with GET.
 func (l *Loader) LoadRequest(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL) (*Page, error) {
+	return l.loadRequest(ctx, method, input, body, contentType, base, l.ignoreBlocks)
+}
+
+// LoadRequestBypass is LoadRequest with block detection disabled for this one
+// load. It backs the "Try anyway" link on the blocked page.
+func (l *Loader) LoadRequestBypass(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL) (*Page, error) {
+	return l.loadRequest(ctx, method, input, body, contentType, base, true)
+}
+
+func (l *Loader) loadRequest(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL, ignoreBlocks bool) (*Page, error) {
 	u, err := ResolveInput(input, base, l.searchURL)
 	if err != nil {
 		return nil, err
@@ -209,12 +222,14 @@ func (l *Loader) LoadRequest(ctx context.Context, method, input string, body []b
 		return nil, err
 	}
 	text := decodeBody(data, ctype)
-	if blocked, reason := blockedResponse(status, text); blocked {
-		root := ParseHTML(blockedPageHTML(finalURL.String(), reason, status))
-		return &Page{
-			URL: finalURL, Base: finalURL, Root: root,
-			Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
-		}, nil
+	if !ignoreBlocks {
+		if blocked, reason := blockedResponse(status, text); blocked {
+			root := ParseHTML(blockedPageHTML(finalURL.String(), reason, status))
+			return &Page{
+				URL: finalURL, Base: finalURL, Root: root,
+				Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
+			}, nil
+		}
 	}
 	mediaType := ""
 	if mt, _, err := mime.ParseMediaType(ctype); err == nil {
@@ -304,6 +319,7 @@ func blockedPageHTML(rawURL, reason string, status int) string {
 body { margin: 16px; max-width: 900px; }
 h1 { font-size: 32px; color: #b42318; }
 .warn { background:#fff3cd; border:1px solid #d4a72c; padding:8px; }
+.try { margin: 16px 0; padding: 8px; border: 1px solid #2f6feb; background: #eef4ff; }
 </style></head><body>
 <h1>Site blocked</h1>
 <p class="warn">This site blocked MOB³ or requires a browser check that it
@@ -311,6 +327,10 @@ cannot complete. Common causes are Cloudflare, CAPTCHA, anti-bot or firewall
 protection, and login protections that need a full browser with
 JavaScript/WASM, fingerprinting and browser APIs.</p>
 <p>Detected: <b>` + EscapeHTML(reason) + `</b>` + ` (HTTP ` + strconv.Itoa(status) + `).</p>
+<p class="try"><a href="about:retry">Try anyway</a> — reload this URL without block
+detection and run the challenge page's scripts. This is a one-shot bypass; the
+site may still refuse access. Challenge pages can run arbitrary script, and
+MOB³ is not a secure browser, so only do this if you trust the site.</p>
 <p>The requested page was not loaded. Try a different source, use the site's
 direct or alternative URL, or open it in a full browser.</p>
 <p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>
@@ -732,6 +752,7 @@ disk write.</p>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
 <tr><td><b>-graphics</b> string</td><td>image protocol: auto, kitty, iterm or blocks (default "auto")</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
+<tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
