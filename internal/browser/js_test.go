@@ -535,6 +535,33 @@ func TestNoJSDisablesRuntime(t *testing.T) {
 	}
 }
 
+func TestJSMemoryLimitDefault(t *testing.T) {
+	b := NewBrowser(40, 10)
+	if b.jsMemLimit != defaultJSMemoryLimit {
+		t.Fatalf("jsMemLimit = %d, want %d", b.jsMemLimit, int64(defaultJSMemoryLimit))
+	}
+}
+
+func TestJSMemoryLimitExceeded(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 1
+	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
+	_, err := j.runCode("alloc", `var a = []; for (;;) { a.push(new Array(4096).fill("x")); }`)
+	if err == nil || !strings.Contains(err.Error(), "memory limit exceeded") {
+		t.Fatalf("err = %v, want memory limit exceeded", err)
+	}
+}
+
+func TestJSMemoryLimitZeroDisables(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
+	_, err := j.runCode("alloc", `var a = []; for (var i = 0; i < 1000; i++) { a.push(new Array(1024).fill(i)); }`)
+	if err != nil {
+		t.Fatalf("runCode with watchdog disabled: %v", err)
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),

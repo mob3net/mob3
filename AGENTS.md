@@ -393,7 +393,8 @@ Standard Go layout:
   are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
   messages and `alert` appear in the footer.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
-  interrupt watchdog. Timer count and per-tick callbacks are capped. Script
+  interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
+  disables). Timer count and per-tick callbacks are capped. Script
   errors surface as footer status. Navigation via `location.href`,
   `location.assign`/`replace`/`reload` is queued until the script or callback
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
@@ -416,8 +417,10 @@ Standard Go layout:
   when the encoded or decoded size exceeds the cap. Images are rejected before
   decoding when they exceed 25 megapixels, to avoid decompression bombs.
 - **JS memory budget:** each guarded script/callback has a 2-second CPU timeout
-  and a best-effort heap-delta watchdog (256 MB above its starting heap);
-  exceeding it interrupts the script with an error.
+  and a best-effort heap-delta watchdog, 256 MB above its starting heap by
+  default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
+  the CPU timeout in place). Exceeding the budget interrupts the script with an
+  error.
 - **Layout budget:** layout stops after 250k fragments or 200k document rows,
   bounding memory/CPU for pathological or generated documents.
 - **Same-origin XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` may

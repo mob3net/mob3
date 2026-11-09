@@ -144,6 +144,7 @@ mob3 [flags] [url|file]
   -width int     layout width (default: terminal width or 100)
   -graphics str  auto, kitty, iterm or blocks (default "auto")
   -no-js         disable page JavaScript
+  -js-memory int  JavaScript heap limit in MB, 0 disables (default 256)
   -text-scale    kitty scaled text: auto or off (default "auto")
   -cpuprofile    write a CPU profile to this file
   -color         force ANSI color when dumping
@@ -239,7 +240,9 @@ the URL; the block caret overlays text without shifting it.
   `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,
   and an English-only `Intl` subset (`NumberFormat`, `DateTimeFormat`,
   `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`).
-  `-no-js` disables it; `!` opens the copyable JS console.
+  `-no-js` disables it; `!` opens the copyable JS console. Each script and
+  callback has a 2 s CPU budget and a 256 MB heap-delta budget; raise or
+  remove the latter with `-js-memory=MB` (0 disables it).
 - Cookie jar, redirects, gzip and charset decoding; pages up to 12 MB.
 - Keyboard and mouse navigation, history, scrolling, focus and text selection.
 

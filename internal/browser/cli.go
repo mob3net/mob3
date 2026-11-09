@@ -24,6 +24,7 @@ func Run(args []string) int {
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	cpuProfile := fs.String("cpuprofile", "", "write a CPU profile to this file")
+	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "MOB³ — A small terminal browser with its own HTML/CSS engine.\n\n")
@@ -67,16 +68,20 @@ func Run(args []string) int {
 	if *ua != "" {
 		loader.userAgent = *ua
 	}
+	var jsMemLimit int64
+	if *jsMemory > 0 {
+		jsMemLimit = int64(*jsMemory) << 20
+	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, jsMemLimit)
 	}
 
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, jsMemLimit)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -89,6 +94,7 @@ func Run(args []string) int {
 	b.loader = loader
 	b.color = !*noColor
 	b.noJS = *noJS
+	b.jsMemLimit = jsMemLimit
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
 	case "off", "none", "false":
 		b.noBigText = true
@@ -155,7 +161,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS bool) int {
+func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS bool, jsMemLimit int64) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -171,6 +177,7 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 	if !noJS {
 		runner := NewBrowser(width, 3)
 		runner.noJS = false
+		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
 	}
 	layout := BuildLayout(page.Root, page.Author, width)

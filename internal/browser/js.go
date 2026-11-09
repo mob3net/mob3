@@ -446,7 +446,9 @@ func (j *jsRuntime) navigatorObject() *goja.Object {
 	return o
 }
 
-const jsMemoryLimit = 256 << 20
+// defaultJSMemoryLimit is the default heap-delta budget for one script or
+// callback. The -js-memory flag overrides it; zero disables the check.
+const defaultJSMemoryLimit = 256 << 20
 
 func (j *jsRuntime) guard(fn func() error) (err error) {
 	if j == nil || j.stopped {
@@ -463,31 +465,36 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		}
 	})
 	var base runtime.MemStats
-	runtime.ReadMemStats(&base)
-	memDone := make(chan struct{})
-	go func() {
-		t := time.NewTicker(25 * time.Millisecond)
-		defer t.Stop()
-		for {
-			select {
-			case <-memDone:
-				return
-			case <-t.C:
-				if j.dialogActive.Load() {
-					continue
-				}
-				var ms runtime.MemStats
-				runtime.ReadMemStats(&ms)
-				if ms.HeapAlloc > base.HeapAlloc+jsMemoryLimit {
-					j.vm.Interrupt("JavaScript memory limit exceeded")
+	var memDone chan struct{}
+	if limit := j.b.jsMemLimit; limit > 0 {
+		runtime.ReadMemStats(&base)
+		memDone = make(chan struct{})
+		go func() {
+			t := time.NewTicker(25 * time.Millisecond)
+			defer t.Stop()
+			for {
+				select {
+				case <-memDone:
 					return
+				case <-t.C:
+					if j.dialogActive.Load() {
+						continue
+					}
+					var ms runtime.MemStats
+					runtime.ReadMemStats(&ms)
+					if ms.HeapAlloc > base.HeapAlloc+uint64(limit) {
+						j.vm.Interrupt("JavaScript memory limit exceeded")
+						return
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 	defer func() {
 		close(done)
-		close(memDone)
+		if memDone != nil {
+			close(memDone)
+		}
 		timer.Stop()
 		j.vm.ClearInterrupt()
 		if r := recover(); r != nil {

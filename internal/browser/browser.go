@@ -35,9 +35,10 @@ type Browser struct {
 	gfx     *gfxRenderer
 	bigText bool
 
-	noJS      bool
-	noBigText bool
-	js        *jsRuntime
+	noJS       bool
+	noBigText  bool
+	jsMemLimit int64
+	js         *jsRuntime
 
 	loadCh     chan loadResult
 	loadSeq    int
@@ -107,7 +108,8 @@ func NewBrowser(w, h int) *Browser {
 	}
 	return &Browser{
 		loader: NewLoader(), width: w, height: h, focus: -1, histIdx: -1,
-		loadCh: make(chan loadResult, 1),
+		jsMemLimit: defaultJSMemoryLimit,
+		loadCh:     make(chan loadResult, 1),
 	}
 }
 
