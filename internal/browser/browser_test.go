@@ -99,16 +99,33 @@ func TestConfigPageShowsValues(t *testing.T) {
 		}
 	}
 	values := map[string]string{}
+	checked := map[string]bool{}
 	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		values[n.Attr("name")] = n.Attr("value")
+		checked[n.Attr("name")] = n.HasAttr("checked")
+	}
+	selects := map[string]string{}
+	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "select" }) {
+		selects[n.Attr("name")] = inputValue(n)
 	}
 	want := map[string]string{
 		"no-js": "on", "home": "https://example.com/home", "js-memory": "64",
-		"text-scale": "off", "ua": "TestUA", "search": "https://search.example/?q=%s",
+		"ua": "TestUA", "search": "https://search.example/?q=%s",
 	}
 	for k, v := range want {
 		if values[k] != v {
 			t.Errorf("input %s = %q, want %q", k, values[k], v)
+		}
+	}
+	if selects["text-scale"] != "off" {
+		t.Errorf("text-scale select = %q, want off", selects["text-scale"])
+	}
+	if !checked["no-js"] {
+		t.Fatal("no-js checkbox is not checked")
+	}
+	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+		if n.Attr("name") == "no-js" && n.Attr("type") != "checkbox" {
+			t.Fatalf("no-js input type = %q", n.Attr("type"))
 		}
 	}
 }
@@ -168,6 +185,54 @@ func TestConfigNavigation(t *testing.T) {
 	}
 	if values["home"] != "https://example.com/home" || values["js-memory"] != "32" {
 		t.Fatalf("config inputs = %+v", values)
+	}
+}
+
+func TestToggleCheckbox(t *testing.T) {
+	b := NewBrowser(40, 10)
+	n := &Node{Type: ElementNode, Tag: "input", Attrs: []Attr{{Key: "type", Value: "checkbox"}, {Key: "name", Value: "x"}}}
+	b.toggleControl(n)
+	if !n.HasAttr("checked") {
+		t.Fatal("checkbox was not checked")
+	}
+	b.toggleControl(n)
+	if n.HasAttr("checked") {
+		t.Fatal("checkbox was not unchecked")
+	}
+}
+
+func TestToggleSelect(t *testing.T) {
+	sel := &Node{Type: ElementNode, Tag: "select", Attrs: []Attr{{Key: "name", Value: "text-scale"}}}
+	auto := &Node{Type: ElementNode, Tag: "option", Parent: sel, Attrs: []Attr{{Key: "selected", Value: ""}}}
+	off := &Node{Type: ElementNode, Tag: "option", Parent: sel}
+	auto.Children = []*Node{{Type: TextNode, Text: "auto", Parent: auto}}
+	off.Children = []*Node{{Type: TextNode, Text: "off", Parent: off}}
+	sel.Children = []*Node{auto, off}
+	b := NewBrowser(40, 10)
+	if got := inputValue(sel); got != "auto" {
+		t.Fatalf("select value = %q", got)
+	}
+	b.toggleControl(sel)
+	if got := inputValue(sel); got != "off" {
+		t.Fatalf("after toggle = %q", got)
+	}
+	b.toggleControl(sel)
+	if got := inputValue(sel); got != "auto" {
+		t.Fatalf("after second toggle = %q", got)
+	}
+}
+
+func TestConfigCheckboxForm(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.setLoader(NewLoader())
+	b.noJS = true
+	b.loader.ignoreBlocks = true
+	b.applyConfig(url.Values{"config-form": {"1"}})
+	if b.noJS || b.loader.noScripts {
+		t.Fatal("unchecked no-js did not turn JS on")
+	}
+	if b.loader.ignoreBlocks {
+		t.Fatal("unchecked ignore-blocks did not turn it off")
 	}
 }
 

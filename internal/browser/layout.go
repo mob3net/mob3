@@ -837,6 +837,22 @@ func inputValue(n *Node) string {
 	if n.ValueSet {
 		return n.Value
 	}
+	if n.Tag == "select" {
+		var first string
+		for _, opt := range n.FindAll(func(x *Node) bool { return x.Tag == "option" }) {
+			val := opt.Attr("value")
+			if val == "" {
+				val = strings.TrimSpace(opt.TextContent())
+			}
+			if first == "" {
+				first = val
+			}
+			if opt.HasAttr("selected") {
+				return val
+			}
+		}
+		return first
+	}
 	if n.Tag == "textarea" {
 		return strings.TrimSpace(n.TextContent())
 	}

@@ -12,6 +12,8 @@ type configItem struct {
 	Value    string
 	Note     string
 	Editable bool
+	Checkbox bool
+	Options  []string
 }
 
 // configItems returns every CLI setting with its current value. Options that
@@ -36,12 +38,12 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
 		{Flag: "-width", Value: get("-width", strconv.Itoa(b.width)), Note: "startup"},
 		{Flag: "-graphics", Value: get("-graphics", "auto"), Note: "startup"},
-		{Flag: "-no-js", Value: onOff(b.noJS), Note: "next page load", Editable: true},
-		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "next request", Editable: true},
+		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
+		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
 		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables", Editable: true},
-		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "auto or off", Editable: true},
+		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
 		{Flag: "-ua", Value: ua, Note: "next request", Editable: true},
@@ -80,17 +82,27 @@ func (b *Browser) applyConfig(q url.Values) {
 	if len(q) == 0 {
 		return
 	}
-	if v, ok := q["no-js"]; ok && len(v) > 0 {
-		if on, ok := parseOnOff(v[0]); ok {
+	form := q.Has("config-form")
+	if v, ok := q["no-js"]; (ok && len(v) > 0) || form {
+		if form {
+			b.noJS = q.Has("no-js")
+			if b.loader != nil {
+				b.loader.noScripts = b.noJS
+			}
+		} else if on, ok := parseOnOff(v[0]); ok {
 			b.noJS = on
 			if b.loader != nil {
 				b.loader.noScripts = on
 			}
 		}
 	}
-	if v, ok := q["ignore-blocks"]; ok && len(v) > 0 && b.loader != nil {
-		if on, ok := parseOnOff(v[0]); ok {
-			b.loader.ignoreBlocks = on
+	if _, ok := q["ignore-blocks"]; (ok && len(q["ignore-blocks"]) > 0) || (form && b.loader != nil) {
+		if form && b.loader != nil {
+			b.loader.ignoreBlocks = q.Has("ignore-blocks")
+		} else if b.loader != nil {
+			if on, ok := parseOnOff(q["ignore-blocks"][0]); ok {
+				b.loader.ignoreBlocks = on
+			}
 		}
 	}
 	if v, ok := q["home"]; ok && len(v) > 0 {
@@ -157,8 +169,10 @@ input { width: 34em; max-width: 100%; }
 	b.WriteString(`<p>Changes are in memory only and disappear when MOB³ exits.
 Options marked <b>startup</b> cannot be changed without restarting; they are
 shown read-only. Options marked <b>dump only</b> apply only to <b>-dump</b>
-runs. All other fields can be edited for this session.</p>
+runs. On/off options use checkboxes; all other fields can be edited for this
+session.</p>
 <form action="about:config" method="get">
+<input type="hidden" name="config-form" value="1">
 <table>
 <tr><th>Option</th><th>Current value</th><th>Notes</th></tr>
 `)
@@ -171,13 +185,45 @@ runs. All other fields can be edited for this session.</p>
 			b.WriteString(`">`)
 			b.WriteString(EscapeHTML(it.Flag))
 			b.WriteString(`</label>`)
-			b.WriteString(`</td><td><input id="`)
-			b.WriteString(EscapeHTML(id))
-			b.WriteString(`" name="`)
-			b.WriteString(EscapeHTML(strings.TrimPrefix(it.Flag, "-")))
-			b.WriteString(`" value="`)
-			b.WriteString(EscapeHTML(it.Value))
-			b.WriteString(`"></td><td class="note">`)
+			b.WriteString(`</td><td>`)
+			if len(it.Options) > 0 {
+				b.WriteString(`<select id="`)
+				b.WriteString(EscapeHTML(id))
+				b.WriteString(`" name="`)
+				b.WriteString(EscapeHTML(strings.TrimPrefix(it.Flag, "-")))
+				b.WriteString(`">`)
+				for _, opt := range it.Options {
+					b.WriteString(`<option value="`)
+					b.WriteString(EscapeHTML(opt))
+					b.WriteString(`"`)
+					if opt == it.Value {
+						b.WriteString(` selected`)
+					}
+					b.WriteString(`>`)
+					b.WriteString(EscapeHTML(opt))
+					b.WriteString(`</option>`)
+				}
+				b.WriteString(`</select>`)
+			} else if it.Checkbox {
+				b.WriteString(`<input type="checkbox" id="`)
+				b.WriteString(EscapeHTML(id))
+				b.WriteString(`" name="`)
+				b.WriteString(EscapeHTML(strings.TrimPrefix(it.Flag, "-")))
+				b.WriteString(`" value="on"`)
+				if on, _ := parseOnOff(it.Value); on {
+					b.WriteString(` checked`)
+				}
+				b.WriteString(`>`)
+			} else {
+				b.WriteString(`<input id="`)
+				b.WriteString(EscapeHTML(id))
+				b.WriteString(`" name="`)
+				b.WriteString(EscapeHTML(strings.TrimPrefix(it.Flag, "-")))
+				b.WriteString(`" value="`)
+				b.WriteString(EscapeHTML(it.Value))
+				b.WriteString(`">`)
+			}
+			b.WriteString(`</td><td class="note">`)
 			b.WriteString(EscapeHTML(it.Note))
 			b.WriteString(`</td></tr>`)
 			continue

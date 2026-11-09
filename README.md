@@ -88,8 +88,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. WebP is not supported.
-- No tabs, downloads, clipboard copy, multipart/file uploads, selects or
-  checkbox/radio toggling.
+- No tabs, downloads, clipboard copy or multipart/file uploads.
 - Very large pages, stylesheets and images are capped to keep memory and CPU
   bounded.
 

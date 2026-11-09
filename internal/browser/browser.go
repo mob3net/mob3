@@ -788,6 +788,75 @@ func isSubmitControl(n *Node) bool {
 	return false
 }
 
+func isToggleControl(n *Node) bool {
+	if n == nil || n.Type != ElementNode {
+		return false
+	}
+	if n.Tag == "select" {
+		return true
+	}
+	if n.Tag != "input" {
+		return false
+	}
+	switch strings.ToLower(n.Attr("type")) {
+	case "checkbox", "radio":
+		return true
+	}
+	return false
+}
+
+// toggleControl flips a checkbox or radio and rebuilds the form labels.
+func (b *Browser) toggleControl(n *Node) {
+	if n == nil {
+		return
+	}
+	if n.Tag == "select" {
+		var opts []*Node
+		for _, opt := range n.FindAll(func(x *Node) bool { return x.Tag == "option" }) {
+			opts = append(opts, opt)
+		}
+		if len(opts) > 1 {
+			next := 0
+			for i, opt := range opts {
+				if opt.HasAttr("selected") {
+					next = (i + 1) % len(opts)
+					break
+				}
+			}
+			for i, opt := range opts {
+				if i == next {
+					setAttr(opt, "selected", "")
+				} else {
+					removeAttr(opt, "selected")
+				}
+			}
+		}
+	} else {
+		typ := strings.ToLower(n.Attr("type"))
+		if typ == "radio" {
+			name := n.Attr("name")
+			if form := nearestForm(n); form != nil && name != "" {
+				form.FindAll(func(x *Node) bool {
+					if x != n && x.Tag == "input" && strings.EqualFold(x.Attr("type"), "radio") && x.Attr("name") == name {
+						removeAttr(x, "checked")
+					}
+					return false
+				})
+			}
+			setAttr(n, "checked", "")
+		} else if n.HasAttr("checked") {
+			removeAttr(n, "checked")
+		} else {
+			setAttr(n, "checked", "")
+		}
+	}
+	if b.js != nil {
+		b.js.fireNodeEvent(n, "input")
+		b.js.fireNodeEvent(n, "change")
+	}
+	b.rebuild()
+}
+
 func nearestForm(n *Node) *Node {
 	for p := n; p != nil; p = p.Parent {
 		if p.Tag == "form" {
@@ -1114,11 +1183,15 @@ func (b *Browser) submitForm(form *Node) {
 	}
 	vals := url.Values{}
 	form.FindAll(func(x *Node) bool {
-		if x.Tag != "input" && x.Tag != "textarea" {
+		if x.Tag != "input" && x.Tag != "textarea" && x.Tag != "select" {
 			return false
 		}
 		name := x.Attr("name")
 		if name == "" {
+			return false
+		}
+		if x.Tag == "select" {
+			vals.Add(name, inputValue(x))
 			return false
 		}
 		typ := strings.ToLower(x.Attr("type"))
@@ -1336,6 +1409,11 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			if y >= top && y < bottom {
 				docY := b.scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
+					if isToggleControl(n) {
+						b.selecting = false
+						b.toggleControl(n)
+						return false
+					}
 					if isTextInput(n) {
 						b.selecting = false
 						b.setInputFocus(n)

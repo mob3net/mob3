@@ -493,21 +493,33 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 	return out
 }
 
+// aboutPageName returns the page part of an about: URL, ignoring a query.
+func aboutPageName(u *url.URL) string {
+	if u == nil || !strings.EqualFold(u.Scheme, "about") {
+		return ""
+	}
+	name := u.Opaque
+	if name == "" {
+		name = strings.TrimPrefix(u.Path, "/")
+	}
+	return strings.ToLower(name)
+}
+
 func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	var doc string
-	switch u.String() {
-	case "about:blank":
+	switch aboutPageName(u) {
+	case "blank":
 		doc = "<html><body></body></html>"
-	case "about:help":
+	case "help":
 		doc = helpPageHTML
-	case "about:history":
+	case "history":
 		var urls []string
 		current := -1
 		if l.historyFn != nil {
 			urls, current = l.historyFn()
 		}
 		doc = historyPageHTML(urls, current)
-	case "about:bookmarks":
+	case "bookmarks":
 		doc = bookmarksPageHTML(l.bookmarks)
 	default:
 		doc = startPageHTML
@@ -517,12 +529,12 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		removeNoscript(root)
 	}
 	title := "MOB³"
-	switch u.String() {
-	case "about:help":
+	switch aboutPageName(u) {
+	case "help":
 		title = "Help — MOB³"
-	case "about:history":
+	case "history":
 		title = "History — MOB³"
-	case "about:bookmarks":
+	case "bookmarks":
 		title = "Bookmarks — MOB³"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, Status: 200}
@@ -941,7 +953,8 @@ exits.</p>
 <p>The <b>⚙</b> icon in the top bar opens <b>about:config</b>. It lists every
 command-line option with its current value. Editable values apply in memory
 for this session; options marked <b>startup</b> are read-only and need a
-restart, while <b>dump only</b> options apply only to dump runs.
+restart, while <b>dump only</b> options apply only to dump runs. On/off
+options use checkboxes.
 Nothing is saved after MOB³ exits.</p>
 
 <h2>Mouse</h2>
@@ -965,6 +978,7 @@ Nothing is saved after MOB³ exits.</p>
 <h2>Forms</h2>
 <p>Click a text input or textarea to type. <b>Backspace</b> deletes,
 <b>Ctrl-U</b> clears, <b>Enter</b> submits, and <b>Esc</b> leaves the field.
+Checkboxes and radios toggle on click; selects cycle through their options.
 GET and urlencoded POST forms work; multipart and file uploads are not
 supported.</p>
 
@@ -975,8 +989,16 @@ supported.</p>
 <li><a href="#" onclick="return confirm('Do you like MOB³?')">ask a yes/no question</a></li>
 <li><a href="#" onclick="var n = prompt('What is your name?', 'friend'); if (n) { alert('Hello, ' + n + '!'); } return false;">ask for a name</a></li>
 </ul>
-<p>You can also click this field and type in it:</p>
-<p><input placeholder="try typing here"></p>
+<h3>Form controls</h3>
+<form action="about:help" method="get">
+<p><label>Text input: <input name="demo-text" value="try typing here"></label></p>
+<p><label><input type="checkbox" name="demo-check" value="on" checked> Checkbox</label></p>
+<p><label><input type="radio" name="demo-radio" value="a" checked> Radio A</label>
+<label><input type="radio" name="demo-radio" value="b"> Radio B</label></p>
+<p><label>Select: <select name="demo-select"><option value="one">One</option><option value="two" selected>Two</option></select></label></p>
+<p><label>Textarea:<br><textarea name="demo-textarea">Some editable text</textarea></label></p>
+<p><button name="demo-submit" value="1">Submit demo</button></p>
+</form>
 
 <h2>JavaScript console</h2>
 <p>Press <b>!</b> to see <b>console</b> output, full script errors and the

@@ -264,8 +264,8 @@ Standard Go layout:
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home, js-memory, text-scale, ua, search);
-  options labelled “startup” are read-only, and colour options are “dump
-  only”. Changes are never persisted.
+  on/off options are checkboxes; options labelled “startup” are read-only, and
+  colour options are “dump only”. Changes are never persisted.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
@@ -301,8 +301,9 @@ Standard Go layout:
   command-line flags, keys, mouse and forms), not as a one-line footer status,
   so every shortcut including `!` is visible and selectable. The flag table
   must list every option accepted by `Run`. The page includes try-it links for
-  alert/confirm/prompt and an editable demo field; inline handlers work even on
-  pages with no `<script>` elements.
+  alert/confirm/prompt and a demo form with text input, checkbox, radio,
+  select, textarea and submit button; inline handlers work even on pages with
+  no `<script>` elements.
 - **Focus:** focused links use a yellow background highlight on text and a
   yellow border on images; the focused URL is shown in the footer.
 - **Mouse:** enable click reporting with `\x1b[?1000h`, all-motion tracking
@@ -323,15 +324,19 @@ Standard Go layout:
   copy is undecided.
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
-  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Submit buttons also
-  submit on click. GET forms build a query from named fields (including hidden
-  inputs); POST forms send `application/x-www-form-urlencoded` bodies. Both
+  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a
+  checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
+  select cycles its options. Submit
+  buttons also submit on click. GET forms build a query from named fields
+  (including hidden inputs, checked checkboxes/radios and selects); POST forms
+  send `application/x-www-form-urlencoded` bodies. Both
   navigate to the resolved action, and reload reuses the last method/body.
-  Focusing/blurring fires `change`, editing fires `input`, and
-  submitting fires `submit` before navigation. JS exposes `value`, `checked`
-  and `form` on elements. Editable fields use a prominent light-blue background
-  with bold text; the focused field switches to a solid blue background with
-  white text, and its placeholder/hint disappears while focused.
+  Focusing/blurring fires `change`, editing fires `input`, toggling fires
+  `input`/`change`, and submitting fires `submit` before navigation. JS exposes
+  `value`, `checked` and `form` on elements. Editable fields use a prominent
+  light-blue background with bold text; the focused field switches to a solid
+  blue background with white text, and its placeholder/hint disappears while
+  focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
   (`MEM 18 MB`), the scroll percentage and a clickable `>_` console icon pinned
@@ -607,11 +612,11 @@ Standard Go layout:
   or passes `-ignore-blocks`; even then most checks fail, so sites behind such
   protection are generally not usable. MOB³ is not a security boundary and
   challenge pages may run arbitrary script once explicitly retried.
-- No tabs or downloads. Forms support editable text fields and urlencoded
-  GET/POST submission; multipart/file uploads, selects and checkbox/radio
-  toggling are not implemented. Mouse support covers click-to-follow,
-  drag selection (highlight only), the URL prompt, right-click back and wheel
-  scrolling. There is no clipboard copy yet.
+- No tabs or downloads. Forms support editable text fields, checkbox/radio
+  toggling, click-to-cycle selects and urlencoded GET/POST submission;
+  multipart/file uploads are not implemented. Mouse support covers
+  click-to-follow, drag selection (highlight only), the URL prompt, right-click
+  back and wheel scrolling. There is no clipboard copy yet.
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
