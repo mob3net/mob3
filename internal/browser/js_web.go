@@ -190,7 +190,40 @@ func (j *jsRuntime) storageObject(data map[string]string) *goja.Object {
 		return j.vm.ToValue(keys[i])
 	}))
 	j.accessor(o, "length", func() goja.Value { return j.vm.ToValue(len(data)) }, nil)
-	return o
+
+	// Web Storage also exposes each key as a named property. Use a proxy so
+	// `storage.key = value`, `storage.key` and `delete storage.key` share the
+	// same map as getItem/setItem/removeItem.
+	proxy := j.vm.NewProxy(o, &goja.ProxyTrapConfig{
+		Get: func(target *goja.Object, property string, _ goja.Value) goja.Value {
+			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+				return v
+			}
+			if v, ok := data[property]; ok {
+				return j.vm.ToValue(v)
+			}
+			return goja.Undefined()
+		},
+		Set: func(target *goja.Object, property string, value goja.Value, _ goja.Value) bool {
+			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+				return true // built-in method/accessor names keep precedence
+			}
+			data[property] = value.String()
+			return true
+		},
+		Has: func(target *goja.Object, property string) bool {
+			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+				return true
+			}
+			_, ok := data[property]
+			return ok
+		},
+		DeleteProperty: func(_ *goja.Object, property string) bool {
+			delete(data, property)
+			return true
+		},
+	})
+	return j.vm.ToValue(proxy).(*goja.Object)
 }
 
 // documentWrite appends a parsed HTML fragment to the body.

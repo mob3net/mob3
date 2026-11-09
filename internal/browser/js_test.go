@@ -375,6 +375,28 @@ func TestJSBrowserGlobals(t *testing.T) {
 	}
 }
 
+func TestStorageNamedProperties(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		localStorage.theirValue = "hello";
+		var read = localStorage.theirValue;
+		var viaGet = localStorage.getItem("theirValue");
+		delete localStorage.theirValue;
+		var afterDelete = localStorage.theirValue;
+		sessionStorage.setItem("k", "v");
+		var named = sessionStorage.k;
+		document.title = [read, viaGet, afterDelete === undefined, named].join("|");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "hello|hello|true|v"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
+	}
+	if _, ok := b.js.storageLocalData["theirValue"]; ok {
+		t.Fatal("deleted storage key is still present")
+	}
+}
+
 func TestJSConsoleLogAndView(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `console.error("navigator is not defined");`)
 	b := NewBrowser(40, 10)

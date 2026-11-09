@@ -476,7 +476,9 @@ Standard Go layout:
   `height`/`complete`/`natural*`. `URL`/`URLSearchParams`,
   `document.currentScript`/`baseURI`, `document.write`/`writeln`,
   `document.cookie`, and in-memory `localStorage`/`sessionStorage` are
-  available. `document.cookie` reads and writes the same in-memory session jar
+  available. Storage supports `getItem`/`setItem`/`removeItem`/`clear`/`key`/
+  `length` plus named property reads, writes and `delete` against the same
+  map. `document.cookie` reads and writes the same in-memory session jar
   as HTTP requests, honors Domain/Path/Expires/Max-Age/Secure and hides
   HttpOnly cookies; `navigator.cookieEnabled` is true. Cookies are not
   persisted. `XMLHttpRequest` supports
@@ -777,7 +779,9 @@ Works well:
   `preventDefault`, `element.click()`.
 - Network: same-origin `fetch`, `Headers`/`Request`/`Response`, same-origin
   `XMLHttpRequest`, cookies, `URL`/`URLSearchParams`.
-- Storage: in-memory `localStorage`/`sessionStorage` and `document.cookie`.
+- Storage: in-memory `localStorage`/`sessionStorage` (`getItem`/`setItem`/
+  `removeItem`/`clear`, `length`, and named property get/set/delete) and
+  `document.cookie`.
 - Canvas: `getContext("2d")` is a no-op context with the common method surface;
   no pixels and no WebGL.
 - Compatibility shims (`js_compat.go`): `dataset`, `outerHTML`,
