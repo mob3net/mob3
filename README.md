@@ -65,7 +65,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, dialogs, same-origin `fetch`/`XMLHttpRequest`, and in-memory
   storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
-  the full console.
+  the full console, where the `>` row runs JavaScript expressions.
 - Browser-style toolbar with back/forward/reload/home, bookmarks/history/help
   buttons, a config gear and a centered page title.
 - Keyboard and mouse navigation, a draggable page scrollbar, history (including

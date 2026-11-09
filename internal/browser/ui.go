@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/dop251/goja"
 )
 
 // logJS records a JavaScript console/error message for the console view.
@@ -58,6 +60,10 @@ func (b *Browser) closeConsole() {
 }
 
 func (b *Browser) handleConsoleKey(k string) bool {
+	l := newConsoleLayout(b.height)
+	if b.consolePane == 2 && l.inputY >= 0 {
+		return b.handleConsoleInputKey(k, l)
+	}
 	scroll := func(delta int) {
 		if b.consolePane == 1 {
 			b.reqScroll += delta
@@ -80,10 +86,13 @@ func (b *Browser) handleConsoleKey(k string) bool {
 	case "q", "ctrl-c":
 		return true
 	case "tab":
-		if b.consolePane == 0 {
-			b.consolePane = 1
-		} else {
-			b.consolePane = 0
+		b.consoleCyclePane(l, 1)
+	case "backtab":
+		b.consoleCyclePane(l, -1)
+	case "i", "enter":
+		if l.inputY >= 0 {
+			b.consolePane = 2
+			b.consoleCursor = len(b.consoleText)
 		}
 	case "k", "up":
 		scroll(1)
@@ -103,6 +112,138 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		}
 	}
 	return false
+}
+
+// consoleCyclePane moves focus between the logs, requests and input panes.
+func (b *Browser) consoleCyclePane(l consoleLayout, dir int) {
+	panes := []int{0}
+	if l.reqRows > 0 {
+		panes = append(panes, 1)
+	}
+	if l.inputY >= 0 {
+		panes = append(panes, 2)
+	}
+	cur := 0
+	for i, p := range panes {
+		if p == b.consolePane {
+			cur = i
+			break
+		}
+	}
+	if dir < 0 {
+		cur = (cur - 1 + len(panes)) % len(panes)
+	} else {
+		cur = (cur + 1) % len(panes)
+	}
+	b.consolePane = panes[cur]
+	if b.consolePane == 2 {
+		b.consoleCursor = len(b.consoleText)
+	}
+}
+
+// handleConsoleInputKey edits the one-line JavaScript input row.
+func (b *Browser) handleConsoleInputKey(k string, l consoleLayout) bool {
+	text := b.consoleText
+	cur := b.consoleCursor
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(text) {
+		cur = len(text)
+	}
+	switch k {
+	case "esc":
+		b.toggleConsole()
+		b.status = exitHint
+		return false
+	case "ctrl-c":
+		return true
+	case "tab":
+		b.consoleCyclePane(l, 1)
+		return false
+	case "backtab":
+		b.consoleCyclePane(l, -1)
+		return false
+	case "enter":
+		b.runConsoleInput()
+		return false
+	case "left":
+		cur = prevRuneBoundary(text, cur)
+	case "right":
+		cur = nextRuneBoundary(text, cur)
+	case "home", "ctrl-a":
+		cur = 0
+	case "end", "ctrl-e":
+		cur = len(text)
+	case "backspace":
+		if cur > 0 {
+			prev := prevRuneBoundary(text, cur)
+			text = text[:prev] + text[cur:]
+			cur = prev
+		}
+	case "delete":
+		if cur < len(text) {
+			next := nextRuneBoundary(text, cur)
+			text = text[:cur] + text[next:]
+		}
+	case "ctrl-u":
+		text = ""
+		cur = 0
+	case "ctrl-k":
+		text = text[:cur]
+	case "ctrl-w":
+		before := strings.TrimRight(text[:cur], " ")
+		cut := 0
+		if i := strings.LastIndexAny(before, " /"); i >= 0 {
+			cut = i + 1
+		}
+		text = text[:cut] + text[cur:]
+		cur = cut
+	default:
+		if utf8.RuneCountInString(k) == 1 {
+			r, _ := utf8.DecodeRuneInString(k)
+			if r >= 32 && r != 127 && len([]rune(text)) < 8192 {
+				text = text[:cur] + k + text[cur:]
+				cur += len(k)
+			}
+		}
+	}
+	b.consoleText = text
+	if cur > len(text) {
+		cur = len(text)
+	}
+	b.consoleCursor = cur
+	return false
+}
+
+// runConsoleInput evaluates the JavaScript input row and logs its result.
+func (b *Browser) runConsoleInput() {
+	src := strings.TrimSpace(b.consoleText)
+	if src == "" {
+		return
+	}
+	b.logJS("input", src)
+	b.consoleText = ""
+	b.consoleCursor = 0
+	if b.js == nil {
+		b.logJS("error", "JavaScript is disabled (-no-js)")
+		return
+	}
+	v, err := b.js.runCode("console", src)
+	if err != nil {
+		b.logJS("error", err.Error())
+	} else if v != nil && !goja.IsUndefined(v) {
+		s := v.String()
+		if r := []rune(s); len(r) > 2000 {
+			s = string(r[:2000]) + "…"
+		}
+		b.logJS("result", s)
+	}
+	if b.js.consumeDirty() {
+		b.rebuild()
+	}
+	b.consumePendingJS()
+	b.consoleScroll = 0
 }
 
 func (b *Browser) consoleLines(width int) []string {
@@ -202,18 +343,24 @@ type consoleLayout struct {
 	logRows int
 	sepY    int // -1 when there is no Requests pane
 	reqRows int
+	inputY  int // -1 when the JavaScript input row does not fit
 	footerY int // -1 when the footer row does not fit
 }
 
 func newConsoleLayout(h int) consoleLayout {
 	avail := h - 2
-	if avail < 0 {
-		avail = 0
-	}
-	l := consoleLayout{logRows: avail, sepY: -1, footerY: -1}
+	l := consoleLayout{logRows: 0, sepY: -1, inputY: -1, footerY: -1}
 	if h >= 2 {
 		l.footerY = h - 1
 	}
+	if h >= 3 {
+		l.inputY = h - 2
+		avail = h - 3
+	}
+	if avail < 0 {
+		avail = 0
+	}
+	l.logRows = avail
 	if avail >= 5 {
 		reqRows := avail / 3
 		if reqRows < 1 {
@@ -235,7 +382,10 @@ func newConsoleLayout(h int) consoleLayout {
 
 // paneAt returns the pane whose heading or body sits on row y.
 func (l consoleLayout) paneAt(y int) int {
-	if l.sepY >= 0 && y >= l.sepY {
+	if l.inputY >= 0 && y == l.inputY {
+		return 2
+	}
+	if l.sepY >= 0 && y >= l.sepY && (l.footerY < 0 || y < l.footerY) {
 		return 1
 	}
 	return 0
@@ -254,7 +404,7 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	}
 	l := newConsoleLayout(b.height)
 	if ev.Wheel != 0 {
-		if y == l.footerY {
+		if y == l.footerY || l.paneAt(y) == 2 {
 			return
 		}
 		step := -3
@@ -290,6 +440,9 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 		return
 	}
 	b.consolePane = l.paneAt(y)
+	if b.consolePane == 2 {
+		b.consoleCursor = len(b.consoleText)
+	}
 }
 
 func (b *Browser) drawConsole(w, h int) {
@@ -346,6 +499,37 @@ func (b *Browser) drawConsole(w, h int) {
 			&Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}, fg)
 		drawPane(reqs, b.reqScroll, l.sepY+1, l.reqRows)
 	}
+	if l.inputY >= 0 {
+		rowBG := ftrBG
+		if b.consolePane == 2 {
+			rowBG = activeBG
+		}
+		g.Fill(0, l.inputY, w, 1, rowBG)
+		g.Text(0, l.inputY, "> ", style, fg)
+		contentW := w - 2
+		if contentW > 0 {
+			if b.consolePane == 2 {
+				runes, start, end, cur := promptWindow(b.consoleText, b.consoleCursor, contentW, false)
+				xx := 2
+				for i := start; i < end; i++ {
+					if i == cur {
+						g.Put(xx, l.inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
+						xx++
+						continue
+					}
+					g.Put(xx, l.inputY, runes[i], style, fg, rowBG)
+					xx += runeWidth(runes[i])
+				}
+				if cur == len(runes) && cur >= start {
+					g.Put(xx, l.inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
+				}
+			} else if b.consoleText == "" {
+				g.Text(2, l.inputY, truncateWidth("JavaScript input: i or Tab", contentW), style, RGB(0x8a, 0x9a, 0xaa))
+			} else {
+				g.Text(2, l.inputY, truncateWidth(b.consoleText, contentW), style, fg)
+			}
+		}
+	}
 	if h >= 2 {
 		icon := ">_"
 		iconW := stringWidth(icon)
@@ -357,7 +541,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if hintW < 1 {
 			hintW = 1
 		}
-		hint := " Tab/click: switch · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hint := " Tab/click: switch · i: JS input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
 		g.Text(0, h-1, padWidth(truncateWidth(hint, hintW), hintW),
 			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
 		if reserve > 0 {

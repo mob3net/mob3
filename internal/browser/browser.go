@@ -85,7 +85,9 @@ type Browser struct {
 	consoleOpen   bool
 	consoleScroll int
 	reqScroll     int
-	consolePane   int // 0 = JS log, 1 = requests
+	consolePane   int // 0 = JS log, 1 = requests, 2 = JS input
+	consoleText   string
+	consoleCursor int
 	jsLog         []string
 
 	keys   <-chan string

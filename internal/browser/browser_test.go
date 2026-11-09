@@ -1737,3 +1737,74 @@ func TestCopySelectionWithoutSelection(t *testing.T) {
 		t.Fatalf("status = %q", b.status)
 	}
 }
+
+func TestConsoleJavaScriptInputRow(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out">before</p></body></html>`, ``)
+	b := NewBrowser(60, 20)
+	b.page = page
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.consoleOpen = true
+	b.handleConsoleKey("i")
+	if b.consolePane != 2 {
+		t.Fatalf("console pane = %d, want JS input", b.consolePane)
+	}
+	b.consoleText = `document.getElementById("out").textContent = "after"`
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("enter")
+	if got := page.Root.FindFirst("p").TextContent(); got != "after" {
+		t.Fatalf("input did not run: %q", got)
+	}
+	if b.consoleText != "" || b.consoleCursor != 0 {
+		t.Fatalf("input was not cleared: %q cursor=%d", b.consoleText, b.consoleCursor)
+	}
+	joined := strings.Join(b.jsLog, "\n")
+	if !strings.Contains(joined, "[input]") || !strings.Contains(joined, "[result] after") {
+		t.Fatalf("console log = %q", joined)
+	}
+}
+
+func TestConsoleInputKeepsNavigationKeysAsText(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consolePane = 2
+	b.handleConsoleKey("q")
+	b.handleConsoleKey("j")
+	b.handleConsoleKey("!")
+	if !b.consoleOpen {
+		t.Fatal("typing q closed or quit the console")
+	}
+	if b.consoleText != "qj!" {
+		t.Fatalf("console input = %q", b.consoleText)
+	}
+}
+
+func TestConsoleTabCyclesThroughInput(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.handleConsoleKey("tab")
+	if b.consolePane != 1 {
+		t.Fatalf("pane after first Tab = %d, want requests", b.consolePane)
+	}
+	b.handleConsoleKey("tab")
+	if b.consolePane != 2 {
+		t.Fatalf("pane after second Tab = %d, want input", b.consolePane)
+	}
+	b.handleConsoleKey("tab")
+	if b.consolePane != 0 {
+		t.Fatalf("pane after third Tab = %d, want logs", b.consolePane)
+	}
+}
+
+func TestConsoleClickInputRowFocusesIt(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	l := newConsoleLayout(20)
+	if l.inputY < 0 {
+		t.Fatal("expected an input row")
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.inputY + 1, Press: true})
+	if b.consolePane != 2 {
+		t.Fatalf("console pane = %d, want input", b.consolePane)
+	}
+}
