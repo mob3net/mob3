@@ -113,6 +113,115 @@ func TestJSWebAPIs(t *testing.T) {
 	}
 }
 
+func TestJSElementConstructors(t *testing.T) {
+	page := newJSPage(`<html><body><script id="s"></script></body></html>`, `
+		var s = document.getElementById("s");
+		var made = document.createElement("script");
+		document.title = [
+			s instanceof HTMLScriptElement,
+			made instanceof HTMLScriptElement,
+			document.body instanceof HTMLBodyElement,
+			document.body instanceof HTMLElement,
+			document.body instanceof Element,
+			document.body instanceof Node,
+			document instanceof HTMLDocument,
+			s.constructor === HTMLScriptElement
+		].join("|");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "true|true|true|true|true|true|true|true"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
+	}
+}
+
+func TestJSFetch(t *testing.T) {
+	loader := NewLoader()
+	var gotMethod, gotPath, gotBody, gotHeader string
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		gotMethod = req.Method
+		gotPath = req.URL.Path
+		gotHeader = req.Header.Get("X-Test")
+		b, _ := io.ReadAll(req.Body)
+		gotBody = string(b)
+		h := make(http.Header)
+		h.Set("Content-Type", "application/json")
+		h.Set("X-Answer", "42")
+		return &http.Response{
+			StatusCode: 201, Status: "201 Created", Header: h,
+			Body: io.NopCloser(strings.NewReader(`{"ok":true}`)), Request: req,
+		}, nil
+	})}
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("/api", {method: "POST", headers: {"X-Test": "yes"}, body: "abc"})
+			.then(function (r) {
+				var meta = [r.status, r.ok, r.headers.get("X-Answer")].join("|");
+				return r.json().then(function (j) { return meta + "|" + j.ok; });
+			})
+			.then(function (s) { document.title = s; })
+			.catch(function (e) { document.title = "error:" + e; });
+	`)
+	b := NewBrowser(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if want := "201|true|42|true"; page.Title != want {
+		t.Fatalf("title = %q, want %q (logs %v, status %q)", page.Title, want, b.jsLog, b.status)
+	}
+	if gotMethod != "POST" || gotPath != "/api" || gotBody != "abc" || gotHeader != "yes" {
+		t.Fatalf("request = %s %s body %q header %q", gotMethod, gotPath, gotBody, gotHeader)
+	}
+}
+
+func TestJSFetchCrossOriginBlocked(t *testing.T) {
+	loader := NewLoader()
+	calls := 0
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader("secret")), Request: req,
+		}, nil
+	})}
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("https://other.example/account")
+			.then(function () { document.title = "leaked"; })
+			.catch(function () { document.title = "blocked"; });
+	`)
+	b := NewBrowser(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if calls != 0 {
+		t.Fatalf("cross-origin fetch made %d requests", calls)
+	}
+	if page.Title != "blocked" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSIntl(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var n = new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"});
+		var d = new Intl.DateTimeFormat("en-US", {
+			year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC"
+		});
+		var date = new Date(Date.UTC(2020, 0, 2, 3, 4, 5));
+		var rel = new Intl.RelativeTimeFormat("en-US");
+		var list = new Intl.ListFormat("en-US");
+		var plural = new Intl.PluralRules("en-US");
+		document.title = [
+			n.format(1234.5), d.format(date), rel.format(-3, "day"),
+			list.format(["a", "b", "c"]), plural.select(1), plural.select(2)
+		].join("|");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "$1,234.50|01/02/2020|3 days ago|a, b, and c|one|other"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q (logs %v, status %q)", page.Title, want, b.jsLog, b.status)
+	}
+}
+
 func TestJSXMLHTTPRequest(t *testing.T) {
 	loader := NewLoader()
 	var gotMethod, gotPath, gotBody string

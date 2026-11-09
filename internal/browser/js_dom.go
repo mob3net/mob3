@@ -211,8 +211,10 @@ func (j *jsRuntime) wrap(n *Node) goja.Value {
 	j.nodes[n] = o
 	j.rev[o] = n
 	if n.Type == TextNode {
+		j.setElementPrototype(o, n)
 		j.initTextObject(o, n)
 	} else {
+		j.setElementPrototype(o, n)
 		j.initElementObject(o, n)
 	}
 	return o

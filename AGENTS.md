@@ -117,6 +117,9 @@ Standard Go layout:
 | `usage.go` | Process resident-memory sampling for the footer. |
 | `js.go` | goja runtime, script execution, events, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists. |
+| `js_elements.go` | HTML element constructor globals and prototype chains for `instanceof` checks. |
+| `js_fetch.go` | Promise-based same-origin `fetch`, plus `Headers`, `Request` and `Response`. |
+| `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
@@ -330,7 +333,10 @@ Standard Go layout:
   `createTextNode`, attributes, `textContent`/`innerText`/`innerHTML`,
   `classList`, `style` (common properties plus `setProperty`/`cssText`),
   `appendChild`/`removeChild`/`replaceChildren`, `children`/`parentNode`, and
-  `document.title`/`URL`.
+  `document.title`/`URL`. Element wrappers use constructor prototypes, so
+  `instanceof HTMLElement`, `instanceof HTMLScriptElement`, `instanceof Node`
+  and similar checks work; document, text and common HTML element constructors
+  are exposed globally and on `window`.
 - **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
   `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events and
@@ -343,11 +349,19 @@ Standard Go layout:
   basic same-origin HTTP methods, headers, `responseText`/`response` (text/
   json/arraybuffer), status and callbacks. Cross-origin requests and redirects
   are blocked (no CORS). It executes synchronously even when `async=true` and
-  does not implement streaming, upload progress or timeouts. `<noscript>` is removed before
-  styles and scripts are collected when JS is enabled, so no-JS styles/scripts
-  cannot affect the JS page. `console.*` and uncaught errors append to a
-  bounded JS log. Module scripts remain unsupported, so globals defined only by
-  modules (for example a third-party `google` object) stay undefined.
+  does not implement streaming, upload progress or timeouts. `fetch` is
+  available with `Headers`, `Request` and `Response`; it follows the same
+  same-origin rule, resolves a promise, and supports `text`, `json`,
+  `arrayBuffer` and `blob` bodies. It is likewise synchronous under the hood
+  and has no streaming, abort controller or upload progress. `Intl` provides
+  an English-only practical subset: `NumberFormat`, `DateTimeFormat`,
+  `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`,
+  `getCanonicalLocales` and `supportedValuesOf`, without full CLDR locale
+  data. `<noscript>` is removed before styles and scripts are collected when
+  JS is enabled, so no-JS styles/scripts cannot affect the JS page.
+  `console.*` and uncaught errors append to a bounded JS log. Module scripts
+  remain unsupported, so globals defined only by modules (for example a
+  third-party `google` object) stay undefined.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
   block script execution until answered. Alert closes on Enter/Space/Esc;
   confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text
@@ -371,9 +385,9 @@ Standard Go layout:
   `location.assign`/`replace`/`reload` is queued until the script or callback
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
   are followed immediately. Storage and `document.cookie` are in-memory only
-  (not persisted or attached to HTTP requests). `XMLHttpRequest` uses the
-  browser's cookie jar and User-Agent but is synchronous under the hood. There
-  is no `fetch`, CSP or module loading; `history.back`/`forward` are stubs.
+  (not persisted or attached to HTTP requests). `XMLHttpRequest` and `fetch`
+  use the browser's cookie jar and User-Agent but are synchronous under the
+  hood. There is no CSP or module loading; `history.back`/`forward` are stubs.
 - **Dump mode with JS:** `-dump` runs scripts and `DOMContentLoaded`/`load`
   synchronously so output reflects DOM changes; timers do not run in dump mode.
 
@@ -390,10 +404,11 @@ Standard Go layout:
   exceeding it interrupts the script with an error.
 - **Layout budget:** layout stops after 250k fragments or 200k document rows,
   bounding memory/CPU for pathological or generated documents.
-- **Same-origin XHR:** JavaScript `XMLHttpRequest` may only request the page's
-  own scheme/host/port (default ports normalized). Cross-origin requests and
-  cross-origin redirects fail with status 0; no CORS is implemented. Cookies
-  therefore cannot be read cross-site through XHR.
+- **Same-origin XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` may
+  only request the page's own scheme/host/port (default ports normalized).
+  Cross-origin requests and cross-origin redirects fail; no CORS is
+  implemented. Cookies therefore cannot be read cross-site through XHR or
+  fetch.
 - **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
   only when the document itself was loaded from `file:`. Remote (http/https/
   data) documents cannot load file resources, navigate the viewport to `file:`
@@ -488,14 +503,15 @@ Standard Go layout:
 
 ## 8. Known limitations (accepted)
 
-- JavaScript is a practical subset: no `fetch`, modules or CSP; storage and
-  `document.cookie` are in-memory only and do not persist or reach HTTP
-  requests. `XMLHttpRequest` is synchronous, same-origin-only and lacks
-  streaming/upload progress. `document.write` is supported for document
-  fragments. JS history navigation is stubbed. Plain same-origin `location`
-  redirects and meta refresh work; remote pages cannot navigate to `file:`.
-  Apps requiring missing APIs (for example Google search) may still show their
-  no-JavaScript fallback.
+- JavaScript is a practical subset: modules and CSP are unsupported; storage
+  and `document.cookie` are in-memory only and do not persist or reach HTTP
+  requests. `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and
+  lack streaming/upload progress; `fetch` has no abort controller. `Intl` is an
+  English-only subset without full CLDR locale data. `document.write` is
+  supported for document fragments. JS history navigation is stubbed. Plain
+  same-origin `location` redirects and meta refresh work; remote pages cannot
+  navigate to `file:`. Apps requiring missing APIs (for example Google search)
+  may still show their no-JavaScript fallback.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.

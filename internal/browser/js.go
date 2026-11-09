@@ -27,15 +27,21 @@ type jsRuntime struct {
 	nodes map[*Node]*goja.Object
 	rev   map[*goja.Object]*Node
 
-	docObj       *goja.Object
-	winObj       *goja.Object
-	navObj       *goja.Object
-	perfObj      *goja.Object
-	locObj       *goja.Object
-	histObj      *goja.Object
-	start        time.Time
-	pendingNav   string
-	dialogActive atomic.Bool
+	docObj        *goja.Object
+	winObj        *goja.Object
+	navObj        *goja.Object
+	perfObj       *goja.Object
+	locObj        *goja.Object
+	histObj       *goja.Object
+	elementProtos map[string]*goja.Object
+	elementCtors  []string
+	elementProto  *goja.Object
+	textProto     *goja.Object
+	docProto      *goja.Object
+	headerObjs    map[*goja.Object]map[string][]string
+	start         time.Time
+	pendingNav    string
+	dialogActive  atomic.Bool
 
 	storageLocal   *goja.Object
 	storageSession *goja.Object
@@ -86,8 +92,12 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		selectors:     make(map[string][]*Selector),
 		timers:        make(map[int]*jsTimer),
 		nextID:        1,
+		headerObjs:    make(map[*goja.Object]map[string][]string),
 	}
 	j.start = time.Now()
+	j.installElementConstructors()
+	j.installIntl()
+	j.installFetch()
 	j.cookies = make(map[string]string)
 	j.storageLocal = j.storageObject(make(map[string]string))
 	j.storageSession = j.storageObject(make(map[string]string))
@@ -96,6 +106,9 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j.locObj = j.locationObject()
 	j.histObj = j.historyObject()
 	j.docObj = j.documentObject()
+	if j.docProto != nil {
+		_ = j.docObj.SetPrototype(j.docProto)
+	}
 	j.winObj = j.windowObject()
 	_ = j.vm.Set("document", j.docObj)
 	_ = j.vm.Set("navigator", j.navObj)
@@ -186,6 +199,16 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		}
 		return j.vm.ToValue(text)
 	}))
+	for _, name := range j.elementCtors {
+		if v := j.vm.Get(name); v != nil {
+			_ = j.winObj.Set(name, v)
+		}
+	}
+	for _, name := range []string{"Intl", "fetch", "Headers", "Request", "Response"} {
+		if v := j.vm.Get(name); v != nil {
+			_ = j.winObj.Set(name, v)
+		}
+	}
 	return j
 }
 

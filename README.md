@@ -225,12 +225,15 @@ the URL; the block caret overlays text without shifting it.
 - Kitty text sizing for genuinely larger heading glyphs; elsewhere font size
   affects line height and emphasis.
 - JavaScript through goja: inline and external scripts, common DOM queries and
-  mutation, `classList`/`style`, `navigator`/`window` basics including
-  `location`, `performance`, `Image`, `requestAnimationFrame`, click handlers,
-  `DOMContentLoaded`/`load`, setTimeout/setInterval, console output and modal
-  `alert`/`confirm`/`prompt` dialogs. Includes `URL`/`URLSearchParams`,
+  mutation, `classList`/`style`, element constructor prototypes
+  (`HTMLElement`, `HTMLScriptElement` and friends), `navigator`/`window` basics
+  including `location`, `performance`, `Image`, `requestAnimationFrame`, click
+  handlers, `DOMContentLoaded`/`load`, setTimeout/setInterval, console output
+  and modal `alert`/`confirm`/`prompt` dialogs. Includes `URL`/`URLSearchParams`,
   `document.currentScript`/`write`, in-memory storage/cookies,
-  `XMLHttpRequest`.
+  `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,
+  and an English-only `Intl` subset (`NumberFormat`, `DateTimeFormat`,
+  `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`).
   `-no-js` disables it; `!` opens the copyable JS console.
 - Cookie jar, redirects, gzip and charset decoding; pages up to 12 MB.
 - Keyboard and mouse navigation, history, scrolling, focus and text selection.
@@ -267,12 +270,14 @@ MOB³ is a cell-based renderer, not a pixel browser:
 
 ## Limits
 
-- JavaScript is a practical subset: no `fetch`, modules or CSP; JS storage and
-  cookies are in-memory only and not sent over HTTP. `XMLHttpRequest` is
-  same-origin-only (cross-origin requests/redirects are blocked), synchronous,
-  and lacks streaming/upload progress. JS history navigation is stubbed.
-  `location` redirects and meta refresh work. JS-heavy apps that require missing
-  APIs (for example Google search) may still show their no-JavaScript fallback.
+- JavaScript is a practical subset: modules and CSP are unsupported; JS storage
+  and cookies are in-memory only and not sent over HTTP. `XMLHttpRequest` and
+  `fetch` are same-origin-only (cross-origin requests/redirects are blocked),
+  synchronous under the hood, and lack streaming/upload progress; `fetch` has
+  no abort controller. `Intl` is an English-only subset without full CLDR
+  locale data. JS history navigation is stubbed. `location` redirects and meta
+  refresh work. JS-heavy apps that require missing APIs (for example Google
+  search) may still show their no-JavaScript fallback.
 - Remote pages cannot load `file:` resources, navigate to `file:` URLs, or XHR
   local files. Local `file:` pages can still load local resources.
 - Flexbox supports basic rows only; grid, floats and absolute positioning are
