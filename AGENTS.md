@@ -292,9 +292,10 @@ Standard Go layout:
   and release keeps the highlight. A press and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus. A left click on the URL bar opens the URL prompt, toolbar
-  buttons act on click, right click goes back, and the wheel scrolls three
-  lines. `Esc` clears the selection. Selected text is highlight-only for now;
-  clipboard copy is undecided.
+  buttons act on click, right click and the mouse back button go back, the
+  mouse forward button goes forward, and the wheel scrolls three lines. `Esc`
+  clears the selection. Selected text is highlight-only for now; clipboard
+  copy is undecided.
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
   deletes, Ctrl-U clears, Enter submits, and Esc finishes. Submit buttons also

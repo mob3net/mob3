@@ -707,6 +707,11 @@ func TestParseSGRMouse(t *testing.T) {
 		{"<0;10;5", false, MouseEvent{Button: 0, X: 10, Y: 5, Press: true}, true},
 		{"<0;10;5", true, MouseEvent{Button: 0, X: 10, Y: 5, Press: false}, true},
 		{"<2;1;1", false, MouseEvent{Button: 2, X: 1, Y: 1, Press: true}, true},
+		{"<8;1;1", false, MouseEvent{Button: 8, X: 1, Y: 1, Press: true}, true},
+		{"<9;1;1", false, MouseEvent{Button: 9, X: 1, Y: 1, Press: true}, true},
+		{"<128;1;1", false, MouseEvent{Button: 8, X: 1, Y: 1, Press: true}, true},
+		{"<129;1;1", false, MouseEvent{Button: 9, X: 1, Y: 1, Press: true}, true},
+		{"<136;1;1", false, MouseEvent{Button: 8, X: 1, Y: 1, Press: true}, true},
 		{"<64;3;4", false, MouseEvent{Button: 0, X: 3, Y: 4, Press: true, Wheel: -1}, true},
 		{"<65;3;4", false, MouseEvent{Button: 1, X: 3, Y: 4, Press: true, Wheel: 1}, true},
 		{"<32;3;4", false, MouseEvent{Button: 0, X: 3, Y: 4, Press: true, Motion: true}, true},
@@ -733,12 +738,34 @@ func TestParseX10Mouse(t *testing.T) {
 	if !ok || ev.Wheel != -1 {
 		t.Fatalf("wheel up = %+v,%v", ev, ok)
 	}
+	ev, ok = parseX10Mouse(32+8, 32+1, 32+1)
+	if !ok || ev != (MouseEvent{Button: MouseButtonBack, X: 1, Y: 1, Press: true}) {
+		t.Fatalf("back button = %+v,%v", ev, ok)
+	}
+	ev, ok = parseX10Mouse(32+128, 32+1, 32+1)
+	if !ok || ev != (MouseEvent{Button: MouseButtonBack, X: 1, Y: 1, Press: true}) {
+		t.Fatalf("xterm back button = %+v,%v", ev, ok)
+	}
+}
+
+func TestMouseSideButtonsNavigate(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleMouse(MouseEvent{Button: MouseButtonBack, X: 5, Y: 5, Press: true})
+	if b.status != "No previous page" {
+		t.Fatalf("back status = %q", b.status)
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonForward, X: 5, Y: 5, Press: true})
+	if b.status != "No next page" {
+		t.Fatalf("forward status = %q", b.status)
+	}
 }
 
 func TestMouseTokenRoundTrip(t *testing.T) {
 	cases := []MouseEvent{
 		{Button: 0, X: 3, Y: 7, Press: true},
 		{Button: 2, X: 1, Y: 2, Press: false},
+		{Button: MouseButtonBack, X: 2, Y: 3, Press: true},
+		{Button: MouseButtonForward, X: 2, Y: 3, Press: true},
 		{Button: 0, X: 4, Y: 8, Press: true, Motion: true},
 		{Wheel: -1, X: 9, Y: 4},
 		{Wheel: 1, X: 5, Y: 6},

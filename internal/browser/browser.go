@@ -1152,10 +1152,18 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	}
 	if ev.Press {
 		switch ev.Button {
-		case 2: // right click: back
+		case MouseButtonBack:
 			b.clearInputFocus()
 			b.back()
-		case 0: // left press starts a drag selection
+			return false
+		case MouseButtonForward:
+			b.clearInputFocus()
+			b.forward()
+			return false
+		case MouseButtonRight:
+			b.clearInputFocus()
+			b.back()
+		case MouseButtonLeft:
 			if y >= top && y < bottom {
 				docY := b.scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
@@ -1749,11 +1757,32 @@ func processRSS() uint64 {
 
 // MouseEvent is a decoded terminal mouse report.
 type MouseEvent struct {
-	Button int // 0 left, 1 middle, 2 right
+	Button int // 0 left, 1 middle, 2 right, 8 back, 9 forward
 	X, Y   int // 1-based terminal cell coordinates
 	Press  bool
 	Motion bool // drag report while a button is held
 	Wheel  int  // -1 wheel up, +1 wheel down, 0 otherwise
+}
+
+const (
+	MouseButtonLeft    = 0
+	MouseButtonMiddle  = 1
+	MouseButtonRight   = 2
+	MouseButtonBack    = 8
+	MouseButtonForward = 9
+)
+
+// decodeMouseButton strips modifier/motion/wheel bits and normalizes xterm's
+// 128-131 encoding for buttons 8-11. Some terminals report 8-11 directly.
+func decodeMouseButton(code int) int {
+	if code&128 != 0 {
+		return 8 + (code & 3)
+	}
+	switch code {
+	case 8, 9, 10, 11:
+		return code
+	}
+	return code & 3
 }
 
 const (
@@ -1785,10 +1814,8 @@ func parseSGRMouse(params string, release bool) (MouseEvent, bool) {
 		} else {
 			ev.Wheel = -1
 		}
-	case release:
-		ev.Button = b & 3
 	default:
-		ev.Button = b & 3
+		ev.Button = decodeMouseButton(b)
 	}
 	return ev, true
 }
@@ -1812,12 +1839,13 @@ func parseX10Mouse(b, x, y byte) (MouseEvent, bool) {
 		}
 		return ev, true
 	}
-	if btn&3 == 3 {
+	button := decodeMouseButton(btn)
+	if button == 3 {
 		ev.Button = 0
 		ev.Press = false
 		return ev, true
 	}
-	ev.Button = btn & 3
+	ev.Button = button
 	ev.Press = true
 	return ev, true
 }

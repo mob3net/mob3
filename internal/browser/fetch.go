@@ -797,6 +797,7 @@ disk write.</p>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
+<tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 </table>
 
