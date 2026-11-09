@@ -12,13 +12,31 @@ const (
 	findScopeHTML
 )
 
-// findMatch is one search hit. Page matches point at a layout fragment; HTML
-// matches point at a wrapped line in the console HTML tab.
-type findMatch struct {
-	frag int // -1 for HTML matches
-	line int // HTML display line
+// findRect is one highlight rectangle inside a match. A multi-word match can
+// span several text fragments or wrapped lines.
+type findRect struct {
 	x, y int // cells; y is the document row for page matches
+	line int // HTML display line, -1 for page matches
 	w, h int
+}
+
+// findMatch is one search hit. Page matches point at layout fragments; HTML
+// matches point at wrapped lines in the console HTML tab.
+type findMatch struct {
+	frag  int // -1 for HTML matches
+	line  int // first HTML display line
+	x, y  int // first rectangle
+	w, h  int
+	rects []findRect
+}
+
+// findUnit maps one normalised search rune to its screen position.
+type findUnit struct {
+	frag int
+	line int
+	x, y int
+	w, h int
+	real bool
 }
 
 // openFind starts an incremental find for the page or the console HTML tab.
@@ -211,7 +229,33 @@ func (b *Browser) computePageMatches() []findMatch {
 	if b.layout == nil {
 		return nil
 	}
-	query := []rune(b.findText)
+	query := normalizeFindRunes(b.findText)
+	if len(query) == 0 {
+		return nil
+	}
+	if !containsFindSpace(query) {
+		return b.computePageSingle(query)
+	}
+	text, units := b.pageFindStream()
+	return findMatchesInStream(text, units, query, false)
+}
+
+func (b *Browser) computeHTMLMatches() []findMatch {
+	query := normalizeFindRunes(b.findText)
+	if len(query) == 0 {
+		return nil
+	}
+	lines := b.htmlLines(b.width - 2)
+	if !containsFindSpace(query) {
+		return computeHTMLSingle(lines, query)
+	}
+	text, units := b.htmlFindStream(lines)
+	return findMatchesInStream(text, units, query, true)
+}
+
+// computePageSingle keeps the common one-word case allocation-free beyond the
+// result slice; multi-word queries use the full visual text stream.
+func (b *Browser) computePageSingle(query []rune) []findMatch {
 	var out []findMatch
 	for fi := range b.layout.Frags {
 		f := &b.layout.Frags[fi]
@@ -238,9 +282,7 @@ func (b *Browser) computePageMatches() []findMatch {
 	return out
 }
 
-func (b *Browser) computeHTMLMatches() []findMatch {
-	lines := b.htmlLines(b.width - 2)
-	query := []rune(b.findText)
+func computeHTMLSingle(lines []string, query []rune) []findMatch {
 	var out []findMatch
 	for li, line := range lines {
 		runes := []rune(line)
@@ -257,6 +299,158 @@ func (b *Browser) computeHTMLMatches() []findMatch {
 		}
 	}
 	return out
+}
+
+func containsFindSpace(runes []rune) bool {
+	for _, r := range runes {
+		if isFindSpace(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// pageFindStream flattens visible text in visual order. Spaces and line breaks
+// are normalised so a query such as "reader mode" can span word fragments and
+// wrapped lines.
+func (b *Browser) pageFindStream() ([]rune, []findUnit) {
+	var text []rune
+	var units []findUnit
+	prevY := -1
+	prevRune := rune(0)
+	for fi := range b.layout.Frags {
+		f := &b.layout.Frags[fi]
+		if f.Kind != fragText || f.Text == "" {
+			continue
+		}
+		runes := []rune(f.Text)
+		if prevY >= 0 && f.Y != prevY && !isFindSpace(prevRune) && !isFindSpace(runes[0]) {
+			appendFindRune(&text, &units, ' ', findUnit{})
+		}
+		scale := 1
+		if b.bigText && f.Style != nil {
+			scale = f.Style.TextScale()
+		}
+		x := f.X
+		for _, r := range runes {
+			w := runeWidth(r) * scale
+			u := findUnit{frag: fi, line: -1, x: x, y: f.Y, w: w, h: scale, real: true}
+			appendFindRune(&text, &units, r, u)
+			x += w
+		}
+		prevY = f.Y
+		prevRune = runes[len(runes)-1]
+	}
+	return text, units
+}
+
+// htmlFindStream flattens console HTML lines with the same whitespace rules as
+// page finding, so a phrase can wrap across display lines.
+func (b *Browser) htmlFindStream(lines []string) ([]rune, []findUnit) {
+	var text []rune
+	var units []findUnit
+	prevRune := rune(0)
+	for li, line := range lines {
+		runes := []rune(line)
+		if len(runes) == 0 {
+			continue
+		}
+		if len(text) > 0 && !isFindSpace(prevRune) && !isFindSpace(runes[0]) {
+			appendFindRune(&text, &units, ' ', findUnit{})
+		}
+		x := 0
+		for _, r := range runes {
+			w := runeWidth(r)
+			u := findUnit{frag: -1, line: li, x: x, w: w, h: 1, real: true}
+			appendFindRune(&text, &units, r, u)
+			x += w
+		}
+		prevRune = runes[len(runes)-1]
+	}
+	return text, units
+}
+
+func normalizeFindRunes(s string) []rune {
+	var out []rune
+	for _, r := range s {
+		appendFindRune(&out, nil, r, findUnit{})
+	}
+	return out
+}
+
+// appendFindRune adds a rune and collapses runs of whitespace to one space.
+// units may be nil when only normalising a query.
+func appendFindRune(text *[]rune, units *[]findUnit, r rune, u findUnit) {
+	if isFindSpace(r) {
+		if len(*text) == 0 || isFindSpace((*text)[len(*text)-1]) {
+			return
+		}
+		r = ' '
+	}
+	*text = append(*text, r)
+	if units != nil {
+		*units = append(*units, u)
+	}
+}
+
+func isFindSpace(r rune) bool {
+	return unicode.IsSpace(r) || r == ' '
+}
+
+// findMatchesInStream matches a normalised query and groups each occurrence
+// into one or more highlight rectangles.
+func findMatchesInStream(text []rune, units []findUnit, query []rune, html bool) []findMatch {
+	var out []findMatch
+	for _, span := range findRuneSpans(text, query) {
+		var rects []findRect
+		var cur *findRect
+		for i := span[0]; i < span[1]; i++ {
+			u := units[i]
+			if !u.real {
+				continue
+			}
+			if cur != nil && u.y == cur.y && (html || u.x <= cur.x+cur.w) &&
+				(!html || u.line == cur.line) {
+				if end := u.x + u.w; end > cur.x+cur.w {
+					cur.w = end - cur.x
+				}
+				continue
+			}
+			if cur != nil {
+				rects = append(rects, *cur)
+			}
+			cur = &findRect{x: u.x, y: u.y, line: u.line, w: u.w, h: u.h}
+		}
+		if cur != nil {
+			rects = append(rects, *cur)
+		}
+		if len(rects) == 0 {
+			continue
+		}
+		first := rects[0]
+		m := findMatch{
+			frag: firstFrag(units[span[0]:span[1]], html),
+			line: first.line, x: first.x, y: first.y, w: first.w, h: first.h,
+			rects: rects,
+		}
+		out = append(out, m)
+		if len(out) >= 5000 {
+			return out
+		}
+	}
+	return out
+}
+
+func firstFrag(units []findUnit, html bool) int {
+	if html {
+		return -1
+	}
+	for _, u := range units {
+		if u.real {
+			return u.frag
+		}
+	}
+	return -1
 }
 
 // findRuneSpans returns case-insensitive, possibly overlapping match spans.
@@ -425,15 +619,21 @@ func (b *Browser) paintFindPage(g *Grid, top, bottom int) {
 		return
 	}
 	for i, m := range b.findMatches {
-		y := m.y - b.scroll + top
-		if y < top || y >= bottom || y < 0 || y >= g.H {
-			continue
+		rects := m.rects
+		if len(rects) == 0 {
+			rects = []findRect{{x: m.x, y: m.y, w: m.w, h: m.h}}
 		}
-		for dy := 0; dy < maxInt(1, m.h); dy++ {
-			if y+dy >= bottom || y+dy >= g.H {
-				break
+		for _, r := range rects {
+			y := r.y - b.scroll + top
+			if y < top || y >= bottom || y < 0 || y >= g.H {
+				continue
 			}
-			b.fillFindCells(g, m.x, y+dy, m.w, i == b.findIdx)
+			for dy := 0; dy < maxInt(1, r.h); dy++ {
+				if y+dy >= bottom || y+dy >= g.H {
+					break
+				}
+				b.fillFindCells(g, r.x, y+dy, r.w, i == b.findIdx)
+			}
 		}
 	}
 }
@@ -444,10 +644,16 @@ func (b *Browser) paintFindHTML(g *Grid, start, bodyY, rows int) {
 		return
 	}
 	for i, m := range b.findMatches {
-		rel := m.line - start
-		if rel < 0 || rel >= rows {
-			continue
+		rects := m.rects
+		if len(rects) == 0 {
+			rects = []findRect{{x: m.x, line: m.line, w: m.w}}
 		}
-		b.fillFindCells(g, 1+m.x, bodyY+rel, m.w, i == b.findIdx)
+		for _, r := range rects {
+			rel := r.line - start
+			if rel < 0 || rel >= rows {
+				continue
+			}
+			b.fillFindCells(g, 1+r.x, bodyY+rel, r.w, i == b.findIdx)
+		}
 	}
 }

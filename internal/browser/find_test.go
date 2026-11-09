@@ -69,6 +69,44 @@ func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	}
 }
 
+func TestFindMultiWordQuery(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		width    int
+		minRects int
+	}{
+		{name: "same line", width: 60, minRects: 1},
+		{name: "wrapped", width: 10, minRects: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := ParseHTML(`<html><body><p>reader mode</p><p>reader mode again</p></body></html>`)
+			u := mustParse(t, "https://example.com/")
+			b := NewBrowser(tc.width, 20)
+			b.page = &Page{URL: u, Base: u, Root: root}
+			b.layout = BuildLayout(root, nil, tc.width)
+			typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
+			if got := len(b.findMatches); got != 2 {
+				t.Fatalf("matches = %d, want 2", got)
+			}
+			if got := len(b.findMatches[0].rects); got < tc.minRects {
+				t.Fatalf("highlight rects = %d, want at least %d", got, tc.minRects)
+			}
+		})
+	}
+}
+
+func TestFindMultiWordNormalisesWhitespace(t *testing.T) {
+	root := ParseHTML(`<html><body><p>reader   mode</p></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.layout = BuildLayout(root, nil, 60)
+	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader  mode")
+	if got := len(b.findMatches); got != 1 {
+		t.Fatalf("matches = %d, want 1", got)
+	}
+}
+
 func TestFindWorksOnAboutPages(t *testing.T) {
 	loader := NewLoader()
 	help, err := loader.Load("about:help", nil)
@@ -78,9 +116,9 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 	b := NewBrowser(80, 20)
 	b.page = help
 	b.layout = BuildLayout(help.Root, help.Author, 80)
-	typeFindQuery(t, b, func() { b.HandleKey("/") }, "mouse")
+	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
 	if len(b.findMatches) == 0 {
-		t.Fatal("help page search found no matches")
+		t.Fatal("help page multi-word search found no matches")
 	}
 
 	loader.bookmarks = []Bookmark{{Title: "Example Site", URL: "https://example.com/"}}

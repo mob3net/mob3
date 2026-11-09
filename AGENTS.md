@@ -346,8 +346,11 @@ Standard Go layout:
   match and `Up` to the previous one, with wrap-around. `Esc` also closes the
   bar but keeps highlights; a later `Esc` clears them. The same find bar
   searches the console's HTML tab (`/` while that tab is active), including
-  scrolling to and highlighting matching lines. It works on
-  every rendered page, including `about:help` and `about:bookmarks`.
+  scrolling to and highlighting matching lines. Queries may contain spaces:
+  whitespace runs collapse to one space, and phrases match across word
+  fragments and wrapped lines, with every rectangle of a multi-line match
+  highlighted. It works on every rendered page, including `about:help` and
+  `about:bookmarks`.
 - **Reader mode:** `R` toggles an extracted article view for the current page.
   Extraction runs on the live DOM, prefers `<article>`/`<main>`/`role=main`,
   scores other prose containers, drops nav/sidebar/footer/forms/scripts and

@@ -990,9 +990,11 @@ orange. <b>Enter</b> confirms the query and closes the bar, then <b>n</b> and
 open, <b>Down</b>/<b>Up</b> also move to the next/previous match. <b>Esc</b>
 closes the bar but keeps the highlights; pressing <b>Esc</b> again clears them.
 Find works on every page, including
-this help page and <b>about:bookmarks</b>. In the JS console, press <b>/</b>
-while the <b>HTML</b> tab is active to search the raw source and jump to
-matching lines.</p>
+this help page and <b>about:bookmarks</b>. Queries may contain spaces: runs of
+whitespace are treated as one space, and a phrase can match across word
+boundaries and wrapped lines. In the JS console, press <b>/</b> while the
+<b>HTML</b> tab is active to search the raw source and jump to matching
+lines.</p>
 
 <h2>Reader mode</h2>
 <p>Press <b>R</b> to extract the main article from the current page and show it

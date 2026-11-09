@@ -69,7 +69,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.
-- Keyboard and mouse navigation, `/` incremental find with highlighted matches
+- Keyboard and mouse navigation, `/` incremental find (including multi-word
+  phrases) with highlighted matches
   (also in the console HTML tab), a draggable page scrollbar, history (including
   a top-right History page
   listing the session's links), bookmarks imported with `-bookmarks` from a
