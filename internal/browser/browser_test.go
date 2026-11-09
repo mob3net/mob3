@@ -1439,6 +1439,19 @@ func TestConsoleRequestPane(t *testing.T) {
 	}
 }
 
+func TestConsoleRequestsHeaderCountsRealRequests(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.url = mustParse(t, "about:home")
+	b.loader.beginPage()
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	l := newConsoleLayout(20, consoleLogs)
+	line := b.prev[l.headerY[consoleRequests]]
+	if !strings.Contains(line, "Requests (0)") {
+		t.Fatalf("empty request header = %q, want Requests (0)", line)
+	}
+}
+
 func TestConsoleStorageSection(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`localStorage.setItem("theme", "dark"); sessionStorage.setItem("tab", "1");`)
@@ -1493,6 +1506,47 @@ func TestConsoleScrollReachesFirstWrappedLine(t *testing.T) {
 	}
 	if want <= 1 {
 		t.Fatalf("test line did not wrap: %d lines", want)
+	}
+}
+
+func TestConsoleHTMLShowsRawHTML(t *testing.T) {
+	b := NewBrowser(40, 20)
+	b.page = &Page{RawHTML: "<html>\n<body><p>Hello raw page</p></body>\n</html>"}
+	joined := strings.Join(b.htmlLines(20), "\n")
+	if !strings.Contains(joined, "<html>") || !strings.Contains(joined, "Hello raw") {
+		t.Fatalf("HTML lines = %q", joined)
+	}
+	// A different page invalidates the cached wrapping.
+	b.page = &Page{RawHTML: "<html><body>second</body></html>"}
+	if got := strings.Join(b.htmlLines(20), "\n"); !strings.Contains(got, "second") {
+		t.Fatalf("HTML cache was not refreshed: %q", got)
+	}
+	// Long source lines wrap to the console width.
+	b.page = &Page{RawHTML: strings.Repeat("x", 45)}
+	for _, line := range b.htmlLines(20) {
+		if stringWidth(line) > 20 {
+			t.Fatalf("HTML line wider than requested: %q", line)
+		}
+	}
+}
+
+func TestConsoleHTMLOpensAtTop(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.page = &Page{RawHTML: "<html>\n" + strings.Repeat("<p>line</p>\n", 100) + "</html>"}
+	for i := 0; i < 3; i++ {
+		b.handleConsoleKey("tab")
+	}
+	if b.consolePane != consoleHTML {
+		t.Fatalf("console pane = %d, want HTML", b.consolePane)
+	}
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	text := strings.Join(b.prev, "\n")
+	if !strings.Contains(text, "<html>") {
+		t.Fatalf("HTML section did not start at the top: %q", text)
+	}
+	if strings.Contains(text, "</html>") {
+		t.Fatalf("HTML section opened at the bottom: %q", text)
 	}
 }
 
@@ -1798,8 +1852,8 @@ func TestConsoleJavaScriptInputRow(t *testing.T) {
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.consoleOpen = true
 	b.handleConsoleKey("i")
-	if b.consolePane != 2 {
-		t.Fatalf("console pane = %d, want JS input", b.consolePane)
+	if b.consolePane != consoleLogs || !b.consoleEdit {
+		t.Fatalf("console state = pane %d edit %v, want logs input", b.consolePane, b.consoleEdit)
 	}
 	b.consoleText = `document.getElementById("out").textContent = "after"`
 	b.consoleCursor = len(b.consoleText)
@@ -1822,7 +1876,8 @@ func TestConsoleJavaScriptInputRow(t *testing.T) {
 func TestConsoleInputKeepsNavigationKeysAsText(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
-	b.consolePane = 2
+	b.consolePane = consoleLogs
+	b.consoleEdit = true
 	b.handleConsoleKey("q")
 	b.handleConsoleKey("j")
 	b.handleConsoleKey("!")
@@ -1834,7 +1889,7 @@ func TestConsoleInputKeepsNavigationKeysAsText(t *testing.T) {
 	}
 }
 
-func TestConsoleTabCyclesThroughInput(t *testing.T) {
+func TestConsoleTabCyclesSections(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
 	b.handleConsoleKey("tab")
@@ -1842,12 +1897,12 @@ func TestConsoleTabCyclesThroughInput(t *testing.T) {
 		t.Fatalf("pane after first Tab = %d, want requests", b.consolePane)
 	}
 	b.handleConsoleKey("tab")
-	if b.consolePane != consoleInput {
-		t.Fatalf("pane after second Tab = %d, want input", b.consolePane)
+	if b.consolePane != consoleStorage {
+		t.Fatalf("pane after second Tab = %d, want storage", b.consolePane)
 	}
 	b.handleConsoleKey("tab")
-	if b.consolePane != consoleStorage {
-		t.Fatalf("pane after third Tab = %d, want storage", b.consolePane)
+	if b.consolePane != consoleHTML {
+		t.Fatalf("pane after third Tab = %d, want HTML", b.consolePane)
 	}
 	b.handleConsoleKey("tab")
 	if b.consolePane != consoleLogs {
@@ -1855,17 +1910,80 @@ func TestConsoleTabCyclesThroughInput(t *testing.T) {
 	}
 }
 
-func TestConsoleClickInputHeadingFocusesIt(t *testing.T) {
+func TestConsoleClickInputRowFocusesIt(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	l := newConsoleLayout(20, consoleLogs)
-	if l.headerY[consoleInput] < 0 {
-		t.Fatal("expected an input heading")
+	if l.inputY < 0 {
+		t.Fatal("expected an input row inside the logs section")
 	}
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.headerY[consoleInput] + 1, Press: true})
-	if b.consolePane != consoleInput {
-		t.Fatalf("console pane = %d, want input", b.consolePane)
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.inputY + 1, Press: true})
+	if b.consolePane != consoleLogs || !b.consoleEdit {
+		t.Fatalf("console state = pane %d edit %v, want logs input", b.consolePane, b.consoleEdit)
+	}
+	// Clicking the log body above the input row stops editing but keeps logs open.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.bodyY + 1, Press: true})
+	if b.consolePane != consoleLogs || b.consoleEdit {
+		t.Fatalf("console state after log click = pane %d edit %v", b.consolePane, b.consoleEdit)
+	}
+}
+
+func TestConsoleInputRowStaysGrayWhenFocused(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.color = true
+	b.consoleOpen = true
+	b.consoleEdit = true
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	l := newConsoleLayout(20, consoleLogs)
+	if l.inputY < 0 {
+		t.Fatal("expected an input row")
+	}
+	const activeBlue = "48;2;47;111;191"
+	if strings.Contains(b.prev[l.inputY], activeBlue) {
+		t.Fatalf("input row turned blue when focused: %q", b.prev[l.inputY])
+	}
+	if !strings.Contains(b.prev[l.headerY[consoleLogs]], activeBlue) {
+		t.Fatalf("logs heading is not highlighted: %q", b.prev[l.headerY[consoleLogs]])
+	}
+}
+
+func TestConsoleInputHistory(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consoleEdit = true
+	for _, src := range []string{"one", "two"} {
+		b.consoleText = src
+		b.consoleCursor = len(src)
+		b.handleConsoleKey("enter")
+	}
+	b.consoleText = "draft"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("up")
+	if b.consoleText != "two" {
+		t.Fatalf("first Up = %q, want two", b.consoleText)
+	}
+	b.handleConsoleKey("up")
+	if b.consoleText != "one" {
+		t.Fatalf("second Up = %q, want one", b.consoleText)
+	}
+	b.handleConsoleKey("down")
+	if b.consoleText != "two" {
+		t.Fatalf("first Down = %q, want two", b.consoleText)
+	}
+	b.handleConsoleKey("down")
+	if b.consoleText != "draft" {
+		t.Fatalf("second Down = %q, want the draft", b.consoleText)
+	}
+	if b.consoleCursor != len(b.consoleText) {
+		t.Fatalf("cursor = %d, want end of %q", b.consoleCursor, b.consoleText)
+	}
+	// Re-running the newest entry does not duplicate it in history.
+	b.consoleText = "two"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("enter")
+	if len(b.consoleHist) != 2 {
+		t.Fatalf("history = %v, want two entries", b.consoleHist)
 	}
 }
 
@@ -1924,7 +2042,9 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	b.consoleText = "draft"
 	b.consoleCursor = 5
 	b.consoleScroll = 3
-	b.consolePane = 2
+	b.storageScroll = 2
+	b.consolePane = consoleStorage
+	b.consoleEdit = true
 	withQuietStdout(t, func() {
 		b.finishLoad(loadResult{page: page, u: page.URL})
 	})
@@ -1934,9 +2054,10 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	if b.jsErr {
 		t.Fatal("JS error state survived navigation")
 	}
-	if b.consoleText != "" || b.consoleCursor != 0 || b.consoleScroll != 0 || b.consolePane != 0 {
-		t.Fatalf("console input state survived navigation: %q cursor=%d scroll=%d pane=%d",
-			b.consoleText, b.consoleCursor, b.consoleScroll, b.consolePane)
+	if b.consoleText != "" || b.consoleCursor != 0 || b.consoleScroll != 0 ||
+		b.storageScroll != 0 || b.consolePane != consoleLogs || b.consoleEdit {
+		t.Fatalf("console input state survived navigation: %q cursor=%d scroll=%d storage=%d pane=%d edit=%v",
+			b.consoleText, b.consoleCursor, b.consoleScroll, b.storageScroll, b.consolePane, b.consoleEdit)
 	}
 }
 

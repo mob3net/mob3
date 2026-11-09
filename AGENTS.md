@@ -478,22 +478,27 @@ Standard Go layout:
   confirm returns false and prompt returns null. Dialogs use keyboard input
   (mouse is not handled while modal).
 - **JS console view:** `!` opens a plain-text console in the viewport. The
-  view stacks four collapsible sections: JavaScript logs, Requests, JavaScript
-  input and Storage. Each section has a one-row heading and only the open
-  section shows a body; the logs section is open by default. Clicking a heading
+  view stacks four collapsible sections: JavaScript logs, Requests, Storage and
+  HTML. Each section has a one-row heading and only the open section shows
+  a body; the logs section is open by default. The JavaScript input row is part
+  of the logs section, pinned to the bottom of its body. Clicking a heading
   opens that section and collapses the others, and `Tab`/`Shift-Tab` cycle
   through the same four sections. The heading of the open section is
-  highlighted blue. Mouse reporting stays enabled so sections can be clicked
-  (plain terminal drag-selection needs the Shift override).
-  `i` or `Enter` opens and focuses the input section; typing edits a one-line
-  expression and `Enter` evaluates it in the page runtime under the usual JS
-  timeout/memory guards. Input and results are appended to the log as
-  `[input]` and `[result]`, the view switches back to the logs to show the
-  result, dirty DOM mutations rebuild the page, and `-no-js` logs that
-  JavaScript is disabled. `Esc`/`!` close and `q` quits when the input section
-  is not focused (`q` is literal text while typing). The footer keeps its
-  clickable `>_` icon while the console is open; clicking it closes the console
-  the same way `Esc` does (including the usual exit hint).
+  highlighted blue. Mouse reporting stays enabled so sections and the input row
+  can be clicked (plain terminal drag-selection needs the Shift override).
+  `i` or `Enter` (or a click on the input row) focuses the input; typing edits a
+  one-line expression and `Enter` evaluates it in the page runtime under the
+  usual JS timeout/memory guards. The input row keeps its gray background while
+  focused. Up/Down recall earlier expressions from the in-memory console
+  history (consecutive duplicates are dropped, capped at 200 entries); Down
+  past the newest entry restores the draft. History is not reset by navigation.
+  Input and results are appended to the log as
+  `[input]` and `[result]`, the result appears above the input row, dirty DOM
+  mutations rebuild the page, and `-no-js` logs that JavaScript is disabled.
+  `Esc`/`!` close and `q` quits when the input row is not focused (`q` is
+  literal text while typing). The footer keeps its clickable `>_` icon while
+  the console is open; clicking it closes the console the same way `Esc` does
+  (including the usual exit hint).
   The JS log and input draft reset when a new page is successfully applied,
   before that page's scripts run; failed loads keep the previous page's log.
   Requests list status, method, size, kind and URL (plain text, not clickable)
@@ -501,6 +506,9 @@ Standard Go layout:
   only, resets on navigation and is capped at the latest 512 entries. Storage
   lists the current page's cookies — including HttpOnly cookies, marked as
   such — and the in-memory `localStorage`/`sessionStorage` key/value pairs.
+  HTML shows the raw decoded page source (pre-JavaScript DOM, wrapped to the
+  console width and opening at the top) retained as `Page.RawHTML`, cached per
+  page and width.
   Timers and timer-driven redraws pause while the console is open, so a
   terminal selection is not cleared by redraws. The full error text is kept
   there; the footer only carries a short `JS: Error (! console)` hint.

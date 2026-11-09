@@ -139,8 +139,9 @@ func (b *Browser) applyConfig(q url.Values) {
 
 // configPage builds the about:config document.
 func (b *Browser) configPage(u *url.URL, updated bool) *Page {
-	root := ParseHTML(configPageHTML(b.configItems(), updated))
-	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", Status: 200}
+	doc := configPageHTML(b.configItems(), updated)
+	root := ParseHTML(doc)
+	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
 	if style := root.FindFirst("style"); style != nil {
 		page.Author = ParseStylesheet(style.TextContent())
 	}

@@ -50,6 +50,7 @@ type Page struct {
 	Title       string
 	Author      []Rule
 	Scripts     []Script
+	RawHTML     string
 	HasModules  bool
 	Status      int
 	Blocked     bool
@@ -186,6 +187,12 @@ func (l *Loader) requestSnapshot() []requestRecord {
 	out := make([]requestRecord, len(l.requests))
 	copy(out, l.requests)
 	return out
+}
+
+func (l *Loader) requestCount() int {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	return len(l.requests)
 }
 
 // NewLoader creates a loader with cookie support and a sane timeout.
@@ -336,11 +343,12 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		return nil, err
 	}
 	text := decodeBody(data, ctype)
+	rawHTML := text
 	if !ignoreBlocks {
 		if blocked, reason := blockedResponse(status, text); blocked {
 			root := ParseHTML(blockedPageHTML(finalURL.String(), reason, status))
 			return &Page{
-				URL: finalURL, Base: finalURL, Root: root,
+				URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML,
 				Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
 			}, nil
 		}
@@ -365,7 +373,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		// whole body until hydration).
 		removeNoscript(root)
 	}
-	page := &Page{URL: finalURL, Base: finalURL, Root: root, Status: status}
+	page := &Page{URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML, Status: status}
 	if baseEl := root.FindFirst("base"); baseEl != nil {
 		if href := baseEl.Attr("href"); href != "" {
 			if bu, err := finalURL.Parse(href); err == nil {
@@ -559,7 +567,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	case "bookmarks":
 		title = "Bookmarks — MOB³"
 	}
-	page := &Page{URL: u, Base: u, Root: root, Title: title, Status: 200}
+	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
 	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
 	l.loadInlineSVGs(root)
 	return page, nil
@@ -1031,20 +1039,25 @@ supported.</p>
 
 <h2>JavaScript console</h2>
 <p>Press <b>!</b> to see <b>console</b> output, full script errors, the
-current page's requests and its in-memory storage. The view stacks four
-collapsible sections: <b>JavaScript logs</b>, <b>Requests</b>,
-<b>JavaScript input</b> and <b>Storage</b>. The logs are open by default;
-click a section heading (or use <b>Tab</b>/<b>Shift-Tab</b>) to expand it and
-collapse the others. The open heading turns blue.
-Press <b>i</b> or <b>Enter</b> to focus the input section, type an expression
-and press <b>Enter</b> to run it; the result appears in the logs and the logs
-section opens to show it. <b>j</b>/<b>k</b> and the wheel scroll the open
-logs/Requests/Storage section, <b>g</b>/<b>G</b> jump to the ends,
+current page's requests, its in-memory storage and the raw page HTML. The view
+stacks four collapsible sections: <b>JavaScript logs</b>, <b>Requests</b>,
+<b>Storage</b> and <b>HTML</b>. The logs are open by default and contain
+the <b>&gt;</b> JavaScript input row at the bottom. Click a section heading (or
+use <b>Tab</b>/<b>Shift-Tab</b>) to expand it and collapse the others. The open
+heading turns blue.
+Press <b>i</b> or <b>Enter</b>, or click the <b>&gt;</b> row, to focus the
+input, type an expression and press <b>Enter</b> to run it; the result appears
+in the logs above the input. <b>Up</b>/<b>Down</b> recall earlier expressions
+from the console history. <b>j</b>/<b>k</b> and the wheel scroll the open
+logs/Requests/Storage/HTML section, <b>g</b>/<b>G</b> jump to the ends,
 <b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
-quits while the input section is not focused.
+quits while the input row is not focused.
 Request URLs are shown as plain text (not clickable). Storage lists the
 current page's cookies (including HttpOnly cookies, marked) plus its
-localStorage and sessionStorage entries. The JS log and input draft reset when
+localStorage and sessionStorage entries. HTML shows the raw fetched page
+source before JavaScript changes the DOM, wrapped to the console width and
+opening at the top of the file. The JS
+log and input draft reset when
 a new page loads successfully; a failed load keeps the old log.
 Because clicking is used to switch sections, use <b>Shift</b>-drag for
 terminal text selection and copy while the console is open.</p>

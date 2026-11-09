@@ -528,6 +528,29 @@ func TestImagesDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestPageKeepsRawHTML(t *testing.T) {
+	dir := t.TempDir()
+	htmlPath := filepath.Join(dir, "page.html")
+	source := "<!DOCTYPE html>\n<html><body><p>raw source</p></body></html>"
+	if err := os.WriteFile(htmlPath, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page, err := NewLoader().Load("file://"+htmlPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.RawHTML != source {
+		t.Fatalf("RawHTML = %q, want the fetched source", page.RawHTML)
+	}
+	about, err := NewLoader().Load("about:home", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(about.RawHTML, "MOB³") {
+		t.Fatalf("about page RawHTML is empty: %q", about.RawHTML)
+	}
+}
+
 func cookieMap(cookies []*http.Cookie) map[string]string {
 	m := make(map[string]string, len(cookies))
 	for _, c := range cookies {

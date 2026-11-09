@@ -87,10 +87,19 @@ type Browser struct {
 	consoleScroll int
 	reqScroll     int
 	storageScroll int
-	consolePane   int // 0 = JS logs, 1 = requests, 2 = JS input, 3 = storage
+	htmlScroll    int
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML
 	consoleText   string
 	consoleCursor int
-	jsLog         []string
+	consoleEdit   bool // the JavaScript input row inside the logs section has focus
+	consoleHist   []string
+	consoleHistAt int
+	consoleDraft  string
+
+	htmlPage  *Page
+	htmlWidth int
+	htmlCache []string
+	jsLog     []string
 
 	keys   <-chan string
 	dialog *jsDialog
@@ -341,7 +350,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		if b.page == nil {
 			doc := "<html><body><h2>Could not load page</h2><p>" + EscapeHTML(res.err.Error()) + "</p></body></html>"
 			root := ParseHTML(doc)
-			b.page = &Page{URL: res.u, Base: res.u, Root: root, Title: "Error", Status: 0}
+			b.page = &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
 			b.url = res.u
 			b.rebuild()
 		}

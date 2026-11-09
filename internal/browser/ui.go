@@ -14,8 +14,8 @@ import (
 const (
 	consoleLogs = iota
 	consoleRequests
-	consoleInput
 	consoleStorage
+	consoleHTML
 	consoleSectionCount
 )
 
@@ -50,7 +50,11 @@ func (b *Browser) toggleConsole() {
 	b.consoleScroll = 0
 	b.reqScroll = 0
 	b.storageScroll = 0
+	b.htmlScroll = 0
 	b.consolePane = consoleLogs
+	b.consoleEdit = false
+	b.consoleHistAt = len(b.consoleHist)
+	b.consoleDraft = ""
 	b.prev = nil
 	if b.consoleOpen {
 		b.jsErr = false
@@ -71,7 +75,7 @@ func (b *Browser) closeConsole() {
 }
 
 func (b *Browser) handleConsoleKey(k string) bool {
-	if b.consolePane == consoleInput {
+	if b.consoleEdit {
 		return b.handleConsoleInputKey(k)
 	}
 	switch k {
@@ -100,8 +104,7 @@ func (b *Browser) handleConsoleKey(k string) bool {
 	return false
 }
 
-// scrollConsolePane scrolls the open console section. The input section has
-// nothing to scroll.
+// scrollConsolePane scrolls the open console section.
 func (b *Browser) scrollConsolePane(pane, delta int) {
 	p := b.consoleScrollFor(pane)
 	if p == nil || delta == 0 {
@@ -119,6 +122,8 @@ func (b *Browser) consoleScrollFor(pane int) *int {
 		return &b.reqScroll
 	case consoleStorage:
 		return &b.storageScroll
+	case consoleHTML:
+		return &b.htmlScroll
 	case consoleLogs:
 		return &b.consoleScroll
 	}
@@ -138,20 +143,34 @@ func (b *Browser) scrollConsoleToEnd(pane int, end bool) {
 }
 
 func (b *Browser) focusConsoleInput() {
-	b.consolePane = consoleInput
+	b.consolePane = consoleLogs
+	b.consoleEdit = true
 	b.consoleCursor = len(b.consoleText)
+	b.consoleHistAt = len(b.consoleHist)
+	b.consoleDraft = ""
 }
 
-// consoleCyclePane moves the open section through logs, requests, input and
-// storage. Only the selected section stays expanded.
+// selectConsolePane opens a console section, expanding the HTML section at its
+// first line rather than at the end of the source.
+func (b *Browser) selectConsolePane(pane int) {
+	if pane < 0 || pane >= consoleSectionCount {
+		pane = consoleLogs
+	}
+	if pane == consoleHTML && b.consolePane != consoleHTML {
+		b.htmlScroll = len(b.htmlLines(b.width - 2))
+	}
+	b.consolePane = pane
+}
+
+// consoleCyclePane moves the open section through logs, requests, storage and
+// HTML. Only the selected section stays expanded; the input row belongs to the
+// logs section, so cycling away also ends input editing.
 func (b *Browser) consoleCyclePane(dir int) {
 	if b.consolePane < 0 || b.consolePane >= consoleSectionCount {
 		b.consolePane = consoleLogs
 	}
-	b.consolePane = (b.consolePane + dir + consoleSectionCount) % consoleSectionCount
-	if b.consolePane == consoleInput {
-		b.consoleCursor = len(b.consoleText)
-	}
+	b.selectConsolePane((b.consolePane + dir + consoleSectionCount) % consoleSectionCount)
+	b.consoleEdit = false
 }
 
 // handleConsoleInputKey edits the one-line JavaScript input row.
@@ -180,6 +199,25 @@ func (b *Browser) handleConsoleInputKey(k string) bool {
 	case "enter":
 		b.runConsoleInput()
 		return false
+	case "up":
+		if b.consoleHistAt == len(b.consoleHist) {
+			b.consoleDraft = text
+		}
+		if b.consoleHistAt > 0 {
+			b.consoleHistAt--
+			text = b.consoleHist[b.consoleHistAt]
+			cur = len(text)
+		}
+	case "down":
+		if b.consoleHistAt < len(b.consoleHist) {
+			b.consoleHistAt++
+			if b.consoleHistAt == len(b.consoleHist) {
+				text = b.consoleDraft
+			} else {
+				text = b.consoleHist[b.consoleHistAt]
+			}
+			cur = len(text)
+		}
 	case "left":
 		cur = prevRuneBoundary(text, cur)
 	case "right":
@@ -235,6 +273,14 @@ func (b *Browser) runConsoleInput() {
 	if src == "" {
 		return
 	}
+	if len(b.consoleHist) == 0 || b.consoleHist[len(b.consoleHist)-1] != src {
+		b.consoleHist = append(b.consoleHist, src)
+		if len(b.consoleHist) > 200 {
+			b.consoleHist = append([]string(nil), b.consoleHist[len(b.consoleHist)-200:]...)
+		}
+	}
+	b.consoleHistAt = len(b.consoleHist)
+	b.consoleDraft = ""
 	b.logJS("input", src)
 	b.consoleText = ""
 	b.consoleCursor = 0
@@ -271,7 +317,11 @@ func (b *Browser) resetConsole() {
 	b.consoleScroll = 0
 	b.reqScroll = 0
 	b.storageScroll = 0
+	b.htmlScroll = 0
 	b.consolePane = consoleLogs
+	b.consoleEdit = false
+	b.consoleHistAt = len(b.consoleHist)
+	b.consoleDraft = ""
 }
 
 func (b *Browser) consoleLines(width int) []string {
@@ -373,6 +423,8 @@ func (b *Browser) consolePaneLines(pane, width int) []string {
 		return b.requestLines()
 	case consoleStorage:
 		return b.storageLines()
+	case consoleHTML:
+		return b.htmlLines(width)
 	default:
 		return b.consoleLines(width)
 	}
@@ -421,6 +473,38 @@ func (b *Browser) storageLines() []string {
 	return out
 }
 
+// htmlLines returns the raw HTML source of the current page, wrapped to
+// the console width. The result is cached per page and width because the source
+// can be large and the console redraws periodically.
+func (b *Browser) htmlLines(width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	src := ""
+	if b.page != nil {
+		src = b.page.RawHTML
+	}
+	if b.htmlPage == b.page && b.htmlWidth == width && b.htmlCache != nil {
+		return b.htmlCache
+	}
+	var out []string
+	for _, raw := range strings.Split(src, "\n") {
+		raw = expandTabs(strings.TrimRight(raw, "\r"))
+		if raw == "" {
+			out = append(out, "")
+			continue
+		}
+		out = append(out, wrapCells(raw, width)...)
+	}
+	if len(out) == 0 {
+		out = append(out, "(no HTML source)")
+	}
+	b.htmlPage = b.page
+	b.htmlWidth = width
+	b.htmlCache = out
+	return out
+}
+
 func appendStorageSection(out []string, label string, data map[string]string, available bool) []string {
 	out = append(out, label)
 	if !available {
@@ -458,12 +542,13 @@ type consoleLayout struct {
 	headerY  [consoleSectionCount]int
 	bodyY    int // -1 when the open section has no body
 	bodyRows int
+	inputY   int // -1 unless the logs section is open with an input row
 	open     int
 	footerY  int // -1 when the footer row does not fit
 }
 
 func newConsoleLayout(h, open int) consoleLayout {
-	l := consoleLayout{bodyY: -1, open: open, footerY: -1}
+	l := consoleLayout{bodyY: -1, inputY: -1, open: open, footerY: -1}
 	for i := range l.headerY {
 		l.headerY[i] = -1
 	}
@@ -499,11 +584,14 @@ func newConsoleLayout(h, open int) consoleLayout {
 				y += bodyRows
 			}
 		}
-		return l
+	} else {
+		l.headerY[open] = 0
+		l.bodyY = 1
+		l.bodyRows = avail - 1
 	}
-	l.headerY[open] = 0
-	l.bodyY = 1
-	l.bodyRows = avail - 1
+	if open == consoleLogs && l.bodyRows > 0 {
+		l.inputY = l.bodyY + l.bodyRows - 1
+	}
 	return l
 }
 
@@ -534,7 +622,7 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	l := newConsoleLayout(b.height, b.consolePane)
 	if ev.Wheel != 0 {
 		pane := l.paneAt(y)
-		if pane < 0 || pane != b.consolePane || pane == consoleInput {
+		if pane < 0 || pane != b.consolePane || (pane == consoleLogs && y == l.inputY) {
 			return
 		}
 		step := -3
@@ -563,9 +651,12 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 	if pane < 0 {
 		return
 	}
-	b.consolePane = pane
-	if pane == consoleInput {
+	b.selectConsolePane(pane)
+	b.consoleEdit = pane == consoleLogs && y == l.inputY
+	if b.consoleEdit {
 		b.consoleCursor = len(b.consoleText)
+		b.consoleHistAt = len(b.consoleHist)
+		b.consoleDraft = ""
 	}
 }
 
@@ -582,6 +673,10 @@ func (b *Browser) drawConsole(w, h int) {
 	}
 	l := newConsoleLayout(h, b.consolePane)
 	reqs := b.requestLines()
+	reqCount := 0
+	if b.loader != nil {
+		reqCount = b.loader.requestCount()
+	}
 	headStyle := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
 	for pane := 0; pane < consoleSectionCount; pane++ {
 		y := l.headerY[pane]
@@ -600,11 +695,11 @@ func (b *Browser) drawConsole(w, h int) {
 		case consoleLogs:
 			title = fmt.Sprintf(" %sJavaScript logs (%d) ", marker, len(b.jsLog))
 		case consoleRequests:
-			title = fmt.Sprintf(" %sRequests (%d) ", marker, len(reqs))
-		case consoleInput:
-			title = " " + marker + "JavaScript input "
+			title = fmt.Sprintf(" %sRequests (%d) ", marker, reqCount)
 		case consoleStorage:
 			title = " " + marker + "Storage "
+		case consoleHTML:
+			title = " " + marker + "HTML "
 		}
 		g.Text(0, y, padWidth(truncateWidth(title, w), w), headStyle, fg)
 	}
@@ -630,34 +725,47 @@ func (b *Browser) drawConsole(w, h int) {
 	}
 	if l.bodyY >= 0 && l.bodyRows > 0 {
 		switch b.consolePane {
-		case consoleInput:
-			inputY := l.bodyY
-			rowBG := ftrBG
-			g.Fill(0, inputY, w, 1, rowBG)
-			g.Text(0, inputY, "> ", style, fg)
-			contentW := w - 2
-			if contentW > 0 {
-				runes, start, end, cur := promptWindow(b.consoleText, b.consoleCursor, contentW, false)
-				xx := 2
-				for i := start; i < end; i++ {
-					if i == cur {
-						g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
-						xx++
-						continue
-					}
-					g.Put(xx, inputY, runes[i], style, fg, rowBG)
-					xx += runeWidth(runes[i])
-				}
-				if cur == len(runes) && cur >= start {
-					g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
-				}
-			}
 		case consoleRequests:
 			drawPane(reqs, b.reqScroll, l.bodyY, l.bodyRows)
 		case consoleStorage:
 			drawPane(b.storageLines(), b.storageScroll, l.bodyY, l.bodyRows)
+		case consoleHTML:
+			drawPane(b.htmlLines(w-2), b.htmlScroll, l.bodyY, l.bodyRows)
 		default:
-			drawPane(b.consoleLines(w-2), b.consoleScroll, l.bodyY, l.bodyRows)
+			logRows := l.bodyRows
+			if l.inputY >= 0 {
+				logRows = l.inputY - l.bodyY
+			}
+			drawPane(b.consoleLines(w-2), b.consoleScroll, l.bodyY, logRows)
+			if l.inputY >= 0 {
+				inputY := l.inputY
+				rowBG := ftrBG
+				g.Fill(0, inputY, w, 1, rowBG)
+				g.Text(0, inputY, "> ", style, fg)
+				contentW := w - 2
+				if contentW > 0 {
+					if b.consoleEdit {
+						runes, start, end, cur := promptWindow(b.consoleText, b.consoleCursor, contentW, false)
+						xx := 2
+						for i := start; i < end; i++ {
+							if i == cur {
+								g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
+								xx++
+								continue
+							}
+							g.Put(xx, inputY, runes[i], style, fg, rowBG)
+							xx += runeWidth(runes[i])
+						}
+						if cur == len(runes) && cur >= start {
+							g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
+						}
+					} else if b.consoleText == "" {
+						g.Text(2, inputY, truncateWidth("JavaScript input: i or Enter", contentW), style, RGB(0x8a, 0x9a, 0xaa))
+					} else {
+						g.Text(2, inputY, truncateWidth(b.consoleText, contentW), style, fg)
+					}
+				}
+			}
 		}
 	}
 	if h >= 2 {
