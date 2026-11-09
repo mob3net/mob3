@@ -42,9 +42,9 @@ func (b *Browser) toggleConsole() {
 	if b.consoleOpen {
 		b.jsErr = false
 	}
-	// With reporting off the terminal's own selection/copy works, so errors
-	// and logs can be copied normally.
-	setMouseReporting(!b.consoleOpen)
+	// Keep mouse reporting on so the panes can be selected by clicking.
+	// Terminal text selection needs the usual Shift-drag override.
+	setMouseReporting(true)
 	b.draw()
 }
 
@@ -188,39 +188,114 @@ func humanSize(n int) string {
 	}
 }
 
+// consoleLayout describes the console's pane geometry for the current height.
+type consoleLayout struct {
+	logRows int
+	sepY    int // -1 when there is no Requests pane
+	reqRows int
+	footerY int // -1 when the footer row does not fit
+}
+
+func newConsoleLayout(h int) consoleLayout {
+	avail := h - 2
+	if avail < 0 {
+		avail = 0
+	}
+	l := consoleLayout{logRows: avail, sepY: -1, footerY: -1}
+	if h >= 2 {
+		l.footerY = h - 1
+	}
+	if avail >= 5 {
+		reqRows := avail / 3
+		if reqRows < 1 {
+			reqRows = 1
+		}
+		logRows := avail - reqRows - 1
+		if logRows < 1 {
+			logRows = 1
+			reqRows = avail - logRows - 1
+		}
+		if reqRows > 0 {
+			l.logRows = logRows
+			l.sepY = 1 + logRows
+			l.reqRows = reqRows
+		}
+	}
+	return l
+}
+
+// paneAt returns the pane whose heading or body sits on row y.
+func (l consoleLayout) paneAt(y int) int {
+	if l.sepY >= 0 && y >= l.sepY {
+		return 1
+	}
+	return 0
+}
+
+// handleConsoleMouse switches the active pane on click and scrolls the pane
+// under the wheel. Plain left clicks only; dragging is left to the terminal.
+func (b *Browser) handleConsoleMouse(ev MouseEvent) {
+	if b.width < 1 || b.height < 1 {
+		return
+	}
+	x := ev.X - 1
+	y := ev.Y - 1
+	if x < 0 || y < 0 || x >= b.width || y >= b.height {
+		return
+	}
+	l := newConsoleLayout(b.height)
+	if ev.Wheel != 0 {
+		if y == l.footerY {
+			return
+		}
+		step := -3
+		if ev.Wheel < 0 {
+			step = 3
+		}
+		if l.paneAt(y) == 1 {
+			b.reqScroll += step
+			if b.reqScroll < 0 {
+				b.reqScroll = 0
+			}
+		} else {
+			b.consoleScroll += step
+			if b.consoleScroll < 0 {
+				b.consoleScroll = 0
+			}
+		}
+		return
+	}
+	if ev.Motion || !ev.Press || ev.Button != 0 {
+		return
+	}
+	if y == l.footerY {
+		return
+	}
+	b.consolePane = l.paneAt(y)
+}
+
 func (b *Browser) drawConsole(w, h int) {
 	fg := RGB(0xdd, 0xe6, 0xee)
 	bg := RGB(0x0f, 0x14, 0x1a)
 	g := NewGrid(w, h, fg, bg)
 	hdrBG := RGB(0x1f, 0x29, 0x37)
 	ftrBG := RGB(0x1b, 0x24, 0x30)
-	g.Fill(0, 0, w, 1, hdrBG)
+	activeBG := RGB(0x2f, 0x6f, 0xbf)
+	headerBG := hdrBG
+	if b.consolePane == 0 {
+		headerBG = activeBG
+	}
+	g.Fill(0, 0, w, 1, headerBG)
 	if h >= 2 {
 		g.Fill(0, h-1, w, 1, ftrBG)
 	}
-	title := " JS console + requests — Esc/! closes · terminal mouse selection is enabled "
+	title := fmt.Sprintf(" JavaScript logs (%d) — Tab/click: switch · Esc/!: close ", len(b.jsLog))
 	g.Text(0, 0, padWidth(truncateWidth(title, w), w),
 		&Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}, fg)
 
-	avail := h - 2
-	if avail < 1 {
-		avail = 0
-	}
 	lines := b.consoleLines(w - 2)
 	reqs := b.requestLines()
-	logRows := avail
-	reqRows := 0
-	if avail >= 5 {
-		reqRows = avail / 3
-		if reqRows < 1 {
-			reqRows = 1
-		}
-		logRows = avail - reqRows - 1
-		if logRows < 1 {
-			logRows = 1
-			reqRows = avail - logRows - 1
-		}
-	}
+	l := newConsoleLayout(h)
 	style := &Style{Color: fg, FontSize: 16, LineHeight: 1}
 	drawPane := func(items []string, scroll, y, rows int) {
 		if rows < 1 {
@@ -240,24 +315,20 @@ func (b *Browser) drawConsole(w, h int) {
 			g.Text(1, y+i, truncateWidth(items[start+i], w-2), style, fg)
 		}
 	}
-	drawPane(lines, b.consoleScroll, 1, logRows)
-	if reqRows > 0 {
-		sepY := 1 + logRows
+	drawPane(lines, b.consoleScroll, 1, l.logRows)
+	if l.reqRows > 0 {
 		sepBG := ftrBG
 		if b.consolePane == 1 {
-			sepBG = RGB(0x2f, 0x6f, 0xbf)
+			sepBG = activeBG
 		}
-		g.Fill(0, sepY, w, 1, sepBG)
-		sep := fmt.Sprintf(" Requests (%d) — Tab to switch pane ", len(reqs))
-		g.Text(0, sepY, padWidth(truncateWidth(sep, w), w),
+		g.Fill(0, l.sepY, w, 1, sepBG)
+		sep := fmt.Sprintf(" Requests (%d) — Tab/click: switch pane ", len(reqs))
+		g.Text(0, l.sepY, padWidth(truncateWidth(sep, w), w),
 			&Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}, fg)
-		drawPane(reqs, b.reqScroll, sepY+1, reqRows)
+		drawPane(reqs, b.reqScroll, l.sepY+1, l.reqRows)
 	}
 	if h >= 2 {
-		hint := " Tab: requests · j/k: scroll logs · g/G: ends · q: quit · Esc: close "
-		if b.consolePane == 1 {
-			hint = " Tab: logs · j/k: scroll requests · g/G: ends · q: quit · Esc: close "
-		}
+		hint := " Tab/click: switch · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
 		g.Text(0, h-1, padWidth(truncateWidth(hint, w), w),
 			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
 	}

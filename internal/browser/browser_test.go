@@ -27,20 +27,22 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 8 {
+	if len(b.headerHits) != 9 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
 	bookW := stringWidth(" ★ ")
 	histW := stringWidth(" ≡ ")
 	helpW := stringWidth(" ? ")
+	cfgW := stringWidth(" ⚙ ")
 	want := []headerHit{
 		{headerBack, 0, 0, 3, 1},
 		{headerForward, 3, 0, 3, 1},
 		{headerReload, 6, 0, 3, 1},
 		{headerHome, 9, 0, 3, 1},
-		{headerBookmarks, b.width - helpW - histW - bookW, 0, bookW, 1},
-		{headerHistory, b.width - helpW - histW, 0, histW, 1},
-		{headerHelp, b.width - helpW, 0, helpW, 1},
+		{headerBookmarks, b.width - cfgW - helpW - histW - bookW, 0, bookW, 1},
+		{headerHistory, b.width - cfgW - helpW - histW, 0, histW, 1},
+		{headerHelp, b.width - cfgW - helpW, 0, helpW, 1},
+		{headerConfig, b.width - cfgW, 0, cfgW, 1},
 		{headerURL, 0, 1, 60, 1},
 	}
 	for i := range want {
@@ -48,8 +50,8 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[6].x+b.headerHits[6].w != b.width {
-		t.Error("help is not at the far right")
+	if b.headerHits[7].x+b.headerHits[7].w != b.width {
+		t.Error("config is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
 		t.Errorf("viewport top = %d, want 2 for a two-row bar", top)
@@ -73,6 +75,102 @@ func TestHeaderWideIcons(t *testing.T) {
 	}
 }
 
+func TestConfigPageShowsValues(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.setLoader(NewLoader())
+	b.home = "https://example.com/home"
+	b.noJS = true
+	b.jsMemLimit = 64 << 20
+	b.noBigText = true
+	b.loader.userAgent = "TestUA"
+	b.loader.searchURL = "https://search.example/?q=%s"
+	b.cliConfig = map[string]string{
+		"-dump": "off", "-width": "80", "-graphics": "auto",
+		"-bookmarks": "(none)", "-color": "off", "-no-color": "off",
+		"-cpuprofile": "(none)", "-version": "dev",
+	}
+	page := b.configPage(mustParse(t, "about:config"), false)
+	text := page.Root.TextContent()
+	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-ignore-blocks",
+		"-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua",
+		"-search", "-cpuprofile", "-version", "startup"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("config page missing %q", want)
+		}
+	}
+	values := map[string]string{}
+	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+		values[n.Attr("name")] = n.Attr("value")
+	}
+	want := map[string]string{
+		"no-js": "on", "home": "https://example.com/home", "js-memory": "64",
+		"text-scale": "off", "ua": "TestUA", "search": "https://search.example/?q=%s",
+	}
+	for k, v := range want {
+		if values[k] != v {
+			t.Errorf("input %s = %q, want %q", k, values[k], v)
+		}
+	}
+}
+
+func TestApplyConfig(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.setLoader(NewLoader())
+	q := url.Values{
+		"no-js":         {"on"},
+		"ignore-blocks": {"on"},
+		"home":          {"https://example.com/start"},
+		"js-memory":     {"128"},
+		"text-scale":    {"off"},
+		"ua":            {"TestUA"},
+		"search":        {""},
+	}
+	b.applyConfig(q)
+	if !b.noJS || !b.loader.noScripts {
+		t.Fatal("-no-js was not applied")
+	}
+	if !b.loader.ignoreBlocks {
+		t.Fatal("-ignore-blocks was not applied")
+	}
+	if b.home != "https://example.com/start" {
+		t.Fatalf("home = %q", b.home)
+	}
+	if b.jsMemLimit != 128<<20 {
+		t.Fatalf("js memory = %d", b.jsMemLimit)
+	}
+	if !b.noBigText {
+		t.Fatal("text-scale off was not applied")
+	}
+	if b.loader.userAgent != "TestUA" {
+		t.Fatalf("ua = %q", b.loader.userAgent)
+	}
+	if b.loader.searchURL != "" {
+		t.Fatalf("search = %q", b.loader.searchURL)
+	}
+}
+
+func TestConfigNavigation(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.setLoader(NewLoader())
+	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome&js-memory=32", true)
+	if b.page == nil || b.page.Title != "Config — MOB³" {
+		t.Fatalf("config page = %+v", b.page)
+	}
+	if b.home != "https://example.com/home" {
+		t.Fatalf("home = %q", b.home)
+	}
+	if b.jsMemLimit != 32<<20 {
+		t.Fatalf("js memory = %d", b.jsMemLimit)
+	}
+	values := map[string]string{}
+	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+		values[n.Attr("name")] = n.Attr("value")
+	}
+	if values["home"] != "https://example.com/home" || values["js-memory"] != "32" {
+		t.Fatalf("config inputs = %+v", values)
+	}
+}
+
 func TestCenteredLabel(t *testing.T) {
 	x, s := centeredLabel(10, 21, "abc")
 	if x != 19 || s != "abc" {
@@ -87,13 +185,14 @@ func TestCenteredLabel(t *testing.T) {
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
 	drawQuiet(b)
-	if len(b.headerHits) != 5 || b.headerHits[0].kind != headerHome ||
+	if len(b.headerHits) != 6 || b.headerHits[0].kind != headerHome ||
 		b.headerHits[1].kind != headerBookmarks || b.headerHits[2].kind != headerHistory ||
-		b.headerHits[3].kind != headerHelp || b.headerHits[4].kind != headerURL {
+		b.headerHits[3].kind != headerHelp || b.headerHits[4].kind != headerConfig ||
+		b.headerHits[5].kind != headerURL {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[3].x+b.headerHits[3].w != b.width {
-		t.Error("narrow help is not at the far right")
+	if b.headerHits[4].x+b.headerHits[4].w != b.width {
+		t.Error("narrow config is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
 	b2.width = 4
@@ -660,7 +759,7 @@ func TestHeaderClicks(t *testing.T) {
 		}
 		return &Page{}, nil
 	}
-	b.HandleMouse(MouseEvent{Button: 0, X: 58, Y: 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: 55, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "about:help" {
@@ -681,7 +780,7 @@ func TestHeaderClicks(t *testing.T) {
 		t.Fatal("home button did not navigate")
 	}
 
-	b.HandleMouse(MouseEvent{Button: 0, X: 55, Y: 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: 52, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "about:history" {
@@ -691,7 +790,7 @@ func TestHeaderClicks(t *testing.T) {
 		t.Fatal("history button did not navigate")
 	}
 
-	b.HandleMouse(MouseEvent{Button: 0, X: 52, Y: 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: 49, Y: 1, Press: true})
 	select {
 	case target := <-targetCh:
 		if target != "about:bookmarks" {
@@ -699,6 +798,11 @@ func TestHeaderClicks(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("bookmarks button did not navigate")
+	}
+
+	b.HandleMouse(MouseEvent{Button: 0, X: 58, Y: 1, Press: true})
+	if b.page == nil || b.page.Title != "Config — MOB³" {
+		t.Fatalf("config page = %+v", b.page)
 	}
 }
 
@@ -1157,6 +1261,79 @@ func TestConsoleScrollReachesFirstWrappedLine(t *testing.T) {
 	}
 	if want <= 1 {
 		t.Fatalf("test line did not wrap: %d lines", want)
+	}
+}
+
+func TestConsoleClickSwitchesPane(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	l := newConsoleLayout(20)
+	if l.sepY < 0 {
+		t.Fatal("expected a requests pane")
+	}
+	// Row 1 (1-based Y=2) is inside the JS log pane.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 2, Press: true})
+	if b.consolePane != 0 {
+		t.Fatalf("console pane after log click = %d, want logs", b.consolePane)
+	}
+	// The separator row selects the requests pane.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.sepY + 1, Press: true})
+	if b.consolePane != 1 {
+		t.Fatalf("console pane after heading click = %d, want requests", b.consolePane)
+	}
+	// A body row in the requests pane keeps it selected.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.sepY + 2, Press: true})
+	if b.consolePane != 1 {
+		t.Fatalf("console pane after request click = %d, want requests", b.consolePane)
+	}
+	// Clicking the top heading returns to the logs pane.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 1, Press: true})
+	if b.consolePane != 0 {
+		t.Fatalf("console pane after heading click = %d, want logs", b.consolePane)
+	}
+}
+
+func TestConsoleActivePaneHeadingHighlight(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.color = true
+	b.consoleOpen = true
+	blue := "48;2;47;111;191"
+	l := newConsoleLayout(20)
+
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	if !strings.Contains(b.prev[0], blue) {
+		t.Fatalf("logs heading not highlighted while active: %q", b.prev[0])
+	}
+	if strings.Contains(b.prev[l.sepY], blue) {
+		t.Fatalf("requests heading highlighted while inactive: %q", b.prev[l.sepY])
+	}
+
+	b.consolePane = 1
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	if strings.Contains(b.prev[0], blue) {
+		t.Fatalf("logs heading still highlighted while inactive: %q", b.prev[0])
+	}
+	if !strings.Contains(b.prev[l.sepY], blue) {
+		t.Fatalf("requests heading not highlighted while active: %q", b.prev[l.sepY])
+	}
+}
+
+func TestConsoleMouseWheelScrollsHoveredPane(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	l := newConsoleLayout(20)
+	b.HandleMouse(MouseEvent{X: 5, Y: l.sepY + 2, Wheel: -1})
+	if b.reqScroll != 3 || b.consoleScroll != 0 {
+		t.Fatalf("wheel scroll = logs %d, requests %d", b.consoleScroll, b.reqScroll)
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 2, Press: true})
+	b.HandleMouse(MouseEvent{X: 5, Y: 2, Wheel: -1})
+	if b.reqScroll != 3 || b.consoleScroll != 3 {
+		t.Fatalf("wheel scroll = logs %d, requests %d", b.consoleScroll, b.reqScroll)
+	}
+	b.HandleMouse(MouseEvent{X: 5, Y: 2, Wheel: 1})
+	if b.consoleScroll != 0 {
+		t.Fatalf("wheel down scroll = logs %d", b.consoleScroll)
 	}
 }
 

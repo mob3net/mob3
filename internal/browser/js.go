@@ -460,7 +460,7 @@ func prefixHash(h string) string {
 
 func (j *jsRuntime) navigatorObject() *goja.Object {
 	o := j.vm.NewObject()
-	ua := "MOB3/1.0 (+terminal; +https://mob3.net)"
+	ua := defaultUserAgent
 	if j.b.loader != nil && j.b.loader.userAgent != "" {
 		ua = j.b.loader.userAgent
 	}

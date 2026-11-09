@@ -124,6 +124,7 @@ Standard Go layout:
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
+| `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
@@ -253,12 +254,18 @@ Standard Go layout:
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` / `? Help`
-  pinned to the far right; forward, reload and home are icon-only. The URL row
-  is a full-width field that becomes the editable `Open: …` prompt with a
-  cursor marker while the prompt is open. The toolbar row uses a subtle
-  horizontal gradient. The page title is centered in the space between the left
-  and right buttons and uses a bold amber color for prominence.
+  `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` /
+  `? Help` / `⚙` pinned to the far right; forward, reload, home and config are
+  icon-only. The URL row is a full-width field that becomes the editable
+  `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
+  row uses a subtle horizontal gradient. The page title is centered in the
+  space between the left and right buttons and uses a bold amber color for
+  prominence.
+- **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
+  CLI option with its current value. Editable options apply immediately for the
+  session (no-js, ignore-blocks, home, js-memory, text-scale, ua, search);
+  options labelled “startup” are read-only, and colour options are “dump
+  only”. Changes are never persisted.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
@@ -270,11 +277,12 @@ Standard Go layout:
   the toolbar buttons and are memory-only; nothing is persisted.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
-  Bookmarks/history/help use full labels at 80+ columns and icons below. Below
-  24 columns hide back/forward/reload so the URL field stays usable; home
-  remains visible down to 12 columns; below 18 hide bookmarks; below 12 hide
-  history; below 6 hide help. Every toolbar item is clickable via per-frame
-  button hit regions including the row coordinate.
+  Bookmarks/history/help use full labels at 80+ columns and icons below; the
+  config gear (`⚙`) is always an icon. Below 24 columns hide
+  back/forward/reload so the URL field stays usable; home remains visible down
+  to 12 columns; below 18 hide bookmarks; below 12 hide history; below 6 hide
+  help and config. Every toolbar item is clickable via per-frame button hit
+  regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
@@ -418,16 +426,19 @@ Standard Go layout:
   editing keys as the URL bar. In non-interactive/dump runs, alert returns,
   confirm returns false and prompt returns null. Dialogs use keyboard input
   (mouse is not handled while modal).
-- **JS console view:** `!` opens a plain-text console in the viewport and
-  disables mouse reporting so the terminal's own selection/copy works. The
+- **JS console view:** `!` opens a plain-text console in the viewport. The
   view is split: console output on top and a Requests pane at the bottom.
-  `Tab` switches which pane `j/k`/`g/G` scroll, `Esc`/`!` close, `q` quits.
+  Mouse reporting stays enabled so clicking a pane heading or body switches the
+  active pane (plain terminal drag-selection needs the Shift override). `Tab`
+  also switches which pane `j/k`/`g/G` and the wheel scroll, while the heading
+  of the active pane (the logs title or the Requests separator) is highlighted
+  blue. `Esc`/`!` close and `q` quits.
   Requests list status, method, size, kind and URL (plain text, not clickable)
   for the page, CSS, scripts, images, `fetch` and XHR; the list is in memory
   only, resets on navigation and is capped at the latest 512 entries. Timers
   and timer-driven redraws pause while the console is open, so a terminal
-  selection is not cleared while copying. The full error text is kept there;
-  the footer only carries a short `JS: Error (! console)` hint.
+  selection is not cleared by redraws. The full error text
+  is kept there; the footer only carries a short `JS: Error (! console)` hint.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`
   attributes and the `onclick` property; `DOMContentLoaded` and `load`.

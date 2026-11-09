@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -110,6 +111,24 @@ func Run(args []string) int {
 	b.home = *home
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
+	}
+	bookmarksValue := *bookmarks
+	if bookmarksValue == "" {
+		bookmarksValue = "(none)"
+	}
+	cpuValue := *cpuProfile
+	if cpuValue == "" {
+		cpuValue = "(none)"
+	}
+	b.cliConfig = map[string]string{
+		"-dump":       onOff(*dump),
+		"-width":      strconv.Itoa(w),
+		"-graphics":   *graphics,
+		"-bookmarks":  bookmarksValue,
+		"-color":      onOff(*forceColor),
+		"-no-color":   onOff(*noColor),
+		"-cpuprofile": cpuValue,
+		"-version":    Version,
 	}
 	b.color = !*noColor
 	b.noJS = *noJS

@@ -28,10 +28,11 @@ type Browser struct {
 	status        string
 
 	// History and bookmarks.
-	history []string
-	histIdx int
-	histMu  sync.RWMutex
-	home    string
+	history   []string
+	histIdx   int
+	histMu    sync.RWMutex
+	home      string
+	cliConfig map[string]string
 
 	prompt          bool
 	promptText      string
@@ -112,6 +113,7 @@ const (
 	headerHistory
 	headerURL
 	headerHelp
+	headerConfig
 	headerConsole
 )
 
@@ -222,6 +224,19 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	}
 	if method == "" {
 		method = http.MethodGet
+	}
+	if isAboutConfigURL(u) {
+		b.clearInputFocus()
+		b.stopJS()
+		b.cancelLoadNow()
+		if b.loader != nil {
+			b.loader.beginPage()
+		}
+		b.loadSeq++
+		b.applyConfig(u.Query())
+		page := b.configPage(u, len(u.Query()) > 0)
+		b.finishLoad(loadResult{seq: b.loadSeq, page: page, u: u, push: push, method: http.MethodGet})
+		return
 	}
 	if u.Scheme == "file" && b.url != nil {
 		switch b.url.Scheme {
@@ -1194,7 +1209,11 @@ func (b *Browser) clickContent(x, docY int) {
 // HandleMouse processes a decoded mouse event. It returns true when the
 // browser should quit.
 func (b *Browser) HandleMouse(ev MouseEvent) bool {
-	if b.prompt || b.consoleOpen {
+	if b.prompt {
+		return false
+	}
+	if b.consoleOpen {
+		b.handleConsoleMouse(ev)
 		return false
 	}
 	x := ev.X - 1
@@ -1242,6 +1261,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				b.Navigate("about:history", true)
 			case headerHelp:
 				b.Navigate("about:help", true)
+			case headerConfig:
+				b.Navigate("about:config", true)
 			case headerURL:
 				if b.inputFocus != nil {
 					b.setInputFocus(nil)
@@ -1630,6 +1651,7 @@ func (b *Browser) draw() {
 		homeLabel := " ⌂ "
 		historyLabel := " ≡ History "
 		bookmarksLabel := " ★ Bookmarks "
+		configLabel := " ⚙ "
 		if w < 80 {
 			backLabel = " ← "
 			helpLabel, historyLabel, bookmarksLabel = " ? ", " ≡ ", " ★ "
@@ -1679,9 +1701,10 @@ func (b *Browser) draw() {
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
-			helpW, historyW, bookmarksW := 0, 0, 0
+			helpW, historyW, bookmarksW, configW := 0, 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
+				configW = stringWidth(configLabel)
 			}
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
@@ -1689,16 +1712,20 @@ func (b *Browser) draw() {
 			if w >= 18 {
 				bookmarksW = stringWidth(bookmarksLabel)
 			}
-			if x+helpW > w {
-				helpW = 0
+			for x+helpW+historyW+bookmarksW+configW > w {
+				switch {
+				case bookmarksW > 0:
+					bookmarksW = 0
+				case historyW > 0:
+					historyW = 0
+				case helpW > 0:
+					helpW = 0
+				default:
+					configW = 0
+				}
 			}
-			if x+helpW+historyW > w {
-				historyW = 0
-			}
-			if x+helpW+historyW+bookmarksW > w {
-				bookmarksW = 0
-			}
-			helpX := w - helpW
+			configX := w - configW
+			helpX := configX - helpW
 			histX := helpX - historyW
 			bookX := histX - bookmarksW
 			title := "MOB³"
@@ -1720,6 +1747,9 @@ func (b *Browser) draw() {
 			if helpW > 0 {
 				b.drawHeaderButton(g, helpX, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
 			}
+			if configW > 0 {
+				b.drawHeaderButton(g, configX, 0, configLabel, headerConfig, btnBG, headerFG, hs)
+			}
 			// URL row.
 			drawField(0, 1, w)
 		} else {
@@ -1732,9 +1762,10 @@ func (b *Browser) draw() {
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
-			helpW, historyW, bookmarksW := 0, 0, 0
+			helpW, historyW, bookmarksW, configW := 0, 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
+				configW = stringWidth(configLabel)
 			}
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
@@ -1742,37 +1773,47 @@ func (b *Browser) draw() {
 			if w >= 18 {
 				bookmarksW = stringWidth(bookmarksLabel)
 			}
-			if x+helpW > w {
-				helpW = 0
+			for x+helpW+historyW+bookmarksW+configW > w {
+				switch {
+				case bookmarksW > 0:
+					bookmarksW = 0
+				case historyW > 0:
+					historyW = 0
+				case helpW > 0:
+					helpW = 0
+				default:
+					configW = 0
+				}
 			}
-			if x+helpW+historyW > w {
-				historyW = 0
-			}
-			if x+helpW+historyW+bookmarksW > w {
-				bookmarksW = 0
-			}
-			urlW := w - x - helpW - historyW - bookmarksW
+			urlW := w - x - helpW - historyW - bookmarksW - configW
 			if urlW < 1 {
 				bookmarksW = 0
-				urlW = w - x - helpW - historyW
+				urlW = w - x - helpW - historyW - configW
 			}
 			if urlW < 1 {
 				historyW = 0
-				urlW = w - x - helpW
+				urlW = w - x - helpW - configW
 			}
 			if urlW < 1 {
 				helpW = 0
+				urlW = w - x - configW
+			}
+			if urlW < 1 {
+				configW = 0
 				urlW = w - x
 			}
 			drawField(x, 0, urlW)
 			if bookmarksW > 0 {
-				b.drawHeaderButton(g, w-helpW-historyW-bookmarksW, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
+				b.drawHeaderButton(g, w-configW-helpW-historyW-bookmarksW, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
 			}
 			if historyW > 0 {
-				b.drawHeaderButton(g, w-helpW-historyW, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
+				b.drawHeaderButton(g, w-configW-helpW-historyW, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
 			}
 			if helpW > 0 {
-				b.drawHeaderButton(g, w-helpW, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
+				b.drawHeaderButton(g, w-configW-helpW, 0, helpLabel, headerHelp, btnBG, headerFG, hs)
+			}
+			if configW > 0 {
+				b.drawHeaderButton(g, w-configW, 0, configLabel, headerConfig, btnBG, headerFG, hs)
 			}
 		}
 

@@ -63,6 +63,9 @@ type Script struct {
 }
 
 // Loader fetches documents and their resources.
+// defaultUserAgent is the browser's identifying User-Agent.
+const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
+
 type Loader struct {
 	client    *http.Client
 	cookies   *cookieJar
@@ -204,7 +207,7 @@ func NewLoader() *Loader {
 				return nil
 			},
 		},
-		userAgent: "MOB3/1.0 (+terminal; +https://mob3.net)",
+		userAgent: defaultUserAgent,
 		searchURL: DefaultSearchURL,
 	}
 }
@@ -934,6 +937,13 @@ which lists this session's pages as links, most recent first. The
 format used by Chrome, Firefox, Safari and Edge). Nothing is saved after MOB³
 exits.</p>
 
+<h2>Config</h2>
+<p>The <b>⚙</b> icon in the top bar opens <b>about:config</b>. It lists every
+command-line option with its current value. Editable values apply in memory
+for this session; options marked <b>startup</b> are read-only and need a
+restart, while <b>dump only</b> options apply only to dump runs.
+Nothing is saved after MOB³ exits.</p>
+
 <h2>Mouse</h2>
 <table>
 <tr><th>Input</th><th>Action</th></tr>
@@ -946,6 +956,8 @@ exits.</p>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open the JS console</td></tr>
+<tr><td>click a console pane</td><td>switch panes; Shift-drag selects text</td></tr>
+<tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
 </table>
@@ -969,10 +981,12 @@ supported.</p>
 <h2>JavaScript console</h2>
 <p>Press <b>!</b> to see <b>console</b> output, full script errors and the
 current page's requests. The view splits into the console log on top and a
-Requests pane at the bottom. <b>Tab</b> switches panes, <b>j</b>/<b>k</b> scroll
-the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b> or <b>!</b>
-closes, and <b>q</b> quits. Request URLs are shown as plain text (not
-clickable). Terminal mouse selection and copy work normally while it is open.</p>
+Requests pane at the bottom. Click either pane (or use <b>Tab</b>) to make it
+active; the active pane's heading turns blue. <b>j</b>/<b>k</b> and the wheel
+scroll the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b> or
+<b>!</b> closes, and <b>q</b> quits. Request URLs are shown as plain text (not
+clickable). Because clicking is used to switch panes, use <b>Shift</b>-drag for
+terminal text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
 dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
 
