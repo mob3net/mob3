@@ -657,6 +657,9 @@ Intentional limits of the shims:
   preorder list on each step.
 - Measurement APIs are approximate: scripts run before layout, so
   `getComputedStyle` and rectangles may reflect defaults until after load.
+- Inline `style` exposes `transition`/`transform`, animation properties and
+  their vendor-prefixed aliases so libraries' CSS feature detection succeeds,
+  but transitions and animations are not rendered.
 - Dynamically inserted `<script>` elements do not execute; modules, `defer`
   and `async` are ignored.
 

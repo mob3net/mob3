@@ -666,6 +666,20 @@ func TestJSPerformanceTiming(t *testing.T) {
 	}
 }
 
+func TestJSStyleFeatureDetection(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var s = document.documentElement.style;
+		document.title = ["transition", "transform", "WebkitTransition", "WebkitTransform"].map(function (k) {
+			return k + ":" + (k in s);
+		}).join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "transition:true,transform:true,WebkitTransition:true,WebkitTransform:true" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
 func TestJSDocumentImplementation(t *testing.T) {
 	page := newJSPage(`<html><body><p id="keep">x</p></body></html>`, `
 		var d = document.implementation.createHTMLDocument("made");
