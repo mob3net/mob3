@@ -164,7 +164,7 @@ Examples:
 `-graphics=auto` detects kitty, WezTerm, Ghostty and iTerm2. Other terminals,
 tmux/screen/zellij and `-dump` use half-block art.
 
-The default User-Agent is `MOB3/1.0 (+terminal)`. Override it with `-ua`.
+The default User-Agent is `MOB3/1.0 (+terminal; +https://mob3.net)`. Override it with `-ua`.
 
 When URL input is not URL-shaped — it contains whitespace or has no dot, so
 `golang tutorial` or `golang` — MOB³ opens DuckDuckGo's server-rendered
@@ -234,7 +234,8 @@ the URL; the block caret overlays text without shifting it.
   including `location`, `performance`, `Image`, `requestAnimationFrame`, click
   handlers, `DOMContentLoaded`/`load`, setTimeout/setInterval, console output
   and modal `alert`/`confirm`/`prompt` dialogs. Includes `URL`/`URLSearchParams`,
-  `document.currentScript`/`write`, in-memory storage/cookies,
+  `document.currentScript`/`write`, in-memory storage and a session cookie jar
+  shared by `document.cookie`, HTTP requests, XHR and fetch,
   `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,
   and an English-only `Intl` subset (`NumberFormat`, `DateTimeFormat`,
   `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`).
@@ -275,13 +276,15 @@ MOB³ is a cell-based renderer, not a pixel browser:
 ## Limits
 
 - JavaScript is a practical subset: modules and CSP are unsupported; JS storage
-  and cookies are in-memory only and not sent over HTTP. `XMLHttpRequest` and
-  `fetch` are same-origin-only (cross-origin requests/redirects are blocked),
-  synchronous under the hood, and lack streaming/upload progress; `fetch` has
-  no abort controller. `Intl` is an English-only subset without full CLDR
-  locale data. JS history navigation is stubbed. `location` redirects and meta
-  refresh work. JS-heavy apps that require missing APIs (for example Google
-  search) may still show their no-JavaScript fallback.
+  and cookies are in-memory only and never persisted. Cookies are session-only,
+  `SameSite` is not enforced, and there is no `CookieStore` API.
+  `XMLHttpRequest` and `fetch` are same-origin-only (cross-origin
+  requests/redirects are blocked), synchronous under the hood, and lack
+  streaming/upload progress; `fetch` has no abort controller. `Intl` is an
+  English-only subset without full CLDR locale data. JS history navigation is
+  stubbed. `location` redirects and meta refresh work. JS-heavy apps that
+  require missing APIs (for example Google search) may still show their
+  no-JavaScript fallback.
 - Nothing is persisted: history, cookies, JS storage and the image cache are
   in-memory only and disappear on exit. The optional `-cpuprofile` file is the
   only disk write; there are no config, history, cookie, cache or log files.

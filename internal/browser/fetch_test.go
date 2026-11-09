@@ -234,7 +234,7 @@ func TestBranding(t *testing.T) {
 		}
 	}
 	ua := NewLoader().userAgent
-	if ua != "MOB3/1.0 (+terminal)" {
+	if ua != "MOB3/1.0 (+terminal; +https://mob3.net)" {
 		t.Errorf("User-Agent = %q", ua)
 	}
 }

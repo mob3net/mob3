@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -797,21 +798,25 @@ func (j *jsRuntime) documentObject() *goja.Object {
 	}
 	_ = o.Set("fonts", fonts)
 	j.accessor(o, "cookie", func() goja.Value {
-		parts := make([]string, 0, len(j.cookies))
-		for k, v := range j.cookies {
-			parts = append(parts, k+"="+v)
+		if j.page == nil || j.page.URL == nil || j.b == nil || j.b.loader == nil || j.b.loader.cookies == nil {
+			return j.vm.ToValue("")
+		}
+		cookies := j.b.loader.cookies.documentCookies(j.page.URL)
+		parts := make([]string, 0, len(cookies))
+		for _, c := range cookies {
+			parts = append(parts, c.Name+"="+c.Value)
 		}
 		return j.vm.ToValue(strings.Join(parts, "; "))
 	}, func(v goja.Value) {
-		for _, part := range strings.Split(v.String(), ";") {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			if i := strings.IndexByte(part, '='); i > 0 {
-				j.cookies[part[:i]] = part[i+1:]
-			}
+		raw := strings.TrimSpace(v.String())
+		if raw == "" || j.page == nil || j.page.URL == nil || j.b == nil || j.b.loader == nil || j.b.loader.cookies == nil {
+			return
 		}
+		c, err := http.ParseSetCookie(raw)
+		if err != nil || c.Name == "" {
+			return
+		}
+		j.b.loader.cookies.setDocumentCookie(j.page.URL, c)
 	})
 	j.method(o, "write", func(call goja.FunctionCall) goja.Value {
 		var b strings.Builder

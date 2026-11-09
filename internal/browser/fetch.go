@@ -12,7 +12,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -63,6 +62,7 @@ type Script struct {
 // Loader fetches documents and their resources.
 type Loader struct {
 	client    *http.Client
+	cookies   *cookieJar
 	userAgent string
 	searchURL string
 	noScripts bool
@@ -72,7 +72,7 @@ type Loader struct {
 
 // NewLoader creates a loader with cookie support and a sane timeout.
 func NewLoader() *Loader {
-	jar, _ := cookiejar.New(nil)
+	jar := newCookieJar()
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		MaxIdleConns:          16,
@@ -81,7 +81,8 @@ func NewLoader() *Loader {
 		ResponseHeaderTimeout: 20 * time.Second,
 	}
 	return &Loader{
-		imgs: make(map[string]image.Image),
+		imgs:    make(map[string]image.Image),
+		cookies: jar,
 		client: &http.Client{
 			Jar:       jar,
 			Transport: tr,
@@ -93,7 +94,7 @@ func NewLoader() *Loader {
 				return nil
 			},
 		},
-		userAgent: "MOB3/1.0 (+terminal)",
+		userAgent: "MOB3/1.0 (+terminal; +https://mob3.net)",
 		searchURL: DefaultSearchURL,
 	}
 }
@@ -731,7 +732,7 @@ disk write.</p>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
-<tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal))</td></tr>
+<tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
 <tr><td><b>-cpuprofile</b> string</td><td>write a CPU profile to this file</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>

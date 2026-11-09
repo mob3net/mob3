@@ -45,7 +45,6 @@ type jsRuntime struct {
 
 	storageLocal   *goja.Object
 	storageSession *goja.Object
-	cookies        map[string]string
 	currentScript  *goja.Object
 
 	nodeListeners map[*Node]map[string][]jsListener
@@ -98,7 +97,6 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j.installElementConstructors()
 	j.installIntl()
 	j.installFetch()
-	j.cookies = make(map[string]string)
 	j.storageLocal = j.storageObject(make(map[string]string))
 	j.storageSession = j.storageObject(make(map[string]string))
 	j.navObj = j.navigatorObject()
@@ -433,7 +431,7 @@ func prefixHash(h string) string {
 
 func (j *jsRuntime) navigatorObject() *goja.Object {
 	o := j.vm.NewObject()
-	ua := "MOB3/1.0 (+terminal)"
+	ua := "MOB3/1.0 (+terminal; +https://mob3.net)"
 	if j.b.loader != nil && j.b.loader.userAgent != "" {
 		ua = j.b.loader.userAgent
 	}
@@ -443,7 +441,7 @@ func (j *jsRuntime) navigatorObject() *goja.Object {
 	_ = o.Set("platform", runtime.GOOS)
 	_ = o.Set("language", "en-US")
 	_ = o.Set("languages", j.vm.NewArray("en-US", "en"))
-	_ = o.Set("cookieEnabled", false)
+	_ = o.Set("cookieEnabled", true)
 	_ = o.Set("onLine", true)
 	return o
 }

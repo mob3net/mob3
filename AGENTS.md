@@ -120,7 +120,8 @@ Standard Go layout:
 | `paint.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support. |
 | `graphics.go` | Kitty and iTerm2 inline-image protocols, terminal capability detection, PNG encoding/downscaling, placement cache. |
 | `mouse.go` | Mouse event type, SGR/X10 decoding helpers and click-to-link hit testing support. |
-| `fetch.go` | HTTP(S)/file/data loading, cookie jar, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache. |
+| `cookies.go` | In-memory session cookie jar with public-suffix checking and a separate HttpOnly-hidden view for `document.cookie`. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation. |
 | `version.go` | Build-time version string reported by `-version`; default `dev`. |
 | `usage.go` | Process resident-memory sampling for the footer. |
@@ -353,8 +354,11 @@ Standard Go layout:
   `location`, visibility state, and image elements expose `src`/`alt`/`width`/
   `height`/`complete`/`natural*`. `URL`/`URLSearchParams`,
   `document.currentScript`/`baseURI`, `document.write`/`writeln`,
-  `document.cookie` (in-memory per page), and in-memory
-  `localStorage`/`sessionStorage` are available. `XMLHttpRequest` supports
+  `document.cookie`, and in-memory `localStorage`/`sessionStorage` are
+  available. `document.cookie` reads and writes the same in-memory session jar
+  as HTTP requests, honors Domain/Path/Expires/Max-Age/Secure and hides
+  HttpOnly cookies; `navigator.cookieEnabled` is true. Cookies are not
+  persisted. `XMLHttpRequest` supports
   basic same-origin HTTP methods, headers, `responseText`/`response` (text/
   json/arraybuffer), status and callbacks. Cross-origin requests and redirects
   are blocked (no CORS). It executes synchronously even when `async=true` and
@@ -393,17 +397,20 @@ Standard Go layout:
   errors surface as footer status. Navigation via `location.href`,
   `location.assign`/`replace`/`reload` is queued until the script or callback
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
-  are followed immediately. Storage and `document.cookie` are in-memory only
-  (not persisted or attached to HTTP requests). `XMLHttpRequest` and `fetch`
-  use the browser's cookie jar and User-Agent but are synchronous under the
-  hood. There is no CSP or module loading; `history.back`/`forward` are stubs.
+  are followed immediately. Storage and the cookie jar are in-memory only and
+  nothing is persisted. `XMLHttpRequest` and `fetch` use the shared cookie jar
+  and User-Agent but are synchronous under the hood. There is no CSP or module
+  loading; `history.back`/`forward` are stubs.
 - **Dump mode with JS:** `-dump` runs scripts and `DOMContentLoaded`/`load`
   synchronously so output reflects DOM changes; timers do not run in dump mode.
 
 ## 6. Networking / resources
 
 - Cookie jar and redirects via `net/http`; the page’s final URL is kept for
-  relative links and history.
+  relative links and history. The jar is memory-only, uses the public suffix
+  list for domain scoping, and is shared by page loads, resources, XHR, fetch
+  and `document.cookie`. HttpOnly cookies are hidden from JavaScript through a
+  separate visible jar. The SameSite attribute is stored but not enforced.
 - Page/resource cap: 12 MB. Local files are read with a `LimitReader`, only
   regular files are accepted (no `/dev/*`/FIFOs), and data URIs are rejected
   when the encoded or decoded size exceeds the cap. Images are rejected before
@@ -431,7 +438,7 @@ Standard Go layout:
 - Images load concurrently (max 6) and are cached per resolved URL for reloads.
 - Blocked responses are replaced with a locally generated “Site blocked” page;
   they do not run the site’s challenge scripts or load its assets.
-- Default User-Agent: **`MOB3/1.0 (+terminal)`**. MOB³ identifies itself
+- Default User-Agent: **`MOB3/1.0 (+terminal; +https://mob3.net)`**. MOB³ identifies itself
   rather than impersonating another browser; UA-sniffing sites may therefore
   serve simplified or no-JavaScript pages. `-ua` overrides it. Keep this string
   documented in `README.md`, the built-in help page and `AGENTS.md` whenever it
@@ -513,9 +520,10 @@ Standard Go layout:
 ## 8. Known limitations (accepted)
 
 - JavaScript is a practical subset: modules and CSP are unsupported; storage
-  and `document.cookie` are in-memory only and do not persist or reach HTTP
-  requests. `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and
-  lack streaming/upload progress; `fetch` has no abort controller. `Intl` is an
+  and cookies are in-memory only and do not persist. Cookies are session-only,
+  `SameSite` is not enforced, and there is no `CookieStore` API.
+  `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and lack
+  streaming/upload progress; `fetch` has no abort controller. `Intl` is an
   English-only subset without full CLDR locale data. `document.write` is
   supported for document fragments. JS history navigation is stubbed. Plain
   same-origin `location` redirects and meta refresh work; remote pages cannot
