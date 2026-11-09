@@ -754,7 +754,7 @@ th { color: #57606a; }
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
-<tr><td><b>Esc</b></td><td>stop loading, leave a field, or clear a selection</td></tr>
+<tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit</td></tr>
 </table>
 

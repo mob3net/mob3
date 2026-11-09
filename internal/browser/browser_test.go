@@ -441,10 +441,58 @@ func TestFooterShowsUsage(t *testing.T) {
 			t.Errorf("footer = %q, want %q", line, want)
 		}
 	}
-	for _, unwanted := range []string{"CPU", "Tab:", "q: quit", "h/l"} {
+	for _, unwanted := range []string{"CPU", "Tab:", "q: quit", "h/l", "q Quit", "? Help"} {
 		if strings.Contains(line, unwanted) {
 			t.Errorf("footer still contains %q: %q", unwanted, line)
 		}
+	}
+}
+
+func TestEscapeShowsExitHint(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.layout = &Layout{Height: 10}
+	b.HandleKey("esc")
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want %q", b.status, exitHint)
+	}
+	drawQuiet(b)
+	line := b.prev[len(b.prev)-1]
+	for _, want := range []string{"q Quit", "? Help"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("footer = %q, want %q", line, want)
+		}
+	}
+}
+
+func TestEscapeFromPromptShowsExitHint(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.openURLPrompt()
+	b.HandleKey("esc")
+	if b.prompt {
+		t.Fatal("escape did not close the URL prompt")
+	}
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want %q", b.status, exitHint)
+	}
+}
+
+func TestEscapeFromInputShowsExitHint(t *testing.T) {
+	doc := ParseHTML(`<html><body><input name="q"></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(80, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.rebuild()
+	q := inputByName(doc, "q")
+	if q == nil {
+		t.Fatal("input not found")
+	}
+	b.setInputFocus(q)
+	b.HandleKey("esc")
+	if b.inputFocus != nil {
+		t.Fatal("escape did not leave the input")
+	}
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want %q", b.status, exitHint)
 	}
 }
 

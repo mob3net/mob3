@@ -37,7 +37,10 @@ func (b *Browser) toggleConsole() {
 
 func (b *Browser) handleConsoleKey(k string) bool {
 	switch k {
-	case "esc", "!":
+	case "esc":
+		b.toggleConsole()
+		b.status = exitHint
+	case "!":
 		b.toggleConsole()
 	case "q", "ctrl-c":
 		return true

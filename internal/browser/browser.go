@@ -740,7 +740,7 @@ func (b *Browser) handlePromptKey(k string) bool {
 		b.promptText = ""
 		b.promptCursor = 0
 		b.promptSelectAll = false
-		b.status = ""
+		b.status = exitHint
 		return false
 	case "left":
 		if b.promptSelectAll {
@@ -1140,6 +1140,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	return false
 }
 
+// exitHint is shown after Escape so users can find the quit and help keys.
+const exitHint = "q Quit / ? Help"
+
 // HandleKey processes one key. It returns true when the browser should quit.
 func (b *Browser) HandleKey(k string) bool {
 	if ev, ok := ParseMouseToken(k); ok {
@@ -1200,7 +1203,7 @@ func (b *Browser) HandleKey(k string) bool {
 	case "esc":
 		b.focus = -1
 		b.clearSelection()
-		b.status = ""
+		b.status = exitHint
 	case "!":
 		b.toggleConsole()
 	case "?":
@@ -1214,6 +1217,7 @@ func (b *Browser) handleInputKey(k string) bool {
 	switch k {
 	case "esc":
 		b.setInputFocus(nil)
+		b.status = exitHint
 		return false
 	case "enter":
 		b.submitInput()

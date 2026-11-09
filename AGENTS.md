@@ -251,7 +251,9 @@ Standard Go layout:
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `o` URL
   prompt, `u` show URL, `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
-  not move `g`/`G` or the `o` prompt to browser-style keys.
+  not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
+  focus/selection and shows `q Quit / ? Help` in the footer; the same hint
+  appears after closing the URL prompt, an input field or the JS console.
 - **Start page:** `about:start` shows the `docs/icon.svg` artwork embedded
   directly in `startPageHTML` (inline `<svg>`, no runtime fetch), rendered
   through the normal inline-SVG path and sized by `.brand svg` to `64px`

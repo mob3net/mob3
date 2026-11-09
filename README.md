@@ -186,7 +186,7 @@ fallback.
 | `u` | show current URL |
 | `?` | open the help page |
 | `!` | JavaScript console (mouse selection enabled) |
-| `Esc` | stop loading or clear selection |
+| `Esc` | stop loading, clear selection, or show the exit hint |
 | `q` / `Ctrl-C` | quit |
 
 | Mouse | Action |
@@ -199,8 +199,10 @@ fallback.
 | right click | back |
 | wheel | scroll |
 
-`Esc` stops an in-flight page load or clears a selection. The top bar shows
-back, reload, the page title, help and a full-width URL field. `?` or the
+`Esc` stops an in-flight page load or clears a selection; in normal browsing,
+or when leaving the URL prompt, an input field or the JS console, it also shows
+`q Quit / ? Help` in the footer so the exit keys are easy to find. The top
+bar shows back, reload, the page title, help and a full-width URL field. `?` or the
 toolbar help button opens the built-in `about:help` page, which documents keys,
 mouse, forms and every command-line flag. Opening the URL field
 prefills and selects the current URL; typing replaces it. Inside the field,
