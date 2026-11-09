@@ -236,6 +236,82 @@ func TestConfigCheckboxForm(t *testing.T) {
 	}
 }
 
+func TestGridTracksAndPlacement(t *testing.T) {
+	tracks := parseGridTracks("1fr 2fr", 90, 16)
+	if len(tracks) != 2 || tracks[0].flex != 1 || tracks[1].flex != 2 {
+		t.Fatalf("tracks = %+v", tracks)
+	}
+	widths := resolveGridTracks(tracks, 90, 0)
+	if widths[0] != 30 || widths[1] != 60 {
+		t.Fatalf("widths = %v", widths)
+	}
+	tracks = parseGridTracks("repeat(3, 1fr)", 90, 16)
+	if len(tracks) != 3 {
+		t.Fatalf("repeat tracks = %+v", tracks)
+	}
+	start, span, ok := gridPlacement("1 / 3", 4)
+	if !ok || start != 0 || span != 2 {
+		t.Fatalf("placement = %d,%d,%v", start, span, ok)
+	}
+	start, span, ok = gridPlacement("span 2", 4)
+	if !ok || start != -1 || span != 2 {
+		t.Fatalf("span placement = %d,%d,%v", start, span, ok)
+	}
+}
+
+func TestGridLayout(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div id="g" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+  <div>A</div><div>B</div>
+</div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	var ax, bx int
+	found := 0
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText {
+			continue
+		}
+		switch f.Text {
+		case "A":
+			ax = f.X
+			found++
+		case "B":
+			bx = f.X
+			found++
+		}
+	}
+	if found != 2 {
+		t.Fatalf("found %d grid text fragments", found)
+	}
+	if bx <= ax || bx-ax < 15 {
+		t.Fatalf("grid columns not separated: A=%d B=%d", ax, bx)
+	}
+}
+
+func TestMediaRangeSyntax(t *testing.T) {
+	if !mediaFeatureMatches("width>=960px", 1280) {
+		t.Fatal("width>=960px did not match 1280")
+	}
+	if mediaFeatureMatches("width>=960px", 800) {
+		t.Fatal("width>=960px matched 800")
+	}
+	if !mediaFeatureMatches("width<=959px", 800) {
+		t.Fatal("width<=959px did not match 800")
+	}
+}
+
+func TestSelectorIs(t *testing.T) {
+	n := &Node{Type: ElementNode, Tag: "div", Attrs: []Attr{{Key: "class", Value: "card lead"}}}
+	sel, err := ParseSelector(":is(.lead, .other)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sel.Match(n) {
+		t.Fatal(":is selector did not match")
+	}
+}
+
 func TestCenteredLabel(t *testing.T) {
 	x, s := centeredLabel(10, 21, "abc")
 	if x != 19 || s != "abc" {

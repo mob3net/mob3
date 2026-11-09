@@ -120,7 +120,15 @@ type Style struct {
 	Clip          string
 	FlexDir       string
 	FlexGrow      float64
+	FlexShrink    float64
+	FlexBasis     Length
+	FlexBasisSet  bool
 	Gap           Length
+	RowGap        Length
+	GridCols      string
+	GridColumn    string
+	GridRow       string
+	GridAutoFlow  string
 }
 
 // TextScale is the visual size multiplier used by terminal text sizing. Runs
@@ -579,8 +587,10 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			"table-header-group", "table-footer-group", "inline-block",
 			"inline-flex", "inline-grid", "inline-table", "contents":
 			switch lower {
-			case "flow-root", "grid":
+			case "flow-root":
 				st.Display = "block"
+			case "grid":
+				st.Display = "grid"
 			case "flex", "inline-flex":
 				st.Display = "flex"
 			case "inline-grid", "contents":
@@ -822,14 +832,55 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "flex":
 		fields := splitFields(lower)
 		if len(fields) > 0 {
-			if f, err := strconv.ParseFloat(fields[0], 64); err == nil && f > 0 {
-				st.FlexGrow = f
+			if f, err := strconv.ParseFloat(fields[0], 64); err == nil {
+				if f > 0 {
+					st.FlexGrow = f
+				}
+				if len(fields) >= 3 {
+					if s, err := strconv.ParseFloat(fields[1], 64); err == nil {
+						st.FlexShrink = s
+					}
+					if l := parseLength(fields[2], st.FontSize); l.Set {
+						st.FlexBasis = l
+						st.FlexBasisSet = true
+					}
+				}
+			} else if l := parseLength(fields[0], st.FontSize); l.Set {
+				st.FlexBasis = l
+				st.FlexBasisSet = true
 			}
+		}
+	case "flex-basis":
+		if l := parseLength(val, st.FontSize); l.Set {
+			st.FlexBasis = l
+			st.FlexBasisSet = true
+		}
+	case "flex-shrink":
+		if f, err := strconv.ParseFloat(lower, 64); err == nil && f >= 0 {
+			st.FlexShrink = f
 		}
 	case "gap", "column-gap":
 		if l := parseLength(val, st.FontSize); l.Set {
 			st.Gap = l
 		}
+	case "row-gap", "grid-row-gap":
+		if l := parseLength(val, st.FontSize); l.Set {
+			st.RowGap = l
+		}
+	case "grid-template-columns":
+		st.GridCols = val
+	case "grid-column", "grid-column-start", "grid-column-end":
+		if prop == "grid-column" {
+			st.GridColumn = val
+		} else if prop == "grid-column-start" {
+			st.GridColumn = val + " / auto"
+		}
+	case "grid-row", "grid-row-start", "grid-row-end":
+		if prop == "grid-row" {
+			st.GridRow = val
+		}
+	case "grid-auto-flow":
+		st.GridAutoFlow = lower
 	case "transform":
 		// Content moved fully off-screen (common for cloned fixed navs and
 		// closed drawers) should not take part in layout.
@@ -1093,6 +1144,7 @@ type SelPart struct {
 	Attrs   []AttrTest
 	Pseudos []string
 	Not     []SelPart
+	Is      []SelPart
 	Comb    byte // 0, ' ', '>', '+', '~'
 }
 
@@ -1352,6 +1404,44 @@ func mediaQueryMatches(q string, vw int) bool {
 
 func mediaFeatureMatches(f string, vw int) bool {
 	f = strings.TrimSpace(f)
+	if strings.ContainsAny(f, "<>") {
+		op := ""
+		var left, right string
+		if i := strings.IndexAny(f, "<>"); i >= 0 {
+			left = strings.TrimSpace(f[:i])
+			right = strings.TrimSpace(f[i+1:])
+			op = string(f[i])
+			if strings.HasPrefix(right, "=") {
+				op += "="
+				right = strings.TrimSpace(right[1:])
+			}
+		}
+		if vw <= 0 {
+			return true
+		}
+		var width bool
+		switch left {
+		case "width", "device-width":
+			width = true
+		case "height", "device-height":
+			return true
+		}
+		if !width {
+			return false
+		}
+		px := mediaPx(right)
+		switch op {
+		case ">":
+			return vw > px
+		case ">=":
+			return vw >= px
+		case "<":
+			return vw < px
+		case "<=":
+			return vw <= px
+		}
+		return false
+	}
 	if k, v, ok := strings.Cut(f, ":"); ok {
 		k = strings.TrimSpace(k)
 		v = strings.TrimSpace(v)
@@ -1702,6 +1792,31 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 				for k := range spec {
 					spec[k] += ispec[k]
 				}
+			} else if name == "is" || name == "where" {
+				var best [3]int
+				found := false
+				for _, alt := range splitTopLevel(arg, ',') {
+					alt = strings.TrimSpace(alt)
+					inner, ispec, n, ok := parseCompound(alt)
+					if !ok || n != len(alt) {
+						continue
+					}
+					inner.Comb = 0
+					p.Is = append(p.Is, inner)
+					found = true
+					for k := range best {
+						if ispec[k] > best[k] {
+							best[k] = ispec[k]
+						}
+					}
+				}
+				if !found {
+					return p, spec, 0, false
+				}
+				spec[1]++
+				for k := range spec {
+					spec[k] += best[k]
+				}
 			} else {
 				p.Pseudos = append(p.Pseudos, name+"("+arg+")")
 				spec[1]++
@@ -1899,6 +2014,18 @@ func (p *SelPart) matches(n *Node) bool {
 	}
 	for i := range p.Not {
 		if p.Not[i].matches(n) {
+			return false
+		}
+	}
+	if len(p.Is) > 0 {
+		ok := false
+		for i := range p.Is {
+			if p.Is[i].matches(n) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
 	}

@@ -145,20 +145,26 @@ Standard Go layout:
 
 - **Scope:** ambitious CSS subset rather than text-only or solid-basics — own
   CSS parser, cascade, specificity, inheritance, selectors, box model, tables,
-  lists, backgrounds, borders and text styling. Basic row-direction flexbox is
-  supported; grid, floating and absolute layout are still approximated as
-  block flow.
+  lists, backgrounds, borders and text styling. Basic row-direction flexbox and
+  basic CSS grid are supported; floating and absolute layout are still
+  approximated as block flow.
 - **Responsive media queries:** `@media` conditions are stored per rule and
   matched against the layout viewport (`columns * 8` CSS px). `screen`/`all`,
-  min/max-width (and device-width) work; `print` never matches; unsupported
+  min/max-width (and device-width), and range syntax such as `(width>=960px)`
+  work; `print` never matches; unsupported
   features such as `prefers-color-scheme: dark` do not match. This keeps
   desktop/mobile duplicates from rendering at the same time.
 - **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
-  side by side, honouring explicit widths, `flex`/`flex-grow`, shrink-to-fit
-  items and `gap`/`column-gap`. Wrapping, `justify-content`, `align-items` and
-  ordering are not implemented. Form controls always use the inline widget
-  path even when CSS gives them block/flex display, so their editable value is
-  rendered inside flex containers.
+  side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
+  shrink-to-fit items and `gap`/`column-gap`. Wrapping, `justify-content`,
+  `align-items` and ordering are not implemented. Form controls always use the
+  inline widget path even when CSS gives them block/flex display, so their
+  editable value is rendered inside flex containers.
+- **CSS grid:** `display:grid` lays children in row-major order over tracks
+  parsed from `grid-template-columns` (lengths, percentages, `fr`, `auto`,
+  `repeat()`, `minmax()`), honours `gap`/`column-gap`/`row-gap`,
+  `grid-column`/`span`, and sizes row heights from the tallest item. Named
+  areas, row spans, auto-fill/auto-fit and alignment are approximated.
 - **Off-screen transforms:** a `transform` that moves content fully off-screen
   (`translateX/Y(-…)` or `scale(0…)`) marks the element hidden. This suppresses
   cloned fixed navs and closed drawers that rely on transforms instead of
@@ -620,8 +626,9 @@ Standard Go layout:
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
-- Flexbox supports basic rows only (no wrap/justify/align/order); grid, floats
-  and absolute positioning are approximated as block flow.
+- Flexbox supports basic rows only (no wrap/justify/align/order); grid supports
+  basic row-major tracks but not named areas or row spans. Floats and absolute
+  positioning are approximated as block flow.
 - SVG support is partial: paths, shapes, gradients and common transforms work,
   but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
   missing. Inline SVG falls back to an accessible label if rasterization fails.
@@ -712,8 +719,9 @@ Known unsupported families (do not present these as available):
 - Network/browser: streaming fetch, upload progress, CORS, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
-- CSS/layout: grid, floats, absolute positioning, CSS variables, animations,
-  transitions, generated content, `@import`, background images, full flexbox.
+- CSS/layout: named grid areas, grid row spans, floats, absolute positioning,
+  CSS variables, animations, transitions, generated content, `@import`,
+  background images, full flexbox.
 
 Do not add a stub just to silence an error when a library would then depend on
 behavior MOB³ cannot provide; document it here instead or implement the real

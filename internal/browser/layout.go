@@ -216,7 +216,7 @@ func (l *layouter) isBlock(n *Node) bool {
 		return false
 	}
 	switch n.Style.Display {
-	case "block", "flex", "list-item", "table", "table-row", "table-cell":
+	case "block", "flex", "grid", "list-item", "table", "table-row", "table-cell":
 		return true
 	}
 	return false
@@ -282,6 +282,8 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 	switch {
 	case st.Display == "table":
 		contentH = l.table(n, contentX, contentY, contentW)
+	case st.Display == "grid":
+		contentH = l.grid(n, contentX, contentY, contentW)
 	case st.Display == "flex" && st.FlexDir != "column":
 		contentH = l.flexRow(n, contentX, contentY, contentW)
 	default:
@@ -333,6 +335,280 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 // flexRow lays out a row-direction flex container. It supports equal or
 // explicit item widths, flex-grow, shrink-to-fit items and column gaps; it does
 // not implement wrapping, alignment or order.
+type gridTrack struct {
+	fixed int
+	flex  float64
+	auto  bool
+}
+
+func splitGridParts(s string) []string {
+	var out []string
+	start := 0
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ' ', '\t', '\n', '\r', ',':
+			if depth == 0 {
+				if part := strings.TrimSpace(s[start:i]); part != "" {
+					out = append(out, part)
+				}
+				start = i + 1
+			}
+		}
+	}
+	if part := strings.TrimSpace(s[start:]); part != "" {
+		out = append(out, part)
+	}
+	return out
+}
+
+func parseGridTracks(raw string, avail int, font float64) []gridTrack {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.EqualFold(raw, "none") || strings.HasPrefix(strings.ToLower(raw), "subgrid") {
+		return nil
+	}
+	var out []gridTrack
+	for _, part := range splitGridParts(raw) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		lower := strings.ToLower(part)
+		if strings.HasPrefix(lower, "repeat(") && strings.HasSuffix(part, ")") {
+			inner := part[len("repeat(") : len(part)-1]
+			fields := splitTopLevel(inner, ',')
+			if len(fields) < 2 {
+				continue
+			}
+			count := 1
+			first := strings.TrimSpace(fields[0])
+			if n, err := strconv.Atoi(first); err == nil && n > 0 {
+				count = n
+			}
+			rest := strings.Join(fields[1:], ",")
+			tracks := parseGridTracks(rest, avail, font)
+			for i := 0; i < count && i < 64; i++ {
+				out = append(out, tracks...)
+			}
+			continue
+		}
+		if strings.HasPrefix(lower, "minmax(") && strings.HasSuffix(part, ")") {
+			inner := part[len("minmax(") : len(part)-1]
+			fields := splitTopLevel(inner, ',')
+			if len(fields) == 2 {
+				part = strings.TrimSpace(fields[1])
+				lower = strings.ToLower(part)
+			}
+		}
+		switch {
+		case strings.HasSuffix(lower, "fr"):
+			if f, err := strconv.ParseFloat(strings.TrimSuffix(lower, "fr"), 64); err == nil && f > 0 {
+				out = append(out, gridTrack{flex: f})
+			} else {
+				out = append(out, gridTrack{flex: 1})
+			}
+		case lower == "auto" || strings.Contains(lower, "content") || strings.HasPrefix(lower, "fit-content"):
+			out = append(out, gridTrack{auto: true})
+		default:
+			if l := parseLength(part, font); l.Set {
+				out = append(out, gridTrack{fixed: l.resolveH(avail, font)})
+			} else {
+				out = append(out, gridTrack{auto: true})
+			}
+		}
+	}
+	return out
+}
+
+func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
+	if len(tracks) == 0 {
+		return nil
+	}
+	widths := make([]int, len(tracks))
+	fixedTotal := 0
+	flexTotal := 0.0
+	autoCount := 0
+	for i, t := range tracks {
+		if t.flex > 0 {
+			flexTotal += t.flex
+		} else if t.auto {
+			autoCount++
+		} else {
+			widths[i] = t.fixed
+			fixedTotal += t.fixed
+		}
+	}
+	remaining := avail - gap*(len(tracks)-1) - fixedTotal
+	if remaining < 0 {
+		remaining = 0
+	}
+	if flexTotal > 0 {
+		for i, t := range tracks {
+			if t.flex > 0 {
+				widths[i] = int(float64(remaining) * t.flex / flexTotal)
+			}
+		}
+		remaining = 0
+	}
+	if autoCount > 0 {
+		each := remaining / autoCount
+		for i, t := range tracks {
+			if t.auto {
+				widths[i] = each
+			}
+		}
+	}
+	total := 0
+	for i := range widths {
+		if widths[i] < 1 {
+			widths[i] = 1
+		}
+		total += widths[i]
+	}
+	if max := avail - gap*(len(tracks)-1); total > max && max > 0 {
+		scaled := 0
+		for i := range widths {
+			widths[i] = widths[i] * max / total
+			if widths[i] < 1 {
+				widths[i] = 1
+			}
+			scaled += widths[i]
+		}
+		if diff := scaled - max; diff > 0 {
+			for i := len(widths) - 1; i >= 0 && diff > 0; i-- {
+				if widths[i] > 1 {
+					widths[i]--
+					diff--
+				}
+			}
+		}
+	}
+	return widths
+}
+
+func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return -1, 1, false
+	}
+	parts := splitTopLevel(raw, '/')
+	first := strings.TrimSpace(parts[0])
+	if strings.HasPrefix(first, "span ") {
+		if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(first, "span "))); err == nil && n > 0 {
+			return -1, n, true
+		}
+		return -1, 1, true
+	}
+	line, err := strconv.Atoi(first)
+	if err != nil {
+		return -1, 1, false
+	}
+	start = line - 1
+	if start < 0 {
+		start = cols + line
+	}
+	if start < 0 {
+		start = 0
+	}
+	span = 1
+	if len(parts) > 1 {
+		endRaw := strings.TrimSpace(parts[1])
+		if strings.HasPrefix(endRaw, "span ") {
+			if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(endRaw, "span "))); err == nil && n > 0 {
+				span = n
+			}
+		} else if endLine, err := strconv.Atoi(endRaw); err == nil {
+			if endLine < 0 {
+				endLine = cols + endLine + 2
+			}
+			if endLine > line {
+				span = endLine - line
+			}
+		}
+	}
+	if span < 1 {
+		span = 1
+	}
+	return start, span, true
+}
+
+func (l *layouter) grid(n *Node, x, y, availW int) int {
+	st := n.Style
+	if st == nil {
+		return l.flow(n, x, y, availW)
+	}
+	tracks := parseGridTracks(st.GridCols, availW, st.FontSize)
+	if len(tracks) == 0 {
+		return l.flow(n, x, y, availW)
+	}
+	gap := st.Gap.resolveH(availW, st.FontSize)
+	if !st.Gap.Set {
+		gap = 0
+	}
+	rowGap := gap
+	if st.RowGap.Set {
+		rowGap = st.RowGap.resolveH(availW, st.FontSize)
+	}
+	widths := resolveGridTracks(tracks, availW, gap)
+	colX := make([]int, len(widths))
+	cx := x
+	for i, w := range widths {
+		colX[i] = cx
+		cx += w + gap
+	}
+	col := 0
+	rowH := 0
+	startY := y
+	for _, child := range n.Children {
+		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
+			continue
+		}
+		start, span, explicit := gridPlacement(child.Style.GridColumn, len(widths))
+		if explicit && start >= 0 && start < len(widths) {
+			col = start
+		}
+		if span < 1 {
+			span = 1
+		}
+		if span > len(widths) {
+			span = len(widths)
+		}
+		if col+span > len(widths) {
+			y += rowH + rowGap
+			rowH = 0
+			col = 0
+		}
+		cellX := colX[col]
+		cellW := 0
+		for i := 0; i < span && col+i < len(widths); i++ {
+			cellW += widths[col+i]
+			if i > 0 {
+				cellW += gap
+			}
+		}
+		h := l.block(child, cellX, y, cellW)
+		if h > rowH {
+			rowH = h
+		}
+		col += span
+		if col >= len(widths) {
+			y += rowH + rowGap
+			rowH = 0
+			col = 0
+		}
+	}
+	if col > 0 {
+		y += rowH
+	}
+	return y - startY
+}
+
 func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	var items []*Node
 	for _, c := range n.Children {
@@ -362,6 +638,20 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
 		extra := ml + mr + bl + br + pl + pr
 		switch {
+		case st.FlexBasisSet:
+			basis := st.FlexBasis.resolveH(availW, st.FontSize)
+			if basis < 0 {
+				basis = 0
+			}
+			widths[i] = basis + extra
+			if widths[i] < 1 {
+				widths[i] = 1
+			}
+			fixed += widths[i]
+			if st.FlexGrow > 0 {
+				grow[i] = st.FlexGrow
+				growTotal += st.FlexGrow
+			}
 		case st.Width.Set && !st.Width.IsAuto():
 			w := st.Width.resolveH(availW, st.FontSize) + extra
 			if w < 1 {
@@ -369,6 +659,10 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 			}
 			widths[i] = w
 			fixed += w
+			if st.FlexGrow > 0 {
+				grow[i] = st.FlexGrow
+				growTotal += st.FlexGrow
+			}
 		case st.FlexGrow > 0:
 			grow[i] = st.FlexGrow
 			growTotal += st.FlexGrow
@@ -385,7 +679,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	if remaining := totalAvail - fixed; remaining > 0 && growTotal > 0 {
 		for i := range items {
 			if grow[i] > 0 {
-				widths[i] = maxInt(1, int(float64(remaining)*grow[i]/growTotal))
+				widths[i] += int(float64(remaining) * grow[i] / growTotal)
 			}
 		}
 	}
@@ -1415,7 +1709,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	pad, _ := l.paddingH(n)
 	isBlock := false
 	switch st.Display {
-	case "block", "list-item", "table":
+	case "block", "grid", "list-item", "table":
 		isBlock = true
 	}
 	if isBlock {

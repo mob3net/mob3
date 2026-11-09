@@ -83,9 +83,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   blocked” page is shown instead.
 - No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes,
   Shadow DOM, custom elements, real observers or full History API.
-- Grid, floats, absolute positioning, CSS variables, animations, transitions,
-  generated content, `@import` and background images are unsupported or
-  approximated as block flow.
+- Basic CSS grid rows are supported; floats, absolute positioning, CSS
+  variables, animations, transitions, generated content, `@import` and
+  background images are unsupported or approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. WebP is not supported.
 - No tabs, downloads, clipboard copy or multipart/file uploads.
