@@ -263,9 +263,11 @@ Standard Go layout:
   art.
 - **Output robustness:** interactive mode disables terminal autowrap
   (`\x1b[?7l`) and restores it on exit, clips double-width glyphs that would
-  cross the right edge, repaints the top bar and footer every frame, and forces
-  a full text repaint whenever the scroll offset changes. A stray terminal wrap
-  or scroll must never leave the chrome stale.
+  cross the right edge, repaints the toolbar and footer every frame, and forces
+  a full text repaint whenever the scroll offset changes. The URL row is left
+  to normal line diffing once drawn, so periodic memory/JS redraws do not wipe
+  a terminal-native selection over it. A stray terminal wrap or scroll must
+  never leave the chrome stale.
 - **Dump rendering:** prints the whole document height (capped at 20,000 rows),
   no browser chrome. Color is automatic on a TTY, forced by `-color`, disabled
   by `-no-color`.
@@ -312,9 +314,8 @@ Standard Go layout:
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
   Clicking the URL field keeps the prompt open; a press anywhere else closes
-  it the same way Escape does. Inside the prompt, a click places the caret and
-  a mouse drag selects a text range that typing, Backspace/Delete, Ctrl-K and
-  Ctrl-W replace or remove.
+  it the same way Escape does. Inside the prompt, a click places the caret.
+  Shift+drag is left to the terminal for native text selection.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
@@ -341,8 +342,9 @@ Standard Go layout:
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus. While the URL prompt is open, a click on its field keeps it
   open and a click anywhere else closes it; clicking inside it positions the
-  caret, and dragging selects URL text. A left click on the URL bar opens
-  the URL prompt, toolbar
+  caret. Shift+mouse reports are ignored and suppress the next redraw so the
+  terminal can keep a native selection over the URL. A left click on the URL
+  bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
   mouse forward button goes forward, clicking the footer `>_` icon toggles the
   JS console (and closes it while open), and the wheel scrolls three lines. Long pages show a scrollbar
@@ -387,8 +389,10 @@ Standard Go layout:
   normal browser address bar; Backspace clears the selection first. The prompt
   has a real cursor: Left/Right, Home/End move it, Backspace/Delete remove
   around it, Ctrl-A selects all, Ctrl-K deletes to the end, Ctrl-U clears and
-  Ctrl-W deletes the previous word. A mouse click places the caret and a drag
-  selects a byte range; the same editing keys replace or remove that selection.
+  Ctrl-W deletes the previous word. A mouse click places the caret. Shift+drag
+  is not app-managed selection: Shift+mouse reports that do arrive are ignored
+  and no redraw is written, so terminals that handle Shift locally can select
+  and copy the URL text normally.
   The caret is an overlay block cursor, not
   an inserted cell, so moving it never shifts the URL text. Existing local paths become `file://`;
   bare host-like input becomes `https://`; `host:port` becomes `http://`;

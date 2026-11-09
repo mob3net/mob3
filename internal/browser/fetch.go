@@ -966,7 +966,8 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>
-<tr><td>click/drag in the URL prompt</td><td>place the caret / select text</td></tr>
+<tr><td>click in the URL prompt</td><td>place the caret</td></tr>
+<tr><td>Shift+drag over the URL</td><td>select it with the terminal</td></tr>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>

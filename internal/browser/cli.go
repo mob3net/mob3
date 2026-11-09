@@ -169,7 +169,11 @@ func Run(args []string) int {
 	b.sampleUsage()
 	b.Navigate(start, true)
 	for {
-		b.draw()
+		if b.skipDraw {
+			b.skipDraw = false
+		} else {
+			b.draw()
+		}
 		select {
 		case k := <-keys:
 			if k == "eof" {

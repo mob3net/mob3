@@ -1643,32 +1643,32 @@ func TestClickInURLPromptKeepsItOpen(t *testing.T) {
 	}
 }
 
-func TestURLPromptMouseDragSelectsText(t *testing.T) {
+func TestShiftMouseDragLeavesURLPromptAlone(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.url = mustParse(t, "https://example.com/page")
 	b.layout = &Layout{Height: 10}
 	b.openURLPrompt()
 	drawQuiet(b)
-
+	before := b.promptText
 	prefixW := stringWidth(" Open: ")
-	startX := prefixW + 5 + 1 // 1-based terminal X
-	endX := prefixW + 10 + 1
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: startX, Y: 2, Press: true})
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: endX, Y: 2, Motion: true})
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: endX, Y: 2, Press: false})
-	if b.promptSelStart != 5 || b.promptSelEnd != 10 {
-		t.Fatalf("selection = %d..%d, want 5..10", b.promptSelStart, b.promptSelEnd)
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: prefixW + 5 + 1, Y: 2, Press: true, Shift: true})
+	if !b.skipDraw {
+		t.Fatal("shift+press did not suppress the redraw")
 	}
-	if b.promptSelectAll {
-		t.Fatal("drag selection was treated as select-all")
+	b.skipDraw = false
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: prefixW + 10 + 1, Y: 2, Motion: true, Shift: true})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: prefixW + 10 + 1, Y: 2, Press: false, Shift: true})
+	if !b.prompt {
+		t.Fatal("shift+drag closed the URL prompt")
 	}
-	want := b.promptText[:5] + "X" + b.promptText[10:]
-	b.HandleKey("X")
-	if b.promptText != want {
-		t.Fatalf("typing over drag selection = %q, want %q", b.promptText, want)
+	if b.promptText != before {
+		t.Fatalf("shift+drag changed the URL to %q", b.promptText)
 	}
-	if b.promptSelStart != b.promptSelEnd {
-		t.Fatal("typing did not clear the drag selection")
+	if !b.promptSelectAll {
+		t.Fatal("shift+drag cleared the prompt selection")
+	}
+	if !b.skipDraw {
+		t.Fatal("shift+release did not suppress the redraw")
 	}
 }
 
@@ -1685,7 +1685,15 @@ func TestURLPromptMouseClickPlacesCursor(t *testing.T) {
 	if b.promptCursor != 4 {
 		t.Fatalf("cursor = %d, want 4", b.promptCursor)
 	}
-	if b.promptSelStart != b.promptSelEnd {
-		t.Fatal("click created a selection")
+	if b.promptSelectAll {
+		t.Fatal("click did not collapse the select-all prompt")
+	}
+}
+
+func TestShiftMouseTokenRoundTrip(t *testing.T) {
+	want := MouseEvent{Button: MouseButtonLeft, X: 4, Y: 9, Press: true, Shift: true}
+	got, ok := ParseMouseToken(mouseToken(want))
+	if !ok || got != want {
+		t.Fatalf("round trip = %+v, %v; want %+v", got, ok, want)
 	}
 }

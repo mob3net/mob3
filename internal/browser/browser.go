@@ -52,10 +52,7 @@ type Browser struct {
 	promptText      string
 	promptCursor    int
 	promptSelectAll bool
-	promptSelStart  int
-	promptSelEnd    int
-	promptDragStart int
-	promptDragging  bool
+	skipDraw        bool
 
 	color   bool
 	prev    []string
@@ -950,9 +947,7 @@ func (b *Browser) openURLPrompt() {
 		b.promptText = b.url.String()
 	}
 	b.promptCursor = len(b.promptText)
-	b.promptSelStart, b.promptSelEnd = 0, len(b.promptText)
-	b.promptSelectAll = len(b.promptText) > 0
-	b.promptDragging = false
+	b.promptSelectAll = true
 	b.status = ""
 }
 
@@ -987,11 +982,13 @@ func (b *Browser) handlePromptKey(k string) bool {
 	if cur > len(text) {
 		cur = len(text)
 	}
-	selStart, selEnd, hasSel := b.promptSelectionBounds()
 	switch k {
 	case "enter":
 		text = strings.TrimSpace(text)
-		b.closeURLPrompt()
+		b.prompt = false
+		b.promptText = ""
+		b.promptCursor = 0
+		b.promptSelectAll = false
 		if text != "" {
 			b.Navigate(text, true)
 		}
@@ -1001,47 +998,46 @@ func (b *Browser) handlePromptKey(k string) bool {
 		b.status = exitHint
 		return false
 	case "left":
-		if hasSel {
-			cur = selStart
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			cur = 0
+			b.promptSelectAll = false
 		} else {
 			cur = prevRuneBoundary(text, cur)
 		}
 	case "right":
-		if hasSel {
-			cur = selEnd
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			cur = len(text)
+			b.promptSelectAll = false
 		} else {
 			cur = nextRuneBoundary(text, cur)
 		}
 	case "home":
 		cur = 0
-		b.clearPromptSelection()
+		b.promptSelectAll = false
 	case "end":
 		cur = len(text)
-		b.clearPromptSelection()
+		b.promptSelectAll = false
 	case "ctrl-a":
+		b.promptSelectAll = true
 		cur = len(text)
-		b.promptSelStart, b.promptSelEnd = 0, len(text)
-		b.promptSelectAll = len(text) > 0
 	case "ctrl-e":
 		cur = len(text)
-		b.clearPromptSelection()
+		b.promptSelectAll = false
 	case "backspace":
-		if hasSel {
-			text = text[:selStart] + text[selEnd:]
-			cur = selStart
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			text = ""
+			cur = 0
+			b.promptSelectAll = false
 		} else if cur > 0 {
 			prev := prevRuneBoundary(text, cur)
 			text = text[:prev] + text[cur:]
 			cur = prev
 		}
 	case "delete":
-		if hasSel {
-			text = text[:selStart] + text[selEnd:]
-			cur = selStart
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			text = ""
+			cur = 0
+			b.promptSelectAll = false
 		} else if cur < len(text) {
 			next := nextRuneBoundary(text, cur)
 			text = text[:cur] + text[next:]
@@ -1049,20 +1045,20 @@ func (b *Browser) handlePromptKey(k string) bool {
 	case "ctrl-u":
 		text = ""
 		cur = 0
-		b.clearPromptSelection()
+		b.promptSelectAll = false
 	case "ctrl-k":
-		if hasSel {
-			text = text[:selStart] + text[selEnd:]
-			cur = selStart
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			text = ""
+			cur = 0
+			b.promptSelectAll = false
 		} else {
 			text = text[:cur]
 		}
 	case "ctrl-w":
-		if hasSel {
-			text = text[:selStart] + text[selEnd:]
-			cur = selStart
-			b.clearPromptSelection()
+		if b.promptSelectAll {
+			text = ""
+			cur = 0
+			b.promptSelectAll = false
 			break
 		}
 		before := strings.TrimRight(text[:cur], " ")
@@ -1079,10 +1075,10 @@ func (b *Browser) handlePromptKey(k string) bool {
 		if utf8.RuneCountInString(k) == 1 {
 			r, _ := utf8.DecodeRuneInString(k)
 			if r >= 32 && r != 127 {
-				if hasSel {
-					text = text[:selStart] + k + text[selEnd:]
-					cur = selStart + len(k)
-					b.clearPromptSelection()
+				if b.promptSelectAll {
+					text = k
+					cur = len(k)
+					b.promptSelectAll = false
 				} else {
 					text = text[:cur] + k + text[cur:]
 					cur += len(k)
@@ -1103,65 +1099,7 @@ func (b *Browser) closeURLPrompt() {
 	b.prompt = false
 	b.promptText = ""
 	b.promptCursor = 0
-	b.clearPromptSelection()
-	b.promptDragging = false
-}
-
-// promptSelectionBounds returns the selected byte range, normalized, and
-// whether a non-empty selection exists.
-func (b *Browser) promptSelectionBounds() (int, int, bool) {
-	text := b.promptText
-	if b.promptSelectAll {
-		if len(text) == 0 {
-			return 0, 0, false
-		}
-		return 0, len(text), true
-	}
-	a, c := b.promptSelStart, b.promptSelEnd
-	if a < 0 {
-		a = 0
-	}
-	if c < 0 {
-		c = 0
-	}
-	if a > len(text) {
-		a = len(text)
-	}
-	if c > len(text) {
-		c = len(text)
-	}
-	if a > c {
-		a, c = c, a
-	}
-	return a, c, a != c
-}
-
-// setPromptSelection selects a byte range for a mouse drag.
-func (b *Browser) setPromptSelection(start, end int) {
-	text := b.promptText
-	if start < 0 {
-		start = 0
-	}
-	if end < 0 {
-		end = 0
-	}
-	if start > len(text) {
-		start = len(text)
-	}
-	if end > len(text) {
-		end = len(text)
-	}
-	if start > end {
-		start, end = end, start
-	}
-	b.promptSelStart, b.promptSelEnd = start, end
 	b.promptSelectAll = false
-}
-
-func (b *Browser) clearPromptSelection() {
-	b.promptSelectAll = false
-	b.promptSelStart = 0
-	b.promptSelEnd = 0
 }
 
 // promptWindow returns the visible rune range for the URL text and the cursor
@@ -1259,42 +1197,6 @@ func (b *Browser) promptOffsetAt(x, width int) int {
 		used += rw
 	}
 	return runeIndexToByte(runes, end)
-}
-
-// drawPromptSelection draws the URL prompt text with the current non-global
-// mouse/keyboard selection highlighted.
-func (b *Browser) drawPromptSelection(g *Grid, x, y, width int, st *Style, fg, bg Color) {
-	prefix := " Open: "
-	prefixW := stringWidth(prefix)
-	g.Text(x, y, prefix, st, fg)
-	contentW := width - prefixW
-	if contentW < 1 {
-		return
-	}
-	runes, start, end, cur := promptWindow(b.promptText, b.promptCursor, contentW, false)
-	selStart, selEnd, hasSel := b.promptSelectionBounds()
-	ss := utf8.RuneCountInString(b.promptText[:selStart])
-	se := utf8.RuneCountInString(b.promptText[:selEnd])
-	selBG := RGB(0x2f, 0x6f, 0xbf)
-	cursorFG := RGB(0xff, 0xff, 0xff)
-	cursorBG := RGB(0x2f, 0x6f, 0xbf)
-	xx := x + prefixW
-	for i := start; i < end; i++ {
-		if i == cur {
-			g.Put(xx, y, ' ', st, cursorFG, cursorBG)
-			xx++
-			continue
-		}
-		charBG := bg
-		if hasSel && i >= ss && i < se {
-			charBG = selBG
-		}
-		g.Put(xx, y, runes[i], st, fg, charBG)
-		xx += runeWidth(runes[i])
-	}
-	if cur == len(runes) && cur >= start {
-		g.Put(xx, y, ' ', st, cursorFG, cursorBG)
-	}
 }
 
 // promptParts splits the visible URL field around the cursor. The cursor is an
@@ -1509,43 +1411,26 @@ func (b *Browser) clickContent(x, docY int) {
 // HandleMouse processes a decoded mouse event. It returns true when the
 // browser should quit.
 func (b *Browser) HandleMouse(ev MouseEvent) bool {
+	if ev.Shift {
+		// Most terminals handle Shift+drag themselves and never send this. If
+		// one does forward it, leave the event alone and write nothing so a
+		// terminal-native selection is not cleared by a redraw.
+		b.skipDraw = true
+		return false
+	}
 	if b.prompt {
+		if ev.Motion || ev.Wheel != 0 || !ev.Press {
+			return false
+		}
 		x := ev.X - 1
 		y := ev.Y - 1
-		if ev.Wheel != 0 {
-			return false
-		}
-		urlHit := func() (headerHit, bool) {
-			for _, hit := range b.headerHits {
-				if hit.kind == headerURL && x >= hit.x && x < hit.x+hit.w && y >= hit.y && y < hit.y+hit.h {
-					return hit, true
-				}
+		for _, hit := range b.headerHits {
+			if hit.kind == headerURL && x >= hit.x && x < hit.x+hit.w && y >= hit.y && y < hit.y+hit.h {
+				b.promptCursor = b.promptOffsetAt(x-hit.x, hit.w)
+				b.promptSelectAll = false
+				b.status = ""
+				return false
 			}
-			return headerHit{}, false
-		}
-		if ev.Motion {
-			if b.promptDragging {
-				if hit, ok := urlHit(); ok {
-					off := b.promptOffsetAt(x-hit.x, hit.w)
-					b.setPromptSelection(b.promptDragStart, off)
-					b.promptCursor = off
-					b.status = ""
-				}
-			}
-			return false
-		}
-		if !ev.Press {
-			b.promptDragging = false
-			return false
-		}
-		if hit, ok := urlHit(); ok {
-			off := b.promptOffsetAt(x-hit.x, hit.w)
-			b.clearPromptSelection()
-			b.promptCursor = off
-			b.promptDragStart = off
-			b.promptDragging = ev.Button == MouseButtonLeft
-			b.status = ""
-			return false
 		}
 		b.closeURLPrompt()
 		b.status = exitHint
@@ -2014,20 +1899,16 @@ func (b *Browser) draw() {
 			}
 			g.Fill(x, y, width, 1, fieldBG)
 			if b.prompt {
-				if b.promptSelectAll {
-					head, at, tail, show := promptParts(" Open: ", b.promptText, b.promptCursor, true, width)
-					g.Text(x, y, head, hs, headerFG)
-					cx := x + stringWidth(head)
-					if show {
-						cursorFG := RGB(0xff, 0xff, 0xff)
-						cursorBG := RGB(0x2f, 0x6f, 0xbf)
-						g.Put(cx, y, at, &Style{Bold: true}, cursorFG, cursorBG)
-						cx++
-					}
-					g.Text(cx, y, tail, hs, headerFG)
-				} else {
-					b.drawPromptSelection(g, x, y, width, hs, headerFG, fieldBG)
+				head, at, tail, show := promptParts(" Open: ", b.promptText, b.promptCursor, b.promptSelectAll, width)
+				g.Text(x, y, head, hs, headerFG)
+				cx := x + stringWidth(head)
+				if show {
+					cursorFG := RGB(0xff, 0xff, 0xff)
+					cursorBG := RGB(0x2f, 0x6f, 0xbf)
+					g.Put(cx, y, at, &Style{Bold: true}, cursorFG, cursorBG)
+					cx++
 				}
+				g.Text(cx, y, tail, hs, headerFG)
 			} else {
 				u := ""
 				if b.url != nil {
@@ -2233,7 +2114,20 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		sb.WriteString("\x1b[2J")
 	}
 	chrome := func(i int) bool {
-		return i < b.headerRows() || (b.height >= 2 && i == b.height-1)
+		if b.height >= 2 && i == b.height-1 {
+			return true
+		}
+		rows := b.headerRows()
+		if i < 0 || i >= rows {
+			return false
+		}
+		// Leave the URL row to normal line diffing once it has been drawn.
+		// Periodic memory/JS redraws must not overwrite it, otherwise a
+		// terminal-native selection over the URL would be cleared.
+		if rows >= 2 && i == 1 {
+			return false
+		}
+		return true
 	}
 	for i := range lines {
 		if !chrome(i) && b.prev[i] == lines[i] {
@@ -2388,6 +2282,7 @@ type MouseEvent struct {
 	Press  bool
 	Motion bool // drag report while a button is held
 	Wheel  int  // -1 wheel up, +1 wheel down, 0 otherwise
+	Shift  bool // modifier bit; reserved for terminal-native selection
 }
 
 const (
@@ -2431,7 +2326,7 @@ func parseSGRMouse(params string, release bool) (MouseEvent, bool) {
 	if err1 != nil || err2 != nil || err3 != nil {
 		return MouseEvent{}, false
 	}
-	ev := MouseEvent{X: x, Y: y, Press: !release, Motion: b&32 != 0}
+	ev := MouseEvent{X: x, Y: y, Press: !release, Motion: b&32 != 0, Shift: b&4 != 0}
 	switch {
 	case b&64 != 0:
 		ev.Button = b & 3
@@ -2454,7 +2349,7 @@ func parseX10Mouse(b, x, y byte) (MouseEvent, bool) {
 	if x < 1 || y < 1 || btn < 0 {
 		return MouseEvent{}, false
 	}
-	ev := MouseEvent{X: int(x), Y: int(y), Motion: btn&32 != 0}
+	ev := MouseEvent{X: int(x), Y: int(y), Motion: btn&32 != 0, Shift: btn&4 != 0}
 	if btn&64 != 0 {
 		ev.Press = true
 		ev.Button = btn & 3
@@ -2478,12 +2373,16 @@ func parseX10Mouse(b, x, y byte) (MouseEvent, bool) {
 
 // mouseToken encodes a mouse event as an input token.
 func mouseToken(ev MouseEvent) string {
+	mod := ""
+	if ev.Shift {
+		mod = ":shift"
+	}
 	if ev.Wheel != 0 {
 		dir := "up"
 		if ev.Wheel > 0 {
 			dir = "down"
 		}
-		return "mouse:wheel:" + dir + ":" + strconv.Itoa(ev.X) + ":" + strconv.Itoa(ev.Y)
+		return "mouse:wheel:" + dir + ":" + strconv.Itoa(ev.X) + ":" + strconv.Itoa(ev.Y) + mod
 	}
 	kind := "release"
 	if ev.Press {
@@ -2492,7 +2391,7 @@ func mouseToken(ev MouseEvent) string {
 	if ev.Motion {
 		kind = "drag"
 	}
-	return "mouse:" + kind + ":" + strconv.Itoa(ev.Button) + ":" + strconv.Itoa(ev.X) + ":" + strconv.Itoa(ev.Y)
+	return "mouse:" + kind + ":" + strconv.Itoa(ev.Button) + ":" + strconv.Itoa(ev.X) + ":" + strconv.Itoa(ev.Y) + mod
 }
 
 // ParseMouseToken decodes a token produced by mouseToken.
@@ -2501,6 +2400,11 @@ func ParseMouseToken(tok string) (MouseEvent, bool) {
 		return MouseEvent{}, false
 	}
 	parts := strings.Split(strings.TrimPrefix(tok, "mouse:"), ":")
+	shift := false
+	if len(parts) > 1 && parts[len(parts)-1] == "shift" {
+		shift = true
+		parts = parts[:len(parts)-1]
+	}
 	switch {
 	case len(parts) == 4 && parts[0] == "wheel":
 		x, err1 := strconv.Atoi(parts[2])
@@ -2508,7 +2412,7 @@ func ParseMouseToken(tok string) (MouseEvent, bool) {
 		if err1 != nil || err2 != nil {
 			return MouseEvent{}, false
 		}
-		ev := MouseEvent{X: x, Y: y}
+		ev := MouseEvent{X: x, Y: y, Shift: shift}
 		if parts[1] == "up" {
 			ev.Wheel = -1
 		} else {
@@ -2524,7 +2428,7 @@ func ParseMouseToken(tok string) (MouseEvent, bool) {
 		}
 		return MouseEvent{
 			Button: btn, X: x, Y: y, Press: parts[0] != "release",
-			Motion: parts[0] == "drag",
+			Motion: parts[0] == "drag", Shift: shift,
 		}, true
 	}
 	return MouseEvent{}, false
