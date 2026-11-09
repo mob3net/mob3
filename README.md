@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="400" alt="image" src="https://github.com/user-attachments/assets/6b64c088-529b-4eba-838e-8f68f200a2fc" />
+  <img width="400" alt="image" src="https://interactive32.com/images/mob3.png?ref=github.com/mob3net/mob3" />
 </p>
 
 
