@@ -21,8 +21,13 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
 ```
 
-With no URL, MOB³ opens `about:home` (the start page). Use `-home` to point it
-somewhere else.
+## Using command line options
+
+Start reading Wikipedia in dark mode:
+```
+mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
+```
+See all available options with -h flag
 
 ## Development
 
