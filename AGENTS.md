@@ -156,15 +156,19 @@ Standard Go layout:
   desktop/mobile duplicates from rendering at the same time.
 - **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
-  shrink-to-fit items and `gap`/`column-gap`. Wrapping, `justify-content`,
+  shrink-to-fit items and `gap`/`column-gap`. Items keep at least their
+  min-content width instead of shrinking into one-character columns.
+  Wrapping, `justify-content`,
   `align-items` and ordering are not implemented. Form controls always use the
   inline widget path even when CSS gives them block/flex display, so their
   editable value is rendered inside flex containers.
 - **CSS grid:** `display:grid` lays children in row-major order over tracks
   parsed from `grid-template-columns` (lengths, percentages, `fr`, `auto`,
   `repeat()`, `minmax()`), honours `gap`/`column-gap`/`row-gap`,
-  `grid-column`/`span`, and sizes row heights from the tallest item. Named
-  areas, row spans, auto-fill/auto-fit and alignment are approximated.
+  `grid-column`/`span`, and sizes row heights from the tallest item. Dense grids
+  whose average track would be under 6 cells fall back to block flow so text
+  stays readable. Named areas, row spans, auto-fill/auto-fit and alignment are
+  approximated.
 - **Off-screen transforms:** a `transform` that moves content fully off-screen
   (`translateX/Y(-…)` or `scale(0…)`) marks the element hidden. This suppresses
   cloned fixed navs and closed drawers that rely on transforms instead of
@@ -218,7 +222,9 @@ Standard Go layout:
 - **Lists:** markers rendered in the list padding area; disc/circle/square,
   decimal, alpha and roman styles.
 - **Images:** intrinsic size in CSS px → cells; CSS/HTML width/height honored;
-  aspect ratio preserved; transparency composited over the underlying cell;
+  aspect ratio preserved; display is capped at 60% of the viewport width and
+  24 rows, preserving the ratio; transparency composited over the underlying
+  cell;
   PNG/JPEG/GIF and SVG; WebP is unsupported. SVG is rasterized with oksvg +
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
   response; inline `<svg>` is serialized back to XML with SVG camelCase names

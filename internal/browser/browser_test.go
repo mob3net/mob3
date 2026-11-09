@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"errors"
+	"image"
 	"net/url"
 	"os"
 	"strings"
@@ -310,6 +311,50 @@ func TestSelectorIs(t *testing.T) {
 	if !sel.Match(n) {
 		t.Fatal(":is selector did not match")
 	}
+}
+
+func TestImageCap(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 3000, 2000))
+	n := &Node{Type: ElementNode, Tag: "img", Img: img}
+	st := &Style{Display: "inline-block", Width: pct(100), Height: pct(100)}
+	w, h := imageSize(n, st, 100, 60)
+	if w > 60 || h > maxImageRows {
+		t.Fatalf("capped image = %dx%d", w, h)
+	}
+	if w != 60 {
+		t.Fatalf("capped width = %d, want 60", w)
+	}
+}
+
+func TestFlexItemsKeepMinContentWidth(t *testing.T) {
+	doc := ParseHTML(`<html><body><div style="display:flex">` +
+		`<span>abcd</span><span>abcd</span><span>abcd</span><span>abcd</span>` +
+		`<span>abcd</span><span>abcd</span><span>abcd</span><span>abcd</span>` +
+		`</div></body></html>`)
+	ly := BuildLayout(doc, nil, 20)
+	whole := 0
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Text == "abcd" {
+			whole++
+		}
+	}
+	if whole < 8 {
+		t.Fatalf("flex items broke below min-content: %d whole words", whole)
+	}
+}
+
+func TestDenseGridFallsBack(t *testing.T) {
+	doc := ParseHTML(`<html><body><div style="display:grid;grid-template-columns:repeat(24,1fr)">` +
+		`<div>hello world</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 60)
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Text == "hello" && f.W == 5 {
+			return
+		}
+	}
+	t.Fatal("dense grid did not fall back to readable block flow")
 }
 
 func TestCenteredLabel(t *testing.T) {

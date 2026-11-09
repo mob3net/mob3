@@ -556,6 +556,15 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		rowGap = st.RowGap.resolveH(availW, st.FontSize)
 	}
 	widths := resolveGridTracks(tracks, availW, gap)
+	if len(widths) > 4 {
+		total := 0
+		for _, w := range widths {
+			total += w
+		}
+		if total/len(widths) < 6 {
+			return l.flow(n, x, y, availW)
+		}
+	}
 	colX := make([]int, len(widths))
 	cx := x
 	for i, w := range widths {
@@ -590,6 +599,17 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			cellW += widths[col+i]
 			if i > 0 {
 				cellW += gap
+			}
+		}
+		if !explicit {
+			if mw, _ := l.measure(child); mw > cellW {
+				for span < len(widths)-col {
+					cellW += gap + widths[col+span]
+					span++
+					if cellW >= mw {
+						break
+					}
+				}
 			}
 		}
 		h := l.block(child, cellX, y, cellW)
@@ -683,6 +703,15 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 			}
 		}
 	}
+	mins := make([]int, len(items))
+	for i, it := range items {
+		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(it.Style, availW)
+		_, mi := l.measure(it)
+		mins[i] = maxInt(1, mi+ml+mr+bl+br+pl+pr)
+		if widths[i] < mins[i] {
+			widths[i] = mins[i]
+		}
+	}
 	total := 0
 	for i := range widths {
 		if widths[i] < 1 {
@@ -692,7 +721,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	}
 	if total > totalAvail && total > 0 {
 		for i := range widths {
-			widths[i] = maxInt(1, widths[i]*totalAvail/total)
+			widths[i] = maxInt(mins[i], widths[i]*totalAvail/total)
 		}
 	}
 	maxH := 0
@@ -831,13 +860,14 @@ type inlineItem struct {
 }
 
 type inlineCtx struct {
-	l     *layouter
-	x, y  int
-	maxW  int
-	base  *Style
-	items []inlineItem
-	curW  int
-	space bool
+	l         *layouter
+	x, y      int
+	maxW      int
+	imageCapW int
+	base      *Style
+	items     []inlineItem
+	curW      int
+	space     bool
 }
 
 func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
@@ -848,7 +878,7 @@ func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 	if base == nil {
 		base = defaultStyle()
 	}
-	c := &inlineCtx{l: l, x: x, y: y, maxW: width, base: base}
+	c := &inlineCtx{l: l, x: x, y: y, maxW: width, imageCapW: l.imageCapWidth(), base: base}
 	if width < 1 {
 		c.maxW = 1
 	}
@@ -1309,7 +1339,7 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 		c.addLabel("[image: "+alt+"]", st, n)
 		return
 	}
-	w, h := imageSize(n, st, c.maxW)
+	w, h := imageSize(n, st, c.maxW, c.imageCapW)
 	w2, h2 := w, h
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: w, h: h, style: st, node: n,
@@ -1413,7 +1443,19 @@ func (c *inlineCtx) flush() {
 	c.space = false
 }
 
-func imageSize(n *Node, st *Style, maxW int) (w, h int) {
+const maxImageRows = 24
+
+func (l *layouter) imageCapWidth() int {
+	w := l.width * 3 / 5
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// imageSize returns the terminal cell size for an image, preserving its aspect
+// ratio and applying the terminal-friendly display cap.
+func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 	iw, ih := 0, 0
 	if n.Img != nil {
 		b := n.Img.Bounds()
@@ -1456,6 +1498,20 @@ func imageSize(n *Node, st *Style, maxW int) (w, h int) {
 		cw = maxW
 		if ch < 1 {
 			ch = 1
+		}
+	}
+	if capW > 0 && cw > capW {
+		ch = int(math.Round(float64(ch) * float64(capW) / float64(cw)))
+		cw = capW
+		if ch < 1 {
+			ch = 1
+		}
+	}
+	if ch > maxImageRows {
+		cw = int(math.Round(float64(cw) * float64(maxImageRows) / float64(ch)))
+		ch = maxImageRows
+		if cw < 1 {
+			cw = 1
 		}
 	}
 	return cw, ch
@@ -1696,7 +1752,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	}
 	st := n.Style
 	if n.Tag == "img" {
-		cw, _ := imageSize(n, st, 1000)
+		cw, _ := imageSize(n, st, 1000, l.imageCapWidth())
 		return cw, cw
 	}
 	if n.Tag == "input" || n.Tag == "select" || n.Tag == "textarea" || n.Tag == "button" {
