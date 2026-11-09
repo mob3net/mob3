@@ -99,6 +99,57 @@ func TestBlockedChallenge(t *testing.T) {
 	}
 }
 
+func TestRequestLogRecordsPageResources(t *testing.T) {
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		body := ""
+		switch req.URL.Path {
+		case "/":
+			h.Set("Content-Type", "text/html")
+			body = `<html><head><link rel="stylesheet" href="/s.css"></head><body><script src="/a.js"></script></body></html>`
+		case "/s.css":
+			h.Set("Content-Type", "text/css")
+			body = "body { color: red }"
+		case "/a.js":
+			h.Set("Content-Type", "application/javascript")
+			body = "var x = 1;"
+		default:
+			h.Set("Content-Type", "text/plain")
+		}
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader(body)), Request: req,
+		}, nil
+	})}
+	if _, err := loader.LoadContext(context.Background(), "https://example.com/", nil); err != nil {
+		t.Fatal(err)
+	}
+	records := loader.requestSnapshot()
+	if len(records) != 3 {
+		t.Fatalf("requests = %+v", records)
+	}
+	want := map[string]bool{"doc": false, "css": false, "js": false}
+	for _, r := range records {
+		if !r.Done || r.Status != 200 {
+			t.Errorf("request %+v not completed", r)
+		}
+		if _, ok := want[r.Kind]; ok {
+			want[r.Kind] = true
+		}
+	}
+	for kind, seen := range want {
+		if !seen {
+			t.Errorf("missing %s request in %+v", kind, records)
+		}
+	}
+
+	loader.beginPage()
+	if got := loader.requestSnapshot(); len(got) != 0 {
+		t.Fatalf("beginPage did not clear requests: %+v", got)
+	}
+}
+
 func TestBlockedBypass(t *testing.T) {
 	newLoader := func() *Loader {
 		loader := NewLoader()

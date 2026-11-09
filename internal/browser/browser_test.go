@@ -954,6 +954,39 @@ func TestHelpAlertExample(t *testing.T) {
 	}
 }
 
+func TestConsoleRequestPane(t *testing.T) {
+	b := NewBrowser(60, 20)
+	gen := b.loader.beginPage()
+	id, ok := b.loader.startRequest(gen, "GET", "https://example.com/a.css", "css")
+	if !ok {
+		t.Fatal("request was not started")
+	}
+	b.loader.finishRequest(id, gen, 200, 2048, 10*time.Millisecond, nil)
+	lines := b.requestLines()
+	if len(lines) != 1 || !strings.Contains(lines[0], "200") ||
+		!strings.Contains(lines[0], "2.0K") || !strings.Contains(lines[0], "a.css") {
+		t.Fatalf("request lines = %q", lines)
+	}
+	if got := humanSize(512); got != "512B" {
+		t.Fatalf("humanSize = %q", got)
+	}
+
+	b.consoleOpen = true
+	withQuietStdout(t, func() { b.drawConsole(60, 20) })
+	b.handleConsoleKey("tab")
+	if b.consolePane != 1 {
+		t.Fatalf("console pane = %d, want requests", b.consolePane)
+	}
+	b.handleConsoleKey("k")
+	if b.reqScroll != 1 {
+		t.Fatalf("request scroll = %d", b.reqScroll)
+	}
+	b.handleConsoleKey("G")
+	if b.reqScroll != 0 {
+		t.Fatalf("request scroll after G = %d", b.reqScroll)
+	}
+}
+
 func TestConsolePausesTimers(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out">before</p></body></html>`, `
 		setTimeout(function () {

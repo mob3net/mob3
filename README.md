@@ -67,7 +67,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   the full console.
 - Keyboard and mouse navigation, history (including a top-right History page
   listing the session's links), scrolling, focus, link hover targets in the
-  footer, and text selection.
+  footer, text selection, and a `!` console with the current page's request
+  log.
 
 **Rough edges**
 

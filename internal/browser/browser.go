@@ -59,6 +59,8 @@ type Browser struct {
 	inputFocus    *Node
 	consoleOpen   bool
 	consoleScroll int
+	reqScroll     int
+	consolePane   int // 0 = JS log, 1 = requests
 	jsLog         []string
 
 	keys   <-chan string
@@ -216,6 +218,9 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	b.clearInputFocus()
 	b.stopJS()
 	b.cancelLoadNow()
+	if b.loader != nil {
+		b.loader.beginPage()
+	}
 	b.loadSeq++
 	seq := b.loadSeq
 	ctx, cancel := context.WithCancel(context.Background())

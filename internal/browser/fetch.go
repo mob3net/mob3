@@ -76,6 +76,107 @@ type Loader struct {
 	ignoreBlocks bool
 	imgMu        sync.Mutex
 	imgs         map[string]image.Image
+
+	reqMu    sync.Mutex
+	reqGen   int
+	reqNext  int
+	requests []requestRecord
+}
+
+// requestRecord is one network request shown in the JS console's request pane.
+type requestRecord struct {
+	ID      int
+	Gen     int
+	Method  string
+	URL     string
+	Kind    string
+	Status  int
+	Size    int
+	Elapsed time.Duration
+	Err     string
+	Done    bool
+}
+
+type requestMetaKey struct{}
+
+type requestMeta struct {
+	gen  int
+	kind string
+}
+
+func withRequestMeta(ctx context.Context, gen int, kind string) context.Context {
+	return context.WithValue(ctx, requestMetaKey{}, requestMeta{gen: gen, kind: kind})
+}
+
+func withRequestKind(ctx context.Context, kind string) context.Context {
+	m, _ := ctx.Value(requestMetaKey{}).(requestMeta)
+	m.kind = kind
+	return context.WithValue(ctx, requestMetaKey{}, m)
+}
+
+func requestMetaFrom(ctx context.Context) requestMeta {
+	m, _ := ctx.Value(requestMetaKey{}).(requestMeta)
+	return m
+}
+
+// beginPage clears the request list and starts a new page generation.
+func (l *Loader) beginPage() int {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	l.reqGen++
+	l.requests = nil
+	return l.reqGen
+}
+
+func (l *Loader) currentPageGeneration() int {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	return l.reqGen
+}
+
+func (l *Loader) startRequest(gen int, method, rawURL, kind string) (int, bool) {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	if gen != l.reqGen {
+		return 0, false
+	}
+	l.reqNext++
+	id := l.reqNext
+	l.requests = append(l.requests, requestRecord{
+		ID: id, Gen: gen, Method: method, URL: rawURL, Kind: kind,
+	})
+	if len(l.requests) > 512 {
+		l.requests = append([]requestRecord(nil), l.requests[len(l.requests)-512:]...)
+	}
+	return id, true
+}
+
+func (l *Loader) finishRequest(id, gen int, status, size int, elapsed time.Duration, err error) {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	if gen != l.reqGen {
+		return
+	}
+	for i := range l.requests {
+		if l.requests[i].ID == id {
+			l.requests[i].Status = status
+			l.requests[i].Size = size
+			l.requests[i].Elapsed = elapsed
+			l.requests[i].Done = true
+			if err != nil {
+				l.requests[i].Err = err.Error()
+			}
+			return
+		}
+	}
+}
+
+func (l *Loader) requestSnapshot() []requestRecord {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	out := make([]requestRecord, len(l.requests))
+	copy(out, l.requests)
+	return out
 }
 
 // NewLoader creates a loader with cookie support and a sane timeout.
@@ -218,6 +319,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		}
 		return l.loadAbout(ctx, u)
 	}
+	ctx = withRequestMeta(ctx, l.currentPageGeneration(), "doc")
 	allowFile := u.Scheme == "file"
 	data, ctype, finalURL, status, err := l.fetchRequest(ctx, method, u, body, contentType, allowFile)
 	if err != nil {
@@ -342,6 +444,7 @@ direct or alternative URL, or open it in a full browser.</p>
 // collectScripts gathers inline and external JavaScript in document order.
 // Modules and non-JavaScript script types are skipped.
 func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Script {
+	ctx = withRequestKind(ctx, "js")
 	nodes := root.FindAll(func(n *Node) bool {
 		if n.Tag != "script" {
 			return false
@@ -434,6 +537,21 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	if len(body) > maxResourceSize {
 		return nil, "", u, 0, errors.New("request body too large")
 	}
+	meta := requestMetaFrom(ctx)
+	gen := meta.gen
+	if gen == 0 {
+		gen = l.currentPageGeneration()
+	}
+	var reqID int
+	start := time.Now()
+	if meta.kind != "" {
+		reqID, _ = l.startRequest(gen, method, u.String(), meta.kind)
+	}
+	defer func() {
+		if reqID != 0 {
+			l.finishRequest(reqID, gen, status, len(data), time.Since(start), err)
+		}
+	}()
 	switch u.Scheme {
 	case "file":
 		if !allowFile {
@@ -610,6 +728,7 @@ var cp1252Extra = map[byte]rune{
 }
 
 func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Rule {
+	ctx = withRequestKind(ctx, "css")
 	var out []Rule
 	order := 0
 	add := func(rules []Rule) {
@@ -663,6 +782,7 @@ func firstSrcset(v string) string {
 }
 
 func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allowFile bool) {
+	ctx = withRequestKind(ctx, "img")
 	imgs := root.FindAll(func(n *Node) bool {
 		return n.Tag == "img" && (n.Attr("src") != "" || n.Attr("srcset") != "")
 	})
@@ -835,9 +955,12 @@ supported.</p>
 <p><input placeholder="try typing here"></p>
 
 <h2>JavaScript console</h2>
-<p>Press <b>!</b> to see <b>console</b> output and full script errors. While the
-console is open, terminal mouse selection and copy work normally.
-<b>j</b>/<b>k</b> scroll, <b>Esc</b> or <b>!</b> closes, <b>q</b> quits.</p>
+<p>Press <b>!</b> to see <b>console</b> output, full script errors and the
+current page's requests. The view splits into the console log on top and a
+Requests pane at the bottom. <b>Tab</b> switches panes, <b>j</b>/<b>k</b> scroll
+the focused pane, <b>g</b>/<b>G</b> jump to the ends, <b>Esc</b> or <b>!</b>
+closes, and <b>q</b> quits. Terminal mouse selection and copy work normally
+while it is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
 dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
 

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dop251/goja"
 )
@@ -314,7 +315,7 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 			reqHeaders[http.CanonicalHeaderKey(k)] = strings.Join(vs, ", ")
 		}
 	}
-	status, data, ctype, respHeaders, final, err := j.httpXHR(method, u, []byte(body), reqHeaders)
+	status, data, ctype, respHeaders, final, err := j.httpXHR("fetch", method, u, []byte(body), reqHeaders)
 	if err != nil {
 		return fail(err.Error())
 	}
@@ -798,7 +799,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		st.readyState = 3
 		j.fireXHR(st, "readystatechange")
 
-		status, data, ctype, headers, final, err := j.httpXHR(st.method, st.url, body, st.reqHeaders)
+		status, data, ctype, headers, final, err := j.httpXHR("xhr", st.method, st.url, body, st.reqHeaders)
 		st.readyState = 4
 		if err != nil {
 			st.status = 0
@@ -868,10 +869,18 @@ func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	}
 }
 
-func (j *jsRuntime) httpXHR(method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers http.Header, final *url.URL, err error) {
+func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers http.Header, final *url.URL, err error) {
 	if len(body) > maxResourceSize {
 		return 0, nil, "", nil, nil, errBadSVG
 	}
+	gen := j.b.loader.currentPageGeneration()
+	reqID, _ := j.b.loader.startRequest(gen, method, u.String(), kind)
+	start := time.Now()
+	defer func() {
+		if reqID != 0 {
+			j.b.loader.finishRequest(reqID, gen, status, len(data), time.Since(start), err)
+		}
+	}()
 	origin := j.page.URL
 	if origin == nil || !sameOrigin(u, origin) {
 		return 0, nil, "", nil, nil, errors.New("cross-origin request blocked")

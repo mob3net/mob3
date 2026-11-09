@@ -406,10 +406,14 @@ Standard Go layout:
   confirm returns false and prompt returns null. Dialogs use keyboard input
   (mouse is not handled while modal).
 - **JS console view:** `!` opens a plain-text console in the viewport and
-  disables mouse reporting so the terminal's own selection/copy works. Timers
-  and timer-driven redraws pause while it is open, so a terminal selection is
-  not cleared while copying. `j/k` scroll, `Esc`/`!` close, `q` quits. The
-  full error text is kept there; the footer only carries a short
+  disables mouse reporting so the terminal's own selection/copy works. The
+  view is split: console output on top and a Requests pane at the bottom.
+  `Tab` switches which pane `j/k`/`g/G` scroll, `Esc`/`!` close, `q` quits.
+  Requests list status, method, size, kind and URL for the page, CSS, scripts,
+  images, `fetch` and XHR; the list is in memory only, resets on navigation and
+  is capped at the latest 512 entries. Timers and timer-driven redraws pause
+  while the console is open, so a terminal selection is not cleared while
+  copying. The full error text is kept there; the footer only carries a short
   `JS: Error (! console)` hint.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`

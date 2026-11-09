@@ -897,6 +897,37 @@ func TestJSFocusAndMicrotask(t *testing.T) {
 	}
 }
 
+func TestJSRequestLog(t *testing.T) {
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})}
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("/f");
+		var x = new XMLHttpRequest();
+		x.open("GET", "/x");
+		x.send();
+	`)
+	b := NewBrowser(40, 10)
+	b.setLoader(loader)
+	b.startJS(page)
+	records := loader.requestSnapshot()
+	kinds := map[string]bool{}
+	for _, r := range records {
+		if r.Done && r.Status == 200 {
+			kinds[r.Kind] = true
+		}
+	}
+	if !kinds["fetch"] || !kinds["xhr"] {
+		t.Fatalf("request log = %+v", records)
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),

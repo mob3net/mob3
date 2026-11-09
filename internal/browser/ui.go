@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"unicode/utf8"
@@ -35,6 +36,8 @@ func setMouseReporting(on bool) {
 func (b *Browser) toggleConsole() {
 	b.consoleOpen = !b.consoleOpen
 	b.consoleScroll = 0
+	b.reqScroll = 0
+	b.consolePane = 0
 	b.prev = nil
 	if b.consoleOpen {
 		b.jsErr = false
@@ -46,6 +49,19 @@ func (b *Browser) toggleConsole() {
 }
 
 func (b *Browser) handleConsoleKey(k string) bool {
+	scroll := func(delta int) {
+		if b.consolePane == 1 {
+			b.reqScroll += delta
+			if b.reqScroll < 0 {
+				b.reqScroll = 0
+			}
+			return
+		}
+		b.consoleScroll += delta
+		if b.consoleScroll < 0 {
+			b.consoleScroll = 0
+		}
+	}
 	switch k {
 	case "esc":
 		b.toggleConsole()
@@ -54,16 +70,28 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		b.toggleConsole()
 	case "q", "ctrl-c":
 		return true
-	case "k", "up":
-		b.consoleScroll++
-	case "j", "down":
-		if b.consoleScroll > 0 {
-			b.consoleScroll--
+	case "tab":
+		if b.consolePane == 0 {
+			b.consolePane = 1
+		} else {
+			b.consolePane = 0
 		}
+	case "k", "up":
+		scroll(1)
+	case "j", "down":
+		scroll(-1)
 	case "g":
-		b.consoleScroll = len(b.consoleLines(1 << 20))
+		if b.consolePane == 1 {
+			b.reqScroll = len(b.requestLines())
+		} else {
+			b.consoleScroll = len(b.consoleLines(1 << 20))
+		}
 	case "G":
-		b.consoleScroll = 0
+		if b.consolePane == 1 {
+			b.reqScroll = 0
+		} else {
+			b.consoleScroll = 0
+		}
 	}
 	return false
 }
@@ -117,6 +145,49 @@ func wrapCells(s string, width int) []string {
 	return out
 }
 
+func (b *Browser) requestLines() []string {
+	if b.loader == nil {
+		return []string{"(requests unavailable)"}
+	}
+	records := b.loader.requestSnapshot()
+	out := make([]string, 0, len(records))
+	for _, r := range records {
+		status := "..."
+		size := "-"
+		if r.Done {
+			status = fmt.Sprintf("%d", r.Status)
+			size = humanSize(r.Size)
+		}
+		if r.Err != "" {
+			status = "ERR"
+		}
+		kind := r.Kind
+		if kind == "" {
+			kind = "req"
+		}
+		line := fmt.Sprintf("%3s %-5s %6s %-5s %s", status, r.Method, size, kind, r.URL)
+		if r.Err != "" {
+			line += "  " + r.Err
+		}
+		out = append(out, line)
+	}
+	if len(out) == 0 {
+		out = append(out, "(no requests for this page)")
+	}
+	return out
+}
+
+func humanSize(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%dB", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1fK", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/(1024*1024))
+	}
+}
+
 func (b *Browser) drawConsole(w, h int) {
 	fg := RGB(0xdd, 0xe6, 0xee)
 	bg := RGB(0x0f, 0x14, 0x1a)
@@ -127,31 +198,66 @@ func (b *Browser) drawConsole(w, h int) {
 	if h >= 2 {
 		g.Fill(0, h-1, w, 1, ftrBG)
 	}
-	title := " JS console — Esc/! closes · terminal mouse selection is enabled "
+	title := " JS console + requests — Esc/! closes · terminal mouse selection is enabled "
 	g.Text(0, 0, padWidth(truncateWidth(title, w), w),
 		&Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}, fg)
 
 	avail := h - 2
 	if avail < 1 {
-		avail = 1
+		avail = 0
 	}
 	lines := b.consoleLines(w - 2)
-	start := len(lines) - avail - b.consoleScroll
-	if start < 0 {
-		start = 0
-	}
-	if start > len(lines)-avail {
-		start = len(lines) - avail
-	}
-	if start < 0 {
-		start = 0
+	reqs := b.requestLines()
+	logRows := avail
+	reqRows := 0
+	if avail >= 5 {
+		reqRows = avail / 3
+		if reqRows < 1 {
+			reqRows = 1
+		}
+		logRows = avail - reqRows - 1
+		if logRows < 1 {
+			logRows = 1
+			reqRows = avail - logRows - 1
+		}
 	}
 	style := &Style{Color: fg, FontSize: 16, LineHeight: 1}
-	for i := 0; i < avail && start+i < len(lines); i++ {
-		g.Text(1, 1+i, truncateWidth(lines[start+i], w-2), style, fg)
+	drawPane := func(items []string, scroll, y, rows int) {
+		if rows < 1 {
+			return
+		}
+		start := len(items) - rows - scroll
+		if start < 0 {
+			start = 0
+		}
+		if start > len(items)-rows {
+			start = len(items) - rows
+		}
+		if start < 0 {
+			start = 0
+		}
+		for i := 0; i < rows && start+i < len(items); i++ {
+			g.Text(1, y+i, truncateWidth(items[start+i], w-2), style, fg)
+		}
+	}
+	drawPane(lines, b.consoleScroll, 1, logRows)
+	if reqRows > 0 {
+		sepY := 1 + logRows
+		sepBG := ftrBG
+		if b.consolePane == 1 {
+			sepBG = RGB(0x2f, 0x6f, 0xbf)
+		}
+		g.Fill(0, sepY, w, 1, sepBG)
+		sep := fmt.Sprintf(" Requests (%d) — Tab to switch pane ", len(reqs))
+		g.Text(0, sepY, padWidth(truncateWidth(sep, w), w),
+			&Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}, fg)
+		drawPane(reqs, b.reqScroll, sepY+1, reqRows)
 	}
 	if h >= 2 {
-		hint := " j/k: scroll · q: quit · Esc: close "
+		hint := " Tab: requests · j/k: scroll logs · g/G: ends · q: quit · Esc: close "
+		if b.consolePane == 1 {
+			hint = " Tab: logs · j/k: scroll requests · g/G: ends · q: quit · Esc: close "
+		}
 		g.Text(0, h-1, padWidth(truncateWidth(hint, w), w),
 			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
 	}
