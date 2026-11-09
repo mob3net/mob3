@@ -130,6 +130,7 @@ Standard Go layout:
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
+| `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
@@ -327,8 +328,9 @@ Standard Go layout:
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
-  `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `o` URL
-  prompt, `/` find in page, `n`/`N` next/previous find match, `u` show URL,
+  `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
+  reader mode, `o` URL prompt, `/` find in page, `n`/`N` next/previous find
+  match, `u` show URL,
   `y` copy selected page text and clear the highlight,
   `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
@@ -346,6 +348,16 @@ Standard Go layout:
   searches the console's HTML tab (`/` while that tab is active), including
   scrolling to and highlighting matching lines. It works on
   every rendered page, including `about:help` and `about:bookmarks`.
+- **Reader mode:** `R` toggles an extracted article view for the current page.
+  Extraction runs on the live DOM, prefers `<article>`/`<main>`/`role=main`,
+  scores other prose containers, drops nav/sidebar/footer/forms/scripts and
+  common junk-class subtrees, strips page CSS, and renders a filtered clone in
+  a centered `max-width:600px` column. The original page tree, URL and history
+  are untouched; toggling off restores the previous scroll position, and any
+  navigation or reload clears reader mode. Failed extraction leaves the page
+  unchanged with `Reader mode unavailable`. Reader mode is a snapshot: live JS
+  mutations are not reflected until it is toggled off, and interactive controls
+  are not available.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
@@ -735,6 +747,9 @@ Standard Go layout:
   but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
   missing. Inline SVG falls back to an accessible label if rasterization fails.
   WebP is still unsupported.
+- Reader mode is heuristic: unusual layouts can lose content or retain
+  clutter, it renders a snapshot rather than live JS updates, and forms and
+  other interactive controls are removed.
 - No CSS variables, animations, transitions, generated content, `@import`, or
   background images. `<dialog>` open state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or

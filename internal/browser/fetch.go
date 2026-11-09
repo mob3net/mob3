@@ -969,6 +969,7 @@ disk write.</p>
 <tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
+<tr><td><b>R</b></td><td>toggle reader mode for the current page</td></tr>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; arrows/Home/End/Delete edit it)</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
@@ -992,6 +993,13 @@ Find works on every page, including
 this help page and <b>about:bookmarks</b>. In the JS console, press <b>/</b>
 while the <b>HTML</b> tab is active to search the raw source and jump to
 matching lines.</p>
+
+<h2>Reader mode</h2>
+<p>Press <b>R</b> to extract the main article from the current page and show it
+in a narrow reading column with navigation, sidebars, forms and other page
+chrome removed. Press <b>R</b> again to return to the normal page and its
+previous scroll position. Reader mode is a snapshot of the live page and is
+cleared when you navigate or reload.</p>
 
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,

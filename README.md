@@ -64,6 +64,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
   the full console, with top tabs for logs (including the `>` input row and
   its Up/Down history), requests, storage and the raw page HTML.
+- Reader mode (`R`): extracts the main article into a narrow, chrome-free
+  column and restores the normal page and scroll position when toggled off.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.
@@ -80,6 +82,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show
   a partial page, a blank page or their no-JavaScript fallback. Pages that rely
   on ES modules show a status-bar warning that modules are unsupported.
+- Reader mode is heuristic: it can pick too little or too much content on
+  unusual layouts, shows a snapshot rather than live updates, and removes
+  forms and other interactive controls.
 - Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX,
   Imperva/Sucuri, access-denied pages) are generally not usable. A “Site
   blocked” page is shown instead.

@@ -45,6 +45,11 @@ type Browser struct {
 	jsErr         bool
 	status        string
 
+	// Reader mode renders an extracted article document instead of the page.
+	reader            bool
+	readerRoot        *Node
+	readerSavedScroll int
+
 	// History and bookmarks.
 	history   []string
 	histIdx   int
@@ -364,6 +369,9 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
+	b.reader = false
+	b.readerRoot = nil
+	b.readerSavedScroll = 0
 	if res.err != nil {
 		b.status = "Error: " + res.err.Error()
 		if b.page == nil {
@@ -525,7 +533,11 @@ func (b *Browser) rebuild() {
 	}
 	start := time.Now()
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
-	b.layout = BuildLayoutDeadline(b.page.Root, b.page.Author, b.width, b.bigText, start.Add(maxFrameTime))
+	root, author := b.page.Root, b.page.Author
+	if b.reader && b.readerRoot != nil {
+		root, author = b.readerRoot, readerRules
+	}
+	b.layout = BuildLayoutDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	b.reindexFind()
@@ -538,6 +550,38 @@ func (b *Browser) rebuild() {
 	}
 	b.hover = -1
 	b.clampScroll()
+}
+
+// toggleReader switches between the page and an extracted article view without
+// touching history or the live page DOM.
+func (b *Browser) toggleReader() {
+	if b.page == nil || b.page.Root == nil {
+		b.status = "Reader mode unavailable"
+		return
+	}
+	if b.reader {
+		b.reader = false
+		b.readerRoot = nil
+		b.rebuild()
+		b.scroll = b.readerSavedScroll
+		b.readerSavedScroll = 0
+		b.clampScroll()
+		b.status = "Reader mode off"
+		return
+	}
+	root, ok := extractReaderPage(b.page.Root, b.page.Title)
+	if !ok {
+		b.status = "Reader mode unavailable"
+		return
+	}
+	b.readerSavedScroll = b.scroll
+	b.reader = true
+	b.readerRoot = root
+	b.scroll = 0
+	b.focus = -1
+	b.clearSelection()
+	b.rebuild()
+	b.status = "Reader mode — R to exit"
 }
 
 func (b *Browser) resize(w, h int) {
@@ -1706,6 +1750,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.forward()
 	case "r":
 		b.reload()
+	case "R":
+		b.toggleReader()
 	case "o":
 		b.openURLPrompt()
 	case "u":
