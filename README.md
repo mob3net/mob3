@@ -11,7 +11,7 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 > **MOB³ is not a secure browser in any way.**
 > It has no sandboxing, process isolation, site isolation, CSP enforcement,
 > certificate UI or security hardening, and it has not been audited. Page
-> JavaScript runs in a hobby-grade engine. Do not use MOB³ to log in to
+> JavaScript runs in a small, unaudited engine. Do not use MOB³ to log in to
 > accounts, enter passwords, make payments, or handle confidential data. Use it
 > at your own risk.
 
@@ -136,7 +136,7 @@ A separate commercial license is available on request for use without the
 AGPL's source-disclosure requirements.
 
 MOB³ is provided “as is”, without warranty of any kind. See the warning at the
-top: this is a hobby browser, not a security boundary.
+top: this is not a security boundary.
 
 Third-party module licenses are listed in
 [THIRD_PARTY_NOTICES](https://github.com/mob3net/mob3/blob/main/THIRD_PARTY_NOTICES).

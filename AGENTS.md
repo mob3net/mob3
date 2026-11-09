@@ -59,7 +59,7 @@ written in Go
   unless the copyright holder supplies them. Contributions use the broad
   license-grant CLA in `CONTRIBUTING.md` so both licensing options remain
   available. Keep the license file and the README License section in sync.
-- **Not a secure browser.** MOB³ is a hobby engine with no sandboxing, process
+- **Not a secure browser.** MOB³ is a small engine with no sandboxing, process
   or site isolation, CSP enforcement, certificate UI or security hardening, and
   it is not audited. This warning must stay prominent in `README.md` and on the
   built-in start and help pages. Never present it as safe for passwords,
