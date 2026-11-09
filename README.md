@@ -240,7 +240,9 @@ the URL; the block caret overlays text without shifting it.
   `document.createEvent` and `dispatchEvent` with bubbling are available.
   `document.defaultView`, `ownerDocument` and
   `document.implementation` (`hasFeature`/`createHTMLDocument`) back common
-  library feature detection. Includes `URL`/`URLSearchParams`,
+  library feature detection, and `getComputedStyle` exposes resolved
+  display/font/box values with `getPropertyValue`. Includes
+  `URL`/`URLSearchParams`,
   `document.currentScript`/`write`, in-memory storage and a session cookie jar
   shared by `document.cookie`, HTTP requests, XHR and fetch,
   `XMLHttpRequest`, promise-based `fetch` with `Headers`/`Request`/`Response`,

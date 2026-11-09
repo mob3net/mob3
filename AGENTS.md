@@ -356,8 +356,8 @@ Standard Go layout:
   no-op context (no pixel buffer); WebGL returns `null`.
 - **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
-  `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events and
-  `console`. `Image`/`Audio` construct DOM elements. `document` exposes
+  `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events,
+  `getComputedStyle` and `console`. `Image`/`Audio` construct DOM elements. `document` exposes
   `location`, visibility state, `defaultView`, `document.implementation`
   (`hasFeature`/`createHTMLDocument`), and image elements expose
   `src`/`alt`/`width`/

@@ -690,6 +690,31 @@ func TestJSDocumentImplementation(t *testing.T) {
 	}
 }
 
+func TestJSGetComputedStyle(t *testing.T) {
+	page := newJSPage(`<html><body style="margin:8px;font-size:20px"><p id="p">x</p></body></html>`, `
+		var el = document.getElementById("p");
+		var s = document.defaultView.getComputedStyle(el);
+		document.title = [
+			typeof window.getComputedStyle,
+			typeof s.getPropertyValue,
+			s.display,
+			s.getPropertyValue("display"),
+			s.getPropertyValue("font-size"),
+			s.fontSize,
+			typeof s.marginTop,
+			s.getPropertyValue("font-weight")
+		].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if !strings.HasPrefix(page.Title, "function,function,block,block,") {
+		t.Fatalf("title = %q", page.Title)
+	}
+	if !strings.HasSuffix(page.Title, ",400") {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
 func TestExternalScriptCollected(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "page.html"),

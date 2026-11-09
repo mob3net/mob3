@@ -584,6 +584,9 @@ func (j *jsRuntime) windowObject() *goja.Object {
 	_ = o.Set("innerWidth", j.b.width*8)
 	_ = o.Set("innerHeight", j.b.height*16)
 	_ = o.Set("devicePixelRatio", 1)
+	_ = o.Set("getComputedStyle", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		return j.computedStyleObject(j.unwrap(call.Argument(0)))
+	}))
 	screen := j.vm.NewObject()
 	_ = screen.Set("width", j.b.width*8)
 	_ = screen.Set("height", j.b.height*16)
