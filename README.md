@@ -66,9 +66,11 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   for speed.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
-  same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script errors show a short `JS: Error` footer hint; `!` opens
-  the full console, with top tabs for logs (including the `>` input row and
-  its Up/Down history), requests, storage and the raw page HTML.
+  same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script
+  errors show a short `JS: Error` footer hint.
+- JavaScript console (`!`): tabbed view of logs, requests, cookies and
+  in-memory storage, plus the raw page HTML; evaluate one-line expressions in
+  the page's runtime, with Up/Down history and results appended to the log.
 - Reader mode (`R`, the footer `Reader on`/`Reader off` label, or `-reader` at
   launch): extracts the main article into a narrow, chrome-free text column,
   stays enabled across navigation, and restores the normal page and scroll
@@ -85,8 +87,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   a top-right History page
   listing the session's links), bookmarks imported with `-bookmarks` from a
   Netscape HTML export, scrolling, focus, link hover targets in the footer,
-  text selection, and a `!` console with the current page's request log,
-  cookies and in-memory storage.
+  text selection, and a `!` JavaScript console.
 
 **Rough edges**
 
