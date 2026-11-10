@@ -576,7 +576,10 @@ Standard Go layout:
   third-party `google` object) stay undefined.
 - **Modals:** alert/confirm/prompt, download and upload-notice modals share a
   centered box over a dimmed page backdrop. The body is fully opaque white
-  (never blended with the page), with a blank spacer row below the title bar and
+  (never blended with the page), with page glyphs and text attributes cleared
+  beneath it, and the backdrop outside dims both the page background and its
+  text (link underlines are dropped) so content does not leak into the modal
+  edges. The body also has a blank spacer row below the title bar and
   above the hint, and a `×` in the top-right corner that closes the modal with
   the mouse. Clicking the dimmed backdrop also closes the modal.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and

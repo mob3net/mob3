@@ -2327,17 +2327,30 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
 	for y := 0; y < g.H; y++ {
 		for x := 0; x < g.W; x++ {
-			g.Put(x, y, 'X', nil, RGB(0, 0, 0), Color{})
+			g.Put(x, y, 'X', &Style{Underline: true, Strike: true}, RGB(0, 0, 0), Color{})
 		}
 	}
 	b.paintDownload(g)
 	r := b.modalBox
 	for y := r.Y; y < r.Y+r.H; y++ {
 		for x := r.X; x < r.X+r.W; x++ {
-			if g.Cells[y*g.W+x].R == 'X' {
+			c := g.Cells[y*g.W+x]
+			if c.R == 'X' {
 				t.Fatalf("page glyph survived inside the modal at (%d,%d)", x, y)
 			}
+			if c.Underline || c.Strike {
+				t.Fatalf("page text decoration survived inside the modal at (%d,%d)", x, y)
+			}
 		}
+	}
+	// The page backdrop outside the box is dimmed rather than left readable,
+	// so page text does not appear to leak into the modal edges.
+	c := g.Cells[0]
+	if c.Underline {
+		t.Fatal("page link underline survived on the dimmed backdrop")
+	}
+	if c.BG != modalDimBG || c.FG != modalDimFG {
+		t.Fatalf("page backdrop cell = fg %+v bg %+v, want dimmed fg %+v bg %+v", c.FG, c.BG, modalDimFG, modalDimBG)
 	}
 }
 

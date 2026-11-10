@@ -1020,12 +1020,15 @@ func (b *Browser) modalFrame(g *Grid, boxW, boxH int, title string) (int, int) {
 	titleFG := RGB(0xff, 0xff, 0xff)
 	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
 	g.Fill(x, y, boxW, boxH, modalBG)
-	// Fill only replaces background colors; blank the glyphs too so page text
-	// cannot show through the solid modal body.
+	// Fill only replaces background colors; blank the glyphs and their
+	// attributes too so page text, link underlines and scaled text cannot
+	// show through the solid modal body.
 	for yy := maxInt(y, 0); yy < minInt(y+boxH, g.H); yy++ {
 		for xx := maxInt(x, 0); xx < minInt(x+boxW, g.W); xx++ {
 			c := &g.Cells[yy*g.W+xx]
 			c.R = 0
+			c.FG = RGB(0x1f, 0x23, 0x28)
+			c.Bold, c.Italic, c.Underline, c.Strike = false, false, false, false
 			c.Cont = false
 			c.Img = false
 			c.Raw = ""
@@ -1046,17 +1049,26 @@ func (b *Browser) modalFrame(g *Grid, boxW, boxH int, title string) (int, int) {
 	return x, y
 }
 
+var (
+	modalDimBG = RGB(0xdf, 0xe4, 0xea)
+	modalDimFG = RGB(0xb2, 0xbc, 0xc8)
+)
+
 // modalDim darkens everything outside the modal rectangle so the solid box
-// stands out against the page behind it.
+// stands out against the page behind it. Page glyphs are muted as well as the
+// background, otherwise dark text and link underlines stay legible and appear
+// to leak into the modal's edges.
 func modalDim(g *Grid, x, y, boxW, boxH int) {
-	dim := RGB(0xdf, 0xe4, 0xea)
 	for yy := 0; yy < g.H; yy++ {
 		for xx := 0; xx < g.W; xx++ {
 			if xx >= x && xx < x+boxW && yy >= y && yy < y+boxH {
 				continue
 			}
 			c := &g.Cells[yy*g.W+xx]
-			c.BG = dim
+			c.BG = modalDimBG
+			c.FG = modalDimFG
+			c.Underline = false
+			c.Strike = false
 		}
 	}
 }
