@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -2880,6 +2881,38 @@ func (b *Browser) paintSelection(g *Grid, top, bottom int) {
 	}
 }
 
+// drawFooterShortcut draws a footer label with its first letter underlined to
+// suggest the keyboard shortcut. Leading punctuation such as '[' is left
+// untouched so "[Dark off]" underlines the D.
+func drawFooterShortcut(g *Grid, x, y int, label string, st *Style, fg Color) {
+	if label == "" {
+		return
+	}
+	idx := -1
+	var shortcut rune
+	for i, r := range label {
+		if unicode.IsLetter(r) {
+			idx, shortcut = i, r
+			break
+		}
+	}
+	if idx < 0 {
+		g.Text(x, y, label, st, fg)
+		return
+	}
+	if prefix := label[:idx]; prefix != "" {
+		g.Text(x, y, prefix, st, fg)
+		x += stringWidth(prefix)
+	}
+	under := *st
+	under.Underline = true
+	g.Put(x, y, shortcut, &under, fg, Color{})
+	x += runeWidth(shortcut)
+	if rest := label[idx+len(string(shortcut)):]; rest != "" {
+		g.Text(x, y, rest, st, fg)
+	}
+}
+
 // drawHeaderButton paints one top-bar button and records its click region.
 func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerKind, bg, fg Color, st *Style) int {
 	bw := stringWidth(label)
@@ -3155,7 +3188,17 @@ func (b *Browser) draw() {
 			if showConsole {
 				reserve += consoleW + 2
 			}
-			rightText := b.footerRight(w - reserve)
+			rightBudget := w - reserve
+			if leftWidth := stringWidth(leftText); leftWidth > 0 {
+				if leftWidth > w/2 {
+					leftWidth = w / 2
+				}
+				rightBudget -= leftWidth
+			}
+			if rightBudget < 1 {
+				rightBudget = 1
+			}
+			rightText := b.footerRight(rightBudget)
 			avail := w - stringWidth(rightText) - reserve
 			if avail < 8 {
 				width := w - reserve
@@ -3224,7 +3267,7 @@ func (b *Browser) draw() {
 					if label.on {
 						labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
 					}
-					g.Text(lx, fy, label.text, labelStyle, labelStyle.Color)
+					drawFooterShortcut(g, lx, fy, label.text, labelStyle, labelStyle.Color)
 					b.footerHits = append(b.footerHits, headerHit{kind: label.kind, x: lx, y: fy, w: lw, h: 1})
 				}
 			}
@@ -3404,25 +3447,57 @@ const (
 
 func (b *Browser) readerStatusText() string {
 	if b.reader {
-		return "Reader on"
+		return "[Reader on]"
 	}
-	return "Reader off"
+	return "[Reader off]"
 }
 
 func (b *Browser) darkStatusText() string {
 	if b.dark {
-		return "Dark on"
+		return "[Dark on]"
 	}
-	return "Dark off"
+	return "[Dark off]"
+}
+
+func (b *Browser) jsStatusText() string {
+	if b.noJS {
+		return "JavaScript off"
+	}
+	return "JavaScript on"
+}
+
+// graphicsStatusText reports the resolved graphics mode: auto is shown as the
+// protocol actually in use.
+func (b *Browser) graphicsStatusText() string {
+	mode := "none"
+	switch {
+	case b.loader != nil && b.loader.noImages:
+		mode = "none"
+	case b.gfx != nil:
+		switch b.gfx.Mode() {
+		case GraphicsKitty:
+			mode = "kitty"
+		case GraphicsITerm:
+			mode = "iterm"
+		default:
+			mode = "blocks"
+		}
+	default:
+		mode = "blocks"
+	}
+	return "Graphics " + mode
 }
 
 // footerRight builds the right-aligned footer text: an optional JS error hint,
-// dark and reader state, resident memory and the scroll percentage.
+// JS and graphics state, dark and reader state, resident memory and the scroll
+// percentage.
 func (b *Browser) footerRight(width int) string {
 	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
+	js := b.jsStatusText()
+	graphics := b.graphicsStatusText()
 	dark := b.darkStatusText()
 	reader := b.readerStatusText()
-	labels := dark + "   " + reader
+	labels := js + "   " + graphics + "   " + dark + "   " + reader
 	withMem := labels + "   " + b.usage.footer() + "   " + pctText
 	if b.jsErr {
 		withMem = jsErrorHint + "   " + withMem

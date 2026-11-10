@@ -381,13 +381,13 @@ Standard Go layout:
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`.
-- **Dark mode:** `D` or the footer `Dark on`/`Dark off` label toggles a
+- **Dark mode:** `D` or the footer `[Dark on]`/`[Dark off]` label toggles a
   post-layout palette remap for every page. Light backgrounds become dark,
   dark text becomes light, and hues are preserved for links, headings and
   accents; images are left unchanged. The preference persists across
   navigation and reload, and `-dark` starts with it enabled, including in
   `-dump` mode. It also applies on top of reader mode.
-- **Reader mode:** `R` or the footer `Reader on`/`Reader off` label toggles an
+- **Reader mode:** `R` or the footer `[Reader on]`/`[Reader off]` label toggles an
   extracted article view. Extraction runs on the live DOM, prefers
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops
   nav/sidebar/footer/forms/scripts and common junk-class subtrees, strips page
@@ -447,8 +447,8 @@ Standard Go layout:
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `Dark on`/`Dark off`
-  or `Reader on`/`Reader off` labels toggles those modes, clicking the footer
+  mouse forward button goes forward, clicking the footer `[Dark on]`/`[Dark off]`
+  or `[Reader on]`/`[Reader off]` labels toggles those modes, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
@@ -494,9 +494,12 @@ Standard Go layout:
   focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, an optional `JS: Error (! console)` hint, current resident memory
-  (`MEM 18 MB`), the scroll percentage, clickable `Dark on`/`Dark off` and
-  `Reader on`/`Reader off` labels before the memory readout, and a clickable
-  `>_` console icon pinned to the far right edge. Each label is blue and bold
+  (`MEM 18 MB`), the scroll percentage, `JavaScript on`/`JavaScript off` and
+  resolved `Graphics <mode>` notices, clickable `[Dark on]`/`[Dark off]` and
+  `[Reader on]`/`[Reader off]` labels before the memory readout, and a clickable
+  `>_` console icon pinned to the far right edge. The first letter of the Dark
+  and Reader labels is underlined to suggest the `D`/`R` shortcuts. Each label
+  is blue and bold
   while its mode is on; the console icon toggles the JS console and stays
   visible and clickable inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and

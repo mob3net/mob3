@@ -1462,7 +1462,7 @@ func TestFooterPercentFarRight(t *testing.T) {
 }
 
 func TestFooterShowsUsage(t *testing.T) {
-	b := NewBrowser(80, 10)
+	b := NewBrowser(120, 10)
 	b.layout = &Layout{Height: 100}
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
@@ -1850,17 +1850,18 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 }
 
 func TestJSErrorHintInFooter(t *testing.T) {
-	b := NewBrowser(80, 10)
+	b := NewBrowser(140, 10)
 	b.usage = procUsage{rss: 18 << 20}
-	if strings.Contains(b.footerRight(80), "JS: Error") {
+	if strings.Contains(b.footerRight(140), "JS: Error") {
 		t.Fatal("error hint shown without a JS error")
 	}
 	b.logJS("error", "TypeError: boom")
 	if !b.jsErr {
 		t.Fatal("JS error was not recorded")
 	}
-	right := b.footerRight(80)
+	right := b.footerRight(140)
 	if !strings.Contains(right, jsErrorHint) || !strings.Contains(right, "MEM 18 MB") ||
+		!strings.Contains(right, "JavaScript on") || !strings.Contains(right, "Graphics none") ||
 		!strings.Contains(right, "Reader off") {
 		t.Fatalf("footer right = %q", right)
 	}
@@ -1871,11 +1872,48 @@ func TestJSErrorHintInFooter(t *testing.T) {
 		t.Fatalf("reader state is not before memory: %q", right)
 	}
 	b.reader = true
-	if got := b.footerRight(80); !strings.Contains(got, "Reader on") {
+	if got := b.footerRight(140); !strings.Contains(got, "Reader on") {
 		t.Fatalf("reader-on footer = %q", got)
 	}
 	if narrow := b.footerRight(24); !strings.HasPrefix(narrow, jsErrorShort) {
 		t.Fatalf("narrow footer = %q", narrow)
+	}
+}
+
+func TestFooterShortcutUnderline(t *testing.T) {
+	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	st := &Style{Color: RGB(0x24, 0x29, 0x2f), FontSize: 16, LineHeight: 1}
+	drawFooterShortcut(g, 0, 0, "[Dark off]", st, st.Color)
+	if g.Cells[0].Underline {
+		t.Fatal("opening bracket was underlined")
+	}
+	if !g.Cells[1].Underline {
+		t.Fatal("Dark shortcut is not underlined")
+	}
+	if g.Cells[2].Underline {
+		t.Fatal("non-shortcut letters are underlined")
+	}
+	g2 := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	drawFooterShortcut(g2, 0, 0, "[Reader off]", st, st.Color)
+	if g2.Cells[0].Underline || !g2.Cells[1].Underline || g2.Cells[2].Underline {
+		t.Fatal("Reader shortcut underline is wrong")
+	}
+}
+
+func TestFooterShowsJSAndGraphicsState(t *testing.T) {
+	b := NewBrowser(120, 10)
+	right := b.footerRight(120)
+	if !strings.Contains(right, "JavaScript on") || !strings.Contains(right, "Graphics none") {
+		t.Fatalf("footer right = %q", right)
+	}
+	b.loader.noImages = false
+	b.gfx = &gfxRenderer{mode: GraphicsKitty}
+	if got := b.footerRight(120); !strings.Contains(got, "Graphics kitty") {
+		t.Fatalf("resolved graphics footer = %q", got)
+	}
+	b.noJS = true
+	if got := b.footerRight(120); !strings.Contains(got, "JavaScript off") {
+		t.Fatalf("JavaScript-off footer = %q", got)
 	}
 }
 
