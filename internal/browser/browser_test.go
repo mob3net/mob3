@@ -1880,6 +1880,17 @@ func TestJSErrorHintInFooter(t *testing.T) {
 	}
 }
 
+func TestFooterGapBeforeRightState(t *testing.T) {
+	b := NewBrowser(100, 10)
+	drawQuiet(b)
+	line := b.prev[len(b.prev)-1]
+	marker := "JavaScript on"
+	i := strings.Index(line, marker)
+	if i < footerGap || line[i-footerGap:i] != strings.Repeat(" ", footerGap) {
+		t.Fatalf("footer has no %d-cell gap before %q: %q", footerGap, marker, line)
+	}
+}
+
 func TestFooterShortcutUnderline(t *testing.T) {
 	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
 	st := &Style{Color: RGB(0x24, 0x29, 0x2f), FontSize: 16, LineHeight: 1}

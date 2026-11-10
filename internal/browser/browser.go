@@ -3188,7 +3188,7 @@ func (b *Browser) draw() {
 			if showConsole {
 				reserve += consoleW + 2
 			}
-			rightBudget := w - reserve
+			rightBudget := w - reserve - footerGap
 			if leftWidth := stringWidth(leftText); leftWidth > 0 {
 				if leftWidth > w/2 {
 					leftWidth = w / 2
@@ -3199,9 +3199,9 @@ func (b *Browser) draw() {
 				rightBudget = 1
 			}
 			rightText := b.footerRight(rightBudget)
-			avail := w - stringWidth(rightText) - reserve
+			avail := w - stringWidth(rightText) - reserve - footerGap
 			if avail < 8 {
-				width := w - reserve
+				width := w - reserve - footerGap
 				shortPct := strings.TrimSpace(fmt.Sprintf("%3d%%", b.scrollPercent()))
 				dark := b.darkStatusText()
 				reader := b.readerStatusText()
@@ -3224,7 +3224,7 @@ func (b *Browser) draw() {
 					}
 				}
 				rightText = truncateWidth(compact, width)
-				avail = w - stringWidth(rightText) - reserve
+				avail = w - stringWidth(rightText) - reserve - footerGap
 			}
 			if avail < 0 {
 				avail = 0
@@ -3443,6 +3443,9 @@ func (b *Browser) footerLeft() string {
 const (
 	jsErrorHint  = "JS: Error (! console)"
 	jsErrorShort = "JS: Error"
+	// footerGap keeps blank cells between the left status/link text and the
+	// right-aligned footer state.
+	footerGap = 3
 )
 
 func (b *Browser) readerStatusText() string {

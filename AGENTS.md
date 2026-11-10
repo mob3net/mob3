@@ -497,7 +497,9 @@ Standard Go layout:
   (`MEM 18 MB`), the scroll percentage, `JavaScript on`/`JavaScript off` and
   resolved `Graphics <mode>` notices, clickable `[Dark on]`/`[Dark off]` and
   `[Reader on]`/`[Reader off]` labels before the memory readout, and a clickable
-  `>_` console icon pinned to the far right edge. The first letter of the Dark
+  `>_` console icon pinned to the far right edge. At least three blank cells
+  separate the left status/link text from the right-side state. The first letter
+  of the Dark
   and Reader labels is underlined to suggest the `D`/`R` shortcuts. Each label
   is blue and bold
   while its mode is on; the console icon toggles the JS console and stays
