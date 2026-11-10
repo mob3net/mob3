@@ -21,6 +21,24 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
 ```
 
+## Download and install
+
+[Download the latest MOB³ release](https://github.com/mob3net/mob3/releases/latest)
+from GitHub Releases.
+
+Release archives cover Linux (`386`, `amd64`, `armv6`, `armv7`, `arm64`) and
+macOS (`amd64`, `arm64`). Choose the archive for your OS and architecture, for
+example `mob3_vX.Y.Z_linux_amd64.tar.gz`. Each archive contains the static
+`mob3` binary.
+
+Example:
+
+```
+tar -xzf mob3_vX.Y.Z_linux_amd64.tar.gz
+sudo install -m 0755 mob3 /usr/local/bin/mob3
+mob3 -version
+```
+
 ## Using command line options
 
 Start reading Wikipedia in dark mode:
