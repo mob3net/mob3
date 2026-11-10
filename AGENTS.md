@@ -94,7 +94,8 @@ written in Go
   `defer` and modules are ignored. `-no-js` disables both script fetching and
   execution. `<noscript>` is hidden when JS is enabled and shown with
   `-no-js`. Text inputs and textareas are editable; GET and urlencoded POST
-  forms submit with Enter. File uploads, multipart forms and most other
+  forms submit with Enter from a text input (Enter inserts a newline in a
+  textarea). File uploads, multipart forms and most other
   controls remain unsupported.
 - **Terminal-only presentation.** There is no GUI toolkit and no native
   window. All output is ANSI/Unicode in the terminal, and a terminal cell is
@@ -444,7 +445,11 @@ Standard Go layout:
   terminal/multiplexer support).
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
-  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a file
+  deletes, Ctrl-U clears, and Esc finishes; Enter submits from other fields but
+  inserts a newline in a textarea. Textareas render as
+  at least two rows (an explicit `rows` value up to 12 is honoured) and wrap
+  their value; only the visible rows are produced, so typing into a huge value
+  stays cheap. Clicking a file
   input opens a modal explaining that uploads are unsupported. Clicking a
   checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
   select cycles its options. Submit

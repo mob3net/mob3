@@ -1160,13 +1160,62 @@ func (b *Browser) setInputValue(n *Node, v string) {
 	}
 	n.Value = v
 	n.ValueSet = true
+	dirty := false
 	if b.js != nil {
 		b.js.fireNodeEvent(n, "input")
+		// The rebuild below uses any DOM mutations the handler made, so do
+		// not schedule a second timer-driven rebuild for the same keystroke.
+		dirty = b.js.consumeDirty()
 	}
 	if b.consumePendingJS() {
 		return
 	}
+	// Most keystrokes only change the control's text. Patch its fragments in
+	// place when the widget keeps the same box geometry instead of running a
+	// full style+layout pass for the whole page.
+	if !dirty && !b.findActive && b.updateInputFragments(n) {
+		return
+	}
 	b.rebuild()
+}
+
+// updateInputFragments rewrites the focused control's text fragments after a
+// value change. It reports false when the widget's width or row count changed
+// and a full relayout is required.
+func (b *Browser) updateInputFragments(n *Node) bool {
+	if b.layout == nil || n == nil || !isTextInput(n) {
+		return false
+	}
+	var frags []*Frag
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind == fragText && f.Node == n {
+			frags = append(frags, f)
+		}
+	}
+	if len(frags) == 0 {
+		return false
+	}
+	if n.Tag == "textarea" {
+		boxW := frags[0].W
+		rows := textareaRowsFor(n, boxW)
+		if len(rows) != len(frags) {
+			return false
+		}
+		for i := range rows {
+			if stringWidth(rows[i]) != frags[i].W {
+				return false
+			}
+			frags[i].Text = rows[i]
+		}
+		return true
+	}
+	label := formLabel(n)
+	if label == "" || len(frags) != 1 || stringWidth(label) != frags[0].W {
+		return false
+	}
+	frags[0].Text = label
+	return true
 }
 
 // openURLPrompt opens the URL field prefilled with the current URL, selected
@@ -1986,6 +2035,12 @@ func (b *Browser) handleInputKey(k string) bool {
 		b.status = exitHint
 		return false
 	case "enter":
+		if n != nil && n.Tag == "textarea" {
+			if utf8.RuneCountInString(inputValue(n)) < 2048 {
+				b.setInputValue(n, inputValue(n)+"\n")
+			}
+			return false
+		}
 		b.submitInput()
 		return false
 	case "backspace":

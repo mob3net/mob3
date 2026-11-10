@@ -2371,6 +2371,61 @@ func TestBrowserFixedLayoutUsesViewportHeight(t *testing.T) {
 	}
 }
 
+func TestTextareaEnterInsertsNewlineAndEscExits(t *testing.T) {
+	u := mustParse(t, "https://example.com/form")
+	doc := ParseHTML(`<form action="/submit" method="post"><textarea name="t"></textarea></form>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	area := doc.FindFirst("textarea")
+	if area == nil {
+		t.Fatal("textarea not found")
+	}
+	b.setInputFocus(area)
+	b.HandleKey("a")
+	b.HandleKey("enter")
+	b.HandleKey("b")
+	if got := inputValue(area); got != "a\nb" {
+		t.Fatalf("value = %q, want %q", got, "a\nb")
+	}
+	if b.inputFocus != area {
+		t.Fatal("Enter left the textarea")
+	}
+	if b.url.String() != "https://example.com/form" {
+		t.Fatalf("Enter navigated to %s", b.url)
+	}
+	b.HandleKey("esc")
+	if b.inputFocus != nil || area.InputFocused {
+		t.Fatal("Esc did not exit the textarea")
+	}
+}
+
+func TestTextareaTypingPatchesLayout(t *testing.T) {
+	u := mustParse(t, "https://example.com/form")
+	doc := ParseHTML(`<form action="/submit"><textarea name="t">` + strings.Repeat("a", 50) + `</textarea></form>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	area := doc.FindFirst("textarea")
+	b.setInputFocus(area)
+	before := b.layout
+	b.HandleKey("x")
+	if b.layout != before {
+		t.Fatal("typing triggered a full relayout")
+	}
+	found := false
+	for _, f := range b.layout.Frags {
+		if f.Kind == fragText && f.Node == area && strings.Contains(f.Text, "x") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("patched layout does not show the typed character")
+	}
+}
+
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}

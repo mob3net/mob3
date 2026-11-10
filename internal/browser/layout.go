@@ -1531,6 +1531,10 @@ func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
 }
 
 func (c *inlineCtx) addForm(n *Node, st *Style) {
+	if n.Tag == "textarea" {
+		c.addTextarea(n, st)
+		return
+	}
 	label := formLabel(n)
 	if label == "" {
 		return
@@ -1565,6 +1569,148 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 			c.l.addText(x, y, label, paintStyle, n)
 		},
 	})
+}
+
+// addTextarea renders a textarea as a multi-row editable widget. Its first row
+// uses the same bracketed style as a text input; the extra rows make the
+// control visibly taller than a single-line field.
+func (c *inlineCtx) addTextarea(n *Node, st *Style) {
+	label := formLabel(n)
+	if label == "" {
+		return
+	}
+	boxW := stringWidth(label)
+	if c.maxW > 0 && boxW > c.maxW {
+		boxW = c.maxW
+	}
+	if boxW < 8 {
+		boxW = 8
+	}
+	rows := textareaRowsFor(n, boxW)
+	editable := isTextInput(n)
+	c.addAtomicBox(inlineItem{
+		kind: itemAtomic, w: boxW, h: len(rows), style: st, node: n,
+		paint: func(x, y int) {
+			bg := RGB(0xea, 0xee, 0xf2)
+			paintStyle := st
+			if editable {
+				cl := *st
+				cl.Bold = true
+				if n.InputFocused {
+					bg = RGB(0x2f, 0x6f, 0xbf)
+					cl.Color = RGB(0xff, 0xff, 0xff)
+				} else {
+					bg = RGB(0xd8, 0xe7, 0xf8)
+					cl.Color = RGB(0x1f, 0x23, 0x28)
+				}
+				cl.Background = bg
+				paintStyle = &cl
+			}
+			for i, row := range rows {
+				c.l.addFill(x, y+i, boxW, 1, bg)
+				c.l.addText(x, y+i, row, paintStyle, n)
+			}
+		},
+	})
+}
+
+// textareaRowsFor formats the visible rows of a textarea at the given box
+// width, including brackets and the focused cursor.
+func textareaRowsFor(n *Node, boxW int) []string {
+	inner := boxW - 3
+	if inner < 1 {
+		inner = 1
+	}
+	lines := textareaLines(n, inner)
+	h := len(lines)
+	if rows := textareaRows(n); rows > h {
+		h = rows
+	}
+	if h < 2 {
+		h = 2
+	}
+	if h > 12 {
+		h = 12
+	}
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+	out := make([]string, h)
+	for i, line := range lines {
+		line = padWidth(truncateWidth(line, inner), inner)
+		if n.InputFocused && i == h-1 {
+			line = padWidth(truncateWidth(line, inner-1), inner-1) + inputCursor(n)
+		}
+		out[i] = "[ " + line + "]"
+	}
+	return out
+}
+
+// textareaLines splits a textarea value into display rows, wrapping long lines
+// to width. Only the rows that can be displayed are produced, so typing into a
+// large textarea stays cheap.
+func textareaLines(n *Node, width int) []string {
+	txt := inputValue(n)
+	if txt == "" && !n.InputFocused {
+		txt = n.Attr("placeholder")
+	}
+	txt = strings.ReplaceAll(txt, "\r\n", "\n")
+	txt = strings.ReplaceAll(txt, "\r", "\n")
+	if width < 1 {
+		width = 1
+	}
+	// The widget never shows more than 12 rows; stop scanning beyond that.
+	txt = truncateWidth(txt, width*12+12)
+	txt = expandTabs(txt)
+	var out []string
+	var b strings.Builder
+	w := 0
+	flush := func() {
+		out = append(out, b.String())
+		b.Reset()
+		w = 0
+	}
+	for _, r := range txt {
+		if len(out) >= 12 {
+			break
+		}
+		if r == '\n' {
+			flush()
+			continue
+		}
+		rw := runeWidth(r)
+		if rw == 0 {
+			b.WriteRune(r)
+			continue
+		}
+		if w+rw > width && w > 0 {
+			flush()
+		}
+		b.WriteRune(r)
+		w += rw
+	}
+	if len(out) < 12 {
+		out = append(out, b.String())
+	}
+	if len(out) == 0 {
+		out = []string{""}
+	}
+	return out
+}
+
+// textareaRows reads the HTML rows attribute, clamped to the supported range.
+func textareaRows(n *Node) int {
+	rows, err := strconv.Atoi(strings.TrimSpace(n.Attr("rows")))
+	if err != nil || rows < 2 {
+		return 0
+	}
+	if rows > 12 {
+		rows = 12
+	}
+	return rows
 }
 
 // inputValue returns the current editable value of a form control.
@@ -1684,7 +1830,7 @@ func formLabel(n *Node) string {
 		}
 		return "[ " + chosen + " ▾ ]"
 	case "textarea":
-		txt := inputValue(n)
+		txt := truncateWidth(inputValue(n), 80)
 		if txt == "" && !n.InputFocused {
 			txt = n.Attr("placeholder")
 		}

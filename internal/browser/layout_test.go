@@ -663,6 +663,57 @@ func TestAbsolutePaintsAboveFlow(t *testing.T) {
 	}
 }
 
+func TestTextareaLargeValueBounded(t *testing.T) {
+	doc := ParseHTML(`<textarea name="t">` + strings.Repeat("word ", 50000) + `</textarea>`)
+	ly := BuildLayout(doc, nil, 80)
+	area := doc.FindFirst("textarea")
+	if area == nil {
+		t.Fatal("textarea not found")
+	}
+	ys := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Node == area {
+			ys[f.Y] = true
+		}
+	}
+	if len(ys) == 0 || len(ys) > 12 {
+		t.Fatalf("large textarea rendered %d rows, want 1-12", len(ys))
+	}
+}
+
+func TestTextareaRendersAtLeastTwoRows(t *testing.T) {
+	doc := ParseHTML(`<textarea name="t">hello</textarea>`)
+	ly := BuildLayout(doc, nil, 60)
+	area := doc.FindFirst("textarea")
+	if area == nil {
+		t.Fatal("textarea not found")
+	}
+	ys := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Node == area {
+			ys[f.Y] = true
+		}
+	}
+	if len(ys) < 2 {
+		t.Fatalf("textarea rendered %d row(s), want at least 2", len(ys))
+	}
+}
+
+func TestTextareaWrapsAndHonoursRows(t *testing.T) {
+	doc := ParseHTML(`<textarea name="t" rows="4">` + strings.Repeat("word ", 40) + `</textarea>`)
+	ly := BuildLayout(doc, nil, 60)
+	area := doc.FindFirst("textarea")
+	ys := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Node == area {
+			ys[f.Y] = true
+		}
+	}
+	if len(ys) < 4 {
+		t.Fatalf("textarea rendered %d row(s), want at least 4 rows", len(ys))
+	}
+}
+
 func TestRelativeOffsetMovesOnlyItsBox(t *testing.T) {
 	ly := build(`<div style="position:relative;top:16px;left:16px">shift</div><div>next</div>`, 30)
 	shift := textFrag(ly, "shift")

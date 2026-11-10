@@ -986,7 +986,7 @@ disk write.</p>
 <tr><td><b>Ctrl-D</b> / <b>Ctrl-U</b></td><td>scroll half a screen</td></tr>
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
 <tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link</td></tr>
-<tr><td><b>Enter</b></td><td>follow the focused link or submit the focused field</td></tr>
+<tr><td><b>Enter</b></td><td>follow the focused link, submit the focused field, or insert a newline in a textarea</td></tr>
 <tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
@@ -1084,8 +1084,11 @@ OSC 52 and close the popup; <b>Esc</b>, <b>Enter</b> or <b>q</b> closes it
 without copying. Nothing is written to disk by MOB³ itself.</p>
 
 <h2>Forms</h2>
-<p>Click a text input or textarea to type. <b>Backspace</b> deletes,
-<b>Ctrl-U</b> clears, <b>Enter</b> submits, and <b>Esc</b> leaves the field.
+<p>Click a text input or textarea to type. Textareas show at least two rows and
+wrap their text; an explicit <b>rows</b> value up to 12 is honoured.
+<b>Backspace</b> deletes,
+<b>Ctrl-U</b> clears, <b>Enter</b> submits (or inserts a newline in a textarea),
+and <b>Esc</b> leaves the field.
 Checkboxes and radios toggle on click; selects cycle through their options.
 GET and urlencoded POST forms work; multipart and file uploads are not
 supported.</p>
