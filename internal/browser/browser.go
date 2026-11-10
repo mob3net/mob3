@@ -1674,12 +1674,27 @@ func (b *Browser) nodeAt(x, y int) *Node {
 	return nil
 }
 
+// liveNode reports whether n belongs to the current page document. Reader mode
+// lays out a detached extraction, so synthetic events must not be dispatched on
+// those clones.
+func (b *Browser) liveNode(n *Node) bool {
+	if b.page == nil || n == nil {
+		return false
+	}
+	for p := n; p != nil; p = p.Parent {
+		if p == b.page.Root {
+			return true
+		}
+	}
+	return false
+}
+
 // clickContent follows a link under the pointer, or clears link focus.
 // JavaScript click handlers run first and may prevent navigation.
 func (b *Browser) clickContent(x, docY int) {
 	if idx := b.linkAt(x, docY); idx >= 0 {
 		li := b.layout.Links[idx]
-		if b.js != nil && li.Node != nil && b.js.dispatchClick(li.Node) {
+		if b.js != nil && b.liveNode(li.Node) && b.js.dispatchClick(li.Node) {
 			if b.js.consumeDirty() {
 				b.rebuild()
 			}
@@ -1695,7 +1710,7 @@ func (b *Browser) clickContent(x, docY int) {
 	}
 	n := b.nodeAt(x, docY)
 	prevented := false
-	if b.js != nil && n != nil {
+	if b.js != nil && b.liveNode(n) {
 		prevented = b.js.dispatchClick(n)
 		if b.js.consumeDirty() {
 			b.rebuild()

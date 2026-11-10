@@ -23,6 +23,7 @@ func (j *jsRuntime) installCompat() {
 	j.installCrypto()
 	j.installStructuredClone()
 	j.installURLStatics()
+	j.installBase64()
 	_ = j.vm.Set("queueMicrotask", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 		return j.setTimer(goja.FunctionCall{Arguments: []goja.Value{call.Argument(0), j.vm.ToValue(0)}}, false)
 	}))
@@ -99,6 +100,56 @@ func (j *jsRuntime) installCompatConstructors() {
 			return ctrl.Get("signal")
 		})
 	}
+}
+
+// installBase64 provides the window btoa/atob binary-string helpers used by
+// many modal and image scripts.
+func (j *jsRuntime) installBase64() {
+	_ = j.vm.Set("btoa", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		s := call.Argument(0).String()
+		buf := make([]byte, 0, len(s))
+		for _, r := range s {
+			if r > 0xff {
+				panic(j.vm.NewTypeError("btoa: character out of Latin-1 range"))
+			}
+			buf = append(buf, byte(r))
+		}
+		return j.vm.ToValue(base64.StdEncoding.EncodeToString(buf))
+	}))
+	_ = j.vm.Set("atob", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		s := strings.Map(func(r rune) rune {
+			switch r {
+			case ' ', '\t', '\n', '\r', '\f':
+				return -1
+			}
+			return r
+		}, call.Argument(0).String())
+		if len(s)%4 == 0 {
+			if strings.HasSuffix(s, "==") {
+				s = s[:len(s)-2]
+			} else if strings.HasSuffix(s, "=") {
+				s = s[:len(s)-1]
+			}
+		}
+		switch len(s) % 4 {
+		case 1:
+			panic(j.vm.NewTypeError("atob: invalid base64 length"))
+		case 2:
+			s += "=="
+		case 3:
+			s += "="
+		}
+		data, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			panic(j.vm.NewTypeError("atob: invalid base64 data"))
+		}
+		var out strings.Builder
+		out.Grow(len(data))
+		for _, b := range data {
+			out.WriteRune(rune(b))
+		}
+		return j.vm.ToValue(out.String())
+	}))
 }
 
 func (j *jsRuntime) newTextEncoder() *goja.Object {

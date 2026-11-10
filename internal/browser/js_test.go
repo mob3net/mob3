@@ -513,6 +513,30 @@ func TestJSClickHandlerPreventsDefault(t *testing.T) {
 	}
 }
 
+func TestClickContentRunsLivePageJavaScript(t *testing.T) {
+	page := newJSPage(`<html><body><a id="l" href="/next">go</a></body></html>`, `
+		var link = document.getElementById("l");
+		link.addEventListener("click", function (e) {
+			e.preventDefault();
+			link.textContent = "clicked";
+		});
+	`)
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.url = page.URL
+	b.startJS(page)
+	b.rebuild()
+	link := page.Root.FindFirst("a")
+	if len(b.layout.Links) == 0 || len(b.layout.Links[0].Rects) == 0 {
+		t.Fatal("link has no click rectangle")
+	}
+	r := b.layout.Links[0].Rects[0]
+	b.clickContent(r.X, r.Y)
+	if got := link.TextContent(); got != "clicked" {
+		t.Fatalf("live page click handler did not run, text = %q", got)
+	}
+}
+
 func TestJSListenerOnce(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `
 		var n = 0;
@@ -862,6 +886,26 @@ func TestJSTextCryptoAndClone(t *testing.T) {
 	b.startJS(page)
 	if page.Title != "héllo,6,36,1,2,true,true" && page.Title != "héllo,6,36,1,2,true,false" {
 		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSBase64(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var enc = btoa("hello");
+		var dec = atob(enc);
+		var bin = "";
+		for (var i = 0; i < 256; i++) bin += String.fromCharCode(i);
+		var round = atob(btoa(bin)) === bin;
+		var forgiving = atob(" aGVs\nbG8 ") + "," + atob("aGVsbG8");
+		var thrown = false;
+		try { btoa("\u0100"); } catch (e) { thrown = true; }
+		document.title = [enc, dec, round, forgiving, thrown].join(",");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "aGVsbG8=,hello,true,hello,hello,true"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
 	}
 }
 

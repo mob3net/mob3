@@ -402,7 +402,10 @@ Standard Go layout:
   reader mode is on: opening it keeps the current page and shows the warning
   `Config is not available in reader mode — press R to turn it off`. Reader
   mode is a snapshot: live JS mutations are not reflected while it is active,
-  and interactive controls are not available. Same-document links with no
+  and interactive controls are not available. Reader link clicks do not run the
+  page's JavaScript click handlers, because the extracted clone is detached
+  from the live document; document-level handlers therefore cannot cancel
+  reader navigation. Same-document links with no
   fragment or a missing target (common on modal triggers) do not navigate or
   jump to the top; the footer shows `Reader mode: link is not available`
   instead.
@@ -894,8 +897,8 @@ Works well:
   `getClientRects`, `Range`/`Selection`/`getSelection`,
   `createTreeWalker`/`createNodeIterator`, `TextEncoder`/`TextDecoder`,
   `crypto.getRandomValues`/`randomUUID`, `structuredClone`, `AbortController`/
-  `AbortSignal`, `Blob`/`File`/`FileReader`, `FormData`, `URL.createObjectURL`
-  and `queueMicrotask`.
+  `AbortSignal`, `btoa`/`atob`, `Blob`/`File`/`FileReader`, `FormData`,
+  `URL.createObjectURL` and `queueMicrotask`.
 
 Intentional limits of the shims:
 - `structuredClone` covers primitives, plain objects, arrays, Date, Map, Set

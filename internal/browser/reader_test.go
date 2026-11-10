@@ -208,6 +208,45 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	}
 }
 
+func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
+	page := newJSPage(`<html><body><article>
+		<p>`+strings.Repeat("Reader prose before the link. ", 40)+`</p>
+		<p><a href="#target">Jump to the target</a></p>
+		<h2 id="target">Target heading</h2>
+		<p>`+strings.Repeat("Reader prose after the link. ", 40)+`</p>
+	</article></body></html>`, `
+		document.addEventListener("click", function (e) {
+			e.preventDefault();
+		});
+	`)
+	b := NewBrowser(60, 20)
+	b.page = page
+	b.url = page.URL
+	b.startJS(page)
+	b.rebuild()
+	b.HandleKey("R")
+	if !b.reader {
+		t.Fatal("reader mode did not turn on")
+	}
+	var link *LinkInfo
+	for _, li := range b.layout.Links {
+		if li.Href == "#target" {
+			link = li
+			break
+		}
+	}
+	if link == nil || len(link.Rects) == 0 {
+		t.Fatalf("reader link is missing: %+v", b.layout.Links)
+	}
+	if b.scroll != 0 {
+		t.Fatalf("initial reader scroll = %d", b.scroll)
+	}
+	b.clickContent(link.Rects[0].X, link.Rects[0].Y)
+	if b.scroll == 0 {
+		t.Fatal("page JavaScript cancelled the reader link click")
+	}
+}
+
 func TestReaderFooterLabel(t *testing.T) {
 	doc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("Reader icon article text. ", 20) + `</p></article></body></html>`)
