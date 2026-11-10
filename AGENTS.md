@@ -473,7 +473,8 @@ Standard Go layout:
   option on its own row; clicking an option toggles it. Submit
   buttons run their `click` handler and then submit their form on release
   unless the handler prevents default; `type=button`/`type=reset` buttons and
-  buttons outside a form only run their click handlers. GET forms build a query
+  buttons outside a form only run their click handlers. Clicking a `<label for>`
+  or a wrapping label activates its associated control. GET forms build a query
   from named fields
   (including hidden inputs, checked checkboxes/radios and selects); POST forms
   send `application/x-www-form-urlencoded` bodies. Both

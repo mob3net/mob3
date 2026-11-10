@@ -972,6 +972,50 @@ func TestRangeKeyboardControl(t *testing.T) {
 	}
 }
 
+func TestLabelAssociations(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go">
+		<label for="query">Query label</label>
+		<input id="query" name="q">
+		<p><label><input id="agree" type="checkbox" name="agree"> Accept terms</label></p>
+		<label for="off">Disabled label</label>
+		<input id="off" name="off" disabled>
+	</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(70, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	clickText := func(text string) {
+		for i := range b.layout.Frags {
+			f := &b.layout.Frags[i]
+			if f.Kind != fragText || !strings.Contains(f.Text, text) {
+				continue
+			}
+			top, _ := b.viewport()
+			x, y := f.X+1, f.Y-b.scroll+top+1
+			b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
+			b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y})
+			return
+		}
+		t.Fatalf("label text %q not found", text)
+	}
+	query := inputByName(doc, "q")
+	clickText("Query")
+	if b.inputFocus != query {
+		t.Fatal("label for= did not focus the input")
+	}
+	agree := inputByName(doc, "agree")
+	clickText("Accept")
+	if !agree.HasAttr("checked") {
+		t.Fatal("wrapping label did not toggle the checkbox")
+	}
+	b.HandleKey("esc")
+	clickText("Disabled")
+	if b.inputFocus != nil {
+		t.Fatal("label focused a disabled control")
+	}
+}
+
 func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 	page := newJSPage(`<html><body><p>intro</p><button id="b" type="button">Got it</button><p id="out">visible</p></body></html>`,
 		`document.getElementById("b").addEventListener("click", function () {

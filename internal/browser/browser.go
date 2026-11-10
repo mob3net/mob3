@@ -1882,6 +1882,87 @@ func (b *Browser) submitForm(form *Node) {
 	b.Navigate(u.String(), true)
 }
 
+// isLabelable reports controls that a <label> can activate.
+func isLabelable(n *Node) bool {
+	if n == nil || n.Type != ElementNode {
+		return false
+	}
+	switch n.Tag {
+	case "input":
+		return !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "hidden")
+	case "button", "select", "textarea":
+		return true
+	}
+	return false
+}
+
+// findElementByID returns the first element with the given id below root.
+func findElementByID(root *Node, id string) *Node {
+	if root == nil || id == "" {
+		return nil
+	}
+	var found *Node
+	root.FindAll(func(n *Node) bool {
+		if found == nil && n.Attr("id") == id {
+			found = n
+		}
+		return false
+	})
+	return found
+}
+
+// labelControl returns the labelable control associated with a label: its for
+// target, or the first labelable descendant for a wrapping label.
+func labelControl(root, label *Node) *Node {
+	if label == nil || label.Tag != "label" {
+		return nil
+	}
+	if id := strings.TrimSpace(label.Attr("for")); id != "" {
+		if c := findElementByID(root, id); isLabelable(c) {
+			return c
+		}
+		return nil
+	}
+	var found *Node
+	label.FindAll(func(n *Node) bool {
+		if found == nil && isLabelable(n) {
+			found = n
+		}
+		return false
+	})
+	return found
+}
+
+// resolveLabelTarget maps a click on label text to its control. Clicks on the
+// control itself return nil so normal control handling is not duplicated.
+func (b *Browser) resolveLabelTarget(n *Node) *Node {
+	if n == nil || b.page == nil || b.page.Root == nil {
+		return nil
+	}
+	for p := n; p != nil; p = p.Parent {
+		if isLabelable(p) {
+			return nil
+		}
+	}
+	label := n
+	for label != nil && label.Tag != "label" {
+		label = label.Parent
+	}
+	if label == nil {
+		return nil
+	}
+	target := labelControl(b.page.Root, label)
+	if target == nil {
+		return nil
+	}
+	for p := n; p != nil; p = p.Parent {
+		if p == target {
+			return nil
+		}
+	}
+	return target
+}
+
 // rangeSideAt reports which end of a range slider was clicked: -1 for the
 // minus, +1 for the plus, and 0 elsewhere.
 func (b *Browser) rangeSideAt(n *Node, x, y int) int {
@@ -1961,6 +2042,9 @@ func (b *Browser) clickContent(x, docY int) {
 		return
 	}
 	n := b.nodeAt(x, docY)
+	if target := b.resolveLabelTarget(n); target != nil {
+		n = target
+	}
 	if n != nil && isDisabledControl(n) {
 		b.focus = -1
 		b.status = ""
@@ -2167,6 +2251,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			if y >= top && y < bottom {
 				docY := b.scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
+					if target := b.resolveLabelTarget(n); target != nil {
+						n = target
+					}
 					if isFileInput(n) {
 						b.selecting = false
 						b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")

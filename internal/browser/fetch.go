@@ -1094,7 +1094,8 @@ lines. <b>Delete</b> removes forward,
 <b>Backspace</b> deletes backwards,
 <b>Ctrl-U</b> clears, <b>Enter</b> submits (or inserts a newline in a textarea),
 and <b>Esc</b> leaves the field.
-Checkboxes and radios toggle on click. Clicking a select opens a popup with every
+Checkboxes and radios toggle on click, and clicking a label activates its
+associated control. Clicking a select opens a popup with every
 option; use <b>Up</b>/<b>Down</b> and <b>Enter</b>, or click an option, and
 <b>Esc</b> closes it. A multi-select shows all its options as a list; clicking
 an option toggles it.
