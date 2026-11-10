@@ -941,6 +941,7 @@ func (j *jsRuntime) newDetachedDocument(title string) *goja.Object {
 	_ = doc.Set("nodeName", "#document")
 	j.accessor(doc, "documentElement", func() goja.Value { return j.wrap(html) }, nil)
 	j.accessor(doc, "doctype", func() goja.Value { return goja.Null() }, nil)
+	j.accessor(doc, "domain", func() goja.Value { return j.vm.ToValue("") }, nil)
 	j.accessor(doc, "head", func() goja.Value { return j.wrap(head) }, nil)
 	j.accessor(doc, "body", func() goja.Value { return j.wrap(body) }, nil)
 	j.accessor(doc, "defaultView", func() goja.Value { return j.winObj }, nil)
@@ -1175,6 +1176,12 @@ func (j *jsRuntime) documentObject() *goja.Object {
 	_ = o.Set("nodeName", "#document")
 	j.accessor(o, "documentElement", func() goja.Value { return j.wrap(html) }, nil)
 	j.accessor(o, "doctype", func() goja.Value { return goja.Null() }, nil)
+	j.accessor(o, "domain", func() goja.Value {
+		if j.page != nil && j.page.URL != nil {
+			return j.vm.ToValue(j.page.URL.Hostname())
+		}
+		return j.vm.ToValue("")
+	}, nil)
 	j.accessor(o, "body", func() goja.Value { return j.wrap(body) }, nil)
 	j.accessor(o, "head", func() goja.Value { return j.wrap(head) }, nil)
 	j.accessor(o, "defaultView", func() goja.Value { return j.winObj }, nil)

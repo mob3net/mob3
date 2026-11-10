@@ -418,6 +418,15 @@ func TestJSDocumentTypeGlobal(t *testing.T) {
 	}
 }
 
+func TestJSDocumentDomain(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `document.title = document.domain;`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "example.com" {
+		t.Fatalf("document.domain = %q", page.Title)
+	}
+}
+
 func TestJSFormSubmitQueuesPost(t *testing.T) {
 	page := newJSPage(`<html><body><form id="f" method="POST" action="/access_keys">
 		<input type="hidden" name="authenticity_token" value="abc">

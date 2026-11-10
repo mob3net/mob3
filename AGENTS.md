@@ -582,7 +582,8 @@ Standard Go layout:
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
   `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events,
   `getComputedStyle` and `console`. `Image`/`Audio` construct DOM elements. `document` exposes
-  `location`, visibility state, `defaultView`, `document.implementation`
+  `location`, visibility state, `defaultView`, `domain`,
+  `document.implementation`
   (`hasFeature`/`createHTMLDocument`), and image elements expose
   `src`/`alt`/`width`/
   `height`/`complete`/`natural*`. `URL`/`URLSearchParams`,
