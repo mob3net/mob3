@@ -294,6 +294,29 @@ func (j *jsRuntime) stop() {
 	j.timers = nil
 }
 
+// nextJSTimerDelay reports how long until the earliest scheduled JS timer is
+// due. It reports false when no timers are pending, so the event loop can sleep
+// instead of waking on a fixed tick.
+func (b *Browser) nextJSTimerDelay() (time.Duration, bool) {
+	if b.js == nil || b.consoleOpen || len(b.js.timers) == 0 {
+		return 0, false
+	}
+	var next time.Time
+	for _, t := range b.js.timers {
+		if next.IsZero() || t.due.Before(next) {
+			next = t.due
+		}
+	}
+	if next.IsZero() {
+		return 0, false
+	}
+	d := time.Until(next)
+	if d < 0 {
+		d = 0
+	}
+	return d, true
+}
+
 // runJSTimers executes due timers and reports whether the UI should redraw.
 func (b *Browser) runJSTimers() bool {
 	if b.js == nil || b.consoleOpen {

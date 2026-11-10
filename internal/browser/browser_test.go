@@ -2467,6 +2467,29 @@ func TestConsolePausesTimers(t *testing.T) {
 	}
 }
 
+func TestNextJSTimerDelayTracksPendingTimers(t *testing.T) {
+	b := NewBrowser(60, 15)
+	if _, ok := b.nextJSTimerDelay(); ok {
+		t.Fatal("reported a timer without a JS runtime")
+	}
+	page := newJSPage(`<html><body><p>idle</p></body></html>`, `
+		setTimeout(function () {}, 5000);
+	`)
+	b.page = page
+	withQuietStdout(t, func() { b.startJS(page) })
+	d, ok := b.nextJSTimerDelay()
+	if !ok {
+		t.Fatal("pending timer was not reported")
+	}
+	if d <= 0 || d > 5*time.Second {
+		t.Fatalf("delay = %v, want about 5s", d)
+	}
+	b.consoleOpen = true
+	if _, ok := b.nextJSTimerDelay(); ok {
+		t.Fatal("paused timers must not wake the event loop")
+	}
+}
+
 func TestPageContentCannotInjectTerminalControls(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	root := ParseHTML("<html><head><title>evil\x1b]52;c;x\x07</title></head><body><p>hi\x1b[2Jthere</p></body></html>")

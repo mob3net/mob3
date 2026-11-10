@@ -171,8 +171,14 @@ func Run(args []string) int {
 	startSignalHandlers(winch, quitSig)
 	defer stopSignalHandlers(winch, quitSig)
 
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
+	// JS timers drive their own one-shot deadlines. An idle page with no
+	// pending timers must not wake up and repaint on a fixed tick.
+	var jsTimer *time.Timer
+	defer func() {
+		if jsTimer != nil {
+			jsTimer.Stop()
+		}
+	}()
 	usageTicker := time.NewTicker(2 * time.Second)
 	defer usageTicker.Stop()
 
@@ -183,6 +189,21 @@ func Run(args []string) int {
 			b.skipDraw = false
 		} else {
 			b.draw()
+		}
+		var timerC <-chan time.Time
+		if d, ok := b.nextJSTimerDelay(); ok {
+			if jsTimer == nil {
+				jsTimer = time.NewTimer(d)
+			} else {
+				if !jsTimer.Stop() {
+					select {
+					case <-jsTimer.C:
+					default:
+					}
+				}
+				jsTimer.Reset(d)
+			}
+			timerC = jsTimer.C
 		}
 		select {
 		case k := <-keys:
@@ -198,14 +219,21 @@ func Run(args []string) int {
 			}
 		case res := <-b.loadCh:
 			b.finishLoad(res)
-		case <-ticker.C:
-			if b.runJSTimers() {
-				b.draw()
+		case <-timerC:
+			// The loop body repaints once per event. Skip that repaint unless a
+			// JS timer rebuilt the page: an idle page must not repaint at every
+			// timer wakeup (this also re-sends graphics protocol image
+			// placements and rewrites the chrome every frame).
+			if !b.runJSTimers() {
+				b.skipDraw = true
 			}
 		case <-usageTicker.C:
+			// Refresh the memory readout only when the displayed value changed;
+			// an unchanged readout does not justify a full repaint.
+			before := b.usage.footer()
 			b.sampleUsage()
-			if !b.consoleOpen {
-				b.draw()
+			if b.consoleOpen || b.usage.footer() == before {
+				b.skipDraw = true
 			}
 		case <-quitSig:
 			return 0

@@ -678,7 +678,12 @@ Standard Go layout:
   rebuild on every tick: timer-driven rebuilds are coalesced to at most once
   per `max(250 ms, 2× the previous rebuild time)`, so a page whose timers fire
   every 50 ms cannot consume every core with full style/layout passes.
-  User-input redraws remain immediate.
+  User-input redraws remain immediate. Idle pages do not repaint: the event
+  loop draws only after input, a load result, a resize, a JS timer that actually
+  rebuilt the page, or a changed memory readout. Pending timers arm a one-shot
+  deadline for the next due timer instead of waking on a fixed tick, so a page
+  with no timers sleeps; this also stops graphics-protocol image placements
+  from being re-sent every frame.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
   disables). Timer count and per-tick callbacks are capped. Script

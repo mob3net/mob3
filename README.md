@@ -146,7 +146,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   bounded. Style and layout also run under a time budget, so a pathological
   page is shown partially with a truncation notice instead of freezing the
   browser. Pages whose timers update the DOM are redrawn a few times per
-  second rather than continuously.
+  second rather than continuously, and an idle page with no pending timers does
+  not repaint at all.
 
 ## Contributing
 
