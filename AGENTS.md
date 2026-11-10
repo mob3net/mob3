@@ -289,8 +289,14 @@ Standard Go layout:
   rectangles are overlaid. Kitty deletes previous placements each frame
   (`a=d`) and re-places images, scaled to the layout cell box, with `q=2` so
   replies do not pollute stdin; APC replies are drained defensively. A
-  full-screen clear also clears kitty image data, so the placement cache is
-  reset and images are retransmitted after `2J` (scroll, resize, mode switch). iTerm2
+  scroll/resize/mode-switch repaint clears text with `ED 1` + `ED 0` instead of
+  `2J` in kitty, because those erase placements but keep stored image data; the
+  cached image is then re-placed by id, so scrolling an image-heavy page does
+  not re-scale, re-encode and re-upload every image per step. A true `2J` clear
+  still frees kitty data and resets the placement cache. Image caches are
+  bounded by evicting only images that are absent from the current frame; a
+  frame showing more images than the soft cap keeps all of them, so periodic
+  redraws can never fall into a reset-and-rebuild-every-image loop. iTerm2
   saves/restores the cursor around an inline image sized in cells with
   `preserveAspectRatio=0`. Source images are downscaled to about the terminal
   cell size (default 8×16 px) before encoding. Dump mode always uses half-block

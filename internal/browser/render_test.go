@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -195,8 +196,11 @@ func TestGraphicsResetForgetsTransmissions(t *testing.T) {
 	}
 	var reset strings.Builder
 	r.Reset(&reset)
-	if len(r.kitty) != 0 || len(r.scaled) != 0 {
-		t.Fatal("graphics cache was not reset")
+	if len(r.kitty) != 0 {
+		t.Fatal("transmission cache was not reset")
+	}
+	if len(r.scaled) != 1 {
+		t.Fatal("scaled image cache should survive a transmission reset")
 	}
 	if !strings.Contains(reset.String(), "a=d,d=A") {
 		t.Errorf("reset output = %q", reset.String())
@@ -205,6 +209,92 @@ func TestGraphicsResetForgetsTransmissions(t *testing.T) {
 	r.PlaceAll(&sb, []ImagePlacement{p})
 	if !strings.Contains(sb.String(), "a=t,f=100") {
 		t.Error("image was not retransmitted after reset")
+	}
+}
+
+func TestPlaceAllKeepsVisibleImagesOverCacheCap(t *testing.T) {
+	r := NewGFXRenderer(GraphicsKitty, 8, 16)
+	// More distinct images than maxCachedImages, all in one frame. They must
+	// stay cached: resetting them every frame re-scales and re-encodes all of
+	// them forever.
+	placements := make([]ImagePlacement, 0, maxCachedImages+16)
+	for i := 0; i < maxCachedImages+16; i++ {
+		src := image.NewNRGBA(image.Rect(0, 0, 16, 16))
+		placements = append(placements, ImagePlacement{
+			Img: src, Src: fmt.Sprintf("img%d.png", i),
+			X: i % 10, Y: i / 10, W: 1, H: 1, TotalRows: 1,
+		})
+	}
+	var first strings.Builder
+	r.PlaceAll(&first, placements)
+	if len(r.scaled) != len(placements) {
+		t.Fatalf("scaled cache = %d, want %d", len(r.scaled), len(placements))
+	}
+	var second strings.Builder
+	r.PlaceAll(&second, placements)
+	if strings.Contains(second.String(), "a=d,d=A") {
+		t.Error("visible images were reset on the next frame")
+	}
+	if strings.Contains(second.String(), "a=t,f=100") {
+		t.Error("visible images were retransmitted on the next frame")
+	}
+	if !strings.Contains(second.String(), "a=p,i=") {
+		t.Error("cached images were not re-placed")
+	}
+}
+
+func TestPlaceAllPrunesOnlyUnseenImages(t *testing.T) {
+	r := NewGFXRenderer(GraphicsKitty, 8, 16)
+	mk := func(name string) ImagePlacement {
+		return ImagePlacement{Img: image.NewNRGBA(image.Rect(0, 0, 16, 16)), Src: name, W: 1, H: 1, TotalRows: 1}
+	}
+	var all []ImagePlacement
+	for i := 0; i < maxCachedImages+8; i++ {
+		all = append(all, mk(fmt.Sprintf("old%d.png", i)))
+	}
+	var sb strings.Builder
+	r.PlaceAll(&sb, all)
+	if len(r.scaled) <= maxCachedImages {
+		t.Fatalf("scaled cache = %d, want over cap", len(r.scaled))
+	}
+	// A later frame showing one new image prunes the old, unseen ones but keeps
+	// the image that is still visible.
+	fresh := mk("new.png")
+	var sb2 strings.Builder
+	r.PlaceAll(&sb2, []ImagePlacement{all[0], fresh})
+	if len(r.scaled) != 2 || len(r.kitty) != 2 {
+		t.Fatalf("cache after prune = %d scaled, %d kitty; want 2 each", len(r.scaled), len(r.kitty))
+	}
+	if !strings.Contains(sb2.String(), "a=d,d=I,i=") {
+		t.Error("evicted kitty image data was not freed")
+	}
+}
+
+func TestClearScreenKeepsKittyTransmissions(t *testing.T) {
+	r := NewGFXRenderer(GraphicsKitty, 8, 16)
+	src := image.NewNRGBA(image.Rect(0, 0, 32, 64))
+	p := ImagePlacement{Img: src, Src: "x.png", X: 0, Y: 0, W: 4, H: 4, TotalRows: 4}
+	var first strings.Builder
+	r.PlaceAll(&first, []ImagePlacement{p})
+	var clear strings.Builder
+	r.ClearScreen(&clear)
+	out := clear.String()
+	if !strings.Contains(out, "\x1b[1J") || !strings.Contains(out, "\x1b[0J") {
+		t.Errorf("clear output = %q", out)
+	}
+	if strings.Contains(out, "\x1b[2J") || strings.Contains(out, "a=d,d=A") {
+		t.Errorf("clear freed kitty image data: %q", out)
+	}
+	if len(r.kitty) != 1 || len(r.scaled) != 1 {
+		t.Fatal("kitty caches were dropped by the screen clear")
+	}
+	var second strings.Builder
+	r.PlaceAll(&second, []ImagePlacement{p})
+	if strings.Contains(second.String(), "a=t,f=100") {
+		t.Error("image was retransmitted after a text-only clear")
+	}
+	if !strings.Contains(second.String(), "a=p,i=1") {
+		t.Error("cached image was not re-placed after the clear")
 	}
 }
 

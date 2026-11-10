@@ -3315,9 +3315,10 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	}
 	if needClear {
 		if b.gfx != nil {
-			b.gfx.Reset(&sb)
+			b.gfx.ClearScreen(&sb)
+		} else {
+			sb.WriteString("\x1b[2J")
 		}
-		sb.WriteString("\x1b[2J")
 	}
 	chrome := func(i int) bool {
 		if b.height >= 2 && i == b.height-1 {

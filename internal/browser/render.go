@@ -779,6 +779,7 @@ type gfxRenderer struct {
 	nextID       int
 	kitty        map[gfxKey]*kittyImage
 	scaled       map[gfxKey]*image.NRGBA
+	encoded      map[gfxKey][]byte
 	iterm        map[itermKey]string
 }
 
@@ -796,13 +797,14 @@ func NewGFXRenderer(mode GraphicsMode, cellW, cellH int) *gfxRenderer {
 		cellH = 16
 	}
 	return &gfxRenderer{
-		mode:   mode,
-		cellW:  cellW,
-		cellH:  cellH,
-		nextID: 1,
-		kitty:  make(map[gfxKey]*kittyImage),
-		scaled: make(map[gfxKey]*image.NRGBA),
-		iterm:  make(map[itermKey]string),
+		mode:    mode,
+		cellW:   cellW,
+		cellH:   cellH,
+		nextID:  1,
+		kitty:   make(map[gfxKey]*kittyImage),
+		scaled:  make(map[gfxKey]*image.NRGBA),
+		encoded: make(map[gfxKey][]byte),
+		iterm:   make(map[itermKey]string),
 	}
 }
 
@@ -835,9 +837,30 @@ func (r *gfxRenderer) BeginFrame(sb *strings.Builder) {
 	sb.WriteString("\x1b_Ga=d,q=2\x1b\\")
 }
 
-// Reset frees terminal image storage and forgets cached transmissions. It is
-// required after a full-screen clear, because clearing the screen also clears
-// kitty images; re-placing cached ids would silently fail.
+// ClearScreen clears screen text for a full repaint while preserving what can
+// be reused. Kitty keeps transmitted image data across ED 1/0 (only ED 2/3
+// frees it), so using those instead of ED 2 lets the next frame re-place cached
+// images by id instead of re-scaling, re-encoding and re-uploading them after
+// every scroll-triggered clear.
+func (r *gfxRenderer) ClearScreen(sb *strings.Builder) {
+	if sb == nil {
+		return
+	}
+	if r == nil {
+		sb.WriteString("\x1b[2J")
+		return
+	}
+	if r.mode == GraphicsKitty {
+		sb.WriteString("\x1b[1J\x1b[0J")
+		return
+	}
+	r.Reset(sb)
+	sb.WriteString("\x1b[2J")
+}
+
+// Reset frees terminal image storage and forgets cached transmissions. Use it
+// when image data really becomes invalid (for example an explicit 2J clear);
+// scroll-triggered repaints use ClearScreen, which keeps kitty data.
 func (r *gfxRenderer) Reset(sb *strings.Builder) {
 	if r == nil {
 		return
@@ -846,7 +869,6 @@ func (r *gfxRenderer) Reset(sb *strings.Builder) {
 		sb.WriteString("\x1b_Ga=d,d=A,q=2\x1b\\")
 	}
 	r.kitty = make(map[gfxKey]*kittyImage)
-	r.scaled = make(map[gfxKey]*image.NRGBA)
 	r.iterm = make(map[itermKey]string)
 }
 
@@ -864,42 +886,74 @@ func (r *gfxRenderer) Clear(sb *strings.Builder) {
 	}
 }
 
+// maxCachedImages bounds the client-side image caches. Eviction never drops an
+// image used by the frame being drawn, so a viewport that shows more images
+// than this keeps them all instead of resetting and rebuilding the cache on
+// every frame.
+const maxCachedImages = 64
+
 // PlaceAll emits every image placement for the current frame.
 func (r *gfxRenderer) PlaceAll(sb *strings.Builder, placements []ImagePlacement) {
 	if r == nil || len(placements) == 0 {
 		return
 	}
-	if len(r.kitty) > 64 || len(r.scaled) > 64 {
-		// Reclaim terminal image storage and start fresh.
-		if r.mode == GraphicsKitty {
-			sb.WriteString("\x1b_Ga=d,d=A,q=2\x1b\\")
-		}
-		r.kitty = make(map[gfxKey]*kittyImage)
-		r.scaled = make(map[gfxKey]*image.NRGBA)
-		r.iterm = make(map[itermKey]string)
-	}
+	keep := make(map[gfxKey]struct{}, len(placements))
 	for _, p := range placements {
 		if p.Img == nil || p.W <= 0 || p.H <= 0 || p.TotalRows <= 0 {
 			continue
 		}
 		switch r.mode {
 		case GraphicsKitty:
-			r.placeKitty(sb, p)
+			r.placeKitty(sb, p, keep)
 		case GraphicsITerm:
-			r.placeITerm(sb, p)
+			r.placeITerm(sb, p, keep)
+		}
+	}
+	r.prune(sb, keep)
+}
+
+// prune drops cached images that are not in the current frame once the cache
+// exceeds its soft cap. Visible images are always retained.
+func (r *gfxRenderer) prune(sb *strings.Builder, keep map[gfxKey]struct{}) {
+	if len(r.scaled) <= maxCachedImages && len(r.kitty) <= maxCachedImages && len(r.encoded) <= maxCachedImages {
+		return
+	}
+	for key, entry := range r.kitty {
+		if _, ok := keep[key]; ok {
+			continue
+		}
+		if r.mode == GraphicsKitty && sb != nil {
+			fmt.Fprintf(sb, "\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", entry.id)
+		}
+		delete(r.kitty, key)
+	}
+	for key := range r.scaled {
+		if _, ok := keep[key]; !ok {
+			delete(r.scaled, key)
+		}
+	}
+	for key := range r.encoded {
+		if _, ok := keep[key]; !ok {
+			delete(r.encoded, key)
 		}
 	}
 }
 
-func (r *gfxRenderer) placeKitty(sb *strings.Builder, p ImagePlacement) {
+func (r *gfxRenderer) placeKitty(sb *strings.Builder, p ImagePlacement, keep map[gfxKey]struct{}) {
 	key, img := r.scaledImage(p)
+	keep[key] = struct{}{}
 	entry := r.kitty[key]
 	if entry == nil {
 		entry = &kittyImage{id: r.nextID, w: img.Bounds().Dx(), h: img.Bounds().Dy()}
 		r.nextID++
-		data, err := encodePNG(img)
-		if err != nil {
-			return
+		data := r.encoded[key]
+		if data == nil {
+			var err error
+			data, err = encodePNG(img)
+			if err != nil {
+				return
+			}
+			r.encoded[key] = data
 		}
 		r.kittyTransmit(sb, entry.id, data)
 		r.kitty[key] = entry
@@ -920,8 +974,9 @@ func (r *gfxRenderer) placeKitty(sb *strings.Builder, p ImagePlacement) {
 		entry.id, p.W, p.H, y0, entry.w, y1-y0)
 }
 
-func (r *gfxRenderer) placeITerm(sb *strings.Builder, p ImagePlacement) {
+func (r *gfxRenderer) placeITerm(sb *strings.Builder, p ImagePlacement, keep map[gfxKey]struct{}) {
 	key, img := r.scaledImage(p)
+	keep[key] = struct{}{}
 	ik := itermKey{gfxKey: key, rowStart: p.RowStart, cropRows: p.H}
 	payload, ok := r.iterm[ik]
 	if !ok {
