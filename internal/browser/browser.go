@@ -134,10 +134,11 @@ type Browser struct {
 	// modalBox is the full modal rectangle, used to close on backdrop clicks.
 	modalBox Rect
 
-	lastScroll int
-	usage      procUsage
-	scrollBar  *scrollBarInfo
-	scrollDrag bool
+	lastScroll  int
+	usage       procUsage
+	scrollBar   *scrollBarInfo
+	scrollDrag  bool
+	quitPending bool
 
 	headerHits     []headerHit
 	footerHits     []headerHit
@@ -394,6 +395,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	b.selectMenu = nil
 	b.selectHits = nil
+	b.quitPending = false
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
@@ -2351,8 +2353,16 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 // exitHint is shown after Escape so users can find the quit and help keys.
 const exitHint = "q Quit / ? Help"
 
+// quitConfirmText is shown before quitting; only y/Y confirms.
+const quitConfirmText = "Are you sure you want to quit? (y)"
+
 // HandleKey processes one key. It returns true when the browser should quit.
 func (b *Browser) HandleKey(k string) bool {
+	if b.quitPending {
+		b.quitPending = false
+		b.status = ""
+		return k == "y" || k == "Y"
+	}
 	if ev, ok := ParseMouseToken(k); ok {
 		return b.HandleMouse(ev)
 	}
@@ -2403,7 +2413,9 @@ func (b *Browser) HandleKey(k string) bool {
 
 	switch k {
 	case "q", "ctrl-c":
-		return true
+		b.quitPending = true
+		b.status = quitConfirmText
+		return false
 	case "j", "down", "ctrl-n":
 		b.scrollBy(1)
 	case "k", "up", "ctrl-p":
@@ -3355,6 +3367,7 @@ func statusLevelFor(s string) statusLevel {
 		return statusSuccess
 	case s == moduleUnsupportedStatus,
 		s == layoutTruncatedStatus,
+		s == quitConfirmText,
 		strings.HasPrefix(s, "Form: "),
 		strings.HasPrefix(s, "Site blocked"),
 		strings.HasPrefix(s, "HTTP "),

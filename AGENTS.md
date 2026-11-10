@@ -361,7 +361,8 @@ Standard Go layout:
   `n`/`N` next/previous find match, `u` show URL,
   `y` copy selected page text (or the download popup's curl command) and clear
   the highlight,
-  `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
+  `?` help page, `!` JS console, `q`/`Ctrl-C` ask for `y` confirmation before
+  quitting. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
@@ -636,7 +637,8 @@ Standard Go layout:
   Input and results are appended to the log as
   `[input]` and `[result]`, the result appears above the input row, dirty DOM
   mutations rebuild the page, and `-no-js` logs that JavaScript is disabled.
-  `Esc`/`!` close and `q` quits when the input row is not focused (`q` is
+  `Esc`/`!` close and `q` asks to confirm quitting when the input row is not
+  focused (`q` is
   literal text while typing). The footer keeps its clickable `>_` icon while
   the console is open; clicking it closes the console the same way `Esc` does
   (including the usual exit hint).

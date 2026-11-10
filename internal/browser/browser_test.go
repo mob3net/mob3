@@ -1059,6 +1059,45 @@ func TestLabelAssociations(t *testing.T) {
 	}
 }
 
+func TestQuitConfirmation(t *testing.T) {
+	b := NewBrowser(40, 10)
+	if b.HandleKey("q") {
+		t.Fatal("q quit without confirmation")
+	}
+	if !b.quitPending || b.status != quitConfirmText {
+		t.Fatalf("quit prompt = pending %v status %q", b.quitPending, b.status)
+	}
+	if b.HandleKey("n") {
+		t.Fatal("n confirmed quit")
+	}
+	if b.quitPending || b.status != "" {
+		t.Fatalf("cancel state = pending %v status %q", b.quitPending, b.status)
+	}
+	if b.HandleKey("ctrl-c") {
+		t.Fatal("ctrl-c quit without confirmation")
+	}
+	if !b.HandleKey("y") {
+		t.Fatal("y did not confirm quit")
+	}
+	if b.quitPending {
+		t.Fatal("quit confirmation survived a confirmed quit")
+	}
+}
+
+func TestConsoleQuitConfirmation(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	if b.handleConsoleKey("q") {
+		t.Fatal("console q quit without confirmation")
+	}
+	if !b.quitPending || b.status != quitConfirmText {
+		t.Fatalf("console quit prompt = pending %v status %q", b.quitPending, b.status)
+	}
+	if !b.HandleKey("y") {
+		t.Fatal("y did not confirm console quit")
+	}
+}
+
 func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 	page := newJSPage(`<html><body><p>intro</p><button id="b" type="button">Got it</button><p id="out">visible</p></body></html>`,
 		`document.getElementById("b").addEventListener("click", function () {

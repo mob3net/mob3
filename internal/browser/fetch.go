@@ -1037,7 +1037,7 @@ disk write.</p>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
-<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit</td></tr>
+<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b> quits, any other key cancels)</td></tr>
 </table>
 
 <h2>Find</h2>
@@ -1193,7 +1193,7 @@ in the logs above the input. <b>Up</b>/<b>Down</b> recall earlier expressions
 from the console history. <b>j</b>/<b>k</b> and the wheel scroll the open
 logs/Requests/Storage/HTML section, <b>g</b>/<b>G</b> jump to the ends,
 <b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
-quits while the input row is not focused.
+asks to confirm quitting while the input row is not focused.
 Request URLs are shown as plain text (not clickable). Cache hits replace the
 size column with <b>cached</b>, and the bottom of the request list shows the
 cache bytes used, total budget and entry count. Storage lists the
@@ -1281,7 +1281,7 @@ a { color:#0645ad; text-decoration:underline; }
 <li>Press <b>o</b> and type a URL, then Enter.</li>
 <li>Press <b>Tab</b> to cycle links, <b>Enter</b> to follow one.</li>
 <li>Scroll with <b>j</b>/<b>k</b>, <b>Space</b>/<b>b</b>, or the arrow keys.</li>
-<li><b>h</b> goes back, <b>l</b> goes forward, <b>r</b> reloads, <b>q</b> quits.</li>
+<li><b>h</b> goes back, <b>l</b> goes forward, <b>r</b> reloads, <b>q</b> asks before quitting.</li>
 <li>Press <b>?</b> for the full help page.</li>
 </ul>
 <p>Try <a href="https://example.com">example.com</a> or any page you like.</p>

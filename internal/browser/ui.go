@@ -95,7 +95,9 @@ func (b *Browser) handleConsoleKey(k string) bool {
 	case "!":
 		b.toggleConsole()
 	case "q", "ctrl-c":
-		return true
+		b.quitPending = true
+		b.status = quitConfirmText
+		return false
 	case "tab":
 		b.consoleCyclePane(1)
 	case "backtab":
@@ -836,8 +838,13 @@ func (b *Browser) drawConsole(w, h int) {
 			hintW = 1
 		}
 		hint := " Click/Tab: switch section · i: JS input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hintFG := fg
+		if b.quitPending {
+			hint = " " + quitConfirmText
+			hintFG = RGB(0x9a, 0x5b, 0x00)
+		}
 		g.Text(0, h-1, padWidth(truncateWidth(hint, hintW), hintW),
-			&Style{Color: fg, FontSize: 16, LineHeight: 1}, fg)
+			&Style{Color: hintFG, FontSize: 16, LineHeight: 1, Bold: b.quitPending}, hintFG)
 		if reserve > 0 {
 			iconStyle := &Style{Bold: true, Color: RGB(0x8a, 0xc4, 0xff), FontSize: 16, LineHeight: 1}
 			g.Text(w-iconW, h-1, icon, iconStyle, iconStyle.Color)
