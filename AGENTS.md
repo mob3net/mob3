@@ -151,8 +151,19 @@ Standard Go layout:
 - **Scope:** ambitious CSS subset rather than text-only or solid-basics — own
   CSS parser, cascade, specificity, inheritance, selectors, box model, tables,
   lists, backgrounds, borders and text styling. Basic row-direction flexbox and
-  basic CSS grid are supported; floating and absolute layout are still
-  approximated as block flow.
+  basic CSS grid are supported; floating and `position:fixed`/`sticky` layout
+  are still approximated as block flow.
+- **Positioning:** `position:relative` and `position:absolute` are supported.
+  Absolute boxes are taken out of flow and resolved against the nearest
+  positioned ancestor's padding box, falling back to the page for root-level
+  elements. `top`/`right`/`bottom`/`left` (including percentages) are honoured;
+  auto width shrinks to fit, left+right stretches width, and top+bottom with
+  auto height stretch vertically. Absolute boxes paint above in-flow content in
+  tree order, and their fragments feed link rectangles, find and dark mode
+  normally. Relative offsets shift a block and its painted subtree without
+  moving siblings, and the containing block it establishes moves with it.
+  `z-index` is ignored, `fixed`/`sticky` fall back to block flow, and relative
+  offsets are applied to block boxes only (inline relative is ignored).
 - **Responsive media queries:** `@media` conditions are stored per rule and
   matched against the layout viewport (`columns * 8` CSS px). `screen`/`all`,
   min/max-width (and device-width), and range syntax such as `(width>=960px)`
@@ -764,8 +775,10 @@ Standard Go layout:
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
 - Flexbox supports basic rows only (no wrap/justify/align/order); grid supports
-  basic row-major tracks but not named areas or row spans. Floats and absolute
-  positioning are approximated as block flow.
+  basic row-major tracks but not named areas or row spans. Floats,
+  `position:fixed` and `position:sticky` are approximated as block flow.
+  Absolute and relative positioning work, but `z-index` stacking is ignored and
+  relative offsets are not applied to inline boxes.
 - SVG support is partial: paths, shapes, gradients and common transforms work,
   but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
   missing. Inline SVG falls back to an accessible label if rasterization fails.
@@ -865,9 +878,9 @@ Known unsupported families (do not present these as available):
 - Network/browser: streaming fetch, upload progress, CORS, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
-- CSS/layout: named grid areas, grid row spans, floats, absolute positioning,
-  CSS variables, animations, transitions, generated content, `@import`,
-  background images, full flexbox.
+- CSS/layout: named grid areas, grid row spans, floats, `position:fixed`/
+  `position:sticky`, `z-index` stacking, CSS variables, animations,
+  transitions, generated content, `@import`, background images, full flexbox.
 
 Do not add a stub just to silence an error when a library would then depend on
 behavior MOB³ cannot provide; document it here instead or implement the real

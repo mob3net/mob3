@@ -117,6 +117,10 @@ type Style struct {
 	ListStyle     string
 	Overflow      string
 	Position      string
+	Top           Length
+	Right         Length
+	Bottom        Length
+	Left          Length
 	Clip          string
 	FlexDir       string
 	FlexGrow      float64
@@ -900,6 +904,18 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "position":
 		st.Position = lower
+	case "top", "right", "bottom", "left":
+		l := parseLength(val, st.FontSize)
+		switch prop {
+		case "top":
+			st.Top = l
+		case "right":
+			st.Right = l
+		case "bottom":
+			st.Bottom = l
+		case "left":
+			st.Left = l
+		}
 	case "clip":
 		st.Clip = lower
 	}

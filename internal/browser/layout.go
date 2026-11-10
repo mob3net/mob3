@@ -72,6 +72,32 @@ type layouter struct {
 	truncated bool
 	deadline  time.Time
 	expired   bool
+
+	// cb is the padding box of the nearest positioned ancestor, used to
+	// resolve absolute offsets. nil at the root, where rootCB stands in.
+	cb     *cbRect
+	rootCB *cbRect
+	// abs collects absolutely positioned boxes. They are kept out of normal
+	// flow and laid out after it, so they paint above in-flow content.
+	abs []*absBox
+}
+
+// cbRect is a containing block in document coordinates. h stays unknown until
+// the ancestor's layout finishes, or the in-flow page height is known for the
+// initial containing block.
+type cbRect struct {
+	x, y, w, h int
+	knownH     bool
+}
+
+// absBox records an absolutely positioned element found during normal flow.
+// The subtree is laid out in a second pass, once containing-block heights are
+// known, then its fragments are appended above the in-flow content.
+type absBox struct {
+	node    *Node
+	cb      *cbRect
+	staticX int
+	staticY int
 }
 
 // outOfTime reports whether the layout pass has exceeded its deadline. The
@@ -119,6 +145,7 @@ func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadl
 	engine := newStyleEngineDeadline(author, width*cellW, deadline)
 	styles := engine.computeAll(root)
 	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline}
+	l.rootCB = &cbRect{w: width}
 	if engine.expired {
 		l.truncated = true
 	}
@@ -128,6 +155,21 @@ func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadl
 	} else {
 		l.flow(root, 0, 0, width)
 	}
+	// Absolute boxes resolve against the in-flow page height when they have no
+	// positioned ancestor, so record it before laying them out.
+	inFlowHeight := 0
+	for i := range l.frags {
+		f := &l.frags[i]
+		if f.Y+f.H > inFlowHeight {
+			inFlowHeight = f.Y + f.H
+		}
+		if f.Kind == fragText && f.Y+1 > inFlowHeight {
+			inFlowHeight = f.Y + 1
+		}
+	}
+	l.rootCB.h = inFlowHeight
+	l.rootCB.knownH = true
+	l.finalizeAbsolute()
 	height := 0
 	for i := range l.frags {
 		f := &l.frags[i]
@@ -273,20 +315,31 @@ func (l *layouter) isBlock(n *Node) bool {
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
+	h, _ := l.blockLayout(n, x, y, availW, 0)
+	return h
+}
+
+// blockLayout is block with the border-box rectangle reported. forceContentH,
+// when positive, stretches the content box to at least that height (used by
+// absolutely positioned boxes with both top and bottom offsets).
+func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, Rect) {
 	if l.outOfTime() {
-		return 0
+		return 0, Rect{}
 	}
 	if l.truncated || y > maxLayoutRows {
 		l.truncated = true
-		return 0
+		return 0, Rect{}
 	}
 	st := n.Style
 	if st == nil || st.Display == "none" {
-		return 0
+		return 0, Rect{}
 	}
 	if availW < 1 {
 		availW = 1
 	}
+	parentCB := l.cb
+	fragStart := len(l.frags)
+	absStart := len(l.abs)
 	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, availW)
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if st.Width.Set && !st.Width.IsAuto() {
@@ -323,6 +376,16 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 	contentY := top + bt + pt
 	boxW := bl + pl + contentW + pr + br
 
+	// A positioned box is a containing block for its absolutely positioned
+	// descendants. Its height is filled in once the content has been laid out.
+	positioned := st.Position == "relative" || st.Position == "absolute"
+	var newCB *cbRect
+	if positioned {
+		newCB = &cbRect{x: boxX + bl, y: top + bt, w: pl + contentW + pr}
+		l.cb = newCB
+		defer func() { l.cb = parentCB }()
+	}
+
 	bgIndex := -1
 	if st.Background.opaque() {
 		l.addFill(boxX, top, boxW, 1, st.Background)
@@ -344,6 +407,13 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 		if h := st.Height.resolveV(availW, st.FontSize); h > contentH {
 			contentH = h
 		}
+	}
+	if forceContentH > contentH {
+		contentH = forceContentH
+	}
+	if newCB != nil {
+		newCB.h = pt + contentH + pb
+		newCB.knownH = true
 	}
 	if st.Display == "list-item" {
 		if marker := listMarker(st, n); marker != "" {
@@ -380,7 +450,201 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 			l.addFill(boxX+boxW-br, top, br, totalH, bc)
 		}
 	}
-	return mt + totalH + mb
+	// Relative offsets move the box and its painted subtree without affecting
+	// siblings. Shift the containing block it establishes as well, so nested
+	// absolute descendants follow.
+	if st.Position == "relative" {
+		dx, dy := l.relativeOffset(st, parentCB)
+		if dx != 0 || dy != 0 {
+			for i := fragStart; i < len(l.frags); i++ {
+				l.frags[i].X += dx
+				l.frags[i].Y += dy
+			}
+			if newCB != nil {
+				newCB.x += dx
+				newCB.y += dy
+			}
+			for i := absStart; i < len(l.abs); i++ {
+				l.abs[i].staticX += dx
+				l.abs[i].staticY += dy
+			}
+		}
+	}
+	return mt + totalH + mb, Rect{X: boxX, Y: top, W: boxW, H: totalH}
+}
+
+// offsetSet reports whether a positioned offset is a real length rather than
+// auto or unset.
+func offsetSet(l Length) bool {
+	return l.Set && !l.Auto
+}
+
+// relativeOffset resolves top/left/right/bottom for a relatively positioned
+// box into a visual translation. Left wins over right and top over bottom,
+// matching CSS for left-to-right text.
+func (l *layouter) relativeOffset(st *Style, cb *cbRect) (int, int) {
+	w, h := l.width, 0
+	if cb != nil {
+		w = cb.w
+		if cb.knownH {
+			h = cb.h
+		}
+	}
+	dx, dy := 0, 0
+	if offsetSet(st.Left) {
+		dx = st.Left.resolveH(w, st.FontSize)
+	} else if offsetSet(st.Right) {
+		dx = -st.Right.resolveH(w, st.FontSize)
+	}
+	if offsetSet(st.Top) {
+		dy = st.Top.resolveV(h, st.FontSize)
+	} else if offsetSet(st.Bottom) {
+		dy = -st.Bottom.resolveV(h, st.FontSize)
+	}
+	return dx, dy
+}
+
+// deferAbsolute records an out-of-flow element. Its subtree is laid out after
+// normal flow, when containing-block heights are known.
+func (l *layouter) deferAbsolute(n *Node, staticX, staticY int) {
+	if n == nil || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
+		return
+	}
+	cb := l.cb
+	if cb == nil {
+		cb = l.rootCB
+	}
+	l.abs = append(l.abs, &absBox{node: n, cb: cb, staticX: staticX, staticY: staticY})
+}
+
+// finalizeAbsolute lays out the recorded absolute boxes and appends their
+// fragments above the in-flow content. Boxes discovered while laying out an
+// absolute subtree are appended to the queue and processed in tree order.
+func (l *layouter) finalizeAbsolute() {
+	for i := 0; i < len(l.abs); i++ {
+		l.layoutAbsolute(l.abs[i])
+	}
+}
+
+// layoutAbsolute places one absolute box against its containing block,
+// resolving left/right/top/bottom, percentage offsets, shrink-to-fit widths
+// and top+bottom height stretching.
+func (l *layouter) layoutAbsolute(a *absBox) {
+	if l.outOfTime() {
+		return
+	}
+	n := a.node
+	st := n.Style
+	if st == nil || st.Display == "none" || st.Hidden {
+		return
+	}
+	cb := a.cb
+	if cb == nil {
+		cb = l.rootCB
+	}
+	cbW := cb.w
+	if cbW < 1 {
+		cbW = l.width
+	}
+	cbH := 0
+	if cb.knownH {
+		cbH = cb.h
+	}
+	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, cbW)
+
+	hasL, hasR := offsetSet(st.Left), offsetSet(st.Right)
+	hasT, hasB := offsetSet(st.Top), offsetSet(st.Bottom)
+	left, right, topOff, bottomOff := 0, 0, 0, 0
+	if hasL {
+		left = st.Left.resolveH(cbW, st.FontSize)
+	}
+	if hasR {
+		right = st.Right.resolveH(cbW, st.FontSize)
+	}
+	if hasT {
+		topOff = st.Top.resolveV(cbH, st.FontSize)
+	}
+	if hasB {
+		bottomOff = st.Bottom.resolveV(cbH, st.FontSize)
+	}
+
+	borderPad := bl + br + pl + pr
+	availContent := cbW - ml - mr - borderPad - left - right
+	contentW := availContent
+	switch {
+	case st.Width.Set && !st.Width.IsAuto():
+		contentW = st.Width.resolveH(cbW, st.FontSize)
+	case hasL && hasR:
+		// Stretch to fill the space between the offsets.
+	default:
+		// Shrink-to-fit: the used width is the content's preferred width,
+		// clamped to the space available between the offsets.
+		maxW, _ := l.measure(n)
+		if l.isBlock(n) {
+			maxW -= bl + br + pl + pr
+		}
+		if maxW < 0 {
+			maxW = 0
+		}
+		if maxW < contentW {
+			contentW = maxW
+		}
+	}
+	if contentW < 0 {
+		contentW = 0
+	}
+	availW := contentW + ml + mr + borderPad
+	if availW < 1 {
+		availW = 1
+	}
+
+	// With both vertical offsets and an auto height, stretch between them.
+	forceH := 0
+	if hasT && hasB && (!st.Height.Set || st.Height.IsAuto()) {
+		forceH = cbH - topOff - bottomOff - mt - mb - bt - bb - pt - pb
+		if forceH < 0 {
+			forceH = 0
+		}
+	}
+
+	x, y := a.staticX, a.staticY
+	if hasL {
+		x = cb.x + left
+	}
+	if hasT {
+		y = cb.y + topOff
+	}
+
+	prevCB := l.cb
+	l.cb = cb
+	start := len(l.frags)
+	_, rect := l.blockLayout(n, x, y, availW, forceH)
+	frags := make([]Frag, len(l.frags)-start)
+	copy(frags, l.frags[start:])
+	l.frags = l.frags[:start]
+	l.cb = prevCB
+
+	desiredX, desiredY := rect.X, rect.Y
+	switch {
+	case hasL:
+		desiredX = cb.x + left + ml
+	case hasR:
+		desiredX = cb.x + cb.w - right - mr - rect.W
+	}
+	switch {
+	case hasT:
+		desiredY = cb.y + topOff + mt
+	case hasB:
+		desiredY = cb.y + cbH - bottomOff - mb - rect.H
+	}
+	dx, dy := desiredX-rect.X, desiredY-rect.Y
+	if dx != 0 || dy != 0 {
+		for i := range frags {
+			frags[i].X += dx
+			frags[i].Y += dy
+		}
+	}
+	l.frags = append(l.frags, frags...)
 }
 
 // flexRow lays out a row-direction flex container. It supports equal or
@@ -632,6 +896,10 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
 		}
+		if child.Style.Position == "absolute" {
+			l.deferAbsolute(child, x, y)
+			continue
+		}
 		start, span, explicit := gridPlacement(child.Style.GridColumn, len(widths))
 		if explicit && start >= 0 && start < len(widths) {
 			col = start
@@ -690,6 +958,10 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	var items []*Node
 	for _, c := range n.Children {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display != "none" {
+			if c.Style.Position == "absolute" {
+				l.deferAbsolute(c, x, y)
+				continue
+			}
 			items = append(items, c)
 		}
 	}
@@ -887,6 +1159,10 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 			if c.Style == nil || c.Style.Display == "none" {
 				continue
 			}
+			if c.Style.Position == "absolute" {
+				l.deferAbsolute(c, x, cur)
+				continue
+			}
 			if l.isBlock(c) {
 				flush()
 				cur += l.block(c, x, cur, width)
@@ -978,6 +1254,10 @@ func (c *inlineCtx) collect(n *Node) {
 	}
 	st := n.Style
 	if st == nil || st.Display == "none" || st.Hidden {
+		return
+	}
+	if st.Position == "absolute" {
+		c.l.deferAbsolute(n, c.x, c.y)
 		return
 	}
 	switch n.Tag {
@@ -1626,6 +1906,10 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	collect = func(parent *Node) {
 		for _, c := range parent.Children {
 			if c.Type != ElementNode || c.Style == nil || c.Style.Display == "none" {
+				continue
+			}
+			if c.Style.Position == "absolute" {
+				l.deferAbsolute(c, x, y)
 				continue
 			}
 			if c.Tag == "tr" {

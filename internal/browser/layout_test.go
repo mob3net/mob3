@@ -565,3 +565,139 @@ func TestBuildLayoutWithoutDeadlineComplete(t *testing.T) {
 		t.Fatal("small layout was unexpectedly truncated")
 	}
 }
+
+func textFrag(ly *Layout, s string) *Frag {
+	for i := range ly.Frags {
+		if ly.Frags[i].Kind == fragText && strings.TrimSpace(ly.Frags[i].Text) == s {
+			return &ly.Frags[i]
+		}
+	}
+	return nil
+}
+
+func TestAbsoluteOutOfFlowAndOffsets(t *testing.T) {
+	ly := build(`<div>first</div><div style="position:absolute;top:80px;left:24px">abs</div><div>after</div>`, 40)
+	abs := textFrag(ly, "abs")
+	after := textFrag(ly, "after")
+	if abs == nil || after == nil {
+		t.Fatalf("missing fragments: abs=%v after=%v", abs, after)
+	}
+	if abs.X != 3 || abs.Y != 5 {
+		t.Fatalf("absolute offset = (%d,%d), want (3,5)", abs.X, abs.Y)
+	}
+	if after.Y > abs.Y {
+		t.Fatalf("absolute box pushed following flow: after.Y=%d abs.Y=%d", after.Y, abs.Y)
+	}
+}
+
+func TestAbsoluteContainingBlock(t *testing.T) {
+	ly := build(`<div style="position:relative;height:160px"><div style="position:absolute;top:16px;left:16px">child</div></div><div>after</div>`, 40)
+	child := textFrag(ly, "child")
+	after := textFrag(ly, "after")
+	if child == nil || after == nil {
+		t.Fatalf("missing fragments: child=%v after=%v", child, after)
+	}
+	if child.X != 2 || child.Y != 1 {
+		t.Fatalf("child at (%d,%d), want (2,1)", child.X, child.Y)
+	}
+	if after.Y < 10 {
+		t.Fatalf("following flow did not clear the 160px containing block: after.Y=%d", after.Y)
+	}
+}
+
+func TestAbsoluteRightBottom(t *testing.T) {
+	ly := build(`<div>body</div><div style="position:absolute;right:0;bottom:0">abc</div>`, 30)
+	abs := textFrag(ly, "abc")
+	if abs == nil {
+		t.Fatal("missing absolute fragment")
+	}
+	if abs.X != 27 || abs.Y != 0 {
+		t.Fatalf("right/bottom position = (%d,%d), want (27,0)", abs.X, abs.Y)
+	}
+}
+
+func TestAbsolutePercentageOffset(t *testing.T) {
+	ly := build(`<div>body</div><div style="position:absolute;left:50%;top:0">abcd</div>`, 40)
+	abs := textFrag(ly, "abcd")
+	if abs == nil {
+		t.Fatal("missing absolute fragment")
+	}
+	if abs.X != 20 {
+		t.Fatalf("50%% left = %d, want 20", abs.X)
+	}
+}
+
+func TestAbsoluteStretchBetweenOffsets(t *testing.T) {
+	ly := build(`<div style="position:relative;height:80px;background:#eee"><div style="position:absolute;top:0;left:0;right:0;bottom:0;background:#ff0000"></div></div>`, 30)
+	red := RGB(0xff, 0, 0)
+	for _, f := range ly.Frags {
+		if f.Kind == fragFill && f.Color == red {
+			if f.X != 0 || f.Y != 0 || f.W != 30 || f.H != 5 {
+				t.Fatalf("stretched box = %+v, want x=0 y=0 w=30 h=5", f)
+			}
+			return
+		}
+	}
+	t.Fatal("no stretched absolute background")
+}
+
+func TestAbsolutePaintsAboveFlow(t *testing.T) {
+	ly := build(`<div style="position:absolute;top:0;left:0">abs</div><p>flow</p>`, 30)
+	absIdx, flowIdx := -1, -1
+	for i, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		switch strings.TrimSpace(f.Text) {
+		case "abs":
+			absIdx = i
+		case "flow":
+			flowIdx = i
+		}
+	}
+	if absIdx < 0 || flowIdx < 0 {
+		t.Fatalf("missing fragments: abs=%d flow=%d", absIdx, flowIdx)
+	}
+	if absIdx < flowIdx {
+		t.Fatalf("absolute painted below flow: abs=%d flow=%d", absIdx, flowIdx)
+	}
+}
+
+func TestRelativeOffsetMovesOnlyItsBox(t *testing.T) {
+	ly := build(`<div style="position:relative;top:16px;left:16px">shift</div><div>next</div>`, 30)
+	shift := textFrag(ly, "shift")
+	next := textFrag(ly, "next")
+	if shift == nil || next == nil {
+		t.Fatalf("missing fragments: shift=%v next=%v", shift, next)
+	}
+	if shift.X != 2 || shift.Y != 1 {
+		t.Fatalf("relative box at (%d,%d), want (2,1)", shift.X, shift.Y)
+	}
+	if next.X != 0 || next.Y != 1 {
+		t.Fatalf("sibling moved with relative box: (%d,%d), want (0,1)", next.X, next.Y)
+	}
+}
+
+func TestAbsoluteLinkRectFollowsOffset(t *testing.T) {
+	ly := build(`<a href="#x" style="position:absolute;left:24px;top:80px">L</a>`, 30)
+	if len(ly.Links) != 1 || len(ly.Links[0].Rects) == 0 {
+		t.Fatalf("links = %+v", ly.Links)
+	}
+	r := ly.Links[0].Rects[0]
+	if r.X != 3 || r.Y != 5 {
+		t.Fatalf("link rect = %+v, want x=3 y=5", r)
+	}
+}
+
+func TestAbsoluteNestedInRelative(t *testing.T) {
+	ly := build(`<div style="position:relative;left:16px"><div style="position:absolute;top:0;left:0">nested</div></div>`, 30)
+	nested := textFrag(ly, "nested")
+	if nested == nil {
+		t.Fatal("missing nested absolute fragment")
+	}
+	// The relative parent shifts to x=2 and its containing block follows, so
+	// the child starts at the parent's new left edge.
+	if nested.X != 2 || nested.Y != 0 {
+		t.Fatalf("nested absolute at (%d,%d), want (2,0)", nested.X, nested.Y)
+	}
+}
