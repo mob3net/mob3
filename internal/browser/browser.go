@@ -28,7 +28,7 @@ const (
 	jsRedrawInterval = 250 * time.Millisecond
 
 	layoutTruncatedStatus   = "Page truncated (layout limit)"
-	moduleUnsupportedStatus = "Page requires ES modules (unsupported)"
+	moduleUnsupportedStatus = "Page requires ES modules (unsupported) — try reader mode (R)"
 	maxClipboardBytes       = 100 * 1024
 )
 

@@ -815,7 +815,8 @@ Standard Go layout:
 
 - JavaScript is a practical subset: modules and CSP are unsupported. A page
   containing `<script type="module">` is shown with the status
-  `Page requires ES modules (unsupported)` so an SPA boot/loading screen does
+  `Page requires ES modules (unsupported) — try reader mode (R)` so an SPA
+  boot/loading screen does
   not look like a hang; the module scripts are still skipped. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.

@@ -97,7 +97,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 
 - Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show
   a partial page, a blank page or their no-JavaScript fallback. Pages that rely
-  on ES modules show a status-bar warning that modules are unsupported.
+  on ES modules show a status-bar warning that modules are unsupported and
+  suggest reader mode (`R`).
 - Reader mode is heuristic: it can pick too little or too much content on
   unusual layouts, shows a snapshot rather than live updates, and removes
   images, forms and other interactive controls. Dark mode keeps images in

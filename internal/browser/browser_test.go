@@ -3194,6 +3194,9 @@ func TestModulePageShowsStatusWarning(t *testing.T) {
 	if b.status != moduleUnsupportedStatus {
 		t.Fatalf("status = %q, want %q", b.status, moduleUnsupportedStatus)
 	}
+	if !strings.Contains(b.status, "reader mode") {
+		t.Fatalf("status has no reader-mode hint: %q", b.status)
+	}
 }
 
 func TestFooterStatusColors(t *testing.T) {
