@@ -1071,6 +1071,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
+<tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
 </table>
@@ -1139,7 +1140,9 @@ a new page loads successfully; a failed load keeps the old log.
 Because clicking is used to switch sections, use <b>Shift</b>-drag for
 terminal text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
-dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.</p>
+dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.
+Every modal has a <b>×</b> in its top-right corner that closes it with the
+mouse, and clicking the dimmed backdrop also closes it.</p>
 
 <p><a href="about:start">Back to the start page</a></p>
 </body></html>`

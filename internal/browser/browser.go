@@ -124,6 +124,10 @@ type Browser struct {
 	// notice holds a small informational modal, such as the unsupported
 	// file-upload message.
 	notice *noticeDialog
+	// modalClose is the close-button hit region of the modal drawn last.
+	modalClose Rect
+	// modalBox is the full modal rectangle, used to close on backdrop clicks.
+	modalBox Rect
 
 	lastScroll int
 	usage      procUsage
@@ -842,8 +846,28 @@ func sameDocument(a, b *url.URL) bool {
 	return a.Scheme == b.Scheme && a.Host == b.Host && a.Path == b.Path && a.RawQuery == b.RawQuery
 }
 
+// modalMouseAction classifies a press on an open modal: "close" for the ×,
+// "outside" for a click on the backdrop, and "" for a click inside the body.
+func (b *Browser) modalMouseAction(ev MouseEvent) string {
+	if !ev.Press || ev.Motion || ev.Button != MouseButtonLeft {
+		return ""
+	}
+	x, y := ev.X-1, ev.Y-1
+	inRect := func(r Rect) bool {
+		return r.W > 0 && r.H > 0 && x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
+	}
+	if inRect(b.modalClose) {
+		return "close"
+	}
+	if !inRect(b.modalBox) {
+		return "outside"
+	}
+	return ""
+}
+
 // showNotice opens a small informational modal.
 func (b *Browser) showNotice(title, message string) {
+	b.download = nil
 	b.notice = &noticeDialog{title: title, message: message}
 }
 
@@ -863,6 +887,7 @@ func (b *Browser) showDownload(target, name string) {
 	}
 	name = sanitizeDownloadName(name)
 	command := "curl -L -o " + shellQuote(name) + " " + shellQuote(target)
+	b.notice = nil
 	b.download = &downloadDialog{url: target, name: name, command: command}
 }
 
@@ -1628,9 +1653,19 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		return false
 	}
 	if b.download != nil {
+		switch b.modalMouseAction(ev) {
+		case "close", "outside":
+			b.download = nil
+			b.status = ""
+		}
 		return false
 	}
 	if b.notice != nil {
+		switch b.modalMouseAction(ev) {
+		case "close", "outside":
+			b.notice = nil
+			b.status = ""
+		}
 		return false
 	}
 	if b.prompt {
@@ -2468,13 +2503,14 @@ func (b *Browser) draw() {
 
 // flushGrid writes changed cells to the terminal.
 func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
-	if b.dialog != nil {
+	b.modalClose = Rect{}
+	b.modalBox = Rect{}
+	switch {
+	case b.dialog != nil:
 		b.paintDialog(g)
-	}
-	if b.download != nil {
+	case b.download != nil:
 		b.paintDownload(g)
-	}
-	if b.notice != nil {
+	case b.notice != nil:
 		b.paintNotice(g)
 	}
 	lines := g.Lines(b.color)

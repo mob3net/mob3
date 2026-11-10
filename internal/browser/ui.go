@@ -884,6 +884,13 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 		if !ok || k == "eof" {
 			return "", false
 		}
+		if ev, isMouse := ParseMouseToken(k); isMouse {
+			switch b.modalMouseAction(ev) {
+			case "close", "outside":
+				return "", d.kind == "alert"
+			}
+			continue
+		}
 		switch d.kind {
 		case "alert":
 			switch k {
@@ -999,7 +1006,62 @@ func dialogPromptKey(d *jsDialog, k string) (text string, cursor int, done, ok b
 	return text, cursor, false, false
 }
 
-// paintDialog overlays the active modal on the current grid.
+// modalBG is the solid background used for modal bodies. It stays fully opaque
+// over the dimmed page backdrop.
+var modalBG = RGB(0xff, 0xff, 0xff)
+
+// modalFrame draws the solid modal box, title bar and mouse close button, and
+// records the close hit region. It returns the box origin.
+func (b *Browser) modalFrame(g *Grid, boxW, boxH int, title string) (int, int) {
+	x := (g.W - boxW) / 2
+	y := (g.H - boxH) / 2
+	border := RGB(0x2f, 0x6f, 0xbf)
+	titleBG := RGB(0x2f, 0x6f, 0xbf)
+	titleFG := RGB(0xff, 0xff, 0xff)
+	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
+	g.Fill(x, y, boxW, boxH, modalBG)
+	// Fill only replaces background colors; blank the glyphs too so page text
+	// cannot show through the solid modal body.
+	for yy := maxInt(y, 0); yy < minInt(y+boxH, g.H); yy++ {
+		for xx := maxInt(x, 0); xx < minInt(x+boxW, g.W); xx++ {
+			c := &g.Cells[yy*g.W+xx]
+			c.R = 0
+			c.Cont = false
+			c.Img = false
+			c.Raw = ""
+			c.RawW = 0
+			c.Skip = false
+		}
+	}
+	g.Fill(x, y, boxW, 1, border)
+	g.Fill(x, y+boxH-1, boxW, 1, border)
+	g.Fill(x, y, 1, boxH, border)
+	g.Fill(x+boxW-1, y, 1, boxH, border)
+	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
+	g.Text(x+2, y+1, truncateWidth(" "+title+" ", boxW-8), titleStyle, titleFG)
+	closeX := x + boxW - 2
+	g.Put(closeX, y, '×', &Style{Bold: true}, titleFG, border)
+	b.modalClose = Rect{X: closeX - 1, Y: y, W: 3, H: 1}
+	b.modalBox = Rect{X: x, Y: y, W: boxW, H: boxH}
+	return x, y
+}
+
+// modalDim darkens everything outside the modal rectangle so the solid box
+// stands out against the page behind it.
+func modalDim(g *Grid, x, y, boxW, boxH int) {
+	dim := RGB(0xdf, 0xe4, 0xea)
+	for yy := 0; yy < g.H; yy++ {
+		for xx := 0; xx < g.W; xx++ {
+			if xx >= x && xx < x+boxW && yy >= y && yy < y+boxH {
+				continue
+			}
+			c := &g.Cells[yy*g.W+xx]
+			c.BG = dim
+		}
+	}
+}
+
+// paintDialog overlays the active JavaScript alert/confirm/prompt modal.
 func (b *Browser) paintDialog(g *Grid) {
 	d := b.dialog
 	if d == nil {
@@ -1009,7 +1071,7 @@ func (b *Browser) paintDialog(g *Grid) {
 	if boxW < 20 {
 		boxW = g.W
 	}
-	if boxW < 4 {
+	if boxW < 8 {
 		return
 	}
 	inner := boxW - 4
@@ -1018,45 +1080,31 @@ func (b *Browser) paintDialog(g *Grid) {
 		promptRow = 1
 	}
 	msg := wrapCells(d.message, inner)
-	maxLines := g.H - 4 - promptRow
+	maxLines := g.H - 6 - promptRow
 	if maxLines < 1 {
 		maxLines = 1
 	}
 	if len(msg) > maxLines {
 		msg = msg[:maxLines]
 	}
-	boxH := 4 + len(msg) + promptRow
+	boxH := 6 + len(msg) + promptRow
 	if boxH > g.H {
 		boxH = g.H
 	}
-	x := (g.W - boxW) / 2
-	y := (g.H - boxH) / 2
-	bg := RGB(0xf6, 0xf8, 0xfa)
+	x, y := b.modalFrame(g, boxW, boxH, "JavaScript "+d.kind)
 	fg := RGB(0x1f, 0x23, 0x28)
-	border := RGB(0x2f, 0x6f, 0xbf)
-	titleBG := RGB(0x2f, 0x6f, 0xbf)
-	titleFG := RGB(0xff, 0xff, 0xff)
-	g.Fill(x, y, boxW, boxH, bg)
-	g.Fill(x, y, boxW, 1, border)
-	g.Fill(x, y+boxH-1, boxW, 1, border)
-	g.Fill(x, y, 1, boxH, border)
-	g.Fill(x+boxW-1, y, 1, boxH, border)
-	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
-	title := " JavaScript " + d.kind + " "
 	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
-	g.Text(x+2, y+1, truncateWidth(title, boxW-4), titleStyle, titleFG)
 	for i, line := range msg {
-		g.Text(x+2, y+2+i, padWidth(truncateWidth(line, inner), inner), style, fg)
+		g.Text(x+2, y+3+i, padWidth(truncateWidth(line, inner), inner), style, fg)
 	}
-	row := y + 2 + len(msg)
+	row := y + 3 + len(msg)
 	if d.kind == "prompt" {
 		g.Fill(x+2, row, inner, 1, RGB(0xe8, 0xf0, 0xfe))
 		head, at, tail, show := promptParts("", d.text, d.cursor, d.selectAll, inner)
 		g.Text(x+2, row, head, style, fg)
 		cx := x + 2 + stringWidth(head)
 		if show {
-			g.Put(cx, row, at, &Style{Bold: true}, titleFG, border)
+			g.Put(cx, row, at, &Style{Bold: true}, RGB(0xff, 0xff, 0xff), RGB(0x2f, 0x6f, 0xbf))
 			cx++
 		}
 		g.Text(cx, row, tail, style, fg)
@@ -1068,17 +1116,7 @@ func (b *Browser) paintDialog(g *Grid) {
 		hint = " Enter/Y: Yes · N/Esc: No "
 	}
 	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-
-	// Shadow-free simple modal: dim the outermost columns to make the box pop.
-	for yy := 0; yy < g.H; yy++ {
-		if yy >= y && yy < y+boxH {
-			continue
-		}
-		for xx := 0; xx < g.W; xx++ {
-			c := &g.Cells[yy*g.W+xx]
-			c.BG = RGB(0xdf, 0xe4, 0xea)
-		}
-	}
+	modalDim(g, x, y, boxW, boxH)
 }
 
 // paintDownload overlays the download curl hint. The command is shown as plain
@@ -1097,49 +1135,26 @@ func (b *Browser) paintDownload(g *Grid) {
 	}
 	inner := boxW - 4
 	lines := wrapCells(d.command, inner)
-	maxLines := g.H - 4
+	maxLines := g.H - 6
 	if maxLines < 1 {
 		maxLines = 1
 	}
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
 	}
-	boxH := 4 + len(lines)
+	boxH := 6 + len(lines)
 	if boxH > g.H {
 		boxH = g.H
 	}
-	x := (g.W - boxW) / 2
-	y := (g.H - boxH) / 2
-	bg := RGB(0xf6, 0xf8, 0xfa)
+	x, y := b.modalFrame(g, boxW, boxH, "Download "+d.name)
 	fg := RGB(0x1f, 0x23, 0x28)
-	border := RGB(0x2f, 0x6f, 0xbf)
-	titleBG := RGB(0x2f, 0x6f, 0xbf)
-	titleFG := RGB(0xff, 0xff, 0xff)
 	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
-	g.Fill(x, y, boxW, boxH, bg)
-	g.Fill(x, y, boxW, 1, border)
-	g.Fill(x, y+boxH-1, boxW, 1, border)
-	g.Fill(x, y, 1, boxH, border)
-	g.Fill(x+boxW-1, y, 1, boxH, border)
-	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
-	title := truncateWidth(" Download "+d.name+" ", boxW-4)
-	g.Text(x+2, y+1, title, titleStyle, titleFG)
 	for i, line := range lines {
-		g.Text(x+2, y+2+i, padWidth(truncateWidth(line, inner), inner), style, fg)
+		g.Text(x+2, y+3+i, padWidth(truncateWidth(line, inner), inner), style, fg)
 	}
 	hint := " y: copy curl command · Esc: close "
 	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-
-	for yy := 0; yy < g.H; yy++ {
-		if yy >= y && yy < y+boxH {
-			continue
-		}
-		for xx := 0; xx < g.W; xx++ {
-			c := &g.Cells[yy*g.W+xx]
-			c.BG = RGB(0xdf, 0xe4, 0xea)
-		}
-	}
+	modalDim(g, x, y, boxW, boxH)
 }
 
 // paintNotice overlays a small informational modal.
@@ -1157,46 +1172,24 @@ func (b *Browser) paintNotice(g *Grid) {
 	}
 	inner := boxW - 4
 	lines := wrapCells(d.message, inner)
-	maxLines := g.H - 4
+	maxLines := g.H - 6
 	if maxLines < 1 {
 		maxLines = 1
 	}
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
 	}
-	boxH := 4 + len(lines)
+	boxH := 6 + len(lines)
 	if boxH > g.H {
 		boxH = g.H
 	}
-	x := (g.W - boxW) / 2
-	y := (g.H - boxH) / 2
-	bg := RGB(0xf6, 0xf8, 0xfa)
+	x, y := b.modalFrame(g, boxW, boxH, d.title)
 	fg := RGB(0x1f, 0x23, 0x28)
-	border := RGB(0x2f, 0x6f, 0xbf)
-	titleBG := RGB(0x2f, 0x6f, 0xbf)
-	titleFG := RGB(0xff, 0xff, 0xff)
 	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
-	g.Fill(x, y, boxW, boxH, bg)
-	g.Fill(x, y, boxW, 1, border)
-	g.Fill(x, y+boxH-1, boxW, 1, border)
-	g.Fill(x, y, 1, boxH, border)
-	g.Fill(x+boxW-1, y, 1, boxH, border)
-	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
-	g.Text(x+2, y+1, truncateWidth(" "+d.title+" ", boxW-4), titleStyle, titleFG)
 	for i, line := range lines {
-		g.Text(x+2, y+2+i, padWidth(truncateWidth(line, inner), inner), style, fg)
+		g.Text(x+2, y+3+i, padWidth(truncateWidth(line, inner), inner), style, fg)
 	}
 	hint := " Enter / Esc: close "
 	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-
-	for yy := 0; yy < g.H; yy++ {
-		if yy >= y && yy < y+boxH {
-			continue
-		}
-		for xx := 0; xx < g.W; xx++ {
-			c := &g.Cells[yy*g.W+xx]
-			c.BG = RGB(0xdf, 0xe4, 0xea)
-		}
-	}
+	modalDim(g, x, y, boxW, boxH)
 }

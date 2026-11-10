@@ -565,12 +565,18 @@ Standard Go layout:
   `console.*` and uncaught errors append to a bounded JS log. Module scripts
   remain unsupported, so globals defined only by modules (for example a
   third-party `google` object) stay undefined.
+- **Modals:** alert/confirm/prompt, download and upload-notice modals share a
+  centered box over a dimmed page backdrop. The body is fully opaque white
+  (never blended with the page), with a blank spacer row below the title bar and
+  above the hint, and a `×` in the top-right corner that closes the modal with
+  the mouse. Clicking the dimmed backdrop also closes the modal.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
   block script execution until answered. Alert closes on Enter/Space/Esc;
   confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text
   editing keys as the URL bar. In non-interactive/dump runs, alert returns,
-  confirm returns false and prompt returns null. Dialogs use keyboard input
-  (mouse is not handled while modal).
+  confirm returns false and prompt returns null. Modals use keyboard input;
+  clicking the `×` or the dimmed backdrop closes them with the mouse
+  (cancelling confirm/prompt).
 - **JS console view:** `!` opens a plain-text console in the viewport. A
   one-row menu at the top has four tabs: JavaScript logs, Requests, Storage and
   HTML. The active tab is highlighted blue; only its section body is shown

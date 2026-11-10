@@ -2252,7 +2252,7 @@ func TestDownloadCommandIsNotDrawnSelected(t *testing.T) {
 			if g.Cells[i].BG == RGB(0x2f, 0x6f, 0xbf) {
 				t.Fatal("curl command is drawn with the blue selection background")
 			}
-			if g.Cells[i].BG != RGB(0xf6, 0xf8, 0xfa) {
+			if g.Cells[i].BG != modalBG {
 				t.Fatalf("curl command background = %+v", g.Cells[i].BG)
 			}
 			break
@@ -2260,6 +2260,84 @@ func TestDownloadCommandIsNotDrawnSelected(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("curl command not rendered")
+	}
+}
+
+func TestModalCloseButtonClosesWithMouse(t *testing.T) {
+	u := mustParse(t, "https://example.com/file.zip")
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.url = u
+	b.showDownload(u.String(), "")
+	drawQuiet(b)
+	r := b.modalClose
+	if r.W <= 0 {
+		t.Fatal("download modal close button was not recorded")
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + r.W/2 + 1, Y: r.Y + 1, Press: true})
+	if b.download != nil {
+		t.Fatal("clicking the modal close button did not close the download popup")
+	}
+
+	b.showDownload(u.String(), "")
+	drawQuiet(b)
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 1, Y: 1, Press: true})
+	if b.download != nil {
+		t.Fatal("clicking the backdrop did not close the download popup")
+	}
+
+	b.showNotice("Upload not supported", "not supported")
+	drawQuiet(b)
+	r = b.modalClose
+	if r.W <= 0 {
+		t.Fatal("notice modal close button was not recorded")
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + r.W/2 + 1, Y: r.Y + 1, Press: true})
+	if b.notice != nil {
+		t.Fatal("clicking the modal close button did not close the notice")
+	}
+}
+
+func TestJSDialogMouseClose(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `alert("Continue?");`)
+	b := NewBrowser(60, 15)
+	b.page = page
+	// The alert is one line at width 60: box 56 wide, 7 tall, centered at
+	// x=2, y=4. The close button sits on the top-right border at columns
+	// 55-57 (zero-based); mouse coordinates are one-based.
+	keys := make(chan string, 2)
+	keys <- mouseToken(MouseEvent{Button: MouseButtonLeft, X: 57, Y: 5, Press: true})
+	keys <- "esc"
+	b.keys = keys
+	withQuietStdout(t, func() { b.startJS(page) })
+	if b.dialog != nil {
+		t.Fatal("dialog is still open")
+	}
+	if len(keys) != 1 {
+		t.Fatal("mouse click did not close the JavaScript dialog")
+	}
+}
+
+func TestModalClearsPageGlyphs(t *testing.T) {
+	u := mustParse(t, "https://example.com/file.zip")
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.url = u
+	b.showDownload(u.String(), "")
+	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
+	for y := 0; y < g.H; y++ {
+		for x := 0; x < g.W; x++ {
+			g.Put(x, y, 'X', nil, RGB(0, 0, 0), Color{})
+		}
+	}
+	b.paintDownload(g)
+	r := b.modalBox
+	for y := r.Y; y < r.Y+r.H; y++ {
+		for x := r.X; x < r.X+r.W; x++ {
+			if g.Cells[y*g.W+x].R == 'X' {
+				t.Fatalf("page glyph survived inside the modal at (%d,%d)", x, y)
+			}
+		}
 	}
 }
 
