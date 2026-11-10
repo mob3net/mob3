@@ -2361,7 +2361,7 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.quitPending {
 		b.quitPending = false
 		b.status = ""
-		return k == "y" || k == "Y"
+		return k == "y" || k == "Y" || k == "enter"
 	}
 	if ev, ok := ParseMouseToken(k); ok {
 		return b.HandleMouse(ev)

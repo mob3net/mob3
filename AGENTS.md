@@ -361,7 +361,7 @@ Standard Go layout:
   `n`/`N` next/previous find match, `u` show URL,
   `y` copy selected page text (or the download popup's curl command) and clear
   the highlight,
-  `?` help page, `!` JS console, `q`/`Ctrl-C` ask for `y` confirmation before
+  `?` help page, `!` JS console, `q`/`Ctrl-C` ask for `y`/Enter confirmation before
   quitting. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint

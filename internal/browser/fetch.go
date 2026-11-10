@@ -1037,7 +1037,7 @@ disk write.</p>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
-<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b> quits, any other key cancels)</td></tr>
+<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b>/<b>Enter</b> quits, any other key cancels)</td></tr>
 </table>
 
 <h2>Find</h2>

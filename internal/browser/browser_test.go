@@ -1082,6 +1082,12 @@ func TestQuitConfirmation(t *testing.T) {
 	if b.quitPending {
 		t.Fatal("quit confirmation survived a confirmed quit")
 	}
+	if b.HandleKey("q") {
+		t.Fatal("second q quit without confirmation")
+	}
+	if !b.HandleKey("enter") {
+		t.Fatal("enter did not confirm quit")
+	}
 }
 
 func TestConsoleQuitConfirmation(t *testing.T) {
