@@ -139,7 +139,7 @@ Standard Go layout:
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
-| `js_web.go` | `URL`/`URLSearchParams`, promise-based same-origin `fetch` with `Headers`/`Request`/`Response`, and same-origin `XMLHttpRequest`. |
+| `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
@@ -594,12 +594,16 @@ Standard Go layout:
   as HTTP requests, honors Domain/Path/Expires/Max-Age/Secure and hides
   HttpOnly cookies; `navigator.cookieEnabled` is true. Cookies are not
   persisted. `XMLHttpRequest` supports
-  basic same-origin HTTP methods, headers, `responseText`/`response` (text/
-  json/arraybuffer), status and callbacks. Cross-origin requests and redirects
-  are blocked (no CORS). It executes synchronously even when `async=true` and
+  basic HTTP methods, headers, `responseText`/`response` (text/
+  json/arraybuffer), status and callbacks. Same-origin requests always work;
+  cross-origin requests are limited to simple CORS requests (GET/HEAD/POST
+  with safelisted headers) whose response carries `Access-Control-Allow-Origin`
+  for the page origin or `*`. Preflight and cross-origin credentials are not
+  supported, and cross-origin cookies are not sent. It executes synchronously
+  even when `async=true` and
   does not implement streaming, upload progress or timeouts. `fetch` is
   available with `Headers`, `Request` and `Response`; it follows the same
-  same-origin rule, resolves a promise, and supports `text`, `json`,
+  CORS rules, resolves a promise, and supports `text`, `json`,
   `arrayBuffer` and `blob` bodies. It is likewise synchronous under the hood
   and has no streaming or upload progress; a basic `AbortController` only
   rejects a fetch that has not started. `Intl` provides
@@ -709,11 +713,14 @@ Standard Go layout:
   deadline, and layout also stops after 250k fragments or 200k document rows,
   bounding CPU and memory for pathological or generated documents. The frame
   is rendered partially and marked truncated when a limit is hit.
-- **Same-origin XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` may
-  only request the page's own scheme/host/port (default ports normalized).
-  Cross-origin requests and cross-origin redirects fail; no CORS is
-  implemented. Cookies therefore cannot be read cross-site through XHR or
-  fetch.
+- **XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` always allow
+  same-origin requests (default ports normalized). Simple cross-origin requests
+  (GET/HEAD/POST with safelisted headers) are sent with an `Origin` header and
+  succeed only when the response carries `Access-Control-Allow-Origin` for the
+  page origin or `*`; cross-origin cookies are not sent. Preflight, credentialed
+  cross-origin requests and same-origin-to-cross-origin redirects are not
+  supported. Cross-origin responses without a matching CORS header fail, so
+  cookies cannot be read cross-site through XHR or fetch.
 - **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
   only when the document itself was loaded from `file:`. Remote (http/https/
   data) documents cannot load file resources, navigate the viewport to `file:`
@@ -826,8 +833,10 @@ Standard Go layout:
   not look like a hang; the module scripts are still skipped. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
-  `XMLHttpRequest` and `fetch` are synchronous, same-origin-only and lack
-  streaming/upload progress; `AbortController` only cancels fetches that have
+  `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests
+  and simple CORS cross-origin responses, and lack streaming/upload progress;
+  CORS preflight and credentialed cross-origin requests are unsupported.
+  `AbortController` only cancels fetches that have
   not started. `Intl` is an
   English-only subset without full CLDR locale data. `document.write` is
   supported for document fragments. JS history navigation is stubbed. Plain
@@ -921,8 +930,8 @@ Works well:
 - Events: Event/CustomEvent/UI/Mouse/Keyboard/Focus/Input/Pointer/Error/
   Message/Progress constructors, `createEvent`, bubbling `dispatchEvent`,
   `preventDefault`, `element.click()`.
-- Network: same-origin `fetch`, `Headers`/`Request`/`Response`, same-origin
-  `XMLHttpRequest`, cookies, `URL`/`URLSearchParams`.
+- Network: `fetch`, `Headers`/`Request`/`Response`, `XMLHttpRequest`, cookies,
+  same-origin and simple CORS cross-origin requests, `URL`/`URLSearchParams`.
 - Storage: in-memory `localStorage`/`sessionStorage` (`getItem`/`setItem`/
   `removeItem`/`clear`, `length`, and named property get/set/delete) and
   `document.cookie`.
@@ -964,7 +973,8 @@ Known unsupported families (do not present these as available):
 - DOM: Shadow DOM/`attachShadow`, custom elements registry, real
   Intersection/Resize/Performance observers, iframe browsing contexts,
   `<template>.content`, video/audio playback.
-- Network/browser: streaming fetch, upload progress, CORS, `sendBeacon`,
+- Network/browser: streaming fetch, upload progress, CORS preflight and
+  credentialed cross-origin requests, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid areas, grid row spans, floats, `position:sticky`,

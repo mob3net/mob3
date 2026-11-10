@@ -216,10 +216,39 @@ func TestJSFetchCrossOriginBlocked(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.loader = loader
 	b.startJS(page)
-	if calls != 0 {
-		t.Fatalf("cross-origin fetch made %d requests", calls)
+	if calls != 1 {
+		t.Fatalf("cross-origin fetch made %d requests, want 1", calls)
 	}
 	if page.Title != "blocked" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestJSFetchCrossOriginCORS(t *testing.T) {
+	loader := NewLoader()
+	calls := 0
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		h := make(http.Header)
+		h.Set("Access-Control-Allow-Origin", "*")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("allowed")), Request: req,
+		}, nil
+	})}
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("https://other.example/api")
+			.then(function (r) { return r.text(); })
+			.then(function (t) { document.title = t; })
+			.catch(function (e) { document.title = "error:" + e; });
+	`)
+	b := NewBrowser(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if calls != 1 {
+		t.Fatalf("CORS fetch made %d requests", calls)
+	}
+	if page.Title != "allowed" {
 		t.Fatalf("title = %q", page.Title)
 	}
 }
@@ -304,8 +333,8 @@ func TestJSXHRCrossOriginBlocked(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.loader = loader
 	b.startJS(page)
-	if calls != 0 {
-		t.Fatalf("cross-origin XHR made %d requests", calls)
+	if calls != 1 {
+		t.Fatalf("cross-origin XHR made %d requests, want 1", calls)
 	}
 	if page.Title != "blocked:0" {
 		t.Fatalf("title = %q", page.Title)

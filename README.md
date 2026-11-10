@@ -88,7 +88,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   default budget and `-cache` to change or disable it.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
-  same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script
+  same-origin `fetch`/`XMLHttpRequest` plus simple CORS cross-origin requests,
+  and in-memory storage/cookies. Script
   errors show a short `JS: Error` footer hint.
 - JavaScript console (`!`): tabbed view of logs, requests, cookies and
   in-memory storage, plus the raw page HTML; evaluate one-line expressions in

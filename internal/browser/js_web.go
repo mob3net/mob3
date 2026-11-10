@@ -337,8 +337,7 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 	if err != nil || u == nil {
 		return fail("Failed to parse URL")
 	}
-	if j.page == nil || j.page.URL == nil || !sameOrigin(u, j.page.URL) {
-		j.b.logJS("error", "fetch blocked: cross-origin request")
+	if j.page == nil || j.page.URL == nil {
 		return fail("Cross-origin fetch blocked")
 	}
 	method = strings.ToUpper(method)
@@ -753,8 +752,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		st.text = ""
 		st.response = nil
 		st.err = nil
-		st.blocked = st.url == nil || j.page == nil || j.page.URL == nil ||
-			!sameOrigin(st.url, j.page.URL)
+		st.blocked = st.url == nil || j.page == nil || j.page.URL == nil
 		st.readyState = 1
 		j.fireXHR(st, "readystatechange")
 		return goja.Undefined()
@@ -814,7 +812,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 	})
 	j.method(o, "send", func(call goja.FunctionCall) goja.Value {
 		if st.url == nil || st.blocked {
-			j.b.logJS("error", "XMLHttpRequest blocked: cross-origin request")
+			j.b.logJS("error", "XMLHttpRequest blocked: invalid URL")
 			st.readyState = 4
 			st.status = 0
 			st.err = errBadSVG
@@ -915,8 +913,12 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		}
 	}()
 	origin := j.page.URL
-	if origin == nil || !sameOrigin(u, origin) {
+	if origin == nil {
 		return 0, nil, "", nil, nil, errors.New("cross-origin request blocked")
+	}
+	crossOrigin := !sameOrigin(u, origin)
+	if crossOrigin && !isSimpleCORSRequest(method, reqHeaders) {
+		return 0, nil, "", nil, nil, errors.New("cross-origin request requires CORS preflight (unsupported)")
 	}
 	var reader io.Reader
 	if len(body) > 0 {
@@ -928,16 +930,24 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	}
 	req.Header.Set("User-Agent", j.b.loader.userAgent)
 	req.Header.Set("Accept", "*/*")
+	if crossOrigin {
+		req.Header.Set("Origin", urlOrigin(origin))
+	}
 	for k, v := range reqHeaders {
 		req.Header.Set(k, v)
 	}
 	client := *j.b.loader.client
+	if crossOrigin {
+		// Default fetch/XHR credentials are same-origin; do not leak the
+		// target's cookies into a CORS request.
+		client.Jar = nil
+	}
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-		if !sameOrigin(next.URL, origin) {
-			return errors.New("cross-origin redirect blocked")
-		}
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
+		}
+		if !crossOrigin && !sameOrigin(next.URL, origin) {
+			return errors.New("cross-origin redirect blocked")
 		}
 		return nil
 	}
@@ -949,9 +959,61 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		return 0, nil, "", nil, nil, err
 	}
 	defer resp.Body.Close()
+	if crossOrigin && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
+		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("cross-origin response blocked by CORS")
+	}
 	data, err = io.ReadAll(io.LimitReader(resp.Body, maxResourceSize))
 	if err != nil {
 		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, err
 	}
 	return resp.StatusCode, data, resp.Header.Get("Content-Type"), resp.Header, resp.Request.URL, nil
+}
+
+// urlOrigin returns the serialized scheme and host used by CORS.
+func urlOrigin(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Host)
+	if (scheme == "http" && strings.HasSuffix(host, ":80")) ||
+		(scheme == "https" && strings.HasSuffix(host, ":443")) {
+		host = host[:strings.LastIndex(host, ":")]
+	}
+	return scheme + "://" + host
+}
+
+func corsAllowed(header string, origin *url.URL) bool {
+	allowed := strings.TrimSpace(header)
+	if allowed == "*" {
+		return true
+	}
+	return allowed != "" && strings.EqualFold(strings.TrimRight(allowed, "/"), strings.TrimRight(urlOrigin(origin), "/"))
+}
+
+func isSimpleCORSRequest(method string, headers map[string]string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodPost:
+	default:
+		return false
+	}
+	simple := map[string]bool{
+		"accept": true, "accept-language": true, "content-language": true,
+		"content-type": true, "range": true,
+	}
+	for k, v := range headers {
+		lk := strings.ToLower(strings.TrimSpace(k))
+		if !simple[lk] {
+			return false
+		}
+		if lk == "content-type" {
+			media := strings.ToLower(strings.TrimSpace(strings.Split(v, ";")[0]))
+			switch media {
+			case "application/x-www-form-urlencoded", "multipart/form-data", "text/plain":
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }
