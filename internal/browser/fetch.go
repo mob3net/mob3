@@ -112,6 +112,7 @@ type requestRecord struct {
 	Elapsed time.Duration
 	Err     string
 	Done    bool
+	Cached  bool
 }
 
 type requestMetaKey struct{}
@@ -166,6 +167,22 @@ func (l *Loader) startRequest(gen int, method, rawURL, kind string) (int, bool) 
 		l.requests = append([]requestRecord(nil), l.requests[len(l.requests)-512:]...)
 	}
 	return id, true
+}
+
+func (l *Loader) recordCacheHit(gen int, method, rawURL, kind string, size int) {
+	l.reqMu.Lock()
+	defer l.reqMu.Unlock()
+	if gen != l.reqGen {
+		return
+	}
+	l.reqNext++
+	l.requests = append(l.requests, requestRecord{
+		ID: l.reqNext, Gen: gen, Method: method, URL: rawURL, Kind: kind,
+		Status: 200, Size: size, Done: true, Cached: true,
+	})
+	if len(l.requests) > 512 {
+		l.requests = append([]requestRecord(nil), l.requests[len(l.requests)-512:]...)
+	}
 }
 
 func (l *Loader) finishRequest(id, gen int, status, size int, elapsed time.Duration, err error) {
@@ -619,6 +636,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		(meta.kind == "css" || meta.kind == "js")
 	if cacheable {
 		if cached, ct, final, ok := l.cache.getBytes(u.String()); ok {
+			l.recordCacheHit(gen, method, u.String(), meta.kind, len(cached))
 			finalURL := u
 			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
 				finalURL = parsed
@@ -880,6 +898,11 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 	if len(imgs) == 0 {
 		return
 	}
+	meta := requestMetaFrom(ctx)
+	gen := meta.gen
+	if gen == 0 {
+		gen = l.currentPageGeneration()
+	}
 	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
 	for _, n := range imgs {
@@ -894,7 +917,8 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 			continue
 		}
 		key := u.String()
-		if cached, ok := l.cache.getImage(key); ok {
+		if cached, rawSize, ok := l.cache.getImage(key); ok {
+			l.recordCacheHit(gen, "GET", key, "img", rawSize)
 			n.Img = cached
 			continue
 		}
@@ -939,7 +963,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				return
 			}
 			node.Img = img
-			l.cache.putImage(key, img)
+			l.cache.putImage(key, img, len(data))
 		}(n, u)
 	}
 	wg.Wait()
@@ -1170,7 +1194,9 @@ from the console history. <b>j</b>/<b>k</b> and the wheel scroll the open
 logs/Requests/Storage/HTML section, <b>g</b>/<b>G</b> jump to the ends,
 <b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
 quits while the input row is not focused.
-Request URLs are shown as plain text (not clickable). Storage lists the
+Request URLs are shown as plain text (not clickable). Cache hits replace the
+size column with <b>cached</b>, and the bottom of the request list shows the
+cache bytes used, total budget and entry count. Storage lists the
 current page's cookies (including HttpOnly cookies, marked) plus its
 localStorage and sessionStorage entries. HTML shows the raw fetched page
 source before JavaScript changes the DOM, wrapped to the console width and

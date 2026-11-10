@@ -2082,11 +2082,18 @@ func TestConsoleRequestPane(t *testing.T) {
 		t.Fatal("request was not started")
 	}
 	b.loader.finishRequest(id, gen, 200, 2048, 10*time.Millisecond, nil)
+	b.loader.recordCacheHit(gen, "GET", "https://example.com/b.js", "js", 512)
 	lines := b.requestLines()
-	if len(lines) != 1 || !strings.Contains(lines[0], "200") ||
+	if len(lines) != 2 || !strings.Contains(lines[0], "200") ||
 		!strings.Contains(lines[0], "2.0K") || !strings.Contains(lines[0], "css") ||
 		!strings.Contains(lines[0], "https://example.com/a.css") {
 		t.Fatalf("request lines = %q", lines)
+	}
+	if !strings.Contains(lines[1], "js") || !strings.Contains(lines[1], "cached") || strings.Contains(lines[1], "512B") {
+		t.Fatalf("cached request line = %q", lines[1])
+	}
+	if summary := b.requestCacheSummary(); !strings.Contains(summary, "/") || !strings.Contains(summary, "entries") {
+		t.Fatalf("cache summary = %q", summary)
 	}
 	if got := humanSize(512); got != "512B" {
 		t.Fatalf("humanSize = %q", got)

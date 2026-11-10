@@ -46,10 +46,13 @@ func TestResourceCacheLimitAndEntryCap(t *testing.T) {
 func TestResourceCacheImages(t *testing.T) {
 	c := newResourceCache(1 << 20)
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	c.putImage("https://example.com/a.png", img)
-	got, ok := c.getImage("https://example.com/a.png")
+	c.putImage("https://example.com/a.png", img, 123)
+	got, rawSize, ok := c.getImage("https://example.com/a.png")
 	if !ok || got != img {
 		t.Fatal("image was not cached")
+	}
+	if rawSize != 123 {
+		t.Fatalf("raw image size = %d", rawSize)
 	}
 	if _, _, _, ok := c.getBytes("https://example.com/a.png"); ok {
 		t.Fatal("image entry was returned as raw bytes")

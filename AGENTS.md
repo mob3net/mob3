@@ -643,7 +643,9 @@ Standard Go layout:
   The JS log and input draft reset when a new page is successfully applied,
   before that page's scripts run; failed loads keep the previous page's log.
   Requests list status, method, size, kind and URL (plain text, not clickable)
-  for the page, CSS, scripts, images, `fetch` and XHR; the list is in memory
+  for the page, CSS, scripts, images, `fetch` and XHR. Cache hits replace the
+  size column with `cached`, and a pinned bottom line shows cache bytes used,
+  total budget and entry count; the list is in memory
   only, resets on navigation and is capped at the latest 512 entries. Storage
   lists the current page's cookies — including HttpOnly cookies, marked as
   such — and the in-memory `localStorage`/`sessionStorage` key/value pairs.

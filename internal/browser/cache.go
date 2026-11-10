@@ -24,6 +24,7 @@ type cacheEntry struct {
 	img         image.Image
 	contentType string
 	finalURL    string
+	rawSize     int
 	size        int64
 }
 
@@ -71,6 +72,16 @@ func (c *resourceCache) limitBytes() int64 {
 	return c.limit
 }
 
+// stats returns the current bytes used, total budget and entry count.
+func (c *resourceCache) stats() (used, limit int64, entries int) {
+	if c == nil {
+		return 0, 0, 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.size, c.limit, len(c.entries)
+}
+
 func (c *resourceCache) getBytes(key string) (data []byte, contentType, finalURL string, ok bool) {
 	if c == nil {
 		return nil, "", "", false
@@ -99,29 +110,29 @@ func (c *resourceCache) putBytes(key string, data []byte, contentType, finalURL 
 	})
 }
 
-func (c *resourceCache) getImage(key string) (image.Image, bool) {
+func (c *resourceCache) getImage(key string) (image.Image, int, bool) {
 	if c == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el := c.entries[key]
 	if el == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	e := el.Value.(*cacheEntry)
 	if e.img == nil {
-		return nil, false
+		return nil, 0, false
 	}
 	c.lru.MoveToFront(el)
-	return e.img, true
+	return e.img, e.rawSize, true
 }
 
-func (c *resourceCache) putImage(key string, img image.Image) {
+func (c *resourceCache) putImage(key string, img image.Image, rawSize int) {
 	if img == nil {
 		return
 	}
-	c.put(&cacheEntry{key: key, img: img, size: imageMemorySize(img)})
+	c.put(&cacheEntry{key: key, img: img, rawSize: rawSize, size: imageMemorySize(img)})
 }
 
 func (c *resourceCache) put(e *cacheEntry) {

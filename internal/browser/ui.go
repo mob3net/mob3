@@ -408,6 +408,9 @@ func (b *Browser) requestLines() []string {
 			status = fmt.Sprintf("%d", r.Status)
 			size = humanSize(r.Size)
 		}
+		if r.Cached {
+			size = "cached"
+		}
 		if r.Err != "" {
 			status = "ERR"
 		}
@@ -425,6 +428,19 @@ func (b *Browser) requestLines() []string {
 		out = append(out, "(no requests for this page)")
 	}
 	return out
+}
+
+// requestCacheSummary is the pinned cache usage line shown below the request
+// list.
+func (b *Browser) requestCacheSummary() string {
+	if b.loader == nil || b.loader.cache == nil {
+		return "Cache: unavailable"
+	}
+	used, limit, entries := b.loader.cache.stats()
+	if limit <= 0 {
+		return fmt.Sprintf("Cache: disabled · %d entries", entries)
+	}
+	return fmt.Sprintf("Cache: %s / %s · %d entries", humanSize(int(used)), humanSize(int(limit)), entries)
 }
 
 func humanSize(n int) string {
@@ -751,7 +767,15 @@ func (b *Browser) drawConsole(w, h int) {
 	if l.bodyY >= 0 && l.bodyRows > 0 {
 		switch b.consolePane {
 		case consoleRequests:
-			drawPane(reqs, b.reqScroll, l.bodyY, l.bodyRows)
+			reqRows := l.bodyRows
+			if reqRows > 1 {
+				reqRows--
+			}
+			drawPane(reqs, b.reqScroll, l.bodyY, reqRows)
+			summaryY := l.bodyY + l.bodyRows - 1
+			summary := truncateWidth(b.requestCacheSummary(), w-2)
+			g.Fill(1, summaryY, maxInt(0, w-2), 1, ftrBG)
+			g.Text(1, summaryY, summary, &Style{Color: RGB(0x8a, 0x9a, 0xaa), FontSize: 16, LineHeight: 1}, RGB(0x8a, 0x9a, 0xaa))
 		case consoleStorage:
 			drawPane(b.storageLines(), b.storageScroll, l.bodyY, l.bodyRows)
 		case consoleHTML:

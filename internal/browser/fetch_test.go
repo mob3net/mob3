@@ -51,6 +51,16 @@ func TestFetchCachesSubresources(t *testing.T) {
 	if tr.count != 1 {
 		t.Fatalf("HTTP requests = %d, want 1", tr.count)
 	}
+	records := l.requestSnapshot()
+	if len(records) != 2 {
+		t.Fatalf("request records = %+v, want network + cache", records)
+	}
+	if records[0].Cached || !records[1].Cached {
+		t.Fatalf("cached flags = %+v", records)
+	}
+	if records[1].Kind != "css" || records[1].Status != 200 || records[1].Size != len(tr.body) {
+		t.Fatalf("cache record = %+v", records[1])
+	}
 
 	tr2 := &countingTransport{body: "body { color: blue; }", noStore: true}
 	l2 := NewLoader()
@@ -64,6 +74,11 @@ func TestFetchCachesSubresources(t *testing.T) {
 	}
 	if tr2.count != 2 {
 		t.Fatalf("no-store HTTP requests = %d, want 2", tr2.count)
+	}
+	for _, r := range l2.requestSnapshot() {
+		if r.Cached {
+			t.Fatalf("no-store request was marked cached: %+v", r)
+		}
 	}
 }
 
