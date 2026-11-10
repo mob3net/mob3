@@ -1028,7 +1028,9 @@ new page is extracted automatically, and a page with no usable article is shown
 normally while the preference remains on. Start MOB³ with <b>-reader</b> to
 enable reader mode from the first page. The config page is unavailable while
 reader mode is on; turn reader mode off first. Reader mode is a snapshot of the
-live page.</p>
+live page. Links that point at a missing in-page target, such as modal
+triggers using <b>#</b>, show <b>Reader mode: link is not available</b> in the
+footer instead of reloading or jumping to the top.</p>
 
 <h2>Dark mode</h2>
 <p>Press <b>D</b> or click the <b>Dark on</b>/<b>Dark off</b> label in the footer

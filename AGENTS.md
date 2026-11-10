@@ -402,7 +402,10 @@ Standard Go layout:
   reader mode is on: opening it keeps the current page and shows the warning
   `Config is not available in reader mode — press R to turn it off`. Reader
   mode is a snapshot: live JS mutations are not reflected while it is active,
-  and interactive controls are not available.
+  and interactive controls are not available. Same-document links with no
+  fragment or a missing target (common on modal triggers) do not navigate or
+  jump to the top; the footer shows `Reader mode: link is not available`
+  instead.
 - **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
   artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
   fetch), rendered through the normal inline-SVG path and sized by `.brand svg`

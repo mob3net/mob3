@@ -2426,6 +2426,55 @@ func TestTextareaTypingPatchesLayout(t *testing.T) {
 	}
 }
 
+func TestReaderModeModalLinkWarnsWithoutScrolling(t *testing.T) {
+	for _, href := range []string{"#", "#missing"} {
+		u := mustParse(t, "https://example.com/article")
+		doc := ParseHTML(`<p>hello</p><p><a href="` + href + `">open modal</a></p>`)
+		b := NewBrowser(40, 10)
+		b.page = &Page{URL: u, Base: u, Root: doc}
+		b.url = u
+		b.reader = true
+		b.readerRoot = doc
+		b.rebuild()
+		if len(b.layout.Links) == 0 {
+			t.Fatal("link not laid out")
+		}
+		b.layout.Height = 100
+		b.scroll = 3
+		b.focus = 0
+		b.followFocused()
+		if b.status != readerLinkUnavailable {
+			t.Fatalf("href %q status = %q, want %q", href, b.status, readerLinkUnavailable)
+		}
+		if b.scroll != 3 {
+			t.Fatalf("href %q scrolled to %d", href, b.scroll)
+		}
+		if b.url.String() != "https://example.com/article" {
+			t.Fatalf("href %q navigated to %s", href, b.url)
+		}
+	}
+}
+
+func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
+	u := mustParse(t, "https://example.com/article")
+	doc := ParseHTML(`<p>hello</p><h2 id="target">target</h2><p><a href="#target">jump</a></p>`)
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.reader = true
+	b.readerRoot = doc
+	b.rebuild()
+	b.layout.Height = 100
+	b.focus = 0
+	b.followFocused()
+	if b.status == readerLinkUnavailable {
+		t.Fatal("existing anchor was rejected in reader mode")
+	}
+	if b.scroll == 0 {
+		t.Fatal("existing anchor did not scroll")
+	}
+}
+
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}

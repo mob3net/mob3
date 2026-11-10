@@ -834,9 +834,23 @@ func (b *Browser) followFocused() {
 	}
 	if b.page != nil && b.page.Base != nil {
 		if u, err := b.page.Base.Parse(href); err == nil {
-			if b.url != nil && u.Fragment != "" && sameDocument(u, b.url) {
-				b.scrollToAnchor(u.Fragment)
-				return
+			if b.url != nil && sameDocument(u, b.url) {
+				if u.Fragment == "" {
+					// A bare "#" link is a page-modal trigger on many sites.
+					// In reader mode it would reload the page and jump to the
+					// top, so warn instead of navigating.
+					if b.reader {
+						b.status = readerLinkUnavailable
+						return
+					}
+				} else if b.scrollToAnchor(u.Fragment) {
+					return
+				} else {
+					if b.reader {
+						b.status = readerLinkUnavailable
+					}
+					return
+				}
 			}
 			b.Navigate(u.String(), true)
 			return
@@ -844,6 +858,10 @@ func (b *Browser) followFocused() {
 	}
 	b.Navigate(href, true)
 }
+
+// readerLinkUnavailable is shown when a same-document link cannot work in the
+// reader snapshot.
+const readerLinkUnavailable = "Reader mode: link is not available"
 
 func sameDocument(a, b *url.URL) bool {
 	return a.Scheme == b.Scheme && a.Host == b.Host && a.Path == b.Path && a.RawQuery == b.RawQuery
@@ -919,9 +937,9 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-func (b *Browser) scrollToAnchor(frag string) {
+func (b *Browser) scrollToAnchor(frag string) bool {
 	if b.layout == nil || frag == "" {
-		return
+		return false
 	}
 	if unescaped, err := url.PathUnescape(frag); err == nil {
 		frag = unescaped
@@ -944,7 +962,9 @@ func (b *Browser) scrollToAnchor(frag string) {
 	if best >= 0 {
 		b.scroll = best - 1
 		b.clampScroll()
+		return true
 	}
+	return false
 }
 
 // linkAt returns the index of the link covering document cell (x, y), or -1.
@@ -2692,6 +2712,7 @@ func statusLevelFor(s string) statusLevel {
 		strings.HasPrefix(s, "HTTP "),
 		strings.HasPrefix(s, "Blocked local file navigation"),
 		strings.HasPrefix(s, "Config is not available in reader mode"),
+		strings.HasPrefix(s, "Reader mode:"),
 		s == "Reader mode is unavailable on the config page",
 		strings.HasPrefix(s, "External protocol:"),
 		s == "JavaScript links are not supported",
