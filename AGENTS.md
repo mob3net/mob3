@@ -416,7 +416,8 @@ Standard Go layout:
   `docs/icon.svg`; `docs/icon.png` is only a raster copy.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
-  command-line flags, keys, mouse and forms), not as a one-line footer status,
+  command-line flags, keys, mouse and forms) and shows the current build
+  version from `Version`, not as a one-line footer status,
   so every shortcut including `!` is visible and selectable. The flag table
   must list every option accepted by `Run`. The page includes try-it links for
   alert/confirm/prompt, a `download` example that opens the curl popup, and a

@@ -563,7 +563,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	case "blank":
 		doc = "<html><body></body></html>"
 	case "help":
-		doc = helpPageHTML
+		doc = strings.Replace(helpPageHTML, "{{VERSION}}", EscapeHTML(Version), 1)
 	case "history":
 		var urls []string
 		current := -1
@@ -946,7 +946,7 @@ th { color: #57606a; }
 .warn { background:#fff3cd; border:1px solid #d4a72c; padding:8px; color:#442c00; }
 </style></head><body>
 <h1>MOB³ Help</h1>
-<p class="muted">A small terminal browser. Keys are vim-first.</p>
+<p class="muted">Version <b>{{VERSION}}</b> · a small terminal browser. Keys are vim-first.</p>
 <p class="muted">MOB³ keeps history, cookies, storage and caches in memory only.
 Nothing is saved when it exits; the optional <b>-cpuprofile</b> file is the only
 disk write.</p>
