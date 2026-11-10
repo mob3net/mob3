@@ -701,3 +701,78 @@ func TestAbsoluteNestedInRelative(t *testing.T) {
 		t.Fatalf("nested absolute at (%d,%d), want (2,0)", nested.X, nested.Y)
 	}
 }
+
+func buildViewport(src string, width, viewportH int) *Layout {
+	doc := ParseHTML(src)
+	return BuildLayoutViewportDeadline(doc, nil, width, viewportH, false, time.Time{})
+}
+
+func TestFixedDumpFallsBackToPageCoordinates(t *testing.T) {
+	ly := build(`<div style="height:80px">top</div><div style="position:fixed;bottom:0">bar</div>`, 30)
+	bar := textFrag(ly, "bar")
+	if bar == nil {
+		t.Fatal("fixed fragment missing in dump layout")
+	}
+	if bar.Fixed {
+		t.Fatal("dump layout should not mark fixed fragments as viewport-anchored")
+	}
+	if ly.Height < bar.Y+1 {
+		t.Fatalf("page height %d does not include fixed content at %d", ly.Height, bar.Y)
+	}
+}
+
+func TestFixedAnchorsToViewportBottomRight(t *testing.T) {
+	ly := buildViewport(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`, 30, 10)
+	bar := textFrag(ly, "bar")
+	if bar == nil {
+		t.Fatal("fixed fragment not rendered")
+	}
+	if bar.X != 27 || bar.Y != 9 {
+		t.Fatalf("fixed box at (%d,%d), want (27,9)", bar.X, bar.Y)
+	}
+	if !bar.Fixed || bar.FixedY != 9 {
+		t.Fatalf("fixed marker = %v FixedY=%d", bar.Fixed, bar.FixedY)
+	}
+	if ly.Height != 1 {
+		t.Fatalf("fixed box changed page height: %d", ly.Height)
+	}
+}
+
+func TestFixedIgnoresRelativeAncestor(t *testing.T) {
+	ly := buildViewport(`<div style="position:relative;margin-left:40px;padding-top:40px"><div style="position:fixed;bottom:0;right:0">bar</div></div>`, 30, 10)
+	bar := textFrag(ly, "bar")
+	if bar == nil {
+		t.Fatal("fixed fragment not rendered")
+	}
+	if bar.X != 27 || bar.Y != 9 {
+		t.Fatalf("fixed box at (%d,%d), want viewport (27,9)", bar.X, bar.Y)
+	}
+}
+
+func TestFixedScrollKeepsViewportPosition(t *testing.T) {
+	ly := buildViewport(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`, 30, 10)
+	ly.SetFixedScroll(4)
+	bar := textFrag(ly, "bar")
+	if bar == nil {
+		t.Fatal("fixed fragment missing after scroll")
+	}
+	// Document coordinates shift with scroll so the painted viewport row stays
+	// at 9 once PaintLayout subtracts the scroll offset.
+	if bar.Y != 13 {
+		t.Fatalf("scrolled fixed Y = %d, want 13", bar.Y)
+	}
+}
+
+func TestFixedLinkRectsFollowScroll(t *testing.T) {
+	ly := buildViewport(`<a href="#x" style="position:fixed;bottom:0;left:0">go</a>`, 30, 10)
+	if len(ly.Links) != 1 || len(ly.Links[0].Rects) == 0 {
+		t.Fatalf("links = %+v", ly.Links)
+	}
+	if r := ly.Links[0].Rects[0]; r.Y != 9 {
+		t.Fatalf("fixed link Y = %d, want 9", r.Y)
+	}
+	ly.SetFixedScroll(3)
+	if r := ly.Links[0].Rects[0]; r.Y != 12 {
+		t.Fatalf("scrolled fixed link Y = %d, want 12", r.Y)
+	}
+}

@@ -42,6 +42,10 @@ type Frag struct {
 	Node  *Node
 	Img   image.Image
 	Link  *LinkInfo
+	// Fixed marks a viewport-anchored fragment. Y is recalculated on scroll
+	// from FixedY (the viewport row) plus the browser scroll offset.
+	Fixed  bool
+	FixedY int
 }
 
 // Layout is the result of styling and layout.
@@ -57,6 +61,10 @@ type Layout struct {
 
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
+
+	// fixedScroll tracks the scroll offset already applied to fixed fragments.
+	fixedScroll  int
+	fixedApplied bool
 }
 
 const (
@@ -77,6 +85,12 @@ type layouter struct {
 	// resolve absolute offsets. nil at the root, where rootCB stands in.
 	cb     *cbRect
 	rootCB *cbRect
+	// fixedCB is the viewport rectangle used by position:fixed elements. It
+	// falls back to rootCB when the viewport height is unknown (dump mode).
+	fixedCB *cbRect
+	// curFixed marks that the absolute box currently being laid out is inside
+	// a fixed subtree, so nested absolutes stay viewport-anchored.
+	curFixed bool
 	// abs collects absolutely positioned boxes. They are kept out of normal
 	// flow and laid out after it, so they paint above in-flow content.
 	abs []*absBox
@@ -98,6 +112,7 @@ type absBox struct {
 	cb      *cbRect
 	staticX int
 	staticY int
+	fixed   bool
 }
 
 // outOfTime reports whether the layout pass has exceeded its deadline. The
@@ -129,16 +144,28 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, bigText, false, deadline)
+	return buildLayout(root, author, width, 0, bigText, false, deadline)
+}
+
+// BuildLayoutViewportDeadline is BuildLayoutDeadline with the terminal
+// viewport height, so position:fixed boxes can anchor to the visible area.
+func BuildLayoutViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, false, deadline)
 }
 
 // BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
 // to page, text, border and background colors after layout.
 func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, bigText, true, deadline)
+	return buildLayout(root, author, width, 0, bigText, true, deadline)
 }
 
-func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadline time.Time) *Layout {
+// BuildLayoutDarkViewportDeadline is BuildLayoutViewportDeadline with the dark
+// palette applied.
+func BuildLayoutDarkViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, true, deadline)
+}
+
+func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time) *Layout {
 	if width < 1 {
 		width = 1
 	}
@@ -146,6 +173,11 @@ func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadl
 	styles := engine.computeAll(root)
 	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline}
 	l.rootCB = &cbRect{w: width}
+	if viewportH > 0 {
+		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
+	} else {
+		l.fixedCB = l.rootCB
+	}
 	if engine.expired {
 		l.truncated = true
 	}
@@ -173,6 +205,9 @@ func buildLayout(root *Node, author []Rule, width int, bigText, dark bool, deadl
 	height := 0
 	for i := range l.frags {
 		f := &l.frags[i]
+		if f.Fixed {
+			continue
+		}
 		if f.Y+f.H > height {
 			height = f.Y + f.H
 		}
@@ -378,7 +413,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 
 	// A positioned box is a containing block for its absolutely positioned
 	// descendants. Its height is filled in once the content has been laid out.
-	positioned := st.Position == "relative" || st.Position == "absolute"
+	positioned := st.Position == "relative" || st.Position == "absolute" || st.Position == "fixed"
 	var newCB *cbRect
 	if positioned {
 		newCB = &cbRect{x: boxX + bl, y: top + bt, w: pl + contentW + pr}
@@ -504,17 +539,34 @@ func (l *layouter) relativeOffset(st *Style, cb *cbRect) (int, int) {
 	return dx, dy
 }
 
+// isOutOfFlow reports whether a box is absolutely or fixed positioned.
+func isOutOfFlow(st *Style) bool {
+	return st != nil && (st.Position == "absolute" || st.Position == "fixed")
+}
+
 // deferAbsolute records an out-of-flow element. Its subtree is laid out after
 // normal flow, when containing-block heights are known.
 func (l *layouter) deferAbsolute(n *Node, staticX, staticY int) {
 	if n == nil || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
 		return
 	}
+	fixed := l.curFixed
 	cb := l.cb
+	if n.Style.Position == "fixed" {
+		if l.fixedCB != l.rootCB {
+			fixed = true
+			cb = l.fixedCB
+		} else {
+			// No viewport height (dump mode): treat fixed as page-anchored so
+			// the content still appears in the rendered document.
+			fixed = false
+			cb = l.rootCB
+		}
+	}
 	if cb == nil {
 		cb = l.rootCB
 	}
-	l.abs = append(l.abs, &absBox{node: n, cb: cb, staticX: staticX, staticY: staticY})
+	l.abs = append(l.abs, &absBox{node: n, cb: cb, staticX: staticX, staticY: staticY, fixed: fixed})
 }
 
 // finalizeAbsolute lays out the recorded absolute boxes and appends their
@@ -616,13 +668,16 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	}
 
 	prevCB := l.cb
+	prevFixed := l.curFixed
 	l.cb = cb
+	l.curFixed = a.fixed
 	start := len(l.frags)
 	_, rect := l.blockLayout(n, x, y, availW, forceH)
 	frags := make([]Frag, len(l.frags)-start)
 	copy(frags, l.frags[start:])
 	l.frags = l.frags[:start]
 	l.cb = prevCB
+	l.curFixed = prevFixed
 
 	desiredX, desiredY := rect.X, rect.Y
 	switch {
@@ -638,6 +693,12 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 		desiredY = cb.y + cbH - bottomOff - mb - rect.H
 	}
 	dx, dy := desiredX-rect.X, desiredY-rect.Y
+	if a.fixed {
+		for i := range frags {
+			frags[i].Fixed = true
+			frags[i].FixedY = frags[i].Y + dy
+		}
+	}
 	if dx != 0 || dy != 0 {
 		for i := range frags {
 			frags[i].X += dx
@@ -896,7 +957,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
 		}
-		if child.Style.Position == "absolute" {
+		if isOutOfFlow(child.Style) {
 			l.deferAbsolute(child, x, y)
 			continue
 		}
@@ -958,7 +1019,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	var items []*Node
 	for _, c := range n.Children {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display != "none" {
-			if c.Style.Position == "absolute" {
+			if isOutOfFlow(c.Style) {
 				l.deferAbsolute(c, x, y)
 				continue
 			}
@@ -1159,7 +1220,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 			if c.Style == nil || c.Style.Display == "none" {
 				continue
 			}
-			if c.Style.Position == "absolute" {
+			if isOutOfFlow(c.Style) {
 				l.deferAbsolute(c, x, cur)
 				continue
 			}
@@ -1256,7 +1317,7 @@ func (c *inlineCtx) collect(n *Node) {
 	if st == nil || st.Display == "none" || st.Hidden {
 		return
 	}
-	if st.Position == "absolute" {
+	if isOutOfFlow(st) {
 		c.l.deferAbsolute(n, c.x, c.y)
 		return
 	}
@@ -1908,7 +1969,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			if c.Type != ElementNode || c.Style == nil || c.Style.Display == "none" {
 				continue
 			}
-			if c.Style.Position == "absolute" {
+			if isOutOfFlow(c.Style) {
 				l.deferAbsolute(c, x, y)
 				continue
 			}
@@ -2203,6 +2264,38 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		maxW = total
 	}
 	return maxW + pad, minW + pad
+}
+
+// SetFixedScroll repositions viewport-anchored fragments for the current
+// scroll offset. Fixed fragments are stored relative to the viewport and then
+// shifted into document coordinates so painting, hit testing, find and
+// selection can keep using one coordinate space.
+func (ly *Layout) SetFixedScroll(scroll int) {
+	if ly.fixedApplied && ly.fixedScroll == scroll {
+		return
+	}
+	changed := false
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Fixed {
+			f.Y = f.FixedY + scroll
+			changed = true
+		}
+	}
+	ly.fixedScroll = scroll
+	ly.fixedApplied = true
+	if changed {
+		ly.rebuildLinks()
+	}
+}
+
+// rebuildLinks recreates link rectangles after fixed fragments move.
+func (ly *Layout) rebuildLinks() {
+	ly.Links = ly.Links[:0]
+	for i := range ly.Frags {
+		ly.Frags[i].Link = nil
+	}
+	ly.buildLinks()
 }
 
 // buildLinks assigns fragments to links and records link rectangles in

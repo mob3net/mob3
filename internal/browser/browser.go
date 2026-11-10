@@ -574,12 +574,15 @@ func (b *Browser) rebuild() {
 		root, author = b.readerRoot, readerRules
 	}
 	if b.dark {
-		b.layout = BuildLayoutDarkDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
+		b.layout = BuildLayoutDarkViewportDeadline(root, author, b.width, b.viewportHeight(), b.bigText, start.Add(maxFrameTime))
 	} else {
-		b.layout = BuildLayoutDeadline(root, author, b.width, b.bigText, start.Add(maxFrameTime))
+		b.layout = BuildLayoutViewportDeadline(root, author, b.width, b.viewportHeight(), b.bigText, start.Add(maxFrameTime))
 	}
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
+	if b.layout != nil {
+		b.layout.SetFixedScroll(b.scroll)
+	}
 	b.reindexFind()
 	if b.layout.Truncated {
 		if b.status == "" {
@@ -2195,6 +2198,9 @@ func (b *Browser) draw() {
 	var collect *[]ImagePlacement
 	if b.gfx != nil {
 		collect = &placements
+	}
+	if b.layout != nil {
+		b.layout.SetFixedScroll(b.scroll)
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
 	b.paintSelection(g, top, bottom)

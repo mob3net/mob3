@@ -2341,6 +2341,23 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 	}
 }
 
+func TestBrowserFixedLayoutUsesViewportHeight(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	doc := ParseHTML(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`)
+	b := NewBrowser(30, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	bar := textFrag(b.layout, "bar")
+	if bar == nil {
+		t.Fatal("fixed fragment not laid out")
+	}
+	wantY := b.viewportHeight() - 1
+	if bar.Y != wantY || bar.X != 27 {
+		t.Fatalf("fixed box at (%d,%d), want (27,%d)", bar.X, bar.Y, wantY)
+	}
+}
+
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
