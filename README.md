@@ -57,7 +57,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Headings, paragraphs, lists, links, tables, `<pre>` blocks, images and common
   presentational markup.
 - Text/search inputs, textareas, single-select option popups and multi-select
-  list boxes, with a visible caret, arrow-key editing, GET and urlencoded POST
+  list boxes, with a visible caret, arrow-key editing, date/time/month/week,
+  range sliders, color swatches, HTML constraint checks, GET and urlencoded POST
   form submission.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and

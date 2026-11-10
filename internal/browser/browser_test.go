@@ -805,6 +805,173 @@ func TestPaintInputCursor(t *testing.T) {
 	}
 }
 
+func TestFormValidationConstraints(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go">
+		<input name="required-empty" required>
+		<input name="pattern" pattern="[0-9]{3}" value="12a">
+		<input name="date" type="date" value="2026-13-01">
+		<input name="time" type="time" value="25:00">
+		<input name="color" type="color" value="#zzzzzz">
+		<input name="ok-date" type="date" value="2026-11-10">
+		<input name="disabled-empty" required disabled>
+	</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	form := doc.FindFirst("form")
+
+	field, msg := b.validateForm(form)
+	if field == nil || field.Attr("name") != "required-empty" || !strings.Contains(msg, "required") {
+		t.Fatalf("first validation = %v %q", field, msg)
+	}
+	setAttr(inputByName(doc, "required-empty"), "value", "ok")
+	field, msg = b.validateForm(form)
+	if field == nil || field.Attr("name") != "pattern" || !strings.Contains(msg, "pattern") {
+		t.Fatalf("pattern validation = %v %q", field, msg)
+	}
+	setAttr(inputByName(doc, "pattern"), "value", "123")
+	field, msg = b.validateForm(form)
+	if field == nil || field.Attr("name") != "date" || !strings.Contains(msg, "date") {
+		t.Fatalf("date validation = %v %q", field, msg)
+	}
+	setAttr(inputByName(doc, "date"), "value", "2026-11-10")
+	field, msg = b.validateForm(form)
+	if field == nil || field.Attr("name") != "time" || !strings.Contains(msg, "time") {
+		t.Fatalf("time validation = %v %q", field, msg)
+	}
+	setAttr(inputByName(doc, "time"), "value", "14:30")
+	field, msg = b.validateForm(form)
+	if field == nil || field.Attr("name") != "color" || !strings.Contains(msg, "color") {
+		t.Fatalf("color validation = %v %q", field, msg)
+	}
+	setAttr(inputByName(doc, "color"), "value", "#ff0000")
+	if field, msg := b.validateForm(form); field != nil {
+		t.Fatalf("valid form rejected: %v %q", field, msg)
+	}
+}
+
+func TestInputTypeFormatValidation(t *testing.T) {
+	cases := []struct {
+		typ, value string
+		valid      bool
+	}{
+		{"date", "2026-11-10", true},
+		{"date", "2026-02-30", false},
+		{"time", "23:59", true},
+		{"time", "24:00", false},
+		{"datetime-local", "2026-11-10T14:30", true},
+		{"datetime-local", "2026-11-10 14:30", false},
+		{"month", "2026-11", true},
+		{"month", "2026-13", false},
+		{"week", "2026-W45", true},
+		{"week", "2026-W99", false},
+		{"color", "#2f6fbf", true},
+		{"color", "#2f6fb", false},
+	}
+	for _, tc := range cases {
+		got := invalidControlValue(nil, tc.typ, tc.value) == ""
+		if got != tc.valid {
+			t.Errorf("%s %q valid=%v, want %v", tc.typ, tc.value, got, tc.valid)
+		}
+	}
+}
+
+func TestMaxlengthReadonlyDisabled(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go">
+		<input name="short" maxlength="3">
+		<input name="ro" value="fixed" readonly>
+		<input name="off" value="hidden" disabled>
+		<textarea name="ro-area" readonly>fixed area</textarea>
+		<input name="off-check" type="checkbox" checked disabled>
+		<button type="submit" disabled>No</button>
+	</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	short := inputByName(doc, "short")
+	b.setInputFocus(short)
+	for _, k := range []string{"a", "b", "c", "d", "e"} {
+		b.HandleKey(k)
+	}
+	if got := inputValue(short); got != "abc" {
+		t.Fatalf("maxlength value = %q", got)
+	}
+	if isTextInput(inputByName(doc, "ro")) || isTextInput(doc.FindFirst("textarea")) {
+		t.Fatal("readonly control is editable")
+	}
+	if isTextInput(inputByName(doc, "off")) || isToggleControl(inputByName(doc, "off-check")) {
+		t.Fatal("disabled control is interactive")
+	}
+	if isSubmitControl(doc.FindFirst("button")) {
+		t.Fatal("disabled button is a submit control")
+	}
+	if field, msg := b.validateForm(doc.FindFirst("form")); field != nil {
+		t.Fatalf("disabled controls affected validation: %v %q", field, msg)
+	}
+}
+
+func TestRangeKeyboardControl(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go"><input name="r" type="range" min="0" max="10" step="2" value="4"></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	r := inputByName(doc, "r")
+	b.setInputFocus(r)
+	if b.inputFocus != r {
+		t.Fatal("range was not focused")
+	}
+	b.HandleKey("right")
+	if got := inputValue(r); got != "6" {
+		t.Fatalf("range after right = %q", got)
+	}
+	b.HandleKey("home")
+	if got := inputValue(r); got != "0" {
+		t.Fatalf("range home = %q", got)
+	}
+	b.HandleKey("end")
+	if got := inputValue(r); got != "10" {
+		t.Fatalf("range end = %q", got)
+	}
+	if label := formLabel(r); !strings.Contains(label, "█") || !strings.Contains(label, "10") || !strings.Contains(label, "- ") || !strings.Contains(label, " + ") {
+		t.Fatalf("range label = %q", label)
+	}
+	var frag *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == r {
+			frag = &b.layout.Frags[i]
+			break
+		}
+	}
+	if frag == nil {
+		t.Fatal("range widget fragment not found")
+	}
+	top, _ := b.viewport()
+	clickAt := func(rel int) {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: frag.X + rel + 1, Y: frag.Y - b.scroll + top + 1, Press: true})
+	}
+	minus := strings.Index(frag.Text, "-")
+	clickAt(stringWidth(frag.Text[:minus]))
+	if got := inputValue(r); got != "8" {
+		t.Fatalf("range after minus click = %q", got)
+	}
+	b.rebuild()
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == r {
+			frag = &b.layout.Frags[i]
+			break
+		}
+	}
+	plus := strings.LastIndex(frag.Text, "+")
+	clickAt(stringWidth(frag.Text[:plus]))
+	if got := inputValue(r); got != "10" {
+		t.Fatalf("range after plus click = %q", got)
+	}
+}
+
 func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 	page := newJSPage(`<html><body><p>intro</p><button id="b" type="button">Got it</button><p id="out">visible</p></body></html>`,
 		`document.getElementById("b").addEventListener("click", function () {

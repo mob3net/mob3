@@ -23,7 +23,7 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
@@ -51,6 +51,28 @@ func TestHelpPageDemoInputPlaceholder(t *testing.T) {
 	input.InputFocused = true
 	if label := formLabel(input); strings.Contains(label, "try typing here") {
 		t.Fatalf("focused input still shows placeholder: %q", label)
+	}
+}
+
+func TestHelpPageNewInputTypes(t *testing.T) {
+	p, err := NewLoader().Load("about:help", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"date": false, "time": false, "datetime-local": false, "month": false, "week": false, "range": false, "color": false}
+	p.Root.FindAll(func(n *Node) bool {
+		if n.Tag == "input" {
+			typ := strings.ToLower(n.Attr("type"))
+			if _, ok := want[typ]; ok {
+				want[typ] = true
+			}
+		}
+		return false
+	})
+	for typ, found := range want {
+		if !found {
+			t.Errorf("help page is missing input type %q", typ)
+		}
 	}
 }
 

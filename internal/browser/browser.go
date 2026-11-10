@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1031,7 +1032,7 @@ func (b *Browser) updateSelection(x, y, top, bottom int) {
 }
 
 func isTextInput(n *Node) bool {
-	if n == nil || n.Type != ElementNode {
+	if n == nil || n.Type != ElementNode || isDisabledControl(n) || isReadOnlyControl(n) {
 		return false
 	}
 	if n.Tag == "textarea" {
@@ -1041,21 +1042,29 @@ func isTextInput(n *Node) bool {
 		return false
 	}
 	switch strings.ToLower(n.Attr("type")) {
-	case "", "text", "search", "email", "url", "tel", "number", "password":
+	case "", "text", "search", "email", "url", "tel", "number", "password",
+		"date", "datetime-local", "month", "week", "time", "color":
 		return true
 	}
 	return false
 }
 
+// isRangeInput reports an interactive range slider.
+func isRangeInput(n *Node) bool {
+	return n != nil && n.Type == ElementNode && n.Tag == "input" &&
+		strings.EqualFold(strings.TrimSpace(n.Attr("type")), "range") &&
+		!isDisabledControl(n)
+}
+
 func isFileInput(n *Node) bool {
-	if n == nil || n.Type != ElementNode || n.Tag != "input" {
+	if n == nil || n.Type != ElementNode || n.Tag != "input" || isDisabledControl(n) {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(n.Attr("type")), "file")
 }
 
 func isSubmitControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode {
+	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
 		return false
 	}
 	if n.Tag == "button" {
@@ -1076,12 +1085,12 @@ func isSubmitControl(n *Node) bool {
 }
 
 func isToggleControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode {
+	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
 		return false
 	}
 	if n.Tag == "option" {
 		sel := nearestSelect(n)
-		return sel != nil && sel.HasAttr("multiple")
+		return sel != nil && sel.HasAttr("multiple") && !isDisabledControl(sel)
 	}
 	if n.Tag == "select" {
 		return true
@@ -1108,12 +1117,12 @@ func nearestSelect(n *Node) *Node {
 // toggleControl flips a checkbox, radio or multi-select option. A single select
 // opens its option popup instead of cycling through values blind.
 func (b *Browser) toggleControl(n *Node) {
-	if n == nil {
+	if n == nil || isDisabledControl(n) {
 		return
 	}
 	if n.Tag == "option" {
 		sel := nearestSelect(n)
-		if sel == nil || !sel.HasAttr("multiple") {
+		if sel == nil || !sel.HasAttr("multiple") || n.HasAttr("disabled") {
 			return
 		}
 		if n.HasAttr("selected") {
@@ -1194,8 +1203,13 @@ func (b *Browser) setInputFocus(n *Node) {
 	b.inputFocus = n
 	if n != nil {
 		n.InputFocused = true
-		n.InputCursor = len(inputValue(n))
-		b.status = "Typing · Enter submits · Esc finishes"
+		if isRangeInput(n) {
+			n.InputCursor = 0
+			b.status = "+/− or arrows adjust · Esc finishes"
+		} else {
+			n.InputCursor = len(inputValue(n))
+			b.status = "Typing · Enter submits · Esc finishes"
+		}
 	} else {
 		b.status = ""
 	}
@@ -1232,6 +1246,11 @@ func (b *Browser) setInputValue(n *Node, v string) {
 // and a full relayout is required.
 func (b *Browser) updateInputFragments(n *Node) bool {
 	if b.layout == nil || n == nil || !isTextInput(n) {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "color") {
+		// The color field's own background is the live swatch, so it needs a
+		// full paint whenever the value changes.
 		return false
 	}
 	var frags []*Frag
@@ -1620,8 +1639,170 @@ func (b *Browser) submitNode(n *Node) {
 	}
 }
 
+// validateForm applies the supported HTML constraint checks in document order.
+// It returns the first invalid control and a warning for the footer.
+func (b *Browser) validateForm(form *Node) (*Node, string) {
+	var invalid *Node
+	var reason string
+	fail := func(x *Node, msg string) {
+		if invalid == nil {
+			invalid, reason = x, msg
+		}
+	}
+	form.FindAll(func(x *Node) bool {
+		if x.Tag != "input" && x.Tag != "textarea" && x.Tag != "select" {
+			return false
+		}
+		if isDisabledControl(x) {
+			return false
+		}
+		typ := strings.ToLower(strings.TrimSpace(x.Attr("type")))
+		required := x.HasAttr("required")
+		switch typ {
+		case "submit", "button", "reset", "image", "file", "hidden":
+			return false
+		case "checkbox":
+			if required && !x.HasAttr("checked") {
+				fail(x, "Form: "+formFieldName(x)+" is required")
+			}
+			return false
+		case "radio":
+			if required && !radioGroupChecked(form, x) {
+				fail(x, "Form: "+formFieldName(x)+" is required")
+			}
+			return false
+		}
+		var value string
+		if x.Tag == "select" {
+			if x.HasAttr("multiple") {
+				if required && len(selectedOptionValues(x)) == 0 {
+					fail(x, "Form: "+formFieldName(x)+" is required")
+				}
+				return false
+			}
+			value = inputValue(x)
+		} else {
+			value = inputValue(x)
+		}
+		if required && value == "" {
+			fail(x, "Form: "+formFieldName(x)+" is required")
+			return false
+		}
+		if value == "" {
+			return false
+		}
+		if msg := invalidControlValue(x, typ, value); msg != "" {
+			fail(x, "Form: "+formFieldName(x)+" "+msg)
+			return false
+		}
+		if patternApplies(typ) {
+			if pattern := strings.TrimSpace(x.Attr("pattern")); pattern != "" {
+				re, err := regexp.Compile("^(?:" + pattern + ")$")
+				if err == nil && !re.MatchString(value) {
+					fail(x, "Form: "+formFieldName(x)+" does not match the pattern")
+				}
+			}
+		}
+		return false
+	})
+	return invalid, reason
+}
+
+func formFieldName(n *Node) string {
+	for _, key := range []string{"name", "id", "placeholder"} {
+		if v := strings.TrimSpace(n.Attr(key)); v != "" {
+			return v
+		}
+	}
+	if n != nil && n.Tag != "" {
+		return n.Tag
+	}
+	return "field"
+}
+
+func radioGroupChecked(form *Node, x *Node) bool {
+	if x == nil {
+		return false
+	}
+	name := x.Attr("name")
+	if name == "" {
+		return x.HasAttr("checked")
+	}
+	checked := false
+	form.FindAll(func(n *Node) bool {
+		if n.Tag == "input" && strings.EqualFold(n.Attr("type"), "radio") &&
+			n.Attr("name") == name && n.HasAttr("checked") && !isDisabledControl(n) {
+			checked = true
+		}
+		return false
+	})
+	return checked
+}
+
+func patternApplies(typ string) bool {
+	switch typ {
+	case "", "text", "search", "email", "url", "tel", "password":
+		return true
+	}
+	return false
+}
+
+var (
+	inputDateRE     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	inputMonthRE    = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
+	inputWeekRE     = regexp.MustCompile(`^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$`)
+	inputTimeRE     = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,3})?)?$`)
+	inputDateTimeRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,3})?)?$`)
+	inputColorRE    = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+)
+
+// invalidControlValue reports a format error for typed value controls.
+func invalidControlValue(n *Node, typ, value string) string {
+	switch typ {
+	case "date":
+		if !inputDateRE.MatchString(value) {
+			return "needs a date like YYYY-MM-DD"
+		}
+		if _, err := time.Parse("2006-01-02", value); err != nil {
+			return "has an invalid date"
+		}
+	case "month":
+		if !inputMonthRE.MatchString(value) {
+			return "needs a month like YYYY-MM"
+		}
+	case "week":
+		if !inputWeekRE.MatchString(value) {
+			return "needs a week like YYYY-W01"
+		}
+	case "time":
+		if !inputTimeRE.MatchString(value) {
+			return "needs a time like HH:MM"
+		}
+	case "datetime-local":
+		if !inputDateTimeRE.MatchString(value) {
+			return "needs a date and time like YYYY-MM-DDTHH:MM"
+		}
+		datePart := value[:10]
+		if _, err := time.Parse("2006-01-02", datePart); err != nil {
+			return "has an invalid date"
+		}
+	case "color":
+		if !inputColorRE.MatchString(value) {
+			return "needs a color like #ff0000"
+		}
+	}
+	return ""
+}
+
 func (b *Browser) submitForm(form *Node) {
 	if form == nil {
+		return
+	}
+	if field, msg := b.validateForm(form); field != nil {
+		if isTextInput(field) || isRangeInput(field) {
+			b.setInputFocus(field)
+		}
+		b.status = msg
 		return
 	}
 	prevented := false
@@ -1653,6 +1834,9 @@ func (b *Browser) submitForm(form *Node) {
 	vals := url.Values{}
 	form.FindAll(func(x *Node) bool {
 		if x.Tag != "input" && x.Tag != "textarea" && x.Tag != "select" {
+			return false
+		}
+		if isDisabledControl(x) {
 			return false
 		}
 		name := x.Attr("name")
@@ -1696,6 +1880,28 @@ func (b *Browser) submitForm(form *Node) {
 	}
 	u.RawQuery = q.Encode()
 	b.Navigate(u.String(), true)
+}
+
+// rangeSideAt reports which end of a range slider was clicked: -1 for the
+// minus, +1 for the plus, and 0 elsewhere.
+func (b *Browser) rangeSideAt(n *Node, x, y int) int {
+	if b.layout == nil || n == nil {
+		return 0
+	}
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind != fragText || f.Node != n || y != f.Y {
+			continue
+		}
+		rel := x - f.X
+		if i := strings.Index(f.Text, "-"); i >= 0 && rel == stringWidth(f.Text[:i]) {
+			return -1
+		}
+		if i := strings.LastIndex(f.Text, "+"); i >= 0 && rel == stringWidth(f.Text[:i]) {
+			return 1
+		}
+	}
+	return 0
 }
 
 // nodeAt returns the nearest element under a document cell, or nil.
@@ -1755,6 +1961,11 @@ func (b *Browser) clickContent(x, docY int) {
 		return
 	}
 	n := b.nodeAt(x, docY)
+	if n != nil && isDisabledControl(n) {
+		b.focus = -1
+		b.status = ""
+		return
+	}
 	prevented := false
 	if b.js != nil && b.liveNode(n) {
 		prevented = b.js.dispatchClick(n)
@@ -1971,6 +2182,18 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 						b.setInputFocus(n)
 						return false
 					}
+					if isRangeInput(n) {
+						b.selecting = false
+						if dir := b.rangeSideAt(n, x, docY); dir != 0 {
+							if b.inputFocus != n {
+								b.setInputFocus(n)
+							}
+							b.adjustRange(n, float64(dir))
+						} else {
+							b.setInputFocus(n)
+						}
+						return false
+					}
 				}
 				b.setInputFocus(nil)
 				p := cellPos{X: x, Y: docY}
@@ -2120,6 +2343,9 @@ func (b *Browser) handleInputKey(k string) bool {
 	if n == nil {
 		return false
 	}
+	if isRangeInput(n) {
+		return b.handleRangeKey(n, k)
+	}
 	value := inputValue(n)
 	cur := n.InputCursor
 	if cur < 0 || cur > len(value) {
@@ -2132,7 +2358,7 @@ func (b *Browser) handleInputKey(k string) bool {
 		return false
 	case "enter":
 		if n.Tag == "textarea" {
-			if utf8.RuneCountInString(value) < 2048 {
+			if utf8.RuneCountInString(value) < 2048 && !inputAtMaxLength(n, value) {
 				n.InputCursor = cur + 1
 				b.setInputValue(n, value[:cur]+"\n"+value[cur:])
 			}
@@ -2204,12 +2430,80 @@ func (b *Browser) handleInputKey(k string) bool {
 	}
 	if utf8.RuneCountInString(k) == 1 {
 		r, _ := utf8.DecodeRuneInString(k)
-		if r >= 32 && r != 127 && len([]rune(value)) < 2048 {
+		if r >= 32 && r != 127 && len([]rune(value)) < 2048 && !inputAtMaxLength(n, value) {
 			n.InputCursor = cur + len(k)
 			b.setInputValue(n, value[:cur]+k+value[cur:])
 		}
 	}
 	return false
+}
+
+// inputAtMaxLength reports whether the control has reached its maxlength.
+func inputAtMaxLength(n *Node, value string) bool {
+	limit := maxLength(n)
+	return limit > 0 && utf8.RuneCountInString(value) >= limit
+}
+
+// handleRangeKey drives a focused range slider.
+func (b *Browser) handleRangeKey(n *Node, k string) bool {
+	switch k {
+	case "esc":
+		b.setInputFocus(nil)
+		b.status = exitHint
+		return false
+	case "enter":
+		b.submitInput()
+		return false
+	case "tab", "backtab":
+		b.setInputFocus(nil)
+		return false
+	case "ctrl-c":
+		return true
+	case "left", "down":
+		b.adjustRange(n, -1)
+		return false
+	case "right", "up":
+		b.adjustRange(n, 1)
+		return false
+	case "home":
+		min, _, _, _ := rangeParams(n)
+		b.setRangeValue(n, min)
+		return false
+	case "end":
+		_, max, _, _ := rangeParams(n)
+		b.setRangeValue(n, max)
+		return false
+	}
+	return false
+}
+
+func (b *Browser) adjustRange(n *Node, direction float64) {
+	min, max, step, value := rangeParams(n)
+	value += direction * step
+	if value < min {
+		value = min
+	}
+	if value > max {
+		value = max
+	}
+	b.setRangeValue(n, value)
+}
+
+func (b *Browser) setRangeValue(n *Node, value float64) {
+	min, max, _, _ := rangeParams(n)
+	if value < min {
+		value = min
+	}
+	if value > max {
+		value = max
+	}
+	n.Value = formatRangeNumber(value)
+	n.ValueSet = true
+	if b.js != nil {
+		b.js.fireNodeEvent(n, "input")
+		b.js.fireNodeEvent(n, "change")
+	}
+	b.rebuild()
 }
 
 // refreshInputCursor patches the focused widget after a caret-only move and
@@ -2917,6 +3211,7 @@ func statusLevelFor(s string) statusLevel {
 		return statusSuccess
 	case s == moduleUnsupportedStatus,
 		s == layoutTruncatedStatus,
+		strings.HasPrefix(s, "Form: "),
 		strings.HasPrefix(s, "Site blocked"),
 		strings.HasPrefix(s, "HTTP "),
 		strings.HasPrefix(s, "Blocked local file navigation"),

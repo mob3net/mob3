@@ -459,7 +459,12 @@ Standard Go layout:
   inserts a newline at the caret in a textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap
   their value; only the visible rows are produced, so typing into a huge value
-  stays cheap. Clicking a file
+  stays cheap. Required controls, `pattern`, `maxlength`, `readonly` and
+  `disabled` are enforced; disabled controls are not submitted. Date, time,
+  datetime-local, month and week inputs are edited as typed text with format
+  validation, range inputs are sliders with clickable `-`/`+` ends and arrow
+  adjustment, and color inputs accept
+  `#rrggbb` and paint the field with a live swatch. Clicking a file
   input opens a modal explaining that uploads are unsupported. Clicking a
   checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
   select opens a centered popup listing every option, navigated with Up/Down

@@ -1099,7 +1099,11 @@ option; use <b>Up</b>/<b>Down</b> and <b>Enter</b>, or click an option, and
 <b>Esc</b> closes it. A multi-select shows all its options as a list; clicking
 an option toggles it.
 GET and urlencoded POST forms work; multipart and file uploads are not
-supported.</p>
+supported. Required fields, pattern matching, maxlength, readonly and
+disabled are enforced. Date, time, month and week fields use typed formats;
+range sliders adjust with <b>Left</b>/<b>Right</b> or by clicking their
+<b>-</b>/<b>+</b> ends; color fields show a live
+swatch and accept <b>#rrggbb</b>.</p>
 
 <h2>Try it</h2>
 <p>These links run JavaScript in this page:</p>
@@ -1123,6 +1127,17 @@ submitted.</p>
 <label><input type="radio" name="demo-radio" value="b"> Radio B</label></p>
 <p><label>Select: <select name="demo-select"><option value="one">One</option><option value="two" selected>Two</option><option value="three">Three</option></select></label></p>
 <p><label>Multi-select:<br><select name="demo-multi" multiple><option value="red">Red</option><option value="green" selected>Green</option><option value="blue">Blue</option></select></label></p>
+<p><label>Date: <input type="date" name="demo-date" value="2026-11-10" placeholder="YYYY-MM-DD"></label></p>
+<p><label>Time: <input type="time" name="demo-time" value="14:30" placeholder="HH:MM"></label></p>
+<p><label>Date and time: <input type="datetime-local" name="demo-datetime" value="2026-11-10T14:30" placeholder="YYYY-MM-DDTHH:MM"></label></p>
+<p><label>Month: <input type="month" name="demo-month" value="2026-11" placeholder="YYYY-MM"></label></p>
+<p><label>Week: <input type="week" name="demo-week" value="2026-W45" placeholder="YYYY-W01"></label></p>
+<p><label>Range: <input type="range" name="demo-range" min="0" max="100" step="5" value="50"></label></p>
+<p><label>Color: <input type="color" name="demo-color" value="#2f6fbf" maxlength="7"></label></p>
+<p><label>Required (clear it to see the error): <input name="demo-required" value="ready" required></label></p>
+<p><label>Pattern (three digits): <input name="demo-pattern" pattern="[0-9]{3}" maxlength="3" value="123"></label></p>
+<p><label>Read-only: <input name="demo-readonly" value="cannot edit" readonly></label></p>
+<p><label>Disabled: <input name="demo-disabled" value="not submitted" disabled></label></p>
 <p><label>Textarea:<br><textarea name="demo-textarea">Some editable text</textarea></label></p>
 <p><label>File upload: <input type="file" name="demo-file"></label> (not supported)</p>
 <p><button name="demo-submit" value="1">Submit demo</button></p>

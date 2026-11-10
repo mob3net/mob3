@@ -344,6 +344,57 @@ func isFormControl(n *Node) bool {
 	return false
 }
 
+// isDisabledControl reports a control that is disabled itself or belongs to a
+// disabled fieldset.
+func isDisabledControl(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	for p := n; p != nil; p = p.Parent {
+		if p.Type != ElementNode {
+			continue
+		}
+		if (p.Tag == "input" || p.Tag == "select" || p.Tag == "textarea" || p.Tag == "button" || p.Tag == "option") && p.HasAttr("disabled") {
+			return true
+		}
+		if p.Tag == "fieldset" && p.HasAttr("disabled") {
+			return true
+		}
+	}
+	return false
+}
+
+// isReadOnlyControl reports a text-like control that is not editable.
+func isReadOnlyControl(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	if n.Tag == "textarea" {
+		return n.HasAttr("readonly")
+	}
+	if n.Tag != "input" {
+		return false
+	}
+	switch strings.ToLower(n.Attr("type")) {
+	case "", "text", "search", "email", "url", "tel", "number", "password",
+		"date", "datetime-local", "month", "week", "time", "color":
+		return n.HasAttr("readonly")
+	}
+	return false
+}
+
+// maxLength returns the maxlength limit in runes, or 0 when unrestricted.
+func maxLength(n *Node) int {
+	if n == nil {
+		return 0
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(n.Attr("maxlength")))
+	if err != nil || limit < 0 {
+		return 0
+	}
+	return limit
+}
+
 func (l *layouter) isBlock(n *Node) bool {
 	if n == nil || n.Type != ElementNode || n.Style == nil {
 		return false
@@ -1568,24 +1619,47 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		w = 1
 	}
 	editable := isTextInput(n)
+	disabled := isDisabledControl(n)
+	readOnly := isReadOnlyControl(n)
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: w, h: 1, style: st, node: n,
 		paint: func(x, y int) {
 			bg := RGB(0xea, 0xee, 0xf2)
+			fg := RGB(0x1f, 0x23, 0x28)
 			paintStyle := st
-			if editable {
-				cl := *st
-				cl.Bold = true
+			cl := *st
+			cl.Bold = true
+			switch {
+			case disabled:
+				bg = RGB(0xdc, 0xe0, 0xe4)
+				fg = RGB(0x8a, 0x93, 0x9d)
+			case readOnly:
+				bg = RGB(0xf1, 0xf3, 0xf5)
+				fg = RGB(0x57, 0x60, 0x6a)
+			case n.InputFocused && isRangeInput(n):
+				bg = RGB(0x2f, 0x6f, 0xbf)
+				fg = RGB(0xff, 0xff, 0xff)
+			case editable:
 				if n.InputFocused {
 					bg = RGB(0x2f, 0x6f, 0xbf)
-					cl.Color = RGB(0xff, 0xff, 0xff)
+					fg = RGB(0xff, 0xff, 0xff)
 				} else {
 					bg = RGB(0xd8, 0xe7, 0xf8)
-					cl.Color = RGB(0x1f, 0x23, 0x28)
+					fg = RGB(0x1f, 0x23, 0x28)
 				}
-				cl.Background = bg
-				paintStyle = &cl
 			}
+			if !disabled && !readOnly && strings.EqualFold(n.Attr("type"), "color") {
+				if swatch, ok := parseColor(inputValue(n), Color{}); ok && swatch.Set && swatch.A > 0 {
+					bg = swatch
+					fg = readableFG(RGB(0x1f, 0x23, 0x28), bg)
+					if n.InputFocused {
+						cl.Bold = true
+					}
+				}
+			}
+			cl.Color = fg
+			cl.Background = bg
+			paintStyle = &cl
 			c.l.addFill(x, y, w, 1, bg)
 			c.l.addText(x, y, label, paintStyle, n)
 			if col, ok := inputCursorOffset(n, label); ok {
@@ -1884,11 +1958,81 @@ func optionValue(opt *Node) string {
 func selectedOptionValues(n *Node) []string {
 	var values []string
 	for _, opt := range selectOptions(n) {
-		if opt.HasAttr("selected") {
+		if opt.HasAttr("selected") && !isDisabledControl(opt) {
 			values = append(values, optionValue(opt))
 		}
 	}
 	return values
+}
+
+// rangeParams resolves the min/max/step/value of a range input using the HTML
+// defaults.
+func rangeParams(n *Node) (min, max, step, value float64) {
+	min, max, step, value = 0, 100, 1, 0
+	if v, err := strconv.ParseFloat(strings.TrimSpace(n.Attr("min")), 64); err == nil {
+		min = v
+	}
+	if v, err := strconv.ParseFloat(strings.TrimSpace(n.Attr("max")), 64); err == nil {
+		max = v
+	}
+	if max < min {
+		max = min
+	}
+	if v, err := strconv.ParseFloat(strings.TrimSpace(n.Attr("step")), 64); err == nil && v > 0 {
+		step = v
+	}
+	value = min + (max-min)/2
+	if n.ValueSet {
+		if v, err := strconv.ParseFloat(strings.TrimSpace(n.Value), 64); err == nil {
+			value = v
+		}
+	} else if v, err := strconv.ParseFloat(strings.TrimSpace(n.Attr("value")), 64); err == nil {
+		value = v
+	}
+	if value < min {
+		value = min
+	}
+	if value > max {
+		value = max
+	}
+	return min, max, step, value
+}
+
+func formatRangeNumber(v float64) string {
+	if math.Abs(v-math.Round(v)) < 1e-9 {
+		return strconv.FormatInt(int64(math.Round(v)), 10)
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+func rangeValueString(n *Node) string {
+	_, _, _, value := rangeParams(n)
+	return formatRangeNumber(value)
+}
+
+// rangeLabel draws a compact slider with the current value.
+func rangeLabel(n *Node) string {
+	min, max, _, value := rangeParams(n)
+	const barW = 16
+	pos := 0
+	if max > min {
+		pos = int(math.Round((value - min) / (max - min) * float64(barW-1)))
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= barW {
+		pos = barW - 1
+	}
+	var bar strings.Builder
+	for i := 0; i < barW; i++ {
+		if i <= pos {
+			bar.WriteRune('█')
+		} else {
+			bar.WriteRune('░')
+		}
+	}
+	return "[ - " + bar.String() + " " + rangeValueString(n) + " + ]"
 }
 
 // inputValue returns the current editable value of a form control.
@@ -1902,6 +2046,9 @@ func inputValue(n *Node) string {
 	if n.Tag == "select" {
 		var first string
 		for _, opt := range selectOptions(n) {
+			if isDisabledControl(opt) {
+				continue
+			}
 			val := optionValue(opt)
 			if first == "" {
 				first = val
@@ -1914,6 +2061,17 @@ func inputValue(n *Node) string {
 	}
 	if n.Tag == "textarea" {
 		return strings.TrimSpace(n.TextContent())
+	}
+	if n.Tag == "input" {
+		switch strings.ToLower(n.Attr("type")) {
+		case "range":
+			return rangeValueString(n)
+		case "color":
+			if v := n.Attr("value"); v != "" {
+				return v
+			}
+			return "#000000"
+		}
 	}
 	return n.Attr("value")
 }
@@ -1999,7 +2157,7 @@ func inputCursorOffset(n *Node, label string) (int, bool) {
 	}
 	typ := strings.ToLower(n.Attr("type"))
 	switch typ {
-	case "hidden", "checkbox", "radio", "submit", "button", "reset", "file", "image":
+	case "hidden", "checkbox", "radio", "submit", "button", "reset", "file", "image", "range":
 		return 0, false
 	}
 	_, col, ok := inputTextDisplay(n, typ)
@@ -2046,6 +2204,8 @@ func formLabel(n *Node) string {
 			return "[ Choose File ]"
 		case "image":
 			return "[ image button ]"
+		case "range":
+			return rangeLabel(n)
 		case "password":
 			display, _, _ := inputTextDisplay(n, typ)
 			minW := 16
@@ -2066,7 +2226,10 @@ func formLabel(n *Node) string {
 		}
 	case "select":
 		var chosen string
-		for _, opt := range n.FindAll(func(x *Node) bool { return x.Tag == "option" }) {
+		for _, opt := range selectOptions(n) {
+			if isDisabledControl(opt) {
+				continue
+			}
 			if chosen == "" {
 				chosen = strings.TrimSpace(opt.TextContent())
 			}
