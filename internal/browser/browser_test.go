@@ -623,6 +623,45 @@ func TestMouseDragSelection(t *testing.T) {
 	}
 }
 
+func TestSelectionHighlightsOnlyContent(t *testing.T) {
+	doc := ParseHTML(`<html><body><p>one</p><p>two</p><p>three</p></body></html>`)
+	b := NewBrowser(40, 16)
+	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: doc}
+	b.layout = BuildLayout(doc, nil, 40)
+	b.scroll = 0
+	var first, middle, last *Frag
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind != fragText {
+			continue
+		}
+		switch f.Text {
+		case "one":
+			first = f
+		case "two":
+			middle = f
+		case "three":
+			last = f
+		}
+	}
+	if first == nil || middle == nil || last == nil {
+		t.Fatalf("missing paragraph fragments: %v %v %v", first, middle, last)
+	}
+	b.selAnchor = cellPos{X: first.X, Y: first.Y}
+	b.selCursor = cellPos{X: last.X + last.W - 1, Y: last.Y}
+	top, bottom := b.viewport()
+	g := NewGrid(40, 16, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.paintSelection(g, top, bottom)
+	selBG := RGB(0x2f, 0x6f, 0xbf)
+	y := middle.Y - b.scroll + top
+	if g.Cells[y*g.W+middle.X].BG != selBG {
+		t.Fatal("selected text was not highlighted")
+	}
+	if g.Cells[y*g.W+30].BG == selBG {
+		t.Fatal("empty space to the right of the content was highlighted")
+	}
+}
+
 func inputByName(root *Node, name string) *Node {
 	var found *Node
 	root.FindAll(func(n *Node) bool {

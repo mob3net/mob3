@@ -433,7 +433,9 @@ Standard Go layout:
   `mouse:` input tokens. Hovering a link shows its resolved target in the
   footer and clears when the pointer leaves it. Left press starts a drag
   selection in document coordinates; dragging updates and auto-scrolls it,
-  and release keeps the highlight. A press and release on the same cell is a
+  and release keeps the highlight. The highlight tints only rendered text
+  fragments, not empty margins or unrelated columns on the same row. A press
+  and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus; a download link opens the curl popup instead. While the URL
   prompt is open, a click on its field keeps it

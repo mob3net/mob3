@@ -2772,25 +2772,40 @@ func (b *Browser) selectionSummary() string {
 	return fmt.Sprintf("Selected %d chars (y copies)", n)
 }
 
-// paintSelection highlights selected cells in the content viewport.
+// paintSelection highlights selected cells in the content viewport. Only cells
+// covered by rendered text fragments are tinted, so selecting across several
+// lines does not paint empty margins or unrelated columns.
 func (b *Browser) paintSelection(g *Grid, top, bottom int) {
-	if !b.hasSelection() {
+	if !b.hasSelection() || b.layout == nil {
 		return
 	}
 	a, c := b.selectionOrder()
 	selBG := RGB(0x2f, 0x6f, 0xbf)
 	selFG := RGB(0xf8, 0xfa, 0xfc)
-	for y := top; y < bottom && y < g.H; y++ {
-		docY := b.scroll + (y - top)
-		if docY < a.Y || docY > c.Y {
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind != fragText || f.Text == "" || f.W < 1 {
 			continue
 		}
-		x0, x1 := 0, g.W-1
-		if docY == a.Y {
+		y := f.Y - b.scroll + top
+		if y < top || y >= bottom || y >= g.H {
+			continue
+		}
+		if f.Y < a.Y || f.Y > c.Y {
+			continue
+		}
+		x0, x1 := f.X, f.X+f.W-1
+		if f.Y == a.Y && a.X > x0 {
 			x0 = a.X
 		}
-		if docY == c.Y {
+		if f.Y == c.Y && c.X < x1 {
 			x1 = c.X
+		}
+		if x0 < f.X {
+			x0 = f.X
+		}
+		if x1 >= f.X+f.W {
+			x1 = f.X + f.W - 1
 		}
 		if x0 < 0 {
 			x0 = 0
