@@ -563,7 +563,8 @@ Standard Go layout:
   `appendChild`/`removeChild`/`replaceChildren`, `children`/`parentNode`, and
   `document.title`/`URL`. Element wrappers use constructor prototypes, so
   `instanceof HTMLElement`, `instanceof HTMLScriptElement`, `instanceof Node`
-  and similar checks work; document, text, SVG, `CharacterData` and common HTML
+  and similar checks work; document, text, SVG, `CharacterData`,
+  `DocumentType` and common HTML
   element constructors are exposed globally and on `window`. `<dialog>`
   elements expose `open`, `returnValue`, `show()`, `showModal()` and `close()`;
   only dialogs with the `open` attribute render, and `close()` fires `close`.

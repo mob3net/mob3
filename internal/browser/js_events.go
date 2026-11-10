@@ -521,6 +521,7 @@ func (j *jsRuntime) installElementConstructors() {
 	var TextC = ctor("Text", CharacterDataC);
 	var CommentC = ctor("Comment", TextC);
 	var DocumentFragmentC = ctor("DocumentFragment", NodeC);
+	var DocumentTypeC = ctor("DocumentType", NodeC);
 	var tags = {
 		html: "HTMLHtmlElement", head: "HTMLHeadElement", body: "HTMLBodyElement",
 		title: "HTMLTitleElement", meta: "HTMLMetaElement", link: "HTMLLinkElement",
@@ -562,7 +563,7 @@ func (j *jsRuntime) installElementConstructors() {
 	globalThis.__mob3ElementProto = HTMLElementC.prototype;
 	globalThis.__mob3TextProto = TextC.prototype;
 	globalThis.__mob3DocumentProto = HTMLDocumentC.prototype;
-	var names = ["Node", "Element", "HTMLElement", "SVGElement", "Document", "HTMLDocument", "CharacterData", "Text", "Comment", "DocumentFragment"];
+	var names = ["Node", "Element", "HTMLElement", "SVGElement", "Document", "HTMLDocument", "CharacterData", "Text", "Comment", "DocumentFragment", "DocumentType"];
 	for (var tag2 in tags) {
 		if (names.indexOf(tags[tag2]) < 0) {
 			names.push(tags[tag2]);

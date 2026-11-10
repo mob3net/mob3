@@ -377,6 +377,18 @@ func TestJSLocationRedirect(t *testing.T) {
 	}
 }
 
+func TestJSDocumentTypeGlobal(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		document.title = typeof DocumentType + ":" + (document.doctype === null) +
+			":" + (Object.getPrototypeOf(DocumentType.prototype) === Node.prototype);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "function:true:true" {
+		t.Fatalf("DocumentType global = %q", page.Title)
+	}
+}
+
 func TestJSFormSubmitQueuesPost(t *testing.T) {
 	page := newJSPage(`<html><body><form id="f" method="POST" action="/access_keys">
 		<input type="hidden" name="authenticity_token" value="abc">
