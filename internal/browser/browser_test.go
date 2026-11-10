@@ -271,12 +271,125 @@ func TestToggleSelect(t *testing.T) {
 		t.Fatalf("select value = %q", got)
 	}
 	b.toggleControl(sel)
+	if b.selectMenu == nil || len(b.selectMenu.options) != 2 || b.selectMenu.idx != 0 {
+		t.Fatalf("select popup = %+v", b.selectMenu)
+	}
+	b.HandleKey("down")
+	b.HandleKey("enter")
+	if b.selectMenu != nil {
+		t.Fatal("select popup did not close after choosing")
+	}
 	if got := inputValue(sel); got != "off" {
-		t.Fatalf("after toggle = %q", got)
+		t.Fatalf("after choosing = %q", got)
 	}
 	b.toggleControl(sel)
-	if got := inputValue(sel); got != "auto" {
-		t.Fatalf("after second toggle = %q", got)
+	b.HandleKey("esc")
+	if b.selectMenu != nil {
+		t.Fatal("escape did not close the select popup")
+	}
+	if got := inputValue(sel); got != "off" {
+		t.Fatalf("escape changed the value to %q", got)
+	}
+}
+
+func TestSelectClickOpensAllOptions(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/submit">
+		<select name="choice"><option value="one">One</option><option value="two" selected>Two</option><option value="three">Three</option></select>
+	</form></body></html>`)
+	u, _ := url.Parse("https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.url = u
+	b.rebuild()
+	sel := doc.FindFirst("select")
+	var rect Rect
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind == fragText && f.Node == sel {
+			rect = Rect{X: f.X, Y: f.Y, W: f.W, H: f.H}
+			break
+		}
+	}
+	if rect.W == 0 {
+		t.Fatal("select widget was not rendered")
+	}
+	clickDoc := func(x, docY int) {
+		top, _ := b.viewport()
+		sx, sy := x+1, docY-b.scroll+top+1
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy, Press: true})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy})
+	}
+	clickDoc(rect.X, rect.Y)
+	if b.selectMenu == nil || len(b.selectMenu.options) != 3 {
+		t.Fatalf("select popup = %+v", b.selectMenu)
+	}
+	drawQuiet(b)
+	if len(b.selectHits) != 3 {
+		t.Fatalf("select popup rows = %+v", b.selectHits)
+	}
+	if b.modalBox.W < 40 {
+		t.Fatalf("select popup width = %d, want at least 40", b.modalBox.W)
+	}
+	hit := b.selectHits[2]
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.rect.X + 1, Y: hit.rect.Y + 1, Press: true})
+	if b.selectMenu != nil {
+		t.Fatal("select popup did not close after clicking an option")
+	}
+	if got := inputValue(sel); got != "three" {
+		t.Fatalf("select value = %q, want three", got)
+	}
+}
+
+func TestMultiSelectShowsAndTogglesAllOptions(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/submit">
+		<select name="colours" multiple><option value="red">Red</option><option value="green" selected>Green</option><option value="blue">Blue</option></select>
+	</form></body></html>`)
+	u, _ := url.Parse("https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.url = u
+	b.rebuild()
+	sel := doc.FindFirst("select")
+	rows := map[*Node]int{}
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind == fragText {
+			for p := f.Node; p != nil; p = p.Parent {
+				if p.Tag == "option" {
+					rows[p] = f.Y
+					break
+				}
+			}
+		}
+	}
+	opts := selectOptions(sel)
+	if len(opts) != 3 {
+		t.Fatalf("options = %d", len(opts))
+	}
+	if rows[opts[0]] == rows[opts[1]] || rows[opts[1]] == rows[opts[2]] {
+		t.Fatalf("multi-select options are not on separate rows: %v", rows)
+	}
+	clickOption := func(opt *Node) {
+		for i := range b.layout.Frags {
+			f := &b.layout.Frags[i]
+			if f.Kind == fragText && f.Node == opt {
+				top, _ := b.viewport()
+				b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: f.X + 1, Y: f.Y - b.scroll + top + 1, Press: true})
+				return
+			}
+		}
+		t.Fatalf("option %q has no clickable row", optionLabel(opt))
+	}
+	clickOption(opts[0])
+	clickOption(opts[2])
+	got := strings.Join(selectedOptionValues(sel), ",")
+	if got != "red,green,blue" {
+		t.Fatalf("selected values = %q, want red,green,blue", got)
+	}
+	clickOption(opts[1])
+	got = strings.Join(selectedOptionValues(sel), ",")
+	if got != "red,blue" {
+		t.Fatalf("selected values after toggle = %q, want red,blue", got)
 	}
 }
 
@@ -524,7 +637,7 @@ func inputByName(root *Node, name string) *Node {
 func TestInputTypingAndSubmit(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/search" method="get">
 		<input type="hidden" name="hl" value="en">
-		<input name="q" value="">
+		<input name="q" value="" placeholder="try typing here">
 		<input type="submit" value="Go">
 	</form></body></html>`)
 	u := mustParse(t, "https://www.google.com/")
@@ -546,6 +659,9 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	if field == nil {
 		t.Fatal("input fragment not laid out")
 	}
+	if !strings.Contains(formLabel(q), "try typing here") {
+		t.Fatalf("unfocused label = %q", formLabel(q))
+	}
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{
 		Button: 0, X: field.X + 1, Y: top + field.Y - b.scroll + 1, Press: true,
@@ -556,8 +672,11 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	if b.inputFocus != q || !q.InputFocused {
 		t.Fatal("clicking the input did not focus it")
 	}
-	if !strings.Contains(formLabel(q), "▏") {
-		t.Fatalf("focused label = %q", formLabel(q))
+	if strings.Contains(formLabel(q), "try typing here") {
+		t.Fatalf("focused label still shows the placeholder: %q", formLabel(q))
+	}
+	if b.layout == nil || !b.layout.HasCursor {
+		t.Fatal("focused input has no caret")
 	}
 	b.HandleKey("h")
 	b.HandleKey("i")
@@ -590,6 +709,99 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 	if b.inputFocus != nil {
 		t.Fatal("input focus was not cleared after submit")
+	}
+}
+
+func TestInputCursorMovementAndEditing(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="abcd"></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	q := inputByName(doc, "q")
+	if q == nil {
+		t.Fatal("input not found")
+	}
+	b.setInputFocus(q)
+	if q.InputCursor != 4 {
+		t.Fatalf("focus cursor = %d, want 4", q.InputCursor)
+	}
+	if b.layout == nil || !b.layout.HasCursor {
+		t.Fatal("focused input has no caret")
+	}
+	endX := b.layout.Cursor.X
+	b.HandleKey("left")
+	b.HandleKey("left")
+	if q.InputCursor != 2 {
+		t.Fatalf("cursor after two lefts = %d, want 2", q.InputCursor)
+	}
+	if b.layout.Cursor.X != endX-2 {
+		t.Fatalf("caret did not move: x = %d, want %d", b.layout.Cursor.X, endX-2)
+	}
+	b.HandleKey("X")
+	if got := inputValue(q); got != "abXcd" {
+		t.Fatalf("value = %q, want abXcd", got)
+	}
+	if q.InputCursor != 3 {
+		t.Fatalf("cursor after typing = %d, want 3", q.InputCursor)
+	}
+	b.HandleKey("home")
+	if q.InputCursor != 0 {
+		t.Fatalf("home cursor = %d", q.InputCursor)
+	}
+	b.HandleKey("delete")
+	if got := inputValue(q); got != "bXcd" {
+		t.Fatalf("value after delete = %q, want bXcd", got)
+	}
+	b.HandleKey("end")
+	if q.InputCursor != len(inputValue(q)) {
+		t.Fatalf("end cursor = %d", q.InputCursor)
+	}
+}
+
+func TestTextareaCursorMovesBetweenRows(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go"><textarea name="body">ab
+cd</textarea></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	area := doc.FindFirst("textarea")
+	if area == nil {
+		t.Fatal("textarea not found")
+	}
+	b.setInputFocus(area)
+	if area.InputCursor != len(inputValue(area)) {
+		t.Fatalf("focus cursor = %d", area.InputCursor)
+	}
+	row2 := b.layout.Cursor.Y
+	b.HandleKey("up")
+	if area.InputCursor != 2 {
+		t.Fatalf("cursor after up = %d, want 2", area.InputCursor)
+	}
+	if b.layout.Cursor.Y == row2 {
+		t.Fatal("textarea caret did not move to the previous row")
+	}
+	b.HandleKey("left")
+	if area.InputCursor != 1 {
+		t.Fatalf("cursor after left = %d, want 1", area.InputCursor)
+	}
+	b.HandleKey("down")
+	if area.InputCursor != len("ab\nc") {
+		t.Fatalf("cursor after down = %d", area.InputCursor)
+	}
+}
+
+func TestPaintInputCursor(t *testing.T) {
+	b := NewBrowser(20, 5)
+	b.layout = &Layout{HasCursor: true, Cursor: Rect{X: 2, Y: 1, W: 1, H: 1}}
+	g := NewGrid(20, 5, RGB(0, 0, 0), RGB(0x11, 0x22, 0x33))
+	b.paintInputCursor(g, 2, 5)
+	cell := g.Cells[3*20+2]
+	if cell.BG != RGB(0xff, 0xff, 0xff) || cell.FG != RGB(0x2f, 0x6f, 0xbf) {
+		t.Fatalf("caret cell colors = %+v", cell)
 	}
 }
 

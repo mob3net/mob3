@@ -56,8 +56,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   server-rendered HTML.
 - Headings, paragraphs, lists, links, tables, `<pre>` blocks, images and common
   presentational markup.
-- Text/search inputs and textareas, with GET and urlencoded POST form
-  submission.
+- Text/search inputs, textareas, single-select option popups and multi-select
+  list boxes, with a visible caret, arrow-key editing, GET and urlencoded POST
+  form submission.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and
   basic flex rows.

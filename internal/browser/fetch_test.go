@@ -23,10 +23,59 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
+	}
+}
+
+func TestHelpPageDemoInputPlaceholder(t *testing.T) {
+	p, err := NewLoader().Load("about:help", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := inputByName(p.Root, "demo-text")
+	if input == nil {
+		t.Fatal("demo text input is missing")
+	}
+	if got := input.Attr("value"); got != "" {
+		t.Fatalf("demo input value = %q, want empty", got)
+	}
+	if got := input.Attr("placeholder"); got != "try typing here" {
+		t.Fatalf("demo input placeholder = %q", got)
+	}
+	if label := formLabel(input); !strings.Contains(label, "try typing here") {
+		t.Fatalf("unfocused input label = %q", label)
+	}
+	input.InputFocused = true
+	if label := formLabel(input); strings.Contains(label, "try typing here") {
+		t.Fatalf("focused input still shows placeholder: %q", label)
+	}
+}
+
+func TestHelpPageSelectControls(t *testing.T) {
+	p, err := NewLoader().Load("about:help", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var single, multi *Node
+	p.Root.FindAll(func(n *Node) bool {
+		if n.Tag != "select" {
+			return false
+		}
+		if n.HasAttr("multiple") && multi == nil {
+			multi = n
+		} else if !n.HasAttr("multiple") && single == nil {
+			single = n
+		}
+		return false
+	})
+	if single == nil || len(selectOptions(single)) != 3 {
+		t.Fatalf("single select = %+v", single)
+	}
+	if multi == nil || len(selectOptions(multi)) != 3 {
+		t.Fatalf("multi-select = %+v", multi)
 	}
 }
 

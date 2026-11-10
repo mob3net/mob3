@@ -420,7 +420,8 @@ Standard Go layout:
   so every shortcut including `!` is visible and selectable. The flag table
   must list every option accepted by `Run`. The page includes try-it links for
   alert/confirm/prompt, a `download` example that opens the curl popup, and a
-  demo form with text input, checkbox, radio, select, textarea, a file-upload
+  demo form with text input, checkbox, radio, a three-option select, a
+  multi-select, textarea, a file-upload
   control (shown but unsupported) and a submit button; inline handlers work
   even on pages with no `<script>` elements.
 - **Focus:** focused links use a yellow background highlight on text and a
@@ -450,15 +451,21 @@ Standard Go layout:
   OSC 52 clipboard sequence and then clears the highlight (subject to
   terminal/multiplexer support).
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
-  textarea focuses it and shows a cursor; typing edits the value, Backspace
-  deletes, Ctrl-U clears, and Esc finishes; Enter submits from other fields but
-  inserts a newline in a textarea. Textareas render as
+  textarea focuses it and shows a block caret. Left/Right move by one
+  character, Home/End by line, Delete removes forward, and in a textarea
+  Up/Down move between logical lines (keeping the column); typing and Backspace
+  edit at the caret, and a long focused input scrolls around the caret.
+  Ctrl-U clears, and Esc finishes; Enter submits from other fields but
+  inserts a newline at the caret in a textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap
   their value; only the visible rows are produced, so typing into a huge value
   stays cheap. Clicking a file
   input opens a modal explaining that uploads are unsupported. Clicking a
   checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
-  select cycles its options. Submit
+  select opens a centered popup listing every option, navigated with Up/Down
+  and chosen with Enter or a click, with Esc/backdrop/`×` closing it without a
+  change. `<select multiple>` renders as an always-visible list box with every
+  option on its own row; clicking an option toggles it. Submit
   buttons run their `click` handler and then submit their form on release
   unless the handler prevents default; `type=button`/`type=reset` buttons and
   buttons outside a form only run their click handlers. GET forms build a query
@@ -814,7 +821,8 @@ Standard Go layout:
 - No tabs or automatic downloads. A link with a `download` attribute or a
   non-HTML response opens a popup with a copyable `curl` command instead of
   saving the file. Forms support editable text fields, checkbox/radio
-  toggling, click-to-cycle selects and urlencoded GET/POST submission;
+  toggling, single-select popups, multi-select list boxes and urlencoded
+  GET/POST submission;
   multipart/file uploads are not implemented (clicking a file input shows an
   unsupported notice). Mouse support covers
   click-to-follow, page drag selection, the URL prompt, right-click back and

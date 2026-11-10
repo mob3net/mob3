@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 type fragKind int
@@ -62,6 +63,11 @@ type Layout struct {
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
 
+	// Cursor is the cell of the focused input/textarea caret, in document
+	// coordinates. It is drawn as an overlay, not part of the text.
+	Cursor    Rect
+	HasCursor bool
+
 	// fixedScroll tracks the scroll offset already applied to fixed fragments.
 	fixedScroll  int
 	fixedApplied bool
@@ -94,6 +100,10 @@ type layouter struct {
 	// abs collects absolutely positioned boxes. They are kept out of normal
 	// flow and laid out after it, so they paint above in-flow content.
 	abs []*absBox
+
+	// cursor is the focused form caret cell, in document coordinates.
+	cursor    Rect
+	hasCursor bool
 }
 
 // cbRect is a containing block in document coordinates. h stays unknown until
@@ -228,6 +238,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark 
 	out := &Layout{
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
 		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
+		Cursor: l.cursor, HasCursor: l.hasCursor,
 	}
 	out.buildLinks()
 	if dark {
@@ -262,6 +273,12 @@ func (l *layouter) addText(x, y int, s string, st *Style, n *Node) {
 		return
 	}
 	l.frags = append(l.frags, Frag{Kind: fragText, X: x, Y: y, W: l.textWidth(s, st), H: l.lineH(st), Text: s, Style: st, Node: n})
+}
+
+// setInputCursor records the focused form caret cell in document coordinates.
+func (l *layouter) setInputCursor(x, y int) {
+	l.cursor = Rect{X: x, Y: y, W: 1, H: 1}
+	l.hasCursor = true
 }
 
 func resolveBorderH(l Length, basis int, fontPx float64) int {
@@ -1535,6 +1552,10 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		c.addTextarea(n, st)
 		return
 	}
+	if n.Tag == "select" && n.HasAttr("multiple") {
+		c.addMultiSelect(n, st)
+		return
+	}
 	label := formLabel(n)
 	if label == "" {
 		return
@@ -1567,6 +1588,65 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 			}
 			c.l.addFill(x, y, w, 1, bg)
 			c.l.addText(x, y, label, paintStyle, n)
+			if col, ok := inputCursorOffset(n, label); ok {
+				c.l.setInputCursor(x+2+col, y)
+			}
+		},
+	})
+}
+
+// addMultiSelect renders a <select multiple> as an always-visible list box.
+// Every option occupies its own row and keeps the option node, so a click can
+// toggle precisely that option rather than cycling the whole control.
+func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
+	opts := selectOptions(n)
+	if len(opts) == 0 {
+		c.addLabel("[ multi-select ]", st, n)
+		return
+	}
+	labels := make([]string, len(opts))
+	boxW := 0
+	for i, opt := range opts {
+		mark := "[ ] "
+		if opt.HasAttr("selected") {
+			mark = "[x] "
+		}
+		labels[i] = mark + optionLabel(opt)
+		if w := stringWidth(labels[i]); w > boxW {
+			boxW = w
+		}
+	}
+	if c.maxW > 0 && boxW > c.maxW {
+		boxW = c.maxW
+	}
+	if boxW < 10 {
+		boxW = 10
+		if c.maxW > 0 && boxW > c.maxW {
+			boxW = c.maxW
+		}
+	}
+	if boxW < 1 {
+		boxW = 1
+	}
+	for i := range labels {
+		labels[i] = truncateWidth(labels[i], boxW)
+	}
+	c.addAtomicBox(inlineItem{
+		kind: itemAtomic, w: boxW, h: len(opts), style: st, node: n,
+		paint: func(x, y int) {
+			for i, opt := range opts {
+				bg := RGB(0xea, 0xee, 0xf2)
+				fg := RGB(0x1f, 0x23, 0x28)
+				rowStyle := st
+				if opt.HasAttr("selected") {
+					bg = RGB(0xd8, 0xe7, 0xf8)
+					cl := *st
+					cl.Color = fg
+					rowStyle = &cl
+				}
+				c.l.addFill(x, y+i, boxW, 1, bg)
+				c.l.addText(x, y+i, labels[i], rowStyle, opt)
+			}
 		},
 	})
 }
@@ -1586,7 +1666,7 @@ func (c *inlineCtx) addTextarea(n *Node, st *Style) {
 	if boxW < 8 {
 		boxW = 8
 	}
-	rows := textareaRowsFor(n, boxW)
+	rows, cursorRow, cursorCol, hasCursor := textareaLayoutFor(n, boxW)
 	editable := isTextInput(n)
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: boxW, h: len(rows), style: st, node: n,
@@ -1610,18 +1690,21 @@ func (c *inlineCtx) addTextarea(n *Node, st *Style) {
 				c.l.addFill(x, y+i, boxW, 1, bg)
 				c.l.addText(x, y+i, row, paintStyle, n)
 			}
+			if hasCursor && n.InputFocused {
+				c.l.setInputCursor(x+2+cursorCol, y+cursorRow)
+			}
 		},
 	})
 }
 
-// textareaRowsFor formats the visible rows of a textarea at the given box
-// width, including brackets and the focused cursor.
-func textareaRowsFor(n *Node, boxW int) []string {
+// textareaLayoutFor formats the visible rows of a textarea and the focused
+// caret cell within the box.
+func textareaLayoutFor(n *Node, boxW int) (rows []string, cursorRow, cursorCol int, hasCursor bool) {
 	inner := boxW - 3
 	if inner < 1 {
 		inner = 1
 	}
-	lines := textareaLines(n, inner)
+	lines, cursorRow, cursorCol, hasCursor := textareaLinesCursor(n, inner)
 	h := len(lines)
 	if rows := textareaRows(n); rows > h {
 		h = rows
@@ -1638,44 +1721,71 @@ func textareaRowsFor(n *Node, boxW int) []string {
 	if len(lines) > h {
 		lines = lines[:h]
 	}
+	if cursorRow >= h {
+		hasCursor = false
+	}
 	out := make([]string, h)
 	for i, line := range lines {
-		line = padWidth(truncateWidth(line, inner), inner)
-		if n.InputFocused && i == h-1 {
-			line = padWidth(truncateWidth(line, inner-1), inner-1) + inputCursor(n)
-		}
-		out[i] = "[ " + line + "]"
+		out[i] = "[ " + padWidth(truncateWidth(line, inner), inner) + "]"
 	}
-	return out
+	if cursorCol >= inner {
+		cursorCol = inner - 1
+	}
+	if cursorCol < 0 {
+		cursorCol = 0
+	}
+	return out, cursorRow, cursorCol, hasCursor
 }
 
 // textareaLines splits a textarea value into display rows, wrapping long lines
 // to width. Only the rows that can be displayed are produced, so typing into a
 // large textarea stays cheap.
 func textareaLines(n *Node, width int) []string {
+	lines, _, _, _ := textareaLinesCursor(n, width)
+	return lines
+}
+
+// textareaLinesCursor is textareaLines plus the caret's row and cell column.
+func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol int, hasCursor bool) {
 	txt := inputValue(n)
+	cur := n.InputCursor
+	hasCursor = n.InputFocused
 	if txt == "" && !n.InputFocused {
 		txt = n.Attr("placeholder")
+		hasCursor = false
 	}
-	txt = strings.ReplaceAll(txt, "\r\n", "\n")
-	txt = strings.ReplaceAll(txt, "\r", "\n")
+	txt, cur = normalizeTextCursor(txt, cur)
 	if width < 1 {
 		width = 1
 	}
 	// The widget never shows more than 12 rows; stop scanning beyond that.
 	txt = truncateWidth(txt, width*12+12)
+	if hasCursor {
+		if cur > len(txt) {
+			hasCursor = false
+		} else {
+			cur = len(expandTabs(txt[:cur]))
+		}
+	}
 	txt = expandTabs(txt)
-	var out []string
 	var b strings.Builder
 	w := 0
+	row := 0
+	found := false
 	flush := func() {
 		out = append(out, b.String())
 		b.Reset()
 		w = 0
+		row = len(out)
 	}
-	for _, r := range txt {
+	for i, r := range txt {
 		if len(out) >= 12 {
 			break
+		}
+		atCursor := hasCursor && !found && i == cur
+		if atCursor {
+			cursorRow, cursorCol = row, w
+			found = true
 		}
 		if r == '\n' {
 			flush()
@@ -1688,6 +1798,9 @@ func textareaLines(n *Node, width int) []string {
 		}
 		if w+rw > width && w > 0 {
 			flush()
+			if atCursor {
+				cursorRow, cursorCol = row, w
+			}
 		}
 		b.WriteRune(r)
 		w += rw
@@ -1695,10 +1808,30 @@ func textareaLines(n *Node, width int) []string {
 	if len(out) < 12 {
 		out = append(out, b.String())
 	}
+	if hasCursor && !found {
+		if cur <= len(txt) && row < len(out) {
+			cursorRow, cursorCol = row, w
+			found = true
+		}
+	}
 	if len(out) == 0 {
 		out = []string{""}
 	}
-	return out
+	return out, cursorRow, cursorCol, hasCursor && found
+}
+
+// normalizeTextCursor normalises CRLF/CR newlines while keeping the caret at
+// the same logical position.
+func normalizeTextCursor(s string, cur int) (string, int) {
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(s) {
+		cur = len(s)
+	}
+	before := strings.ReplaceAll(strings.ReplaceAll(s[:cur], "\r\n", "\n"), "\r", "\n")
+	full := strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+	return full, len(before)
 }
 
 // textareaRows reads the HTML rows attribute, clamped to the supported range.
@@ -1713,6 +1846,51 @@ func textareaRows(n *Node) int {
 	return rows
 }
 
+// selectOptions returns every option below a select, including those nested in
+// optgroup elements.
+func selectOptions(n *Node) []*Node {
+	if n == nil {
+		return nil
+	}
+	return n.FindAll(func(x *Node) bool { return x.Tag == "option" })
+}
+
+// optionLabel is the visible text of an option, falling back to its value.
+func optionLabel(opt *Node) string {
+	if opt == nil {
+		return ""
+	}
+	label := strings.TrimSpace(opt.TextContent())
+	if label == "" {
+		label = strings.TrimSpace(opt.Attr("value"))
+	}
+	return label
+}
+
+// optionValue is the value submitted for an option. Options without a value
+// use their visible text, matching HTML.
+func optionValue(opt *Node) string {
+	if opt == nil {
+		return ""
+	}
+	if v := opt.Attr("value"); v != "" {
+		return v
+	}
+	return strings.TrimSpace(opt.TextContent())
+}
+
+// selectedOptionValues returns the submitted values of a multi-select in
+// document order.
+func selectedOptionValues(n *Node) []string {
+	var values []string
+	for _, opt := range selectOptions(n) {
+		if opt.HasAttr("selected") {
+			values = append(values, optionValue(opt))
+		}
+	}
+	return values
+}
+
 // inputValue returns the current editable value of a form control.
 func inputValue(n *Node) string {
 	if n == nil {
@@ -1723,11 +1901,8 @@ func inputValue(n *Node) string {
 	}
 	if n.Tag == "select" {
 		var first string
-		for _, opt := range n.FindAll(func(x *Node) bool { return x.Tag == "option" }) {
-			val := opt.Attr("value")
-			if val == "" {
-				val = strings.TrimSpace(opt.TextContent())
-			}
+		for _, opt := range selectOptions(n) {
+			val := optionValue(opt)
 			if first == "" {
 				first = val
 			}
@@ -1743,11 +1918,101 @@ func inputValue(n *Node) string {
 	return n.Attr("value")
 }
 
-func inputCursor(n *Node) string {
-	if n.InputFocused {
-		return "▏"
+// inputDisplayCells is the widest text window shown inside a focused input.
+const inputDisplayCells = 40
+
+// inputTextDisplay returns the text shown inside a text-like input and the
+// cell column of the caret within that text. A focused value scrolls so the
+// caret stays visible; unfocused values simply truncate at the right edge.
+func inputTextDisplay(n *Node, typ string) (string, int, bool) {
+	val := inputValue(n)
+	if !n.InputFocused {
+		if val == "" {
+			val = n.Attr("placeholder")
+		}
+		if typ == "password" {
+			val = strings.Repeat("•", utf8.RuneCountInString(val))
+		}
+		if val == "" {
+			val = strings.Repeat(" ", 10)
+		}
+		if w := stringWidth(val); w > inputDisplayCells {
+			val = truncateWidth(val, inputDisplayCells)
+		}
+		return val, 0, false
 	}
-	return " "
+	cur := n.InputCursor
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(val) {
+		cur = len(val)
+	}
+	if typ == "password" {
+		before := utf8.RuneCountInString(val[:cur])
+		val = strings.Repeat("•", utf8.RuneCountInString(val))
+		cur = len(strings.Repeat("•", before))
+	}
+	runes := []rune(val)
+	curRune := utf8.RuneCountInString(val[:cur])
+	if curRune > len(runes) {
+		curRune = len(runes)
+	}
+	// Leave one cell for the caret itself and one for a leading ellipsis.
+	limit := inputDisplayCells - 1
+	start := curRune
+	used := 0
+	for start > 0 {
+		rw := runeWidth(runes[start-1])
+		if used+rw > limit {
+			break
+		}
+		used += rw
+		start--
+	}
+	used = 0
+	for i := start; i < curRune; i++ {
+		used += runeWidth(runes[i])
+	}
+	end := curRune
+	for end < len(runes) {
+		rw := runeWidth(runes[end])
+		if used+rw > limit {
+			break
+		}
+		used += rw
+		end++
+	}
+	display := string(runes[start:end])
+	cursorCol := stringWidth(string(runes[start:curRune]))
+	if start > 0 {
+		display = "…" + display
+		cursorCol++
+	}
+	return display, cursorCol, true
+}
+
+// inputCursorOffset returns the caret column within a formatted input label.
+func inputCursorOffset(n *Node, label string) (int, bool) {
+	if n == nil || n.Tag != "input" || !n.InputFocused {
+		return 0, false
+	}
+	typ := strings.ToLower(n.Attr("type"))
+	switch typ {
+	case "hidden", "checkbox", "radio", "submit", "button", "reset", "file", "image":
+		return 0, false
+	}
+	_, col, ok := inputTextDisplay(n, typ)
+	if !ok {
+		return 0, false
+	}
+	if max := stringWidth(label) - 4; col > max {
+		col = max
+	}
+	if col < 0 {
+		col = 0
+	}
+	return col, true
 }
 
 func formLabel(n *Node) string {
@@ -1782,37 +2047,22 @@ func formLabel(n *Node) string {
 		case "image":
 			return "[ image button ]"
 		case "password":
-			if val == "" && !n.InputFocused {
-				val = n.Attr("placeholder")
+			display, _, _ := inputTextDisplay(n, typ)
+			minW := 16
+			if w := stringWidth(display); w < minW {
+				display += strings.Repeat(" ", minW-w)
 			}
-			if val == "" {
-				val = strings.Repeat(" ", 10)
-			}
-			return "[ " + strings.Repeat("•", len([]rune(val))) + inputCursor(n) + "]"
+			return "[ " + display + " ]"
 		default:
-			if val == "" {
-				if !n.InputFocused {
-					val = n.Attr("placeholder")
-				}
-				if val == "" {
-					val = strings.Repeat(" ", 10)
-				}
-			}
+			display, _, _ := inputTextDisplay(n, typ)
 			minW := 16
 			if typ == "search" {
 				minW = 30
 			}
-			if w := stringWidth(val); w < minW {
-				val += strings.Repeat(" ", minW-w)
+			if w := stringWidth(display); w < minW {
+				display += strings.Repeat(" ", minW-w)
 			}
-			if w := stringWidth(val); w > 40 {
-				if n.InputFocused {
-					val = "…" + tailWidth(val, 39)
-				} else {
-					val = truncateWidth(val, 40)
-				}
-			}
-			return "[ " + val + inputCursor(n) + "]"
+			return "[ " + display + " ]"
 		}
 	case "select":
 		var chosen string
@@ -1846,7 +2096,7 @@ func formLabel(n *Node) string {
 		if w := stringWidth(txt); w > 40 {
 			txt = truncateWidth(txt, 40)
 		}
-		return "[ " + txt + inputCursor(n) + "]"
+		return "[ " + txt + " ]"
 	case "button":
 		txt := strings.TrimSpace(visibleText(n))
 		if txt == "" {
@@ -2327,6 +2577,20 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	if n.Tag == "img" {
 		cw, _ := imageSize(n, st, 1000, l.imageCapWidth())
 		return cw, cw
+	}
+	if n.Tag == "select" && n.HasAttr("multiple") {
+		opts := selectOptions(n)
+		w := 10
+		for _, opt := range opts {
+			mark := "[ ] "
+			if opt.HasAttr("selected") {
+				mark = "[x] "
+			}
+			if ow := stringWidth(mark + optionLabel(opt)); ow > w {
+				w = ow
+			}
+		}
+		return w, w
 	}
 	if n.Tag == "input" || n.Tag == "select" || n.Tag == "textarea" || n.Tag == "button" {
 		w := stringWidth(formLabel(n))

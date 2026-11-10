@@ -43,6 +43,7 @@ type Node struct {
 	Value        string
 	ValueSet     bool
 	InputFocused bool
+	InputCursor  int // byte offset of the caret while focused
 
 	// HTMLDialogElement state.
 	DialogReturnValue string

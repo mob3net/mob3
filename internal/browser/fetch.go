@@ -1087,11 +1087,17 @@ without copying. Nothing is written to disk by MOB³ itself.</p>
 
 <h2>Forms</h2>
 <p>Click a text input or textarea to type. Textareas show at least two rows and
-wrap their text; an explicit <b>rows</b> value up to 12 is honoured.
-<b>Backspace</b> deletes,
+wrap their text; an explicit <b>rows</b> value up to 12 is honoured. The focused
+field shows a block caret: <b>Left</b>/<b>Right</b> move by character,
+<b>Home</b>/<b>End</b> by line, and textarea <b>Up</b>/<b>Down</b> move between
+lines. <b>Delete</b> removes forward,
+<b>Backspace</b> deletes backwards,
 <b>Ctrl-U</b> clears, <b>Enter</b> submits (or inserts a newline in a textarea),
 and <b>Esc</b> leaves the field.
-Checkboxes and radios toggle on click; selects cycle through their options.
+Checkboxes and radios toggle on click. Clicking a select opens a popup with every
+option; use <b>Up</b>/<b>Down</b> and <b>Enter</b>, or click an option, and
+<b>Esc</b> closes it. A multi-select shows all its options as a list; clicking
+an option toggles it.
 GET and urlencoded POST forms work; multipart and file uploads are not
 supported.</p>
 
@@ -1111,11 +1117,12 @@ explaining this; it is rendered for layout only and is skipped when a form is
 submitted.</p>
 <h3>Form controls</h3>
 <form action="about:help" method="get">
-<p><label>Text input: <input name="demo-text" value="try typing here"></label></p>
+<p><label>Text input: <input name="demo-text" placeholder="try typing here"></label></p>
 <p><label><input type="checkbox" name="demo-check" value="on" checked> Checkbox</label></p>
 <p><label><input type="radio" name="demo-radio" value="a" checked> Radio A</label>
 <label><input type="radio" name="demo-radio" value="b"> Radio B</label></p>
-<p><label>Select: <select name="demo-select"><option value="one">One</option><option value="two" selected>Two</option></select></label></p>
+<p><label>Select: <select name="demo-select"><option value="one">One</option><option value="two" selected>Two</option><option value="three">Three</option></select></label></p>
+<p><label>Multi-select:<br><select name="demo-multi" multiple><option value="red">Red</option><option value="green" selected>Green</option><option value="blue">Blue</option></select></label></p>
 <p><label>Textarea:<br><textarea name="demo-textarea">Some editable text</textarea></label></p>
 <p><label>File upload: <input type="file" name="demo-file"></label> (not supported)</p>
 <p><button name="demo-submit" value="1">Submit demo</button></p>

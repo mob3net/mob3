@@ -830,6 +830,188 @@ type noticeDialog struct {
 	message string
 }
 
+// selectHit is one clickable option row in the open select popup.
+type selectHit struct {
+	rect   Rect
+	option *Node
+}
+
+// selectMenuDialog is the popup listing every option of a single select.
+type selectMenuDialog struct {
+	node    *Node
+	options []*Node
+	idx     int
+	scroll  int
+}
+
+// openSelectMenu shows all options of a single select with the current value
+// highlighted.
+func (b *Browser) openSelectMenu(sel *Node) {
+	opts := selectOptions(sel)
+	if len(opts) == 0 {
+		return
+	}
+	idx := 0
+	for i, opt := range opts {
+		if opt.HasAttr("selected") {
+			idx = i
+			break
+		}
+	}
+	b.selectMenu = &selectMenuDialog{node: sel, options: opts, idx: idx}
+	b.selectHits = nil
+	b.status = ""
+}
+
+// commitSelectOption applies the chosen option, closes the popup and fires the
+// same input/change events a native select would.
+func (b *Browser) commitSelectOption(opt *Node) {
+	m := b.selectMenu
+	if m == nil || opt == nil {
+		return
+	}
+	for _, o := range m.options {
+		removeAttr(o, "selected")
+	}
+	setAttr(opt, "selected", "")
+	sel := m.node
+	b.selectMenu = nil
+	b.selectHits = nil
+	b.status = ""
+	b.fireSelectChange(sel)
+}
+
+// handleSelectMenuKey drives the option popup from the keyboard.
+func (b *Browser) handleSelectMenuKey(k string) bool {
+	m := b.selectMenu
+	if m == nil || len(m.options) == 0 {
+		return false
+	}
+	switch k {
+	case "esc", "q", "ctrl-c":
+		b.selectMenu = nil
+		b.selectHits = nil
+	case "up", "k", "ctrl-p":
+		if m.idx > 0 {
+			m.idx--
+		}
+	case "down", "j", "ctrl-n":
+		if m.idx < len(m.options)-1 {
+			m.idx++
+		}
+	case "home", "g":
+		m.idx = 0
+	case "end", "G":
+		m.idx = len(m.options) - 1
+	case "enter", " ":
+		b.commitSelectOption(m.options[m.idx])
+	}
+	return false
+}
+
+// handleSelectMenuMouse chooses a clicked option or closes the popup when the
+// dimmed backdrop or the close button is clicked.
+func (b *Browser) handleSelectMenuMouse(ev MouseEvent) {
+	if !ev.Press || ev.Motion || ev.Wheel != 0 || ev.Button != MouseButtonLeft {
+		return
+	}
+	x, y := ev.X-1, ev.Y-1
+	for _, hit := range b.selectHits {
+		r := hit.rect
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			b.commitSelectOption(hit.option)
+			return
+		}
+	}
+	switch b.modalMouseAction(ev) {
+	case "close", "outside":
+		b.selectMenu = nil
+		b.selectHits = nil
+		b.status = ""
+	}
+}
+
+// paintSelectMenu overlays the open single-select option popup.
+func (b *Browser) paintSelectMenu(g *Grid) {
+	m := b.selectMenu
+	if m == nil || len(m.options) == 0 || g.W < 8 || g.H < 4 {
+		return
+	}
+	maxLabel := 0
+	for _, opt := range m.options {
+		if w := stringWidth("✓ " + optionLabel(opt)); w > maxLabel {
+			maxLabel = w
+		}
+	}
+	hint := " ↑↓ choose · Enter select · Esc close "
+	boxW := maxLabel + 6
+	if w := stringWidth(hint) + 4; w > boxW {
+		boxW = w
+	}
+	if boxW < 40 {
+		boxW = 40
+	}
+	if boxW > g.W {
+		boxW = g.W
+	}
+	if boxW < 8 {
+		return
+	}
+	inner := boxW - 4
+	maxRows := g.H - 4
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	visible := len(m.options)
+	if visible > maxRows {
+		visible = maxRows
+	}
+	if m.idx < m.scroll {
+		m.scroll = m.idx
+	}
+	if m.idx >= m.scroll+visible {
+		m.scroll = m.idx - visible + 1
+	}
+	if m.scroll < 0 {
+		m.scroll = 0
+	}
+	if m.scroll+visible > len(m.options) {
+		m.scroll = len(m.options) - visible
+	}
+	boxH := visible + 4
+	if boxH > g.H {
+		boxH = g.H
+	}
+	x, y := b.modalFrame(g, boxW, boxH, "Select an option")
+	fg := RGB(0x1f, 0x23, 0x28)
+	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
+	activeBG := RGB(0x2f, 0x6f, 0xbf)
+	activeFG := RGB(0xff, 0xff, 0xff)
+	b.selectHits = b.selectHits[:0]
+	for i := 0; i < visible; i++ {
+		idx := m.scroll + i
+		opt := m.options[idx]
+		marker := "  "
+		if opt.HasAttr("selected") {
+			marker = "✓ "
+		}
+		rowBG, rowFG := modalBG, fg
+		rowStyle := style
+		if idx == m.idx {
+			rowBG, rowFG = activeBG, activeFG
+		}
+		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
+		text := padWidth(truncateWidth(marker+optionLabel(opt), inner), inner)
+		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
+		b.selectHits = append(b.selectHits, selectHit{
+			rect:   Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
+			option: opt,
+		})
+	}
+	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
+	modalDim(g, x, y, boxW, boxH)
+}
+
 // downloadDialog is the modal curl hint offered for download links and
 // non-renderable responses.
 type downloadDialog struct {

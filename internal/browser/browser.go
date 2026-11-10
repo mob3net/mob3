@@ -124,6 +124,10 @@ type Browser struct {
 	// notice holds a small informational modal, such as the unsupported
 	// file-upload message.
 	notice *noticeDialog
+	// selectMenu is the open popup listing every option of a single select.
+	selectMenu *selectMenuDialog
+	// selectHits are the clickable option rows of the open select popup.
+	selectHits []selectHit
 	// modalClose is the close-button hit region of the modal drawn last.
 	modalClose Rect
 	// modalBox is the full modal rectangle, used to close on backdrop clicks.
@@ -387,6 +391,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	if res.seq != b.loadSeq {
 		return
 	}
+	b.selectMenu = nil
+	b.selectHits = nil
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
@@ -1073,6 +1079,10 @@ func isToggleControl(n *Node) bool {
 	if n == nil || n.Type != ElementNode {
 		return false
 	}
+	if n.Tag == "option" {
+		sel := nearestSelect(n)
+		return sel != nil && sel.HasAttr("multiple")
+	}
 	if n.Tag == "select" {
 		return true
 	}
@@ -1086,54 +1096,70 @@ func isToggleControl(n *Node) bool {
 	return false
 }
 
-// toggleControl flips a checkbox or radio and rebuilds the form labels.
+func nearestSelect(n *Node) *Node {
+	for p := n; p != nil; p = p.Parent {
+		if p.Type == ElementNode && p.Tag == "select" {
+			return p
+		}
+	}
+	return nil
+}
+
+// toggleControl flips a checkbox, radio or multi-select option. A single select
+// opens its option popup instead of cycling through values blind.
 func (b *Browser) toggleControl(n *Node) {
 	if n == nil {
 		return
 	}
-	if n.Tag == "select" {
-		var opts []*Node
-		for _, opt := range n.FindAll(func(x *Node) bool { return x.Tag == "option" }) {
-			opts = append(opts, opt)
+	if n.Tag == "option" {
+		sel := nearestSelect(n)
+		if sel == nil || !sel.HasAttr("multiple") {
+			return
 		}
-		if len(opts) > 1 {
-			next := 0
-			for i, opt := range opts {
-				if opt.HasAttr("selected") {
-					next = (i + 1) % len(opts)
-					break
-				}
-			}
-			for i, opt := range opts {
-				if i == next {
-					setAttr(opt, "selected", "")
-				} else {
-					removeAttr(opt, "selected")
-				}
-			}
-		}
-	} else {
-		typ := strings.ToLower(n.Attr("type"))
-		if typ == "radio" {
-			name := n.Attr("name")
-			if form := nearestForm(n); form != nil && name != "" {
-				form.FindAll(func(x *Node) bool {
-					if x != n && x.Tag == "input" && strings.EqualFold(x.Attr("type"), "radio") && x.Attr("name") == name {
-						removeAttr(x, "checked")
-					}
-					return false
-				})
-			}
-			setAttr(n, "checked", "")
-		} else if n.HasAttr("checked") {
-			removeAttr(n, "checked")
+		if n.HasAttr("selected") {
+			removeAttr(n, "selected")
 		} else {
-			setAttr(n, "checked", "")
+			setAttr(n, "selected", "")
 		}
+		b.fireSelectChange(sel)
+		return
+	}
+	if n.Tag == "select" {
+		if n.HasAttr("multiple") {
+			return
+		}
+		b.openSelectMenu(n)
+		return
+	}
+	typ := strings.ToLower(n.Attr("type"))
+	if typ == "radio" {
+		name := n.Attr("name")
+		if form := nearestForm(n); form != nil && name != "" {
+			form.FindAll(func(x *Node) bool {
+				if x != n && x.Tag == "input" && strings.EqualFold(x.Attr("type"), "radio") && x.Attr("name") == name {
+					removeAttr(x, "checked")
+				}
+				return false
+			})
+		}
+		setAttr(n, "checked", "")
+	} else if n.HasAttr("checked") {
+		removeAttr(n, "checked")
+	} else {
+		setAttr(n, "checked", "")
 	}
 	if b.js != nil {
 		b.js.fireNodeEvent(n, "input")
 		b.js.fireNodeEvent(n, "change")
+	}
+	b.rebuild()
+}
+
+// fireSelectChange notifies scripts and repaints after a select value changes.
+func (b *Browser) fireSelectChange(sel *Node) {
+	if b.js != nil && sel != nil {
+		b.js.fireNodeEvent(sel, "input")
+		b.js.fireNodeEvent(sel, "change")
 	}
 	b.rebuild()
 }
@@ -1160,6 +1186,7 @@ func (b *Browser) setInputFocus(n *Node) {
 	}
 	if old := b.inputFocus; old != nil {
 		old.InputFocused = false
+		old.InputCursor = 0
 		if b.js != nil {
 			b.js.fireNodeEvent(old, "change")
 		}
@@ -1167,6 +1194,7 @@ func (b *Browser) setInputFocus(n *Node) {
 	b.inputFocus = n
 	if n != nil {
 		n.InputFocused = true
+		n.InputCursor = len(inputValue(n))
 		b.status = "Typing · Enter submits · Esc finishes"
 	} else {
 		b.status = ""
@@ -1218,7 +1246,7 @@ func (b *Browser) updateInputFragments(n *Node) bool {
 	}
 	if n.Tag == "textarea" {
 		boxW := frags[0].W
-		rows := textareaRowsFor(n, boxW)
+		rows, cursorRow, cursorCol, hasCursor := textareaLayoutFor(n, boxW)
 		if len(rows) != len(frags) {
 			return false
 		}
@@ -1228,6 +1256,12 @@ func (b *Browser) updateInputFragments(n *Node) bool {
 			}
 			frags[i].Text = rows[i]
 		}
+		if hasCursor {
+			b.layout.Cursor = Rect{X: frags[cursorRow].X + 2 + cursorCol, Y: frags[cursorRow].Y, W: 1, H: 1}
+			b.layout.HasCursor = true
+		} else {
+			b.layout.HasCursor = false
+		}
 		return true
 	}
 	label := formLabel(n)
@@ -1235,6 +1269,12 @@ func (b *Browser) updateInputFragments(n *Node) bool {
 		return false
 	}
 	frags[0].Text = label
+	if col, ok := inputCursorOffset(n, label); ok {
+		b.layout.Cursor = Rect{X: frags[0].X + 2 + col, Y: frags[0].Y, W: 1, H: 1}
+		b.layout.HasCursor = true
+	} else {
+		b.layout.HasCursor = false
+	}
 	return true
 }
 
@@ -1620,7 +1660,13 @@ func (b *Browser) submitForm(form *Node) {
 			return false
 		}
 		if x.Tag == "select" {
-			vals.Add(name, inputValue(x))
+			if x.HasAttr("multiple") {
+				for _, v := range selectedOptionValues(x) {
+					vals.Add(name, v)
+				}
+			} else {
+				vals.Add(name, inputValue(x))
+			}
 			return false
 		}
 		typ := strings.ToLower(x.Attr("type"))
@@ -1753,6 +1799,10 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			b.notice = nil
 			b.status = ""
 		}
+		return false
+	}
+	if b.selectMenu != nil {
+		b.handleSelectMenuMouse(ev)
 		return false
 	}
 	if b.prompt {
@@ -1974,6 +2024,9 @@ func (b *Browser) HandleKey(k string) bool {
 		}
 		return false
 	}
+	if b.selectMenu != nil {
+		return b.handleSelectMenuKey(k)
+	}
 	if b.consoleOpen {
 		return b.handleConsoleKey(k)
 	}
@@ -2064,28 +2117,83 @@ func (b *Browser) HandleKey(k string) bool {
 
 func (b *Browser) handleInputKey(k string) bool {
 	n := b.inputFocus
+	if n == nil {
+		return false
+	}
+	value := inputValue(n)
+	cur := n.InputCursor
+	if cur < 0 || cur > len(value) {
+		cur = len(value)
+	}
 	switch k {
 	case "esc":
 		b.setInputFocus(nil)
 		b.status = exitHint
 		return false
 	case "enter":
-		if n != nil && n.Tag == "textarea" {
-			if utf8.RuneCountInString(inputValue(n)) < 2048 {
-				b.setInputValue(n, inputValue(n)+"\n")
+		if n.Tag == "textarea" {
+			if utf8.RuneCountInString(value) < 2048 {
+				n.InputCursor = cur + 1
+				b.setInputValue(n, value[:cur]+"\n"+value[cur:])
 			}
 			return false
 		}
 		b.submitInput()
 		return false
+	case "left":
+		n.InputCursor = prevRuneBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
+	case "right":
+		n.InputCursor = nextRuneBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
+	case "home":
+		if n.Tag == "textarea" {
+			cur = inputLineStart(value, cur)
+		} else {
+			cur = 0
+		}
+		n.InputCursor = cur
+		b.refreshInputCursor(n)
+		return false
+	case "end":
+		if n.Tag == "textarea" {
+			cur = inputLineEnd(value, cur)
+		} else {
+			cur = len(value)
+		}
+		n.InputCursor = cur
+		b.refreshInputCursor(n)
+		return false
+	case "up":
+		if n.Tag == "textarea" {
+			n.InputCursor = textareaVerticalOffset(value, cur, -1)
+			b.refreshInputCursor(n)
+		}
+		return false
+	case "down":
+		if n.Tag == "textarea" {
+			n.InputCursor = textareaVerticalOffset(value, cur, 1)
+			b.refreshInputCursor(n)
+		}
+		return false
 	case "backspace":
-		v := inputValue(n)
-		if v != "" {
-			_, size := utf8.DecodeLastRuneInString(v)
-			b.setInputValue(n, v[:len(v)-size])
+		if cur > 0 {
+			prev := prevRuneBoundary(value, cur)
+			n.InputCursor = prev
+			b.setInputValue(n, value[:prev]+value[cur:])
+		}
+		return false
+	case "delete":
+		if cur < len(value) {
+			next := nextRuneBoundary(value, cur)
+			n.InputCursor = cur
+			b.setInputValue(n, value[:cur]+value[next:])
 		}
 		return false
 	case "ctrl-u":
+		n.InputCursor = 0
 		b.setInputValue(n, "")
 		return false
 	case "tab", "backtab":
@@ -2096,11 +2204,77 @@ func (b *Browser) handleInputKey(k string) bool {
 	}
 	if utf8.RuneCountInString(k) == 1 {
 		r, _ := utf8.DecodeRuneInString(k)
-		if r >= 32 && r != 127 && len([]rune(inputValue(n))) < 2048 {
-			b.setInputValue(n, inputValue(n)+k)
+		if r >= 32 && r != 127 && len([]rune(value)) < 2048 {
+			n.InputCursor = cur + len(k)
+			b.setInputValue(n, value[:cur]+k+value[cur:])
 		}
 	}
 	return false
+}
+
+// refreshInputCursor patches the focused widget after a caret-only move and
+// falls back to a full rebuild when its display width changed.
+func (b *Browser) refreshInputCursor(n *Node) {
+	if !b.updateInputFragments(n) {
+		b.rebuild()
+	}
+}
+
+// inputLineStart returns the byte offset of the start of the caret's line.
+func inputLineStart(s string, cur int) int {
+	if cur > len(s) {
+		cur = len(s)
+	}
+	if i := strings.LastIndexByte(s[:cur], '\n'); i >= 0 {
+		return i + 1
+	}
+	return 0
+}
+
+// inputLineEnd returns the byte offset of the end of the caret's line.
+func inputLineEnd(s string, cur int) int {
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(s) {
+		cur = len(s)
+	}
+	if i := strings.IndexByte(s[cur:], '\n'); i >= 0 {
+		return cur + i
+	}
+	return len(s)
+}
+
+// textareaVerticalOffset moves the caret one logical line up or down, keeping
+// its character column where the target line is long enough.
+func textareaVerticalOffset(s string, cur, delta int) int {
+	if cur < 0 {
+		cur = 0
+	}
+	if cur > len(s) {
+		cur = len(s)
+	}
+	start := inputLineStart(s, cur)
+	col := utf8.RuneCountInString(s[start:cur])
+	line := start
+	if delta < 0 {
+		if start == 0 {
+			return cur
+		}
+		line = inputLineStart(s, start-1)
+	} else {
+		end := inputLineEnd(s, cur)
+		if end == len(s) {
+			return cur
+		}
+		line = end + 1
+	}
+	end := inputLineEnd(s, line)
+	runes := []rune(s[line:end])
+	if col > len(runes) {
+		col = len(runes)
+	}
+	return line + len(string(runes[:col]))
 }
 
 func (b *Browser) pageFG() Color {
@@ -2269,6 +2443,23 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 }
 
 // draw renders the UI and writes changed lines to the terminal.
+// paintInputCursor draws the caret over a focused input or textarea.
+func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
+	if b.layout == nil || !b.layout.HasCursor {
+		return
+	}
+	r := b.layout.Cursor
+	x, y := r.X, r.Y-b.scroll+top
+	if x < 0 || x >= g.W || y < top || y >= bottom {
+		return
+	}
+	ch := g.Cells[y*g.W+x].R
+	if ch == 0 || runeWidth(ch) != 1 {
+		ch = ' '
+	}
+	g.Put(x, y, ch, &Style{Bold: true}, RGB(0x2f, 0x6f, 0xbf), RGB(0xff, 0xff, 0xff))
+}
+
 func (b *Browser) draw() {
 	w, h := b.width, b.height
 	if w < 1 {
@@ -2293,6 +2484,7 @@ func (b *Browser) draw() {
 		b.layout.SetFixedScroll(b.scroll)
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
+	b.paintInputCursor(g, top, bottom)
 	b.paintSelection(g, top, bottom)
 	b.paintFindPage(g, top, bottom)
 	b.drawScrollBar(g, top, bottom)
@@ -2608,6 +2800,8 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.paintDownload(g)
 	case b.notice != nil:
 		b.paintNotice(g)
+	case b.selectMenu != nil:
+		b.paintSelectMenu(g)
 	}
 	lines := g.Lines(b.color)
 	// Scrolling can leave the terminal in a shifted state (for example after a

@@ -513,6 +513,32 @@ func TestJSClickHandlerPreventsDefault(t *testing.T) {
 	}
 }
 
+func TestSelectChangeFiresJavaScript(t *testing.T) {
+	page := newJSPage(`<html><body><select id="s" name="choice">
+		<option value="one" selected>One</option><option value="two">Two</option>
+	</select></body></html>`, `
+		var sel = document.getElementById("s");
+		sel.addEventListener("input", function () {
+			document.title = "input:" + sel.value;
+		});
+		sel.addEventListener("change", function () {
+			document.title = "change:" + sel.value;
+		});
+	`)
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.url = page.URL
+	b.startJS(page)
+	b.rebuild()
+	sel := page.Root.FindFirst("select")
+	b.toggleControl(sel)
+	b.HandleKey("down")
+	b.HandleKey("enter")
+	if page.Title != "change:two" {
+		t.Fatalf("title = %q, want change:two", page.Title)
+	}
+}
+
 func TestClickContentRunsLivePageJavaScript(t *testing.T) {
 	page := newJSPage(`<html><body><a id="l" href="/next">go</a></body></html>`, `
 		var link = document.getElementById("l");
