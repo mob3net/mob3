@@ -23,10 +23,39 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Checkbox", "Radio A", "Select", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
+	}
+}
+
+func TestHelpPageDownloadAndUploadExamples(t *testing.T) {
+	p, err := NewLoader().Load("about:help", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var download, upload *Node
+	p.Root.FindAll(func(n *Node) bool {
+		if n.Tag == "a" && n.HasAttr("download") && download == nil {
+			download = n
+		}
+		if n.Tag == "input" && strings.EqualFold(n.Attr("type"), "file") && upload == nil {
+			upload = n
+		}
+		return false
+	})
+	if download == nil {
+		t.Fatal("help page has no download example link")
+	}
+	if download.Attr("download") != "index.html" {
+		t.Fatalf("download example name = %q", download.Attr("download"))
+	}
+	if upload == nil {
+		t.Fatal("help page has no file upload example")
+	}
+	if upload.Attr("name") != "demo-file" {
+		t.Fatalf("upload example name = %q", upload.Attr("name"))
 	}
 }
 

@@ -118,6 +118,12 @@ type Browser struct {
 
 	keys   <-chan string
 	dialog *jsDialog
+	// download holds the modal curl hint shown for download links and
+	// non-renderable responses.
+	download *downloadDialog
+	// notice holds a small informational modal, such as the unsupported
+	// file-upload message.
+	notice *noticeDialog
 
 	lastScroll int
 	usage      procUsage
@@ -392,6 +398,12 @@ func (b *Browser) finishLoad(res loadResult) {
 		return
 	}
 	page := res.page
+	if page != nil && page.Download && res.method == http.MethodGet && page.URL != nil {
+		b.showDownload(page.URL.String(), page.DownloadName)
+		b.status = "Download link — y copies the curl command"
+		b.prev = nil
+		return
+	}
 	b.page = page
 	b.url = page.URL
 	b.lastMethod = res.method
@@ -803,6 +815,16 @@ func (b *Browser) followFocused() {
 		b.status = "External protocol: " + href
 		return
 	}
+	if li.Node != nil && li.Node.HasAttr("download") {
+		target := href
+		if b.page != nil && b.page.Base != nil {
+			if u, err := b.page.Base.Parse(href); err == nil {
+				target = u.String()
+			}
+		}
+		b.showDownload(target, li.Node.Attr("download"))
+		return
+	}
 	if b.page != nil && b.page.Base != nil {
 		if u, err := b.page.Base.Parse(href); err == nil {
 			if b.url != nil && u.Fragment != "" && sameDocument(u, b.url) {
@@ -818,6 +840,55 @@ func (b *Browser) followFocused() {
 
 func sameDocument(a, b *url.URL) bool {
 	return a.Scheme == b.Scheme && a.Host == b.Host && a.Path == b.Path && a.RawQuery == b.RawQuery
+}
+
+// showNotice opens a small informational modal.
+func (b *Browser) showNotice(title, message string) {
+	b.notice = &noticeDialog{title: title, message: message}
+}
+
+// showDownload opens the modal curl hint for a download link or a response
+// the browser cannot render. name, when empty, is derived from the URL path.
+func (b *Browser) showDownload(target, name string) {
+	if name == "" {
+		if u, err := url.Parse(target); err == nil {
+			name = u.Path
+			if i := strings.LastIndexByte(name, '/'); i >= 0 {
+				name = name[i+1:]
+			}
+			if unescaped, err := url.PathUnescape(name); err == nil {
+				name = unescaped
+			}
+		}
+	}
+	name = sanitizeDownloadName(name)
+	command := "curl -L -o " + shellQuote(name) + " " + shellQuote(target)
+	b.download = &downloadDialog{url: target, name: name, command: command}
+}
+
+// sanitizeDownloadName keeps a derived filename safe to print and use in the
+// suggested curl command.
+func sanitizeDownloadName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.Map(func(r rune) rune {
+		if r < 32 || r == '/' || r == '\\' || strings.ContainsRune(`:*?"<>|`, r) {
+			return '_'
+		}
+		return r
+	}, name)
+	if name == "" || name == "." || name == ".." {
+		return "download"
+	}
+	return name
+}
+
+// shellQuote wraps s in single quotes for the suggested shell command,
+// escaping embedded single quotes.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func (b *Browser) scrollToAnchor(frag string) {
@@ -920,6 +991,13 @@ func isTextInput(n *Node) bool {
 		return true
 	}
 	return false
+}
+
+func isFileInput(n *Node) bool {
+	if n == nil || n.Type != ElementNode || n.Tag != "input" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(n.Attr("type")), "file")
 }
 
 func isSubmitControl(n *Node) bool {
@@ -1549,6 +1627,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.skipDraw = true
 		return false
 	}
+	if b.download != nil {
+		return false
+	}
+	if b.notice != nil {
+		return false
+	}
 	if b.prompt {
 		if ev.Motion || ev.Wheel != 0 || !ev.Press {
 			return false
@@ -1700,6 +1784,11 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			if y >= top && y < bottom {
 				docY := b.scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
+					if isFileInput(n) {
+						b.selecting = false
+						b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")
+						return false
+					}
 					if isToggleControl(n) {
 						b.selecting = false
 						b.toggleControl(n)
@@ -1742,6 +1831,26 @@ const exitHint = "q Quit / ? Help"
 func (b *Browser) HandleKey(k string) bool {
 	if ev, ok := ParseMouseToken(k); ok {
 		return b.HandleMouse(ev)
+	}
+	if b.download != nil {
+		switch k {
+		case "y", "Y":
+			if b.copyText(b.download.command) {
+				b.download = nil
+			}
+		case "esc", "enter", "q", "ctrl-c":
+			b.download = nil
+			b.status = ""
+		}
+		return false
+	}
+	if b.notice != nil {
+		switch k {
+		case "esc", "enter", "q", "ctrl-c":
+			b.notice = nil
+			b.status = ""
+		}
+		return false
 	}
 	if b.consoleOpen {
 		return b.handleConsoleKey(k)
@@ -1933,6 +2042,18 @@ func (b *Browser) copySelection() {
 		b.status = "No selection"
 		return
 	}
+	if b.copyText(text) {
+		b.clearSelection()
+	}
+}
+
+// copyText sends text to the terminal clipboard with OSC 52 and reports
+// whether it was written.
+func (b *Browser) copyText(text string) bool {
+	if text == "" {
+		b.status = "Nothing to copy"
+		return false
+	}
 	truncated := false
 	if len(text) > maxClipboardBytes {
 		cut := maxClipboardBytes
@@ -1949,7 +2070,7 @@ func (b *Browser) copySelection() {
 	}
 	if _, err := fmt.Fprintf(w, "\x1b]52;c;%s\x07", payload); err != nil {
 		b.status = "Copy failed"
-		return
+		return false
 	}
 	n := utf8.RuneCountInString(text)
 	if truncated {
@@ -1957,7 +2078,7 @@ func (b *Browser) copySelection() {
 	} else {
 		b.status = fmt.Sprintf("Copied %d chars", n)
 	}
-	b.clearSelection()
+	return true
 }
 
 func (b *Browser) selectionSummary() string {
@@ -2349,6 +2470,12 @@ func (b *Browser) draw() {
 func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	if b.dialog != nil {
 		b.paintDialog(g)
+	}
+	if b.download != nil {
+		b.paintDownload(g)
+	}
+	if b.notice != nil {
+		b.paintNotice(g)
 	}
 	lines := g.Lines(b.color)
 	// Scrolling can leave the terminal in a shifted state (for example after a

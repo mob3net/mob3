@@ -2087,6 +2087,182 @@ func TestShiftMouseTokenRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDownloadLinkOpensCurlPopup(t *testing.T) {
+	u := mustParse(t, "https://filesamples.com/formats/html")
+	doc := ParseHTML(`<a href="/samples/code/html/sample1.html" download="">Download</a>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.layout = BuildLayout(doc, nil, 60)
+	if len(b.layout.Links) != 1 {
+		t.Fatalf("links = %d", len(b.layout.Links))
+	}
+	b.focus = 0
+	b.followFocused()
+	if b.download == nil {
+		t.Fatal("download link did not open the curl popup")
+	}
+	want := "curl -L -o 'sample1.html' 'https://filesamples.com/samples/code/html/sample1.html'"
+	if b.download.command != want {
+		t.Fatalf("command = %q, want %q", b.download.command, want)
+	}
+	// The download link must not navigate.
+	if b.url.String() != "https://filesamples.com/formats/html" {
+		t.Fatalf("download link navigated to %s", b.url)
+	}
+}
+
+func TestDownloadAttributeNameWins(t *testing.T) {
+	u := mustParse(t, "https://example.com/files/")
+	doc := ParseHTML(`<a href="x.bin" download="chosen.zip">Download</a>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.layout = BuildLayout(doc, nil, 60)
+	b.focus = 0
+	b.followFocused()
+	if b.download == nil {
+		t.Fatal("download link did not open the popup")
+	}
+	want := "curl -L -o 'chosen.zip' 'https://example.com/files/x.bin'"
+	if b.download.command != want {
+		t.Fatalf("command = %q, want %q", b.download.command, want)
+	}
+}
+
+func TestDownloadPopupCopiesWithY(t *testing.T) {
+	u := mustParse(t, "https://example.com/file.zip")
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.url = u
+	b.showDownload(u.String(), "")
+	drawQuiet(b)
+	if screen := strings.Join(b.prev, "\n"); !strings.Contains(screen, "curl -L -o") ||
+		!strings.Contains(screen, "Download") {
+		t.Fatalf("download popup not rendered:\n%s", screen)
+	}
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	wantCommand := b.download.command
+	b.HandleKey("y")
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decoded) != wantCommand {
+		t.Fatalf("copied %q, want %q", decoded, wantCommand)
+	}
+	if b.download != nil {
+		t.Fatal("copying did not close the popup")
+	}
+	if !strings.Contains(b.status, "Copied") {
+		t.Fatalf("status = %q", b.status)
+	}
+	b.HandleKey("esc")
+	if b.download != nil {
+		t.Fatal("Esc did not close the popup")
+	}
+}
+
+func TestNonHTMLNavigationOffersDownload(t *testing.T) {
+	u := mustParse(t, "https://example.com/files/archive.zip")
+	b := NewBrowser(60, 15)
+	page := &Page{
+		URL: u, Base: u, Root: ParseHTML(`<p>cannot display</p>`),
+		Download: true, DownloadName: "archive.zip",
+	}
+	b.loadSeq = 1
+	b.finishLoad(loadResult{seq: 1, page: page, u: u, push: true, method: http.MethodGet})
+	if b.download == nil {
+		t.Fatal("non-HTML response did not offer the curl popup")
+	}
+	if b.page != nil {
+		t.Fatal("non-HTML response was applied as a page")
+	}
+	if !strings.Contains(b.download.command, "archive.zip") || !strings.Contains(b.download.command, u.String()) {
+		t.Fatalf("command = %q", b.download.command)
+	}
+	if len(b.history) != 0 {
+		t.Fatalf("download pushed history: %v", b.history)
+	}
+}
+
+func TestFileInputClickShowsUnsupportedNotice(t *testing.T) {
+	u := mustParse(t, "https://example.com/form")
+	doc := ParseHTML(`<form action="/upload" method="post"><input type="file" name="f"><button>Send</button></form>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	file := inputByName(doc, "f")
+	if file == nil {
+		t.Fatal("file input not found")
+	}
+	var field *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Node == file {
+			field = &b.layout.Frags[i]
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("file input fragment not laid out")
+	}
+	top, _ := b.viewport()
+	x := field.X + 1
+	y := top + field.Y - b.scroll + 1
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
+	})
+	if b.notice == nil {
+		t.Fatal("clicking the file input did not open a notice")
+	}
+	if !strings.Contains(b.notice.title, "not supported") ||
+		!strings.Contains(b.notice.message, "not supported") {
+		t.Fatalf("notice = %+v", b.notice)
+	}
+	drawQuiet(b)
+	if screen := strings.Join(b.prev, "\n"); !strings.Contains(screen, "not supported") {
+		t.Fatalf("upload notice not rendered:\n%s", screen)
+	}
+	b.HandleKey("esc")
+	if b.notice != nil {
+		t.Fatal("Esc did not close the upload notice")
+	}
+}
+
+func TestDownloadCommandIsNotDrawnSelected(t *testing.T) {
+	u := mustParse(t, "https://example.com/file.zip")
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.url = u
+	b.showDownload(u.String(), "")
+	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.paintDownload(g)
+	found := false
+	for i := 0; i+3 < len(g.Cells); i++ {
+		if g.Cells[i].R == 'c' && g.Cells[i+1].R == 'u' && g.Cells[i+2].R == 'r' && g.Cells[i+3].R == 'l' {
+			found = true
+			if g.Cells[i].BG == RGB(0x2f, 0x6f, 0xbf) {
+				t.Fatal("curl command is drawn with the blue selection background")
+			}
+			if g.Cells[i].BG != RGB(0xf6, 0xf8, 0xfa) {
+				t.Fatalf("curl command background = %+v", g.Cells[i].BG)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("curl command not rendered")
+	}
+}
+
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}

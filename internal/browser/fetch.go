@@ -55,6 +55,10 @@ type Page struct {
 	Status      int
 	Blocked     bool
 	BlockReason string
+	// Download marks a response that is not renderable (a binary or other
+	// non-HTML resource). The browser shows a curl hint instead of applying it.
+	Download     bool
+	DownloadName string
 }
 
 // Script is one page script in document order. Src is a label for errors.
@@ -360,10 +364,22 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	if mt, _, err := mime.ParseMediaType(ctype); err == nil {
 		mediaType = strings.ToLower(mt)
 	}
+	download := false
+	downloadName := ""
 	switch {
 	case mediaType == "text/plain":
 		text = "<html><body><pre>" + EscapeHTML(text) + "</pre></body></html>"
 	case mediaType != "" && mediaType != "text/html" && mediaType != "application/xhtml+xml" && !strings.HasSuffix(mediaType, "+html"):
+		if finalURL.Scheme == "http" || finalURL.Scheme == "https" {
+			download = true
+			downloadName = finalURL.Path
+			if i := strings.LastIndexByte(downloadName, '/'); i >= 0 {
+				downloadName = downloadName[i+1:]
+			}
+			if unescaped, err := url.PathUnescape(downloadName); err == nil {
+				downloadName = unescaped
+			}
+		}
 		text = "<html><head><title>" + EscapeHTML(mediaType) + "</title></head><body>" +
 			"<h2>Cannot display " + EscapeHTML(mediaType) + "</h2>" +
 			"<p>The browser only renders HTML pages. The URL was:</p><pre>" +
@@ -376,7 +392,10 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		// whole body until hydration).
 		removeNoscript(root)
 	}
-	page := &Page{URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML, Status: status}
+	page := &Page{
+		URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML, Status: status,
+		Download: download, DownloadName: downloadName,
+	}
 	if baseEl := root.FindFirst("base"); baseEl != nil {
 		if href := baseEl.Attr("href"); href != "" {
 			if bu, err := finalURL.Parse(href); err == nil {
@@ -978,7 +997,7 @@ disk write.</p>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
-<tr><td><b>y</b></td><td>copy the selected page text and clear the highlight (OSC 52)</td></tr>
+<tr><td><b>y</b></td><td>copy the selected page text, or the curl command in the download popup (OSC 52)</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
@@ -1038,7 +1057,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><th>Input</th><th>Action</th></tr>
 <tr><td>hover a link</td><td>show its target in the footer</td></tr>
 <tr><td>drag over page text</td><td>select it; <b>y</b> copies and clears it</td></tr>
-<tr><td>click a link</td><td>follow it</td></tr>
+<tr><td>click a link</td><td>follow it; a download link opens the curl popup instead</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>
@@ -1056,6 +1075,13 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
 </table>
 
+<h2>Downloads</h2>
+<p>MOB³ does not save files. Clicking a link with a <b>download</b> attribute,
+or opening a URL whose response is not HTML, shows a download popup with a
+a ready-to-copy <b>curl</b> command shown as plain text. Press <b>y</b> to copy the command through
+OSC 52 and close the popup; <b>Esc</b>, <b>Enter</b> or <b>q</b> closes it
+without copying. Nothing is written to disk by MOB³ itself.</p>
+
 <h2>Forms</h2>
 <p>Click a text input or textarea to type. <b>Backspace</b> deletes,
 <b>Ctrl-U</b> clears, <b>Enter</b> submits, and <b>Esc</b> leaves the field.
@@ -1070,6 +1096,13 @@ supported.</p>
 <li><a href="#" onclick="return confirm('Do you like MOB³?')">ask a yes/no question</a></li>
 <li><a href="#" onclick="var n = prompt('What is your name?', 'friend'); if (n) { alert('Hello, ' + n + '!'); } return false;">ask for a name</a></li>
 </ul>
+<h3>Download and upload</h3>
+<p><a href="https://mob3.net/index.html" download="index.html">Download a sample file</a>
+opens a popup with a <b>curl</b> command; press <b>y</b> to copy it and close
+the popup, then run it in your terminal. MOB³ itself never saves the file.</p>
+<p>File uploads are not supported. Click the file control below to see a notice
+explaining this; it is rendered for layout only and is skipped when a form is
+submitted.</p>
 <h3>Form controls</h3>
 <form action="about:help" method="get">
 <p><label>Text input: <input name="demo-text" value="try typing here"></label></p>
@@ -1078,6 +1111,7 @@ supported.</p>
 <label><input type="radio" name="demo-radio" value="b"> Radio B</label></p>
 <p><label>Select: <select name="demo-select"><option value="one">One</option><option value="two" selected>Two</option></select></label></p>
 <p><label>Textarea:<br><textarea name="demo-textarea">Some editable text</textarea></label></p>
+<p><label>File upload: <input type="file" name="demo-file"></label> (not supported)</p>
 <p><button name="demo-submit" value="1">Submit demo</button></p>
 </form>
 

@@ -823,6 +823,21 @@ func (b *Browser) drawConsole(w, h int) {
 	b.flushGrid(g, nil)
 }
 
+// noticeDialog is a small informational modal, such as the unsupported
+// file-upload message.
+type noticeDialog struct {
+	title   string
+	message string
+}
+
+// downloadDialog is the modal curl hint offered for download links and
+// non-renderable responses.
+type downloadDialog struct {
+	url     string
+	name    string
+	command string
+}
+
 // jsDialog is a modal JavaScript alert/confirm/prompt.
 type jsDialog struct {
 	kind      string // alert, confirm, prompt
@@ -1055,6 +1070,126 @@ func (b *Browser) paintDialog(g *Grid) {
 	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
 
 	// Shadow-free simple modal: dim the outermost columns to make the box pop.
+	for yy := 0; yy < g.H; yy++ {
+		if yy >= y && yy < y+boxH {
+			continue
+		}
+		for xx := 0; xx < g.W; xx++ {
+			c := &g.Cells[yy*g.W+xx]
+			c.BG = RGB(0xdf, 0xe4, 0xea)
+		}
+	}
+}
+
+// paintDownload overlays the download curl hint. The command is shown as plain
+// text; y copies it.
+func (b *Browser) paintDownload(g *Grid) {
+	d := b.download
+	if d == nil {
+		return
+	}
+	boxW := minInt(g.W-4, 82)
+	if boxW >= g.W {
+		boxW = g.W
+	}
+	if boxW < 8 {
+		return
+	}
+	inner := boxW - 4
+	lines := wrapCells(d.command, inner)
+	maxLines := g.H - 4
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	boxH := 4 + len(lines)
+	if boxH > g.H {
+		boxH = g.H
+	}
+	x := (g.W - boxW) / 2
+	y := (g.H - boxH) / 2
+	bg := RGB(0xf6, 0xf8, 0xfa)
+	fg := RGB(0x1f, 0x23, 0x28)
+	border := RGB(0x2f, 0x6f, 0xbf)
+	titleBG := RGB(0x2f, 0x6f, 0xbf)
+	titleFG := RGB(0xff, 0xff, 0xff)
+	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
+	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
+	g.Fill(x, y, boxW, boxH, bg)
+	g.Fill(x, y, boxW, 1, border)
+	g.Fill(x, y+boxH-1, boxW, 1, border)
+	g.Fill(x, y, 1, boxH, border)
+	g.Fill(x+boxW-1, y, 1, boxH, border)
+	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
+	title := truncateWidth(" Download "+d.name+" ", boxW-4)
+	g.Text(x+2, y+1, title, titleStyle, titleFG)
+	for i, line := range lines {
+		g.Text(x+2, y+2+i, padWidth(truncateWidth(line, inner), inner), style, fg)
+	}
+	hint := " y: copy curl command · Esc: close "
+	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
+
+	for yy := 0; yy < g.H; yy++ {
+		if yy >= y && yy < y+boxH {
+			continue
+		}
+		for xx := 0; xx < g.W; xx++ {
+			c := &g.Cells[yy*g.W+xx]
+			c.BG = RGB(0xdf, 0xe4, 0xea)
+		}
+	}
+}
+
+// paintNotice overlays a small informational modal.
+func (b *Browser) paintNotice(g *Grid) {
+	d := b.notice
+	if d == nil {
+		return
+	}
+	boxW := minInt(g.W-4, 68)
+	if boxW >= g.W {
+		boxW = g.W
+	}
+	if boxW < 8 {
+		return
+	}
+	inner := boxW - 4
+	lines := wrapCells(d.message, inner)
+	maxLines := g.H - 4
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	boxH := 4 + len(lines)
+	if boxH > g.H {
+		boxH = g.H
+	}
+	x := (g.W - boxW) / 2
+	y := (g.H - boxH) / 2
+	bg := RGB(0xf6, 0xf8, 0xfa)
+	fg := RGB(0x1f, 0x23, 0x28)
+	border := RGB(0x2f, 0x6f, 0xbf)
+	titleBG := RGB(0x2f, 0x6f, 0xbf)
+	titleFG := RGB(0xff, 0xff, 0xff)
+	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
+	titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
+	g.Fill(x, y, boxW, boxH, bg)
+	g.Fill(x, y, boxW, 1, border)
+	g.Fill(x, y+boxH-1, boxW, 1, border)
+	g.Fill(x, y, 1, boxH, border)
+	g.Fill(x+boxW-1, y, 1, boxH, border)
+	g.Fill(x+1, y+1, boxW-2, 1, titleBG)
+	g.Text(x+2, y+1, truncateWidth(" "+d.title+" ", boxW-4), titleStyle, titleFG)
+	for i, line := range lines {
+		g.Text(x+2, y+2+i, padWidth(truncateWidth(line, inner), inner), style, fg)
+	}
+	hint := " Enter / Esc: close "
+	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
+
 	for yy := 0; yy < g.H; yy++ {
 		if yy >= y && yy < y+boxH {
 			continue

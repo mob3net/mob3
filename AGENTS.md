@@ -66,7 +66,8 @@ written in Go
   accounts, payments or confidential data.
 - **No persistence.** The running browser must not create or update
   configuration, history, cookie, cache, log or download files; closing MOB³
-  saves nothing. History, cookies, `localStorage`/`sessionStorage`, the image
+  saves nothing. The download popup only copies a `curl` command and writes
+  nothing. History, cookies, `localStorage`/`sessionStorage`, the image
   cache and all JS state live in memory only. The only file write is the path
   given to `-cpuprofile`. Disk reads are limited to explicit local `file:` pages
   and their local resources, an explicitly passed `-bookmarks` file, plus
@@ -347,7 +348,8 @@ Standard Go layout:
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
   `n`/`N` next/previous find match, `u` show URL,
-  `y` copy selected page text and clear the highlight,
+  `y` copy selected page text (or the download popup's curl command) and clear
+  the highlight,
   `?` help page, `!` JS console, `q`/`Ctrl-C` quit. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
@@ -401,9 +403,10 @@ Standard Go layout:
   command-line flags, keys, mouse and forms), not as a one-line footer status,
   so every shortcut including `!` is visible and selectable. The flag table
   must list every option accepted by `Run`. The page includes try-it links for
-  alert/confirm/prompt and a demo form with text input, checkbox, radio,
-  select, textarea and submit button; inline handlers work even on pages with
-  no `<script>` elements.
+  alert/confirm/prompt, a `download` example that opens the curl popup, and a
+  demo form with text input, checkbox, radio, select, textarea, a file-upload
+  control (shown but unsupported) and a submit button; inline handlers work
+  even on pages with no `<script>` elements.
 - **Focus:** focused links use a yellow background highlight on text and a
   yellow border on images; the focused URL is shown in the footer.
 - **Mouse:** enable click reporting with `\x1b[?1000h`, all-motion tracking
@@ -415,7 +418,8 @@ Standard Go layout:
   selection in document coordinates; dragging updates and auto-scrolls it,
   and release keeps the highlight. A press and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
-  clears focus. While the URL prompt is open, a click on its field keeps it
+  clears focus; a download link opens the curl popup instead. While the URL
+  prompt is open, a click on its field keeps it
   open and a click anywhere else closes it; clicking inside it positions the
   caret. Shift+mouse reports are ignored and suppress the next redraw so the
   terminal can keep a native selection over the URL. A left click on the URL
@@ -431,7 +435,8 @@ Standard Go layout:
   terminal/multiplexer support).
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a cursor; typing edits the value, Backspace
-  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a
+  deletes, Ctrl-U clears, Enter submits, and Esc finishes. Clicking a file
+  input opens a modal explaining that uploads are unsupported. Clicking a
   checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
   select cycles its options. Submit
   buttons run their `click` handler and then submit their form on release
@@ -494,6 +499,17 @@ Standard Go layout:
   navigation, not link hrefs or form actions.
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
   a `<pre>`); binaries are never rendered as HTML.
+- **Downloads:** MOB³ never saves files. Activating a link with a `download`
+  attribute, or navigating (GET) to a response whose media type is not HTML,
+  opens a modal download popup instead of navigating or showing the page. The
+  popup presents a ready-to-copy `curl -L -o 'name' 'url'` command shown as
+  plain text, using the
+  link's `download` attribute value when non-empty and otherwise the URL's last
+  path segment as the filename; `y` copies the command with OSC 52 and closes
+  the popup, while `Esc`/`Enter`/`q` close it without copying. Nothing is
+  written to disk; the user runs the
+  command in their own terminal. `Content-Disposition` is not inspected, so
+  attachment HTML pages still render normally.
 - **JavaScript scope:** classic inline and external scripts run in document
   order after load and before layout. DOM subset: `getElementById`,
   `querySelector(All)`, `getElementsByTagName`, `createElement`,
@@ -766,9 +782,12 @@ Standard Go layout:
   or passes `-ignore-blocks`; even then most checks fail, so sites behind such
   protection are generally not usable. MOB³ is not a security boundary and
   challenge pages may run arbitrary script once explicitly retried.
-- No tabs or downloads. Forms support editable text fields, checkbox/radio
+- No tabs or automatic downloads. A link with a `download` attribute or a
+  non-HTML response opens a popup with a copyable `curl` command instead of
+  saving the file. Forms support editable text fields, checkbox/radio
   toggling, click-to-cycle selects and urlencoded GET/POST submission;
-  multipart/file uploads are not implemented. Mouse support covers
+  multipart/file uploads are not implemented (clicking a file input shows an
+  unsupported notice). Mouse support covers
   click-to-follow, page drag selection, the URL prompt, right-click back and
   wheel scrolling. `y` copies selected page text through OSC 52; terminal-native
   Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API

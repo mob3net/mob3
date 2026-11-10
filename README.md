@@ -111,7 +111,10 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   CSS-in-SVG may be missing. WebP is not supported.
 - Oversized images are capped at 60% of the viewport width and 24 rows,
   preserving their aspect ratio.
-- No tabs, downloads or multipart/file uploads. Selected page text copies with
+- No tabs or automatic downloads; download links and non-HTML responses open a
+  popup with a copyable `curl` command instead, and multipart/file uploads are
+  not implemented (clicking a file input shows an unsupported notice). Selected
+  page text copies with
   `y` through OSC 52 (terminal support required), and the URL can be selected
   with the terminal.
 - Very large pages, stylesheets and images are capped to keep memory and CPU
