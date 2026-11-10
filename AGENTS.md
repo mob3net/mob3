@@ -310,7 +310,9 @@ Standard Go layout:
   `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` /
   `? Help` / `⚙` pinned to the far right; forward, reload, home and config are
   icon-only. The Bookmarks button is hidden unless `-bookmarks` supplied a
-  file. The URL row is a full-width field that becomes the editable
+  file. While a page is loading, the reload icon becomes `×` and clicking it
+  cancels the in-flight load exactly like `Esc` (status `Stopped loading`),
+  then the reload icon returns. The URL row is a full-width field that becomes the editable
   `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
   row uses a subtle horizontal gradient. The page title is centered in the
   space between the left and right buttons and uses a bold amber color for

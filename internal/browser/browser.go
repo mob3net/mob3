@@ -159,6 +159,7 @@ const (
 	headerBack headerKind = iota
 	headerForward
 	headerReload
+	headerStop
 	headerHome
 	headerBookmarks
 	headerHistory
@@ -1603,6 +1604,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				b.forward()
 			case headerReload:
 				b.reload()
+			case headerStop:
+				b.stopLoading()
 			case headerHome:
 				target := b.home
 				if target == "" {
@@ -2069,7 +2072,10 @@ func (b *Browser) draw() {
 
 		backLabel, helpLabel := " ← Back ", " ? Help "
 		forwardLabel := " → "
-		reloadLabel := " ⟳ "
+		reloadLabel, reloadKind := " ⟳ ", headerReload
+		if b.loading {
+			reloadLabel, reloadKind = " × ", headerStop
+		}
 		homeLabel := " ⌂ "
 		historyLabel := " ≡ History "
 		bookmarksLabel := " ★ Bookmarks "
@@ -2118,7 +2124,7 @@ func (b *Browser) draw() {
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, forwardLabel, headerForward, btnBG, headerFG, hs)
-				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
+				x = b.drawHeaderButton(g, x, 0, reloadLabel, reloadKind, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
@@ -2179,7 +2185,7 @@ func (b *Browser) draw() {
 			if w >= 24 {
 				x = b.drawHeaderButton(g, x, 0, backLabel, headerBack, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, forwardLabel, headerForward, btnBG, headerFG, hs)
-				x = b.drawHeaderButton(g, x, 0, reloadLabel, headerReload, btnBG, headerFG, hs)
+				x = b.drawHeaderButton(g, x, 0, reloadLabel, reloadKind, btnBG, headerFG, hs)
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)

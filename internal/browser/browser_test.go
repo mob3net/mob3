@@ -789,6 +789,58 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 	}
 }
 
+func TestReloadButtonBecomesStopWhileLoading(t *testing.T) {
+	b := NewBrowser(60, 10)
+	started := make(chan struct{})
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	b.Navigate("https://example.com/", false)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("load did not start")
+	}
+	drawQuiet(b)
+	var stop *headerHit
+	for i := range b.headerHits {
+		if b.headerHits[i].kind == headerStop {
+			stop = &b.headerHits[i]
+		}
+		if b.headerHits[i].kind == headerReload {
+			t.Fatal("reload button still shown while loading")
+		}
+	}
+	if stop == nil {
+		t.Fatalf("no stop button while loading: %+v", b.headerHits)
+	}
+	if stop.w != stringWidth(" × ") {
+		t.Fatalf("stop button width = %d, want %d", stop.w, stringWidth(" × "))
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: stop.x + 1, Y: stop.y + 1, Press: true})
+	if b.loading {
+		t.Fatal("clicking stop did not cancel the load")
+	}
+	if b.status != "Stopped loading" {
+		t.Fatalf("status = %q", b.status)
+	}
+	drawQuiet(b)
+	foundReload := false
+	for _, hit := range b.headerHits {
+		if hit.kind == headerStop {
+			t.Fatal("stop button still shown after cancel")
+		}
+		if hit.kind == headerReload {
+			foundReload = true
+		}
+	}
+	if !foundReload {
+		t.Fatal("reload button did not return after cancel")
+	}
+}
+
 func TestNavigateAsyncSuccess(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Navigate("data:text/html,<title>Loaded</title><p>hi</p>", false)

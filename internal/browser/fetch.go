@@ -1044,7 +1044,7 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>
 <tr><td>click in the URL prompt</td><td>place the caret</td></tr>
 <tr><td>Shift+drag over the URL</td><td>select it with the terminal</td></tr>
-<tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help</td></tr>
+<tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer <b>Dark on</b>/<b>Dark off</b> label</td><td>toggle dark mode</td></tr>
