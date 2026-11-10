@@ -91,8 +91,8 @@ type Loader struct {
 	// It is the default so the browser stays fast; -graphics=none keeps it,
 	// and any other graphics mode turns it off.
 	noImages bool
-	imgMu    sync.Mutex
-	imgs     map[string]image.Image
+	// cache holds raw subresources and decoded images for this session.
+	cache *resourceCache
 
 	reqMu    sync.Mutex
 	reqGen   int
@@ -213,7 +213,7 @@ func NewLoader() *Loader {
 		ResponseHeaderTimeout: 20 * time.Second,
 	}
 	return &Loader{
-		imgs:     make(map[string]image.Image),
+		cache:    newResourceCache(defaultResourceCacheLimit),
 		cookies:  jar,
 		noImages: true,
 		client: &http.Client{
@@ -614,6 +614,18 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	if gen == 0 {
 		gen = l.currentPageGeneration()
 	}
+	cacheable := method == http.MethodGet && len(body) == 0 &&
+		(u.Scheme == "http" || u.Scheme == "https") &&
+		(meta.kind == "css" || meta.kind == "js")
+	if cacheable {
+		if cached, ct, final, ok := l.cache.getBytes(u.String()); ok {
+			finalURL := u
+			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
+				finalURL = parsed
+			}
+			return cached, ct, finalURL, 200, nil
+		}
+	}
 	var reqID int
 	start := time.Now()
 	if meta.kind != "" {
@@ -692,7 +704,11 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		if e != nil {
 			return nil, "", u, resp.StatusCode, e
 		}
-		return b, resp.Header.Get("Content-Type"), resp.Request.URL, resp.StatusCode, nil
+		ctype := resp.Header.Get("Content-Type")
+		if cacheable && resp.StatusCode == 200 && cacheControlAllows(resp.Header.Get("Cache-Control")) {
+			l.cache.putBytes(u.String(), b, ctype, resp.Request.URL.String())
+		}
+		return b, ctype, resp.Request.URL, resp.StatusCode, nil
 	}
 	return nil, "", u, 0, errors.New("unsupported URL scheme: " + u.Scheme)
 }
@@ -878,10 +894,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 			continue
 		}
 		key := u.String()
-		l.imgMu.Lock()
-		cached, ok := l.imgs[key]
-		l.imgMu.Unlock()
-		if ok {
+		if cached, ok := l.cache.getImage(key); ok {
 			n.Img = cached
 			continue
 		}
@@ -926,9 +939,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				return
 			}
 			node.Img = img
-			l.imgMu.Lock()
-			l.imgs[key] = img
-			l.imgMu.Unlock()
+			l.cache.putImage(key, img)
 		}(n, u)
 	}
 	wg.Wait()
@@ -965,6 +976,7 @@ disk write.</p>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
 <tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
+<tr><td><b>-cache</b> int</td><td>in-memory resource cache limit in MB, 0 disables (default 32)</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>

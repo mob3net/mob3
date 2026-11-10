@@ -14,6 +14,59 @@ import (
 	"testing"
 )
 
+type countingTransport struct {
+	count   int
+	body    string
+	noStore bool
+}
+
+func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	c.count++
+	header := make(http.Header)
+	header.Set("Content-Type", "text/css")
+	if c.noStore {
+		header.Set("Cache-Control", "no-store")
+	}
+	return &http.Response{
+		StatusCode: 200,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader(c.body)),
+		Request:    req,
+	}, nil
+}
+
+func TestFetchCachesSubresources(t *testing.T) {
+	l := NewLoader()
+	tr := &countingTransport{body: "body { color: red; }"}
+	l.client.Transport = tr
+	l.setCacheLimitMB(1)
+	u := mustParse(t, "https://example.com/style.css")
+	ctx := withRequestKind(context.Background(), "css")
+	for i := 0; i < 2; i++ {
+		data, ctype, _, status, err := l.fetchCtx(ctx, u, false)
+		if err != nil || status != 200 || string(data) != tr.body || ctype != "text/css" {
+			t.Fatalf("fetch %d = %q %q %d %v", i, data, ctype, status, err)
+		}
+	}
+	if tr.count != 1 {
+		t.Fatalf("HTTP requests = %d, want 1", tr.count)
+	}
+
+	tr2 := &countingTransport{body: "body { color: blue; }", noStore: true}
+	l2 := NewLoader()
+	l2.client.Transport = tr2
+	l2.setCacheLimitMB(1)
+	ctx = withRequestKind(context.Background(), "css")
+	for i := 0; i < 2; i++ {
+		if _, _, _, _, err := l2.fetchCtx(ctx, u, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tr2.count != 2 {
+		t.Fatalf("no-store HTTP requests = %d, want 2", tr2.count)
+	}
+}
+
 func TestHelpPage(t *testing.T) {
 	p, err := NewLoader().Load("about:help", nil)
 	if err != nil {
@@ -26,7 +79,7 @@ func TestHelpPage(t *testing.T) {
 	if !strings.Contains(text, "Version") || !strings.Contains(text, Version) {
 		t.Errorf("help page is missing Version %q: %q", Version, text[:minInt(len(text), 200)])
 	}
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua", "-search", "-cpuprofile", "-version", "-help"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}

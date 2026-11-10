@@ -118,7 +118,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
 	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-bookmarks", "-home", "-js-memory", "-text-scale", "-color", "-no-color", "-ua",
+		"-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua",
 		"-search", "-cpuprofile", "-version", "startup"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
@@ -135,7 +135,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 		selects[n.Attr("name")] = inputValue(n)
 	}
 	want := map[string]string{
-		"no-js": "on", "home": "https://example.com/home", "js-memory": "64",
+		"no-js": "on", "home": "https://example.com/home", "js-memory": "64", "cache": "32",
 		"ua": "TestUA", "search": "https://search.example/?q=%s",
 	}
 	for k, v := range want {
@@ -164,6 +164,7 @@ func TestApplyConfig(t *testing.T) {
 		"ignore-blocks": {"on"},
 		"home":          {"https://example.com/start"},
 		"js-memory":     {"128"},
+		"cache":         {"16"},
 		"text-scale":    {"off"},
 		"ua":            {"TestUA"},
 		"search":        {""},
@@ -180,6 +181,9 @@ func TestApplyConfig(t *testing.T) {
 	}
 	if b.jsMemLimit != 128<<20 {
 		t.Fatalf("js memory = %d", b.jsMemLimit)
+	}
+	if got := b.loader.cacheLimitMB(); got != 16 {
+		t.Fatalf("cache = %d MB, want 16", got)
 	}
 	if !b.noBigText {
 		t.Fatal("text-scale off was not applied")

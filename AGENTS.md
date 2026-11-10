@@ -126,7 +126,8 @@ Standard Go layout:
 | `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
-| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading with cache, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
@@ -330,7 +331,7 @@ Standard Go layout:
   prominence.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home, js-memory, text-scale, ua, search);
+  session (no-js, ignore-blocks, home, js-memory, cache, text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
@@ -713,7 +714,15 @@ Standard Go layout:
   source, 50k rules, 256 KiB per declaration block, 4 KiB per selector and
   1 second of parse time; repeated selector text is parsed once per sheet.
   This bounds CPU/GC cost on generated or hostile CSS.
-- Images load concurrently (max 6) and are cached per resolved URL for reloads.
+- **Session resource cache:** CSS and JavaScript response bodies and decoded
+  images share a session-only LRU byte cache. The default budget is 32 MiB with
+  a 2 MiB per-entry cap; `-cache` sets the budget in MB and `0` disables it.
+  Only successful GET CSS/JS responses and decoded images are stored; page
+  documents, POST, `data:` and `file:` reads are not cached, and
+  `Cache-Control: no-store` responses are skipped. Hits avoid network requests;
+  nothing is written to disk. The limit is editable in `about:config`.
+- Images load concurrently (max 6) and use the session resource cache per
+  resolved URL for reloads.
 - Blocked responses are replaced with a locally generated “Site blocked” page
   with a `about:retry` **Try anyway** link; by default they do not run the
   site’s challenge scripts or load its assets. Clicking the link re-fetches the

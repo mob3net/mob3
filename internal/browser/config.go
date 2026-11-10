@@ -29,10 +29,12 @@ func (b *Browser) configItems() []configItem {
 		return fallback
 	}
 	ua, search, ignore := defaultUserAgent, DefaultSearchURL, false
+	cacheMB := int(defaultResourceCacheLimit >> 20)
 	if b.loader != nil {
 		ua = b.loader.userAgent
 		search = b.loader.searchURL
 		ignore = b.loader.ignoreBlocks
+		cacheMB = b.loader.cacheLimitMB()
 	}
 	return []configItem{
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
@@ -45,6 +47,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
 		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables", Editable: true},
+		{Flag: "-cache", Value: strconv.Itoa(cacheMB), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
@@ -117,6 +120,11 @@ func (b *Browser) applyConfig(q url.Values) {
 	if v, ok := q["js-memory"]; ok && len(v) > 0 {
 		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 {
 			b.jsMemLimit = int64(mb) << 20
+		}
+	}
+	if v, ok := q["cache"]; ok && len(v) > 0 {
+		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 && b.loader != nil {
+			b.loader.setCacheLimitMB(mb)
 		}
 	}
 	if v, ok := q["text-scale"]; ok && len(v) > 0 {

@@ -31,6 +31,7 @@ func Run(args []string) int {
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	cpuProfile := fs.String("cpuprofile", "", "write a CPU profile to this file")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
+	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "MOB³ — A small terminal browser with its own HTML/CSS engine.\n\n")
@@ -73,6 +74,7 @@ func Run(args []string) int {
 	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
 	graphicsMode := ParseGraphicsMode(*graphics)
 	loader := NewLoader()
+	loader.setCacheLimitMB(*cache)
 	loader.noScripts = *noJS
 	loader.noImages = graphicsMode == GraphicsNone
 	loader.searchURL = *search
@@ -132,6 +134,7 @@ func Run(args []string) int {
 		"-width":      strconv.Itoa(w),
 		"-graphics":   *graphics,
 		"-bookmarks":  bookmarksValue,
+		"-cache":      strconv.Itoa(*cache),
 		"-color":      onOff(*forceColor),
 		"-no-color":   onOff(*noColor),
 		"-cpuprofile": cpuValue,

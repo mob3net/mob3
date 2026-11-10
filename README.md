@@ -66,6 +66,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - PNG/JPEG/GIF/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
   for speed.
+- Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB
+  default budget and `-cache` to change or disable it.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
   same-origin `fetch`/`XMLHttpRequest`, and in-memory storage/cookies. Script
