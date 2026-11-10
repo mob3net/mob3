@@ -308,6 +308,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 	if n.Tag == "dialog" {
 		j.initDialogObject(o, n)
 	}
+	if n.Tag == "form" {
+		j.initFormObject(o, n)
+	}
 	vw, vh := j.b.width*8, j.b.height*16
 	metric := func(viewportValue int) func() goja.Value {
 		return func() goja.Value {
@@ -897,6 +900,13 @@ func (j *jsRuntime) initDialogObject(o *goja.Object, n *Node) {
 		removeAttr(n, "open")
 		j.markDirty()
 		j.fireNodeEvent(n, "close")
+		return goja.Undefined()
+	})
+}
+
+func (j *jsRuntime) initFormObject(o *goja.Object, n *Node) {
+	j.method(o, "submit", func(goja.FunctionCall) goja.Value {
+		j.b.queueFormSubmit(n)
 		return goja.Undefined()
 	})
 }

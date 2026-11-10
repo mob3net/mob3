@@ -377,6 +377,33 @@ func TestJSLocationRedirect(t *testing.T) {
 	}
 }
 
+func TestJSFormSubmitQueuesPost(t *testing.T) {
+	page := newJSPage(`<html><body><form id="f" method="POST" action="/access_keys">
+		<input type="hidden" name="authenticity_token" value="abc">
+		<input type="hidden" name="_method" value="POST">
+		<input name="try_url" value="https://example.com">
+	</form></body></html>`, `document.getElementById("f").submit();`)
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.startJS(page)
+	if b.js == nil || b.js.pendingForm == nil {
+		t.Fatal("form.submit() did not queue a submission")
+	}
+	pf := b.js.pendingForm
+	if pf.method != http.MethodPost || pf.target != "https://example.com/access_keys" {
+		t.Fatalf("queued form = %s %s", pf.method, pf.target)
+	}
+	body := string(pf.body)
+	for _, want := range []string{"authenticity_token=abc", "_method=POST", "try_url=https%3A%2F%2Fexample.com"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("form body %q is missing %q", body, want)
+		}
+	}
+	if pf.contentType != "application/x-www-form-urlencoded" {
+		t.Fatalf("content type = %q", pf.contentType)
+	}
+}
+
 func TestMetaRefreshTarget(t *testing.T) {
 	u := mustParse(t, "https://example.com/old")
 	page := &Page{URL: u, Base: u, Root: ParseHTML(`<html><head><meta http-equiv="refresh" content="0; url=/next"></head></html>`)}

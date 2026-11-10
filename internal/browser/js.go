@@ -41,6 +41,7 @@ type jsRuntime struct {
 	headerObjs    map[*goja.Object]map[string][]string
 	start         time.Time
 	pendingNav    string
+	pendingForm   *jsFormSubmission
 	dialogActive  atomic.Bool
 
 	storageLocal       *goja.Object
@@ -86,6 +87,15 @@ type jsTimer struct {
 	repeat bool
 	fn     goja.Callable
 	args   []goja.Value
+}
+
+// jsFormSubmission is a programmatic form.submit() queued until the current
+// script/callback returns.
+type jsFormSubmission struct {
+	method      string
+	target      string
+	body        []byte
+	contentType string
 }
 
 func newJSRuntime(b *Browser, page *Page) *jsRuntime {

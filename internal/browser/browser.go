@@ -470,10 +470,22 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.prev = nil
 }
 
-// consumePendingJS applies a queued location.href/assign navigation after the
-// current script or callback has finished.
+// consumePendingJS applies a queued location.href/assign navigation or
+// programmatic form.submit() after the current script or callback has finished.
 func (b *Browser) consumePendingJS() bool {
-	if b.js == nil || b.js.pendingNav == "" {
+	if b.js == nil {
+		return false
+	}
+	if pf := b.js.pendingForm; pf != nil {
+		b.js.pendingForm = nil
+		if pf.method == http.MethodPost {
+			b.navigateRequest(pf.method, pf.target, pf.body, pf.contentType, true)
+		} else {
+			b.Navigate(pf.target, true)
+		}
+		return true
+	}
+	if b.js.pendingNav == "" {
 		return false
 	}
 	target := b.js.pendingNav
@@ -1815,7 +1827,20 @@ func (b *Browser) submitForm(form *Node) {
 	if prevented {
 		return
 	}
-	method := strings.ToUpper(strings.TrimSpace(form.Attr("method")))
+	method, target, body, contentType, ok := b.formRequest(form)
+	if !ok {
+		return
+	}
+	if method == http.MethodPost {
+		b.navigateRequest(method, target, body, contentType, true)
+		return
+	}
+	b.Navigate(target, true)
+}
+
+// formRequest resolves a form's action and collects its successful controls.
+func (b *Browser) formRequest(form *Node) (method, target string, body []byte, contentType string, ok bool) {
+	method = strings.ToUpper(strings.TrimSpace(form.Attr("method")))
 	if method == "" {
 		method = http.MethodGet
 	}
@@ -1829,7 +1854,7 @@ func (b *Browser) submitForm(form *Node) {
 	}
 	if err != nil || u == nil {
 		b.status = "Invalid form action"
-		return
+		return "", "", nil, "", false
 	}
 	vals := url.Values{}
 	form.FindAll(func(x *Node) bool {
@@ -1871,15 +1896,32 @@ func (b *Browser) submitForm(form *Node) {
 		return false
 	})
 	if method == http.MethodPost {
-		b.navigateRequest(http.MethodPost, u.String(), []byte(vals.Encode()), "application/x-www-form-urlencoded", true)
-		return
+		return method, u.String(), []byte(vals.Encode()), "application/x-www-form-urlencoded", true
 	}
 	q := u.Query()
 	for k, values := range vals {
 		q[k] = values
 	}
 	u.RawQuery = q.Encode()
-	b.Navigate(u.String(), true)
+	return http.MethodGet, u.String(), nil, "", true
+}
+
+// queueFormSubmit implements HTMLFormElement.submit(): it queues a navigation
+// without firing submit handlers or running constraint validation.
+func (b *Browser) queueFormSubmit(form *Node) {
+	method, target, body, contentType, ok := b.formRequest(form)
+	if !ok {
+		return
+	}
+	if b.js == nil {
+		if method == http.MethodPost {
+			b.navigateRequest(method, target, body, contentType, true)
+		} else {
+			b.Navigate(target, true)
+		}
+		return
+	}
+	b.js.pendingForm = &jsFormSubmission{method: method, target: target, body: body, contentType: contentType}
 }
 
 // isLabelable reports controls that a <label> can activate.

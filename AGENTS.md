@@ -483,7 +483,9 @@ Standard Go layout:
   send `application/x-www-form-urlencoded` bodies. Both
   navigate to the resolved action, and reload reuses the last method/body.
   Focusing/blurring fires `change`, editing fires `input`, toggling fires
-  `input`/`change`, and submitting fires `submit` before navigation. JS exposes
+  `input`/`change`, and submitting fires `submit` before navigation.
+  `form.submit()` queues the same submission path without re-running
+  validation or the `submit` event. JS exposes
   `value`, `checked` and `form` on elements. Editable fields use a prominent
   light-blue background with bold text; the focused field switches to a solid
   blue background with white text, and its placeholder/hint disappears while
