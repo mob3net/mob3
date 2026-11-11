@@ -13,6 +13,68 @@ func build(src string, width int) *Layout {
 	return BuildLayout(doc, nil, width)
 }
 
+func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
+	src := `<p style="text-align:justify">one two three four five six seven eight nine ten</p>`
+	ly := build(src, 24)
+	firstY := -1
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text != "" {
+			firstY = f.Y
+			break
+		}
+	}
+	if firstY < 0 {
+		t.Fatal("no text laid out")
+	}
+	justified := false
+	for _, f := range ly.Frags {
+		if f.Y == firstY && f.Kind == fragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
+			justified = true
+		}
+	}
+	if !justified {
+		t.Fatal("justified line did not expand inter-word spaces")
+	}
+	plain := build(`<p>one two three four five six seven eight nine ten</p>`, 24)
+	firstY = -1
+	for _, f := range plain.Frags {
+		if f.Kind == fragText && f.Text != "" {
+			firstY = f.Y
+			break
+		}
+	}
+	for _, f := range plain.Frags {
+		if f.Y == firstY && f.Kind == fragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
+			t.Fatal("plain text spaces were expanded")
+		}
+	}
+}
+
+func TestSearchInputFlexFullWidth(t *testing.T) {
+	ly := build(`<form style="display:flex;gap:8px"><input type="search" name="q" placeholder="Search or enter address" style="flex:1"><button type="submit">Go</button></form>`, 40)
+	inputY, inputW, buttonY := -1, 0, -1
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		if strings.Contains(f.Text, "Search or enter address") {
+			inputY, inputW = f.Y, f.W
+		}
+		if strings.Contains(f.Text, "Go") {
+			buttonY = f.Y
+		}
+	}
+	if inputY < 0 || buttonY < 0 {
+		t.Fatal("search form controls were not laid out")
+	}
+	if inputY != buttonY {
+		t.Fatalf("input Y=%d, button Y=%d; want same line", inputY, buttonY)
+	}
+	if inputW < 30 {
+		t.Fatalf("search input width = %d, want it to fill the flex row", inputW)
+	}
+}
+
 func TestFlexPercentageWidthNotDoubleResolved(t *testing.T) {
 	doc := ParseHTML(`<html><body><div style="display:flex">
 		<div style="width:50%"><h1 style="font-size:48px">LinkPreview API</h1></div>

@@ -11,8 +11,10 @@ import (
 var readerRules = ParseStylesheet(`
 html { background:#ffffff; }
 body { background:#ffffff; color:#1f2328; }
-article { display:block; max-width:600px; margin:16px auto; padding:0 8px; }
-h1 { margin:24px 0 12px; }
+article { display:block; max-width:600px; margin:16px auto; padding:0 8px; text-align:justify; }
+form { display:flex; gap:8px; margin:16px 0; }
+input[type=search] { flex:1; }
+h1 { margin:24px 0 24px; }
 h2 { margin:20px 0 8px; }
 h3, h4, h5, h6 { margin:16px 0 6px; }
 p { margin:10px 0; }

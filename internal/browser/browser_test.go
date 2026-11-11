@@ -1194,6 +1194,65 @@ func TestMouseClickSubmitButton(t *testing.T) {
 	}
 }
 
+func TestHomeSearchFormUsesURLResolution(t *testing.T) {
+	newHome := func(value string) (*Browser, *Node, chan string) {
+		u := mustParse(t, "about:home")
+		page := &Page{URL: u, Base: u, Root: ParseHTML(startPageHTML), Title: "MOB³"}
+		b := NewBrowser(80, 20)
+		b.page = page
+		b.url = u
+		b.loader.searchURL = "https://search.example/?q=%s"
+		input := page.Root.FindFirst("input")
+		if input == nil || input.Attr("name") != "q" {
+			t.Fatal("home page has no search input")
+		}
+		input.Value = value
+		input.ValueSet = true
+		form := page.Root.FindFirst("form")
+		if form == nil {
+			t.Fatal("home page has no search form")
+		}
+		ch := make(chan string, 1)
+		b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+			ch <- target
+			return &Page{URL: mustParse(t, "https://example.com/"), Base: u, Root: ParseHTML("<html></html>")}, nil
+		}
+		return b, form, ch
+	}
+	submit := func(b *Browser, form *Node, ch chan string) string {
+		t.Helper()
+		b.submitForm(form)
+		select {
+		case target := <-ch:
+			return target
+		case <-time.After(2 * time.Second):
+			t.Fatal("home search form did not navigate")
+			return ""
+		}
+	}
+
+	b, form, ch := newHome("golang tutorial")
+	if got := submit(b, form, ch); got != "https://search.example/?q=golang+tutorial" {
+		t.Fatalf("search target = %q", got)
+	}
+
+	b, form, ch = newHome("example.com")
+	if got := submit(b, form, ch); got != "https://example.com" {
+		t.Fatalf("URL target = %q", got)
+	}
+
+	b, form, ch = newHome("   ")
+	b.submitForm(form)
+	if b.status != "Enter a URL or search query" {
+		t.Fatalf("empty status = %q", b.status)
+	}
+	select {
+	case target := <-ch:
+		t.Fatalf("empty search navigated to %q", target)
+	default:
+	}
+}
+
 func TestFormPOSTSubmission(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/submit" method="post">
 		<input type="hidden" name="hl" value="en">

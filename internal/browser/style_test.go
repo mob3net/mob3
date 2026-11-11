@@ -68,6 +68,17 @@ func TestInlineStyleAndShorthands(t *testing.T) {
 	}
 }
 
+func TestThreeValueBoxShorthand(t *testing.T) {
+	doc := ParseHTML(`<p style="margin: 8px 12px 16px; padding: 2px 4px 6px">x</p>`)
+	st := newStyleEngine(nil, 0).computeAll(doc)[doc.FindFirst("p")]
+	if st.Margin[0].V != 8 || st.Margin[1].V != 12 || st.Margin[2].V != 16 || st.Margin[3].V != 12 {
+		t.Fatalf("margin = %+v", st.Margin)
+	}
+	if st.Padding[0].V != 2 || st.Padding[1].V != 4 || st.Padding[2].V != 6 || st.Padding[3].V != 4 {
+		t.Fatalf("padding = %+v", st.Padding)
+	}
+}
+
 func TestSelectors(t *testing.T) {
 	doc := ParseHTML(`<div><p class="a b" data-x="hello world">1</p><p id="last">2</p><span></span></div>`)
 	cases := []struct {

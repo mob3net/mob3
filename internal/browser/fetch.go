@@ -1016,6 +1016,8 @@ Nothing is written to disk.</p>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>
+<p>The start page's search/URL box resolves input exactly like the <b>o</b>
+prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <p class="muted">Examples: <b>mob3 https://go.dev</b>,
 <b>mob3 'golang tutorial'</b>,
 <b>mob3 -dump -width 120 -no-color page.html</b>.</p>
@@ -1272,10 +1274,7 @@ memory only and disappears when MOB³ exits.</p>
 const startPageHTML = `<!DOCTYPE html>
 <html><head><title>MOB³</title></head>
 <body><article>
-<h1>MOB³</h1>
-<p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
-<p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is written to disk.</p>
-<p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and can show images inline with kitty or iTerm2 graphics, or half-block art. Images are off by default for speed; pass <b>-graphics auto</b> or <b>-graphics blocks</b> to enable them.</p>
+<h1>MOB³ - a small terminal web browser</h1>
 <h3>Getting started</h3>
 <ul>
 <li>Press <b>o</b> and type a URL, then Enter.</li>
@@ -1283,8 +1282,13 @@ const startPageHTML = `<!DOCTYPE html>
 <li>Scroll with <b>j</b>/<b>k</b>, <b>Space</b>/<b>b</b>, or the arrow keys.</li>
 <li><b>h</b> goes back, <b>l</b> goes forward, <b>r</b> reloads, <b>q</b> asks before quitting.</li>
 <li>Press <b>?</b> for the full help page.</li>
+<li>History, cookies, storage and caches are memory-only.</li>
 </ul>
-<p>Try <a href="https://example.com">example.com</a> or any page you like.</p>
+<form action="about:home" method="get">
+<input type="search" name="q" placeholder="Search or enter address">
+<button type="submit">Go</button>
+</form>
+<p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
 </article></body></html>`
 
 // cookieJar keeps all HTTP cookies in memory and maintains a second jar

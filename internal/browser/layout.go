@@ -1360,7 +1360,7 @@ func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 		c.collect(n)
 	}
 	if len(c.items) > 0 {
-		c.flush()
+		c.flush(true)
 	}
 	if c.y < y {
 		return 0
@@ -1392,7 +1392,7 @@ func (c *inlineCtx) collect(n *Node) {
 	switch n.Tag {
 	case "br":
 		if len(c.items) > 0 {
-			c.flush()
+			c.flush(true)
 		} else {
 			c.y += c.l.lineH(st)
 		}
@@ -1501,7 +1501,7 @@ func (c *inlineCtx) charW(r rune, st *Style) int {
 func (c *inlineCtx) addPre(s string, st *Style, node *Node) {
 	for _, r := range s {
 		if r == '\n' {
-			c.flush()
+			c.flush(true)
 			continue
 		}
 		if r == '\r' {
@@ -1512,7 +1512,7 @@ func (c *inlineCtx) addPre(s string, st *Style, node *Node) {
 			continue
 		}
 		if c.curW+rw > c.maxW && c.curW > 0 {
-			c.flush()
+			c.flush(false)
 		}
 		c.appendRune(r, st, node)
 		c.curW += rw
@@ -1549,7 +1549,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		}
 		if c.curW > 0 {
 			if !nowrap && c.curW+spaceW+width > c.maxW {
-				c.flush()
+				c.flush(false)
 			} else {
 				c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 				c.curW += spaceW
@@ -1565,7 +1565,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 				continue
 			}
 			if c.curW+rw > c.maxW && c.curW > 0 {
-				c.flush()
+				c.flush(false)
 			}
 			c.appendRune(r, st, node)
 			c.curW += rw
@@ -1573,7 +1573,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		return
 	}
 	if !nowrap && c.curW > 0 && c.curW+width > c.maxW {
-		c.flush()
+		c.flush(false)
 	}
 	c.items = append(c.items, inlineItem{kind: itemWord, text: w, style: st, node: node, w: width})
 	c.curW += width
@@ -1619,6 +1619,24 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		w = 1
 	}
 	editable := isTextInput(n)
+	// A text-like control stretches its widget to an explicit CSS width, or to
+	// the width allocated by a flex row (used by the home search box).
+	if editable {
+		target := 0
+		switch {
+		case st.FlexGrow > 0:
+			target = c.maxW
+		case st.Width.Set && !st.Width.IsAuto():
+			target = st.Width.resolveH(c.maxW, st.FontSize)
+		}
+		if target > w {
+			w = minInt(target, c.maxW)
+			if strings.HasSuffix(label, "]") {
+				pad := w - stringWidth(label)
+				label = label[:len(label)-1] + strings.Repeat(" ", pad) + "]"
+			}
+		}
+	}
 	disabled := isDisabledControl(n)
 	readOnly := isReadOnlyControl(n)
 	c.addAtomicBox(inlineItem{
@@ -2337,7 +2355,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 			spaceStyle = it.style
 		}
 		if !nowrap && c.curW+spaceW+it.w > c.maxW {
-			c.flush()
+			c.flush(false)
 		} else {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 			c.curW += spaceW
@@ -2346,7 +2364,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	c.space = false
 	c.spaceStyle, c.spaceNode = nil, nil
 	if !nowrap && c.curW > 0 && c.curW+it.w > c.maxW {
-		c.flush()
+		c.flush(false)
 	}
 	c.items = append(c.items, it)
 	c.curW += it.w
@@ -2354,11 +2372,11 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 
 func (c *inlineCtx) flushIfAny() {
 	if len(c.items) > 0 {
-		c.flush()
+		c.flush(true)
 	}
 }
 
-func (c *inlineCtx) flush() {
+func (c *inlineCtx) flush(last bool) {
 	lineH := c.l.lineH(c.base)
 	for i := range c.items {
 		it := &c.items[i]
@@ -2383,22 +2401,44 @@ func (c *inlineCtx) flush() {
 	if shift < 0 {
 		shift = 0
 	}
+	perSpace, remainder := 0, 0
+	if c.base.TextAlign == "justify" && !last && c.curW < c.maxW {
+		spaces := 0
+		for i := range c.items {
+			if c.items[i].kind == itemSpace && c.items[i].w > 0 {
+				spaces++
+			}
+		}
+		if spaces > 0 {
+			extra := c.maxW - c.curW
+			perSpace = extra / spaces
+			remainder = extra % spaces
+		}
+	}
 	pos := 0
 	for i := range c.items {
 		it := &c.items[i]
 		switch it.kind {
 		case itemSpace:
 			if it.style != nil && it.w > 0 {
+				add := perSpace
+				if remainder > 0 {
+					add++
+					remainder--
+				}
+				cellW := it.w + add
 				runH := c.l.lineH(it.style)
 				yy := c.y + (lineH-runH)/2
-				spaces := strings.Repeat(" ", it.w)
+				spaces := strings.Repeat(" ", cellW)
 				if s := c.l.scale(it.style); s > 1 {
-					spaces = strings.Repeat(" ", maxInt(1, it.w/s))
+					spaces = strings.Repeat(" ", maxInt(1, cellW/s))
 				}
 				c.l.frags = append(c.l.frags, Frag{
-					Kind: fragText, X: c.x + shift + pos, Y: yy, W: it.w, H: runH,
+					Kind: fragText, X: c.x + shift + pos, Y: yy, W: cellW, H: runH,
 					Text: spaces, Style: it.style, Node: it.node,
 				})
+				pos += cellW
+				continue
 			}
 			pos += it.w
 		case itemWord:

@@ -250,6 +250,8 @@ Standard Go layout:
   continuation cells marked and skipped in ANSI output.
 - **Text wrapping:** greedy word wrapping; overlong words are hard-split;
   `white-space: pre` preserves spaces/newlines; `nowrap` never wraps.
+  `text-align: justify` stretches inter-word spaces on wrapped lines; the last
+  line and forced breaks (`<br>`, newlines) stay left-aligned.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height are
   hidden (`display:none`) to avoid rendering them as one-character columns.
 - **Percentage heights are ignored** because parent heights are indefinite;
@@ -424,8 +426,12 @@ Standard Go layout:
   `startPageHTML` (no runtime fetch), with its content wrapped in `<article>`
   and the reader-mode stylesheet (`readerRules`) applied exactly. It therefore
   gets the same centered `max-width:600px` reading column and typography as an
-  extracted article. `about:history` uses the centered `max-width:900px`
-  column shared with `about:help`.
+  extracted article. Its text is justified, and it includes a native GET form
+  with a full-width `q` search/URL box beside a `Go` button; submitting it
+  resolves the text exactly like the `o` prompt (URL first, then the `-search`
+  fallback) and works with JavaScript disabled.
+  `about:history` uses the centered `max-width:900px` column shared with
+  `about:help`.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
   command-line flags, keys, mouse and forms) and shows the current build
@@ -474,7 +480,10 @@ Standard Go layout:
   inserts a newline at the caret in a textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap
   their value; only the visible rows are produced, so typing into a huge value
-  stays cheap. Required controls, `pattern`, `maxlength`, `readonly` and
+  stays cheap. A text-like control with an explicit CSS width pads its widget
+  to that width; in a flex row it fills the width allocated by flex (the home
+  search box is `flex:1` beside the `Go` button). Required controls,
+  `pattern`, `maxlength`, `readonly` and
   `disabled` are enforced; disabled controls are not submitted. Date, time,
   datetime-local, month and week inputs are edited as typed text with format
   validation, range inputs are sliders with clickable `-`/`+` ends and arrow
@@ -559,7 +568,8 @@ Standard Go layout:
   blank without scripts), and an empty value disables the fallback. Valid URLs,
   `example.com`, `host:port`, local files, `about:`/`data:` and base-relative
   references still resolve as URLs. The fallback applies only to typed
-  navigation, not link hrefs or form actions.
+  navigation and the start page's `q` search box, not link hrefs or ordinary
+  form actions.
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
   a `<pre>`); binaries are never rendered as HTML.
 - **Downloads:** MOB³ never saves files. Activating a link with a `download`

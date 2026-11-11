@@ -1838,6 +1838,20 @@ func (b *Browser) submitForm(form *Node) {
 		b.navigateRequest(method, target, body, contentType, true)
 		return
 	}
+	if u, err := url.Parse(target); err == nil && u.Scheme == "about" {
+		switch aboutPageName(u) {
+		case "home", "start":
+			// The start page's search box acts exactly like the URL prompt:
+			// resolve the entered text as a URL, with the -search fallback.
+			query := strings.TrimSpace(u.Query().Get("q"))
+			if query == "" {
+				b.status = "Enter a URL or search query"
+				return
+			}
+			b.Navigate(query, true)
+			return
+		}
+	}
 	b.Navigate(target, true)
 }
 

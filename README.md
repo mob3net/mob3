@@ -77,7 +77,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Text/search inputs, textareas, single-select option popups and multi-select
   list boxes, with a visible caret, arrow-key editing, date/time/month/week,
   range sliders, color swatches, HTML constraint checks, GET and urlencoded POST
-  form submission.
+  form submission. The start page has justified text and a full-width
+  search/URL box that resolves input the same way as the `o` prompt, including
+  the `-search` fallback.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and
   basic flex rows.

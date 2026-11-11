@@ -551,8 +551,9 @@ func setSides(dst *[4]Length, fields []string, fontPx float64) {
 		dst[0], dst[2] = ls[0], ls[0]
 		dst[1], dst[3] = ls[1], ls[1]
 	case 3:
-		dst[0], dst[2] = ls[0], ls[1]
+		dst[0] = ls[0]
 		dst[1], dst[3] = ls[1], ls[1]
+		dst[2] = ls[2]
 	default:
 		dst[0], dst[1], dst[2], dst[3] = ls[0], ls[1], ls[2], ls[3]
 	}
