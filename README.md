@@ -4,7 +4,7 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 
 
 <p align="center">
-  <img width="400" alt="image" src="https://interactive32.com/images/mob3.png?ref=github.com/mob3net/mob3" />
+  <img width="400" alt="image" src="https://interactive32.com/images/mob3-screenshot-1.png?ref=github.com/mob3net/mob3" />
 </p>
 
 ## Warning
