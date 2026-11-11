@@ -90,15 +90,16 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
   same-origin `fetch`/`XMLHttpRequest` plus simple CORS cross-origin requests,
   and in-memory storage/cookies. Script
-  errors show a short `JS: Error` footer hint.
+  errors turn the footer `JavaScript` label into a red `JavaScript:Error`;
+  click it to open the console.
 - JavaScript console (`!`): tabbed view of logs, requests, cookies and
   in-memory storage, plus the raw page HTML; evaluate one-line expressions in
   the page's runtime, with Up/Down history and results appended to the log.
-- Reader mode (`R`, the footer `Reader on`/`Reader off` label, or `-reader` at
+- Reader mode (`R`, the footer `Reader:on`/`Reader:off` label, or `-reader` at
   launch): extracts the main article into a narrow, chrome-free text column,
   stays enabled across navigation, and restores the normal page and scroll
   position when toggled off.
-- Dark mode (`D`, the footer `Dark on`/`Dark off` label, or `-dark` at launch):
+- Dark mode (`D`, the footer `Dark:on`/`Dark:off` label, or `-dark` at launch):
   remaps page backgrounds, text, links and borders to a dark palette; images
   keep their original colors.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,

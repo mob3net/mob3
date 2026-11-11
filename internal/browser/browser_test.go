@@ -1470,7 +1470,7 @@ func TestFooterShowsUsage(t *testing.T) {
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	for _, want := range []string{"MEM 18 MB", "0%"} {
+	for _, want := range []string{"MEM 18MB", "0%"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("footer = %q, want %q", line, want)
 		}
@@ -1852,34 +1852,76 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 	}
 }
 
-func TestJSErrorHintInFooter(t *testing.T) {
-	b := NewBrowser(140, 10)
+func TestJSErrorFooterLabel(t *testing.T) {
+	b := NewBrowser(200, 10)
+	b.color = true
 	b.usage = procUsage{rss: 18 << 20}
-	if strings.Contains(b.footerRight(140), "JS: Error") {
-		t.Fatal("error hint shown without a JS error")
+	if strings.Contains(b.footerRight(140), "Error") {
+		t.Fatal("error label shown without a JS error")
 	}
 	b.logJS("error", "TypeError: boom")
 	if !b.jsErr {
 		t.Fatal("JS error was not recorded")
 	}
 	right := b.footerRight(140)
-	if !strings.Contains(right, jsErrorHint) || !strings.Contains(right, "MEM 18 MB") ||
-		!strings.Contains(right, "JavaScript on") || !strings.Contains(right, "Graphics none") ||
-		!strings.Contains(right, "Reader off") {
+	if !strings.Contains(right, "JavaScript:Error") {
 		t.Fatalf("footer right = %q", right)
 	}
-	if strings.Index(right, "JS: Error") > strings.Index(right, "Reader off") {
-		t.Fatalf("error hint is not before reader state: %q", right)
+	if strings.Contains(right, "JS: Error") {
+		t.Fatalf("separate error hint still present: %q", right)
 	}
-	if strings.Index(right, "Reader off") > strings.Index(right, "MEM") {
+	for _, want := range []string{"Graphics:none", "Reader:off", "MEM 18MB"} {
+		if !strings.Contains(right, want) {
+			t.Fatalf("footer right missing %q: %q", want, right)
+		}
+	}
+	if strings.Index(right, "JavaScript:Error") > strings.Index(right, "Reader:off") {
+		t.Fatalf("JS state is not before reader state: %q", right)
+	}
+	if strings.Index(right, "Reader:off") > strings.Index(right, "MEM") {
 		t.Fatalf("reader state is not before memory: %q", right)
 	}
-	b.reader = true
-	if got := b.footerRight(140); !strings.Contains(got, "Reader on") {
-		t.Fatalf("reader-on footer = %q", got)
+	drawQuiet(b)
+	line := b.prev[len(b.prev)-1]
+	if !strings.Contains(line, "38;2;179;29;29") {
+		t.Fatalf("JavaScript:Error is not red: %q", line)
 	}
-	if narrow := b.footerRight(28); !strings.HasPrefix(narrow, jsErrorShort) {
-		t.Fatalf("narrow footer = %q", narrow)
+	var hit *headerHit
+	for i := range b.footerHits {
+		if b.footerHits[i].kind == headerConsole && b.footerHits[i].w > 2 {
+			hit = &b.footerHits[i]
+			break
+		}
+	}
+	if hit == nil {
+		t.Fatalf("JavaScript label has no click region: %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
+	})
+	if !b.consoleOpen {
+		t.Fatal("clicking JavaScript state did not open the console")
+	}
+}
+
+func TestJavaScriptFooterLabelClick(t *testing.T) {
+	b := NewBrowser(180, 10)
+	drawQuiet(b)
+	var hit *headerHit
+	for i := range b.footerHits {
+		if b.footerHits[i].kind == headerConsole && b.footerHits[i].w > 2 {
+			hit = &b.footerHits[i]
+			break
+		}
+	}
+	if hit == nil {
+		t.Fatalf("JavaScript label has no click region: %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
+	})
+	if !b.consoleOpen {
+		t.Fatal("clicking JavaScript:on did not open the console")
 	}
 }
 
@@ -1887,7 +1929,7 @@ func TestFooterGapBeforeRightState(t *testing.T) {
 	b := NewBrowser(100, 10)
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	marker := "[Reader off]"
+	marker := "Dark:off"
 	i := strings.Index(line, marker)
 	if i < footerGap || line[i-footerGap:i] != strings.Repeat(" ", footerGap) {
 		t.Fatalf("footer has no %d-cell gap before %q: %q", footerGap, marker, line)
@@ -1898,7 +1940,7 @@ func TestFooterRightCollapsesLeftToRight(t *testing.T) {
 	b := NewBrowser(160, 10)
 	b.usage = procUsage{rss: 18 << 20}
 	full := b.footerRight(100)
-	for _, want := range []string{"JavaScript on", "Graphics none", "[Dark off]", "[Reader off]", "MEM 18 MB", "0%"} {
+	for _, want := range []string{"JavaScript:on", "Graphics:none", "Dark:off", "Reader:off", "MEM 18MB", "0%"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("wide footer missing %q: %q", want, full)
 		}
@@ -1908,11 +1950,11 @@ func TestFooterRightCollapsesLeftToRight(t *testing.T) {
 		want  string
 		gone  []string
 	}{
-		{70, "Graphics none", []string{"JavaScript on"}},
-		{50, "[Dark off]", []string{"Graphics none"}},
-		{40, "[Reader off]", []string{"[Dark off]"}},
-		{20, "MEM 18 MB", []string{"[Reader off]"}},
-		{10, "0%", []string{"MEM 18 MB", "[Reader off]", "[Dark off]", "Graphics none", "JavaScript on"}},
+		{60, "JavaScript:on", []string{"Graphics:none"}},
+		{45, "Dark:off", []string{"JavaScript:on"}},
+		{35, "Reader:off", []string{"Dark:off"}},
+		{20, "MEM 18MB", []string{"Reader:off"}},
+		{10, "0%", []string{"MEM 18MB", "Reader:off", "Dark:off", "JavaScript:on", "Graphics:none"}},
 	}
 	for _, tc := range cases {
 		got := b.footerRight(tc.width)
@@ -1947,19 +1989,16 @@ func TestFooterRightDoesNotShrinkForLongLeftText(t *testing.T) {
 func TestFooterShortcutUnderline(t *testing.T) {
 	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
 	st := &Style{Color: RGB(0x24, 0x29, 0x2f), FontSize: 16, LineHeight: 1}
-	drawShortcutLabel(g, 0, 0, "[Dark off]", st, st.Color)
-	if g.Cells[0].Underline {
-		t.Fatal("opening bracket was underlined")
-	}
-	if !g.Cells[1].Underline {
+	drawShortcutLabel(g, 0, 0, "Dark:off", st, st.Color)
+	if !g.Cells[0].Underline {
 		t.Fatal("Dark shortcut is not underlined")
 	}
-	if g.Cells[2].Underline {
-		t.Fatal("non-shortcut letters are underlined")
+	if g.Cells[1].Underline || g.Cells[4].Underline {
+		t.Fatal("non-shortcut letters or punctuation were underlined")
 	}
 	g2 := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
-	drawShortcutLabel(g2, 0, 0, "[Reader off]", st, st.Color)
-	if g2.Cells[0].Underline || !g2.Cells[1].Underline || g2.Cells[2].Underline {
+	drawShortcutLabel(g2, 0, 0, "Reader:off", st, st.Color)
+	if !g2.Cells[0].Underline || g2.Cells[1].Underline {
 		t.Fatal("Reader shortcut underline is wrong")
 	}
 }
@@ -2000,16 +2039,16 @@ func TestHistoryShortcutKey(t *testing.T) {
 func TestFooterShowsJSAndGraphicsState(t *testing.T) {
 	b := NewBrowser(120, 10)
 	right := b.footerRight(120)
-	if !strings.Contains(right, "JavaScript on") || !strings.Contains(right, "Graphics none") {
+	if !strings.Contains(right, "JavaScript:on") || !strings.Contains(right, "Graphics:none") {
 		t.Fatalf("footer right = %q", right)
 	}
 	b.loader.noImages = false
 	b.gfx = &gfxRenderer{mode: GraphicsKitty}
-	if got := b.footerRight(120); !strings.Contains(got, "Graphics kitty") {
+	if got := b.footerRight(120); !strings.Contains(got, "Graphics:kitty") {
 		t.Fatalf("resolved graphics footer = %q", got)
 	}
 	b.noJS = true
-	if got := b.footerRight(120); !strings.Contains(got, "JavaScript off") {
+	if got := b.footerRight(120); !strings.Contains(got, "JavaScript:off") {
 		t.Fatalf("JavaScript-off footer = %q", got)
 	}
 }
@@ -2072,11 +2111,11 @@ func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 
 func TestProcUsageFooterRoundsMemory(t *testing.T) {
 	u := procUsage{rss: 18<<20 + 256<<10}
-	if got, want := u.footer(), "MEM 18 MB"; got != want {
+	if got, want := u.footer(), "MEM 18MB"; got != want {
 		t.Fatalf("footer = %q, want %q", got, want)
 	}
 	u.rss = 18<<20 + 600<<10
-	if got, want := u.footer(), "MEM 19 MB"; got != want {
+	if got, want := u.footer(), "MEM 19MB"; got != want {
 		t.Fatalf("footer = %q, want %q", got, want)
 	}
 }

@@ -1062,7 +1062,7 @@ boundaries and wrapped lines. In the JS console, press <b>/</b> while the
 lines.</p>
 
 <h2>Reader mode</h2>
-<p>Press <b>R</b> or click the <b>[Reader on]</b>/<b>[Reader off]</b> label in the
+<p>Press <b>R</b> or click the <b>Reader:on</b>/<b>Reader:off</b> label in the
 footer to extract the main article from the current page and show it in a
 narrow reading column with navigation, sidebars, images, forms and other page
 chrome removed. Press <b>R</b> or click the label again to return to the normal
@@ -1076,13 +1076,14 @@ triggers using <b>#</b>, show <b>Reader mode: link is not available</b> in the
 footer instead of reloading or jumping to the top.</p>
 
 <h2>Dark mode</h2>
-<p>Press <b>D</b> or click the <b>[Dark on]</b>/<b>[Dark off]</b> label in the footer
+<p>Press <b>D</b> or click the <b>Dark:on</b>/<b>Dark:off</b> label in the footer
 to remap page backgrounds, text, links and borders to a dark palette. Images
 keep their original colors. Start MOB³ with <b>-dark</b> to enable dark mode
 from the first page. Dark mode stays enabled when you navigate or reload.</p>
-<p>The footer also shows <b>JavaScript on</b>/<b>JavaScript off</b> and the
-resolved <b>Graphics</b> mode (for example <b>Graphics blocks</b> or
-<b>Graphics kitty</b>).</p>
+<p>The footer also shows <b>JavaScript:on</b>/<b>JavaScript:off</b> and the
+resolved <b>Graphics</b> mode (for example <b>Graphics:blocks</b> or
+<b>Graphics:kitty</b>). A script error turns the JavaScript label into red
+<b>JavaScript:Error</b>; click the label to open the JavaScript console.</p>
 
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
@@ -1114,8 +1115,8 @@ Nothing is saved after MOB³ exits.</p>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
-<tr><td>click the footer <b>[Dark on]</b>/<b>[Dark off]</b> label</td><td>toggle dark mode</td></tr>
-<tr><td>click the footer <b>[Reader on]</b>/<b>[Reader off]</b> label</td><td>toggle reader mode</td></tr>
+<tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>
+<tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>

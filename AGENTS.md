@@ -390,13 +390,13 @@ Standard Go layout:
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`.
-- **Dark mode:** `D` or the footer `[Dark on]`/`[Dark off]` label toggles a
+- **Dark mode:** `D` or the footer `Dark:on`/`Dark:off` label toggles a
   post-layout palette remap for every page. Light backgrounds become dark,
   dark text becomes light, and hues are preserved for links, headings and
   accents; images are left unchanged. The preference persists across
   navigation and reload, and `-dark` starts with it enabled, including in
   `-dump` mode. It also applies on top of reader mode.
-- **Reader mode:** `R` or the footer `[Reader on]`/`[Reader off]` label toggles an
+- **Reader mode:** `R` or the footer `Reader:on`/`Reader:off` label toggles an
   extracted article view. Extraction runs on the live DOM, prefers
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops
   nav/sidebar/footer/forms/scripts and common junk-class subtrees, strips page
@@ -457,8 +457,8 @@ Standard Go layout:
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
   buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `[Dark on]`/`[Dark off]`
-  or `[Reader on]`/`[Reader off]` labels toggles those modes, clicking the footer
+  mouse forward button goes forward, clicking the footer `Dark:on`/`Dark:off`
+  or `Reader:on`/`Reader:off` labels toggles those modes, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. `Esc`
@@ -503,16 +503,18 @@ Standard Go layout:
   blue background with white text, and its placeholder/hint disappears while
   focused.
 - **Footer:** shows the hovered link target or status on the left and, on the
-  right, an optional `JS: Error (! console)` hint, current resident memory
-  (`MEM 18 MB`), the scroll percentage, `JavaScript on`/`JavaScript off` and
-  resolved `Graphics <mode>` notices, clickable `[Dark on]`/`[Dark off]` and
-  `[Reader on]`/`[Reader off]` labels before the memory readout, and a clickable
-  `>_` console icon pinned to the far right edge. Right-side items collapse
-  from left to right as the terminal narrows: the `JavaScript` state goes
-  first, then `Graphics`, `[Dark …]`, `[Reader …]` and memory, leaving the
-  scroll percentage last. The right-side budget depends only on terminal
-  width (it may use at most half the footer), so at least half is always kept
-  for the left status/URL and a long message never collapses the right state.
+  right, current resident memory (`MEM 18MB`), the scroll percentage,
+  resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
+  becomes red bold `JavaScript:Error` when a script fails), clickable
+  `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels before the memory
+  readout, and a clickable `>_` console icon pinned to the far right edge.
+  Clicking the JavaScript label opens the JS console, like the `>_` icon.
+  Right-side items collapse from left to right as the terminal narrows:
+  `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and memory,
+  leaving the scroll percentage last. The right-side budget depends only on
+  terminal width (it may use at most half the footer), so at least half is
+  always kept for the left status/URL and a long message never collapses the
+  right state.
   At least three blank cells
   separate the left status/link text from the right-side state. The first letter
   of the Dark
@@ -522,9 +524,8 @@ Standard Go layout:
   visible and clickable inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
-  for successful copy messages. The error hint clears
-  when the JS console opens or a new page loads, and is omitted when it no
-  longer fits alongside the collapsed right-side state. The readout refreshes
+  for successful copy messages. The JavaScript error state clears when the JS
+  console opens or a new page loads. The readout refreshes
   every two seconds.
   Memory is `/proc/self/statm` RSS on Linux
   with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
@@ -684,13 +685,14 @@ Standard Go layout:
   page and width.
   Timers and timer-driven redraws pause while the console is open, so a
   terminal selection is not cleared by redraws. The full error text is kept
-  there; the footer only carries a short `JS: Error (! console)` hint.
+  there; the footer JavaScript label turns into red `JavaScript:Error` instead.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`
   attributes and the `onclick` property; `DOMContentLoaded` and `load`.
   `preventDefault()` suppresses link navigation. `setTimeout`/`setInterval`
   are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
-  messages go to the `!` console, `console.error` sets the footer hint, and
+  messages go to the `!` console, `console.error` turns the footer JavaScript
+  label red, and
   `alert` appears in the footer. Timer callbacks that dirty the DOM do not
   rebuild on every tick: timer-driven rebuilds are coalesced to at most once
   per `max(250 ms, 2× the previous rebuild time)`, so a page whose timers fire
@@ -704,8 +706,8 @@ Standard Go layout:
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
   disables). Timer count and per-tick callbacks are capped. Script
-  errors set the right-side `JS: Error (! console)` footer hint and are logged
-  for the `!` console; they do not replace the left status text. Navigation via
+  errors turn the footer JavaScript label into red `JavaScript:Error` and are
+  logged for the `!` console; they do not replace the left status text. Navigation via
   `location.href`,
   `location.assign`/`replace`/`reload` is queued until the script or callback
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects

@@ -2884,8 +2884,8 @@ func (b *Browser) paintSelection(g *Grid, top, bottom int) {
 }
 
 // drawShortcutLabel draws a label with its first letter underlined to suggest
-// the keyboard shortcut. Leading punctuation or symbols such as '[' or '≡' are
-// left untouched, so "[Dark off]" underlines the D and "≡ History" the H.
+// the keyboard shortcut. Leading punctuation or symbols such as '≡' are left
+// untouched, so "Dark:off" underlines the D and "≡ History" the H.
 func drawShortcutLabel(g *Grid, x, y int, label string, st *Style, fg Color) {
 	if label == "" {
 		return
@@ -3235,9 +3235,11 @@ func (b *Browser) draw() {
 					text string
 					kind headerKind
 					on   bool
+					err  bool
 				}{
-					{b.darkStatusText(), headerDark, b.dark},
-					{b.readerStatusText(), headerReader, b.reader},
+					{b.jsStatusText(), headerConsole, false, b.jsErr},
+					{b.darkStatusText(), headerDark, b.dark, false},
+					{b.readerStatusText(), headerReader, b.reader, false},
 				}
 				for _, label := range labels {
 					i := strings.Index(rightText, label.text)
@@ -3246,11 +3248,20 @@ func (b *Browser) draw() {
 					}
 					lx := rightX + stringWidth(rightText[:i])
 					lw := stringWidth(label.text)
-					labelStyle := fs
-					if label.on {
-						labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+					switch {
+					case label.err:
+						errStyle := &Style{Bold: true, Color: RGB(0xb3, 0x1d, 0x1d), FontSize: 16, LineHeight: 1}
+						g.Text(lx, fy, label.text, errStyle, errStyle.Color)
+					case label.kind == headerConsole:
+						// Already drawn with the normal footer style; only the
+						// click region is needed here.
+					default:
+						labelStyle := fs
+						if label.on {
+							labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+						}
+						drawShortcutLabel(g, lx, fy, label.text, labelStyle, labelStyle.Color)
 					}
-					drawShortcutLabel(g, lx, fy, label.text, labelStyle, labelStyle.Color)
 					b.footerHits = append(b.footerHits, headerHit{kind: label.kind, x: lx, y: fy, w: lw, h: 1})
 				}
 			}
@@ -3425,8 +3436,6 @@ func (b *Browser) footerLeft() string {
 }
 
 const (
-	jsErrorHint  = "JS: Error (! console)"
-	jsErrorShort = "JS: Error"
 	// footerGap keeps blank cells between the left status/link text and the
 	// right-aligned footer state.
 	footerGap = 3
@@ -3434,23 +3443,26 @@ const (
 
 func (b *Browser) readerStatusText() string {
 	if b.reader {
-		return "[Reader on]"
+		return "Reader:on"
 	}
-	return "[Reader off]"
+	return "Reader:off"
 }
 
 func (b *Browser) darkStatusText() string {
 	if b.dark {
-		return "[Dark on]"
+		return "Dark:on"
 	}
-	return "[Dark off]"
+	return "Dark:off"
 }
 
 func (b *Browser) jsStatusText() string {
-	if b.noJS {
-		return "JavaScript off"
+	if b.jsErr {
+		return "JavaScript:Error"
 	}
-	return "JavaScript on"
+	if b.noJS {
+		return "JavaScript:off"
+	}
+	return "JavaScript:on"
 }
 
 // graphicsStatusText reports the resolved graphics mode: auto is shown as the
@@ -3472,19 +3484,19 @@ func (b *Browser) graphicsStatusText() string {
 	default:
 		mode = "blocks"
 	}
-	return "Graphics " + mode
+	return "Graphics:" + mode
 }
 
-// footerRight builds the right-aligned footer text: an optional JS error hint,
-// JS and graphics state, dark and reader state, resident memory and the scroll
-// percentage. When the width is too small, elements disappear from left to
-// right: the JS status first, then graphics, dark, reader and memory, leaving
-// the scroll percentage last.
+// footerRight builds the right-aligned footer text: graphics and JS state,
+// dark and reader state, resident memory and the scroll percentage. When the
+// width is too small, elements disappear from left to right: graphics first,
+// then the JS state, dark, reader and memory, leaving the scroll percentage
+// last.
 func (b *Browser) footerRight(width int) string {
 	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
 	parts := []string{
-		b.jsStatusText(),
 		b.graphicsStatusText(),
+		b.jsStatusText(),
 		b.darkStatusText(),
 		b.readerStatusText(),
 		b.usage.footer(),
@@ -3500,16 +3512,6 @@ func (b *Browser) footerRight(width int) string {
 	}
 	if base == "" {
 		return truncateWidth(pctText, width)
-	}
-	// The JS error hint is not part of the collapse order: keep it when it fits
-	// alongside the selected state, using the short form if necessary.
-	if b.jsErr {
-		for _, hint := range []string{jsErrorHint, jsErrorShort} {
-			candidate := hint + "   " + base
-			if stringWidth(candidate) <= width {
-				return candidate
-			}
-		}
 	}
 	return base
 }
@@ -3546,7 +3548,7 @@ func (b *Browser) sampleUsage() {
 
 // footer returns the compact footer readout.
 func (u procUsage) footer() string {
-	return fmt.Sprintf("MEM %d MB", (u.rss+(1<<19))>>20)
+	return fmt.Sprintf("MEM %dMB", (u.rss+(1<<19))>>20)
 }
 
 // processRSS returns the current resident set size, falling back to Go's total
