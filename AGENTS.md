@@ -832,10 +832,12 @@ Standard Go layout:
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, page files or workflow, and on manual dispatch.
   README screenshot galleries are a centered `<div align="center">` with each
-  image wrapped in an `<a>` to its full-size asset, at `width="32%"`, with
-  `<br>` row breaks. This renders three per row on GitHub without table borders
-  (GitHub's table CSS adds borders and zebra rows) and makes the images
-  clickable on both GitHub and the Pages site; the template styles
+  image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
+  full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three
+  per row on GitHub without table borders (GitHub's table CSS adds borders and
+  zebra rows) and makes the images clickable on both GitHub and the Pages site;
+  the `target="_blank"` opens a new tab on mob3.net (GitHub strips `target`
+  from user content, so its images open in the same tab). The template styles
   `.content div[align="center"] img` as inline 32%-wide blocks so the same
   markup lays out three per row on mob3.net. The README must also carry a
   visible link to `https://mob3.net` near the top (currently
