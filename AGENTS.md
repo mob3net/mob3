@@ -268,7 +268,7 @@ Standard Go layout:
   aspect ratio preserved; display is capped at 60% of the viewport width and
   24 rows, preserving the ratio; transparency composited over the underlying
   cell;
-  PNG/JPEG/GIF and SVG; WebP is unsupported. SVG is rasterized with oksvg +
+  PNG/JPEG/GIF/WebP and SVG. SVG is rasterized with oksvg +
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
   response; inline `<svg>` is serialized back to XML with SVG camelCase names
   restored and rasterized before layout. If inline SVG decoding fails it falls
@@ -918,7 +918,7 @@ Standard Go layout:
 - SVG support is partial: paths, shapes, gradients and common transforms work,
   but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
   missing. Inline SVG falls back to an accessible label if rasterization fails.
-  WebP is still unsupported.
+  Static WebP is supported; animated WebP is not.
 - Reader mode is heuristic: unusual layouts can lose content or retain
   clutter, it renders a snapshot rather than live JS updates, and images,
   forms and other interactive controls are removed.

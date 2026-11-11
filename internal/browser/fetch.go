@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	_ "golang.org/x/image/webp"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -752,6 +753,8 @@ func mimeByExt(p string) string {
 		return "image/jpeg"
 	case ".gif":
 		return "image/gif"
+	case ".webp":
+		return "image/webp"
 	}
 	return "application/octet-stream"
 }

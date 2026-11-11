@@ -1,7 +1,9 @@
 package browser
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"image"
 	"image/color"
 	"image/png"
@@ -490,6 +492,27 @@ func TestBlockedGeneric(t *testing.T) {
 	}
 	if !page.Blocked || page.BlockReason != "access denied" {
 		t.Fatalf("blocked=%v reason=%q", page.Blocked, page.BlockReason)
+	}
+}
+
+func TestWebPDecodeRegistered(t *testing.T) {
+	const fixture = "UklGRiwAAABXRUJQVlA4TB8AAAAvAUAAAB8gEEjaH3qN+RcQFPk/2vwHXyTgBwgR/Q8BAA=="
+	data, err := base64.StdEncoding.DecodeString(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("WebP decode failed: %v", err)
+	}
+	if format != "webp" {
+		t.Fatalf("format = %q, want webp", format)
+	}
+	if b := img.Bounds(); b.Dx() != 2 || b.Dy() != 2 {
+		t.Fatalf("bounds = %v", b)
+	}
+	if got := mimeByExt("photo.webp"); got != "image/webp" {
+		t.Fatalf("mimeByExt = %q", got)
 	}
 }
 

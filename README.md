@@ -83,7 +83,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and
   basic flex rows.
-- PNG/JPEG/GIF/SVG/data-URI images when enabled with `-graphics` (`auto`,
+- PNG/JPEG/GIF/WebP/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
   for speed.
 - Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB
@@ -136,7 +136,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   variables, animations, transitions, generated content, `@import` and
   background images are unsupported or approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
-  CSS-in-SVG may be missing. WebP is not supported.
+  CSS-in-SVG may be missing. Animated WebP is not supported.
 - Oversized images are capped at 60% of the viewport width and 24 rows,
   preserving their aspect ratio.
 - No tabs or automatic downloads; download links and non-HTML responses open a
