@@ -339,13 +339,15 @@ Standard Go layout:
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home, js-memory, cache, text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
-  colour options are “dump only”. Changes are never persisted.
+  colour options are “dump only”. Changes are never persisted. The form uses
+  the same centered `max-width:900px` reading column as `about:help`.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
 - **History and bookmarks:** `about:history` lists the session's URLs as
   clickable links, most recent first, marks the current entry, caps the list at
-  the latest 50 and is generated on demand from in-memory history.
+  the latest 50 and is generated on demand from in-memory history. `H` or the
+  toolbar History button opens it.
   `about:bookmarks` lists bookmarks imported with `-bookmarks FILE` (Netscape
   HTML export), grouped by flattened folder path. Both pages are memory-only;
   nothing is persisted. The Bookmarks toolbar button only appears when the flag
@@ -354,7 +356,8 @@ Standard Go layout:
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
   Bookmarks/history/help use full labels at 80+ columns and icons below; the
   bookmarks item is absent when no `-bookmarks` file was supplied; the
-  config gear (`⚙`) is always an icon. Below 24 columns hide
+  config gear (`⚙`) is always an icon. The full History label underlines its
+  `H` to advertise the keyboard shortcut. Below 24 columns hide
   back/forward/reload so the URL field stays usable; home remains visible down
   to 12 columns; below 18 hide bookmarks; below 12 hide history; below 6 hide
   help and config. Every toolbar item is clickable via per-frame button hit
@@ -367,8 +370,8 @@ Standard Go layout:
   `n`/`N` next/previous find match, `u` show URL,
   `y` copy selected page text (or the download popup's curl command) and clear
   the highlight,
-  `?` help page, `!` JS console, `q`/`Ctrl-C` ask for `y`/Enter confirmation before
-  quitting. Do
+  `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
+  `y`/Enter confirmation before quitting. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
@@ -417,11 +420,12 @@ Standard Go layout:
   fragment or a missing target (common on modal triggers) do not navigate or
   jump to the top; the footer shows `Reader mode: link is not available`
   instead.
-- **Start page:** `about:home` and `about:start` show the `docs/icon.svg`
-  artwork embedded directly in `startPageHTML` (inline `<svg>`, no runtime
-  fetch), rendered through the normal inline-SVG path and sized by `.brand svg`
-  to `64px` (8×4 cells). Keep the inline path data in sync with
-  `docs/icon.svg`; `docs/icon.png` is only a raster copy.
+- **Start page:** `about:home` and `about:start` render the built-in
+  `startPageHTML` (no runtime fetch), with its content wrapped in `<article>`
+  and the reader-mode stylesheet (`readerRules`) applied exactly. It therefore
+  gets the same centered `max-width:600px` reading column and typography as an
+  extracted article. `about:history` uses the centered `max-width:900px`
+  column shared with `about:help`.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
   command-line flags, keys, mouse and forms) and shows the current build

@@ -94,7 +94,7 @@ func TestHelpPage(t *testing.T) {
 	if !strings.Contains(text, "Version") || !strings.Contains(text, Version) {
 		t.Errorf("help page is missing Version %q: %q", Version, text[:minInt(len(text), 200)])
 	}
-	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua", "-search", "-version", "-help", "alias for -graphics"} {
+	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua", "-search", "-version", "-help", "alias for -graphics", "session history"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("help page is missing %q", want)
 		}
@@ -510,6 +510,19 @@ func TestBranding(t *testing.T) {
 		if !strings.Contains(startPageHTML, want) {
 			t.Errorf("start page is missing %q", want)
 		}
+	}
+	page, err := NewLoader().LoadContext(context.Background(), "about:home", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Root.FindFirst("article") == nil {
+		t.Error("start page is not wrapped in an article for reader-style layout")
+	}
+	if len(page.Author) < len(readerRules) {
+		t.Errorf("start page author rules = %d, want the reader stylesheet (%d)", len(page.Author), len(readerRules))
+	}
+	if hist := historyPageHTML(nil, -1); !strings.Contains(hist, "max-width: 900px") || !strings.Contains(hist, "margin: 8px auto") {
+		t.Error("history page is not a narrow reading column")
 	}
 	ua := NewLoader().userAgent
 	if ua != "MOB3/1.0 (+terminal; +https://mob3.net)" {

@@ -161,7 +161,7 @@ func configPageHTML(items []configItem, updated bool) string {
 	var b strings.Builder
 	b.WriteString(`<!DOCTYPE html><html><head><title>Config</title>
 <style>
-body { margin: 16px; max-width: 1100px; }
+body { margin: 8px auto; max-width: 900px; }
 h1 { font-size: 32px; }
 table { border-collapse: collapse; margin: 12px 0; }
 th, td { padding: 5px 10px; border-bottom: 1px solid #d0d7de; text-align: left; vertical-align: top; }

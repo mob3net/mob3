@@ -116,6 +116,9 @@ func TestConfigPageShowsValues(t *testing.T) {
 		"-version": "dev",
 	}
 	page := b.configPage(mustParse(t, "about:config"), false)
+	if !strings.Contains(page.RawHTML, "max-width: 900px") || !strings.Contains(page.RawHTML, "margin: 8px auto") {
+		t.Error("config page is not using the narrow reading column")
+	}
 	text := page.Root.TextContent()
 	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua",
@@ -1894,7 +1897,7 @@ func TestFooterGapBeforeRightState(t *testing.T) {
 func TestFooterShortcutUnderline(t *testing.T) {
 	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
 	st := &Style{Color: RGB(0x24, 0x29, 0x2f), FontSize: 16, LineHeight: 1}
-	drawFooterShortcut(g, 0, 0, "[Dark off]", st, st.Color)
+	drawShortcutLabel(g, 0, 0, "[Dark off]", st, st.Color)
 	if g.Cells[0].Underline {
 		t.Fatal("opening bracket was underlined")
 	}
@@ -1905,9 +1908,42 @@ func TestFooterShortcutUnderline(t *testing.T) {
 		t.Fatal("non-shortcut letters are underlined")
 	}
 	g2 := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
-	drawFooterShortcut(g2, 0, 0, "[Reader off]", st, st.Color)
+	drawShortcutLabel(g2, 0, 0, "[Reader off]", st, st.Color)
 	if g2.Cells[0].Underline || !g2.Cells[1].Underline || g2.Cells[2].Underline {
 		t.Fatal("Reader shortcut underline is wrong")
+	}
+}
+
+func TestHistoryHeaderShortcutUnderline(t *testing.T) {
+	b := NewBrowser(60, 10)
+	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	st := &Style{Color: RGB(0xf6, 0xf8, 0xfa), FontSize: 16, LineHeight: 1}
+	b.drawHeaderButton(g, 0, 0, "≡ History", headerHistory, RGB(0x2b, 0x3a, 0x4c), st.Color, st)
+	// "≡ " occupies two cells, so the H is cell 2.
+	if g.Cells[0].Underline || g.Cells[1].Underline {
+		t.Fatal("symbol prefix was underlined")
+	}
+	if !g.Cells[2].Underline {
+		t.Fatal("History shortcut H is not underlined")
+	}
+	if g.Cells[3].Underline {
+		t.Fatal("non-shortcut letter was underlined")
+	}
+}
+
+func TestHistoryShortcutKey(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.history = []string{"https://example.com/a"}
+	b.histIdx = 0
+	b.HandleKey("H")
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("H did not load about:history")
+	}
+	if b.url == nil || b.url.String() != "about:history" {
+		t.Fatalf("url after H = %v", b.url)
 	}
 }
 

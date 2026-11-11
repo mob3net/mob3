@@ -2476,6 +2476,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.toggleConsole()
 	case "?":
 		b.Navigate("about:help", true)
+	case "H":
+		b.Navigate("about:history", true)
 	}
 	return false
 }
@@ -2881,10 +2883,10 @@ func (b *Browser) paintSelection(g *Grid, top, bottom int) {
 	}
 }
 
-// drawFooterShortcut draws a footer label with its first letter underlined to
-// suggest the keyboard shortcut. Leading punctuation such as '[' is left
-// untouched so "[Dark off]" underlines the D.
-func drawFooterShortcut(g *Grid, x, y int, label string, st *Style, fg Color) {
+// drawShortcutLabel draws a label with its first letter underlined to suggest
+// the keyboard shortcut. Leading punctuation or symbols such as '[' or '≡' are
+// left untouched, so "[Dark off]" underlines the D and "≡ History" the H.
+func drawShortcutLabel(g *Grid, x, y int, label string, st *Style, fg Color) {
 	if label == "" {
 		return
 	}
@@ -2920,7 +2922,11 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 		return x
 	}
 	g.Fill(x, y, bw, 1, bg)
-	g.Text(x, y, label, st, fg)
+	if kind == headerHistory {
+		drawShortcutLabel(g, x, y, label, st, fg)
+	} else {
+		g.Text(x, y, label, st, fg)
+	}
 	b.headerHits = append(b.headerHits, headerHit{kind: kind, x: x, y: y, w: bw, h: 1})
 	return x + bw
 }
@@ -3267,7 +3273,7 @@ func (b *Browser) draw() {
 					if label.on {
 						labelStyle = &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
 					}
-					drawFooterShortcut(g, lx, fy, label.text, labelStyle, labelStyle.Color)
+					drawShortcutLabel(g, lx, fy, label.text, labelStyle, labelStyle.Color)
 					b.footerHits = append(b.footerHits, headerHit{kind: label.kind, x: lx, y: fy, w: lw, h: 1})
 				}
 			}

@@ -576,6 +576,7 @@ func aboutPageName(u *url.URL) string {
 
 func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	var doc string
+	home := false
 	switch aboutPageName(u) {
 	case "blank":
 		doc = "<html><body></body></html>"
@@ -592,6 +593,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		doc = bookmarksPageHTML(l.bookmarks)
 	default:
 		doc = startPageHTML
+		home = true
 	}
 	root := ParseHTML(doc)
 	if !l.noScripts {
@@ -608,6 +610,11 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
 	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
+	if home {
+		// The start page uses the reader-mode stylesheet exactly, so it gets the
+		// same narrow article column and typography as an extracted article.
+		page.Author = append(page.Author, readerRules...)
+	}
 	l.loadInlineSVGs(root)
 	return page, nil
 }
@@ -1033,6 +1040,7 @@ Nothing is written to disk.</p>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
 <tr><td><b>y</b></td><td>copy the selected page text, or the curl command in the download popup (OSC 52)</td></tr>
+<tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
@@ -1220,7 +1228,7 @@ func historyPageHTML(urls []string, current int) string {
 	var b strings.Builder
 	b.WriteString(`<!DOCTYPE html><html><head><title>History</title>
 <style>
-body { margin: 16px; max-width: 900px; }
+body { margin: 8px auto; max-width: 900px; }
 h1 { font-size: 32px; }
 li { margin: 6px 0; }
 </style></head><body>
@@ -1261,20 +1269,9 @@ memory only and disappears when MOB³ exits.</p>
 }
 
 const startPageHTML = `<!DOCTYPE html>
-<html><head><title>MOB³</title>
-<style>
-body { margin:16px; background:#ffffff; }
-.brand { text-align:center; margin:4px 0 8px; }
-.brand svg { width:64px; height:64px; }
-.logo { font-size:30px; font-weight:bold; color:#0645ad; margin-bottom:2px; }
-.tagline { font-style:italic; color:#57606a; margin-top:0; }
-.k { color:#57606a; }
-pre { background:#f6f8fa; padding:8px; border-left:3px solid #d0d7de; }
-a { color:#0645ad; text-decoration:underline; }
-.warn { background:#fff3cd; border:1px solid #d4a72c; padding:8px; color:#442c00; }
-</style></head>
-<body>
-<div class="logo">MOB³</div>
+<html><head><title>MOB³</title></head>
+<body><article>
+<h1>MOB³</h1>
 <p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
 <p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is written to disk.</p>
 <p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and can show images inline with kitty or iTerm2 graphics, or half-block art. Images are off by default for speed; pass <b>-graphics auto</b> or <b>-graphics blocks</b> to enable them.</p>
@@ -1287,14 +1284,7 @@ a { color:#0645ad; text-decoration:underline; }
 <li>Press <b>?</b> for the full help page.</li>
 </ul>
 <p>Try <a href="https://example.com">example.com</a> or any page you like.</p>
-<h3>What is supported</h3>
-<ul>
-<li>HTML with headings, paragraphs, lists, tables, links, forms (read-only), images.</li>
-<li>CSS: colors, fonts, margins, padding, borders, backgrounds, widths, text alignment, descendant/child selectors, attribute selectors, <span class="k">:first-child</span> and friends.</li>
-<li>Images are off by default. Enable them with <b>-graphics auto</b>, <b>-graphics kitty</b>, <b>-graphics iterm</b> or <b>-graphics blocks</b> for half-block art.</li>
-<li>JavaScript runs with goja: DOM updates, click handlers and timers. Use <span class="k">-no-js</span> to turn it off.</li>
-</ul>
-</body></html>`
+</article></body></html>`
 
 // cookieJar keeps all HTTP cookies in memory and maintains a second jar
 // containing only cookies visible to document.cookie. Keeping the two jars
