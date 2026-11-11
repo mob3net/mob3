@@ -831,6 +831,11 @@ Standard Go layout:
   `npx`) and wraps it in `.github/pages/template.html`;
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, page files or workflow, and on manual dispatch.
+  README screenshot galleries are a centered `<div align="center">` with images
+  at `width="32%"` and `<br>` row breaks, which renders three per row on GitHub
+  without table borders (GitHub's table CSS adds borders and zebra rows); the
+  template styles `.content div[align="center"] img` as inline 32%-wide blocks
+  so the same markup lays out three per row on the Pages site.
   The build writes a `CNAME` for **`mob3.net`**; the site is served at
   `https://mob3.net` (apex A/AAAA DNS to GitHub Pages, `www` CNAME to
   `mob3net.github.io`, HTTPS enforced in the Pages settings). Never edit
