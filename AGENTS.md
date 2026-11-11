@@ -68,8 +68,8 @@ written in Go
   configuration, history, cookie, cache, log or download files; closing MOB³
   saves nothing. The download popup only copies a `curl` command and writes
   nothing. History, cookies, `localStorage`/`sessionStorage`, the image
-  cache and all JS state live in memory only. The only file write is the path
-  given to `-cpuprofile`. Disk reads are limited to explicit local `file:` pages
+  cache and all JS state live in memory only. The running browser writes no
+  files at all. Disk reads are limited to explicit local `file:` pages
   and their local resources, an explicitly passed `-bookmarks` file, plus
   `/proc/self/statm` for the Linux memory footer; OS-level reads performed by
   Go's TLS, DNS and timezone libraries are not application storage. Do not add
@@ -792,7 +792,10 @@ Standard Go layout:
 - The Git tag (`vX.Y.Z`) is the release version source of truth.
   `internal/browser.Version` defaults to `dev` and is set at build time with
   `-ldflags "-X browser/internal/browser.Version=<tag>"`; `mob3 -version` prints
-  it. Release binaries and the Docker image both receive `github.ref_name`.
+  it, and `mob3 -h` prints usage plus the short build version, the
+  `AGPL-3.0-only` license and the copyright notice. `-g` is an alias for
+  `-graphics`; `about:config` shows the canonical `-graphics` name only.
+  Release binaries and the Docker image both receive `github.ref_name`.
   Local builds use `make VERSION=vX.Y.Z` or
   `docker build --build-arg VERSION=vX.Y.Z`.
 - `.github/workflows/ci.yml` runs gofmt, `go vet` and tests on pushes to `main`

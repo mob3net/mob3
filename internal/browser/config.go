@@ -53,7 +53,6 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
 		{Flag: "-ua", Value: ua, Note: "next request", Editable: true},
 		{Flag: "-search", Value: search, Note: "empty disables search", Editable: true},
-		{Flag: "-cpuprofile", Value: get("-cpuprofile", "(none)"), Note: "startup"},
 		{Flag: "-version", Value: get("-version", Version), Note: "read only"},
 	}
 }

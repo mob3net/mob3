@@ -113,13 +113,13 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b.cliConfig = map[string]string{
 		"-dump": "off", "-width": "80", "-graphics": "auto",
 		"-bookmarks": "(none)", "-color": "off", "-no-color": "off",
-		"-cpuprofile": "(none)", "-version": "dev",
+		"-version": "dev",
 	}
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
 	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua",
-		"-search", "-cpuprofile", "-version", "startup"} {
+		"-search", "-version", "startup"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
 		}

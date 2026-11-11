@@ -40,6 +40,48 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunHelpShowsVersionLicenseCopyrightAndGraphicsAlias(t *testing.T) {
+	old := Version
+	Version = "v9.9.9"
+	defer func() { Version = old }()
+
+	oldErr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	code := Run([]string{"-h"})
+	w.Close()
+	os.Stderr = oldErr
+	out, _ := io.ReadAll(r)
+	r.Close()
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	text := string(out)
+	for _, want := range []string{"v9.9.9", "AGPL-3.0-only", "2026 Milos Stojanovic", "-graphics", "-g"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("help output missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestRunGraphicsAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "page.html")
+	if err := os.WriteFile(path, []byte(`<html><body><p>alias</p></body></html>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-g", "none", path})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if !bytes.Contains(out, []byte("alias")) {
+		t.Fatalf("dump output = %q", out)
+	}
+}
+
 func TestRunDump(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "page.html")

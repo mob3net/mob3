@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/pprof"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +21,7 @@ func Run(args []string) int {
 	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
+	fs.StringVar(graphics, "g", "none", "alias for -graphics")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
 	reader := fs.Bool("reader", false, "start in reader mode")
 	dark := fs.Bool("dark", false, "start in dark mode")
@@ -29,12 +29,13 @@ func Run(args []string) int {
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	cpuProfile := fs.String("cpuprofile", "", "write a CPU profile to this file")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "MOB³ — A small terminal browser with its own HTML/CSS engine.\n\n")
+		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
+		fmt.Fprintf(os.Stderr, "License: AGPL-3.0-only\n")
+		fmt.Fprintf(os.Stderr, "Copyright (c) 2026 Milos Stojanovic\n\n")
 		fs.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n  %s https://example.com\n  %s -dump -width 120 page.html\n  %s -dump -no-color https://go.dev\n", os.Args[0], os.Args[0], os.Args[0])
 	}
@@ -47,20 +48,6 @@ func Run(args []string) int {
 	if *showVersion {
 		fmt.Println(Version)
 		return 0
-	}
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mob3: cannot create CPU profile: %v\n", err)
-		} else if err := pprof.StartCPUProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "mob3: cannot start CPU profile: %v\n", err)
-			f.Close()
-		} else {
-			defer func() {
-				pprof.StopCPUProfile()
-				f.Close()
-			}()
-		}
 	}
 
 	start := *home
@@ -125,20 +112,15 @@ func Run(args []string) int {
 	if bookmarksValue == "" {
 		bookmarksValue = "(none)"
 	}
-	cpuValue := *cpuProfile
-	if cpuValue == "" {
-		cpuValue = "(none)"
-	}
 	b.cliConfig = map[string]string{
-		"-dump":       onOff(*dump),
-		"-width":      strconv.Itoa(w),
-		"-graphics":   *graphics,
-		"-bookmarks":  bookmarksValue,
-		"-cache":      strconv.Itoa(*cache),
-		"-color":      onOff(*forceColor),
-		"-no-color":   onOff(*noColor),
-		"-cpuprofile": cpuValue,
-		"-version":    Version,
+		"-dump":      onOff(*dump),
+		"-width":     strconv.Itoa(w),
+		"-graphics":  *graphics,
+		"-bookmarks": bookmarksValue,
+		"-cache":     strconv.Itoa(*cache),
+		"-color":     onOff(*forceColor),
+		"-no-color":  onOff(*noColor),
+		"-version":   Version,
 	}
 	b.color = !*noColor
 	b.noJS = *noJS

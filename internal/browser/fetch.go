@@ -983,8 +983,7 @@ th { color: #57606a; }
 <h1>MOB³ Help</h1>
 <p class="muted">Version <b>{{VERSION}}</b> · a small terminal browser. Keys are vim-first.</p>
 <p class="muted">MOB³ keeps history, cookies, storage and caches in memory only.
-Nothing is saved when it exits; the optional <b>-cpuprofile</b> file is the only
-disk write.</p>
+Nothing is written to disk.</p>
 
 <h2>Command line</h2>
 <p><b>mob3 [flags] [url|file]</b> opens the start page with no arguments.</p>
@@ -993,6 +992,7 @@ disk write.</p>
 <tr><td><b>-dump</b></td><td>render the page to stdout and exit</td></tr>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
+<tr><td><b>-g</b> string</td><td>alias for -graphics</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
 <tr><td><b>-reader</b></td><td>start in reader mode</td></tr>
 <tr><td><b>-dark</b></td><td>start in dark mode</td></tr>
@@ -1006,7 +1006,6 @@ disk write.</p>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
 <tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
-<tr><td><b>-cpuprofile</b> string</td><td>write a CPU profile to this file</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>
@@ -1277,7 +1276,7 @@ a { color:#0645ad; text-decoration:underline; }
 <body>
 <div class="logo">MOB³</div>
 <p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
-<p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is saved when MOB³ exits. The only file it writes is the optional <span class="k">-cpuprofile</span> output.</p>
+<p><b>Privacy:</b> history, cookies, storage and caches live in memory only; nothing is written to disk.</p>
 <p>MOB³ is a small terminal web browser written in Go. It fetches pages over HTTP(S), renders HTML and a practical CSS subset in 24-bit color, and can show images inline with kitty or iTerm2 graphics, or half-block art. Images are off by default for speed; pass <b>-graphics auto</b> or <b>-graphics blocks</b> to enable them.</p>
 <h3>Getting started</h3>
 <ul>
