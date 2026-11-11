@@ -1878,7 +1878,7 @@ func TestJSErrorHintInFooter(t *testing.T) {
 	if got := b.footerRight(140); !strings.Contains(got, "Reader on") {
 		t.Fatalf("reader-on footer = %q", got)
 	}
-	if narrow := b.footerRight(24); !strings.HasPrefix(narrow, jsErrorShort) {
+	if narrow := b.footerRight(28); !strings.HasPrefix(narrow, jsErrorShort) {
 		t.Fatalf("narrow footer = %q", narrow)
 	}
 }
@@ -1887,10 +1887,60 @@ func TestFooterGapBeforeRightState(t *testing.T) {
 	b := NewBrowser(100, 10)
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	marker := "JavaScript on"
+	marker := "[Reader off]"
 	i := strings.Index(line, marker)
 	if i < footerGap || line[i-footerGap:i] != strings.Repeat(" ", footerGap) {
 		t.Fatalf("footer has no %d-cell gap before %q: %q", footerGap, marker, line)
+	}
+}
+
+func TestFooterRightCollapsesLeftToRight(t *testing.T) {
+	b := NewBrowser(160, 10)
+	b.usage = procUsage{rss: 18 << 20}
+	full := b.footerRight(100)
+	for _, want := range []string{"JavaScript on", "Graphics none", "[Dark off]", "[Reader off]", "MEM 18 MB", "0%"} {
+		if !strings.Contains(full, want) {
+			t.Fatalf("wide footer missing %q: %q", want, full)
+		}
+	}
+	cases := []struct {
+		width int
+		want  string
+		gone  []string
+	}{
+		{70, "Graphics none", []string{"JavaScript on"}},
+		{50, "[Dark off]", []string{"Graphics none"}},
+		{40, "[Reader off]", []string{"[Dark off]"}},
+		{20, "MEM 18 MB", []string{"[Reader off]"}},
+		{10, "0%", []string{"MEM 18 MB", "[Reader off]", "[Dark off]", "Graphics none", "JavaScript on"}},
+	}
+	for _, tc := range cases {
+		got := b.footerRight(tc.width)
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("footerRight(%d) = %q, want %q kept", tc.width, got, tc.want)
+		}
+		for _, gone := range tc.gone {
+			if strings.Contains(got, gone) {
+				t.Errorf("footerRight(%d) = %q, still has %q", tc.width, got, gone)
+			}
+		}
+	}
+}
+
+func TestFooterRightDoesNotShrinkForLongLeftText(t *testing.T) {
+	b := NewBrowser(100, 10)
+	drawQuiet(b)
+	right := b.footerRight(100/2 - 7)
+	if right == "" {
+		t.Fatal("no right footer state")
+	}
+	if !strings.Contains(b.prev[len(b.prev)-1], right) {
+		t.Fatalf("short footer = %q, missing right state %q", b.prev[len(b.prev)-1], right)
+	}
+	b.status = strings.Repeat("long status ", 30)
+	drawQuiet(b)
+	if !strings.Contains(b.prev[len(b.prev)-1], right) {
+		t.Fatalf("long footer collapsed the right state: %q, want %q", b.prev[len(b.prev)-1], right)
 	}
 }
 

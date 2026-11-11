@@ -3194,44 +3194,21 @@ func (b *Browser) draw() {
 			if showConsole {
 				reserve += consoleW + 2
 			}
-			rightBudget := w - reserve - footerGap
-			if leftWidth := stringWidth(leftText); leftWidth > 0 {
-				if leftWidth > w/2 {
-					leftWidth = w / 2
-				}
-				rightBudget -= leftWidth
+			rightBudget := w/2 - reserve - footerGap
+			// Never truncate the scroll percentage just because the console
+			// reserve and gap eat into the right half; the left side yields.
+			const pctWidth = 4 // "100%"
+			if rightBudget < pctWidth && w >= reserve+pctWidth {
+				rightBudget = pctWidth
 			}
 			if rightBudget < 1 {
 				rightBudget = 1
 			}
+			// The right-side state collapses according to terminal width only.
+			// Reserve at least half the footer for the left status/URL so a long
+			// message never costs more right-side labels than a short one.
 			rightText := b.footerRight(rightBudget)
 			avail := w - stringWidth(rightText) - reserve - footerGap
-			if avail < 8 {
-				width := w - reserve - footerGap
-				shortPct := strings.TrimSpace(fmt.Sprintf("%3d%%", b.scrollPercent()))
-				dark := b.darkStatusText()
-				reader := b.readerStatusText()
-				compact := dark + " " + reader + " " + shortPct
-				if b.jsErr && stringWidth(jsErrorShort+"  "+compact) <= width {
-					compact = jsErrorShort + "  " + compact
-				}
-				if stringWidth(compact) > width {
-					switch {
-					case stringWidth(dark+" "+reader+" "+shortPct) <= width:
-						compact = dark + " " + reader + " " + shortPct
-					case stringWidth(dark+" "+shortPct) <= width:
-						compact = dark + " " + shortPct
-					case stringWidth(reader+" "+shortPct) <= width:
-						compact = reader + " " + shortPct
-					case b.jsErr && stringWidth(jsErrorShort+"  "+shortPct) <= width:
-						compact = jsErrorShort + "  " + shortPct
-					default:
-						compact = shortPct
-					}
-				}
-				rightText = truncateWidth(compact, width)
-				avail = w - stringWidth(rightText) - reserve - footerGap
-			}
 			if avail < 0 {
 				avail = 0
 			}
@@ -3500,57 +3477,41 @@ func (b *Browser) graphicsStatusText() string {
 
 // footerRight builds the right-aligned footer text: an optional JS error hint,
 // JS and graphics state, dark and reader state, resident memory and the scroll
-// percentage.
+// percentage. When the width is too small, elements disappear from left to
+// right: the JS status first, then graphics, dark, reader and memory, leaving
+// the scroll percentage last.
 func (b *Browser) footerRight(width int) string {
 	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
-	js := b.jsStatusText()
-	graphics := b.graphicsStatusText()
-	dark := b.darkStatusText()
-	reader := b.readerStatusText()
-	labels := js + "   " + graphics + "   " + dark + "   " + reader
-	withMem := labels + "   " + b.usage.footer() + "   " + pctText
-	if b.jsErr {
-		withMem = jsErrorHint + "   " + withMem
+	parts := []string{
+		b.jsStatusText(),
+		b.graphicsStatusText(),
+		b.darkStatusText(),
+		b.readerStatusText(),
+		b.usage.footer(),
+		pctText,
 	}
-	if stringWidth(withMem) <= width-8 {
-		return withMem
-	}
-	noMem := labels + "   " + pctText
-	if b.jsErr {
-		noMem = jsErrorHint + "   " + noMem
-	}
-	if stringWidth(noMem) <= width-8 {
-		return noMem
-	}
-	if b.jsErr {
-		short := jsErrorShort + "  " + labels + "  " + pctText
-		if stringWidth(short) <= width {
-			return short
+	var base string
+	for drop := 0; drop < len(parts); drop++ {
+		candidate := strings.Join(parts[drop:], "   ")
+		if stringWidth(candidate) <= width {
+			base = candidate
+			break
 		}
 	}
-	if stringWidth(labels+"   "+pctText) <= width {
-		return labels + "   " + pctText
+	if base == "" {
+		return truncateWidth(pctText, width)
 	}
-	shortPct := strings.TrimSpace(pctText)
-	if b.jsErr && stringWidth(jsErrorShort+"  "+shortPct) <= width {
-		return jsErrorShort + "  " + shortPct
+	// The JS error hint is not part of the collapse order: keep it when it fits
+	// alongside the selected state, using the short form if necessary.
+	if b.jsErr {
+		for _, hint := range []string{jsErrorHint, jsErrorShort} {
+			candidate := hint + "   " + base
+			if stringWidth(candidate) <= width {
+				return candidate
+			}
+		}
 	}
-	if stringWidth(dark+" "+reader+" "+shortPct) <= width {
-		return dark + " " + reader + " " + shortPct
-	}
-	if stringWidth(dark+" "+shortPct) <= width {
-		return dark + " " + shortPct
-	}
-	if stringWidth(reader+" "+shortPct) <= width {
-		return reader + " " + shortPct
-	}
-	if stringWidth(dark) <= width {
-		return dark
-	}
-	if stringWidth(reader) <= width {
-		return reader
-	}
-	return truncateWidth(pctText, width)
+	return base
 }
 
 // centeredLabel fits label into room cells and returns the starting cell plus

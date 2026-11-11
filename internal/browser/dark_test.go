@@ -84,7 +84,8 @@ func TestDarkReaderMode(t *testing.T) {
 func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	doc := ParseHTML(`<html><body><p>Dark mode text</p></body></html>`)
 	u, _ := url.Parse("https://example.com/dark")
-	b := NewBrowser(80, 20)
+	// Wide enough that the right-side dark label has not collapsed.
+	b := NewBrowser(120, 20)
 	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Dark"}
 	b.rebuild()
 	if b.HandleKey("D") {

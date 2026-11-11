@@ -507,7 +507,13 @@ Standard Go layout:
   (`MEM 18 MB`), the scroll percentage, `JavaScript on`/`JavaScript off` and
   resolved `Graphics <mode>` notices, clickable `[Dark on]`/`[Dark off]` and
   `[Reader on]`/`[Reader off]` labels before the memory readout, and a clickable
-  `>_` console icon pinned to the far right edge. At least three blank cells
+  `>_` console icon pinned to the far right edge. Right-side items collapse
+  from left to right as the terminal narrows: the `JavaScript` state goes
+  first, then `Graphics`, `[Dark …]`, `[Reader …]` and memory, leaving the
+  scroll percentage last. The right-side budget depends only on terminal
+  width (it may use at most half the footer), so at least half is always kept
+  for the left status/URL and a long message never collapses the right state.
+  At least three blank cells
   separate the left status/link text from the right-side state. The first letter
   of the Dark
   and Reader labels is underlined to suggest the `D`/`R` shortcuts. Each label
@@ -517,8 +523,9 @@ Standard Go layout:
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
   for successful copy messages. The error hint clears
-  when the JS console opens or a new page loads, and drops before memory on
-  narrow terminals. The readout refreshes every two seconds.
+  when the JS console opens or a new page loads, and is omitted when it no
+  longer fits alongside the collapsed right-side state. The readout refreshes
+  every two seconds.
   Memory is `/proc/self/statm` RSS on Linux
   with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
   while the JS console is open, so terminal selection is not disturbed.
