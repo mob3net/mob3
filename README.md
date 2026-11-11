@@ -2,19 +2,11 @@
   <img width="400" alt="image" src="https://interactive32.com/images/mob3-screenshot-1.png?ref=github.com/mob3net/mob3" />
 </p>
 
-# MOB³ is a compact, self-contained web browser for the terminal
+# MOB³ is a small indie web browser for the terminal
 
 Written in Go, it combines its own HTML parser, CSS cascade and layout engine, ANSI renderer and pure-Go JavaScript runtime to display real web pages, including inline images, without a GUI toolkit or persistent profile. History, cookies, storage and caches live in memory only: closing MOB³ saves nothing.
 
 Project page: [mob3.net](https://mob3.net).
-
-## Warning
-> **MOB³ is not a secure web browser in any way.**
-> It has no sandboxing, process isolation, site isolation, CSP enforcement,
-> certificate UI or security hardening, and it has not been audited. Page
-> JavaScript runs in a small, unaudited engine. Do not use MOB³ to log in to
-> accounts, enter passwords, make payments, or handle confidential data. Use it
-> at your own risk.
 
 ## Try it with Docker:
 
@@ -40,29 +32,20 @@ sudo install -m 0755 mob3 /usr/local/bin/mob3
 mob3 -version
 ```
 
-## Using command line options
-
-Start reading Wikipedia in dark mode:
-```
-mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
-```
-See all available options with -h flag
-
-## Development
-
-Build from source and start browsing:
-
-```
-make
-./bin/mob3 https://example.com
-```
-
-Requires Go 1.27 or newer. Interactive mode runs on Linux and macOS terminals;
-Windows users can run it under WSL. When stdin/stdout are not a terminal, MOB³
-automatically falls back to dump mode.
-
-Press `?` inside the app for keys, mouse and forms help. Run `mob3 -h` for the
-full list of command-line flags. `mob3 -version` prints the embedded version.
+## Screenshots
+<div align="center">
+<a href="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" /></a>
+<a href="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" /></a>
+<a href="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" /></a>
+<br />
+<a href="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" /></a>
+<a href="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" /></a>
+<a href="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" /></a>
+<br />
+<a href="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" /></a>
+<a href="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" /></a>
+<a href="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" /></a>
+</div>
 
 ## What to expect
 
@@ -153,20 +136,30 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   second rather than continuously, and an idle page with no pending timers does
   not repaint at all.
 
-## Screenshots
-<div align="center">
-<a href="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" /></a>
-<a href="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" /></a>
-<a href="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" /></a>
-<br />
-<a href="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" /></a>
-<a href="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" /></a>
-<a href="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" /></a>
-<br />
-<a href="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" /></a>
-<a href="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" /></a>
-<a href="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" /></a>
-</div>
+## Using command line options
+
+Start reading Wikipedia in dark mode:
+```
+mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
+```
+See all available options with -h flag
+
+## Development
+
+Build from source and start browsing:
+
+```
+make
+./bin/mob3 https://example.com
+```
+
+Requires Go 1.27 or newer. Interactive mode runs on Linux and macOS terminals;
+Windows users can run it under WSL. When stdin/stdout are not a terminal, MOB³
+automatically falls back to dump mode.
+
+Press `?` inside the app for keys, mouse and forms help. Run `mob3 -h` for the
+full list of command-line flags. `mob3 -version` prints the embedded version.
+
 
 ## Contributing
 
