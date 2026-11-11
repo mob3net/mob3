@@ -151,6 +151,19 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   second rather than continuously, and an idle page with no pending timers does
   not repaint at all.
 
+## Screenshots
+<img width="330" src="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" />
+<img width="330" src="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" />
+<img width="330" src="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" />
+
+<img width="330" src="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" />
+<img width="330" src="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" />
+<img width="330" src="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" />
+
+<img width="330" src="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" />
+<img width="330" src="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" />
+<img width="330" src="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" />
+
 ## Contributing
 
 Contributions are welcome. Every pull request must include the broad
