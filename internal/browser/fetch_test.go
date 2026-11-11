@@ -495,6 +495,27 @@ func TestBlockedGeneric(t *testing.T) {
 	}
 }
 
+func TestBMPDecodeRegistered(t *testing.T) {
+	const fixture = "Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAADEDgAAxA4AAAAAAAAAAAAA/wAAAP//AAAAAP8A/wAAAA=="
+	data, err := base64.StdEncoding.DecodeString(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("BMP decode failed: %v", err)
+	}
+	if format != "bmp" {
+		t.Fatalf("format = %q, want bmp", format)
+	}
+	if b := img.Bounds(); b.Dx() != 2 || b.Dy() != 2 {
+		t.Fatalf("bounds = %v", b)
+	}
+	if got := mimeByExt("photo.bmp"); got != "image/bmp" {
+		t.Fatalf("mimeByExt = %q", got)
+	}
+}
+
 func TestWebPDecodeRegistered(t *testing.T) {
 	const fixture = "UklGRiwAAABXRUJQVlA4TB8AAAAvAUAAAB8gEEjaH3qN+RcQFPk/2vwHXyTgBwgR/Q8BAA=="
 	data, err := base64.StdEncoding.DecodeString(fixture)

@@ -83,7 +83,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Common CSS: selectors, cascade and inheritance, box model, margins, borders,
   backgrounds, text styling, lists, tables, viewport-width `@media` queries and
   basic flex rows.
-- PNG/JPEG/GIF/WebP/SVG/data-URI images when enabled with `-graphics` (`auto`,
+- PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
   for speed.
 - Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB

@@ -268,7 +268,7 @@ Standard Go layout:
   aspect ratio preserved; display is capped at 60% of the viewport width and
   24 rows, preserving the ratio; transparency composited over the underlying
   cell;
-  PNG/JPEG/GIF/WebP and SVG. SVG is rasterized with oksvg +
+  PNG/JPEG/GIF/WebP/BMP and SVG. SVG is rasterized with oksvg +
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
   response; inline `<svg>` is serialized back to XML with SVG camelCase names
   restored and rasterized before layout. If inline SVG decoding fails it falls
