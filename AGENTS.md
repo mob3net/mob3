@@ -948,8 +948,9 @@ Standard Go layout:
   `.github/pages/build.sh` converts `README.md` to `index.html` and every
   `docs/*.md` to `docs/*.html` with pinned `marked` (via `npx`), wraps each page
   in `.github/pages/template.html`, rewrites relative `.md` links to `.html`
-  so the same Markdown works on GitHub and the site, and generates the docs
-  sidebar from the fixed `docs/` page order.
+  so the same Markdown works on GitHub and the site, generates the docs
+  sidebar from the fixed `docs/` page order, and builds `search-index.js` for
+  the client-side header search.
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, `docs/`, page files or workflow, and on manual
   dispatch.

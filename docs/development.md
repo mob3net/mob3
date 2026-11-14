@@ -41,10 +41,10 @@ Build the site locally:
 .github/pages/build.sh /tmp/mob3-site
 ```
 
-The script writes `index.html`, `docs/*.html`, a `CNAME` for `mob3.net` and
-`.nojekyll`. Relative `.md` links are rewritten to `.html` for the site. Docs
-pages share a generated sidebar and on-page “On this page” contents list,
-with a light/dark theme toggle and a mobile menu.
+The script writes `index.html`, `docs/*.html`, `search-index.js`, a `CNAME` for
+`mob3.net` and `.nojekyll`. Relative `.md` links are rewritten to `.html` for
+the site. Docs pages share a generated sidebar, on-page “On this page” contents
+list and header search, with a light/dark theme toggle and a mobile menu.
 
 ## Repository layout
 

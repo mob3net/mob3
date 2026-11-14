@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-root="{{ROOT}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -97,11 +97,66 @@ try {
     font-size: .88rem;
     white-space: nowrap;
   }
-  .header-actions {
+  .search {
     margin-left: auto;
+    flex: 1 1 14rem;
+    min-width: 8rem;
+    max-width: 22rem;
+  }
+  .search input {
+    width: 100%;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: 0;
     display: flex;
     align-items: center;
     gap: .5rem;
+  }
+  .search-results {
+    position: fixed;
+    top: 3.6rem;
+    right: max(1.25rem, calc((100vw - var(--max-width)) / 2 + 1.25rem));
+    z-index: 40;
+    width: min(32rem, calc(100vw - 2.5rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
   }
   .theme-toggle, .nav-toggle {
     display: grid;
@@ -284,6 +339,8 @@ try {
     .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
     h1 { font-size: 1.6rem; }
     .header-inner { gap: .6rem; padding: .5rem .9rem; }
+    .search { max-width: none; }
+    .search-results { left: .75rem; right: .75rem; width: auto; }
   }
 
   @media (prefers-color-scheme: dark) {
@@ -322,6 +379,10 @@ try {
   <div class="header-inner">
     <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
     <span class="tagline">Documentation</span>
+    <label class="search">
+      <span class="visually-hidden">Search the documentation</span>
+      <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+    </label>
     <div class="header-actions">
       <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
         <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -336,6 +397,7 @@ try {
     </div>
   </div>
 </header>
+<div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
 {{LAYOUT_START}}
 {{SIDEBAR}}
 <main class="content" id="content">
@@ -346,6 +408,8 @@ try {
 <footer class="site-footer">
   <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
 </footer>
+<script src="{{ROOT}}/search-index.js"></script>
+<script src="{{ROOT}}/search.js"></script>
 <script>
 (function () {
   var theme = document.querySelector(".theme-toggle");

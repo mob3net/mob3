@@ -137,7 +137,69 @@ for src in "$root"/docs/*.md; do
     '<div class="docs-layout">' "$(sidebar_for "$name")" '</div>' "docs-page"
 done
 
+cp "$root/.github/pages/search.js" "$out/search.js"
+
+node - "$out" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const out = process.argv[2];
+
+function files(dir) {
+  const result = [];
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) result.push(...files(full));
+    else if (name.endsWith(".html")) result.push(full);
+  }
+  return result;
+}
+
+function strip(html) {
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const entries = [];
+for (const file of files(out)) {
+  if (path.basename(file) === "search-index.js") continue;
+  const rel = path.relative(out, file).split(path.sep).join("/");
+  const html = fs.readFileSync(file, "utf8");
+  const title = strip((html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1] || rel);
+  const main = (html.match(/<main[^>]*>([\s\S]*?)<\/main>/i) || [])[1] || html;
+  const body = main.replace(/<nav class="toc"[\s\S]*?<\/nav>/i, " ");
+  const headings = [...body.matchAll(/<h2 id="([^"]+)"[^>]*>([\s\S]*?)<\/h2>/gi)].map(
+    (m) => ({ id: m[1], text: strip(m[2]) }),
+  );
+  entries.push({
+    path: rel,
+    title,
+    text: strip(body).slice(0, 50000),
+    headings,
+  });
+}
+entries.sort((a, b) => {
+  if (a.path === "index.html") return -1;
+  if (b.path === "index.html") return 1;
+  return a.path.localeCompare(b.path);
+});
+fs.writeFileSync(
+  path.join(out, "search-index.js"),
+  "window.MOB3_SEARCH = " + JSON.stringify(entries) + ";\n",
+);
+NODE
+
 printf 'mob3.net\n' >"$out/CNAME"
 printf '/bin/\n/_site/\n' >"$out/.gitignore"
 touch "$out/.nojekyll"
-echo "Wrote $out/index.html and $out/docs/*.html, plus CNAME and .gitignore"
+echo "Wrote $out/index.html, $out/docs/*.html, search index and CNAME"
