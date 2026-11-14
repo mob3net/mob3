@@ -22,18 +22,111 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 
 ## Client configuration
 
-Claude Desktop, Cursor and other MCP clients use a `mcpServers` entry:
+MOB³ speaks MCP over stdio, so any MCP client that can start a local command
+can use it. The examples below assume `mob3` is installed at
+`/usr/local/bin/mob3`; replace that path with the output of `command -v mob3`
+on your machine (for example `/opt/homebrew/bin/mob3` on Apple Silicon).
+
+All clients accept the same server arguments. `-width` controls wrapping and
+coordinates, and the optional starting URL defaults to `about:home`:
+
+```sh
+/usr/local/bin/mob3 -mcp -width 100 about:home
+```
+
+### OpenCode
+
+Add MOB³ as a global local server:
+
+```sh
+opencode mcp add mob3 --global -- /usr/local/bin/mob3 -mcp -width 100 about:home
+opencode mcp list
+```
+
+Or add it by hand to `~/.config/opencode/opencode.json` (use
+`opencode.json` in a project for project-local access):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "mob3": {
+        "type": "local",
+        "command": ["/usr/local/bin/mob3", "-mcp", "-width", "100", "about:home"]
+      }
+    }
+  }
+}
+```
+
+OpenCode reloads configuration automatically; `opencode mcp list` shows the
+connection state.
+
+### Claude Code
+
+Add MOB³ at user scope so it is available in every project:
+
+```sh
+claude mcp add --transport stdio --scope user mob3 -- \
+  /usr/local/bin/mob3 -mcp -width 100 about:home
+claude mcp list
+```
+
+For a project-scoped server, put the equivalent entry in `.mcp.json` at the
+project root:
 
 ```json
 {
   "mcpServers": {
     "mob3": {
-      "command": "/path/to/mob3",
+      "command": "/usr/local/bin/mob3",
       "args": ["-mcp", "-width", "100", "about:home"]
     }
   }
 }
 ```
+
+### Cursor
+
+Create `.cursor/mcp.json` in the project, or `~/.cursor/mcp.json` for a global
+server:
+
+```json
+{
+  "mcpServers": {
+    "mob3": {
+      "command": "/usr/local/bin/mob3",
+      "args": ["-mcp", "-width", "100", "about:home"]
+    }
+  }
+}
+```
+
+Reload the MCP servers from Cursor's settings after editing the file.
+
+### Claude Desktop
+
+Add the server to Claude Desktop's configuration file (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "mob3": {
+      "command": "/usr/local/bin/mob3",
+      "args": ["-mcp", "-width", "100", "about:home"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after changing the file.
+
+### Other clients
+
+Clients that use the common `mcpServers` shape can use the same entry shown for
+Cursor. The only required fields are `command` and `args`; the server needs no
+environment variables, URL or API key.
 
 MCP communication is stdio-only. Stdout carries protocol messages only;
 diagnostics go to stderr. Do not expose the process as a network service; there

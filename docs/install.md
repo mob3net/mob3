@@ -37,6 +37,24 @@ The image is published for `linux/386`, `linux/amd64`, `linux/arm64`,
 certificates, `LICENSE` and third-party notices. It is a terminal application:
 use `-it` to attach it to a TTY.
 
+## MCP clients
+
+After installing `mob3`, you can use it as a headless MCP server. OpenCode,
+Claude Code, Cursor and Claude Desktop all start it as a local stdio server:
+
+```sh
+mob3 -mcp -width 100 about:home
+```
+
+For OpenCode, one command registers it globally:
+
+```sh
+opencode mcp add mob3 --global -- /usr/local/bin/mob3 -mcp -width 100 about:home
+```
+
+See [Automation with MCP](automation.md#client-configuration) for the OpenCode,
+Claude Code, Cursor and Claude Desktop configuration details.
+
 ## Build from source
 
 Requirements:

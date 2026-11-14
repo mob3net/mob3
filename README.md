@@ -205,8 +205,9 @@ pixel screenshot because MOB3 renders to terminal cells.
 
 The server is local and unauthenticated, sessions and storage are memory-only,
 and nothing is written to disk. Do not expose it as a network service. See the
-[full MCP reference](docs/automation.md) for the protocol, snapshot format and
-tool details.
+[full MCP reference](docs/automation.md) for the protocol, snapshot format,
+tool details, and setup instructions for OpenCode, Claude Code, Cursor and
+Claude Desktop.
 
 ## Development
 

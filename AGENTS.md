@@ -450,7 +450,9 @@ Standard Go layout:
   logs and request list cover the current page, reset on navigation and are
   memory-only. The screenshot is a terminal-cell raster,
   not a browser pixel capture. Stdout is protocol-only. Sessions, cookies and
-  history are memory-only, and the server is local and unauthenticated.
+  history are memory-only, and the server is local and unauthenticated. Client
+  setup for OpenCode, Claude Code, Cursor and Claude Desktop is documented in
+  `docs/automation.md`.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
