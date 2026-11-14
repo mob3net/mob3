@@ -50,6 +50,52 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	}
 }
 
+func TestFlexWrapStartsNewLine(t *testing.T) {
+	ly := build(`<div style="display:flex;flex-wrap:wrap"><div style="width:100%">alpha</div><div style="width:100%">beta</div></div>`, 40)
+	var alpha, beta *Frag
+	for i := range ly.Frags {
+		if ly.Frags[i].Kind != fragText {
+			continue
+		}
+		switch ly.Frags[i].Text {
+		case "alpha":
+			alpha = &ly.Frags[i]
+		case "beta":
+			beta = &ly.Frags[i]
+		}
+	}
+	if alpha == nil || beta == nil {
+		t.Fatal("missing wrapped flex items")
+	}
+	if beta.Y <= alpha.Y {
+		t.Fatalf("wrapped flex item stayed on the first row: alpha y=%d beta y=%d", alpha.Y, beta.Y)
+	}
+}
+
+func TestInlineBlockWrapperWithWidthKeepsBlocks(t *testing.T) {
+	ly := build(`<div>before <span style="display:inline-block;width:100%"><div>inside</div></span>after</div>`, 40)
+	var before, inside, after *Frag
+	for i := range ly.Frags {
+		if ly.Frags[i].Kind != fragText {
+			continue
+		}
+		switch ly.Frags[i].Text {
+		case "before":
+			before = &ly.Frags[i]
+		case "inside":
+			inside = &ly.Frags[i]
+		case "after":
+			after = &ly.Frags[i]
+		}
+	}
+	if before == nil || inside == nil || after == nil {
+		t.Fatal("missing inline-block content")
+	}
+	if inside.Y <= before.Y || after.Y <= inside.Y {
+		t.Fatalf("inline-block wrapper did not lay out its block: before y=%d inside y=%d after y=%d", before.Y, inside.Y, after.Y)
+	}
+}
+
 func TestSearchInputFlexFullWidth(t *testing.T) {
 	ly := build(`<form style="display:flex;gap:8px"><input type="search" name="q" placeholder="Search or enter address" style="flex:1"><button type="submit">Go</button></form>`, 40)
 	inputY, inputW, buttonY := -1, 0, -1

@@ -508,6 +508,23 @@ func (l *layouter) hasBlockDescendant(n *Node) bool {
 	return false
 }
 
+// inlineWrapperIsBlock reports whether an inline-level wrapper must be laid
+// out as a block so its block/grid/flex descendants keep their own layout.
+// An inline-block with an explicit width behaves like a block container; an
+// inline-block without one stays an atomic inline box (menu items, buttons).
+func (l *layouter) inlineWrapperIsBlock(n *Node) bool {
+	if n == nil || n.Style == nil {
+		return false
+	}
+	switch n.Style.Display {
+	case "inline":
+		return l.hasBlockDescendant(n)
+	case "inline-block":
+		return n.Style.Width.Set && !n.Style.Width.IsAuto() && l.hasBlockDescendant(n)
+	}
+	return false
+}
+
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
@@ -1211,6 +1228,66 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	if n.Style != nil {
 		gap = nonNeg(n.Style.Gap.resolveH(availW, n.Style.FontSize))
 	}
+	if n.Style != nil && n.Style.FlexWrap == "wrap" {
+		var lines [][]*Node
+		var line []*Node
+		used := 0
+		for _, it := range items {
+			w := l.flexItemBasis(it, availW)
+			if len(line) > 0 && used+gap+w > availW {
+				lines = append(lines, line)
+				line = nil
+				used = 0
+			}
+			if len(line) > 0 {
+				used += gap
+			}
+			line = append(line, it)
+			used += w
+		}
+		if len(line) > 0 {
+			lines = append(lines, line)
+		}
+		totalH := 0
+		for _, ln := range lines {
+			totalH += l.layFlexLine(ln, x, y+totalH, availW, gap, n.Style)
+		}
+		return totalH
+	}
+	return l.layFlexLine(items, x, y, availW, gap, n.Style)
+}
+
+// flexItemBasis returns the base width used to decide where wrapped flex rows
+// break.
+func (l *layouter) flexItemBasis(it *Node, availW int) int {
+	st := it.Style
+	if st == nil {
+		return 1
+	}
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
+	extra := ml + mr + bl + br + pl + pr
+	base := 0
+	switch {
+	case st.FlexBasisSet:
+		base = l.widthValue(st, st.FlexBasis, availW)
+	case st.Width.Set && !st.Width.IsAuto():
+		base = l.widthValue(st, st.Width, availW)
+	case st.FlexGrow > 0:
+		base = 0
+	default:
+		base, _ = l.measure(it)
+	}
+	if base < 0 {
+		base = 0
+	}
+	return maxInt(1, base+extra)
+}
+
+// layFlexLine sizes and lays out one flex row.
+func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style) int {
+	if len(items) == 0 {
+		return 0
+	}
 	totalAvail := availW - gap*(len(items)-1)
 	if totalAvail < len(items) {
 		totalAvail = len(items)
@@ -1304,7 +1381,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		if l.isBlock(it) {
 			h = l.block(it, xx, y, maxInt(1, basis))
 		} else {
-			h = l.inlineFlow([]*Node{it}, xx, y, maxInt(1, basis), n.Style)
+			h = l.inlineFlow([]*Node{it}, xx, y, maxInt(1, basis), base)
 		}
 		if h > maxH {
 			maxH = h
@@ -1400,7 +1477,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 				l.deferAbsolute(c, x, cur)
 				continue
 			}
-			if l.isBlock(c) || (c.Style.Display == "inline" && l.hasBlockDescendant(c)) {
+			if l.isBlock(c) || l.inlineWrapperIsBlock(c) {
 				flush()
 				cur += l.block(c, x, cur, width)
 				continue

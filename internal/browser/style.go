@@ -133,6 +133,7 @@ type Style struct {
 	Left          Length
 	Clip          string
 	FlexDir       string
+	FlexWrap      string
 	FlexGrow      float64
 	FlexShrink    float64
 	FlexBasis     Length
@@ -953,6 +954,21 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.FlexDir = "column"
 		default:
 			st.FlexDir = "row"
+		}
+	case "flex-wrap":
+		if lower == "wrap" || lower == "wrap-reverse" {
+			st.FlexWrap = "wrap"
+		}
+	case "flex-flow":
+		for _, f := range splitFields(lower) {
+			switch f {
+			case "column", "column-reverse":
+				st.FlexDir = "column"
+			case "row", "row-reverse":
+				st.FlexDir = "row"
+			case "wrap", "wrap-reverse":
+				st.FlexWrap = "wrap"
+			}
 		}
 	case "flex-grow":
 		if f, err := strconv.ParseFloat(lower, 64); err == nil && f > 0 {
