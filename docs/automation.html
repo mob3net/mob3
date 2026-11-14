@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en" data-root="..">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MOB³ documentation — Automation with MCP">
+<link rel="canonical" href="https://mob3.net/docs/automation.html">
+<title>Automation with MCP</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .tagline {
+    color: var(--muted);
+    font-size: .88rem;
+    white-space: nowrap;
+  }
+  .search {
+    margin-left: auto;
+    flex: 1 1 14rem;
+    min-width: 8rem;
+    max-width: 22rem;
+  }
+  .search input {
+    width: 100%;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .search-results {
+    position: fixed;
+    top: 3.6rem;
+    right: max(1.25rem, calc((100vw - var(--max-width)) / 2 + 1.25rem));
+    z-index: 40;
+    width: min(32rem, calc(100vw - 2.5rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .tagline { display: none; }
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner { gap: .6rem; padding: .5rem .9rem; }
+    .search { max-width: none; }
+    .search-results { left: .75rem; right: .75rem; width: auto; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="docs-page">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="../index.html">MOB³</a>
+    <span class="tagline">Documentation</span>
+    <label class="search">
+      <span class="visually-hidden">Search the documentation</span>
+      <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+    </div>
+  </div>
+</header>
+<div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+<div class="docs-layout">
+<aside class="docs-sidebar" id="sidebar" aria-label="Documentation"><h2>Documentation</h2><ul><li><a href="index.html">MOB³ documentation</a></li><li><a href="use-cases.html">Use cases</a></li><li><a href="install.html">Install</a></li><li><a href="cli.html">Command line</a></li><li><a href="keys.html">Keyboard and mouse</a></li><li><a class="active" aria-current="page" href="automation.html">Automation with MCP</a></li><li><a href="security.html">Security and privacy</a></li><li><a href="sites.html">Site support</a></li><li><a href="development.html">Development</a></li></ul></aside>
+<main class="content" id="content">
+<h1>Automation with MCP</h1>
+<p><code>mob3 -mcp</code> runs MOB³ headlessly as a
+<a href="https://modelcontextprotocol.io/">Model Context Protocol</a> server over
+stdin/stdout. It exposes the browser to scripts and AI agents through a small
+set of text-oriented tools.</p>
+<pre><code class="language-sh">mob3 -mcp
+mob3 -mcp -width 100 about:home
+mob3 -mcp -width 120 https://en.wikipedia.org/
+</code></pre>
+<ul>
+<li>Optional starting URL; otherwise <code>about:home</code>.</li>
+<li><code>-width</code> controls wrapping and coordinates.</li>
+<li>The virtual viewport is 30 rows by default; <code>-height N</code> sets it explicitly
+(about <code>N-3</code> page rows after chrome).</li>
+<li>Images are disabled.</li>
+<li><code>-no-js</code>, <code>-layout-budget</code>, <code>-reader</code>, <code>-dark</code>, bookmarks and search settings
+are honored.</li>
+<li>History, cookies and storage are in memory only.</li>
+</ul>
+<h2 id="client-configuration">Client configuration</h2>
+<p>MOB³ speaks MCP over stdio, so any MCP client that can start a local command
+can use it. The examples below assume <code>mob3</code> is installed at
+<code>/usr/local/bin/mob3</code>; replace that path with the output of <code>command -v mob3</code>
+on your machine (for example <code>/opt/homebrew/bin/mob3</code> on Apple Silicon).</p>
+<p>All clients accept the same server arguments. <code>-width</code> controls wrapping and
+coordinates, and the optional starting URL defaults to <code>about:home</code>:</p>
+<pre><code class="language-sh">/usr/local/bin/mob3 -mcp -width 100 about:home
+</code></pre>
+<h3>OpenCode</h3>
+<p>Add MOB³ as a global local server:</p>
+<pre><code class="language-sh">opencode mcp add mob3 --global -- /usr/local/bin/mob3 -mcp -width 100 about:home
+opencode mcp list
+</code></pre>
+<p>Or add it by hand to <code>~/.config/opencode/opencode.json</code> (use
+<code>opencode.json</code> in a project for project-local access):</p>
+<pre><code class="language-json">{
+  &quot;$schema&quot;: &quot;https://opencode.ai/config.json&quot;,
+  &quot;mcp&quot;: {
+    &quot;servers&quot;: {
+      &quot;mob3&quot;: {
+        &quot;type&quot;: &quot;local&quot;,
+        &quot;command&quot;: [&quot;/usr/local/bin/mob3&quot;, &quot;-mcp&quot;, &quot;-width&quot;, &quot;100&quot;, &quot;about:home&quot;]
+      }
+    }
+  }
+}
+</code></pre>
+<p>OpenCode reloads configuration automatically; <code>opencode mcp list</code> shows the
+connection state.</p>
+<h3>Claude Code</h3>
+<p>Add MOB³ at user scope so it is available in every project:</p>
+<pre><code class="language-sh">claude mcp add --transport stdio --scope user mob3 -- \
+  /usr/local/bin/mob3 -mcp -width 100 about:home
+claude mcp list
+</code></pre>
+<p>For a project-scoped server, put the equivalent entry in <code>.mcp.json</code> at the
+project root:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;mob3&quot;: {
+      &quot;command&quot;: &quot;/usr/local/bin/mob3&quot;,
+      &quot;args&quot;: [&quot;-mcp&quot;, &quot;-width&quot;, &quot;100&quot;, &quot;about:home&quot;]
+    }
+  }
+}
+</code></pre>
+<h3>Cursor</h3>
+<p>Create <code>.cursor/mcp.json</code> in the project, or <code>~/.cursor/mcp.json</code> for a global
+server:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;mob3&quot;: {
+      &quot;command&quot;: &quot;/usr/local/bin/mob3&quot;,
+      &quot;args&quot;: [&quot;-mcp&quot;, &quot;-width&quot;, &quot;100&quot;, &quot;about:home&quot;]
+    }
+  }
+}
+</code></pre>
+<p>Reload the MCP servers from Cursor&#39;s settings after editing the file.</p>
+<h3>Claude Desktop</h3>
+<p>Add the server to Claude Desktop&#39;s configuration file (<code>claude_desktop_config.json</code>):</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;mob3&quot;: {
+      &quot;command&quot;: &quot;/usr/local/bin/mob3&quot;,
+      &quot;args&quot;: [&quot;-mcp&quot;, &quot;-width&quot;, &quot;100&quot;, &quot;about:home&quot;]
+    }
+  }
+}
+</code></pre>
+<p>Restart Claude Desktop after changing the file.</p>
+<h3>Other clients</h3>
+<p>Clients that use the common <code>mcpServers</code> shape can use the same entry shown for
+Cursor. The only required fields are <code>command</code> and <code>args</code>; the server needs no
+environment variables, URL or API key.</p>
+<p>MCP communication is stdio-only. Stdout carries protocol messages only;
+diagnostics go to stderr. Do not expose the process as a network service; there
+is no authentication.</p>
+<h2 id="protocol">Protocol</h2>
+<p>Messages are newline-delimited JSON-RPC 2.0.</p>
+<pre><code class="language-json">{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;protocolVersion&quot;:&quot;2025-06-18&quot;}}
+{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;method&quot;:&quot;notifications/initialized&quot;,&quot;params&quot;:{}}
+{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:2,&quot;method&quot;:&quot;tools/list&quot;,&quot;params&quot;:{}}
+{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:3,&quot;method&quot;:&quot;tools/call&quot;,&quot;params&quot;:{&quot;name&quot;:&quot;navigate&quot;,&quot;arguments&quot;:{&quot;url&quot;:&quot;https://example.com/&quot;}}}
+</code></pre>
+<p>Supported methods:</p>
+<ul>
+<li><code>initialize</code> — returns <code>capabilities.tools</code>, <code>serverInfo</code> and short usage
+instructions.</li>
+<li><code>ping</code> — empty result.</li>
+<li><code>tools/list</code> — tool names, descriptions and JSON schemas.</li>
+<li><code>tools/call</code> — runs one tool.</li>
+<li><code>notifications/initialized</code> and other notifications — acknowledged by
+silence.</li>
+</ul>
+<p>Tool failures are returned as successful JSON-RPC responses whose <code>content</code>
+explains the error and whose <code>isError</code> field is <code>true</code>. Protocol errors use
+standard JSON-RPC error codes.</p>
+<p>You can test the server without an MCP client:</p>
+<pre><code class="language-sh">printf &#39;%s\n&#39; \
+  &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,&quot;params&quot;:{&quot;protocolVersion&quot;:&quot;2025-06-18&quot;}}&#39; \
+  &#39;{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:2,&quot;method&quot;:&quot;tools/call&quot;,&quot;params&quot;:{&quot;name&quot;:&quot;navigate&quot;,&quot;arguments&quot;:{&quot;url&quot;:&quot;https://example.com/&quot;}}}&#39; \
+  | ./bin/mob3 -mcp
+</code></pre>
+<h2 id="debugging-in-the-running-browser">Debugging in the running browser</h2>
+<p>The interactive browser&#39;s <code>!</code> console has a <strong>Tools</strong> tab for read-only
+inspection of the page you are looking at. Its commands mirror the inspection
+tools below: <code>help</code>, <code>form [selector]</code>, <code>links [selector]</code>, <code>requests [limit]</code>,
+<code>logs [limit]</code>, <code>source [selector]</code>, <code>snapshot</code>, <code>history</code> and <code>clear</code>. Results
+scroll in the tab and keep the newest 500 lines, <code>help</code> lists the arguments and
+selector examples, and the scrollback survives page loads. <code>clear</code> (or <code>cls</code>)
+empties the Tools scrollback; the JS logs input accepts the same command to
+clear the JavaScript log. A <code>[selector]</code> is an optional CSS selector such as
+<code>#content</code>, <code>.card</code>, <code>form#search</code>, <code>input[name=q]</code> or <code>main a</code>; omit it to
+inspect all forms/links or the full page source.</p>
+<p>Navigation, form editing (<code>fill</code>/<code>select</code>/<code>toggle</code>/<code>submit</code>), <code>wait</code>/<code>wait_for</code>
+and <code>screenshot</code> are available only through <code>mob3 -mcp</code>: the interactive event
+loop owns navigation results, so those commands cannot run synchronously from
+inside it.</p>
+<h2 id="tools">Tools</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Arguments</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>navigate</code></td>
+<td><code>{url}</code></td>
+<td>Snapshot after loading</td>
+</tr>
+<tr>
+<td><code>snapshot</code></td>
+<td><code>{}</code></td>
+<td>Current page viewport, links and form controls</td>
+</tr>
+<tr>
+<td><code>links</code></td>
+<td><code>{selector?}</code></td>
+<td>Every link with index, text, href and selector</td>
+</tr>
+<tr>
+<td><code>screenshot</code></td>
+<td><code>{scale}</code></td>
+<td>PNG image of the current page viewport</td>
+</tr>
+<tr>
+<td><code>click</code></td>
+<td><code>{link}</code> or <code>{text}</code> or <code>{selector}</code> or <code>{x,y}</code></td>
+<td>Snapshot after the click</td>
+</tr>
+<tr>
+<td><code>form</code></td>
+<td><code>{selector?}</code></td>
+<td>Every form and control with CSS selectors and values</td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>{selector,value}</code> or <code>{fields}</code></td>
+<td><code>filled N field(s)</code></td>
+</tr>
+<tr>
+<td><code>select</code></td>
+<td><code>{selector,value}</code> or <code>{values}</code> or <code>{text}</code> or <code>{index}</code></td>
+<td><code>selected …</code></td>
+</tr>
+<tr>
+<td><code>toggle</code></td>
+<td><code>{selector,checked?}</code></td>
+<td><code>… is checked</code> / <code>… is unchecked</code></td>
+</tr>
+<tr>
+<td><code>submit</code></td>
+<td><code>{selector?}</code></td>
+<td>Snapshot after navigation</td>
+</tr>
+<tr>
+<td><code>wait</code></td>
+<td><code>{ms}</code></td>
+<td><code>waited &lt;ms&gt;ms</code></td>
+</tr>
+<tr>
+<td><code>wait_for</code></td>
+<td><code>{selector?}</code> and/or <code>{text?}</code>, <code>{timeout_ms?}</code></td>
+<td><code>found … after &lt;ms&gt;</code></td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>{text}</code></td>
+<td><code>typed</code></td>
+</tr>
+<tr>
+<td><code>press</code></td>
+<td><code>{key}</code></td>
+<td><code>pressed &lt;key&gt;</code></td>
+</tr>
+<tr>
+<td><code>scroll</code></td>
+<td><code>{lines}</code> or <code>{pages}</code> or <code>{top}</code> or <code>{bottom}</code></td>
+<td>Scroll percentage</td>
+</tr>
+<tr>
+<td><code>back</code></td>
+<td><code>{}</code></td>
+<td>Snapshot</td>
+</tr>
+<tr>
+<td><code>forward</code></td>
+<td><code>{}</code></td>
+<td>Snapshot</td>
+</tr>
+<tr>
+<td><code>reload</code></td>
+<td><code>{}</code></td>
+<td>Snapshot</td>
+</tr>
+<tr>
+<td><code>evaluate</code></td>
+<td><code>{expression}</code></td>
+<td>JavaScript result as text</td>
+</tr>
+<tr>
+<td><code>history</code></td>
+<td><code>{}</code></td>
+<td>Session history, most recent first</td>
+</tr>
+<tr>
+<td><code>requests</code></td>
+<td><code>{limit?}</code></td>
+<td>Current page&#39;s request log and cache usage</td>
+</tr>
+<tr>
+<td><code>logs</code></td>
+<td><code>{limit?}</code></td>
+<td>JavaScript console messages and errors</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><code>{selector?}</code></td>
+<td>Raw decoded HTML, or one element&#39;s serialized HTML</td>
+</tr>
+</tbody></table>
+<h3><code>navigate</code></h3>
+<p>Resolves input like the URL prompt: URLs, local paths, <code>about:</code> pages, or a
+search query through <code>-search</code>. Waits for the page, meta refreshes and scripted
+redirects.</p>
+<h3><code>snapshot</code></h3>
+<p>Returns the current page viewport as plain text:</p>
+<pre><code class="language-text">URL: https://example.com/
+Title: Example Domain
+Viewport: 100x27  Scroll: 0%
+
+Example Domain
+...
+
+Links:
+[1] More information... -&gt; https://iana.org/domains/example
+
+Inputs:
+- input name=&quot;q&quot; type=&quot;search&quot; value=&quot;&quot; at (4,12)
+</code></pre>
+<ul>
+<li><code>[n]</code> is a 1-based link index for <code>click({link:n})</code>.</li>
+<li>Only visible links are listed. Link numbers are stable layout indices, so a
+filtered list may skip numbers.</li>
+<li><code>Inputs</code> positions are zero-based page-viewport cells, matching <code>click</code>.</li>
+<li>Page text is the viewport, not the whole document. Use <code>scroll</code>.</li>
+</ul>
+<h3><code>links</code></h3>
+<pre><code class="language-json">{}
+{&quot;selector&quot;:&quot;main a&quot;}
+</code></pre>
+<p>Lists every rendered anchor in the document, including links outside the
+current viewport, with the same <code>[n]</code> index that <code>snapshot</code> shows and <code>click</code>
+accepts:</p>
+<pre><code class="language-text">Links: 2
+[1] Docs -&gt; https://example.com/docs selector=&quot;a[href=\&quot;/docs\&quot;]&quot;
+[2] Sign in -&gt; https://example.com/login selector=&quot;#nav a:nth-child(2)&quot;
+</code></pre>
+<p>Empty anchors, hidden anchors and anchors with no rendered content are
+omitted. <code>selector</code> filters which anchors are listed (it matches the anchor,
+not its containers). Listings are capped at 200 entries.</p>
+<h3><code>form</code></h3>
+<pre><code class="language-json">{}
+{&quot;selector&quot;:&quot;form#search&quot;}
+</code></pre>
+<p>Lists every form and its controls, including fields that are outside the
+current viewport. Each control shows its tag, name, type, current value or
+checked state, flags (<code>required</code>, <code>readonly</code>, <code>disabled</code>) and a stable CSS
+selector for the other form tools:</p>
+<pre><code class="language-text">Forms: 1
+[1] form method=&quot;GET&quot; action=&quot;/find&quot; selector=&quot;#search&quot;
+  - input name=&quot;q&quot; type=&quot;text&quot; value=&quot;old&quot; selector=&quot;#search input[name=\&quot;q\&quot;]&quot;
+  - select name=&quot;lang&quot; value=&quot;fr&quot; options=[&quot;en&quot; &quot;fr&quot;] selector=&quot;select[name=\&quot;lang\&quot;]&quot;
+  - input name=&quot;safe&quot; type=&quot;checkbox&quot; state=checked value=&quot;on&quot; selector=&quot;#search input[name=\&quot;safe\&quot;]&quot;
+</code></pre>
+<p>Hidden inputs are omitted because they cannot be edited. Controls outside any
+form are listed separately. Selectors prefer an <code>#id</code>, then a
+<code>form-id name</code> pair, then an <code>nth-child</code> path. Pass a form or control selector
+to list just that form.</p>
+<h3><code>fill</code></h3>
+<pre><code class="language-json">{&quot;selector&quot;:&quot;#search input[name=q]&quot;,&quot;value&quot;:&quot;terminal browsers&quot;}
+{&quot;fields&quot;:{&quot;#search input[name=q]&quot;:&quot;terminal browsers&quot;,&quot;textarea[name=notes]&quot;:&quot;a note&quot;}}
+</code></pre>
+<p><code>fill</code> sets text-like inputs and textareas, replacing any existing value; an
+empty string clears the field. It accepts one selector/value pair or a <code>fields</code>
+map of selector to value. Values honor <code>maxlength</code>, and <code>range</code> inputs accept a
+number. Checkboxes, radios and selects are rejected: use <code>toggle</code> and <code>select</code>.
+<code>fill</code> never submits and never requires focus, so it also works on off-screen
+fields. Each change fires <code>input</code> and <code>change</code>.</p>
+<h3><code>select</code></h3>
+<pre><code class="language-json">{&quot;selector&quot;:&quot;select[name=lang]&quot;,&quot;value&quot;:&quot;fr&quot;}
+{&quot;selector&quot;:&quot;select[name=tags]&quot;,&quot;values&quot;:[&quot;a&quot;,&quot;b&quot;]}
+{&quot;selector&quot;:&quot;select[name=lang]&quot;,&quot;text&quot;:&quot;French&quot;}
+{&quot;selector&quot;:&quot;select[name=lang]&quot;,&quot;index&quot;:1}
+</code></pre>
+<p>Chooses by option value, visible label, or zero-based option index. Pass
+<code>values</code> for a <code>&lt;select multiple&gt;</code> to replace the selected set. A missing value
+or an out-of-range index is a tool error that lists the available options.</p>
+<h3><code>toggle</code></h3>
+<pre><code class="language-json">{&quot;selector&quot;:&quot;input[name=remember]&quot;}
+{&quot;selector&quot;:&quot;input[name=remember]&quot;,&quot;checked&quot;:true}
+{&quot;selector&quot;:&quot;option[value=b]&quot;,&quot;checked&quot;:true}
+</code></pre>
+<p>Checks or unchecks a checkbox or radio. Omit <code>checked</code> to flip the current
+state. Selecting a radio unchecks the other radios in its group, including
+groups outside a form. Multi-select options can also be toggled this way. Use
+<code>select</code> to choose a single-select option or replace a whole multiple selection.</p>
+<h3><code>submit</code></h3>
+<pre><code class="language-json">{}
+{&quot;selector&quot;:&quot;form#search&quot;}
+</code></pre>
+<p>Submits a form: runs the supported constraint validation, fires the form&#39;s
+<code>submit</code> handler, builds the GET query or urlencoded POST body, navigates, and
+returns a snapshot. Without a selector it uses the focused control&#39;s form, or
+the page&#39;s only form. Validation failures, invalid actions and
+<code>preventDefault()</code> are returned as tool errors (validation also focuses the
+first invalid field), so the page does not change on failure.</p>
+<h3><code>wait</code> and <code>wait_for</code></h3>
+<pre><code class="language-json">{&quot;ms&quot;:500}
+{&quot;selector&quot;:&quot;#results&quot;,&quot;timeout_ms&quot;:5000}
+{&quot;text&quot;:&quot;No results found&quot;,&quot;timeout_ms&quot;:2000}
+{&quot;selector&quot;:&quot;.item&quot;,&quot;text&quot;:&quot;price&quot;,&quot;timeout_ms&quot;:5000}
+</code></pre>
+<p>JavaScript timers do not run on their own between tool calls. <code>wait</code> advances
+the page for a number of milliseconds (default 100, maximum 10000), running due
+timers, applying the DOM rebuilds they cause and waiting for navigations they
+start.</p>
+<p><code>wait_for</code> polls until a CSS selector matches an element and/or the given text
+appears in the rendered page. Text matching is case-insensitive, ignores
+markup and scripts, and sees the laid-out document rather than just the
+viewport. It returns <code>found … after &lt;ms&gt;</code> or fails with a timeout error; the
+default timeout is 5000ms and the maximum is 30000ms. When both <code>selector</code> and
+<code>text</code> are supplied, both must match.</p>
+<p>Both tools return a short confirmation rather than a snapshot; call <code>snapshot</code>
+afterwards when you need the page contents.</p>
+<h3><code>screenshot</code></h3>
+<pre><code class="language-json">{&quot;scale&quot;:1}
+</code></pre>
+<p>Returns an MCP <code>image/png</code> content block of the current page viewport, plus a
+short text line with the URL. <code>scale</code> 1 uses 8×16 pixel cells; <code>scale</code> 2
+doubles the image. This is a terminal-cell raster, not a browser pixel
+screenshot: Go Mono glyphs are used, CJK/emoji glyphs may be missing, and MCP
+disables image downloads so image regions show alt text.</p>
+<h3><code>click</code></h3>
+<pre><code class="language-json">{&quot;link&quot;:1}
+{&quot;text&quot;:&quot;Sign in&quot;}
+{&quot;selector&quot;:&quot;input[name=q]&quot;}
+{&quot;x&quot;:4,&quot;y&quot;:12}
+</code></pre>
+<ul>
+<li><code>link</code> uses a snapshot or <code>links</code> link number, including off-screen links.</li>
+<li><code>text</code> clicks the most specific rendered element whose visible text matches,
+case-insensitively. Exact matches are preferred, then links and buttons over
+containers. It also matches submit-button <code>value</code> text and <code>aria-label</code>/<code>alt</code>
+fallbacks.</li>
+<li><code>selector</code> uses a CSS selector. Links, inputs, checkboxes and buttons are
+clicked through their rendered cell, so normal browser click behaviour runs.
+A selector click scrolls an off-screen element into view first.</li>
+<li><code>x</code>/<code>y</code> are zero-based page-viewport cells.</li>
+<li>Pass exactly one of the four targets.</li>
+</ul>
+<h3><code>type</code> and <code>press</code></h3>
+<p><code>type</code> requires a focused input, textarea or the URL prompt. Click a field
+first. A newline presses Enter; a tab presses Tab.</p>
+<p><code>press</code> accepts <code>Enter</code>, <code>Tab</code>, <code>Escape</code>, <code>Backspace</code>, <code>Delete</code>, arrows,
+<code>Home</code>, <code>End</code>, <code>PageUp</code>, <code>PageDown</code> and <code>Space</code>, plus single characters.</p>
+<h3><code>evaluate</code></h3>
+<p>Runs JavaScript in the page realm through goja:</p>
+<pre><code class="language-json">{&quot;expression&quot;:&quot;document.title&quot;}
+{&quot;expression&quot;:&quot;JSON.stringify([...document.querySelectorAll(&#39;h2&#39;)].map(h =&gt; h.textContent))&quot;}
+</code></pre>
+<p>Objects stringify as <code>[object Object]</code>; use <code>JSON.stringify</code> for structured
+results. <code>-no-js</code> disables evaluation.</p>
+<h3><code>requests</code>, <code>logs</code> and <code>source</code></h3>
+<pre><code class="language-json">{&quot;limit&quot;:50}
+{&quot;limit&quot;:20}
+{&quot;selector&quot;:&quot;main article&quot;}
+</code></pre>
+<p>These expose the same diagnostics as the in-browser <code>!</code> console:</p>
+<ul>
+<li><code>requests</code> lists the current page&#39;s in-memory request log — status, method,
+size, kind (<code>doc</code>, <code>css</code>, <code>js</code>, <code>img</code>, <code>fetch</code>, <code>xhr</code>) and URL — followed by
+cache bytes used. <code>limit</code> keeps the newest entries (default 100; 0 shows all,
+up to the 512-entry cap).</li>
+<li><code>logs</code> returns JavaScript console messages and uncaught errors in order, with
+<code>· error</code> in the header when the page has a script error. <code>limit</code> keeps the
+newest entries (default 200; 0 shows all retained entries). Logs and the
+error flag reset when a new page is applied and are lost on failed loads.</li>
+<li><code>source</code> returns the raw decoded HTML that was fetched, before scripts ran.
+With <code>selector</code>, it returns the serialized HTML of that element instead.
+Terminal control characters are removed. Large sources may be clipped by the
+MCP transport.</li>
+</ul>
+<h3><code>history</code></h3>
+<p>Lists session history, most recent first; <code>*</code> marks the current entry.</p>
+<h2 id="typical-agent-loop">Typical agent loop</h2>
+<ol>
+<li><code>navigate</code> a page.</li>
+<li><code>snapshot</code> to read text and collect visible link numbers; use <code>links</code> when
+the target link is below the fold.</li>
+<li><code>form</code> to get every control&#39;s selector and current value.</li>
+<li><code>fill</code>, <code>select</code> and <code>toggle</code> to set fields without focusing or scrolling.</li>
+<li><code>submit</code> to send the form, then read the returned snapshot.</li>
+<li>Use <code>wait_for</code> after clicks and submissions that load content with timers,
+then <code>snapshot</code> when ready.</li>
+<li>Use <code>click</code>/<code>type</code>/<code>press</code> for special widgets, <code>evaluate</code> for DOM
+extraction, or <code>scroll</code>/<code>back</code>/<code>history</code> to move.</li>
+<li>When a page loads wrong, check <code>requests</code> for blocked or missing resources,
+<code>logs</code> for script errors, and <code>source</code> for the markup that was fetched.</li>
+</ol>
+<h2 id="limitations">Limitations</h2>
+<ul>
+<li><strong>Text only.</strong> There is no pixel screenshot: MOB³ renders to terminal cells
+and has no font rasterizer.</li>
+<li><strong>One browsing context.</strong> No tabs or iframes.</li>
+<li><strong>Fixed height</strong> of 30 rows; only <code>-width</code> is configurable.</li>
+<li><strong>JavaScript is a subset.</strong> Module scripts, workers, service workers and
+many modern APIs are unavailable.</li>
+<li><strong>Forms.</strong> <code>fill</code>, <code>select</code>, <code>toggle</code> and <code>submit</code> handle text fields,
+textareas, checkboxes, radios and selects. File uploads and multipart forms
+are not supported, and framework widgets that rerender from their own state
+may overwrite a value set directly.</li>
+<li><strong>Timers advance only during loads and waits.</strong> JavaScript timers run while a
+page loads and during <code>wait</code>/<code>wait_for</code>; a timer that fires later needs one of
+those tools before its content appears. Unrelated tool calls do not pump
+timers.</li>
+<li><strong>Memory only.</strong> Closing the server discards history, cookies and storage.</li>
+<li><strong>Local, unauthenticated server.</strong> Use it only over a trusted local stdio
+channel.</li>
+</ul>
+<p>See <a href="security.html">Security and privacy</a> for the broader security model.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#client-configuration">Client configuration</a></li><li><a href="#protocol">Protocol</a></li><li><a href="#debugging-in-the-running-browser">Debugging in the running browser</a></li><li><a href="#tools">Tools</a></li><li><a href="#typical-agent-loop">Typical agent loop</a></li><li><a href="#limitations">Limitations</a></li></ul></nav>
+</main>
+</div>
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="../search-index.js"></script>
+<script src="../search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>

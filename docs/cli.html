@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en" data-root="..">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MOB³ documentation — Command line">
+<link rel="canonical" href="https://mob3.net/docs/cli.html">
+<title>Command line</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .tagline {
+    color: var(--muted);
+    font-size: .88rem;
+    white-space: nowrap;
+  }
+  .search {
+    margin-left: auto;
+    flex: 1 1 14rem;
+    min-width: 8rem;
+    max-width: 22rem;
+  }
+  .search input {
+    width: 100%;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .search-results {
+    position: fixed;
+    top: 3.6rem;
+    right: max(1.25rem, calc((100vw - var(--max-width)) / 2 + 1.25rem));
+    z-index: 40;
+    width: min(32rem, calc(100vw - 2.5rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .tagline { display: none; }
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner { gap: .6rem; padding: .5rem .9rem; }
+    .search { max-width: none; }
+    .search-results { left: .75rem; right: .75rem; width: auto; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="docs-page">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="../index.html">MOB³</a>
+    <span class="tagline">Documentation</span>
+    <label class="search">
+      <span class="visually-hidden">Search the documentation</span>
+      <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+    </div>
+  </div>
+</header>
+<div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+<div class="docs-layout">
+<aside class="docs-sidebar" id="sidebar" aria-label="Documentation"><h2>Documentation</h2><ul><li><a href="index.html">MOB³ documentation</a></li><li><a href="use-cases.html">Use cases</a></li><li><a href="install.html">Install</a></li><li><a class="active" aria-current="page" href="cli.html">Command line</a></li><li><a href="keys.html">Keyboard and mouse</a></li><li><a href="automation.html">Automation with MCP</a></li><li><a href="security.html">Security and privacy</a></li><li><a href="sites.html">Site support</a></li><li><a href="development.html">Development</a></li></ul></aside>
+<main class="content" id="content">
+<h1>Command line</h1>
+<pre><code class="language-text">mob3 [flags] [url|file]
+</code></pre>
+<p>With no URL, MOB³ opens the <code>-home</code> target (<code>about:home</code> by default). Input that
+looks like a search query instead of a URL uses the <code>-search</code> fallback. A local
+path becomes a <code>file:</code> URL.</p>
+<p>Interactive mode starts only when stdin and stdout are TTYs. Otherwise MOB³
+falls back to dump mode and prints the rendered page.</p>
+<h2 id="flags">Flags</h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-dump</code></td>
+<td>off</td>
+<td>Render the page to stdout and exit</td>
+</tr>
+<tr>
+<td><code>-png</code></td>
+<td>off</td>
+<td>Write a PNG screenshot of the dump to stdout; implies <code>-dump</code></td>
+</tr>
+<tr>
+<td><code>-width int</code></td>
+<td>terminal width or 100</td>
+<td>Layout width in columns</td>
+</tr>
+<tr>
+<td><code>-height int</code></td>
+<td>0</td>
+<td>Layout viewport height and output limit; 0 uses the full page (dump/PNG/MCP)</td>
+</tr>
+<tr>
+<td><code>-graphics string</code></td>
+<td><code>none</code></td>
+<td>Image mode: <code>none</code>, <code>auto</code>, <code>kitty</code>, <code>iterm</code>, <code>blocks</code></td>
+</tr>
+<tr>
+<td><code>-g string</code></td>
+<td><code>none</code></td>
+<td>Alias for <code>-graphics</code></td>
+</tr>
+<tr>
+<td><code>-no-js</code></td>
+<td>off</td>
+<td>Disable page script fetching and execution</td>
+</tr>
+<tr>
+<td><code>-reader</code></td>
+<td>off</td>
+<td>Start in reader mode</td>
+</tr>
+<tr>
+<td><code>-dark</code></td>
+<td>off</td>
+<td>Start in dark mode</td>
+</tr>
+<tr>
+<td><code>-ignore-blocks</code></td>
+<td>off</td>
+<td>Load anti-bot/CAPTCHA pages instead of the blocked page</td>
+</tr>
+<tr>
+<td><code>-bookmarks string</code></td>
+<td>none</td>
+<td>Import a Netscape bookmark HTML file</td>
+</tr>
+<tr>
+<td><code>-home string</code></td>
+<td><code>about:home</code></td>
+<td>Startup and Home-button target</td>
+</tr>
+<tr>
+<td><code>-js-memory int</code></td>
+<td>256</td>
+<td>JavaScript heap limit in MB; <code>0</code> disables the watchdog</td>
+</tr>
+<tr>
+<td><code>-cache int</code></td>
+<td>32</td>
+<td>In-memory resource cache limit in MB; <code>0</code> disables it</td>
+</tr>
+<tr>
+<td><code>-layout-budget string</code></td>
+<td><code>standard</code></td>
+<td>Layout limits: <code>low</code>, <code>standard</code>, <code>high</code>, <code>none</code></td>
+</tr>
+<tr>
+<td><code>-text-scale string</code></td>
+<td><code>auto</code></td>
+<td>Kitty scaled text: <code>auto</code> or <code>off</code></td>
+</tr>
+<tr>
+<td><code>-color</code></td>
+<td>off</td>
+<td>Force ANSI colors when dumping</td>
+</tr>
+<tr>
+<td><code>-no-color</code></td>
+<td>off</td>
+<td>Disable ANSI colors in dump mode</td>
+</tr>
+<tr>
+<td><code>-ua string</code></td>
+<td><code>MOB3/1.0 (+terminal; +https://mob3.net)</code></td>
+<td>Custom User-Agent</td>
+</tr>
+<tr>
+<td><code>-search string</code></td>
+<td>DuckDuckGo HTML endpoint</td>
+<td>Search URL template with <code>%s</code>; empty disables the fallback</td>
+</tr>
+<tr>
+<td><code>-mcp</code></td>
+<td>off</td>
+<td>Run the MCP automation server on stdin/stdout</td>
+</tr>
+<tr>
+<td><code>-version</code></td>
+<td></td>
+<td>Print the version and exit</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>-help</code></td>
+<td></td>
+<td>Print flags and exit</td>
+</tr>
+</tbody></table>
+<p>Run <code>mob3 -h</code> for the exact defaults in your build.</p>
+<h2 id="images-and-graphics">Images and graphics</h2>
+<p><code>-graphics=none</code> is the default: no external image downloads and no inline SVG
+rasterization. When enabled, native terminal graphics are preferred:</p>
+<ol>
+<li>kitty graphics protocol</li>
+<li>iTerm2 inline images</li>
+<li>colored half-block art (<code>▀</code>/<code>▄</code>)</li>
+</ol>
+<p>Auto-detection uses environment variables. Under tmux, screen or zellij it
+falls back to half-block art because the multiplexer usually consumes graphics
+escapes unless passthrough is configured. <code>-g</code> is an alias for <code>-graphics</code>.</p>
+<p>Dump mode always uses half-block art for images that were loaded.</p>
+<h2 id="color-and-dump-mode">Color and dump mode</h2>
+<p><code>-dump</code> prints the whole document height (capped at 20,000 rows) without browser
+chrome. Color is automatic on a TTY, forced by <code>-color</code>, and disabled by
+<code>-no-color</code>.</p>
+<pre><code class="language-sh">mob3 -dump -width 120 page.html
+mob3 -dump -width 120 -no-color https://go.dev
+mob3 -dump -color https://example.com
+</code></pre>
+<h3>Page height</h3>
+<p><code>-height N</code> sets the layout viewport to <code>N</code> rows and limits dump/PNG output to
+<code>N</code> document rows. This affects <code>position:fixed</code> boxes and other
+height-dependent layout. <code>-height 0</code> keeps the full document height. The
+interactive UI always uses the real terminal height.</p>
+<pre><code class="language-sh">mob3 -dump -height 40 -width 120 page.html
+mob3 -png -height 40 -width 120 page.html &gt; page.png
+mob3 -mcp -width 100 -height 60
+</code></pre>
+<h3>PNG screenshots</h3>
+<p><code>-png</code> renders the dump as a PNG stream on stdout. It implies <code>-dump</code>, is
+capped at 2,000 rows, and uses an 8×16 pixel cell with Go Mono glyphs:</p>
+<pre><code class="language-sh">mob3 -png -width 120 bbc.com/news &gt; bbc.png
+mob3 -png -g blocks -width 120 bbc.com/news &gt; bbc-images.png
+</code></pre>
+<p>Image cells render as colored half-block art. The renderer is text-oriented:
+CJK and emoji glyphs are missing from the bundled Go Mono font, and there is no
+browser chrome or true pixel screenshot.</p>
+<h2 id="layout-budget">Layout budget</h2>
+<p><code>-layout-budget</code> bundles the style/layout deadline and fragment/document-row
+caps:</p>
+<table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Deadline</th>
+<th>Fragments</th>
+<th>Rows</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>low</code></td>
+<td>1 s</td>
+<td>100,000</td>
+<td>80,000</td>
+</tr>
+<tr>
+<td><code>standard</code></td>
+<td>2 s</td>
+<td>250,000</td>
+<td>200,000</td>
+</tr>
+<tr>
+<td><code>high</code></td>
+<td>5 s</td>
+<td>1,000,000</td>
+<td>1,000,000</td>
+</tr>
+<tr>
+<td><code>none</code></td>
+<td>disabled</td>
+<td>disabled</td>
+<td>disabled</td>
+</tr>
+</tbody></table>
+<p><code>none</code> can freeze the UI on hostile or generated pages. The preset is editable
+in <code>about:config</code>; a zero individual limit disables that check. When a limit is
+hit, the page renders partially and the status says
+<code>Page truncated (layout limit)</code>.</p>
+<h2 id="javascript-and-cache-limits">JavaScript and cache limits</h2>
+<p><code>-js-memory</code> sets the per-script/callback heap budget. Every script also runs
+under a 2-second CPU watchdog. <code>0</code> disables the heap watchdog but not the CPU
+timeout. <code>-no-js</code> disables both script fetching and execution; <code>&lt;noscript&gt;</code>
+content is then shown.</p>
+<p><code>-cache</code> is a session-only LRU budget for CSS/JS response bodies and decoded
+images. Nothing is written to disk, and cache hits appear in the <code>!</code> console.</p>
+<h2 id="home-search-and-bookmarks">Home, search and bookmarks</h2>
+<p><code>-home</code> sets the page opened at startup and by the <code>⌂</code> toolbar button. The
+<code>-search</code> template receives the URL-escaped query in <code>%s</code>; the default uses the
+server-rendered DuckDuckGo HTML endpoint. An empty value disables search
+fallback, so only URL-like input navigates.</p>
+<p><code>-bookmarks FILE</code> imports a Netscape bookmark export (Chrome, Firefox, Safari,
+Edge). The <code>★ Bookmarks</code> toolbar button appears only when a bookmark file was
+loaded. Bookmarks live in memory for the session.</p>
+<h2 id="automation">Automation</h2>
+<p><code>-mcp</code> starts the headless MCP server instead of the terminal UI:</p>
+<pre><code class="language-sh">mob3 -mcp -width 100 about:home
+</code></pre>
+<p>See <a href="automation.html">Automation with MCP</a> for the client configuration, protocol
+and tools.</p>
+<h2 id="about-config"><code>about:config</code></h2>
+<p>The <code>⚙</code> toolbar icon opens <code>about:config</code>, a form listing every CLI option and
+its current value. Editable options change for the session only; startup
+options are read-only; dump-only colour options do not affect the interactive
+UI. The top shows the current viewport in characters and pixels (using the
+terminal&#39;s reported cell size, or 8×16 by default). Nothing is persisted.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#flags">Flags</a></li><li><a href="#images-and-graphics">Images and graphics</a></li><li><a href="#color-and-dump-mode">Color and dump mode</a></li><li><a href="#layout-budget">Layout budget</a></li><li><a href="#javascript-and-cache-limits">JavaScript and cache limits</a></li><li><a href="#home-search-and-bookmarks">Home, search and bookmarks</a></li><li><a href="#automation">Automation</a></li><li><a href="#about-config">about:config</a></li></ul></nav>
+</main>
+</div>
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="../search-index.js"></script>
+<script src="../search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>

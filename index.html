@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en" data-root=".">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color.">
+<link rel="canonical" href="https://mob3.net/">
+<title>MOB³ is a small indie web browser for the terminal</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .tagline {
+    color: var(--muted);
+    font-size: .88rem;
+    white-space: nowrap;
+  }
+  .search {
+    margin-left: auto;
+    flex: 1 1 14rem;
+    min-width: 8rem;
+    max-width: 22rem;
+  }
+  .search input {
+    width: 100%;
+    padding: .5rem .75rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .search-results {
+    position: fixed;
+    top: 3.6rem;
+    right: max(1.25rem, calc((100vw - var(--max-width)) / 2 + 1.25rem));
+    z-index: 40;
+    width: min(32rem, calc(100vw - 2.5rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .tagline { display: none; }
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner { gap: .6rem; padding: .5rem .9rem; }
+    .search { max-width: none; }
+    .search-results { left: .75rem; right: .75rem; width: auto; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="./index.html">MOB³</a>
+    <span class="tagline">Documentation</span>
+    <label class="search">
+      <span class="visually-hidden">Search the documentation</span>
+      <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+    </div>
+  </div>
+</header>
+<div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+
+
+<main class="content" id="content">
+<p align="center">
+  <img width="400" alt="image" src="https://interactive32.com/images/mob3-screenshot-1.png?ref=github.com/mob3net/mob3" />
+</p>
+
+<h1>MOB³ is a small indie web browser for the terminal</h1>
+<p>Written in Go, MOB³ features its own HTML rendering engine with JavaScript support, an ANSI renderer, and inline image support. No GUI toolkit or persistent browser profile required. Built as a true terminal web browser for humans and AI agents.</p>
+<p>Project page: <a href="https://mob3.net">mob3.net</a></p>
+<p>GitHub: <a href="https://github.com/mob3net/mob3">github.com/mob3net/mob3</a></p>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li><a href="docs/index.html">Documentation index</a></li>
+<li><a href="docs/use-cases.html">Use cases</a> — developers, AI agents, terminal users and
+automation</li>
+<li><a href="docs/install.html">Install</a> — releases, Docker and source builds</li>
+<li><a href="docs/cli.html">Command line</a> — every flag, default and limit</li>
+<li><a href="docs/keys.html">Keyboard and mouse</a></li>
+<li><a href="docs/automation.html">Automation with MCP</a> — headless control for scripts and AI tools</li>
+<li><a href="docs/security.html">Security and privacy</a>, <a href="docs/sites.html">site support</a> and
+<a href="docs/development.html">development</a></li>
+</ul>
+<h2 id="try-it-with-docker">Try it with Docker:</h2>
+<pre><code>docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
+</code></pre>
+<h2 id="download-and-install">Download and install</h2>
+<p><a href="https://github.com/mob3net/mob3/releases/latest">Download the latest MOB³ release</a>
+from GitHub Releases.</p>
+<p>Release archives cover Linux (<code>386</code>, <code>amd64</code>, <code>armv6</code>, <code>armv7</code>, <code>arm64</code>) and
+macOS (<code>amd64</code>, <code>arm64</code>). Choose the archive for your OS and architecture, for
+example <code>mob3_vX.Y.Z_linux_amd64.tar.gz</code>. Each archive contains the static
+<code>mob3</code> binary.</p>
+<p>Example:</p>
+<pre><code>tar -xzf mob3_vX.Y.Z_linux_amd64.tar.gz
+sudo install -m 0755 mob3 /usr/local/bin/mob3
+mob3 -version
+</code></pre>
+<h2 id="screenshots">Screenshots</h2>
+<div align="center">
+<a href="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/8588bbd5-0b97-47cd-95e3-83c443cf761d" /></a>
+<a href="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/0dcd6d0b-f0ff-405f-bc1f-5e4c07e2cf10" /></a>
+<a href="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/376014a5-96ac-4b4e-bb80-6c9f82a8454d" /></a>
+<br />
+<a href="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/e570359d-0665-4467-add4-b380555f3dba" /></a>
+<a href="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/21dfff33-2280-4f4b-938c-4bc233da0667" /></a>
+<a href="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/6453a4b6-6628-4a3e-bb55-02ff6d724bc2" /></a>
+<br />
+<a href="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/a0486574-b646-4981-be59-a60eff284140" /></a>
+<a href="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" /></a>
+<a href="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" /></a>
+</div>
+
+<h2 id="show-your-support">Show your support</h2>
+<p>If MOB³ has been useful to you, please consider
+<a href="https://github.com/mob3net/mob3">giving the project a star on GitHub</a>. It helps
+others discover it and supports the continued development of the project.</p>
+<h2 id="what-to-expect">What to expect</h2>
+<p>MOB³ is a content browser, not a full browser engine. It is happiest with
+text-focused pages and gets rough on modern JavaScript-heavy apps.</p>
+<p><strong>Works well</strong></p>
+<ul>
+<li>Documentation, blogs, news articles, wikis, forums, changelogs and old or
+server-rendered HTML.</li>
+<li>Headings, paragraphs, lists, links, tables, <code>&lt;pre&gt;</code> blocks, images and common
+presentational markup.</li>
+<li>Text/search inputs, textareas, single-select option popups and multi-select
+list boxes, with a visible caret, arrow-key editing, date/time/month/week,
+range sliders, color swatches, HTML constraint checks, GET and urlencoded POST
+form submission. The start page has justified text and a full-width
+search/URL box that resolves input the same way as the <code>o</code> prompt, including
+the <code>-search</code> fallback.</li>
+<li>Common CSS: selectors, cascade and inheritance, box model (including
+<code>box-sizing</code> and min/max sizes), margins, borders, backgrounds, text styling,
+lists, tables, viewport-width <code>@media</code> queries and basic flex rows.</li>
+<li>PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with <code>-graphics</code> (<code>auto</code>,
+<code>kitty</code>, <code>iterm</code>, or <code>blocks</code> for half-block art). Images are off by default
+for speed.</li>
+<li>Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB
+default budget and <code>-cache</code> to change or disable it.</li>
+<li>Light JavaScript: DOM queries and mutation, <code>classList</code>/<code>style</code>, click
+handlers, timers, alert/confirm/prompt and native <code>&lt;dialog&gt;</code> open/close,
+same-origin <code>fetch</code>/<code>XMLHttpRequest</code> plus simple CORS cross-origin requests,
+and in-memory storage/cookies. Script
+errors turn the footer <code>JavaScript</code> label into a red <code>JavaScript:Error</code>;
+click it to open the console.</li>
+<li>JavaScript console (<code>!</code>): tabbed view of logs, requests, cookies and
+in-memory storage, the raw page HTML, and a Tools tab for read-only page
+inspection (<code>help</code>, <code>form</code>, <code>links</code>, <code>requests</code>, <code>logs</code>, <code>source</code>,
+<code>snapshot</code>, <code>history</code>, <code>clear</code>); evaluate one-line expressions in the page&#39;s
+runtime, with Up/Down or Ctrl-P/Ctrl-N history and results appended to the
+log. <code>clear</code>/<code>cls</code> empties either the JS log or the Tools scrollback.</li>
+<li>Reader mode (<code>R</code>, the footer <code>Reader:on</code>/<code>Reader:off</code> label, or <code>-reader</code> at
+launch): extracts the main article into a narrow, chrome-free text column,
+stays enabled across navigation, and restores the normal page and scroll
+position when toggled off.</li>
+<li>Dark mode (<code>D</code>, the footer <code>Dark:on</code>/<code>Dark:off</code> label, or <code>-dark</code> at launch):
+asks sites for their dark styles with <code>prefers-color-scheme: dark</code>. Pages that
+already render a dark background keep their own palette; otherwise
+backgrounds, text, links and borders are remapped to a dark palette. Images
+keep their original colors.</li>
+<li>Headless MCP automation (<code>-mcp</code>): navigate, snapshot page text and links,
+click links or elements by text, list and fill forms, select options, submit,
+wait for async content, type, press keys, scroll, evaluate JavaScript, inspect
+history and read request logs, JS errors or page source. Screen captures are
+terminal-cell rasters; sessions are memory-only.</li>
+<li>Browser-style toolbar with back/forward/reload/home, history/help buttons,
+a bookmarks button when <code>-bookmarks</code> is supplied, a config gear and a centered
+page title.</li>
+<li>Keyboard and mouse navigation, including the kitty keyboard protocol in
+kitty, WezTerm, Ghostty and foot, <code>/</code> incremental find (including multi-word
+phrases) with highlighted matches
+(also in the console HTML tab), a draggable page scrollbar, history (including
+a top-right History page
+listing the session&#39;s links), bookmarks imported with <code>-bookmarks</code> from a
+Netscape HTML export, scrolling, focus, link hover targets in the footer,
+text selection, and a <code>!</code> JavaScript console.</li>
+</ul>
+<p><strong>Rough edges</strong></p>
+<ul>
+<li>Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show
+a partial page, a blank page or their no-JavaScript fallback. Pages that rely
+on ES modules show a status-bar warning that modules are unsupported and
+suggest reader mode (<code>R</code>).</li>
+<li>Reader mode is heuristic: it can pick too little or too much content on
+unusual layouts, shows a snapshot rather than live updates, and removes
+images, forms and other interactive controls. Dark mode keeps images in
+their original colors and approximates some author color schemes.</li>
+<li>Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX,
+Imperva/Sucuri, access-denied pages) are generally not usable. A “Site
+blocked” page is shown instead.</li>
+<li>No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes,
+Shadow DOM, custom elements, real observers or full History API.</li>
+<li>Basic CSS grid rows are supported, along with <code>position:relative</code>,
+<code>position:absolute</code> and <code>position:fixed</code>; floats, <code>position:sticky</code>,
+<code>z-index</code>, CSS
+variables, animations, transitions, generated content, <code>@import</code> and
+background images are unsupported or approximated as block flow.</li>
+<li>SVG support is partial: text inside SVG, <code>&lt;use&gt;/&lt;symbol&gt;</code>, filters, masks and
+CSS-in-SVG may be missing. Animated WebP is not supported.</li>
+<li>Oversized images are capped at 60% of the viewport width and 24 rows,
+preserving their aspect ratio.</li>
+<li>No tabs or automatic downloads; download links and non-HTML responses open a
+popup with a copyable <code>curl</code> command instead, and multipart/file uploads are
+not implemented (clicking a file input shows an unsupported notice). Selected
+page text copies with
+<code>y</code> through OSC 52 (terminal support required), and the URL can be selected
+with the terminal.</li>
+<li>Very large pages, stylesheets and images are capped to keep memory and CPU
+bounded. Style and layout also run under a time budget, so a pathological
+page is shown partially with a truncation notice instead of freezing the
+browser. Pages whose timers update the DOM are redrawn a few times per
+second rather than continuously, and an idle page with no pending timers does
+not repaint at all.</li>
+</ul>
+<h2 id="using-command-line-options">Using command line options</h2>
+<p>Start reading Wikipedia in dark mode:</p>
+<pre><code>mob3 -dark -reader &#39;https://en.wikipedia.org/wiki/Vim_(text_editor)&#39;
+</code></pre>
+<p>See all available options with -h flag. Every flag and default is listed in the
+<a href="docs/cli.html">command-line reference</a>.</p>
+<p>Capture a PNG screenshot:</p>
+<pre><code class="language-sh">mob3 -png -width 120 bbc.com/news &gt; bbc.png
+</code></pre>
+<h2 id="automation-mcp">Automation (MCP)</h2>
+<p><code>mob3 -mcp</code> runs a headless browser as a Model Context Protocol server over
+stdin/stdout. It accepts an optional starting URL and fixed <code>-width</code>:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;mob3&quot;: {
+      &quot;command&quot;: &quot;/path/to/mob3&quot;,
+      &quot;args&quot;: [&quot;-mcp&quot;, &quot;-width&quot;, &quot;100&quot;, &quot;about:home&quot;]
+    }
+  }
+}
+</code></pre>
+<p>Tools: <code>navigate</code>, <code>snapshot</code>, <code>screenshot</code>, <code>click</code> (link number, CSS
+selector or <code>x</code>/<code>y</code>), <code>type</code>, <code>press</code>, <code>scroll</code>, <code>back</code>, <code>forward</code>, <code>reload</code>,
+<code>evaluate</code> and <code>history</code>. <code>snapshot</code> returns the current page viewport as text, visible links
+as <code>[n]</code> and form controls with coordinates. Results are text only: there is no
+pixel screenshot because MOB3 renders to terminal cells.</p>
+<p>The server is local and unauthenticated, sessions and storage are memory-only,
+and nothing is written to disk. Do not expose it as a network service. See the
+<a href="docs/automation.html">full MCP reference</a> for the protocol, snapshot format,
+tool details, and setup instructions for OpenCode, Claude Code, Cursor and
+Claude Desktop.</p>
+<h2 id="development">Development</h2>
+<p>Build from source and start browsing:</p>
+<pre><code>make
+./bin/mob3 https://example.com
+</code></pre>
+<p>Requires Go 1.27 or newer. Interactive mode runs on Linux and macOS terminals;
+Windows users can run it under WSL. When stdin/stdout are not a terminal, MOB³
+automatically falls back to dump mode.</p>
+<p>Press <code>?</code> inside the app for keys, mouse and forms help. Run <code>mob3 -h</code> for the
+full list of command-line flags. <code>mob3 -version</code> prints the embedded version.</p>
+<h2 id="contributing">Contributing</h2>
+<p>Contributions are welcome. Every pull request must include the broad
+license-grant CLA statement described in
+<a href="https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>; it
+keeps MOB³ available under both AGPL-3.0-only and a commercial license. The PR
+workflow checks the statement. The CI workflow runs formatting, vet and tests.</p>
+<h2 id="license">License</h2>
+<p>MOB³ is licensed under the GNU Affero General Public License, version 3 only
+(AGPL-3.0-only). Copyright (c) 2026 Milos Stojanovic. See
+<a href="https://github.com/mob3net/mob3/blob/main/LICENSE">LICENSE</a>.</p>
+<p>A separate commercial license is available on request for use without the
+AGPL&#39;s source-disclosure requirements.</p>
+<p>MOB³ is provided “as is”, without warranty of any kind. See the warning at the
+top: this is not a security boundary.</p>
+<p>Third-party module licenses are listed in
+<a href="https://github.com/mob3net/mob3/blob/main/THIRD_PARTY_NOTICES">THIRD_PARTY_NOTICES</a>.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#documentation">Documentation</a></li><li><a href="#try-it-with-docker">Try it with Docker:</a></li><li><a href="#download-and-install">Download and install</a></li><li><a href="#screenshots">Screenshots</a></li><li><a href="#show-your-support">Show your support</a></li><li><a href="#what-to-expect">What to expect</a></li><li><a href="#using-command-line-options">Using command line options</a></li><li><a href="#automation-mcp">Automation (MCP)</a></li><li><a href="#development">Development</a></li><li><a href="#contributing">Contributing</a></li><li><a href="#license">License</a></li></ul></nav>
+</main>
+
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="./search-index.js"></script>
+<script src="./search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>
