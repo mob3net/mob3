@@ -110,8 +110,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   backgrounds, text, links and borders are remapped to a dark palette. Images
   keep their original colors.
 - Headless MCP automation (`-mcp`): navigate, snapshot page text and links,
-  click, type, press keys, scroll, evaluate JavaScript and inspect history.
-  Text-only and memory-only; no screenshots or persistent sessions.
+  click, list and fill forms, select options, submit, type, press keys, scroll,
+  evaluate JavaScript and inspect history. Screen captures are terminal-cell
+  rasters; sessions are memory-only.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.

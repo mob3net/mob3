@@ -432,12 +432,17 @@ Standard Go layout:
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
   optional start URL, `-width` and `-height` (default 30); `-no-js` and
   `-layout-budget` are honored, and images are disabled. Tools cover
-  navigate, snapshot, click,
+  navigate, snapshot, click, form/control listing, fill, select, toggle, submit,
   type, press, scroll, history navigation, JS evaluation, session history and a
   PNG `screenshot` of the current viewport. The snapshot is text plus visible
-  `[n]` links and form-control coordinates; the screenshot is a terminal-cell
-  raster, not a browser pixel capture. Stdout is protocol-only. Sessions, cookies
-  and history are memory-only, and the server is local and unauthenticated.
+  `[n]` links and form-control coordinates. `form` lists every form and control
+  (including off-screen ones) with stable CSS selectors; `fill`, `select` and
+  `toggle` set values by selector without focus or scrolling, and `submit` runs
+  constraint validation and the submit handler, waits for navigation, and
+  reports validation/prevented failures as tool errors. File uploads and
+  multipart forms remain unsupported. The screenshot is a terminal-cell raster,
+  not a browser pixel capture. Stdout is protocol-only. Sessions, cookies and
+  history are memory-only, and the server is local and unauthenticated.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.

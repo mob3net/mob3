@@ -1214,8 +1214,15 @@ func (b *Browser) toggleControl(n *Node) {
 	typ := strings.ToLower(n.Attr("type"))
 	if typ == "radio" {
 		name := n.Attr("name")
-		if form := nearestForm(n); form != nil && name != "" {
-			form.FindAll(func(x *Node) bool {
+		// Radio groups are scoped to their form; controls outside any form share
+		// the whole document as their group.
+		scope := nearestForm(n)
+		if scope == nil {
+			for scope = n; scope.Parent != nil; scope = scope.Parent {
+			}
+		}
+		if name != "" {
+			scope.FindAll(func(x *Node) bool {
 				if x != n && x.Tag == "input" && strings.EqualFold(x.Attr("type"), "radio") && x.Attr("name") == name {
 					removeAttr(x, "checked")
 				}
@@ -1973,34 +1980,36 @@ func invalidControlValue(n *Node, typ, value string) string {
 	return ""
 }
 
-func (b *Browser) submitForm(form *Node) {
+// submitForm validates and submits a form. It reports whether a navigation was
+// started and, when not, the reason shown to the user or returned to automation.
+func (b *Browser) submitForm(form *Node) (started bool, reason string) {
 	if form == nil {
-		return
+		return false, "no form to submit"
 	}
 	if field, msg := b.validateForm(form); field != nil {
 		if isTextInput(field) || isRangeInput(field) {
 			b.setInputFocus(field)
 		}
 		b.status = msg
-		return
+		return false, msg
 	}
 	prevented := false
 	if b.js != nil {
 		prevented = b.js.fireNodeEvent(form, "submit")
 	}
 	if b.consumePendingJS() {
-		return
+		return true, ""
 	}
 	if prevented {
-		return
+		return false, "submit event was prevented"
 	}
 	method, target, body, contentType, ok := b.formRequest(form)
 	if !ok {
-		return
+		return false, nonEmptyStatus(b.status)
 	}
 	if method == http.MethodPost {
 		b.navigateRequest(method, target, body, contentType, true)
-		return
+		return true, ""
 	}
 	if u, err := url.Parse(target); err == nil && u.Scheme == "about" {
 		switch aboutPageName(u) {
@@ -2010,13 +2019,14 @@ func (b *Browser) submitForm(form *Node) {
 			query := strings.TrimSpace(u.Query().Get("q"))
 			if query == "" {
 				b.status = "Enter a URL or search query"
-				return
+				return false, b.status
 			}
 			b.Navigate(query, true)
-			return
+			return true, ""
 		}
 	}
 	b.Navigate(target, true)
+	return true, ""
 }
 
 // formRequest resolves a form's action and collects its successful controls.

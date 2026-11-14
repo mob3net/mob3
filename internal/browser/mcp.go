@@ -134,7 +134,9 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 		},
 		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
 			"links as [n], and form-control positions; click accepts link, selector, x/y. " +
-			"Use evaluate for DOM queries. Sessions and storage are memory-only.",
+			"Use form for every control's selector and value, fill/select/toggle to set them, " +
+			"and submit to send a form. Use evaluate for DOM queries. " +
+			"Sessions and storage are memory-only.",
 	})
 }
 
@@ -233,6 +235,12 @@ func mcpToolDefinitions() []map[string]any {
 			"inputSchema": object(map[string]any{}),
 		},
 		{
+			"name": "form",
+			"description": "List every form and form control, including off-screen ones, with a stable CSS selector, " +
+				"current value or state, and flags (required, disabled, readonly). Use these selectors with fill, select, toggle and submit.",
+			"inputSchema": object(map[string]any{"selector": str("optional form or control selector to scope the listing")}),
+		},
+		{
 			"name":        "screenshot",
 			"description": "Render the current page viewport as a PNG image. Scale 1 uses 8x16 pixel cells; scale 2 doubles the image.",
 			"inputSchema": object(map[string]any{
@@ -248,6 +256,54 @@ func mcpToolDefinitions() []map[string]any {
 				"selector": str("CSS selector"),
 				"x":        integer("zero-based page column"),
 				"y":        integer("zero-based page row"),
+			}),
+		},
+		{
+			"name": "fill",
+			"description": "Set text-like fields by CSS selector, replacing their current values. " +
+				"Pass one selector/value pair, or a fields map of selector to value to set several at once. Does not submit.",
+			"inputSchema": object(map[string]any{
+				"selector": str("CSS selector of one input or textarea"),
+				"value":    str("replacement value; may be empty to clear the field"),
+				"fields": map[string]any{
+					"type":                 "object",
+					"description":          "map of CSS selector to replacement value",
+					"additionalProperties": map[string]any{"type": "string"},
+				},
+			}),
+		},
+		{
+			"name": "select",
+			"description": "Choose options in a <select> by value, visible label, or zero-based option index. " +
+				"For a multiple select, pass values to replace the selected set.",
+			"inputSchema": object(map[string]any{
+				"selector": str("CSS selector of the select element"),
+				"value":    str("option value (single select)"),
+				"values": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "option values to select (multiple select)",
+				},
+				"text":  str("visible option label"),
+				"index": integer("zero-based option index"),
+			}, "selector"),
+		},
+		{
+			"name": "toggle",
+			"description": "Check or uncheck a checkbox, radio, or multi-select option by CSS selector. " +
+				"Omit checked to flip the current state.",
+			"inputSchema": object(map[string]any{
+				"selector": str("CSS selector"),
+				"checked":  boolean("desired state"),
+			}, "selector"),
+		},
+		{
+			"name": "submit",
+			"description": "Submit a form, running constraint validation and submit handlers, then wait for navigation. " +
+				"Without a selector, submits the focused control's form or the page's only form. Returns a snapshot; " +
+				"validation failures are reported as tool errors.",
+			"inputSchema": object(map[string]any{
+				"selector": str("CSS selector of a form or a control inside it"),
 			}),
 		},
 		{

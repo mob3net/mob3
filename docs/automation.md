@@ -81,6 +81,11 @@ printf '%s\n' \
 | `snapshot` | `{}` | Current page viewport, links and form controls |
 | `screenshot` | `{scale}` | PNG image of the current page viewport |
 | `click` | `{link}` or `{selector}` or `{x,y}` | Snapshot after the click |
+| `form` | `{selector?}` | Every form and control with CSS selectors and values |
+| `fill` | `{selector,value}` or `{fields}` | `filled N field(s)` |
+| `select` | `{selector,value}` or `{values}` or `{text}` or `{index}` | `selected …` |
+| `toggle` | `{selector,checked?}` | `… is checked` / `… is unchecked` |
+| `submit` | `{selector?}` | Snapshot after navigation |
 | `type` | `{text}` | `typed` |
 | `press` | `{key}` | `pressed <key>` |
 | `scroll` | `{lines}` or `{pages}` or `{top}` or `{bottom}` | Scroll percentage |
@@ -120,6 +125,85 @@ Inputs:
   filtered list may skip numbers.
 - `Inputs` positions are zero-based page-viewport cells, matching `click`.
 - Page text is the viewport, not the whole document. Use `scroll`.
+
+### `form`
+
+```json
+{}
+{"selector":"form#search"}
+```
+
+Lists every form and its controls, including fields that are outside the
+current viewport. Each control shows its tag, name, type, current value or
+checked state, flags (`required`, `readonly`, `disabled`) and a stable CSS
+selector for the other form tools:
+
+```text
+Forms: 1
+[1] form method="GET" action="/find" selector="#search"
+  - input name="q" type="text" value="old" selector="#search input[name=\"q\"]"
+  - select name="lang" value="fr" options=["en" "fr"] selector="select[name=\"lang\"]"
+  - input name="safe" type="checkbox" state=checked value="on" selector="#search input[name=\"safe\"]"
+```
+
+Hidden inputs are omitted because they cannot be edited. Controls outside any
+form are listed separately. Selectors prefer an `#id`, then a
+`form-id name` pair, then an `nth-child` path. Pass a form or control selector
+to list just that form.
+
+### `fill`
+
+```json
+{"selector":"#search input[name=q]","value":"terminal browsers"}
+{"fields":{"#search input[name=q]":"terminal browsers","textarea[name=notes]":"a note"}}
+```
+
+`fill` sets text-like inputs and textareas, replacing any existing value; an
+empty string clears the field. It accepts one selector/value pair or a `fields`
+map of selector to value. Values honor `maxlength`, and `range` inputs accept a
+number. Checkboxes, radios and selects are rejected: use `toggle` and `select`.
+`fill` never submits and never requires focus, so it also works on off-screen
+fields. Each change fires `input` and `change`.
+
+### `select`
+
+```json
+{"selector":"select[name=lang]","value":"fr"}
+{"selector":"select[name=tags]","values":["a","b"]}
+{"selector":"select[name=lang]","text":"French"}
+{"selector":"select[name=lang]","index":1}
+```
+
+Chooses by option value, visible label, or zero-based option index. Pass
+`values` for a `<select multiple>` to replace the selected set. A missing value
+or an out-of-range index is a tool error that lists the available options.
+
+### `toggle`
+
+```json
+{"selector":"input[name=remember]"}
+{"selector":"input[name=remember]","checked":true}
+{"selector":"option[value=b]","checked":true}
+```
+
+Checks or unchecks a checkbox or radio. Omit `checked` to flip the current
+state. Selecting a radio unchecks the other radios in its group, including
+groups outside a form. Multi-select options can also be toggled this way. Use
+`select` to choose a single-select option or replace a whole multiple selection.
+
+### `submit`
+
+```json
+{}
+{"selector":"form#search"}
+```
+
+Submits a form: runs the supported constraint validation, fires the form's
+`submit` handler, builds the GET query or urlencoded POST body, navigates, and
+returns a snapshot. Without a selector it uses the focused control's form, or
+the page's only form. Validation failures, invalid actions and
+`preventDefault()` are returned as tool errors (validation also focuses the
+first invalid field), so the page does not change on failure.
 
 ### `screenshot`
 
@@ -169,11 +253,12 @@ results. `-no-js` disables evaluation.
 ## Typical agent loop
 
 1. `navigate` a page.
-2. `snapshot` to read text and collect link numbers and field coordinates.
-3. `click` a link or field.
-4. `type` and `press` to fill and submit forms.
-5. `snapshot` again after navigation.
-6. Use `evaluate` for DOM extraction or `scroll`/`back`/`history` to move.
+2. `snapshot` to read text and collect link numbers.
+3. `form` to get every control's selector and current value.
+4. `fill`, `select` and `toggle` to set fields without focusing or scrolling.
+5. `submit` to send the form, then read the returned snapshot.
+6. Use `click`/`type`/`press` for special widgets, `evaluate` for DOM
+   extraction, or `scroll`/`back`/`history` to move.
 
 ## Limitations
 
@@ -183,6 +268,10 @@ results. `-no-js` disables evaluation.
 - **Fixed height** of 30 rows; only `-width` is configurable.
 - **JavaScript is a subset.** Module scripts, workers, service workers and
   many modern APIs are unavailable.
+- **Forms.** `fill`, `select`, `toggle` and `submit` handle text fields,
+  textareas, checkboxes, radios and selects. File uploads and multipart forms
+  are not supported, and framework widgets that rerender from their own state
+  may overwrite a value set directly.
 - **Timers are not pumped between tool calls.** Content that only appears in a
   later `setTimeout` callback may be missing from the snapshot.
 - **Memory only.** Closing the server discards history, cookies and storage.
