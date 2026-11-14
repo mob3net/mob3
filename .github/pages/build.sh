@@ -22,13 +22,17 @@ mkdir -p "$out/docs"
 
 render_page() {
   local src="$1" dst="$2" title="$3" description="$4" canonical="$5" relroot="$6"
+  local layout_start="$7" sidebar="$8" layout_end="$9"
   local body
   body="$(mktemp)"
   npx --yes marked@15.0.12 --gfm "$src" >"$body"
-  node - "$template" "$body" "$dst" "$title" "$description" "$canonical" "$relroot" <<'NODE'
+  node - "$template" "$body" "$dst" "$title" "$description" "$canonical" "$relroot" \
+    "$layout_start" "$sidebar" "$layout_end" <<'NODE'
 const fs = require("fs");
-const [templatePath, bodyPath, outputPath, title, description, canonical, root] =
-  process.argv.slice(2);
+const [
+  templatePath, bodyPath, outputPath, title, description, canonical, root,
+  layoutStart, sidebar, layoutEnd,
+] = process.argv.slice(2);
 const template = fs.readFileSync(templatePath, "utf8");
 let body = fs.readFileSync(bodyPath, "utf8");
 
@@ -51,6 +55,9 @@ const values = {
   "{{DESCRIPTION}}": description,
   "{{CANONICAL}}": canonical,
   "{{ROOT}}": root,
+  "{{LAYOUT_START}}": layoutStart,
+  "{{SIDEBAR}}": sidebar,
+  "{{LAYOUT_END}}": layoutEnd,
   "{{CONTENT}}": body,
 };
 let html = template;
@@ -70,10 +77,32 @@ read_title() {
   printf '%s' "$title"
 }
 
+html_escape() {
+  sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
+}
+
+docs_order=(index install cli keys automation security sites development)
+
+sidebar_for() {
+  local current="$1" name title active
+  printf '<aside class="docs-sidebar" aria-label="Documentation">'
+  printf '<h2>Documentation</h2><ul>'
+  for name in "${docs_order[@]}"; do
+    title="$(read_title "$root/docs/$name.md" "$name")"
+    title="$(printf '%s' "$title" | html_escape)"
+    active=""
+    if [ "$name" = "$current" ]; then
+      active=' class="active" aria-current="page"'
+    fi
+    printf '<li><a%s href="%s.html">%s</a></li>' "$active" "$name" "$title"
+  done
+  printf '</ul></aside>'
+}
+
 readme_title="$(read_title "$root/README.md" "MOB³ — a small terminal web browser in Go")"
 render_page "$root/README.md" "$out/index.html" "$readme_title" \
   "MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color." \
-  "https://mob3.net/" "."
+  "https://mob3.net/" "." "" "" ""
 
 for src in "$root"/docs/*.md; do
   [ -e "$src" ] || continue
@@ -81,7 +110,8 @@ for src in "$root"/docs/*.md; do
   title="$(read_title "$src" "MOB³ documentation")"
   render_page "$src" "$out/docs/$name.html" "$title" \
     "MOB³ documentation — $title" \
-    "https://mob3.net/docs/$name.html" ".."
+    "https://mob3.net/docs/$name.html" ".." \
+    '<div class="docs-layout">' "$(sidebar_for "$name")" '</div>'
 done
 
 printf 'mob3.net\n' >"$out/CNAME"
