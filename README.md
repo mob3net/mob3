@@ -4,7 +4,7 @@
 
 # MOB³ is a small indie web browser for the terminal
 
-Written in Go, it combines its own HTML parser, CSS cascade and layout engine, ANSI renderer and pure-Go JavaScript runtime to display real web pages, including inline images, without a GUI toolkit or persistent profile. History, cookies, storage and caches live in memory only: closing MOB³ saves nothing.
+Written in Go, MOB³ features its own HTML rendering engine with JavaScript support, an ANSI renderer, and inline image support. No GUI toolkit or persistent browser profile required. Built as a true terminal web browser for humans and AI agents.
 
 Project page: [mob3.net](https://mob3.net)
 
