@@ -79,6 +79,55 @@ func TestThreeValueBoxShorthand(t *testing.T) {
 	}
 }
 
+func TestLHUnitsResolveAfterCascade(t *testing.T) {
+	doc := ParseHTML(`<div style="font-size:20px; line-height:1.5">` +
+		`<p style="margin:1lh; margin-block:2lh 3lh; padding-inline:1ch; ` +
+		`padding-inline-start:2ch; height:2lh; max-width:10lh">x</p></div>`)
+	st := newStyleEngine(nil, 0).computeAll(doc)[doc.FindFirst("p")]
+	if got := st.Margin[0]; got.U != UnitPX || got.V != 60 {
+		t.Fatalf("margin-block-start = %+v, want 60px", got)
+	}
+	if got := st.Margin[2]; got.U != UnitPX || got.V != 90 {
+		t.Fatalf("margin-block-end = %+v, want 90px", got)
+	}
+	if got := st.Margin[1]; got.U != UnitPX || got.V != 30 {
+		t.Fatalf("margin-inline-end = %+v, want 30px", got)
+	}
+	if got := st.Margin[3]; got.U != UnitPX || got.V != 30 {
+		t.Fatalf("margin-inline-start = %+v, want 30px", got)
+	}
+	if got := st.Padding[3]; got.U != UnitCH || got.V != 2 {
+		t.Fatalf("padding-inline-start = %+v, want 2ch", got)
+	}
+	if got := st.Padding[1]; got.U != UnitCH || got.V != 1 {
+		t.Fatalf("padding-inline-end = %+v, want 1ch", got)
+	}
+	if got := st.Height; got.U != UnitPX || got.V != 60 {
+		t.Fatalf("height = %+v, want 60px", got)
+	}
+	if got := st.MaxWidth; got.U != UnitPX || got.V != 300 {
+		t.Fatalf("max-width = %+v, want 300px", got)
+	}
+}
+
+func TestLogicalBoxProperties(t *testing.T) {
+	doc := ParseHTML(`<p style="margin-inline:4px 8px; margin-block-start:1px; ` +
+		`padding-block:2px 6px; padding-inline-end:3px">x</p>`)
+	st := newStyleEngine(nil, 0).computeAll(doc)[doc.FindFirst("p")]
+	if st.Margin[3].V != 4 || st.Margin[1].V != 8 {
+		t.Fatalf("margin-inline = %+v", st.Margin)
+	}
+	if st.Margin[0].V != 1 || st.Margin[2].V != 8 {
+		t.Fatalf("margin-block-start = %+v", st.Margin)
+	}
+	if st.Padding[0].V != 2 || st.Padding[2].V != 6 {
+		t.Fatalf("padding-block = %+v", st.Padding)
+	}
+	if st.Padding[1].V != 3 {
+		t.Fatalf("padding-inline-end = %+v", st.Padding)
+	}
+}
+
 func TestSelectors(t *testing.T) {
 	doc := ParseHTML(`<div><p class="a b" data-x="hello world">1</p><p id="last">2</p><span></span></div>`)
 	cases := []struct {

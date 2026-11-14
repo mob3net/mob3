@@ -18,6 +18,15 @@ const (
 	fragImage
 )
 
+// Form controls use single-cell Unicode glyphs so a checkbox plus its label
+// reads like a form rather than a run of ASCII brackets.
+const (
+	glyphCheckboxOn  = "☑"
+	glyphCheckboxOff = "☐"
+	glyphRadioOn     = "◉"
+	glyphRadioOff    = "○"
+)
+
 // Rect is a terminal-cell rectangle.
 type Rect struct {
 	X, Y, W, H int
@@ -1699,9 +1708,9 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 	labels := make([]string, len(opts))
 	boxW := 0
 	for i, opt := range opts {
-		mark := "[ ] "
+		mark := glyphCheckboxOff + " "
 		if opt.HasAttr("selected") {
-			mark = "[x] "
+			mark = glyphCheckboxOn + " "
 		}
 		labels[i] = mark + optionLabel(opt)
 		if w := stringWidth(labels[i]); w > boxW {
@@ -2201,14 +2210,14 @@ func formLabel(n *Node) string {
 			return ""
 		case "checkbox":
 			if n.HasAttr("checked") {
-				return "[x]"
+				return glyphCheckboxOn
 			}
-			return "[ ]"
+			return glyphCheckboxOff
 		case "radio":
 			if n.HasAttr("checked") {
-				return "(x)"
+				return glyphRadioOn
 			}
-			return "( )"
+			return glyphRadioOff
 		case "submit", "button", "reset":
 			if val == "" {
 				if typ == "reset" {
@@ -2785,9 +2794,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		opts := selectOptions(n)
 		w := 10
 		for _, opt := range opts {
-			mark := "[ ] "
+			mark := glyphCheckboxOff + " "
 			if opt.HasAttr("selected") {
-				mark = "[x] "
+				mark = glyphCheckboxOn + " "
 			}
 			if ow := stringWidth(mark + optionLabel(opt)); ow > w {
 				w = ow

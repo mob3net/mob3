@@ -123,7 +123,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade), logical `margin`/`padding` aliases for horizontal-tb, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
@@ -493,8 +493,9 @@ Standard Go layout:
   validation, range inputs are sliders with clickable `-`/`+` ends and arrow
   adjustment, and color inputs accept
   `#rrggbb` and paint the field with a live swatch. Clicking a file
-  input opens a modal explaining that uploads are unsupported. Clicking a
-  checkbox or radio toggles it (radios uncheck same-name siblings); clicking a
+  input opens a modal explaining that uploads are unsupported. Checkboxes
+  render as `☑`/`☐` and radios as `◉`/`○` (one cell each); clicking one toggles
+  it (radios uncheck same-name siblings); clicking a
   select opens a centered popup listing every option, navigated with Up/Down
   and chosen with Enter or a click, with Esc/backdrop/`×` closing it without a
   change. `<select multiple>` renders as an always-visible list box with every

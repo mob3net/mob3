@@ -876,6 +876,33 @@ func TestFixedScrollKeepsViewportPosition(t *testing.T) {
 	}
 }
 
+func TestFormControlGlyphs(t *testing.T) {
+	control := func(typ string, checked bool) *Node {
+		attrs := []Attr{{Key: "type", Value: typ}}
+		if checked {
+			attrs = append(attrs, Attr{Key: "checked"})
+		}
+		return &Node{Type: ElementNode, Tag: "input", Attrs: attrs}
+	}
+	cases := []struct {
+		node *Node
+		want string
+	}{
+		{control("checkbox", true), glyphCheckboxOn},
+		{control("checkbox", false), glyphCheckboxOff},
+		{control("radio", true), glyphRadioOn},
+		{control("radio", false), glyphRadioOff},
+	}
+	for _, c := range cases {
+		if got := formLabel(c.node); got != c.want {
+			t.Errorf("formLabel(%s) = %q, want %q", c.node.Attr("type"), got, c.want)
+		}
+		if w := stringWidth(c.want); w != 1 {
+			t.Errorf("glyph %q width = %d, want 1 cell", c.want, w)
+		}
+	}
+}
+
 func TestFixedLinkRectsFollowScroll(t *testing.T) {
 	ly := buildViewport(`<a href="#x" style="position:fixed;bottom:0;left:0">go</a>`, 30, 10)
 	if len(ly.Links) != 1 || len(ly.Links[0].Rects) == 0 {

@@ -39,6 +39,7 @@ const (
 	UnitPercent
 	UnitPT
 	UnitCH
+	UnitLH
 )
 
 // Length is a CSS length or auto.
@@ -64,6 +65,10 @@ func (l Length) cssPx(fontPx float64) float64 {
 		return l.V * 96 / 72
 	case UnitCH:
 		return l.V * cellW
+	case UnitLH:
+		// resolveStyleUnits converts lh to px once the cascade is complete;
+		// this fallback is only reached while parsing line-height itself.
+		return l.V * fontPx
 	}
 	return 0
 }
@@ -195,6 +200,43 @@ func inheritStyle(parent *Style) *Style {
 		st.BorderColor = parent.BorderColor
 	}
 	return st
+}
+
+// resolveLengthLH converts a computed lh length to px. lh depends on the
+// element's own line-height, so this runs after the cascade rather than while
+// declarations are parsed.
+func resolveLengthLH(l *Length, linePx float64) {
+	if l.Set && l.U == UnitLH {
+		*l = px(l.V * linePx)
+	}
+}
+
+func resolveStyleUnits(st *Style) {
+	lh := st.LineHeight
+	if lh <= 0 {
+		lh = 1
+	}
+	linePx := st.FontSize * lh
+	resolveLengthLH(&st.TextIndent, linePx)
+	for i := range st.Margin {
+		resolveLengthLH(&st.Margin[i], linePx)
+	}
+	for i := range st.Padding {
+		resolveLengthLH(&st.Padding[i], linePx)
+	}
+	for i := range st.Border {
+		resolveLengthLH(&st.Border[i], linePx)
+	}
+	resolveLengthLH(&st.Width, linePx)
+	resolveLengthLH(&st.Height, linePx)
+	resolveLengthLH(&st.MaxWidth, linePx)
+	resolveLengthLH(&st.Top, linePx)
+	resolveLengthLH(&st.Right, linePx)
+	resolveLengthLH(&st.Bottom, linePx)
+	resolveLengthLH(&st.Left, linePx)
+	resolveLengthLH(&st.FlexBasis, linePx)
+	resolveLengthLH(&st.Gap, linePx)
+	resolveLengthLH(&st.RowGap, linePx)
 }
 
 // UA stylesheet: base document styling expressed in the same CSS subset the
@@ -481,7 +523,8 @@ func parseLength(v string, fontPx float64) Length {
 		mul    float64
 	}{
 		{"px", UnitPX, 1}, {"pt", UnitPT, 1}, {"em", UnitEM, 1},
-		{"rem", UnitREM, 1}, {"ch", UnitCH, 1}, {"%", UnitPercent, 1},
+		{"rem", UnitREM, 1}, {"ch", UnitCH, 1}, {"lh", UnitLH, 1},
+		{"%", UnitPercent, 1},
 	}
 	for _, u := range units {
 		if strings.HasSuffix(v, u.suffix) {
@@ -534,6 +577,21 @@ func parseFontSize(v string, parentPx float64) (float64, bool) {
 		return l.cssPx(parentPx), true
 	}
 	return 0, false
+}
+
+// setPair applies a logical start/end shorthand to two physical sides. MOB³
+// only lays out horizontal-tb text, so inline maps to left/right and block to
+// top/bottom.
+func setPair(dst *[4]Length, start, end int, fields []string, fontPx float64) {
+	if len(fields) == 0 {
+		return
+	}
+	first := parseLength(fields[0], fontPx)
+	second := first
+	if len(fields) > 1 {
+		second = parseLength(fields[1], fontPx)
+	}
+	dst[start], dst[end] = first, second
 }
 
 func setSides(dst *[4]Length, fields []string, fontPx float64) {
@@ -752,6 +810,18 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		st.Margin[2] = parseLength(val, st.FontSize)
 	case "margin-left":
 		st.Margin[3] = parseLength(val, st.FontSize)
+	case "margin-inline":
+		setPair(&st.Margin, 3, 1, splitFields(val), st.FontSize)
+	case "margin-block":
+		setPair(&st.Margin, 0, 2, splitFields(val), st.FontSize)
+	case "margin-inline-start":
+		st.Margin[3] = parseLength(val, st.FontSize)
+	case "margin-inline-end":
+		st.Margin[1] = parseLength(val, st.FontSize)
+	case "margin-block-start":
+		st.Margin[0] = parseLength(val, st.FontSize)
+	case "margin-block-end":
+		st.Margin[2] = parseLength(val, st.FontSize)
 	case "padding":
 		setSides(&st.Padding, splitFields(val), st.FontSize)
 	case "padding-top":
@@ -762,6 +832,18 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		st.Padding[2] = parseLength(val, st.FontSize)
 	case "padding-left":
 		st.Padding[3] = parseLength(val, st.FontSize)
+	case "padding-inline":
+		setPair(&st.Padding, 3, 1, splitFields(val), st.FontSize)
+	case "padding-block":
+		setPair(&st.Padding, 0, 2, splitFields(val), st.FontSize)
+	case "padding-inline-start":
+		st.Padding[3] = parseLength(val, st.FontSize)
+	case "padding-inline-end":
+		st.Padding[1] = parseLength(val, st.FontSize)
+	case "padding-block-start":
+		st.Padding[0] = parseLength(val, st.FontSize)
+	case "padding-block-end":
+		st.Padding[2] = parseLength(val, st.FontSize)
 	case "border":
 		applyBorderShorthand(st, val, []int{0, 1, 2, 3})
 	case "border-top":
@@ -1134,6 +1216,7 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 				applyDecls(st, decls, parent, true, parentSize(parent))
 			}
 		}
+		resolveStyleUnits(st)
 		// Common screen-reader-only pattern: a 1px clipped box. Rendering it
 		// would produce one character per line, so hide it.
 		if st.Overflow == "hidden" && st.Width.Set && st.Width.U == UnitPX && st.Width.V <= 1 &&
