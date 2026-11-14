@@ -251,8 +251,8 @@ func resolveStyleUnits(st *Style) {
 // UA stylesheet: base document styling expressed in the same CSS subset the
 // engine understands.
 const uaStylesheet = `
-html { display:block; background:#ffffff; color:#1f2328; font-size:16px; line-height:1; }
-body { display:block; margin:8px; padding:0; background:#ffffff; color:#1f2328; }
+html { display:block; color:#1f2328; font-size:16px; line-height:1; }
+body { display:block; margin:8px; padding:0; color:#1f2328; }
 head, script, style, title, meta, link, base, template, param, source, track { display:none; }
 div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, blockquote, pre,
 table, thead, tbody, tfoot, tr, td, th, form, fieldset, legend, figure,

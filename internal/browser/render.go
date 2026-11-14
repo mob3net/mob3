@@ -409,6 +409,12 @@ func paintImage(g *Grid, img image.Image, x, y, w, h, rowStart, totalRows int) {
 			switch {
 			case !topA && !botA:
 				continue
+			case topA && botA && topC == botC:
+				// Uniform cells need no glyph; the background color alone
+				// renders the pixel and keeps the text layer clean.
+				cell.R = ' '
+				cell.FG = topC
+				cell.BG = topC
 			case topA && botA:
 				cell.R = '▀'
 				cell.FG = topC

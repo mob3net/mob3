@@ -68,6 +68,29 @@ func TestTargetPixels(t *testing.T) {
 	}
 }
 
+func TestUniformHalfBlockUsesSpace(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, color.RGBA{10, 20, 30, 255})
+		}
+	}
+	g := NewGrid(2, 2, RGB(0, 0, 0), RGB(255, 255, 255))
+	paintImage(g, img, 0, 0, 2, 2, 0, 2)
+	want := Color{R: 10, G: 20, B: 30, A: 255, Set: true}
+	for _, c := range g.Cells[:4] {
+		if c.R != ' ' {
+			t.Fatalf("uniform image cell glyph = %q, want space", c.R)
+		}
+		if c.BG != want || c.FG != want {
+			t.Fatalf("uniform image cell = %+v", c)
+		}
+		if !c.Img {
+			t.Fatal("uniform image cell lost its image marker")
+		}
+	}
+}
+
 func TestScaleImage(t *testing.T) {
 	src := image.NewNRGBA(image.Rect(0, 0, 4, 4))
 	for y := 0; y < 4; y++ {

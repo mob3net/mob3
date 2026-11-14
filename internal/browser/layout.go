@@ -240,10 +240,21 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark 
 		body = html.FindFirst("body")
 	}
 	pageBG := RGB(255, 255, 255)
+	explicitBG := false
 	if body != nil && body.Style != nil && body.Style.Background.opaque() {
 		pageBG = body.Style.Background
+		explicitBG = true
 	} else if html != nil && html.Style != nil && html.Style.Background.opaque() {
 		pageBG = html.Style.Background
+		explicitBG = true
+	}
+	if !explicitBG {
+		// Sites sometimes paint their background on a full-page wrapper or
+		// use a gradient the engine cannot parse. Use the largest opaque fill
+		// covering most of the first viewport as the page background.
+		if c, ok := fallbackPageBackground(l.frags, width, viewportH, height); ok {
+			pageBG = c
+		}
 	}
 	out := &Layout{
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
@@ -2393,8 +2404,11 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 	if n.Img == nil {
 		alt := n.Attr("alt")
 		if alt == "" {
-			// Decorative broken image: render nothing instead of
-			// "[image: image]" noise.
+			// An explicitly sized broken image gets a small placeholder;
+			// 1-cell decorative images (tracking pixels) stay invisible.
+			if w, h := imageSize(n, st, c.maxW, c.imageCapW); w >= 2 || h >= 2 {
+				c.addLabel("░", st, n)
+			}
 			return
 		}
 		c.addLabel("[image: "+alt+"]", st, n)
@@ -2825,6 +2839,43 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	}
 	tableH := curY + 1 - y
 	return (y - startY) + tableH
+}
+
+// fallbackPageBackground finds a full-page wrapper background when html/body
+// do not provide an opaque color. A fill must cover at least 60% of the first
+// viewport (or the whole short document) to count.
+func fallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bool) {
+	if width < 1 {
+		return Color{}, false
+	}
+	h := docH
+	if viewportH > 0 && viewportH < h {
+		h = viewportH
+	}
+	if h < 1 {
+		h = 1
+	}
+	want := width * h * 60 / 100
+	best := Color{}
+	bestArea := 0
+	for _, f := range frags {
+		if f.Kind != fragFill || !f.Color.opaque() {
+			continue
+		}
+		x0, x1 := maxInt(f.X, 0), minInt(f.X+f.W, width)
+		y0, y1 := maxInt(f.Y, 0), minInt(f.Y+f.H, h)
+		if x1 <= x0 || y1 <= y0 {
+			continue
+		}
+		if area := (x1 - x0) * (y1 - y0); area > bestArea {
+			bestArea = area
+			best = f.Color
+		}
+	}
+	if bestArea < want {
+		return Color{}, false
+	}
+	return best, true
 }
 
 // tableCellOffset returns the vertical shift for a table cell whose content is

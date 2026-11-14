@@ -876,6 +876,37 @@ func TestFixedScrollKeepsViewportPosition(t *testing.T) {
 	}
 }
 
+func TestBrokenImagePlaceholder(t *testing.T) {
+	ly := build(`<p><img alt="" width="40" height="40"></p>`, 40)
+	if textFrag(ly, "░") == nil {
+		t.Fatal("explicitly sized broken image has no placeholder")
+	}
+	ly = build(`<p><img alt="" width="8" height="8"></p>`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "░") {
+			t.Fatalf("1-cell broken image showed a placeholder: %q", f.Text)
+		}
+	}
+}
+
+func TestPageBackgroundFallback(t *testing.T) {
+	ly := buildViewport(`<body style="margin:0"><div style="background:#123456;height:800px">x</div></body>`, 40, 20)
+	if ly.PageBG != RGB(0x12, 0x34, 0x56) {
+		t.Fatalf("fallback page background = %+v", ly.PageBG)
+	}
+
+	small := buildViewport(`<body style="margin:0"><div style="background:#123456;height:16px">x</div>`+
+		`<div>`+strings.Repeat("y<br>", 40)+`</div></body>`, 40, 20)
+	if small.PageBG != RGB(255, 255, 255) {
+		t.Fatalf("small fill became the page background: %+v", small.PageBG)
+	}
+
+	explicit := buildViewport(`<body style="margin:0;background:#ffffff"><div style="background:#123456;height:800px">x</div></body>`, 40, 20)
+	if explicit.PageBG != RGB(255, 255, 255) {
+		t.Fatalf("explicit body background was overridden: %+v", explicit.PageBG)
+	}
+}
+
 func TestBoxSizingBorderBox(t *testing.T) {
 	const text = `abcdefghijklmnopqrstuvwxyz`
 	content := func(css string) int {

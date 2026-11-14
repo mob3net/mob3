@@ -107,7 +107,8 @@ written in Go
   external image downloads and inline SVG rasterization are skipped, leaving
   `alt` text or labels. When enabled, native terminal graphics come first —
   kitty graphics protocol, then iTerm2 inline images — with colored half-block
-  art (`▀`/`▄`) as the fallback. No sixel.
+  art (`▀`/`▄`) as the fallback; cells whose upper and lower pixels match
+  render as a space with that background color. No sixel.
 - Keep it bare-bones but functional: real fetching, parsing, layout, rendering,
   navigation and scrolling.
 
@@ -240,9 +241,15 @@ Standard Go layout:
   text cannot inject terminal escapes.
 - **No font files:** the terminal font is used for all glyphs; font size affects
   line height and emphasis, not glyph scale outside kitty.
-- **UA page style:** white page background, near-black text, and an `8px`
-  `body` margin so pages get the usual browser gutter unless author CSS
-  overrides it.
+- **UA page style:** the grid defaults to a white page background and
+  near-black text, with an `8px` `body` margin so pages get the usual browser
+  gutter unless author CSS overrides it. The UA sheet does not paint `html` or
+  `body` backgrounds itself, so an author wrapper or an unsupported gradient
+  leaves room for the fallback below.
+- **Page background fallback:** when neither `html` nor `body` has an opaque
+  background, the largest opaque fill covering at least 60% of the first
+  viewport (or of a short document) becomes `PageBG`. This rescues full-page
+  wrapper colors and dark themes that would otherwise leave the grid white.
 - **Auto margins:** `margin:auto` is distinguished from an unset length; a
   constrained-width block with auto left/right margins centers itself
   (`margin:0 auto`).
@@ -288,7 +295,9 @@ Standard Go layout:
   response; inline `<svg>` is serialized back to XML with SVG camelCase names
   restored and rasterized before layout. If inline SVG decoding fails it falls
   back to `aria-label`, `<title>` or visible text; `aria-hidden` SVGs are
-  skipped. Broken images show `[image: alt]`, or nothing when `alt` is empty.
+  skipped. Broken images show `[image: alt]`; an empty-`alt` image with
+  explicit dimensions of at least 2 cells shows a `░` marker, while 1-cell
+  decorative/tracking images render nothing.
   In interactive mode with a detected graphics terminal, the same rectangles
   are filled with a real inline image
   (kitty/iTerm2) instead of half-block art; images clipped by the viewport are
