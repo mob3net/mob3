@@ -111,9 +111,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   keep their original colors.
 - Headless MCP automation (`-mcp`): navigate, snapshot page text and links,
   click links or elements by text, list and fill forms, select options, submit,
-  wait for async content, type, press keys, scroll, evaluate JavaScript and
-  inspect history. Screen captures are terminal-cell rasters; sessions are
-  memory-only.
+  wait for async content, type, press keys, scroll, evaluate JavaScript, inspect
+  history and read request logs, JS errors or page source. Screen captures are
+  terminal-cell rasters; sessions are memory-only.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.

@@ -809,3 +809,81 @@ func TestAutomationLinksAndTextCommands(t *testing.T) {
 		t.Fatal("click with two targets was accepted")
 	}
 }
+
+func TestAutomationDiagnostics(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p id="x">hello source</p></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+
+	a.b.logJS("input", "1+1")
+	a.b.logJS("error", "boom\x1b[31m")
+	logs := a.Logs(0)
+	for _, want := range []string{"JS logs: 2", "· error", "[input] 1+1", "[error] boom"} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("logs missing %q:\n%s", want, logs)
+		}
+	}
+	if strings.ContainsRune(logs, 0x1b) {
+		t.Errorf("logs contain a terminal escape: %q", logs)
+	}
+	if limited := a.Logs(1); !strings.Contains(limited, "showing last 1") || strings.Contains(limited, "1+1") {
+		t.Errorf("limited logs = %q", limited)
+	}
+
+	full, err := a.Source("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(full, "hello source") || !strings.Contains(full, "<html>") {
+		t.Errorf("full source = %q", full)
+	}
+	elem, err := a.Source("#x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(elem, `<p id="x">`) || strings.Contains(elem, "<body") {
+		t.Errorf("element source = %q", elem)
+	}
+	if _, err := a.Source("#nope"); err == nil {
+		t.Fatal("unknown source selector was accepted")
+	}
+
+	a.b.loader.requests = []requestRecord{
+		{ID: 1, Method: "GET", URL: "https://example.com/first.css", Kind: "css", Status: 200, Size: 100, Done: true},
+		{ID: 2, Method: "GET", URL: "https://example.com/second.js", Kind: "js", Status: 404, Size: 0, Done: true},
+	}
+	reqs := a.Requests(0)
+	for _, want := range []string{"Requests: 2", "first.css", "second.js", "404", "Cache:"} {
+		if !strings.Contains(reqs, want) {
+			t.Errorf("requests missing %q:\n%s", want, reqs)
+		}
+	}
+	limited := a.Requests(1)
+	if !strings.Contains(limited, "showing last 1") || strings.Contains(limited, "first.css") {
+		t.Errorf("limited requests = %q", limited)
+	}
+}
+
+func TestAutomationDiagnosticCommands(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p id="x">hello source</p></body></html>`,
+	})
+	ctx := context.Background()
+	if _, err := a.RunCommand(ctx, "navigate", json.RawMessage(`{"url":"https://example.com/"}`)); err != nil {
+		t.Fatal(err)
+	}
+	a.b.logJS("info", "diagnostic message")
+	if got, err := a.RunCommand(ctx, "logs", nil); err != nil || !strings.Contains(got, "diagnostic message") {
+		t.Fatalf("logs = %q, %v", got, err)
+	}
+	if got, err := a.RunCommand(ctx, "source", json.RawMessage(`{"selector":"#x"}`)); err != nil || !strings.Contains(got, "hello source") {
+		t.Fatalf("source = %q, %v", got, err)
+	}
+	if got, err := a.RunCommand(ctx, "requests", nil); err != nil || !strings.Contains(got, "Requests:") {
+		t.Fatalf("requests = %q, %v", got, err)
+	}
+}

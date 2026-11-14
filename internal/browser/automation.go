@@ -1659,6 +1659,120 @@ func (a *Automation) Links(selector string) (string, error) {
 	return sb.String(), nil
 }
 
+// Requests lists the in-memory request log for the current page. limit 0 shows
+// everything; the newest entries are kept when a limit is given.
+func (a *Automation) Requests(limit int) string {
+	if a == nil || a.b == nil {
+		return "(requests unavailable)"
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b := a.b
+	if b.loader == nil {
+		return "(requests unavailable)"
+	}
+	records := b.loader.requestSnapshot()
+	lines := b.requestLines()
+	header := fmt.Sprintf("Requests: %d", len(records))
+	if len(records) == 0 {
+		lines = nil
+	}
+	if limit > 0 && len(lines) > limit {
+		header += fmt.Sprintf(" (showing last %d)", limit)
+		lines = lines[len(lines)-limit:]
+	}
+	var sb strings.Builder
+	sb.WriteString(header)
+	sb.WriteString("\n")
+	if len(lines) == 0 {
+		sb.WriteString("(no requests for this page)\n")
+	} else {
+		sb.WriteString(strings.Join(lines, "\n"))
+		sb.WriteString("\n")
+	}
+	sb.WriteString(b.requestCacheSummary())
+	return sb.String()
+}
+
+// Logs returns JavaScript console messages and uncaught errors for the current
+// page, newest last. limit 0 shows every retained entry.
+func (a *Automation) Logs(limit int) string {
+	if a == nil || a.b == nil {
+		return "(no JavaScript messages)"
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b := a.b
+	entries := b.jsLog
+	header := fmt.Sprintf("JS logs: %d", len(entries))
+	if limit > 0 && len(entries) > limit {
+		header += fmt.Sprintf(" (showing last %d)", limit)
+		entries = entries[len(entries)-limit:]
+	}
+	if b.jsErr {
+		header += " · error"
+	}
+	var sb strings.Builder
+	sb.WriteString(header)
+	sb.WriteString("\n")
+	if b.noJS {
+		sb.WriteString("(JavaScript is disabled)\n")
+	}
+	if len(entries) == 0 && !b.noJS {
+		sb.WriteString("(no JavaScript messages)\n")
+	}
+	for _, entry := range entries {
+		for _, line := range strings.Split(entry, "\n") {
+			sb.WriteString(stripTerminalControls(line))
+			sb.WriteString("\n")
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// Source returns the raw decoded page source (pre-scripting DOM), or the
+// serialized HTML of one element when selector is set. Terminal control
+// characters are removed; newlines and tabs are kept.
+func (a *Automation) Source(selector string) (string, error) {
+	if a == nil || a.b == nil {
+		return "", errors.New("automation is closed")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b := a.b
+	if b.page == nil || b.page.Root == nil {
+		return "No page loaded", nil
+	}
+	src := b.page.RawHTML
+	if selector != "" {
+		n, err := findSelectorNode(b.page.Root, selector)
+		if err != nil {
+			return "", err
+		}
+		var sb strings.Builder
+		serializeNode(&sb, n)
+		src = sb.String()
+	}
+	if src == "" {
+		return "(empty source)", nil
+	}
+	return sanitizeSource(src), nil
+}
+
+// sanitizeSource removes terminal control bytes from source text while keeping
+// line structure.
+func sanitizeSource(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 32 || (r >= 0x7f && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // RunCommand executes one named automation command with JSON arguments. It is
 // shared by protocol front ends so each transport only owns framing. Command
 // names and argument shapes are the MCP tool definitions in mcp.go.
@@ -1751,6 +1865,38 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 			return "", err
 		}
 		return a.WaitFor(ctx, p.Selector, p.Text, p.TimeoutMS)
+	case "requests":
+		var p struct {
+			Limit *int `json:"limit"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		limit := 100
+		if p.Limit != nil {
+			limit = *p.Limit
+		}
+		return a.Requests(limit), nil
+	case "logs":
+		var p struct {
+			Limit *int `json:"limit"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		limit := 200
+		if p.Limit != nil {
+			limit = *p.Limit
+		}
+		return a.Logs(limit), nil
+	case "source":
+		var p struct {
+			Selector string `json:"selector"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		return a.Source(p.Selector)
 	case "links":
 		var p struct {
 			Selector string `json:"selector"`

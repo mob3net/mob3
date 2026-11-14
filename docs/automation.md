@@ -97,6 +97,9 @@ printf '%s\n' \
 | `reload` | `{}` | Snapshot |
 | `evaluate` | `{expression}` | JavaScript result as text |
 | `history` | `{}` | Session history, most recent first |
+| `requests` | `{limit?}` | Current page's request log and cache usage |
+| `logs` | `{limit?}` | JavaScript console messages and errors |
+| `source` | `{selector?}` | Raw decoded HTML, or one element's serialized HTML |
 
 ### `navigate`
 
@@ -305,6 +308,33 @@ Runs JavaScript in the page realm through goja:
 Objects stringify as `[object Object]`; use `JSON.stringify` for structured
 results. `-no-js` disables evaluation.
 
+### `requests`, `logs` and `source`
+
+```json
+{"limit":50}
+{"limit":20}
+{"selector":"main article"}
+```
+
+These expose the same diagnostics as the in-browser `!` console:
+
+- `requests` lists the current page's in-memory request log — status, method,
+  size, kind (`doc`, `css`, `js`, `img`, `fetch`, `xhr`) and URL — followed by
+  cache bytes used. `limit` keeps the newest entries (default 100; 0 shows all,
+  up to the 512-entry cap).
+- `logs` returns JavaScript console messages and uncaught errors in order, with
+  `· error` in the header when the page has a script error. `limit` keeps the
+  newest entries (default 200; 0 shows all retained entries). Logs and the
+  error flag reset when a new page is applied and are lost on failed loads.
+- `source` returns the raw decoded HTML that was fetched, before scripts ran.
+  With `selector`, it returns the serialized HTML of that element instead.
+  Terminal control characters are removed. Large sources may be clipped by the
+  MCP transport.
+
+### `history`
+
+Lists session history, most recent first; `*` marks the current entry.
+
 ## Typical agent loop
 
 1. `navigate` a page.
@@ -317,6 +347,8 @@ results. `-no-js` disables evaluation.
    then `snapshot` when ready.
 7. Use `click`/`type`/`press` for special widgets, `evaluate` for DOM
    extraction, or `scroll`/`back`/`history` to move.
+8. When a page loads wrong, check `requests` for blocked or missing resources,
+   `logs` for script errors, and `source` for the markup that was fetched.
 
 ## Limitations
 

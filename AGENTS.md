@@ -434,8 +434,8 @@ Standard Go layout:
   `-layout-budget` are honored, and images are disabled. Tools cover
   navigate, snapshot, click, link listing, form/control listing, fill, select,
   toggle, submit, wait/wait_for, type, press, scroll, history navigation,
-  JS evaluation, session
-  history and a
+  JS evaluation, session history, diagnostics (`requests`, `logs`, `source`) and
+  a
   PNG `screenshot` of the current viewport. The snapshot is text plus visible
   `[n]` links and form-control coordinates. `links` lists every rendered anchor
   (including off-screen ones) with its `[n]` index, href and selector; `click`
@@ -445,7 +445,10 @@ Standard Go layout:
   `toggle` set values by selector without focus or scrolling, and `submit` runs
   constraint validation and the submit handler, waits for navigation, and
   reports validation/prevented failures as tool errors. File uploads and
-  multipart forms remain unsupported. The screenshot is a terminal-cell raster,
+  multipart forms remain unsupported. `requests`, `logs` and `source` expose the
+  current page's request log, JavaScript messages/errors and fetched HTML; the
+  logs and request list cover the current page, reset on navigation and are
+  memory-only. The screenshot is a terminal-cell raster,
   not a browser pixel capture. Stdout is protocol-only. Sessions, cookies and
   history are memory-only, and the server is local and unauthenticated.
 - **Home:** `-home URL` sets the home target (default `about:home`); the

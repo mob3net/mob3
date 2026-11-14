@@ -135,8 +135,8 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
 			"links as [n], and form-control positions; click accepts link, text, selector, x/y. " +
 			"Use links for every off-screen link and form for every control's selector and value, fill/select/toggle to set them, " +
-			"and submit to send a form. Use evaluate for DOM queries. " +
-			"Sessions and storage are memory-only.",
+			"and submit to send a form. Use evaluate for DOM queries, and requests/logs/source " +
+			"to diagnose loading, script and markup problems. Sessions and storage are memory-only.",
 	})
 }
 
@@ -239,6 +239,30 @@ func mcpToolDefinitions() []map[string]any {
 			"description": "List every form and form control, including off-screen ones, with a stable CSS selector, " +
 				"current value or state, and flags (required, disabled, readonly). Use these selectors with fill, select, toggle and submit.",
 			"inputSchema": object(map[string]any{"selector": str("optional form or control selector to scope the listing")}),
+		},
+		{
+			"name": "requests",
+			"description": "List the current page's in-memory request log (page, CSS, scripts, images, fetch/XHR) " +
+				"with status, method, size, kind and URL, plus cache usage. Newest entries last.",
+			"inputSchema": object(map[string]any{
+				"limit": integer("maximum entries, newest kept (default 100, 0 for all)"),
+			}),
+		},
+		{
+			"name": "logs",
+			"description": "Return the current page's JavaScript console messages and uncaught errors. " +
+				"Logs reset when a new page loads. Newest entries last.",
+			"inputSchema": object(map[string]any{
+				"limit": integer("maximum entries, newest kept (default 200, 0 for all)"),
+			}),
+		},
+		{
+			"name": "source",
+			"description": "Return the raw decoded HTML source of the page before scripting, or the serialized " +
+				"HTML of one element when a selector is given. Output may be clipped by the transport.",
+			"inputSchema": object(map[string]any{
+				"selector": str("optional CSS selector to serialize one element"),
+			}),
 		},
 		{
 			"name": "links",
