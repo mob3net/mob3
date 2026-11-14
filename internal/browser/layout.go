@@ -1107,6 +1107,70 @@ func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
 	return start, span, true
 }
 
+type gridAreaSpan struct {
+	start int
+	span  int
+}
+
+// parseGridAreas extracts named areas from grid-template-areas. Only the
+// column placement is needed by the row-major grid implementation; a name
+// spanning several rows still starts at its leftmost column.
+func parseGridAreas(raw string) map[string]gridAreaSpan {
+	out := map[string]gridAreaSpan{}
+	if strings.TrimSpace(raw) == "" {
+		return out
+	}
+	var rows [][]string
+	for i := 0; i < len(raw); {
+		for i < len(raw) && raw[i] != '\'' && raw[i] != '"' {
+			i++
+		}
+		if i >= len(raw) {
+			break
+		}
+		quote := raw[i]
+		i++
+		start := i
+		for i < len(raw) && raw[i] != quote {
+			i++
+		}
+		if i >= len(raw) {
+			break
+		}
+		rows = append(rows, strings.Fields(raw[start:i]))
+		i++
+	}
+	type bounds struct {
+		start, end int
+		rows       int
+	}
+	seen := map[string]bounds{}
+	for _, row := range rows {
+		for c, name := range row {
+			if name == "." || name == "" {
+				continue
+			}
+			b, ok := seen[name]
+			if !ok {
+				b.start, b.end = c, c
+			} else {
+				if c < b.start {
+					b.start = c
+				}
+				if c > b.end {
+					b.end = c
+				}
+			}
+			b.rows++
+			seen[name] = b
+		}
+	}
+	for name, b := range seen {
+		out[name] = gridAreaSpan{start: b.start, span: b.end - b.start + 1}
+	}
+	return out
+}
+
 func (l *layouter) grid(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
@@ -1128,6 +1192,47 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		rowGap = st.RowGap.resolveH(availW, st.FontSize)
 	}
 	widths := resolveGridTracks(tracks, availW, gap)
+	areas := parseGridAreas(st.GridAreas)
+	// An auto track placed by a named area is at least as wide as that area's
+	// content; take the space from fr tracks so a CTA or label does not end up
+	// one character wide.
+	for _, child := range n.Children {
+		if child.Type != ElementNode || child.Style == nil {
+			continue
+		}
+		a, ok := areas[child.Style.GridArea]
+		if !ok || a.span != 1 || a.start < 0 || a.start >= len(tracks) || !tracks[a.start].auto {
+			continue
+		}
+		pref, _ := l.measure(child)
+		need := minInt(maxInt(2, pref), availW)
+		if need <= widths[a.start] {
+			continue
+		}
+		extra := need - widths[a.start]
+		widths[a.start] = need
+		flexLeft := 0.0
+		for i := range tracks {
+			if tracks[i].flex > 0 {
+				flexLeft += tracks[i].flex
+			}
+		}
+		for i := range tracks {
+			if extra <= 0 || flexLeft <= 0 || tracks[i].flex <= 0 || widths[i] <= 1 {
+				continue
+			}
+			take := int(float64(extra) * tracks[i].flex / flexLeft)
+			if take > widths[i]-1 {
+				take = widths[i] - 1
+			}
+			if take > extra {
+				take = extra
+			}
+			widths[i] -= take
+			extra -= take
+			flexLeft -= tracks[i].flex
+		}
+	}
 	if len(widths) > 4 {
 		total := 0
 		for _, w := range widths {
@@ -1155,7 +1260,18 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			continue
 		}
 		start, span, explicit := gridPlacement(child.Style.GridColumn, len(widths))
+		if name := child.Style.GridArea; name != "" {
+			if a, ok := areas[name]; ok {
+				start, span, explicit = a.start, a.span, true
+			}
+		}
 		if explicit && start >= 0 && start < len(widths) {
+			// An explicit placement that would move backwards on the current
+			// row starts a new row (named areas commonly span a full row).
+			if start < col && col > 0 {
+				y += rowH + rowGap
+				rowH = 0
+			}
 			col = start
 		}
 		if span < 1 {

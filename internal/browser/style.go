@@ -141,6 +141,8 @@ type Style struct {
 	Gap           Length
 	RowGap        Length
 	GridCols      string
+	GridAreas     string
+	GridArea      string
 	GridColumn    string
 	GridRow       string
 	GridAutoFlow  string
@@ -1014,6 +1016,17 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "grid-template-columns":
 		st.GridCols = val
+	case "grid-template-areas":
+		st.GridAreas = val
+	case "grid-area":
+		if fields := splitFields(val); len(fields) > 0 {
+			name := fields[0]
+			if name != "auto" && name != "span" {
+				if _, err := strconv.Atoi(name); err != nil {
+					st.GridArea = name
+				}
+			}
+		}
 	case "grid-column", "grid-column-start", "grid-column-end":
 		if prop == "grid-column" {
 			st.GridColumn = val

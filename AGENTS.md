@@ -220,8 +220,11 @@ Standard Go layout:
   `repeat()`, `minmax()`), honours `gap`/`column-gap`/`row-gap`,
   `grid-column`/`span`, and sizes row heights from the tallest item. Dense grids
   whose average track would be under 6 cells fall back to block flow so text
-  stays readable. Named areas, row spans, auto-fill/auto-fit and alignment are
-  approximated.
+  stays readable. Named `grid-template-areas` place children by their
+  `grid-area` name; a name spanning several columns starts a new row when it
+  would move backwards, and an `auto` track used by a named area is sized to
+  that area's content instead of collapsing to one cell. Row spans beyond that
+  new-row rule, auto-fill/auto-fit and alignment remain approximated.
 - **Box sizing and constraints:** `box-sizing:border-box` makes declared
   widths/heights/min/max include padding and borders in block and absolute
   layout and in flex item widths/basis. `min-width`, `max-width`, `min-height`
@@ -1001,7 +1004,8 @@ Standard Go layout:
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
 - Flexbox supports basic rows and `flex-wrap` (no justify/align/order); grid supports
-  basic row-major tracks but not named areas or row spans. Floats and
+  basic row-major tracks plus named-area column placement, but not full row
+  spans. Floats and
   `position:sticky` are approximated as block flow. `display:contents` is
   approximated as an inline wrapper (its block/grid children still lay out, but
   they are not hoisted into a parent grid or flex row). Absolute, relative and
@@ -1110,7 +1114,7 @@ Known unsupported families (do not present these as available):
   credentialed cross-origin requests, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
-- CSS/layout: named grid areas, grid row spans, floats, `position:sticky`,
+- CSS/layout: full grid row spans, floats, `position:sticky`,
   `z-index` stacking, CSS variables, animations,
   transitions, generated content, `@import`, background images, full flexbox.
 

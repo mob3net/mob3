@@ -50,6 +50,31 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	}
 }
 
+func TestGridNamedAreasAndAutoTrack(t *testing.T) {
+	ly := build(`<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'heading cta' 'promos promos'">`+
+		`<div style="grid-area:heading">head</div>`+
+		`<div style="grid-area:promos">alpha beta gamma delta</div>`+
+		`<a style="grid-area:cta">View more</a></div>`, 40)
+	find := func(text string) *Frag {
+		for i := range ly.Frags {
+			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+				return &ly.Frags[i]
+			}
+		}
+		return nil
+	}
+	head, alpha, view, more := find("head"), find("alpha"), find("View"), find("more")
+	if head == nil || alpha == nil || view == nil || more == nil {
+		t.Fatalf("missing fragments: head=%v alpha=%v view=%v more=%v", head, alpha, view, more)
+	}
+	if alpha.Y <= head.Y {
+		t.Fatalf("full-width area did not start a new row: head y=%d alpha y=%d", head.Y, alpha.Y)
+	}
+	if view.Y != more.Y {
+		t.Fatalf("auto track collapsed: View y=%d more y=%d", view.Y, more.Y)
+	}
+}
+
 func TestFlexWrapStartsNewLine(t *testing.T) {
 	ly := build(`<div style="display:flex;flex-wrap:wrap"><div style="width:100%">alpha</div><div style="width:100%">beta</div></div>`, 40)
 	var alpha, beta *Frag
