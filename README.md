@@ -13,6 +13,8 @@ GitHub: [github.com/mob3net/mob3](https://github.com/mob3net/mob3)
 ## Documentation
 
 - [Documentation index](docs/index.md)
+- [Use cases](docs/use-cases.md) — developers, AI agents, terminal users and
+  automation
 - [Install](docs/install.md) — releases, Docker and source builds
 - [Command line](docs/cli.md) — every flag, default and limit
 - [Keyboard and mouse](docs/keys.md)

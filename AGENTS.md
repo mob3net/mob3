@@ -35,9 +35,10 @@ written in Go
 - **Docs stay current.** Update `README.md` and the relevant `docs/` page in the
   same change whenever user-visible behavior, flags, keys, build output,
   supported features or limitations change. Long-form docs live under `docs/`
-  (install, CLI, keys, automation, security, sites, development). `mob3 -h` and
-  `about:help` remain canonical for flags and keys; `mcpToolDefinitions()` is
-  canonical for automation tools. `README.md` stays short and links to the docs.
+  (use cases, install, CLI, keys, automation, security, sites, development).
+  `mob3 -h` and `about:help` remain canonical for flags and keys;
+  `mcpToolDefinitions()` is canonical for automation tools. `README.md` stays
+  short and links to the docs.
 - **Contributions.** Every external contribution requires the broad
   license-grant CLA in `CONTRIBUTING.md` and the PR statement it describes.
   Never merge contributed code without that agreement. Contributors keep their

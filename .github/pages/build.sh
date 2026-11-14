@@ -104,7 +104,7 @@ html_escape() {
   sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
 }
 
-docs_order=(index install cli keys automation security sites development)
+docs_order=(index use-cases install cli keys automation security sites development)
 
 sidebar_for() {
   local current="$1" name title active

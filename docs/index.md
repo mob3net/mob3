@@ -28,4 +28,11 @@ make
 Press `?` inside the app for the built-in help page, and run `mob3 -h` for the
 full flag list.
 
-Project page: [mob3.net](https://mob3.net).
+## What can you do with it?
+
+See [use cases](use-cases.md) for developers and sysadmins, AI agents and MCP,
+everyday terminal users, and automation and integration. The short version:
+browse over SSH, test and inspect pages headlessly, scrape JavaScript-driven
+content, generate PNG screenshots, run browser checks in CI, and give AI agents
+a local web browser.
+
