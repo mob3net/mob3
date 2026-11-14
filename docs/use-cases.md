@@ -4,7 +4,6 @@ MOB³ is a terminal browser with a headless MCP mode, so it fits anywhere a
 graphical browser does not: SSH sessions, containers, CI runners, remote
 servers and AI agents. It is small and text-focused, not a full browser engine,
 so the best results come from content pages, docs and server-rendered HTML; see
-[what to expect](https://github.com/mob3net/mob3#what-to-expect) and
 [site support](sites.md).
 
 Remember that MOB³ is **not a secure browser**: no sandboxing, no site
