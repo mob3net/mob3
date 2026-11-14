@@ -42,7 +42,9 @@ Build the site locally:
 ```
 
 The script writes `index.html`, `docs/*.html`, a `CNAME` for `mob3.net` and
-`.nojekyll`. Relative `.md` links are rewritten to `.html` for the site.
+`.nojekyll`. Relative `.md` links are rewritten to `.html` for the site. Docs
+pages share a generated sidebar and on-page “On this page” contents list,
+with a light/dark theme toggle and a mobile menu.
 
 ## Repository layout
 

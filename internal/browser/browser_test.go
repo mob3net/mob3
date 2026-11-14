@@ -120,9 +120,11 @@ func TestConfigPageShowsValues(t *testing.T) {
 		t.Error("config page is not using the narrow reading column")
 	}
 	text := page.Root.TextContent()
-	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
+	for _, want := range []string{
+		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
-		"-ua", "-search", "-mcp", "-version", "startup"} {
+		"-ua", "-search", "-mcp", "-version", "startup",
+	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
 		}
@@ -3625,8 +3627,8 @@ func TestHasModuleScripts(t *testing.T) {
 func TestModulePageShowsStatusWarning(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	page := &Page{
-		URL: u, Base: u, Status: 200, Title: "FileGator", HasModules: true,
-		Root: ParseHTML(`<html><body><p>Loading...</p></body></html>`),
+		Root:       ParseHTML(`<html><body><p>Loading...</p></body></html>`),
+		HasModules: true,
 	}
 	b := NewBrowser(40, 10)
 	withQuietStdout(t, func() { b.finishLoad(loadResult{page: page, u: u}) })

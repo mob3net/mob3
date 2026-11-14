@@ -22,16 +22,16 @@ mkdir -p "$out/docs"
 
 render_page() {
   local src="$1" dst="$2" title="$3" description="$4" canonical="$5" relroot="$6"
-  local layout_start="$7" sidebar="$8" layout_end="$9"
+  local layout_start="$7" sidebar="$8" layout_end="$9" body_class="${10:-}"
   local body
   body="$(mktemp)"
   npx --yes marked@15.0.12 --gfm "$src" >"$body"
   node - "$template" "$body" "$dst" "$title" "$description" "$canonical" "$relroot" \
-    "$layout_start" "$sidebar" "$layout_end" <<'NODE'
+    "$layout_start" "$sidebar" "$layout_end" "$body_class" <<'NODE'
 const fs = require("fs");
 const [
   templatePath, bodyPath, outputPath, title, description, canonical, root,
-  layoutStart, sidebar, layoutEnd,
+  layoutStart, sidebar, layoutEnd, bodyClass,
 ] = process.argv.slice(2);
 const template = fs.readFileSync(templatePath, "utf8");
 let body = fs.readFileSync(bodyPath, "utf8");
@@ -50,14 +50,37 @@ body = body.replace(/href="([^"]+)"/g, (match, href) => {
   return `href="${target}${suffix}"`;
 });
 
+const toc = [];
+const seen = new Map();
+body = body.replace(/<h2>([\s\S]*?)<\/h2>/g, (match, inner) => {
+  const text = inner.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  let id = text.toLowerCase()
+    .replace(/&[a-z]+;/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!id) id = "section";
+  const n = (seen.get(id) || 0) + 1;
+  seen.set(id, n);
+  if (n > 1) id += "-" + n;
+  toc.push({ id, text });
+  return `<h2 id="${id}">${inner}</h2>`;
+});
+const tocHtml = toc.length
+  ? `<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul>` +
+    toc.map((t) => `<li><a href="#${t.id}">${t.text}</a></li>`).join("") +
+    `</ul></nav>`
+  : "";
+
 const values = {
   "{{TITLE}}": title,
   "{{DESCRIPTION}}": description,
   "{{CANONICAL}}": canonical,
   "{{ROOT}}": root,
+  "{{BODY_CLASS}}": bodyClass,
   "{{LAYOUT_START}}": layoutStart,
   "{{SIDEBAR}}": sidebar,
   "{{LAYOUT_END}}": layoutEnd,
+  "{{TOC}}": tocHtml,
   "{{CONTENT}}": body,
 };
 let html = template;
@@ -85,7 +108,7 @@ docs_order=(index install cli keys automation security sites development)
 
 sidebar_for() {
   local current="$1" name title active
-  printf '<aside class="docs-sidebar" aria-label="Documentation">'
+  printf '<aside class="docs-sidebar" id="sidebar" aria-label="Documentation">'
   printf '<h2>Documentation</h2><ul>'
   for name in "${docs_order[@]}"; do
     title="$(read_title "$root/docs/$name.md" "$name")"
@@ -102,7 +125,7 @@ sidebar_for() {
 readme_title="$(read_title "$root/README.md" "MOB³ — a small terminal web browser in Go")"
 render_page "$root/README.md" "$out/index.html" "$readme_title" \
   "MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color." \
-  "https://mob3.net/" "." "" "" ""
+  "https://mob3.net/" "." "" "" "" ""
 
 for src in "$root"/docs/*.md; do
   [ -e "$src" ] || continue
@@ -111,7 +134,7 @@ for src in "$root"/docs/*.md; do
   render_page "$src" "$out/docs/$name.html" "$title" \
     "MOB³ documentation — $title" \
     "https://mob3.net/docs/$name.html" ".." \
-    '<div class="docs-layout">' "$(sidebar_for "$name")" '</div>'
+    '<div class="docs-layout">' "$(sidebar_for "$name")" '</div>' "docs-page"
 done
 
 printf 'mob3.net\n' >"$out/CNAME"
