@@ -433,7 +433,8 @@ Standard Go layout:
   optional start URL, `-width` and `-height` (default 30); `-no-js` and
   `-layout-budget` are honored, and images are disabled. Tools cover
   navigate, snapshot, click, form/control listing, fill, select, toggle, submit,
-  type, press, scroll, history navigation, JS evaluation, session history and a
+  wait/wait_for, type, press, scroll, history navigation, JS evaluation, session
+  history and a
   PNG `screenshot` of the current viewport. The snapshot is text plus visible
   `[n]` links and form-control coordinates. `form` lists every form and control
   (including off-screen ones) with stable CSS selectors; `fill`, `select` and
@@ -834,7 +835,10 @@ Standard Go layout:
   rebuilt the page, or a changed memory readout. Pending timers arm a one-shot
   deadline for the next due timer instead of waking on a fixed tick, so a page
   with no timers sleeps; this also stops graphics-protocol image placements
-  from being re-sent every frame.
+  from being re-sent every frame. In headless automation timers run only while
+  a load is applied and during the `wait`/`wait_for` tools, which pump due
+  timers, force the deferred rebuild when one is pending, and apply timer-driven
+  navigations; unrelated tool calls do not advance timers.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
   disables). Timer count and per-tick callbacks are capped. Script

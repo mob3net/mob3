@@ -600,3 +600,104 @@ func TestAutomationClickSelectorScrollsIntoView(t *testing.T) {
 		t.Fatal("selector click did not focus the off-screen field")
 	}
 }
+
+func TestAutomationWaitPumpsTimers(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p>start</p></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Evaluate(ctx, `setTimeout(function () {
+		var p = document.createElement('p');
+		p.id = 'late';
+		p.textContent = 'late content';
+		document.body.appendChild(p);
+	}, 30)`); err != nil {
+		t.Fatal(err)
+	}
+	if snap := a.Snapshot(); strings.Contains(snap, "late content") {
+		t.Fatalf("timer ran before wait:\n%s", snap)
+	}
+	waited, err := a.Wait(ctx, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waited != 80 {
+		t.Fatalf("waited = %d", waited)
+	}
+	if snap := a.Snapshot(); !strings.Contains(snap, "late content") {
+		t.Fatalf("wait did not apply the timer's DOM change:\n%s", snap)
+	}
+}
+
+func TestAutomationWaitAppliesTimerNavigation(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/":     `<html><body><p>first</p></body></html>`,
+		"/next": `<html><body><p>second</p></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Evaluate(ctx, `setTimeout(function () { location.href = "https://example.com/next"; }, 20)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Wait(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	if a.b.url == nil || a.b.url.Path != "/next" {
+		t.Fatalf("timer navigation landed on %v", a.b.url)
+	}
+}
+
+func TestAutomationWaitFor(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p>start</p></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Evaluate(ctx, `setTimeout(function () {
+		var d = document.createElement('div');
+		d.id = 'ready';
+		d.textContent = 'ready now';
+		document.body.appendChild(d);
+	}, 30)`); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := a.WaitFor(ctx, "#ready", "", 2000)
+	if err != nil || !strings.Contains(msg, "found") {
+		t.Fatalf("wait_for selector = %q, %v", msg, err)
+	}
+	if msg, err := a.WaitFor(ctx, "", "READY NOW", 2000); err != nil || !strings.Contains(msg, "found") {
+		t.Fatalf("wait_for text = %q, %v", msg, err)
+	}
+	if _, err := a.WaitFor(ctx, "#missing", "", 40); err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("timeout error = %v", err)
+	}
+	if _, err := a.WaitFor(ctx, "input[", "", 50); err == nil || !strings.Contains(err.Error(), "bad selector") {
+		t.Fatalf("invalid selector error = %v", err)
+	}
+	if _, err := a.WaitFor(ctx, "", "", 50); err == nil {
+		t.Fatal("wait_for without a target was accepted")
+	}
+}
+
+func TestAutomationWaitCommands(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p>start</p></body></html>`,
+	})
+	ctx := context.Background()
+	if _, err := a.RunCommand(ctx, "navigate", json.RawMessage(`{"url":"https://example.com/"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := a.RunCommand(ctx, "wait", json.RawMessage(`{"ms":10}`)); err != nil || got != "waited 10ms" {
+		t.Fatalf("wait = %q, %v", got, err)
+	}
+	if got, err := a.RunCommand(ctx, "wait_for", json.RawMessage(`{"selector":"p","timeout_ms":500}`)); err != nil || !strings.Contains(got, "found") {
+		t.Fatalf("wait_for = %q, %v", got, err)
+	}
+}

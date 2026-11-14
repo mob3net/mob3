@@ -86,6 +86,8 @@ printf '%s\n' \
 | `select` | `{selector,value}` or `{values}` or `{text}` or `{index}` | `selected …` |
 | `toggle` | `{selector,checked?}` | `… is checked` / `… is unchecked` |
 | `submit` | `{selector?}` | Snapshot after navigation |
+| `wait` | `{ms}` | `waited <ms>ms` |
+| `wait_for` | `{selector?}` and/or `{text?}`, `{timeout_ms?}` | `found … after <ms>` |
 | `type` | `{text}` | `typed` |
 | `press` | `{key}` | `pressed <key>` |
 | `scroll` | `{lines}` or `{pages}` or `{top}` or `{bottom}` | Scroll percentage |
@@ -205,6 +207,30 @@ the page's only form. Validation failures, invalid actions and
 `preventDefault()` are returned as tool errors (validation also focuses the
 first invalid field), so the page does not change on failure.
 
+### `wait` and `wait_for`
+
+```json
+{"ms":500}
+{"selector":"#results","timeout_ms":5000}
+{"text":"No results found","timeout_ms":2000}
+{"selector":".item","text":"price","timeout_ms":5000}
+```
+
+JavaScript timers do not run on their own between tool calls. `wait` advances
+the page for a number of milliseconds (default 100, maximum 10000), running due
+timers, applying the DOM rebuilds they cause and waiting for navigations they
+start.
+
+`wait_for` polls until a CSS selector matches an element and/or the given text
+appears in the rendered page. Text matching is case-insensitive, ignores
+markup and scripts, and sees the laid-out document rather than just the
+viewport. It returns `found … after <ms>` or fails with a timeout error; the
+default timeout is 5000ms and the maximum is 30000ms. When both `selector` and
+`text` are supplied, both must match.
+
+Both tools return a short confirmation rather than a snapshot; call `snapshot`
+afterwards when you need the page contents.
+
 ### `screenshot`
 
 ```json
@@ -257,7 +283,9 @@ results. `-no-js` disables evaluation.
 3. `form` to get every control's selector and current value.
 4. `fill`, `select` and `toggle` to set fields without focusing or scrolling.
 5. `submit` to send the form, then read the returned snapshot.
-6. Use `click`/`type`/`press` for special widgets, `evaluate` for DOM
+6. Use `wait_for` after clicks and submissions that load content with timers,
+   then `snapshot` when ready.
+7. Use `click`/`type`/`press` for special widgets, `evaluate` for DOM
    extraction, or `scroll`/`back`/`history` to move.
 
 ## Limitations
@@ -272,8 +300,10 @@ results. `-no-js` disables evaluation.
   textareas, checkboxes, radios and selects. File uploads and multipart forms
   are not supported, and framework widgets that rerender from their own state
   may overwrite a value set directly.
-- **Timers are not pumped between tool calls.** Content that only appears in a
-  later `setTimeout` callback may be missing from the snapshot.
+- **Timers advance only during loads and waits.** JavaScript timers run while a
+  page loads and during `wait`/`wait_for`; a timer that fires later needs one of
+  those tools before its content appears. Unrelated tool calls do not pump
+  timers.
 - **Memory only.** Closing the server discards history, cookies and storage.
 - **Local, unauthenticated server.** Use it only over a trusted local stdio
   channel.

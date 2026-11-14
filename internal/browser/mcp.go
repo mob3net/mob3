@@ -307,6 +307,25 @@ func mcpToolDefinitions() []map[string]any {
 			}),
 		},
 		{
+			"name": "wait",
+			"description": "Wait for a number of milliseconds, running due JavaScript timers, applying DOM rebuilds " +
+				"and waiting for navigations they start. Defaults to 100ms; capped at 10000ms.",
+			"inputSchema": object(map[string]any{
+				"ms": integer("milliseconds to wait (0-10000, default 100)"),
+			}),
+		},
+		{
+			"name": "wait_for",
+			"description": "Wait until a CSS selector matches an element and/or text appears in the rendered page, " +
+				"pumping JavaScript timers. Returns when found; fails as a tool error after the timeout. " +
+				"Call snapshot afterwards to read the result.",
+			"inputSchema": object(map[string]any{
+				"selector":   str("CSS selector that must match"),
+				"text":       str("case-insensitive text that must appear in the rendered page"),
+				"timeout_ms": integer("timeout in milliseconds (default 5000, max 30000)"),
+			}),
+		},
+		{
 			"name":        "type",
 			"description": "Type text into the focused input, textarea or URL prompt.",
 			"inputSchema": object(map[string]any{"text": str("text to type")}, "text"),
