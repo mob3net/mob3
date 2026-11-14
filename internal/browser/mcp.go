@@ -133,8 +133,8 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 			"version": Version,
 		},
 		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
-			"links as [n], and form-control positions; click accepts link, selector, x/y. " +
-			"Use form for every control's selector and value, fill/select/toggle to set them, " +
+			"links as [n], and form-control positions; click accepts link, text, selector, x/y. " +
+			"Use links for every off-screen link and form for every control's selector and value, fill/select/toggle to set them, " +
 			"and submit to send a form. Use evaluate for DOM queries. " +
 			"Sessions and storage are memory-only.",
 	})
@@ -241,6 +241,14 @@ func mcpToolDefinitions() []map[string]any {
 			"inputSchema": object(map[string]any{"selector": str("optional form or control selector to scope the listing")}),
 		},
 		{
+			"name": "links",
+			"description": "List every link in the document, including off-screen ones, with its [n] index for click, " +
+				"text, resolved href and CSS selector. Optional selector filters anchors.",
+			"inputSchema": object(map[string]any{
+				"selector": str("optional CSS selector filtering which anchors are listed"),
+			}),
+		},
+		{
 			"name":        "screenshot",
 			"description": "Render the current page viewport as a PNG image. Scale 1 uses 8x16 pixel cells; scale 2 doubles the image.",
 			"inputSchema": object(map[string]any{
@@ -249,10 +257,12 @@ func mcpToolDefinitions() []map[string]any {
 		},
 		{
 			"name": "click",
-			"description": "Click a numbered link, a CSS selector, or a zero-based viewport cell. " +
+			"description": "Click a numbered link, an element by visible text, a CSS selector, or a zero-based viewport cell. " +
+				"Text matching is case-insensitive and prefers exact matches on links and buttons. " +
 				"Returns a fresh snapshot after any navigation.",
 			"inputSchema": object(map[string]any{
-				"link":     integer("1-based link number from snapshot"),
+				"link":     integer("1-based link number from snapshot or links"),
+				"text":     str("visible text of the element to click"),
 				"selector": str("CSS selector"),
 				"x":        integer("zero-based page column"),
 				"y":        integer("zero-based page row"),

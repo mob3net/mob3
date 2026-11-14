@@ -19,11 +19,12 @@ type Automation struct {
 	b  *Browser
 }
 
-// ClickTarget selects what to click. Exactly one of Link, Selector or
+// ClickTarget selects what to click. Exactly one of Link, Text, Selector or
 // HasCoords should be set. Coordinates are zero-based cells in the page
 // viewport (row 0 is the first page row below the chrome).
 type ClickTarget struct {
 	Link      int
+	Text      string
 	Selector  string
 	X, Y      int
 	HasCoords bool
@@ -340,6 +341,15 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 		b.focus = target.Link - 1
 		b.followFocused()
 		return a.waitLoad(ctx)
+	case target.Text != "":
+		n, err := findNodeByText(b, target.Text)
+		if err != nil {
+			return err
+		}
+		if err := a.clickNodeLocked(n); err != nil {
+			return err
+		}
+		return a.waitLoad(ctx)
 	case target.Selector != "":
 		n, err := findSelectorNode(b.page.Root, target.Selector)
 		if err != nil {
@@ -358,7 +368,7 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: target.X + 1, Y: top + target.Y + 1, Press: false})
 		return a.waitLoad(ctx)
 	default:
-		return errors.New("click needs a link number, selector or coordinates")
+		return errors.New("click needs a link number, text, selector or coordinates")
 	}
 }
 
@@ -392,6 +402,132 @@ func (a *Automation) clickNodeLocked(n *Node) error {
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
 	return nil
+}
+
+// findNodeByText returns the most specific rendered element whose visible text
+// matches query, preferring exact matches and interactive elements.
+func findNodeByText(b *Browser, query string) (*Node, error) {
+	needle := strings.ToLower(collapseWhitespace(query))
+	if needle == "" {
+		return nil, errors.New("click text is empty")
+	}
+	if b.page == nil || b.page.Root == nil || b.layout == nil {
+		return nil, errors.New("no page loaded")
+	}
+	var best *Node
+	bestExact := false
+	bestPrio, bestLen := 0, 0
+	b.page.Root.FindAll(func(n *Node) bool {
+		if n.Type != ElementNode {
+			return false
+		}
+		switch n.Tag {
+		case "html", "body", "head", "script", "style", "noscript", "template":
+			return false
+		}
+		text := nodeMatchText(n)
+		if text == "" {
+			return false
+		}
+		low := strings.ToLower(text)
+		exact := low == needle
+		if !exact && !strings.Contains(low, needle) {
+			return false
+		}
+		if !hasAnyFrag(b, n) {
+			return false
+		}
+		prio, length := clickTextPriority(n), len([]rune(low))
+		better := false
+		switch {
+		case best == nil:
+			better = true
+		case exact != bestExact:
+			better = exact
+		case prio != bestPrio:
+			better = prio < bestPrio
+		case length != bestLen:
+			better = length < bestLen
+		}
+		if better {
+			best, bestExact, bestPrio, bestLen = n, exact, prio, length
+		}
+		return false
+	})
+	if best == nil {
+		return nil, fmt.Errorf("no clickable element with text %q", query)
+	}
+	return best, nil
+}
+
+// hasAnyFrag reports whether layout produced a fragment for n or its subtree,
+// including content outside the current viewport.
+func hasAnyFrag(b *Browser, n *Node) bool {
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Node == n || (f.Node != nil && isDescendant(f.Node, n)) {
+			return true
+		}
+	}
+	return false
+}
+
+func nodeMatchText(n *Node) string {
+	if n.Tag == "input" {
+		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
+		case "submit", "button", "reset":
+			if v := n.Attr("value"); v != "" {
+				return collapseWhitespace(v)
+			}
+		}
+	}
+	var sb strings.Builder
+	writeMatchText(&sb, n)
+	if text := collapseWhitespace(sb.String()); text != "" {
+		return text
+	}
+	for _, key := range []string{"aria-label", "alt", "title"} {
+		if v := n.Attr(key); v != "" {
+			return collapseWhitespace(v)
+		}
+	}
+	return ""
+}
+
+func writeMatchText(sb *strings.Builder, n *Node) {
+	for _, c := range n.Children {
+		switch c.Type {
+		case TextNode:
+			sb.WriteString(c.Text)
+			sb.WriteByte(' ')
+		case ElementNode:
+			switch c.Tag {
+			case "script", "style", "noscript", "template":
+				continue
+			}
+			if c.HasAttr("hidden") || c.Style != nil && c.Style.Display == "none" {
+				continue
+			}
+			writeMatchText(sb, c)
+		}
+	}
+}
+
+func clickTextPriority(n *Node) int {
+	switch n.Tag {
+	case "a":
+		return 0
+	case "button", "summary":
+		return 1
+	case "label":
+		return 2
+	case "input", "select", "textarea":
+		return 3
+	}
+	if strings.EqualFold(n.Attr("role"), "button") || n.Attr("onclick") != "" {
+		return 1
+	}
+	return 10
 }
 
 func findSelectorNode(root *Node, sel string) (*Node, error) {
@@ -1191,6 +1327,13 @@ func selectorForNode(root, n *Node) string {
 			return base
 		}
 	}
+	if n.Tag == "a" {
+		if href := n.Attr("href"); href != "" && safeAttrText(href) {
+			if sel := "a[href=" + strconv.Quote(href) + "]"; selectorMatchesNode(root, n, sel) {
+				return sel
+			}
+		}
+	}
 	return cssNodePath(n)
 }
 
@@ -1455,6 +1598,67 @@ func (a *Automation) flushDirtyLocked() {
 	}
 }
 
+// Links lists every anchor in document order, including off-screen links, with
+// the [n] index click accepts, its text, resolved href and CSS selector.
+func (a *Automation) Links(selector string) (string, error) {
+	if a == nil || a.b == nil {
+		return "", errors.New("automation is closed")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b := a.b
+	if b.page == nil || b.page.Root == nil || b.layout == nil {
+		return "No page loaded", nil
+	}
+	var filter *Selector
+	if selector != "" {
+		s, err := ParseSelector(selector)
+		if err != nil {
+			return "", fmt.Errorf("bad selector: %w", err)
+		}
+		filter = s
+	}
+	var lines []string
+	total := 0
+	truncated := false
+	for i := range b.layout.Links {
+		li := b.layout.Links[i]
+		if li.Node == nil || filter != nil && !filter.Match(li.Node) {
+			continue
+		}
+		total++
+		if len(lines) >= 200 {
+			truncated = true
+			continue
+		}
+		text := collapseWhitespace(li.Node.TextContent())
+		if text == "" {
+			text = li.Node.Attr("aria-label")
+		}
+		if text == "" {
+			text = li.Node.Attr("alt")
+		}
+		if text == "" {
+			text = "(no text)"
+		}
+		lines = append(lines, fmt.Sprintf("[%d] %s -> %s selector=%s",
+			i+1, clipText(text, 100), b.resolveHref(li.Href), strconv.Quote(selectorForNode(b.page.Root, li.Node))))
+	}
+	if total == 0 {
+		if selector != "" {
+			return "No links match " + strconv.Quote(selector), nil
+		}
+		return "No links found", nil
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Links: %d\n", total)
+	sb.WriteString(strings.Join(lines, "\n"))
+	if truncated {
+		fmt.Fprintf(&sb, "\n(truncated at %d links)", len(lines))
+	}
+	return sb.String(), nil
+}
+
 // RunCommand executes one named automation command with JSON arguments. It is
 // shared by protocol front ends so each transport only owns framing. Command
 // names and argument shapes are the MCP tool definitions in mcp.go.
@@ -1485,6 +1689,7 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 	case "click":
 		var p struct {
 			Link     int    `json:"link"`
+			Text     string `json:"text"`
 			Selector string `json:"selector"`
 			X        *int   `json:"x"`
 			Y        *int   `json:"y"`
@@ -1492,15 +1697,29 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 		if err := decodeArgs(args, &p); err != nil {
 			return "", err
 		}
-		target := ClickTarget{Link: p.Link, Selector: p.Selector}
+		target := ClickTarget{Link: p.Link, Text: p.Text, Selector: p.Selector}
+		targets := 0
+		if target.Link > 0 {
+			targets++
+		}
+		if target.Text != "" {
+			targets++
+		}
+		if target.Selector != "" {
+			targets++
+		}
 		if p.X != nil || p.Y != nil {
 			if p.X == nil || p.Y == nil {
 				return "", errors.New("click x and y must be provided together")
 			}
 			target.X, target.Y, target.HasCoords = *p.X, *p.Y, true
+			targets++
 		}
-		if target.Link == 0 && target.Selector == "" && !target.HasCoords {
-			return "", errors.New("click needs link, selector, or x/y")
+		if targets == 0 {
+			return "", errors.New("click needs link, text, selector, or x/y")
+		}
+		if targets > 1 {
+			return "", errors.New("click takes only one of link, text, selector, or x/y")
 		}
 		if err := a.Click(ctx, target); err != nil {
 			return "", err
@@ -1532,6 +1751,14 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 			return "", err
 		}
 		return a.WaitFor(ctx, p.Selector, p.Text, p.TimeoutMS)
+	case "links":
+		var p struct {
+			Selector string `json:"selector"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		return a.Links(p.Selector)
 	case "form":
 		var p struct {
 			Selector string `json:"selector"`

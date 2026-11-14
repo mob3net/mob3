@@ -701,3 +701,111 @@ func TestAutomationWaitCommands(t *testing.T) {
 		t.Fatalf("wait_for = %q, %v", got, err)
 	}
 }
+
+func TestAutomationLinksListsOffscreen(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body>` + strings.Repeat("<p>filler</p>", 40) + `
+			<a href="/next">Far link</a>
+			<a href="/other"><span>Other</span></a>
+		</body></html>`,
+		"/next":  `<html><body>next page</body></html>`,
+		"/other": `<html><body>other page</body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if snap := a.Snapshot(); strings.Contains(snap, "Far link") {
+		t.Fatalf("off-screen link unexpectedly in viewport snapshot:\n%s", snap)
+	}
+	out, err := a.Links("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Links: 2",
+		"[1] Far link -> https://example.com/next",
+		"[2] Other -> https://example.com/other",
+		"selector=",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("links missing %q:\n%s", want, out)
+		}
+	}
+	filtered, err := a.Links(`a[href="/other"]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(filtered, "Links: 1") || strings.Contains(filtered, "Far link") {
+		t.Fatalf("filtered links = %q", filtered)
+	}
+	if _, err := a.Links("a["); err == nil {
+		t.Fatal("invalid filter selector was accepted")
+	}
+	if err := a.Click(ctx, ClickTarget{Link: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if a.b.url == nil || a.b.url.Path != "/next" {
+		t.Fatalf("off-screen link click landed on %v", a.b.url)
+	}
+}
+
+func TestAutomationClickByText(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/":     `<html><body><p>Intro text</p><a href="/next">Next Page</a></body></html>`,
+		"/next": `<html><body>second</body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Click(ctx, ClickTarget{Text: "next page"}); err != nil {
+		t.Fatal(err)
+	}
+	if a.b.url == nil || a.b.url.Path != "/next" {
+		t.Fatalf("text click landed on %v", a.b.url)
+	}
+	if err := a.Click(ctx, ClickTarget{Text: "missing text"}); err == nil {
+		t.Fatal("text click without a match was accepted")
+	}
+}
+
+func TestAutomationClickTextSubmitButton(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/":     `<html><body><form action="/find"><input name="q" value="hi"><input type="submit" value="Send"></form></body></html>`,
+		"/find": `<html><body>found</body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Click(ctx, ClickTarget{Text: "Send"}); err != nil {
+		t.Fatal(err)
+	}
+	if a.b.url == nil || a.b.url.Path != "/find" {
+		t.Fatalf("submit button click landed on %v", a.b.url)
+	}
+	if got := a.b.url.Query().Get("q"); got != "hi" {
+		t.Fatalf("submitted q = %q", got)
+	}
+}
+
+func TestAutomationLinksAndTextCommands(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/":     `<html><body><a href="/next">Next Page</a></body></html>`,
+		"/next": `<html><body>second</body></html>`,
+	})
+	ctx := context.Background()
+	if _, err := a.RunCommand(ctx, "navigate", json.RawMessage(`{"url":"https://example.com/"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := a.RunCommand(ctx, "links", nil); err != nil || !strings.Contains(got, "Next Page") {
+		t.Fatalf("links = %q, %v", got, err)
+	}
+	if got, err := a.RunCommand(ctx, "click", json.RawMessage(`{"text":"next page"}`)); err != nil || !strings.Contains(got, "second") {
+		t.Fatalf("click text = %q, %v", got, err)
+	}
+	if _, err := a.RunCommand(ctx, "click", json.RawMessage(`{"link":1,"text":"Next Page"}`)); err == nil {
+		t.Fatal("click with two targets was accepted")
+	}
+}

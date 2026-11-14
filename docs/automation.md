@@ -79,8 +79,9 @@ printf '%s\n' \
 | --- | --- | --- |
 | `navigate` | `{url}` | Snapshot after loading |
 | `snapshot` | `{}` | Current page viewport, links and form controls |
+| `links` | `{selector?}` | Every link with index, text, href and selector |
 | `screenshot` | `{scale}` | PNG image of the current page viewport |
-| `click` | `{link}` or `{selector}` or `{x,y}` | Snapshot after the click |
+| `click` | `{link}` or `{text}` or `{selector}` or `{x,y}` | Snapshot after the click |
 | `form` | `{selector?}` | Every form and control with CSS selectors and values |
 | `fill` | `{selector,value}` or `{fields}` | `filled N field(s)` |
 | `select` | `{selector,value}` or `{values}` or `{text}` or `{index}` | `selected …` |
@@ -127,6 +128,27 @@ Inputs:
   filtered list may skip numbers.
 - `Inputs` positions are zero-based page-viewport cells, matching `click`.
 - Page text is the viewport, not the whole document. Use `scroll`.
+
+### `links`
+
+```json
+{}
+{"selector":"main a"}
+```
+
+Lists every rendered anchor in the document, including links outside the
+current viewport, with the same `[n]` index that `snapshot` shows and `click`
+accepts:
+
+```text
+Links: 2
+[1] Docs -> https://example.com/docs selector="a[href=\"/docs\"]"
+[2] Sign in -> https://example.com/login selector="#nav a:nth-child(2)"
+```
+
+Empty anchors, hidden anchors and anchors with no rendered content are
+omitted. `selector` filters which anchors are listed (it matches the anchor,
+not its containers). Listings are capped at 200 entries.
 
 ### `form`
 
@@ -247,14 +269,21 @@ disables image downloads so image regions show alt text.
 
 ```json
 {"link":1}
+{"text":"Sign in"}
 {"selector":"input[name=q]"}
 {"x":4,"y":12}
 ```
 
-- `link` uses a snapshot link number.
+- `link` uses a snapshot or `links` link number, including off-screen links.
+- `text` clicks the most specific rendered element whose visible text matches,
+  case-insensitively. Exact matches are preferred, then links and buttons over
+  containers. It also matches submit-button `value` text and `aria-label`/`alt`
+  fallbacks.
 - `selector` uses a CSS selector. Links, inputs, checkboxes and buttons are
   clicked through their rendered cell, so normal browser click behaviour runs.
+  A selector click scrolls an off-screen element into view first.
 - `x`/`y` are zero-based page-viewport cells.
+- Pass exactly one of the four targets.
 
 ### `type` and `press`
 
@@ -279,7 +308,8 @@ results. `-no-js` disables evaluation.
 ## Typical agent loop
 
 1. `navigate` a page.
-2. `snapshot` to read text and collect link numbers.
+2. `snapshot` to read text and collect visible link numbers; use `links` when
+   the target link is below the fold.
 3. `form` to get every control's selector and current value.
 4. `fill`, `select` and `toggle` to set fields without focusing or scrolling.
 5. `submit` to send the form, then read the returned snapshot.

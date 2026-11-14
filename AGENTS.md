@@ -432,11 +432,15 @@ Standard Go layout:
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
   optional start URL, `-width` and `-height` (default 30); `-no-js` and
   `-layout-budget` are honored, and images are disabled. Tools cover
-  navigate, snapshot, click, form/control listing, fill, select, toggle, submit,
-  wait/wait_for, type, press, scroll, history navigation, JS evaluation, session
+  navigate, snapshot, click, link listing, form/control listing, fill, select,
+  toggle, submit, wait/wait_for, type, press, scroll, history navigation,
+  JS evaluation, session
   history and a
   PNG `screenshot` of the current viewport. The snapshot is text plus visible
-  `[n]` links and form-control coordinates. `form` lists every form and control
+  `[n]` links and form-control coordinates. `links` lists every rendered anchor
+  (including off-screen ones) with its `[n]` index, href and selector; `click`
+  also accepts visible `text` and prefers exact matches on links and buttons.
+  `form` lists every form and control
   (including off-screen ones) with stable CSS selectors; `fill`, `select` and
   `toggle` set values by selector without focus or scrolling, and `submit` runs
   constraint validation and the submit handler, waits for navigation, and
