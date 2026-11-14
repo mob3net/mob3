@@ -149,4 +149,5 @@ and tools.
 The `⚙` toolbar icon opens `about:config`, a form listing every CLI option and
 its current value. Editable options change for the session only; startup
 options are read-only; dump-only colour options do not affect the interactive
-UI. Nothing is persisted.
+UI. The top shows the current viewport in characters and pixels (using the
+terminal's reported cell size, or 8×16 by default). Nothing is persisted.

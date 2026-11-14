@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -157,7 +158,7 @@ func (b *Browser) applyConfig(q url.Values) {
 
 // configPage builds the about:config document.
 func (b *Browser) configPage(u *url.URL, updated bool) *Page {
-	doc := configPageHTML(b.configItems(), updated)
+	doc := configPageHTML(b.configItems(), updated, b.width, b.viewportHeight(), b.cellW, b.cellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
 	if style := root.FindFirst("style"); style != nil {
@@ -166,7 +167,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 	return page
 }
 
-func configPageHTML(items []configItem, updated bool) string {
+func configPageHTML(items []configItem, updated bool, width, height, cellW, cellH int) string {
 	var b strings.Builder
 	b.WriteString(`<!DOCTYPE html><html><head><title>Config</title>
 <style>
@@ -178,10 +179,20 @@ th { color: #57606a; }
 input { width: 34em; max-width: 100%; }
 .note { color: #57606a; }
 .fixed { color: #57606a; }
+.viewport { background: #f6f8fa; border: 1px solid #d0d7de; padding: 8px 10px; }
 .updated { background: #e6f4ea; border: 1px solid #8cc59b; padding: 8px; }
 </style></head><body>
 <h1>Config</h1>
 `)
+	if cellW < 1 {
+		cellW = 8
+	}
+	if cellH < 1 {
+		cellH = 16
+	}
+	b.WriteString(fmt.Sprintf(
+		`<p class="viewport"><b>Viewport:</b> %dx%d characters (%dx%d pixels; %dx%d per cell)</p>`,
+		width, height, width*cellW, height*cellH, cellW, cellH))
 	if updated {
 		b.WriteString(`<p class="updated">Settings updated for this session.</p>`)
 	}

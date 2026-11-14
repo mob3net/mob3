@@ -124,6 +124,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
 		"-bookmarks", "-home", "-js-memory", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
 		"-ua", "-search", "-mcp", "-version", "startup",
+		"Viewport:", "80x7 characters", "640x112 pixels", "8x16 per cell",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
@@ -157,6 +158,18 @@ func TestConfigPageShowsValues(t *testing.T) {
 	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		if n.Attr("name") == "no-js" && n.Attr("type") != "checkbox" {
 			t.Fatalf("no-js input type = %q", n.Attr("type"))
+		}
+	}
+}
+
+func TestConfigPageShowsPixelViewport(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.cellW, b.cellH = 10, 20
+	page := b.configPage(mustParse(t, "about:config"), false)
+	text := page.Root.TextContent()
+	for _, want := range []string{"80x7 characters", "800x140 pixels", "10x20 per cell"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("config page missing %q:\n%s", want, text)
 		}
 	}
 }

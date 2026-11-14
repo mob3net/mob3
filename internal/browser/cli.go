@@ -177,7 +177,14 @@ func Run(args []string) int {
 	case "off", "none", "false":
 		b.noBigText = true
 	}
-	cellW, cellH, _ := terminalCellPixels(os.Stdout)
+	cellW, cellH, ok := terminalCellPixels(os.Stdout)
+	if !ok || cellW <= 0 {
+		cellW = 8
+	}
+	if !ok || cellH <= 0 {
+		cellH = 16
+	}
+	b.cellW, b.cellH = cellW, cellH
 	b.gfx = NewGFXRenderer(graphicsMode, cellW, cellH)
 
 	kittyKeys := kittyKeyboardEnabled()

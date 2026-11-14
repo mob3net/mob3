@@ -40,6 +40,7 @@ type Browser struct {
 	page   *Page
 
 	width, height int
+	cellW, cellH  int
 	layout        *Layout
 	scroll        int
 	focus         int
@@ -214,7 +215,7 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		loader: NewLoader(), width: w, height: h, focus: -1, hover: -1, histIdx: -1,
+		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1,
 		jsMemLimit:   defaultJSMemoryLimit,
 		layoutBudget: DefaultLayoutBudget,
 		loadCh:       make(chan loadResult, 1),

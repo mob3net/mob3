@@ -1177,7 +1177,8 @@ Edge). Nothing is saved after MOB³ exits.</p>
 command-line option with its current value. Editable values apply in memory
 for this session; options marked <b>startup</b> are read-only and need a
 restart, while <b>dump only</b> options apply only to dump runs. On/off
-options use checkboxes.
+options use checkboxes. The top of the page shows the current viewport in
+characters and pixels (for example <b>80x17 characters (640x272 pixels)</b>).
 Nothing is saved after MOB³ exits.</p>
 
 <h2>Mouse</h2>

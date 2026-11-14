@@ -419,8 +419,11 @@ Standard Go layout:
   session (no-js, ignore-blocks, home, js-memory, cache, layout-budget,
   text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
-  colour options are “dump only”. Changes are never persisted. The form uses
-  the same centered `max-width:900px` reading column as `about:help`.
+  colour options are “dump only”. Changes are never persisted. The page starts
+  with the current viewport in characters and pixels (`width*cellW` by
+  `viewportHeight*cellH`, using the terminal cell pixels or the 8×16 default)
+  and the form uses the same centered `max-width:900px` reading column as
+  `about:help`.
 - **MCP automation:** `-mcp` starts a headless `Automation` session and serves
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
   optional start URL, `-width` and `-height` (default 30); `-no-js` and
