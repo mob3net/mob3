@@ -468,13 +468,13 @@ func TestGridLayout(t *testing.T) {
 }
 
 func TestMediaRangeSyntax(t *testing.T) {
-	if !mediaFeatureMatches("width>=960px", 1280) {
+	if !mediaFeatureMatches("width>=960px", 1280, false) {
 		t.Fatal("width>=960px did not match 1280")
 	}
-	if mediaFeatureMatches("width>=960px", 800) {
+	if mediaFeatureMatches("width>=960px", 800, false) {
 		t.Fatal("width>=960px matched 800")
 	}
-	if !mediaFeatureMatches("width<=959px", 800) {
+	if !mediaFeatureMatches("width<=959px", 800, false) {
 		t.Fatal("width<=959px did not match 800")
 	}
 }

@@ -86,7 +86,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   stays enabled across navigation, and restores the normal page and scroll
   position when toggled off.
 - Dark mode (`D`, the footer `Dark:on`/`Dark:off` label, or `-dark` at launch):
-  remaps page backgrounds, text, links and borders to a dark palette; images
+  asks sites for their dark styles with `prefers-color-scheme: dark`. Pages that
+  already render a dark background keep their own palette; otherwise
+  backgrounds, text, links and borders are remapped to a dark palette. Images
   keep their original colors.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered

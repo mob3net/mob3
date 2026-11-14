@@ -36,6 +36,17 @@ func applyDarkLayout(ly *Layout) {
 	ly.PageBG = darkBackground(ly.PageBG, bgCache)
 }
 
+// isDarkColor reports whether a resolved page background already belongs to a
+// dark palette. It keeps author-supplied dark themes intact when dark mode is
+// enabled.
+func isDarkColor(c Color) bool {
+	if !c.Set || c.A == 0 {
+		return false
+	}
+	_, _, l := colorHSL(c)
+	return l < 0.5
+}
+
 func darkForeground(c Color, cache map[Color]Color) Color {
 	if !c.Set || c.A == 0 {
 		return c

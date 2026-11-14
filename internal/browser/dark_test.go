@@ -54,6 +54,31 @@ func TestDarkLayoutPalette(t *testing.T) {
 	}
 }
 
+func TestDarkModeUsesAuthorDarkCSS(t *testing.T) {
+	rules := ParseStylesheet(`@media (prefers-color-scheme: dark) {
+		body { background: #101010; color: #eeeeee; }
+	}`)
+	root := ParseHTML(`<html><body><p>site dark</p></body></html>`)
+	light := BuildLayout(root, rules, 40)
+	if colorLum(light.PageBG) < 0.8 {
+		t.Fatalf("light page background = %+v", light.PageBG)
+	}
+	dark := BuildLayoutDarkDeadline(root, rules, 40, false, time.Time{})
+	if dark.PageBG != RGB(0x10, 0x10, 0x10) {
+		t.Fatalf("author dark background was remapped: %+v", dark.PageBG)
+	}
+	for i := range dark.Frags {
+		f := &dark.Frags[i]
+		if f.Kind == fragText && f.Style != nil && f.Text != "" {
+			if f.Style.Color != RGB(0xee, 0xee, 0xee) {
+				t.Fatalf("author dark text was remapped: %+v", f.Style.Color)
+			}
+			return
+		}
+	}
+	t.Fatal("no text fragment")
+}
+
 func TestDarkReaderMode(t *testing.T) {
 	doc := ParseHTML(`<html><body><article><p>` +
 		`Dark reader article text that is long enough for extraction.` +

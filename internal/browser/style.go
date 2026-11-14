@@ -1146,6 +1146,7 @@ type styleEngine struct {
 	ua         []Rule
 	author     []Rule
 	viewportPx int
+	dark       bool
 	deadline   time.Time
 	media      map[string]bool
 	expired    bool
@@ -1187,7 +1188,7 @@ func (e *styleEngine) mediaMatches(query string) bool {
 	if v, ok := e.media[query]; ok {
 		return v
 	}
-	v := mediaMatches(query, e.viewportPx)
+	v := mediaMatches(query, e.viewportPx, e.dark)
 	if e.media == nil {
 		e.media = make(map[string]bool)
 	}
@@ -1508,20 +1509,20 @@ func parseRules(src string, st *parseState, media string) []Rule {
 // mediaMatches reports whether a comma-separated media query list applies to
 // a screen viewport of viewportPx CSS pixels. A non-positive width means the
 // viewport is unknown; only print-only rules are excluded then.
-func mediaMatches(query string, viewportPx int) bool {
+func mediaMatches(query string, viewportPx int, dark bool) bool {
 	query = strings.TrimSpace(strings.ToLower(query))
 	if query == "" {
 		return true
 	}
 	for _, part := range splitTopLevel(query, ',') {
-		if mediaQueryMatches(strings.TrimSpace(part), viewportPx) {
+		if mediaQueryMatches(strings.TrimSpace(part), viewportPx, dark) {
 			return true
 		}
 	}
 	return false
 }
 
-func mediaQueryMatches(q string, vw int) bool {
+func mediaQueryMatches(q string, vw int, dark bool) bool {
 	if q == "" {
 		return true
 	}
@@ -1542,7 +1543,7 @@ func mediaQueryMatches(q string, vw int) bool {
 			match = false
 		default:
 			if strings.HasPrefix(term, "(") && strings.HasSuffix(term, ")") {
-				if !mediaFeatureMatches(term[1:len(term)-1], vw) {
+				if !mediaFeatureMatches(term[1:len(term)-1], vw, dark) {
 					match = false
 				}
 			} else {
@@ -1556,7 +1557,7 @@ func mediaQueryMatches(q string, vw int) bool {
 	return match
 }
 
-func mediaFeatureMatches(f string, vw int) bool {
+func mediaFeatureMatches(f string, vw int, dark bool) bool {
 	f = strings.TrimSpace(f)
 	if strings.ContainsAny(f, "<>") {
 		op := ""
@@ -1599,6 +1600,14 @@ func mediaFeatureMatches(f string, vw int) bool {
 	if k, v, ok := strings.Cut(f, ":"); ok {
 		k = strings.TrimSpace(k)
 		v = strings.TrimSpace(v)
+		// The color scheme is independent of the viewport, so it is checked
+		// before the unknown-width shortcut below.
+		if k == "prefers-color-scheme" {
+			if dark {
+				return v == "dark"
+			}
+			return v == "light" || v == "no-preference"
+		}
 		if vw <= 0 {
 			return true
 		}
@@ -1609,8 +1618,6 @@ func mediaFeatureMatches(f string, vw int) bool {
 			return vw <= mediaPx(v)
 		case "width", "device-width":
 			return vw == mediaPx(v)
-		case "prefers-color-scheme":
-			return v == "light" || v == "no-preference"
 		case "orientation", "hover", "any-hover", "pointer", "any-pointer",
 			"min-height", "max-height", "height", "min-resolution",
 			"max-resolution", "resolution":

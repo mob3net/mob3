@@ -104,6 +104,32 @@ func TestLengthUnitsParse(t *testing.T) {
 	}
 }
 
+func TestPrefersColorSchemeMedia(t *testing.T) {
+	rules := ParseStylesheet(`
+		@media (prefers-color-scheme: dark) { p { color: #ffffff; } }
+		@media (prefers-color-scheme: light) { p { background-color: #ffffff; } }
+	`)
+	darkDoc := ParseHTML(`<p>x</p>`)
+	darkEngine := newStyleEngine(rules, 800)
+	darkEngine.dark = true
+	dark := darkEngine.computeAll(darkDoc)[darkDoc.FindFirst("p")]
+	if !dark.Color.Set || dark.Color.R != 255 || dark.Color.G != 255 || dark.Color.B != 255 {
+		t.Fatalf("dark color = %+v, want white", dark.Color)
+	}
+	if dark.Background.Set {
+		t.Fatalf("light-scheme rule applied in dark mode: %+v", dark.Background)
+	}
+
+	lightDoc := ParseHTML(`<p>x</p>`)
+	light := newStyleEngine(rules, 800).computeAll(lightDoc)[lightDoc.FindFirst("p")]
+	if light.Background.R != 255 || light.Background.G != 255 || light.Background.B != 255 {
+		t.Fatalf("light background = %+v, want white", light.Background)
+	}
+	if light.Color.R == 255 && light.Color.G == 255 && light.Color.B == 255 {
+		t.Fatal("dark-scheme rule applied in light mode")
+	}
+}
+
 func TestLHUnitsResolveAfterCascade(t *testing.T) {
 	doc := ParseHTML(`<div style="font-size:20px; line-height:1.5">` +
 		`<p style="margin:1lh; margin-block:2lh 3lh; padding-inline:1ch; ` +
@@ -244,7 +270,7 @@ func TestMediaQueries(t *testing.T) {
 	kept := func(vw int) []string {
 		var out []string
 		for _, r := range rules {
-			if mediaMatches(r.Media, vw) {
+			if mediaMatches(r.Media, vw, false) {
 				out = append(out, r.Decls[0].Prop+"="+r.Decls[0].Value)
 			}
 		}

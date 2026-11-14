@@ -179,8 +179,9 @@ Standard Go layout:
 - **Responsive media queries:** `@media` conditions are stored per rule and
   matched against the layout viewport (`columns * 8` CSS px). `screen`/`all`,
   min/max-width (and device-width), and range syntax such as `(width>=960px)`
-  work; `print` never matches; unsupported
-  features such as `prefers-color-scheme: dark` do not match. This keeps
+  work; `print` never matches; `prefers-color-scheme` follows the dark-mode
+  state (`dark` when `-dark`/`D` is on, `light` otherwise), while other
+  unsupported features do not match. This keeps
   desktop/mobile duplicates from rendering at the same time. Media-query
   results and element class lists are cached for a style pass, so repeated
   rebuilds do not re-parse them for every rule and element.
@@ -398,12 +399,15 @@ Standard Go layout:
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`.
-- **Dark mode:** `D` or the footer `Dark:on`/`Dark:off` label toggles a
-  post-layout palette remap for every page. Light backgrounds become dark,
-  dark text becomes light, and hues are preserved for links, headings and
-  accents; images are left unchanged. The preference persists across
-  navigation and reload, and `-dark` starts with it enabled, including in
-  `-dump` mode. It also applies on top of reader mode.
+- **Dark mode:** `D` or the footer `Dark:on`/`Dark:off` label toggles dark
+  mode. Pages are styled with `prefers-color-scheme: dark`, so sites can serve
+  their own dark CSS; `matchMedia` reflects the same scheme. When the resolved
+  page background is already dark, the author palette is kept as-is. Otherwise
+  a post-layout remap makes light backgrounds dark, dark text light and
+  preserves hues for links, headings and accents; images are left unchanged.
+  The preference persists across navigation and reload, and `-dark` starts with
+  it enabled, including in `-dump` mode. It also applies on top of reader
+  mode.
 - **Reader mode:** `R` or the footer `Reader:on`/`Reader:off` label toggles an
   extracted article view. Extraction runs on the live DOM, prefers
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops

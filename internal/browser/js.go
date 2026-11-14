@@ -375,7 +375,7 @@ func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
 		q := call.Argument(0).String()
 		o := j.vm.NewObject()
 		_ = o.Set("media", q)
-		_ = o.Set("matches", mediaMatches(q, j.b.width*cellW))
+		_ = o.Set("matches", mediaMatches(q, j.b.width*cellW, j.b.dark))
 		_ = o.Set("onchange", goja.Null())
 		noop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
 		_ = o.Set("addListener", noop)

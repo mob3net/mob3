@@ -189,6 +189,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark 
 		width = 1
 	}
 	engine := newStyleEngineDeadline(author, width*cellW, deadline)
+	engine.dark = dark
 	styles := engine.computeAll(root)
 	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline}
 	l.rootCB = &cbRect{w: width}
@@ -250,7 +251,10 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark 
 		Cursor: l.cursor, HasCursor: l.hasCursor,
 	}
 	out.buildLinks()
-	if dark {
+	// A page that already renders a dark background is using its own dark
+	// theme (or responded to prefers-color-scheme); keep its palette. The
+	// post-layout remap remains the fallback for light pages.
+	if dark && !isDarkColor(out.PageBG) {
 		applyDarkLayout(out)
 	}
 	return out

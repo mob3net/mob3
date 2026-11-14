@@ -1090,9 +1090,12 @@ footer instead of reloading or jumping to the top.</p>
 
 <h2>Dark mode</h2>
 <p>Press <b>D</b> or click the <b>Dark:on</b>/<b>Dark:off</b> label in the footer
-to remap page backgrounds, text, links and borders to a dark palette. Images
-keep their original colors. Start MOB³ with <b>-dark</b> to enable dark mode
-from the first page. Dark mode stays enabled when you navigate or reload.</p>
+to enable dark mode. Sites are asked for their dark styles through
+<b>prefers-color-scheme: dark</b>; pages that already render a dark background
+keep their own palette. Otherwise page backgrounds, text, links and borders are
+remapped to a dark palette. Images keep their original colors. Start MOB³ with
+<b>-dark</b> to enable dark mode from the first page. Dark mode stays enabled
+when you navigate or reload.</p>
 <p>The footer also shows <b>JavaScript:on</b>/<b>JavaScript:off</b> and the
 resolved <b>Graphics</b> mode (for example <b>Graphics:blocks</b> or
 <b>Graphics:kitty</b>). A script error turns the JavaScript label into red
