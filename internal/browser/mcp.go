@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 )
 
@@ -145,7 +144,7 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mcpToolTimeout)
 	defer cancel()
-	text, err := s.runTool(ctx, p.Name, p.Arguments)
+	text, err := s.a.RunCommand(ctx, p.Name, p.Arguments)
 	if err != nil {
 		return successResponse(req.ID, mcpToolResult{
 			Content: []mcpContent{{Type: "text", Text: err.Error()}},
@@ -155,139 +154,6 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 	return successResponse(req.ID, mcpToolResult{
 		Content: []mcpContent{{Type: "text", Text: clipText(text, 20000)}},
 	})
-}
-
-func (s *mcpServer) runTool(ctx context.Context, name string, args json.RawMessage) (string, error) {
-	if s.a == nil {
-		return "", fmt.Errorf("automation is closed")
-	}
-	switch name {
-	case "navigate":
-		var p struct {
-			URL string `json:"url"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		if strings.TrimSpace(p.URL) == "" {
-			return "", fmt.Errorf("url is required")
-		}
-		if err := s.a.Navigate(ctx, p.URL); err != nil {
-			return "", err
-		}
-		return s.a.Snapshot(), nil
-	case "snapshot":
-		return s.a.Snapshot(), nil
-	case "click":
-		var p struct {
-			Link     int    `json:"link"`
-			Selector string `json:"selector"`
-			X        *int   `json:"x"`
-			Y        *int   `json:"y"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		target := ClickTarget{Link: p.Link, Selector: p.Selector}
-		if p.X != nil || p.Y != nil {
-			if p.X == nil || p.Y == nil {
-				return "", fmt.Errorf("click x and y must be provided together")
-			}
-			target.X, target.Y, target.HasCoords = *p.X, *p.Y, true
-		}
-		if target.Link == 0 && target.Selector == "" && !target.HasCoords {
-			return "", fmt.Errorf("click needs link, selector, or x/y")
-		}
-		if err := s.a.Click(ctx, target); err != nil {
-			return "", err
-		}
-		return s.a.Snapshot(), nil
-	case "type":
-		var p struct {
-			Text string `json:"text"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		if err := s.a.Type(ctx, p.Text); err != nil {
-			return "", err
-		}
-		return "typed", nil
-	case "press":
-		var p struct {
-			Key string `json:"key"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		if err := s.a.Press(ctx, p.Key); err != nil {
-			return "", err
-		}
-		return "pressed " + p.Key, nil
-	case "scroll":
-		var p struct {
-			Lines  int  `json:"lines"`
-			Pages  int  `json:"pages"`
-			Top    bool `json:"top"`
-			Bottom bool `json:"bottom"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		if p.Lines == 0 && p.Pages == 0 && !p.Top && !p.Bottom {
-			p.Lines = 1
-		}
-		s.a.Scroll(p.Lines, p.Pages, p.Top, p.Bottom)
-		return fmt.Sprintf("scrolled (scroll %d%%)", s.a.b.scrollPercent()), nil
-	case "back":
-		if err := s.a.Back(ctx); err != nil {
-			return "", err
-		}
-		return s.a.Snapshot(), nil
-	case "forward":
-		if err := s.a.Forward(ctx); err != nil {
-			return "", err
-		}
-		return s.a.Snapshot(), nil
-	case "reload":
-		if err := s.a.Reload(ctx); err != nil {
-			return "", err
-		}
-		return s.a.Snapshot(), nil
-	case "evaluate":
-		var p struct {
-			Expression string `json:"expression"`
-		}
-		if err := decodeArgs(args, &p); err != nil {
-			return "", err
-		}
-		v, err := s.a.Evaluate(ctx, p.Expression)
-		if err != nil {
-			return "", err
-		}
-		if v == "" {
-			return "undefined", nil
-		}
-		return v, nil
-	case "history":
-		h := s.a.History()
-		if h == "" {
-			return "(no history)", nil
-		}
-		return h, nil
-	default:
-		return "", fmt.Errorf("unknown tool %q", name)
-	}
-}
-
-func decodeArgs(raw json.RawMessage, dst any) error {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil
-	}
-	if err := json.Unmarshal(raw, dst); err != nil {
-		return fmt.Errorf("invalid arguments: %w", err)
-	}
-	return nil
 }
 
 func successResponse(id json.RawMessage, result any) *mcpResponse {

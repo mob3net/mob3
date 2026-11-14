@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"strings"
 	"testing"
@@ -144,6 +145,25 @@ func TestAutomationScrollAndHistory(t *testing.T) {
 	}
 	if h := a.History(); !strings.Contains(h, "* https://example.com/") {
 		t.Fatalf("history = %q", h)
+	}
+}
+
+func TestAutomationRunCommand(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><p>command page</p></body></html>`,
+	})
+	ctx := context.Background()
+	if _, err := a.RunCommand(ctx, "navigate", json.RawMessage(`{"url":"https://example.com/"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := a.RunCommand(ctx, "snapshot", nil); err != nil || !strings.Contains(got, "command page") {
+		t.Fatalf("snapshot = %q, %v", got, err)
+	}
+	if got, err := a.RunCommand(ctx, "evaluate", json.RawMessage(`{"expression":"1+1"}`)); err != nil || got != "2" {
+		t.Fatalf("evaluate = %q, %v", got, err)
+	}
+	if _, err := a.RunCommand(ctx, "nope", nil); err == nil {
+		t.Fatal("unknown command was accepted")
 	}
 }
 

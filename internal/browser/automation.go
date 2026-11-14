@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -549,6 +550,145 @@ func (a *Automation) Evaluate(ctx context.Context, expression string) (string, e
 		return "", nil
 	}
 	return clipText(v.String(), 20000), nil
+}
+
+// RunCommand executes one named automation command with JSON arguments. It is
+// shared by protocol front ends so each transport only owns framing. Command
+// names and argument shapes are the MCP tool definitions in mcp.go.
+func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if a == nil || a.b == nil {
+		return "", errors.New("automation is closed")
+	}
+	switch name {
+	case "navigate":
+		var p struct {
+			URL string `json:"url"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(p.URL) == "" {
+			return "", errors.New("url is required")
+		}
+		if err := a.Navigate(ctx, p.URL); err != nil {
+			return "", err
+		}
+		return a.Snapshot(), nil
+	case "snapshot":
+		return a.Snapshot(), nil
+	case "click":
+		var p struct {
+			Link     int    `json:"link"`
+			Selector string `json:"selector"`
+			X        *int   `json:"x"`
+			Y        *int   `json:"y"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		target := ClickTarget{Link: p.Link, Selector: p.Selector}
+		if p.X != nil || p.Y != nil {
+			if p.X == nil || p.Y == nil {
+				return "", errors.New("click x and y must be provided together")
+			}
+			target.X, target.Y, target.HasCoords = *p.X, *p.Y, true
+		}
+		if target.Link == 0 && target.Selector == "" && !target.HasCoords {
+			return "", errors.New("click needs link, selector, or x/y")
+		}
+		if err := a.Click(ctx, target); err != nil {
+			return "", err
+		}
+		return a.Snapshot(), nil
+	case "type":
+		var p struct {
+			Text string `json:"text"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		if err := a.Type(ctx, p.Text); err != nil {
+			return "", err
+		}
+		return "typed", nil
+	case "press":
+		var p struct {
+			Key string `json:"key"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		if err := a.Press(ctx, p.Key); err != nil {
+			return "", err
+		}
+		return "pressed " + p.Key, nil
+	case "scroll":
+		var p struct {
+			Lines  int  `json:"lines"`
+			Pages  int  `json:"pages"`
+			Top    bool `json:"top"`
+			Bottom bool `json:"bottom"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		if p.Lines == 0 && p.Pages == 0 && !p.Top && !p.Bottom {
+			p.Lines = 1
+		}
+		a.Scroll(p.Lines, p.Pages, p.Top, p.Bottom)
+		return fmt.Sprintf("scrolled (scroll %d%%)", a.b.scrollPercent()), nil
+	case "back":
+		if err := a.Back(ctx); err != nil {
+			return "", err
+		}
+		return a.Snapshot(), nil
+	case "forward":
+		if err := a.Forward(ctx); err != nil {
+			return "", err
+		}
+		return a.Snapshot(), nil
+	case "reload":
+		if err := a.Reload(ctx); err != nil {
+			return "", err
+		}
+		return a.Snapshot(), nil
+	case "evaluate":
+		var p struct {
+			Expression string `json:"expression"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		v, err := a.Evaluate(ctx, p.Expression)
+		if err != nil {
+			return "", err
+		}
+		if v == "" {
+			return "undefined", nil
+		}
+		return v, nil
+	case "history":
+		h := a.History()
+		if h == "" {
+			return "(no history)", nil
+		}
+		return h, nil
+	default:
+		return "", fmt.Errorf("unknown tool %q", name)
+	}
+}
+
+func decodeArgs(raw json.RawMessage, dst any) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		return fmt.Errorf("invalid arguments: %w", err)
+	}
+	return nil
 }
 
 // History lists session history, most recent first, with the current entry
