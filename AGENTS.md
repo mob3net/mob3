@@ -91,7 +91,10 @@ written in Go
   label/`alt` fallback when rasterization fails.
 - **JavaScript via goja.** Page scripts run through goja in a per-page runtime.
   Classic inline and external scripts execute in document order; `async`,
-  `defer` and modules are ignored. `-no-js` disables both script fetching and
+  `defer` and modules are ignored. External scripts must arrive with a
+  JavaScript MIME type (a missing `Content-Type` is allowed), so HTML error
+  pages, JSON, `text/plain`, images, audio, video and CSV are never executed as
+  script. `-no-js` disables both script fetching and
   execution. `<noscript>` is hidden when JS is enabled and shown with
   `-no-js`. Text inputs and textareas are editable; GET and urlencoded POST
   forms submit with Enter from a text input (Enter inserts a newline in a

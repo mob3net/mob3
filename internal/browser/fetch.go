@@ -554,6 +554,12 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 		if err != nil || status < 200 || status >= 400 {
 			continue
 		}
+		// MOB³ applies strict MIME checking to external scripts: a response
+		// typed as HTML, JSON, text/plain, an image or any other non-script
+		// type is not executed. A missing Content-Type stays lenient.
+		if !isJavaScriptMIME(ctype) {
+			continue
+		}
 		code := decodeBody(data, ctype)
 		total += len(code)
 		out = append(out, Script{Code: code, Src: u.String(), Node: n})
@@ -740,12 +746,60 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	return nil, "", u, 0, errors.New("unsupported URL scheme: " + u.Scheme)
 }
 
+// jsMIMEEssences lists the response types a classic script may execute as.
+// Missing Content-Type is handled separately and stays lenient, matching the
+// way file and data resources without metadata are treated.
+var jsMIMEEssences = map[string]bool{
+	"application/ecmascript":   true,
+	"application/javascript":   true,
+	"application/x-ecmascript": true,
+	"application/x-javascript": true,
+	"text/ecmascript":          true,
+	"text/javascript":          true,
+	"text/javascript1.0":       true,
+	"text/javascript1.1":       true,
+	"text/javascript1.2":       true,
+	"text/javascript1.3":       true,
+	"text/javascript1.4":       true,
+	"text/javascript1.5":       true,
+	"text/jscript":             true,
+	"text/livescript":          true,
+	"text/x-ecmascript":        true,
+	"text/x-javascript":        true,
+}
+
+// mimeEssence returns the lowercased type/subtype of a Content-Type header,
+// dropping parameters. It returns "" when no usable type is present.
+func mimeEssence(contentType string) string {
+	essence := ""
+	for _, part := range strings.Split(contentType, ",") {
+		part = strings.TrimSpace(part)
+		if i := strings.IndexByte(part, ';'); i >= 0 {
+			part = strings.TrimSpace(part[:i])
+		}
+		if strings.Contains(part, "/") {
+			essence = strings.ToLower(part)
+		}
+	}
+	return essence
+}
+
+// isJavaScriptMIME reports whether a script response may execute. An empty
+// (missing) type is allowed so local and data resources without metadata keep
+// working; any explicit non-JavaScript type is rejected.
+func isJavaScriptMIME(contentType string) bool {
+	essence := mimeEssence(contentType)
+	return essence == "" || jsMIMEEssences[essence]
+}
+
 func mimeByExt(p string) string {
 	switch strings.ToLower(filepath.Ext(p)) {
 	case ".html", ".htm", ".xhtml":
 		return "text/html"
 	case ".css":
 		return "text/css"
+	case ".js", ".mjs":
+		return "text/javascript"
 	case ".txt":
 		return "text/plain"
 	case ".png":

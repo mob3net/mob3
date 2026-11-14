@@ -272,6 +272,101 @@ func TestBlockedChallenge(t *testing.T) {
 	}
 }
 
+func TestJavaScriptMIME(t *testing.T) {
+	cases := []struct {
+		ctype string
+		want  bool
+	}{
+		{"text/javascript", true},
+		{"text/javascript; charset=utf-8", true},
+		{"Application/JavaScript", true},
+		{"text/x-javascript", true},
+		{"", true},
+		{"text/html", false},
+		{"text/plain", false},
+		{"application/json", false},
+		{"image/png", false},
+		{"text/csv", false},
+	}
+	for _, c := range cases {
+		if got := isJavaScriptMIME(c.ctype); got != c.want {
+			t.Errorf("isJavaScriptMIME(%q) = %v, want %v", c.ctype, got, c.want)
+		}
+	}
+	if got := mimeEssence("Text/JavaScript; charset=utf-8"); got != "text/javascript" {
+		t.Errorf("mimeEssence = %q", got)
+	}
+}
+
+func TestScriptMIMEGate(t *testing.T) {
+	loader := NewLoader()
+	types := map[string]string{
+		"/ok.js":      "application/javascript",
+		"/upper.js":   "Application/JavaScript; charset=utf-8",
+		"/legacy.js":  "text/x-javascript",
+		"/html.js":    "text/html",
+		"/plain.js":   "text/plain",
+		"/json.js":    "application/json",
+		"/image.js":   "image/png",
+		"/csv.js":     "text/csv",
+		"/missing.js": "",
+	}
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		body := ""
+		if req.URL.Path == "/" {
+			h.Set("Content-Type", "text/html")
+			body = `<html><body>
+				<script src="/ok.js"></script>
+				<script src="/upper.js"></script>
+				<script src="/legacy.js"></script>
+				<script src="/html.js"></script>
+				<script src="/plain.js"></script>
+				<script src="/json.js"></script>
+				<script src="/image.js"></script>
+				<script src="/csv.js"></script>
+				<script src="/missing.js"></script>
+				<script>var inline = 1;</script>
+			</body></html>`
+		} else if ct, ok := types[req.URL.Path]; ok {
+			if ct != "" {
+				h.Set("Content-Type", ct)
+			}
+			body = "var x = 1;"
+		}
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader(body)), Request: req,
+		}, nil
+	})}
+	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, s := range page.Scripts {
+		got[s.Src] = true
+	}
+	for _, want := range []string{
+		"https://example.com/ok.js", "https://example.com/upper.js",
+		"https://example.com/legacy.js", "https://example.com/missing.js",
+		"inline script",
+	} {
+		if !got[want] {
+			t.Errorf("allowed script %q missing: %+v", want, got)
+		}
+	}
+	for _, bad := range []string{
+		"https://example.com/html.js", "https://example.com/plain.js",
+		"https://example.com/json.js", "https://example.com/image.js",
+		"https://example.com/csv.js",
+	} {
+		if got[bad] {
+			t.Errorf("blocked script %q executed", bad)
+		}
+	}
+}
+
 func TestRequestLogRecordsPageResources(t *testing.T) {
 	loader := NewLoader()
 	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
