@@ -441,6 +441,73 @@ func TestTableColumnsAndCells(t *testing.T) {
 	}
 }
 
+func TestTableCellPercentageWidthAndNowrap(t *testing.T) {
+	ly := build(`<table><tr><td width="25%"></td><td>search</td><td width="25%" nowrap><a href="/x">Advanced search</a></td></tr></table>`, 60)
+	linkLines := map[int]bool{}
+	var linkText string
+	for _, f := range ly.Frags {
+		if f.Kind != fragText || f.Link == nil || f.Link.Href != "/x" {
+			continue
+		}
+		linkLines[f.Y] = true
+		linkText += f.Text
+	}
+	if len(linkLines) != 1 {
+		t.Fatalf("legacy nowrap cell wrapped over %d lines", len(linkLines))
+	}
+	if !strings.Contains(linkText, "Advanced") {
+		t.Fatalf("advanced link text missing: %q", linkText)
+	}
+}
+
+func TestTableCellWidthDoesNotClampContent(t *testing.T) {
+	ly := build(`<table><tr><td width="10%">abcdefgh</td><td>zzzzzzzzzzzzzzzzzzzz</td></tr></table>`, 60)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text == "abcdefgh" {
+			return
+		}
+	}
+	t.Fatal("cell content was wrapped by its own width hint")
+}
+
+func TestTableCenteredByCenterTag(t *testing.T) {
+	left := build(`<table><tr><td>Name</td><td>Value</td></tr></table>`, 40)
+	center := build(`<center><table><tr><td>Name</td><td>Value</td></tr></table></center>`, 40)
+	leftX, centerX := -1, -1
+	for _, f := range left.Frags {
+		if f.Kind == fragText && f.Text == "Name" {
+			leftX = f.X
+		}
+	}
+	for _, f := range center.Frags {
+		if f.Kind == fragText && f.Text == "Name" {
+			centerX = f.X
+		}
+	}
+	if leftX < 0 || centerX < 0 {
+		t.Fatalf("left=%d center=%d", leftX, centerX)
+	}
+	if centerX <= leftX {
+		t.Fatalf("centered table at %d should be right of left-aligned %d", centerX, leftX)
+	}
+}
+
+func TestHiddenInputDoesNotWidenTableCell(t *testing.T) {
+	plain := build(`<table><tr><td>ab</td></tr></table>`, 40)
+	hidden := build(`<table><tr><td><input type="hidden" name="x" value="long-value">ab</td></tr></table>`, 40)
+	tableWidth := func(ly *Layout) int {
+		for _, f := range ly.Frags {
+			if f.Kind == fragFill && f.W > 1 {
+				return f.W
+			}
+		}
+		return 0
+	}
+	if pw, hw := tableWidth(plain), tableWidth(hidden); pw != hw {
+		t.Fatalf("hidden input changed table width: plain=%d hidden=%d", pw, hw)
+	}
+}
+
 func TestListMarkerBeforeText(t *testing.T) {
 	ly := build(`<ul><li>First item</li></ul>`, 30)
 	markerX, textX := -1, -1

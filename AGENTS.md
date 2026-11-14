@@ -277,10 +277,18 @@ Standard Go layout:
 - **Percentage heights are ignored** because parent heights are indefinite;
   this avoids `height:100%` on logos becoming 100 terminal rows.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled
-  down to available width; `colspan` supported; `rowspan` ignored; empty rows
-  are skipped. Cells honour `vertical-align: top|middle|bottom` (`middle` is the
-  browser-like default; `baseline`/`text-*` map to top), shifting shorter
-  content after the row height is final. The cell's own background stays put.
+  down to available width while keeping each column at its min-content width
+  and shrinking only columns that have slack. Legacy cell `width` hints size the
+  column, not the cell content box: percentage widths fill the available table
+  width (auto columns take the remainder) and fixed widths act as minimums.
+  A table narrower than its container is centred or right-aligned when the
+  inherited `text-align` says so (so `<center><table>` works), and the legacy
+  `nowrap` attribute maps to `white-space:nowrap`. `colspan` supported;
+  `rowspan` ignored; empty rows are skipped. Cells honour
+  `vertical-align: top|middle|bottom` (`middle` is the browser-like default;
+  `baseline`/`text-*` map to top), shifting shorter content after the row height
+  is final. The cell's own background stays put. Hidden inputs take no space,
+  and `<br>` breaks the measured line when sizing a cell.
 - **Lists:** markers rendered in the list padding area; disc/circle/square,
   decimal, alpha and roman styles.
 - **Images:** disabled by default (`-graphics=none`); no image requests are

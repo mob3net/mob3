@@ -2721,22 +2721,109 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		// Fall back to normal block flow for empty tables.
 		return l.flow(n, x, y, availW)
 	}
+	colMin := make([]int, ncols)
 	colW := make([]int, ncols)
+	colPct := make([]float64, ncols)
+	hasPct := false
 	for _, r := range rows {
 		for _, c := range r.cells {
-			pref, _ := l.measure(c.node)
-			need := pref
-			per := (need + c.span - 1) / c.span
+			if c.col >= ncols {
+				continue
+			}
+			pref, min := l.measure(c.node)
+			perPref := (pref + c.span - 1) / c.span
+			perMin := (min + c.span - 1) / c.span
 			for k := 0; k < c.span && c.col+k < ncols; k++ {
-				if per > colW[c.col+k] {
-					colW[c.col+k] = per
+				if perPref > colW[c.col+k] {
+					colW[c.col+k] = perPref
+				}
+				if perMin > colMin[c.col+k] {
+					colMin[c.col+k] = perMin
+				}
+			}
+			// Legacy table cells carry width hints. They size the column, not
+			// the cell's content box, so percentage/fixed widths must be folded
+			// into the column targets below.
+			if st := c.node.Style; st != nil && st.Width.Set && !st.Width.IsAuto() {
+				if st.Width.U == UnitPercent {
+					hasPct = true
+					for k := 0; k < c.span && c.col+k < ncols; k++ {
+						if st.Width.V > colPct[c.col+k] {
+							colPct[c.col+k] = st.Width.V
+						}
+					}
+				} else {
+					w := st.Width.resolveH(availW, st.FontSize)
+					per := (w + c.span - 1) / c.span
+					for k := 0; k < c.span && c.col+k < ncols; k++ {
+						if per > colW[c.col+k] {
+							colW[c.col+k] = per
+						}
+						if per > colMin[c.col+k] {
+							colMin[c.col+k] = per
+						}
+					}
 				}
 			}
 		}
 	}
 	for i := range colW {
+		if colMin[i] < 1 {
+			colMin[i] = 1
+		}
+		if colW[i] < colMin[i] {
+			colW[i] = colMin[i]
+		}
 		if colW[i] < 3 {
 			colW[i] = 3
+		}
+	}
+	// Percentage columns resolve against the table width, so a table using
+	// them fills the available width and lets the auto columns take the rest.
+	if hasPct {
+		inner := availW - (ncols + 1)
+		if inner < 1 {
+			inner = 1
+		}
+		used, autoWeight := 0, 0
+		var autoCols []int
+		for i := 0; i < ncols; i++ {
+			if colPct[i] > 0 {
+				w := int(math.Round(float64(inner) * colPct[i] / 100))
+				if w < colMin[i] {
+					w = colMin[i]
+				}
+				colW[i] = w
+				used += w
+				continue
+			}
+			autoCols = append(autoCols, i)
+			autoWeight += colW[i]
+		}
+		remaining := inner - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		if len(autoCols) > 0 {
+			assigned := 0
+			for n, i := range autoCols {
+				w := 0
+				if n == len(autoCols)-1 {
+					w = remaining - assigned
+				} else if autoWeight > 0 {
+					w = remaining * colW[i] / autoWeight
+				} else {
+					w = remaining / len(autoCols)
+				}
+				if w < colMin[i] {
+					w = colMin[i]
+				}
+				if w < 1 {
+					w = 1
+				}
+				colW[i] = w
+				assigned += w
+			}
 		}
 	}
 	total := ncols + 1
@@ -2745,25 +2832,67 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	}
 	if total > availW {
 		avail := availW - (ncols + 1)
-		if avail < ncols {
-			avail = ncols
+		if avail < 1 {
+			avail = 1
 		}
 		sum := 0
-		for _, w := range colW {
-			sum += w
+		minSum := 0
+		for i := range colW {
+			sum += colW[i]
+			minSum += colMin[i]
 		}
-		if sum > 0 {
+		switch {
+		case minSum >= avail:
+			copy(colW, colMin)
+		case sum > avail:
+			budget := avail - minSum
+			slackSum := sum - minSum
+			caps := append([]int(nil), colW...)
+			assigned := 0
 			for i := range colW {
-				colW[i] = int(math.Floor(float64(colW[i]) * float64(avail) / float64(sum)))
-				if colW[i] < 1 {
-					colW[i] = 1
+				slack := caps[i] - colMin[i]
+				add := 0
+				if slackSum > 0 {
+					add = budget * slack / slackSum
+				}
+				if add > slack {
+					add = slack
+				}
+				colW[i] = colMin[i] + add
+				assigned += colW[i]
+			}
+			for leftover := avail - assigned; leftover > 0; leftover-- {
+				grew := false
+				for i := range colW {
+					if colW[i] < caps[i] {
+						colW[i]++
+						grew = true
+						break
+					}
+				}
+				if !grew {
+					break
 				}
 			}
+		}
+		total = ncols + 1
+		for _, w := range colW {
+			total += w
 		}
 	}
 	tableW := ncols + 1
 	for _, w := range colW {
 		tableW += w
+	}
+	// Legacy <center> maps to an inherited text-align; a narrow table is
+	// centered (or right-aligned) inside its containing block.
+	if tableW < availW {
+		switch st.TextAlign {
+		case "center":
+			x += (availW - tableW) / 2
+		case "right":
+			x += availW - tableW
+		}
 	}
 	colX := make([]int, ncols)
 	cx := x + 1
@@ -2795,6 +2924,10 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			orig := c.node.Style
 			cs := *orig
 			cs.Border = [4]Length{}
+			// The column width already carries any cell width hint; applying
+			// it again to the content box would shrink the content to a
+			// fraction of its own column.
+			cs.Width = Length{}
 			c.node.Style = &cs
 			start := len(l.frags)
 			h := l.block(c.node, colX[c.col], rowY, cw)
@@ -2959,6 +3092,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 				minW = wordMax
 			}
 		}
+		if n.Style.WhiteSpace == "nowrap" || n.Style.WhiteSpace == "pre" {
+			minW = maxW
+		}
 		return maxW, minW
 	}
 	if n.Type != ElementNode || n.Style == nil || n.Style.Display == "none" {
@@ -2984,6 +3120,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return w, w
 	}
 	if n.Tag == "input" || n.Tag == "select" || n.Tag == "textarea" || n.Tag == "button" {
+		if n.Tag == "input" && strings.EqualFold(n.Attr("type"), "hidden") {
+			return 0, 0
+		}
 		w := stringWidth(formLabel(n))
 		if w < 1 {
 			w = 1
@@ -3006,6 +3145,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 				minW = mi
 			}
 		}
+		if st.WhiteSpace == "nowrap" || st.WhiteSpace == "pre" {
+			minW = maxW
+		}
 		return maxW + pad, minW + pad
 	}
 	// inline: content is laid out left to right, so max widths add up while
@@ -3013,6 +3155,14 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	total := 0
 	space := false
 	for _, c := range n.Children {
+		if c.Type == ElementNode && c.Tag == "br" {
+			if total > maxW {
+				maxW = total
+			}
+			total = 0
+			space = false
+			continue
+		}
 		if c.Type == TextNode && c.Style != nil {
 			s := expandTabs(c.Text)
 			s = applyTextTransform(s, c.Style.TextTransform)
@@ -3059,10 +3209,15 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		if mi > minW {
 			minW = mi
 		}
-		space = true
+		if mw > 0 || mi > 0 {
+			space = true
+		}
 	}
 	if total > maxW {
 		maxW = total
+	}
+	if st.WhiteSpace == "nowrap" || st.WhiteSpace == "pre" {
+		minW = maxW
 	}
 	return maxW + pad, minW + pad
 }

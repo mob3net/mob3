@@ -1152,6 +1152,9 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 			st.TextAlign = strings.ToLower(v)
 		}
 	}
+	if n.HasAttr("nowrap") {
+		st.WhiteSpace = "nowrap"
+	}
 	if v := n.Attr("width"); v != "" {
 		switch n.Tag {
 		case "img", "table", "td", "th", "hr":
