@@ -50,6 +50,32 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	}
 }
 
+func TestLayoutBudgetPresets(t *testing.T) {
+	if _, ok := ParseLayoutBudget("nonsense"); ok {
+		t.Fatal("invalid budget name accepted")
+	}
+	if b, ok := ParseLayoutBudget("standard"); !ok || b.Frags != 250000 || b.Rows != 200000 {
+		t.Fatalf("standard budget = %+v", b)
+	}
+	if b, ok := ParseLayoutBudget("none"); !ok || b.Time != 0 || b.Frags != 0 || b.Rows != 0 {
+		t.Fatalf("none budget = %+v", b)
+	}
+}
+
+func TestLayoutRowLimitTruncates(t *testing.T) {
+	src := `<div><p>alpha beta gamma delta epsilon</p><p>one two three four five</p></div>`
+	root := ParseHTML(src)
+	limited := BuildLayoutBudgetDeadline(root, nil, 40, 0, false, false, time.Time{}, LayoutBudget{Name: "tiny", Rows: 1})
+	if !limited.Truncated {
+		t.Fatalf("tiny row budget did not truncate: frags=%d height=%d", len(limited.Frags), limited.Height)
+	}
+	root = ParseHTML(src)
+	unlimited := BuildLayoutBudgetDeadline(root, nil, 40, 0, false, false, time.Time{}, LayoutBudget{Name: "none"})
+	if unlimited.Truncated {
+		t.Fatal("unlimited budget truncated")
+	}
+}
+
 func TestGridNamedAreasAndAutoTrack(t *testing.T) {
 	ly := build(`<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'heading cta' 'promos promos'">`+
 		`<div style="grid-area:heading">head</div>`+

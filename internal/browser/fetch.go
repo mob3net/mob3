@@ -1068,6 +1068,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
 <tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
 <tr><td><b>-cache</b> int</td><td>in-memory resource cache limit in MB, 0 disables (default 32)</td></tr>
+<tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>

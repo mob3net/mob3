@@ -168,6 +168,7 @@ func TestApplyConfig(t *testing.T) {
 		"home":          {"https://example.com/start"},
 		"js-memory":     {"128"},
 		"cache":         {"16"},
+		"layout-budget": {"high"},
 		"text-scale":    {"off"},
 		"ua":            {"TestUA"},
 		"search":        {""},
@@ -190,6 +191,9 @@ func TestApplyConfig(t *testing.T) {
 	}
 	if !b.noBigText {
 		t.Fatal("text-scale off was not applied")
+	}
+	if b.layoutBudget.Name != "high" {
+		t.Fatalf("layout budget = %q, want high", b.layoutBudget.Name)
 	}
 	if b.loader.userAgent != "TestUA" {
 		t.Fatalf("ua = %q", b.loader.userAgent)

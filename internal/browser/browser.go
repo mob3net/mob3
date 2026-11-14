@@ -19,10 +19,6 @@ import (
 )
 
 const (
-	// maxFrameTime bounds the style+layout work for one rebuild. A page that
-	// cannot render within this budget produces a partial layout instead of
-	// freezing the UI.
-	maxFrameTime = 2 * time.Second
 	// jsRedrawInterval is the minimum gap between timer-driven rebuilds. The
 	// previous rebuild cost is added so a slow page cannot spend all its time
 	// re-laying out from timers.
@@ -78,10 +74,11 @@ type Browser struct {
 	gfx     *gfxRenderer
 	bigText bool
 
-	noJS       bool
-	noBigText  bool
-	jsMemLimit int64
-	js         *jsRuntime
+	noJS         bool
+	noBigText    bool
+	jsMemLimit   int64
+	layoutBudget LayoutBudget
+	js           *jsRuntime
 
 	loadCh       chan loadResult
 	loadSeq      int
@@ -217,9 +214,10 @@ func NewBrowser(w, h int) *Browser {
 	}
 	b := &Browser{
 		loader: NewLoader(), width: w, height: h, focus: -1, hover: -1, histIdx: -1,
-		jsMemLimit: defaultJSMemoryLimit,
-		loadCh:     make(chan loadResult, 1),
-		home:       "about:home",
+		jsMemLimit:   defaultJSMemoryLimit,
+		layoutBudget: DefaultLayoutBudget,
+		loadCh:       make(chan loadResult, 1),
+		home:         "about:home",
 	}
 	b.setLoader(b.loader)
 	return b
@@ -651,11 +649,11 @@ func (b *Browser) rebuild() {
 	if b.reader && b.readerRoot != nil {
 		root, author = b.readerRoot, readerRules
 	}
-	if b.dark {
-		b.layout = BuildLayoutDarkViewportDeadline(root, author, b.width, b.viewportHeight(), b.bigText, start.Add(maxFrameTime))
-	} else {
-		b.layout = BuildLayoutViewportDeadline(root, author, b.width, b.viewportHeight(), b.bigText, start.Add(maxFrameTime))
+	deadline := time.Time{}
+	if b.layoutBudget.Time > 0 {
+		deadline = start.Add(b.layoutBudget.Time)
 	}
+	b.layout = BuildLayoutBudgetDeadline(root, author, b.width, b.viewportHeight(), b.bigText, b.dark, deadline, b.layoutBudget)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	if b.layout != nil {

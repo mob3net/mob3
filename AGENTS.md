@@ -196,12 +196,16 @@ Standard Go layout:
   desktop/mobile duplicates from rendering at the same time. Media-query
   results and element class lists are cached for a style pass, so repeated
   rebuilds do not re-parse them for every rule and element.
-- **Frame budget:** style computation and layout share a cooperative 2-second
-  deadline per rebuild. Rule matching and the block/inline/table/flex/grid
-  layout entry points check it; expiry produces a partial layout with
-  `Layout.Truncated` set and the status `Page truncated (layout limit)`. This
-  is the safety net against pathological pages, alongside the fragment/row
-  limits.
+- **Frame budget:** style computation and layout share a cooperative deadline
+  per rebuild. Rule matching and the block/inline/table/flex/grid layout entry
+  points check it; expiry produces a partial layout with `Layout.Truncated`
+  set and the status `Page truncated (layout limit)`. This is the safety net
+  against pathological pages, alongside the fragment/row limits. The three
+  limits are bundled into one `-layout-budget` preset, editable in
+  `about:config`: `low` (1s, 100k fragments, 80k rows), `standard` (2s, 250k,
+  200k; the default), `high` (5s, 1M, 1M) and `none` (disables all three,
+  which can freeze the UI on hostile pages). A zero limit disables that
+  individual check.
 - **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
   shrink-to-fit items and `gap`/`column-gap`. Items keep at least their
@@ -399,7 +403,8 @@ Standard Go layout:
   prominence.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home, js-memory, cache, text-scale, ua, search);
+  session (no-js, ignore-blocks, home, js-memory, cache, layout-budget,
+  text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted. The form uses
   the same centered `max-width:900px` reading column as `about:help`.
@@ -826,10 +831,12 @@ Standard Go layout:
   default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
   the CPU timeout in place). Exceeding the budget interrupts the script with an
   error.
-- **Layout budget:** style and layout stop after a 2-second cooperative
-  deadline, and layout also stops after 250k fragments or 200k document rows,
-  bounding CPU and memory for pathological or generated documents. The frame
-  is rendered partially and marked truncated when a limit is hit.
+- **Layout budget:** style and layout stop after the selected cooperative
+  deadline (2 seconds on `standard`), and layout also stops after the selected
+  fragment and document-row caps, bounding CPU and memory for pathological or
+  generated documents. `-layout-budget=low|standard|high|none` selects the
+  preset; `none` removes the safety limits entirely. The frame is rendered
+  partially and marked truncated when a limit is hit.
 - **XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` always allow
   same-origin requests (default ports normalized). Simple cross-origin requests
   (GET/HEAD/POST with safelisted headers) are sent with an `Origin` header and

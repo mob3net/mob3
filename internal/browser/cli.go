@@ -31,6 +31,7 @@ func Run(args []string) int {
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
+	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
@@ -82,16 +83,21 @@ func Run(args []string) int {
 	if *jsMemory > 0 {
 		jsMemLimit = int64(*jsMemory) << 20
 	}
+	budget, ok := ParseLayoutBudget(*layoutBudget)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", *layoutBudget)
+		return 2
+	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit, budget)
 	}
 
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit, budget)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -113,18 +119,20 @@ func Run(args []string) int {
 		bookmarksValue = "(none)"
 	}
 	b.cliConfig = map[string]string{
-		"-dump":      onOff(*dump),
-		"-width":     strconv.Itoa(w),
-		"-graphics":  *graphics,
-		"-bookmarks": bookmarksValue,
-		"-cache":     strconv.Itoa(*cache),
-		"-color":     onOff(*forceColor),
-		"-no-color":  onOff(*noColor),
-		"-version":   Version,
+		"-dump":          onOff(*dump),
+		"-width":         strconv.Itoa(w),
+		"-graphics":      *graphics,
+		"-bookmarks":     bookmarksValue,
+		"-cache":         strconv.Itoa(*cache),
+		"-layout-budget": budget.Name,
+		"-color":         onOff(*forceColor),
+		"-no-color":      onOff(*noColor),
+		"-version":       Version,
 	}
 	b.color = !*noColor
 	b.noJS = *noJS
 	b.jsMemLimit = jsMemLimit
+	b.layoutBudget = budget
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
 	case "off", "none", "false":
 		b.noBigText = true
@@ -259,7 +267,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark bool, jsMemLimit int64) int {
+func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark bool, jsMemLimit int64, budget LayoutBudget) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -284,12 +292,11 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 			root, author = extracted, readerRules
 		}
 	}
-	var layout *Layout
-	if dark {
-		layout = BuildLayoutDarkDeadline(root, author, width, false, time.Now().Add(maxFrameTime))
-	} else {
-		layout = BuildLayoutDeadline(root, author, width, false, time.Now().Add(maxFrameTime))
+	deadline := time.Time{}
+	if budget.Time > 0 {
+		deadline = time.Now().Add(budget.Time)
 	}
+	layout := BuildLayoutBudgetDeadline(root, author, width, 0, false, dark, deadline, budget)
 	height := layout.Height
 	if height < 1 {
 		height = 1

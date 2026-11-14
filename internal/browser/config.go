@@ -48,6 +48,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
 		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-cache", Value: strconv.Itoa(cacheMB), Note: "MB; 0 disables", Editable: true},
+		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
 		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
@@ -124,6 +125,11 @@ func (b *Browser) applyConfig(q url.Values) {
 	if v, ok := q["cache"]; ok && len(v) > 0 {
 		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 && b.loader != nil {
 			b.loader.setCacheLimitMB(mb)
+		}
+	}
+	if v, ok := q["layout-budget"]; ok && len(v) > 0 {
+		if budget, ok := ParseLayoutBudget(v[0]); ok {
+			b.layoutBudget = budget
 		}
 	}
 	if v, ok := q["text-scale"]; ok && len(v) > 0 {

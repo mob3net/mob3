@@ -82,10 +82,39 @@ type Layout struct {
 	fixedApplied bool
 }
 
-const (
-	maxLayoutFrags = 250000
-	maxLayoutRows  = 200000
-)
+// LayoutBudget bundles the style/layout safety limits. A zero Time, Frags or
+// Rows value disables that individual limit.
+type LayoutBudget struct {
+	Name  string
+	Time  time.Duration
+	Frags int
+	Rows  int
+}
+
+var DefaultLayoutBudget = LayoutBudget{Name: "standard", Time: 2 * time.Second, Frags: 250000, Rows: 200000}
+
+var layoutBudgetPresets = map[string]LayoutBudget{
+	"low":      {Name: "low", Time: time.Second, Frags: 100000, Rows: 80000},
+	"standard": DefaultLayoutBudget,
+	"high":     {Name: "high", Time: 5 * time.Second, Frags: 1000000, Rows: 1000000},
+	"none":     {Name: "none"},
+}
+
+// ParseLayoutBudget resolves a preset name. Several spellings of "none" are
+// accepted so the flag is forgiving at the command line.
+func ParseLayoutBudget(name string) (LayoutBudget, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "low":
+		return layoutBudgetPresets["low"], true
+	case "standard", "", "default":
+		return layoutBudgetPresets["standard"], true
+	case "high":
+		return layoutBudgetPresets["high"], true
+	case "none", "no-limit", "nolimit", "off", "unlimited":
+		return layoutBudgetPresets["none"], true
+	}
+	return LayoutBudget{}, false
+}
 
 type layouter struct {
 	styles    map[*Node]*Style
@@ -95,6 +124,8 @@ type layouter struct {
 	truncated bool
 	deadline  time.Time
 	expired   bool
+	maxFrags  int
+	maxRows   int
 
 	// cb is the padding box of the nearest positioned ancestor, used to
 	// resolve absolute offsets. nil at the root, where rootCB stands in.
@@ -136,6 +167,14 @@ type absBox struct {
 
 // outOfTime reports whether the layout pass has exceeded its deadline. The
 // flag is sticky so recursive callers unwind instead of starting new work.
+func (l *layouter) overFragLimit() bool {
+	return l.maxFrags > 0 && len(l.frags) >= l.maxFrags
+}
+
+func (l *layouter) overRowLimit(y int) bool {
+	return l.maxRows > 0 && y > l.maxRows
+}
+
 func (l *layouter) outOfTime() bool {
 	if l.expired {
 		return true
@@ -163,35 +202,44 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, false, deadline)
+	return buildLayout(root, author, width, 0, bigText, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutViewportDeadline is BuildLayoutDeadline with the terminal
 // viewport height, so position:fixed boxes can anchor to the visible area.
 func BuildLayoutViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, false, deadline)
+	return buildLayout(root, author, width, viewportH, bigText, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
 // to page, text, border and background colors after layout.
 func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, true, deadline)
+	return buildLayout(root, author, width, 0, bigText, true, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkViewportDeadline is BuildLayoutViewportDeadline with the dark
 // palette applied.
 func BuildLayoutDarkViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, true, deadline)
+	return buildLayout(root, author, width, viewportH, bigText, true, deadline, DefaultLayoutBudget)
 }
 
-func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time) *Layout {
+// BuildLayoutBudgetDeadline is BuildLayoutViewportDeadline with explicit
+// layout limits.
+func BuildLayoutBudgetDeadline(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time, budget LayoutBudget) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, dark, deadline, budget)
+}
+
+func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time, budget LayoutBudget) *Layout {
 	if width < 1 {
 		width = 1
+	}
+	if budget.Time <= 0 {
+		deadline = time.Time{}
 	}
 	engine := newStyleEngineDeadline(author, width*cellW, deadline)
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline}
+	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -278,7 +326,7 @@ func (l *layouter) addFill(x, y, w, h int, c Color) {
 	if w <= 0 || h <= 0 || !c.Set || c.A == 0 {
 		return
 	}
-	if len(l.frags) >= maxLayoutFrags || y > maxLayoutRows {
+	if l.overFragLimit() || l.overRowLimit(y) {
 		l.truncated = true
 		return
 	}
@@ -292,7 +340,7 @@ func (l *layouter) addText(x, y int, s string, st *Style, n *Node) {
 	if s == "" || st == nil {
 		return
 	}
-	if len(l.frags) >= maxLayoutFrags || y > maxLayoutRows {
+	if l.overFragLimit() || l.overRowLimit(y) {
 		l.truncated = true
 		return
 	}
@@ -539,7 +587,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	if l.outOfTime() {
 		return 0, Rect{}
 	}
-	if l.truncated || y > maxLayoutRows {
+	if l.truncated || l.overRowLimit(y) {
 		l.truncated = true
 		return 0, Rect{}
 	}
@@ -1581,7 +1629,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 		}
 	}
 	for _, c := range parent.Children {
-		if l.truncated || cur > maxLayoutRows {
+		if l.truncated || l.overRowLimit(cur) {
 			l.truncated = true
 			break
 		}
@@ -1642,7 +1690,7 @@ func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 	if l.outOfTime() {
 		return 0
 	}
-	if l.truncated || y > maxLayoutRows {
+	if l.truncated || l.overRowLimit(y) {
 		l.truncated = true
 		return 0
 	}
@@ -2862,7 +2910,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
 	}
-	if l.truncated || y > maxLayoutRows {
+	if l.truncated || l.overRowLimit(y) {
 		l.truncated = true
 		return 0
 	}
