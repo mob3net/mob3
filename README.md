@@ -6,11 +6,9 @@
 
 Written in Go, it combines its own HTML parser, CSS cascade and layout engine, ANSI renderer and pure-Go JavaScript runtime to display real web pages, including inline images, without a GUI toolkit or persistent profile. History, cookies, storage and caches live in memory only: closing MOB³ saves nothing.
 
-Project page: [mob3.net](https://mob3.net).
+Project page: [mob3.net](https://mob3.net)
 
-If MOB³ has been useful to you, please consider
-[giving the project a star on GitHub](https://github.com/mob3net/mob3). It helps
-others discover it and supports the continued development of the project.
+GitHub: [github.com/mob3net/mob3](https://github.com/mob3net/mob3)
 
 ## Documentation
 
@@ -60,6 +58,11 @@ mob3 -version
 <a href="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/7f0becc1-0658-4cac-a893-7d864c0b4be3" /></a>
 <a href="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" target="_blank" rel="noopener"><img width="32%" src="https://github.com/user-attachments/assets/50d20cc6-cb34-4733-8168-9b12c838056e" /></a>
 </div>
+
+## Show your support
+If MOB³ has been useful to you, please consider
+[giving the project a star on GitHub](https://github.com/mob3net/mob3). It helps
+others discover it and supports the continued development of the project.
 
 ## What to expect
 
