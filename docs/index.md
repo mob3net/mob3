@@ -8,18 +8,6 @@ runtime. History, cookies, storage and caches live in memory only.
 > or site isolation, CSP enforcement, certificate UI or security audit. Do not
 > use it for passwords, accounts, payments or confidential data.
 
-## Start here
-
-| Page | What it covers |
-| --- | --- |
-| [Install](install.md) | Releases, Docker, build from source |
-| [Command line](cli.md) | Every flag, defaults, examples and limits |
-| [Keyboard and mouse](keys.md) | Navigation, prompts, find, console and forms |
-| [Automation with MCP](automation.md) | Headless browser control for scripts and AI tools |
-| [Security and privacy](security.md) | What MOB³ does and does not protect |
-| [Site support](sites.md) | What renders well and what usually fails |
-| [Development](development.md) | Build, test, architecture and contributing |
-
 ## Quick start
 
 Download an archive from
