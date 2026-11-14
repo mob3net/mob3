@@ -161,7 +161,7 @@ Standard Go layout:
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
-| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol `CSI u` keys with release/event filtering. |
+| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
@@ -493,6 +493,10 @@ Standard Go layout:
   pushes kitty keyboard flags `1|2|16` (`CSI > 19 u`) and pops them on exit.
   `CSI u` keys map to the same symbolic tokens, key releases are ignored, and
   the associated-text field handles shifted symbols and AltGr layouts.
+  Functional keys that keep legacy encodings (arrows, Home/End, Delete, …) may
+  carry a kitty event suffix (`CSI 1;5:3A`); event 3 is dropped as a release and
+  repeat (event 2) behaves like a press, so a release cannot double-move the
+  cursor or page.
 - **Find:** `/` opens an incremental, case-insensitive find bar in the footer.
   Every match in the rendered page is highlighted; the current match uses a
   stronger color. `Enter` confirms the query and closes the bar, after which
@@ -788,24 +792,38 @@ Standard Go layout:
   clicking the `×` or the dimmed backdrop closes them with the mouse
   (cancelling confirm/prompt).
 - **JS console view:** `!` opens a plain-text console in the viewport. A
-  one-row menu at the top has four tabs: JavaScript logs, Requests, Storage and
-  HTML. The active tab is highlighted blue; only its section body is shown
-  below the menu, and the logs tab is active by default. The JavaScript input
-  row is part of the logs body, pinned to its bottom. Clicking a tab switches
-  sections, and `Tab`/`Shift-Tab` cycle through the same four tabs. Mouse
-  reporting stays enabled so tabs and the input row can be clicked (plain
+  one-row menu at the top has five tabs: JavaScript logs, Requests, Storage,
+  HTML and Tools. The active tab is highlighted blue; only its section body is
+  shown below the menu, and the logs tab is active by default. The JavaScript
+  input row is part of the logs body, pinned to its bottom. Clicking a tab
+  switches sections, and `Tab`/`Shift-Tab` cycle through the same five tabs.
+  Mouse reporting stays enabled so tabs and the input row can be clicked (plain
   terminal drag-selection needs the Shift override).
   `i` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
   usual JS timeout/memory guards. The input row supports the same Ctrl/Alt
   word-motion and word-deletion keys as the URL prompt. It keeps its gray
   background while
-  focused. Up/Down recall earlier expressions from the in-memory console
-  history (consecutive duplicates are dropped, capped at 200 entries); Down
-  past the newest entry restores the draft. History is not reset by navigation.
+  focused. Up/Down or Ctrl-P/Ctrl-N recall earlier inputs from the in-memory
+  console history (consecutive duplicates are dropped, capped at 200 entries);
+  Down past the newest entry restores the draft, and refocusing or clicking the
+  input row does not reset the history position. The JS logs and Tools tabs
+  keep separate histories. History is not reset by navigation.
   Input and results are appended to the log as
   `[input]` and `[result]`, the result appears above the input row, dirty DOM
   mutations rebuild the page, and `-no-js` logs that JavaScript is disabled.
+  The Tools tab has its own input row at the bottom of its body and runs the
+  read-only inspection subset against the live page: `help`, `form [selector]`,
+  `links [selector]`, `requests [limit]`, `logs [limit]`, `source [selector]`,
+  `snapshot` and `history`. `help` is shown the first time the tab opens;
+  commands and results append to a scrollback that keeps the newest 500 lines
+  and survives page loads; new output replaces the oldest lines, a single
+  oversized result keeps its beginning with a truncation note, and
+  `clear`/`cls` empties it. The JS logs input accepts
+  `clear`/`cls` too and empties the JS log (and its error state) instead of
+  evaluating JavaScript. These commands must never start or wait for a
+  navigation, because the interactive event loop owns load results;
+  navigational and mutating tools stay in `-mcp`.
   `Esc`/`!` close and `q` asks to confirm quitting when the input row is not
   focused (`q` is
   literal text while typing). The footer keeps its clickable `>_` icon while

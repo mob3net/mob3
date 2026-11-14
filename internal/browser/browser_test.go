@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	"net/http"
 	"net/url"
@@ -3545,8 +3546,12 @@ func TestConsoleTabCyclesSections(t *testing.T) {
 		t.Fatalf("pane after third Tab = %d, want HTML", b.consolePane)
 	}
 	b.handleConsoleKey("tab")
+	if b.consolePane != consoleTools {
+		t.Fatalf("pane after fourth Tab = %d, want tools", b.consolePane)
+	}
+	b.handleConsoleKey("tab")
 	if b.consolePane != consoleLogs {
-		t.Fatalf("pane after fourth Tab = %d, want logs", b.consolePane)
+		t.Fatalf("pane after fifth Tab = %d, want logs", b.consolePane)
 	}
 }
 
@@ -3622,8 +3627,8 @@ func TestConsoleInputHistory(t *testing.T) {
 	b.consoleText = "two"
 	b.consoleCursor = len(b.consoleText)
 	b.handleConsoleKey("enter")
-	if len(b.consoleHist) != 2 {
-		t.Fatalf("history = %v, want two entries", b.consoleHist)
+	if len(b.consoleHist.entries) != 2 {
+		t.Fatalf("history = %v, want two entries", b.consoleHist.entries)
 	}
 }
 
@@ -3713,5 +3718,260 @@ func TestConsoleKeepsLogOnFailedNavigation(t *testing.T) {
 	})
 	if len(b.jsLog) != 1 || b.jsLog[0] != "[error] old" {
 		t.Fatalf("failed navigation cleared the log: %v", b.jsLog)
+	}
+}
+
+func TestConsoleToolsTab(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body>
+			<form id="f" action="/next"><input name="q" value="x"></form>
+			<a href="/next">Next page</a>
+		</body></html>`,
+		"/next": `<html><body>next</body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	b := a.b
+	b.consoleOpen = true
+	b.selectConsolePane(consoleTools)
+	if b.consolePane != consoleTools {
+		t.Fatalf("pane = %d, want tools", b.consolePane)
+	}
+	help := strings.Join(b.toolLog, "\n")
+	if !strings.Contains(help, "Tools: read-only inspection") || !strings.Contains(help, "mob3 -mcp") {
+		t.Fatalf("tools help = %q", help)
+	}
+	if !strings.Contains(help, "[selector] is an optional CSS selector") ||
+		!strings.Contains(help, "links main a") || !strings.Contains(help, "source #content") {
+		t.Fatalf("tools help lacks selector examples = %q", help)
+	}
+	l := newConsoleLayout(b.height, consoleTools)
+	if l.inputY < 0 {
+		t.Fatal("tools tab has no input row")
+	}
+
+	run := func(cmd string) string {
+		t.Helper()
+		b.consolePane = consoleTools
+		b.consoleEdit = true
+		b.consoleText = cmd
+		b.consoleCursor = len(cmd)
+		b.handleConsoleKey("enter")
+		return strings.Join(b.toolLog, "\n")
+	}
+	if out := run("form"); !strings.Contains(out, "[tool] form") || !strings.Contains(out, "Forms: 1") {
+		t.Fatalf("form output = %q", out)
+	}
+	if b.consoleText != "" || b.consoleCursor != 0 {
+		t.Fatalf("tools input not cleared: %q", b.consoleText)
+	}
+	if out := run("source #f"); !strings.Contains(out, `<form id="f"`) {
+		t.Fatalf("source output missing element: %q", out)
+	}
+	if out := run("links"); !strings.Contains(out, "Next page -> https://example.com/next") {
+		t.Fatalf("links output = %q", out)
+	}
+	if out := run("requests"); !strings.Contains(out, "Requests: 0") {
+		t.Fatalf("requests output = %q", out)
+	}
+	if out := run("nope"); !strings.Contains(out, "[error] unknown tool") {
+		t.Fatalf("unknown tool output = %q", out)
+	}
+
+	// Clicking the tools input row focuses it without switching panes.
+	b.consoleEdit = false
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.inputY + 1, Press: true})
+	if b.consolePane != consoleTools || !b.consoleEdit {
+		t.Fatalf("tools input focus = pane %d edit %v", b.consolePane, b.consoleEdit)
+	}
+	// A page load keeps the tools scrollback but resets the pane to logs.
+	b.resetConsole()
+	if len(b.toolLog) == 0 {
+		t.Fatal("tools scrollback was cleared by a page load")
+	}
+	if b.consolePane != consoleLogs {
+		t.Fatalf("pane after reset = %d, want logs", b.consolePane)
+	}
+
+	b.appendToolLine(strings.Repeat("x", 5000))
+	if got := len([]rune(b.toolLog[len(b.toolLog)-1])); got > 4097 {
+		t.Fatalf("tool log line = %d runes, want capped at 4097", got)
+	}
+}
+
+func TestConsoleHistoryCtrlKeysAndFocus(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consoleEdit = true
+	for _, src := range []string{"one", "two"} {
+		b.consoleText = src
+		b.consoleCursor = len(src)
+		b.handleConsoleKey("enter")
+	}
+	b.consoleText = "draft"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("ctrl-p")
+	if b.consoleText != "two" {
+		t.Fatalf("first Ctrl-P = %q, want two", b.consoleText)
+	}
+	b.handleConsoleKey("ctrl-p")
+	if b.consoleText != "one" {
+		t.Fatalf("second Ctrl-P = %q, want one", b.consoleText)
+	}
+	b.handleConsoleKey("ctrl-n")
+	if b.consoleText != "two" {
+		t.Fatalf("first Ctrl-N = %q, want two", b.consoleText)
+	}
+	// Refocusing the input must not reset the history position or the draft.
+	b.focusConsoleInput()
+	b.handleConsoleKey("ctrl-n")
+	if b.consoleText != "draft" {
+		t.Fatalf("Ctrl-N after refocus = %q, want the draft", b.consoleText)
+	}
+
+	// Editing a recalled entry preserves the edit as the draft.
+	b.consoleText = "two edited"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("up")
+	if b.consoleText != "two" {
+		t.Fatalf("Up from edited draft = %q, want two", b.consoleText)
+	}
+	b.consoleText = "two v2"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("up")
+	b.handleConsoleKey("down")
+	b.handleConsoleKey("down")
+	if b.consoleText != "two v2" {
+		t.Fatalf("edited draft = %q, want two v2", b.consoleText)
+	}
+}
+
+func TestConsoleToolsHistorySeparateAndStable(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+
+	run := func(pane int, src string) {
+		t.Helper()
+		b.consolePane = pane
+		b.consoleEdit = true
+		b.consoleText = src
+		b.consoleCursor = len(src)
+		b.handleConsoleKey("enter")
+	}
+	// A JS command and two Tools commands must not share one history.
+	run(consoleLogs, `1+1`)
+	run(consoleTools, "help")
+	run(consoleTools, "history")
+	if len(b.consoleHist.entries) != 1 || b.consoleHist.entries[0] != "1+1" {
+		t.Fatalf("JS history = %v", b.consoleHist.entries)
+	}
+	if len(b.toolHist.entries) != 2 || b.toolHist.entries[0] != "help" {
+		t.Fatalf("tools history = %v", b.toolHist.entries)
+	}
+
+	b.consolePane = consoleTools
+	b.consoleEdit = true
+	b.consoleText = "draft"
+	b.consoleCursor = len(b.consoleText)
+	b.handleConsoleKey("up") // history
+	if b.consoleText != "history" {
+		t.Fatalf("first Up = %q", b.consoleText)
+	}
+
+	// Clicking the input row keeps the history position instead of resetting it.
+	l := newConsoleLayout(b.height, consoleTools)
+	b.handleConsoleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.inputY + 1, Press: true})
+	b.handleConsoleKey("up")
+	if b.consoleText != "help" {
+		t.Fatalf("Up after click = %q, want help (position preserved)", b.consoleText)
+	}
+	b.handleConsoleKey("down")
+	b.handleConsoleKey("down")
+	if b.consoleText != "draft" {
+		t.Fatalf("Down to draft = %q, want draft", b.consoleText)
+	}
+
+	// Tools text is not recalled in the JS input history.
+	b.consoleText = ""
+	b.consoleCursor = 0
+	b.selectConsolePane(consoleLogs)
+	b.consoleEdit = true
+	b.handleConsoleKey("up")
+	if b.consoleText != "1+1" {
+		t.Fatalf("JS Up = %q, want the JS entry", b.consoleText)
+	}
+}
+
+func TestConsoleClearCommandAndToolLogRing(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+
+	// The Tools scrollback keeps the newest lines instead of freezing at the cap.
+	for i := 0; i < toolLogCap+50; i++ {
+		b.appendToolLine(fmt.Sprintf("line %d", i))
+	}
+	if len(b.toolLog) != toolLogCap {
+		t.Fatalf("tool log length = %d, want %d", len(b.toolLog), toolLogCap)
+	}
+	if b.toolLog[0] != "line 50" || b.toolLog[len(b.toolLog)-1] != "line 549" {
+		t.Fatalf("tool log range = %q .. %q", b.toolLog[0], b.toolLog[len(b.toolLog)-1])
+	}
+	b.appendToolLine("fresh output")
+	if got := b.toolLog[len(b.toolLog)-1]; got != "fresh output" {
+		t.Fatalf("new output after cap = %q", got)
+	}
+	if strings.Contains(strings.Join(b.toolLog, "\n"), "truncated") {
+		t.Fatal("tool log still reports hard truncation")
+	}
+
+	// One oversized result keeps its beginning and marks the cut; later output
+	// still replaces the oldest lines instead of being dropped.
+	var many []string
+	for i := 0; i < toolLogCap+100; i++ {
+		many = append(many, fmt.Sprintf("big %d", i))
+	}
+	b.appendToolLines(strings.Join(many, "\n"))
+	if len(b.toolLog) != toolLogCap {
+		t.Fatalf("large result length = %d, want %d", len(b.toolLog), toolLogCap)
+	}
+	if b.toolLog[0] != "big 0" || !strings.Contains(b.toolLog[len(b.toolLog)-1], "result truncated") {
+		t.Fatalf("large result = %q .. %q", b.toolLog[0], b.toolLog[len(b.toolLog)-1])
+	}
+	b.appendToolLine("after big result")
+	if got := b.toolLog[len(b.toolLog)-1]; got != "after big result" {
+		t.Fatalf("output after large result = %q", got)
+	}
+
+	run := func(pane int, src string) {
+		t.Helper()
+		b.consolePane = pane
+		b.consoleEdit = true
+		b.consoleText = src
+		b.consoleCursor = len(src)
+		b.handleConsoleKey("enter")
+	}
+	run(consoleTools, "help")
+	if len(b.toolLog) == 0 {
+		t.Fatal("tools command produced no output")
+	}
+	run(consoleTools, "clear")
+	if len(b.toolLog) != 0 || b.toolScroll != 0 {
+		t.Fatalf("tools clear left %d lines, scroll %d", len(b.toolLog), b.toolScroll)
+	}
+	run(consoleTools, "help")
+	run(consoleTools, "cls")
+	if len(b.toolLog) != 0 {
+		t.Fatalf("cls left %d lines", len(b.toolLog))
+	}
+
+	run(consoleLogs, "1+1")
+	if len(b.jsLog) == 0 {
+		t.Fatal("JS command produced no log")
+	}
+	run(consoleLogs, "clear")
+	if len(b.jsLog) != 0 || b.jsErr {
+		t.Fatalf("JS clear left %d messages, error=%v", len(b.jsLog), b.jsErr)
 	}
 }

@@ -73,6 +73,24 @@ printf '%s\n' \
   | ./bin/mob3 -mcp
 ```
 
+## Debugging in the running browser
+
+The interactive browser's `!` console has a **Tools** tab for read-only
+inspection of the page you are looking at. Its commands mirror the inspection
+tools below: `help`, `form [selector]`, `links [selector]`, `requests [limit]`,
+`logs [limit]`, `source [selector]`, `snapshot`, `history` and `clear`. Results
+scroll in the tab and keep the newest 500 lines, `help` lists the arguments and
+selector examples, and the scrollback survives page loads. `clear` (or `cls`)
+empties the Tools scrollback; the JS logs input accepts the same command to
+clear the JavaScript log. A `[selector]` is an optional CSS selector such as
+`#content`, `.card`, `form#search`, `input[name=q]` or `main a`; omit it to
+inspect all forms/links or the full page source.
+
+Navigation, form editing (`fill`/`select`/`toggle`/`submit`), `wait`/`wait_for`
+and `screenshot` are available only through `mob3 -mcp`: the interactive event
+loop owns navigation results, so those commands cannot run synchronously from
+inside it.
+
 ## Tools
 
 | Tool | Arguments | Returns |

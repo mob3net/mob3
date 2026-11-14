@@ -1,9 +1,11 @@
 package browser
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -16,8 +18,81 @@ const (
 	consoleRequests
 	consoleStorage
 	consoleHTML
+	consoleTools
 	consoleSectionCount
 )
+
+// toolLogCap bounds the Tools tab scrollback; the newest lines are kept.
+const toolLogCap = 500
+
+// consoleHistory is one input history with the shell-style cursor used by
+// Up/Down and Ctrl-P/Ctrl-N. at == len(entries) means the draft line is shown.
+type consoleHistory struct {
+	entries []string
+	at      int
+	draft   string
+}
+
+// reset returns to the draft line without discarding recorded entries.
+func (h *consoleHistory) reset() {
+	h.at = len(h.entries)
+	h.draft = ""
+}
+
+// record appends src (dropping consecutive duplicates), caps the list and
+// returns to the draft line.
+func (h *consoleHistory) record(src string) {
+	if len(h.entries) == 0 || h.entries[len(h.entries)-1] != src {
+		h.entries = append(h.entries, src)
+		if len(h.entries) > 200 {
+			h.entries = append([]string(nil), h.entries[len(h.entries)-200:]...)
+		}
+	}
+	h.reset()
+}
+
+// saveDraft keeps the line the user is editing, including edits made to a
+// recalled entry, so moving away and back does not discard it.
+func (h *consoleHistory) saveDraft(text string) {
+	if h.at >= len(h.entries) || text != h.entries[h.at] {
+		h.draft = text
+	}
+}
+
+func (h *consoleHistory) up(text string) (string, bool) {
+	if h.at > len(h.entries) {
+		h.at = len(h.entries)
+	}
+	h.saveDraft(text)
+	if h.at == 0 {
+		return text, false
+	}
+	h.at--
+	return h.entries[h.at], true
+}
+
+func (h *consoleHistory) down(text string) (string, bool) {
+	if h.at > len(h.entries) {
+		h.at = len(h.entries)
+	}
+	h.saveDraft(text)
+	if h.at >= len(h.entries) {
+		return text, false
+	}
+	h.at++
+	if h.at == len(h.entries) {
+		return h.draft, true
+	}
+	return h.entries[h.at], true
+}
+
+// consoleHistoryFor selects the per-tab history used by the active input row.
+func (b *Browser) consoleHistoryFor(pane int) *consoleHistory {
+	if pane == consoleTools {
+		return &b.toolHist
+	}
+	return &b.consoleHist
+}
 
 // logJS records a JavaScript console/error message for the console view.
 func (b *Browser) logJS(kind, msg string) {
@@ -54,10 +129,11 @@ func (b *Browser) toggleConsole() {
 	b.reqScroll = 0
 	b.storageScroll = 0
 	b.htmlScroll = 0
+	b.toolScroll = 0
 	b.consolePane = consoleLogs
 	b.consoleEdit = false
-	b.consoleHistAt = len(b.consoleHist)
-	b.consoleDraft = ""
+	b.consoleHist.reset()
+	b.toolHist.reset()
 	b.prev = nil
 	if b.consoleOpen {
 		b.jsErr = false
@@ -144,6 +220,8 @@ func (b *Browser) consoleScrollFor(pane int) *int {
 		return &b.storageScroll
 	case consoleHTML:
 		return &b.htmlScroll
+	case consoleTools:
+		return &b.toolScroll
 	case consoleLogs:
 		return &b.consoleScroll
 	}
@@ -163,11 +241,11 @@ func (b *Browser) scrollConsoleToEnd(pane int, end bool) {
 }
 
 func (b *Browser) focusConsoleInput() {
-	b.consolePane = consoleLogs
+	if b.consolePane != consoleTools {
+		b.consolePane = consoleLogs
+	}
 	b.consoleEdit = true
 	b.consoleCursor = len(b.consoleText)
-	b.consoleHistAt = len(b.consoleHist)
-	b.consoleDraft = ""
 }
 
 // selectConsolePane opens a console section, expanding the HTML section at its
@@ -182,12 +260,19 @@ func (b *Browser) selectConsolePane(pane int) {
 	if b.findActive && b.findScope == findScopeHTML && pane != consoleHTML {
 		b.findActive = false
 	}
+	if pane == consoleTools && len(b.toolLog) == 0 {
+		for _, line := range toolsHelpLines() {
+			b.appendToolLine(line)
+		}
+		b.toolScroll = len(b.toolLines(b.width - 2))
+	}
 	b.consolePane = pane
 }
 
-// consoleCyclePane moves the open section through logs, requests, storage and
-// HTML. Only the selected section stays expanded; the input row belongs to the
-// logs section, so cycling away also ends input editing.
+// consoleCyclePane moves the open section through logs, requests, storage,
+// HTML and tools. Only the selected section stays expanded; the input row
+// belongs to the logs and tools sections, so cycling away also ends input
+// editing.
 func (b *Browser) consoleCyclePane(dir int) {
 	if b.consolePane < 0 || b.consolePane >= consoleSectionCount {
 		b.consolePane = consoleLogs
@@ -222,23 +307,14 @@ func (b *Browser) handleConsoleInputKey(k string) bool {
 	case "enter":
 		b.runConsoleInput()
 		return false
-	case "up":
-		if b.consoleHistAt == len(b.consoleHist) {
-			b.consoleDraft = text
-		}
-		if b.consoleHistAt > 0 {
-			b.consoleHistAt--
-			text = b.consoleHist[b.consoleHistAt]
+	case "up", "ctrl-p":
+		if prev, ok := b.consoleHistoryFor(b.consolePane).up(text); ok {
+			text = prev
 			cur = len(text)
 		}
-	case "down":
-		if b.consoleHistAt < len(b.consoleHist) {
-			b.consoleHistAt++
-			if b.consoleHistAt == len(b.consoleHist) {
-				text = b.consoleDraft
-			} else {
-				text = b.consoleHist[b.consoleHistAt]
-			}
+	case "down", "ctrl-n":
+		if next, ok := b.consoleHistoryFor(b.consolePane).down(text); ok {
+			text = next
 			cur = len(text)
 		}
 	case "left", "ctrl-b":
@@ -303,17 +379,21 @@ func (b *Browser) runConsoleInput() {
 	if src == "" {
 		return
 	}
-	if len(b.consoleHist) == 0 || b.consoleHist[len(b.consoleHist)-1] != src {
-		b.consoleHist = append(b.consoleHist, src)
-		if len(b.consoleHist) > 200 {
-			b.consoleHist = append([]string(nil), b.consoleHist[len(b.consoleHist)-200:]...)
-		}
-	}
-	b.consoleHistAt = len(b.consoleHist)
-	b.consoleDraft = ""
-	b.logJS("input", src)
+	b.consoleHistoryFor(b.consolePane).record(src)
 	b.consoleText = ""
 	b.consoleCursor = 0
+	if b.consolePane == consoleTools {
+		b.runToolInput(src)
+		return
+	}
+	if isClearCommand(src) {
+		b.jsLog = nil
+		b.jsErr = false
+		b.consoleScroll = 0
+		b.consolePane = consoleLogs
+		return
+	}
+	b.logJS("input", src)
 	if b.js == nil {
 		b.logJS("error", "JavaScript is disabled (-no-js)")
 		return
@@ -350,8 +430,8 @@ func (b *Browser) resetConsole() {
 	b.htmlScroll = 0
 	b.consolePane = consoleLogs
 	b.consoleEdit = false
-	b.consoleHistAt = len(b.consoleHist)
-	b.consoleDraft = ""
+	b.consoleHist.reset()
+	b.toolHist.reset()
 	b.clearFind()
 }
 
@@ -472,8 +552,193 @@ func (b *Browser) consolePaneLines(pane, width int) []string {
 		return b.storageLines()
 	case consoleHTML:
 		return b.htmlLines(width)
+	case consoleTools:
+		return b.toolLines(width)
 	default:
 		return b.consoleLines(width)
+	}
+}
+
+// toolLines returns the Tools tab scrollback wrapped to width.
+func (b *Browser) toolLines(width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	var out []string
+	for _, entry := range b.toolLog {
+		if entry == "" {
+			out = append(out, "")
+			continue
+		}
+		out = append(out, wrapCells(entry, width)...)
+	}
+	return out
+}
+
+// appendToolLine adds one line to the Tools tab scrollback, keeping the newest
+// lines so a large result can never block later output.
+func (b *Browser) appendToolLine(line string) {
+	b.toolLog = append(b.toolLog, sanitizeToolLine(line))
+	b.trimToolLog()
+}
+
+func (b *Browser) appendToolLines(text string) {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	if len(lines) > toolLogCap {
+		// Keep the beginning of one very large result (for example source),
+		// where the useful markup is, and mark it instead of flooding the tab.
+		kept := append([]string(nil), lines[:toolLogCap-1]...)
+		kept = append(kept, "… (result truncated; use a selector or smaller limit)")
+		lines = kept
+	}
+	for _, line := range lines {
+		b.toolLog = append(b.toolLog, sanitizeToolLine(strings.TrimRight(line, "\r")))
+	}
+	b.trimToolLog()
+}
+
+func (b *Browser) trimToolLog() {
+	if len(b.toolLog) > toolLogCap {
+		b.toolLog = append([]string(nil), b.toolLog[len(b.toolLog)-toolLogCap:]...)
+	}
+}
+
+func sanitizeToolLine(line string) string {
+	line = stripTerminalControls(line)
+	if r := []rune(line); len(r) > 4096 {
+		line = string(r[:4096]) + "…"
+	}
+	return line
+}
+
+// clearToolLog empties the Tools tab scrollback.
+func (b *Browser) clearToolLog() {
+	b.toolLog = nil
+	b.toolScroll = 0
+}
+
+// isClearCommand reports the console shortcut that empties the active log.
+func isClearCommand(s string) bool {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, ":")
+	return strings.EqualFold(s, "clear") || strings.EqualFold(s, "cls")
+}
+
+// runToolInput interprets one command typed in the Tools tab.
+func (b *Browser) runToolInput(src string) {
+	if isClearCommand(src) {
+		b.clearToolLog()
+		b.consolePane = consoleTools
+		return
+	}
+	b.appendToolLine("[tool] " + src)
+	b.runToolCommand(src)
+	b.toolScroll = 0
+	b.consolePane = consoleTools
+}
+
+// runToolCommand executes the read-only command surface that is safe inside
+// the interactive event loop: it never starts or waits for a navigation.
+func (b *Browser) runToolCommand(src string) {
+	fields := strings.Fields(src)
+	if len(fields) == 0 {
+		return
+	}
+	cmd := strings.ToLower(fields[0])
+	arg := strings.TrimSpace(src[len(fields[0]):])
+	a := &Automation{b: b}
+	switch cmd {
+	case "help", "?":
+		for _, line := range toolsHelpLines() {
+			b.appendToolLine(line)
+		}
+	case "form":
+		out, err := a.FormFields(arg)
+		b.appendToolResult(out, err)
+	case "links":
+		out, err := a.Links(arg)
+		b.appendToolResult(out, err)
+	case "source":
+		out, err := a.Source(arg)
+		b.appendToolResult(out, err)
+	case "snapshot":
+		b.appendToolLines(a.Snapshot())
+	case "history":
+		out := a.History()
+		if out == "" {
+			out = "(no history)"
+		}
+		b.appendToolLines(out)
+	case "requests":
+		limit, err := toolLimit(arg, 100)
+		if err != nil {
+			b.appendToolLine("[error] " + err.Error())
+			return
+		}
+		b.appendToolLines(a.Requests(limit))
+	case "logs":
+		limit, err := toolLimit(arg, 200)
+		if err != nil {
+			b.appendToolLine("[error] " + err.Error())
+			return
+		}
+		b.appendToolLines(a.Logs(limit))
+	default:
+		b.appendToolLine("[error] unknown tool " + strconv.Quote(cmd) + " (type help)")
+	}
+}
+
+func (b *Browser) appendToolResult(out string, err error) {
+	if err != nil {
+		b.appendToolLine("[error] " + err.Error())
+		return
+	}
+	if strings.TrimSpace(out) == "" {
+		b.appendToolLine("(empty result)")
+		return
+	}
+	b.appendToolLines(out)
+}
+
+func toolLimit(arg string, def int) (int, error) {
+	if arg == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(arg)
+	if err != nil || n < 0 {
+		return 0, errors.New("limit must be a non-negative number")
+	}
+	return n, nil
+}
+
+// toolsHelpLines is the Tools tab reference. It stays short enough to read on
+// an 80-column terminal.
+func toolsHelpLines() []string {
+	return []string{
+		"Tools: read-only inspection of the current page",
+		"  help                 this list",
+		"  form [selector]      forms and controls with selectors",
+		"  links [selector]     every link with index and href",
+		"  requests [limit]     request log and cache usage",
+		"  logs [limit]         JavaScript messages and errors",
+		"  source [selector]    raw HTML or one element",
+		"  snapshot             viewport text, links and inputs",
+		"  history              session history",
+		"  clear                clear this scrollback (also cls)",
+		"",
+		"[selector] is an optional CSS selector:",
+		"  #content  .card  form#search  input[name=q]  main a",
+		"Omit it for all forms/links or the full page source.",
+		"Examples:",
+		"  form form#search     controls inside that form",
+		"  links main a         links inside <main>",
+		"  source #content      serialized HTML of that element",
+		"  form input[name=q]   form containing that field",
+		"",
+		"Type a command above and press Enter.",
+		"Up/Down or Ctrl-P/Ctrl-N recalls commands.",
+		"Navigation, form editing, waiting and screenshots run in the",
+		"headless MCP server: mob3 -mcp.",
 	}
 }
 
@@ -619,7 +884,7 @@ func newConsoleLayout(h, open int) consoleLayout {
 	if l.bodyRows < 0 {
 		l.bodyRows = 0
 	}
-	if open == consoleLogs && l.bodyRows > 0 {
+	if (open == consoleLogs || open == consoleTools) && l.bodyRows > 0 {
 		l.inputY = l.bodyY + l.bodyRows - 1
 	}
 	return l
@@ -636,6 +901,7 @@ func (b *Browser) consoleTabTitles() [consoleSectionCount]string {
 		fmt.Sprintf(" Requests (%d) ", reqCount),
 		" Storage ",
 		" HTML ",
+		" Tools ",
 	}
 }
 
@@ -685,7 +951,7 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 		if l.bodyY < 0 || y < l.bodyY || y >= l.bodyY+l.bodyRows {
 			return
 		}
-		if b.consolePane == consoleLogs && y == l.inputY {
+		if (b.consolePane == consoleLogs || b.consolePane == consoleTools) && y == l.inputY {
 			return
 		}
 		step := -3
@@ -721,11 +987,9 @@ func (b *Browser) handleConsoleMouse(ev MouseEvent) {
 		return
 	}
 	if l.bodyY >= 0 && y >= l.bodyY && y < l.bodyY+l.bodyRows {
-		b.consoleEdit = b.consolePane == consoleLogs && y == l.inputY
+		b.consoleEdit = (b.consolePane == consoleLogs || b.consolePane == consoleTools) && y == l.inputY
 		if b.consoleEdit {
 			b.consoleCursor = len(b.consoleText)
-			b.consoleHistAt = len(b.consoleHist)
-			b.consoleDraft = ""
 		}
 	}
 }
@@ -791,12 +1055,16 @@ func (b *Browser) drawConsole(w, h int) {
 			htmlLines := b.htmlLines(w - 2)
 			drawPane(htmlLines, b.htmlScroll, l.bodyY, l.bodyRows)
 			b.paintFindHTML(g, paneStart(len(htmlLines), b.htmlScroll, l.bodyRows), l.bodyY, l.bodyRows)
-		default:
+		case consoleLogs, consoleTools:
 			logRows := l.bodyRows
 			if l.inputY >= 0 {
 				logRows = l.inputY - l.bodyY
 			}
-			drawPane(b.consoleLines(w-2), b.consoleScroll, l.bodyY, logRows)
+			items, scroll := b.consoleLines(w-2), b.consoleScroll
+			if b.consolePane == consoleTools {
+				items, scroll = b.toolLines(w-2), b.toolScroll
+			}
+			drawPane(items, scroll, l.bodyY, logRows)
 			if l.inputY >= 0 {
 				inputY := l.inputY
 				rowBG := ftrBG
@@ -820,7 +1088,11 @@ func (b *Browser) drawConsole(w, h int) {
 							g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
 						}
 					} else if b.consoleText == "" {
-						g.Text(2, inputY, truncateWidth("JavaScript input: i or Enter", contentW), style, RGB(0x8a, 0x9a, 0xaa))
+						hint := "JavaScript input: i or Enter"
+						if b.consolePane == consoleTools {
+							hint = "Tools: help · form · links · requests · logs · source · snapshot"
+						}
+						g.Text(2, inputY, truncateWidth(hint, contentW), style, RGB(0x8a, 0x9a, 0xaa))
 					} else {
 						g.Text(2, inputY, truncateWidth(b.consoleText, contentW), style, fg)
 					}
@@ -844,7 +1116,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if hintW < 1 {
 			hintW = 1
 		}
-		hint := " Click/Tab: switch section · i: JS input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hint := " Click/Tab: switch section · i: input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
 		hintFG := fg
 		if b.quitPending {
 			hint = " " + quitConfirmText

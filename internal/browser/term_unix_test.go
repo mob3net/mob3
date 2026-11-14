@@ -58,6 +58,14 @@ func TestReadKeyEscapeSequences(t *testing.T) {
 		{"\x1b[1;2A", "shift-up"},
 		{"\x1b[3;5~", "ctrl-delete"},
 		{"\x1b[3;3~", "alt-delete"},
+		// Kitty event types on legacy-encoded keys: press, repeat, release.
+		{"\x1b[1;1:1A", "up"},
+		{"\x1b[1;1:2A", "up"},
+		{"\x1b[1;1:3A", ""},
+		{"\x1b[1;5:1D", "ctrl-left"},
+		{"\x1b[1;5:3D", ""},
+		{"\x1b[3;5:1~", "ctrl-delete"},
+		{"\x1b[3;5:3~", ""},
 	}
 	for _, tc := range cases {
 		r := bufio.NewReader(strings.NewReader(tc.in))

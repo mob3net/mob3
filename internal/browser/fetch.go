@@ -1274,17 +1274,29 @@ submitted.</p>
 
 <h2>JavaScript console</h2>
 <p>Press <b>!</b> to see <b>console</b> output, full script errors, the
-current page's requests, its in-memory storage and the raw page HTML. A one-row
-menu at the top has four tabs: <b>JS logs</b>, <b>Requests</b>, <b>Storage</b>
-and <b>HTML</b>. The logs tab is active by default and contains the
+current page's requests, its in-memory storage, the raw page HTML and a
+read-only <b>Tools</b> tab. A one-row menu at the top has five tabs:
+<b>JS logs</b>, <b>Requests</b>, <b>Storage</b>, <b>HTML</b> and <b>Tools</b>.
+The logs tab is active by default and contains the
 <b>&gt;</b> JavaScript input row at the bottom of its body. Click a tab (or use
 <b>Tab</b>/<b>Shift-Tab</b>) to switch sections. The active tab is blue.
 Press <b>i</b> or <b>Enter</b>, or click the <b>&gt;</b> row, to focus the
 input, type an expression and press <b>Enter</b> to run it; the result appears
-in the logs above the input. <b>Up</b>/<b>Down</b> recall earlier expressions
-from the console history. The input supports the same word-editing keys as the
-URL prompt. <b>j</b>/<b>k</b> and the wheel scroll the open
-logs/Requests/Storage/HTML section, <b>g</b>/<b>G</b> jump to the ends,
+in the logs above the input. <b>Up</b>/<b>Down</b> (or <b>Ctrl-P</b>/<b>Ctrl-N</b>)
+recall earlier inputs from the console history; the JS logs and Tools tabs keep
+separate histories and each keeps the line you were typing as a draft. The Tools tab has its own input row for read-only
+inspection commands: <b>help</b>, <b>form</b>, <b>links</b>, <b>requests</b>,
+<b>logs</b>, <b>source</b>, <b>snapshot</b> and <b>history</b>. Commands are
+echoed into the tab, results scroll like a log, and <b>help</b> lists the
+arguments. The scrollback keeps the newest 500 lines. Type <b>clear</b> (or
+<b>cls</b>) in either the Tools or JS logs input to empty that tab's
+scrollback; in the JS input it clears the log instead of evaluating. A <b>[selector]</b> is an optional CSS selector such as
+<b>#content</b>, <b>.card</b>, <b>form#search</b>, <b>input[name=q]</b> or
+<b>main a</b>; omit it to inspect all forms/links or the full page source. Editing forms, navigation, waiting and screenshots remain available
+in the headless MCP server (<b>mob3 -mcp</b>). The input supports the same
+word-editing keys as the URL prompt. <b>j</b>/<b>k</b> and the wheel scroll the
+open logs/Requests/Storage/HTML/Tools section, <b>g</b>/<b>G</b> jump to the
+ends,
 <b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
 asks to confirm quitting while the input row is not focused.
 Request URLs are shown as plain text (not clickable). Cache hits replace the
@@ -1295,7 +1307,8 @@ localStorage and sessionStorage entries. HTML shows the raw fetched page
 source before JavaScript changes the DOM, wrapped to the console width and
 opening at the top of the file. The JS
 log and input draft reset when
-a new page loads successfully; a failed load keeps the old log.
+a new page loads successfully; a failed load keeps the old log. The Tools
+scrollback is kept across page loads.
 Because clicking is used to switch sections, use <b>Shift</b>-drag for
 terminal text selection and copy while the console is open.</p>
 <p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal

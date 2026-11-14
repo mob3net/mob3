@@ -103,13 +103,14 @@ type Browser struct {
 	reqScroll     int
 	storageScroll int
 	htmlScroll    int
-	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML
+	toolScroll    int
+	toolLog       []string
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
 	consoleText   string
 	consoleCursor int
-	consoleEdit   bool // the JavaScript input row inside the logs section has focus
-	consoleHist   []string
-	consoleHistAt int
-	consoleDraft  string
+	consoleEdit   bool // the input row inside the logs or tools section has focus
+	consoleHist   consoleHistory
+	toolHist      consoleHistory
 
 	findActive  bool
 	findText    string

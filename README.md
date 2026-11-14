@@ -98,8 +98,11 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   errors turn the footer `JavaScript` label into a red `JavaScript:Error`;
   click it to open the console.
 - JavaScript console (`!`): tabbed view of logs, requests, cookies and
-  in-memory storage, plus the raw page HTML; evaluate one-line expressions in
-  the page's runtime, with Up/Down history and results appended to the log.
+  in-memory storage, the raw page HTML, and a Tools tab for read-only page
+  inspection (`help`, `form`, `links`, `requests`, `logs`, `source`,
+  `snapshot`, `history`, `clear`); evaluate one-line expressions in the page's
+  runtime, with Up/Down or Ctrl-P/Ctrl-N history and results appended to the
+  log. `clear`/`cls` empties either the JS log or the Tools scrollback.
 - Reader mode (`R`, the footer `Reader:on`/`Reader:off` label, or `-reader` at
   launch): extracts the main article into a narrow, chrome-free text column,
   stays enabled across navigation, and restores the normal page and scroll

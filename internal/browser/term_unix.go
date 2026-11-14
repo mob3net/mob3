@@ -111,6 +111,21 @@ func readAltKey(r *bufio.Reader, b byte) string {
 	return "alt-" + string(buf)
 }
 
+// splitLegacyEvent removes a kitty event-type suffix (":1" press, ":2" repeat,
+// ":3" release) from the last parameter of a legacy-encoded key and reports
+// whether the key was released.
+func splitLegacyEvent(params string) (string, bool) {
+	i := strings.LastIndexByte(params, ':')
+	if i < 0 || i+1 >= len(params) {
+		return params, false
+	}
+	event, err := strconv.Atoi(params[i+1:])
+	if err != nil {
+		return params, false
+	}
+	return params[:i], event == 3
+}
+
 // modifierPrefix maps xterm/kitty modifier parameters (1 + shift|alt|ctrl|meta
 // bit flags) to the key-name prefixes the rest of the browser understands.
 func modifierPrefix(params string) string {
@@ -289,6 +304,18 @@ func readEscape(r *bufio.Reader) string {
 	}
 	final := seq[len(seq)-1]
 	params := string(seq[:len(seq)-1])
+	// Kitty reports event types on legacy-encoded keys too (arrows, Home,
+	// Delete, …): CSI 1;mods:event A, where event 1 is press, 2 repeat and
+	// 3 release. Drop the suffix before reading modifiers and ignore releases,
+	// otherwise every arrow release moves a second time. CSI u keeps its own
+	// field because decodeKittyKey parses the event itself.
+	if final != 'u' && final != 'M' && final != 'm' {
+		var release bool
+		params, release = splitLegacyEvent(params)
+		if release {
+			return ""
+		}
+	}
 	mod := modifierPrefix(params)
 	switch final {
 	case 'A':
