@@ -42,9 +42,12 @@ written in Go
   license-grant CLA in `CONTRIBUTING.md` and the PR statement it describes.
   Never merge contributed code without that agreement. Contributors keep their
   copyright but grant the Maintainer the right to relicense under AGPL-3.0-only
-  or commercial terms. The `PR` workflow checks the statement; the `CI`
-  workflow runs formatting, vet and tests on pull requests and pushes to
-  `main`.
+  or commercial terms. Contributors must follow the code of conduct, discuss
+  proposed changes with a maintainer, file an issue before a pull request, and
+  keep CI green. Bugs go to the repository issues tracker; vulnerabilities go
+  privately through GitHub Security Advisories. The `PR` workflow checks the
+  statement; the `CI` workflow runs formatting, vet and tests on pull requests
+  and pushes to `main`.
 - **Commit messages.** End every completed change with a short, one-line commit
   message summarizing the work. Do not commit unless explicitly asked; just
   provide the message.

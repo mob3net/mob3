@@ -6,6 +6,33 @@ by the Contributor License Agreement (CLA) below. You keep the copyright to
 your work; you grant the maintainer the rights needed to use it under both
 licensing options.
 
+## Before you start
+
+- Talk to a maintainer and discuss proposed changes before starting to write
+  code.
+- File an issue before submitting a pull request.
+- Make sure continuous integration passes.
+
+## Code of conduct
+
+ - Participants will be tolerant of opposing views.
+ - Participants must ensure that their language and actions are free of personal attacks and disparaging personal remarks.
+ - When interpreting the words and actions of others, participants should always assume good intentions.
+ - Behavior which can be reasonably considered harassment will not be tolerated.
+
+## Where to report bugs?
+
+Please report all bugs in this repository's issues tracker:
+<https://github.com/mob3net/mob3/issues>.
+
+## Security policy
+
+### Reporting a vulnerability
+
+If you discover a security vulnerability, please report it privately via
+[GitHub Security Advisories](https://github.com/mob3net/mob3/security/advisories/new)
+instead of using the public issue tracker.
+
 ## How to accept the CLA
 
 Include this statement in the description of every pull request:
