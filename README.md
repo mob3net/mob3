@@ -8,6 +8,10 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 
 Project page: [mob3.net](https://mob3.net).
 
+If MOB³ has been useful to you, please consider
+[giving the project a star on GitHub](https://github.com/mob3net/mob3). It helps
+others discover it and supports the continued development of the project.
+
 ## Documentation
 
 - [Documentation index](docs/index.md)
