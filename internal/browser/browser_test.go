@@ -1481,6 +1481,127 @@ func TestURLPromptCursorEditing(t *testing.T) {
 	}
 }
 
+func TestURLPromptWordEditing(t *testing.T) {
+	b := NewBrowser(80, 10)
+	open := func(text string) {
+		b.prompt = false
+		b.promptText = ""
+		b.url = mustParse(t, text)
+		b.HandleKey("o")
+		b.HandleKey("right") // collapse the initial select-all to the end
+	}
+	got := func() string { return b.promptText }
+
+	open("https://example.com/a/b")
+	b.HandleKey("alt-left")
+	b.HandleKey("alt-left")
+	b.HandleKey("Z")
+	if got() != "https://example.com/Za/b" {
+		t.Fatalf("alt-left motion = %q", got())
+	}
+
+	open("https://example.com/a/b")
+	b.HandleKey("ctrl-left")
+	b.HandleKey("ctrl-left")
+	b.HandleKey("Z")
+	if got() != "https://example.com/Za/b" {
+		t.Fatalf("ctrl-left motion = %q", got())
+	}
+
+	open("https://en.wikipedia.org/wiki/Wyoming")
+	for _, want := range []string{
+		"https://en.wikipedia.org/wiki/",
+		"https://en.wikipedia.org/",
+		"https://en.wikipedia.",
+	} {
+		b.HandleKey("alt-backspace")
+		if got() != want {
+			t.Fatalf("alt-backspace = %q, want %q", got(), want)
+		}
+	}
+
+	open("https://example.com/path")
+	b.HandleKey("ctrl-w")
+	if got() != "https://example.com/" {
+		t.Fatalf("ctrl-w = %q", got())
+	}
+
+	open("https://example.com/a")
+	b.HandleKey("home")
+	b.HandleKey("alt-d")
+	if got() != "example.com/a" {
+		t.Fatalf("alt-d = %q", got())
+	}
+
+	open("abc")
+	b.HandleKey("ctrl-b")
+	b.HandleKey("X")
+	if got() != "abXc" {
+		t.Fatalf("ctrl-b = %q", got())
+	}
+	b.HandleKey("ctrl-f")
+	b.HandleKey("Y")
+	if got() != "abXcY" {
+		t.Fatalf("ctrl-f = %q", got())
+	}
+}
+
+func TestLoadingProgress(t *testing.T) {
+	b := NewBrowser(80, 10)
+	if b.progressActive() {
+		t.Fatal("idle browser reports active progress")
+	}
+	b.loading = true
+	b.startProgress()
+	if !b.progressActive() || b.progress != 0.05 {
+		t.Fatalf("start = %v active=%v", b.progress, b.progressActive())
+	}
+	for i := 0; i < 200; i++ {
+		if !b.tickProgress() {
+			t.Fatal("loading tick did not repaint")
+		}
+	}
+	if b.progress <= 0.5 || b.progress > 0.9 {
+		t.Fatalf("progress after loading ticks = %v", b.progress)
+	}
+
+	b.loading = false
+	b.finishProgress()
+	if b.progress != 1 {
+		t.Fatalf("finish progress = %v", b.progress)
+	}
+	for i := 0; i < progressLingerTicks-1; i++ {
+		if b.tickProgress() {
+			t.Fatal("lingering progress repainted before it cleared")
+		}
+	}
+	if !b.progressActive() {
+		t.Fatal("progress cleared too early")
+	}
+	if !b.tickProgress() || b.progress != 0 || b.progressActive() {
+		t.Fatalf("progress did not clear: %v active=%v", b.progress, b.progressActive())
+	}
+
+	b.loading = true
+	b.startProgress()
+	b.cancelLoadNow()
+	if b.progressActive() || b.progress != 0 {
+		t.Fatalf("cancel did not clear progress: %v active=%v", b.progress, b.progressActive())
+	}
+}
+
+func TestLoadingProgressPaintsURLRow(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.color = true
+	b.loading = true
+	b.startProgress()
+	b.progress = 0.5
+	drawQuiet(b)
+	if !strings.Contains(b.prev[1], "48;2;31;79;138") {
+		t.Fatalf("URL row has no progress fill: %q", b.prev[1])
+	}
+}
+
 func TestVimURLKey(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.HandleKey("o")

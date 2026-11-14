@@ -53,6 +53,11 @@ func TestReadKeyEscapeSequences(t *testing.T) {
 		{"\x1b[7~", "home"},
 		{"\x1b[8~", "end"},
 		{"\x1bOH", "home"},
+		{"\x1b[1;5D", "ctrl-left"},
+		{"\x1b[1;3C", "alt-right"},
+		{"\x1b[1;2A", "shift-up"},
+		{"\x1b[3;5~", "ctrl-delete"},
+		{"\x1b[3;3~", "alt-delete"},
 	}
 	for _, tc := range cases {
 		r := bufio.NewReader(strings.NewReader(tc.in))
@@ -67,12 +72,17 @@ func TestReadKeyEscapeSequences(t *testing.T) {
 }
 
 func TestReadKeyAltKey(t *testing.T) {
-	r := bufio.NewReader(strings.NewReader("\x1bx"))
-	if got, _ := readKey(r); got != "esc" {
-		t.Fatalf("alt prefix = %q, want esc", got)
+	cases := []struct{ in, want string }{
+		{"\x1bx", "alt-x"},
+		{"\x1b\x7f", "alt-backspace"},
+		{"\x1bé", "alt-é"},
+		{"\x1b ", "alt- "},
 	}
-	if got, _ := readKey(r); got != "x" {
-		t.Fatalf("alt body = %q, want x", got)
+	for _, tc := range cases {
+		r := bufio.NewReader(strings.NewReader(tc.in))
+		if got, _ := readKey(r); got != tc.want {
+			t.Errorf("readKey(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
 

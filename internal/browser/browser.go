@@ -27,6 +27,10 @@ const (
 	// previous rebuild cost is added so a slow page cannot spend all its time
 	// re-laying out from timers.
 	jsRedrawInterval = 250 * time.Millisecond
+	// Loading progress eases toward 90% while a page loads, then completes and
+	// lingers for a few ticks before the URL row returns to its normal color.
+	progressTickInterval = 80 * time.Millisecond
+	progressLingerTicks  = 4
 
 	layoutTruncatedStatus   = "Page truncated (layout limit)"
 	moduleUnsupportedStatus = "Page requires ES modules (unsupported) — try reader mode (R)"
@@ -79,11 +83,13 @@ type Browser struct {
 	jsMemLimit int64
 	js         *jsRuntime
 
-	loadCh     chan loadResult
-	loadSeq    int
-	cancelLoad context.CancelFunc
-	loading    bool
-	loadFn     func(context.Context, string, string, []byte, string) (*Page, error)
+	loadCh       chan loadResult
+	loadSeq      int
+	cancelLoad   context.CancelFunc
+	loading      bool
+	progress     float64
+	progressHold int
+	loadFn       func(context.Context, string, string, []byte, string) (*Page, error)
 
 	lastMethod      string
 	lastBody        []byte
@@ -344,6 +350,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	ctx, cancel := context.WithCancel(context.Background())
 	b.cancelLoad = cancel
 	b.loading = true
+	b.startProgress()
 	b.status = "Loading " + u.String() + " … (Esc stops)"
 	b.clearSelection()
 
@@ -376,6 +383,54 @@ func (b *Browser) cancelLoadNow() {
 		b.cancelLoad = nil
 	}
 	b.loading = false
+	b.clearProgress()
+}
+
+// startProgress resets the URL-row loading indicator for a new navigation.
+func (b *Browser) startProgress() {
+	b.progress = 0.05
+	b.progressHold = 0
+}
+
+// finishProgress completes the indicator and leaves it visible briefly so the
+// end of a fast load is still perceptible.
+func (b *Browser) finishProgress() {
+	if b.progress <= 0 {
+		return
+	}
+	b.progress = 1
+	b.progressHold = progressLingerTicks
+}
+
+func (b *Browser) clearProgress() {
+	b.progress = 0
+	b.progressHold = 0
+}
+
+// progressActive reports whether the event loop should keep ticking the
+// loading indicator.
+func (b *Browser) progressActive() bool {
+	return b.loading || b.progressHold > 0
+}
+
+// tickProgress advances the indicator. It reports whether the bar changed
+// enough to justify a repaint.
+func (b *Browser) tickProgress() bool {
+	if b.loading {
+		b.progress += (0.9 - b.progress) * 0.08
+		if b.progress > 0.9 {
+			b.progress = 0.9
+		}
+		return true
+	}
+	if b.progressHold > 0 {
+		b.progressHold--
+		if b.progressHold == 0 {
+			b.progress = 0
+			return true
+		}
+	}
+	return false
 }
 
 // stopLoading aborts the in-flight page load and ignores its late result.
@@ -400,6 +455,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
+	b.finishProgress()
 	if res.err != nil {
 		b.status = "Error: " + res.err.Error()
 		if b.page == nil {
@@ -1347,6 +1403,77 @@ func nextRuneBoundary(s string, i int) int {
 	return i + size
 }
 
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
+// prevWordBoundary returns the start of the word before i, skipping any
+// separators immediately before the caret. Deleting [start, i) therefore
+// removes one URL segment while keeping the separators before it.
+func prevWordBoundary(s string, i int) int {
+	if i <= 0 {
+		return 0
+	}
+	if i > len(s) {
+		i = len(s)
+	}
+	for i > 0 {
+		r, size := utf8.DecodeLastRuneInString(s[:i])
+		if isWordRune(r) {
+			break
+		}
+		i -= size
+	}
+	for i > 0 {
+		r, size := utf8.DecodeLastRuneInString(s[:i])
+		if !isWordRune(r) {
+			break
+		}
+		i -= size
+	}
+	return i
+}
+
+// nextWordBoundary returns the end of the word at or after i, skipping leading
+// separators first. It is used for forward word motion.
+func nextWordBoundary(s string, i int) int {
+	if i < 0 {
+		i = 0
+	}
+	if i > len(s) {
+		i = len(s)
+	}
+	for i < len(s) {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if isWordRune(r) {
+			break
+		}
+		i += size
+	}
+	for i < len(s) {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if !isWordRune(r) {
+			break
+		}
+		i += size
+	}
+	return i
+}
+
+// forwardWordBoundary returns the end of the next word including the
+// separators that follow it, matching kill-word behavior.
+func forwardWordBoundary(s string, i int) int {
+	i = nextWordBoundary(s, i)
+	for i < len(s) {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if isWordRune(r) {
+			break
+		}
+		i += size
+	}
+	return i
+}
+
 func (b *Browser) handlePromptKey(k string) bool {
 	text := b.promptText
 	cur := b.promptCursor
@@ -1397,6 +1524,34 @@ func (b *Browser) handlePromptKey(k string) bool {
 	case "ctrl-e":
 		cur = len(text)
 		b.promptSelectAll = false
+	case "ctrl-b":
+		if b.promptSelectAll {
+			cur = 0
+			b.promptSelectAll = false
+		} else {
+			cur = prevRuneBoundary(text, cur)
+		}
+	case "ctrl-f":
+		if b.promptSelectAll {
+			cur = len(text)
+			b.promptSelectAll = false
+		} else {
+			cur = nextRuneBoundary(text, cur)
+		}
+	case "alt-b", "ctrl-left", "alt-left":
+		if b.promptSelectAll {
+			cur = 0
+			b.promptSelectAll = false
+		} else {
+			cur = prevWordBoundary(text, cur)
+		}
+	case "alt-f", "ctrl-right", "alt-right":
+		if b.promptSelectAll {
+			cur = len(text)
+			b.promptSelectAll = false
+		} else {
+			cur = nextWordBoundary(text, cur)
+		}
 	case "backspace":
 		if b.promptSelectAll {
 			text = ""
@@ -1428,20 +1583,29 @@ func (b *Browser) handlePromptKey(k string) bool {
 		} else {
 			text = text[:cur]
 		}
-	case "ctrl-w":
+	case "alt-backspace", "ctrl-backspace", "ctrl-w":
 		if b.promptSelectAll {
 			text = ""
 			cur = 0
 			b.promptSelectAll = false
 			break
 		}
-		before := strings.TrimRight(text[:cur], " ")
-		cut := 0
-		if i := strings.LastIndexAny(before, " /"); i >= 0 {
-			cut = i + 1
+		cut := prevWordBoundary(text, cur)
+		if cut < cur {
+			text = text[:cut] + text[cur:]
+			cur = cut
 		}
-		text = text[:cut] + text[cur:]
-		cur = cut
+	case "alt-delete", "ctrl-delete", "alt-d":
+		if b.promptSelectAll {
+			text = ""
+			cur = 0
+			b.promptSelectAll = false
+			break
+		}
+		end := forwardWordBoundary(text, cur)
+		if end > cur {
+			text = text[:cur] + text[end:]
+		}
 	case "ctrl-c":
 		b.closeURLPrompt()
 		return false
@@ -3044,6 +3208,16 @@ func (b *Browser) draw() {
 				return
 			}
 			g.Fill(x, y, width, 1, fieldBG)
+			if b.progress > 0 {
+				filled := int(b.progress*float64(width) + 0.5)
+				if filled < 1 {
+					filled = 1
+				}
+				if filled > width {
+					filled = width
+				}
+				g.Fill(x, y, filled, 1, RGB(0x1f, 0x4f, 0x8a))
+			}
 			if b.prompt {
 				head, at, tail, show := promptParts(" Open: ", b.promptText, b.promptCursor, b.promptSelectAll, width)
 				g.Text(x, y, head, hs, headerFG)

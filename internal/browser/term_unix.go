@@ -52,15 +52,7 @@ func readKey(r *bufio.Reader) (string, error) {
 	}
 	// UTF-8 multibyte.
 	buf := []byte{b}
-	want := 1
-	switch {
-	case b&0xe0 == 0xc0:
-		want = 2
-	case b&0xf0 == 0xe0:
-		want = 3
-	case b&0xf8 == 0xf0:
-		want = 4
-	}
+	want := utf8Len(b)
 	for len(buf) < want {
 		nb, err := r.ReadByte()
 		if err != nil {
@@ -72,6 +64,76 @@ func readKey(r *bufio.Reader) (string, error) {
 		return "", nil
 	}
 	return string(buf), nil
+}
+
+func utf8Len(b byte) int {
+	switch {
+	case b&0xf8 == 0xf0:
+		return 4
+	case b&0xf0 == 0xe0:
+		return 3
+	case b&0xe0 == 0xc0:
+		return 2
+	}
+	return 1
+}
+
+// readAltKey decodes ESC followed by a key as an alt-<key> token. Terminals
+// send Alt as an ESC prefix; when ESC arrives alone Buffered is empty and the
+// caller reports a plain escape instead.
+func readAltKey(r *bufio.Reader, b byte) string {
+	switch b {
+	case 127, 8:
+		return "alt-backspace"
+	case 13, 10:
+		return "alt-enter"
+	case 9:
+		return "alt-tab"
+	}
+	if b < 32 {
+		// Alt+control has no binding; leave it for the normal key decoder.
+		_ = r.UnreadByte()
+		return "esc"
+	}
+	buf := []byte{b}
+	want := utf8Len(b)
+	for len(buf) < want {
+		nb, err := r.ReadByte()
+		if err != nil {
+			break
+		}
+		buf = append(buf, nb)
+	}
+	if !utf8.Valid(buf) {
+		return "esc"
+	}
+	return "alt-" + string(buf)
+}
+
+// modifierPrefix maps xterm/kitty modifier parameters (1 + shift|alt|ctrl|meta
+// bit flags) to the key-name prefixes the rest of the browser understands.
+func modifierPrefix(params string) string {
+	parts := strings.Split(params, ";")
+	if len(parts) < 2 {
+		return ""
+	}
+	switch parts[len(parts)-1] {
+	case "2":
+		return "shift-"
+	case "3":
+		return "alt-"
+	case "4":
+		return "alt-shift-"
+	case "5":
+		return "ctrl-"
+	case "6":
+		return "ctrl-shift-"
+	case "7":
+		return "ctrl-alt-"
+	case "8":
+		return "ctrl-alt-shift-"
+	}
+	return ""
 }
 
 func readEscape(r *bufio.Reader) string {
@@ -89,8 +151,7 @@ func readEscape(r *bufio.Reader) string {
 		return ""
 	}
 	if b2 != '[' && b2 != 'O' {
-		_ = r.UnreadByte()
-		return "esc"
+		return readAltKey(r, b2)
 	}
 	var seq []byte
 	for len(seq) < 32 {
@@ -108,39 +169,44 @@ func readEscape(r *bufio.Reader) string {
 	}
 	final := seq[len(seq)-1]
 	params := string(seq[:len(seq)-1])
+	mod := modifierPrefix(params)
 	switch final {
 	case 'A':
-		return "up"
+		return mod + "up"
 	case 'B':
-		return "down"
+		return mod + "down"
 	case 'C':
-		return "right"
+		return mod + "right"
 	case 'D':
-		return "left"
+		return mod + "left"
 	case 'H':
-		return "home"
+		return mod + "home"
 	case 'F':
-		return "end"
+		return mod + "end"
 	case 'Z':
 		return "backtab"
 	case '~':
-		switch params {
+		base := params
+		if i := strings.IndexByte(base, ';'); i >= 0 {
+			base = base[:i]
+		}
+		switch base {
 		case "1":
-			return "home"
+			return mod + "home"
 		case "2":
-			return "insert"
+			return mod + "insert"
 		case "3":
-			return "delete"
+			return mod + "delete"
 		case "4":
-			return "end"
+			return mod + "end"
 		case "5":
-			return "pgup"
+			return mod + "pgup"
 		case "6":
-			return "pgdn"
+			return mod + "pgdn"
 		case "7":
-			return "home"
+			return mod + "home"
 		case "8":
-			return "end"
+			return mod + "end"
 		}
 	case 'M', 'm':
 		if strings.HasPrefix(params, "<") {

@@ -141,7 +141,7 @@ Standard Go layout:
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
-| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding. |
+| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences plus `alt-<key>` ESC prefixes and modified arrows/keys (`ctrl-left`, `alt-delete`, …). |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
@@ -333,7 +333,11 @@ Standard Go layout:
   file. While a page is loading, the reload icon becomes `×` and clicking it
   cancels the in-flight load exactly like `Esc` (status `Stopped loading`),
   then the reload icon returns. The URL row is a full-width field that becomes the editable
-  `Open: …` prompt with a cursor marker while the prompt is open. The toolbar
+  `Open: …` prompt with a cursor marker while the prompt is open. While loading,
+  the URL row fills from the left with a blue progress tint that eases toward
+  90%, completes on finish and lingers briefly before clearing; it is driven by
+  an event-loop timer only while progress is active, so idle pages stay asleep.
+  The toolbar
   row uses a subtle horizontal gradient. The page title is centered in the
   space between the left and right buttons and uses a bold amber color for
   prominence.
@@ -552,7 +556,11 @@ Standard Go layout:
   normal browser address bar; Backspace clears the selection first. The prompt
   has a real cursor: Left/Right, Home/End move it, Backspace/Delete remove
   around it, Ctrl-A selects all, Ctrl-K deletes to the end, Ctrl-U clears and
-  Ctrl-W deletes the previous word. A mouse click places the caret. Shift+drag
+  Ctrl-W deletes the previous word. Emacs/readline chords also work: Ctrl-B/F
+  move by character; Alt-B/F (or Ctrl/Alt+Left/Right) move by URL word;
+  Alt-Backspace, Ctrl-Backspace and Ctrl-W delete the previous word/segment;
+  Alt-D, Alt-Delete and Ctrl-Delete delete the next word plus its following
+  separators. A mouse click places the caret. Shift+drag
   is not app-managed selection: Shift+mouse reports that do arrive are ignored
   and no redraw is written, so terminals that handle Shift locally can select
   and copy the URL text normally.

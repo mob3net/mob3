@@ -161,6 +161,12 @@ func Run(args []string) int {
 			jsTimer.Stop()
 		}
 	}()
+	var progressTimer *time.Timer
+	defer func() {
+		if progressTimer != nil {
+			progressTimer.Stop()
+		}
+	}()
 	usageTicker := time.NewTicker(2 * time.Second)
 	defer usageTicker.Stop()
 
@@ -187,6 +193,21 @@ func Run(args []string) int {
 			}
 			timerC = jsTimer.C
 		}
+		var progressC <-chan time.Time
+		if b.progressActive() {
+			if progressTimer == nil {
+				progressTimer = time.NewTimer(progressTickInterval)
+			} else {
+				if !progressTimer.Stop() {
+					select {
+					case <-progressTimer.C:
+					default:
+					}
+				}
+				progressTimer.Reset(progressTickInterval)
+			}
+			progressC = progressTimer.C
+		}
 		select {
 		case k := <-keys:
 			if k == "eof" {
@@ -207,6 +228,10 @@ func Run(args []string) int {
 			// timer wakeup (this also re-sends graphics protocol image
 			// placements and rewrites the chrome every frame).
 			if !b.runJSTimers() {
+				b.skipDraw = true
+			}
+		case <-progressC:
+			if !b.tickProgress() {
 				b.skipDraw = true
 			}
 		case <-usageTicker.C:

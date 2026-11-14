@@ -1042,7 +1042,7 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
-<tr><td><b>o</b></td><td>open a URL (prefilled and selected; arrows/Home/End/Delete edit it)</td></tr>
+<tr><td><b>o</b></td><td>open a URL (prefilled and selected; Ctrl/Alt+Left/Right move by word, Alt/Ctrl+Backspace or Ctrl-W delete a segment, Alt-D deletes forward)</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
@@ -1054,6 +1054,11 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b>/<b>Enter</b> quits, any other key cancels)</td></tr>
 </table>
+
+<h2>Loading</h2>
+<p>While a page loads, the URL bar fills from the left with a blue progress
+bar. It completes when the page arrives and clears a moment later. <b>Esc</b>
+or the <b>×</b> toolbar button stops the load.</p>
 
 <h2>Find</h2>
 <p>Press <b>/</b> to open the find bar in the footer. Typing searches
