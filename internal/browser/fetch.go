@@ -1074,8 +1074,9 @@ closes the bar but keeps the highlights; pressing <b>Esc</b> again clears them.
 Find works on every page, including
 this help page and <b>about:bookmarks</b>. Queries may contain spaces: runs of
 whitespace are treated as one space, and a phrase can match across word
-boundaries and wrapped lines. In the JS console, press <b>/</b> while the
-<b>HTML</b> tab is active to search the raw source and jump to matching
+boundaries and wrapped lines. The query line accepts the same word motion and
+word deletion keys as the URL prompt. In the JS console, press <b>/</b> while
+the <b>HTML</b> tab is active to search the raw source and jump to matching
 lines.</p>
 
 <h2>Reader mode</h2>
@@ -1155,10 +1156,11 @@ without copying. Nothing is written to disk by MOB³ itself.</p>
 <h2>Forms</h2>
 <p>Click a text input or textarea to type. Textareas show at least two rows and
 wrap their text; an explicit <b>rows</b> value up to 12 is honoured. The focused
-field shows a block caret: <b>Left</b>/<b>Right</b> move by character,
-<b>Home</b>/<b>End</b> by line, and textarea <b>Up</b>/<b>Down</b> move between
-lines. <b>Delete</b> removes forward,
-<b>Backspace</b> deletes backwards,
+field shows a block caret: <b>Left</b>/<b>Right</b> (or <b>Ctrl-B</b>/<b>Ctrl-F</b>)
+move by character, <b>Home</b>/<b>End</b> by line, <b>Alt-B</b>/<b>Alt-F</b> or
+<b>Ctrl/Alt+Left/Right</b> by word, and textarea <b>Up</b>/<b>Down</b> move
+between lines. <b>Alt/Ctrl+Backspace</b>, <b>Ctrl-W</b> and <b>Alt-D</b> delete
+words; <b>Delete</b> removes forward, <b>Backspace</b> deletes backwards,
 <b>Ctrl-U</b> clears, <b>Enter</b> submits (or inserts a newline in a textarea),
 and <b>Esc</b> leaves the field.
 Checkboxes and radios toggle on click, and clicking a label activates its
@@ -1221,7 +1223,8 @@ and <b>HTML</b>. The logs tab is active by default and contains the
 Press <b>i</b> or <b>Enter</b>, or click the <b>&gt;</b> row, to focus the
 input, type an expression and press <b>Enter</b> to run it; the result appears
 in the logs above the input. <b>Up</b>/<b>Down</b> recall earlier expressions
-from the console history. <b>j</b>/<b>k</b> and the wheel scroll the open
+from the console history. The input supports the same word-editing keys as the
+URL prompt. <b>j</b>/<b>k</b> and the wheel scroll the open
 logs/Requests/Storage/HTML section, <b>g</b>/<b>G</b> jump to the ends,
 <b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
 asks to confirm quitting while the input row is not focused.

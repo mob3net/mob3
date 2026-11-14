@@ -2726,6 +2726,22 @@ func (b *Browser) handleInputKey(k string) bool {
 			b.refreshInputCursor(n)
 		}
 		return false
+	case "ctrl-b":
+		n.InputCursor = prevRuneBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
+	case "ctrl-f":
+		n.InputCursor = nextRuneBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
+	case "alt-b", "ctrl-left", "alt-left":
+		n.InputCursor = prevWordBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
+	case "alt-f", "ctrl-right", "alt-right":
+		n.InputCursor = nextWordBoundary(value, cur)
+		b.refreshInputCursor(n)
+		return false
 	case "backspace":
 		if cur > 0 {
 			prev := prevRuneBoundary(value, cur)
@@ -2733,11 +2749,25 @@ func (b *Browser) handleInputKey(k string) bool {
 			b.setInputValue(n, value[:prev]+value[cur:])
 		}
 		return false
+	case "alt-backspace", "ctrl-backspace", "ctrl-w":
+		cut := prevWordBoundary(value, cur)
+		if cut < cur {
+			n.InputCursor = cut
+			b.setInputValue(n, value[:cut]+value[cur:])
+		}
+		return false
 	case "delete":
 		if cur < len(value) {
 			next := nextRuneBoundary(value, cur)
 			n.InputCursor = cur
 			b.setInputValue(n, value[:cur]+value[next:])
+		}
+		return false
+	case "alt-delete", "ctrl-delete", "alt-d":
+		end := forwardWordBoundary(value, cur)
+		if end > cur {
+			n.InputCursor = cur
+			b.setInputValue(n, value[:cur]+value[end:])
 		}
 		return false
 	case "ctrl-u":

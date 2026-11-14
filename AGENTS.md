@@ -403,7 +403,8 @@ Standard Go layout:
   whitespace runs collapse to one space, and phrases match across word
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
-  `about:bookmarks`.
+  `about:bookmarks`. The query line takes the same Ctrl/Alt word motion and
+  Alt/Ctrl+Backspace, Ctrl-W and Alt-D word deletion as the URL prompt.
 - **Dark mode:** `D` or the footer `Dark:on`/`Dark:off` label toggles dark
   mode. Pages are styled with `prefers-color-scheme: dark`, so sites can serve
   their own dark CSS; `matchMedia` reflects the same scheme. When the resolved
@@ -488,11 +489,13 @@ Standard Go layout:
   terminal/multiplexer support).
 - **Forms:** clicking a text/search/email/URL/tel/number/password input or a
   textarea focuses it and shows a block caret. Left/Right move by one
-  character, Home/End by line, Delete removes forward, and in a textarea
-  Up/Down move between logical lines (keeping the column); typing and Backspace
-  edit at the caret, and a long focused input scrolls around the caret.
-  Ctrl-U clears, and Esc finishes; Enter submits from other fields but
-  inserts a newline at the caret in a textarea. Textareas render as
+  character, Home/End by line, and in a textarea Up/Down move between logical
+  lines (keeping the column); typing and Backspace edit at the caret, and a
+  long focused input scrolls around the caret. Ctrl-B/F move by character;
+  Alt-B/F or Ctrl/Alt+Left/Right move by word; Alt/Ctrl+Backspace, Ctrl-W and
+  Alt-D delete words; Delete removes forward. Ctrl-U clears, and Esc finishes;
+  Enter submits from other fields but inserts a newline at the caret in a
+  textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap
   their value; only the visible rows are produced, so typing into a huge value
   stays cheap. A text-like control with an explicit CSS width pads its widget
@@ -689,7 +692,9 @@ Standard Go layout:
   terminal drag-selection needs the Shift override).
   `i` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
-  usual JS timeout/memory guards. The input row keeps its gray background while
+  usual JS timeout/memory guards. The input row supports the same Ctrl/Alt
+  word-motion and word-deletion keys as the URL prompt. It keeps its gray
+  background while
   focused. Up/Down recall earlier expressions from the in-memory console
   history (consecutive duplicates are dropped, capped at 200 entries); Down
   past the newest entry restores the draft. History is not reset by navigation.

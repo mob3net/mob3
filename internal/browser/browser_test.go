@@ -758,6 +758,64 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 }
 
+func TestInputWordEditing(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="https://en.wikipedia.org/wiki/Wyoming"></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	q := inputByName(doc, "q")
+	b.setInputFocus(q)
+
+	b.HandleKey("alt-backspace")
+	if got := inputValue(q); got != "https://en.wikipedia.org/wiki/" {
+		t.Fatalf("alt-backspace = %q", got)
+	}
+	b.HandleKey("ctrl-w")
+	if got := inputValue(q); got != "https://en.wikipedia.org/" {
+		t.Fatalf("ctrl-w = %q", got)
+	}
+
+	b.setInputValue(q, "https://example.com/a/b")
+	q.InputCursor = len("https://example.com/a/b")
+	b.HandleKey("alt-left")
+	b.HandleKey("ctrl-left")
+	b.HandleKey("Z")
+	if got := inputValue(q); got != "https://example.com/Za/b" {
+		t.Fatalf("word motion = %q", got)
+	}
+
+	b.setInputValue(q, "https://example.com/a")
+	q.InputCursor = 0
+	b.HandleKey("alt-d")
+	if got := inputValue(q); got != "example.com/a" {
+		t.Fatalf("alt-d = %q", got)
+	}
+}
+
+func TestConsoleWordEditing(t *testing.T) {
+	b := NewBrowser(80, 20)
+	b.consoleOpen = true
+	b.consoleEdit = true
+	b.consoleText = "https://en.wikipedia.org/wiki/Wyoming"
+	b.consoleCursor = len(b.consoleText)
+
+	b.HandleKey("alt-backspace")
+	if b.consoleText != "https://en.wikipedia.org/wiki/" {
+		t.Fatalf("alt-backspace = %q", b.consoleText)
+	}
+	b.HandleKey("ctrl-w")
+	if b.consoleText != "https://en.wikipedia.org/" {
+		t.Fatalf("ctrl-w = %q", b.consoleText)
+	}
+	b.HandleKey("alt-left")
+	b.HandleKey("Z")
+	if b.consoleText != "https://en.wikipedia.Zorg/" {
+		t.Fatalf("word motion = %q", b.consoleText)
+	}
+}
+
 func TestInputCursorMovementAndEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="abcd"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")

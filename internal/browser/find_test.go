@@ -69,6 +69,33 @@ func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	}
 }
 
+func TestFindWordEditing(t *testing.T) {
+	root := ParseHTML(`<html><body><p>alpha beta gamma</p></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.layout = BuildLayout(root, nil, 60)
+	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha beta gamma")
+
+	b.handleFindKey("alt-backspace")
+	if b.findText != "alpha beta " {
+		t.Fatalf("alt-backspace = %q", b.findText)
+	}
+	b.handleFindKey("ctrl-w")
+	if b.findText != "alpha " {
+		t.Fatalf("ctrl-w = %q", b.findText)
+	}
+	b.handleFindKey("alt-left")
+	b.handleFindKey("Z")
+	if b.findText != "Zalpha " {
+		t.Fatalf("word motion = %q", b.findText)
+	}
+	b.handleFindKey("alt-d")
+	if b.findText != "Z" {
+		t.Fatalf("alt-d = %q", b.findText)
+	}
+}
+
 func TestFindMultiWordQuery(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

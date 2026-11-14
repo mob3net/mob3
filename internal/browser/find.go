@@ -2,7 +2,6 @@ package browser
 
 import (
 	"fmt"
-	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -114,10 +113,14 @@ func (b *Browser) handleFindKey(k string) bool {
 		b.findActive = false
 		b.status = b.findStatusText()
 		return false
-	case "left":
+	case "left", "ctrl-b":
 		cur = prevRuneBoundary(text, cur)
-	case "right":
+	case "right", "ctrl-f":
 		cur = nextRuneBoundary(text, cur)
+	case "alt-b", "ctrl-left", "alt-left":
+		cur = prevWordBoundary(text, cur)
+	case "alt-f", "ctrl-right", "alt-right":
+		cur = nextWordBoundary(text, cur)
 	case "home", "ctrl-a":
 		cur = 0
 	case "end", "ctrl-e":
@@ -128,24 +131,27 @@ func (b *Browser) handleFindKey(k string) bool {
 			text = text[:prev] + text[cur:]
 			cur = prev
 		}
+	case "alt-backspace", "ctrl-backspace", "ctrl-w":
+		cut := prevWordBoundary(text, cur)
+		if cut < cur {
+			text = text[:cut] + text[cur:]
+			cur = cut
+		}
 	case "delete":
 		if cur < len(text) {
 			next := nextRuneBoundary(text, cur)
 			text = text[:cur] + text[next:]
+		}
+	case "alt-delete", "ctrl-delete", "alt-d":
+		end := forwardWordBoundary(text, cur)
+		if end > cur {
+			text = text[:cur] + text[end:]
 		}
 	case "ctrl-u":
 		text = ""
 		cur = 0
 	case "ctrl-k":
 		text = text[:cur]
-	case "ctrl-w":
-		before := strings.TrimRight(text[:cur], " ")
-		cut := 0
-		if i := strings.LastIndexAny(before, " /"); i >= 0 {
-			cut = i + 1
-		}
-		text = text[:cut] + text[cur:]
-		cur = cut
 	default:
 		if utf8.RuneCountInString(k) == 1 {
 			r, _ := utf8.DecodeRuneInString(k)
