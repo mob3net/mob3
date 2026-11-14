@@ -161,6 +161,12 @@ mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
 See all available options with -h flag. Every flag and default is listed in the
 [command-line reference](docs/cli.md).
 
+Capture a PNG screenshot:
+
+```sh
+mob3 -png -width 120 bbc.com/news > bbc.png
+```
+
 ## Automation (MCP)
 
 `mob3 -mcp` runs a headless browser as a Model Context Protocol server over
@@ -177,9 +183,9 @@ stdin/stdout. It accepts an optional starting URL and fixed `-width`:
 }
 ```
 
-Tools: `navigate`, `snapshot`, `click` (link number, CSS selector or `x`/`y`),
-`type`, `press`, `scroll`, `back`, `forward`, `reload`, `evaluate` and
-`history`. `snapshot` returns the current page viewport as text, visible links
+Tools: `navigate`, `snapshot`, `screenshot`, `click` (link number, CSS
+selector or `x`/`y`), `type`, `press`, `scroll`, `back`, `forward`, `reload`,
+`evaluate` and `history`. `snapshot` returns the current page viewport as text, visible links
 as `[n]` and form controls with coordinates. Results are text only: there is no
 pixel screenshot because MOB3 renders to terminal cells.
 

@@ -139,6 +139,7 @@ Standard Go layout:
 | `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade), logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
+| `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
@@ -367,6 +368,13 @@ Standard Go layout:
   `preserveAspectRatio=0`. Source images are downscaled to about the terminal
   cell size (default 8×16 px) before encoding. Dump mode always uses half-block
   art for the images that were loaded.
+- **PNG screenshots:** `-png` implies dump mode and writes a PNG stream to
+  stdout; the file is capped at 2,000 rows. The MCP `screenshot` tool renders
+  the current page viewport and returns an `image/png` content block plus a
+  short text line. Both use 8×16 pixel cells and bundled Go Mono faces, include
+  text colors/backgrounds, bold/italic/underline/strike and half-block image
+  cells, and omit browser chrome. They are terminal-cell rasters: CJK and emoji
+  glyphs may be missing, and they are not pixel screenshots of a browser.
 - **Output robustness:** interactive mode disables terminal autowrap
   (`\x1b[?7l`) and restores it on exit, clips double-width glyphs that would
   cross the right edge, repaints the toolbar and footer every frame, and forces
@@ -417,9 +425,10 @@ Standard Go layout:
   optional start URL and `-width`; `-no-js` and `-layout-budget` are honored,
   the viewport height is fixed at 30, and images are disabled. Tools cover
   navigate, snapshot, click,
-  type, press, scroll, history navigation, JS evaluation and session history.
-  The snapshot is text plus visible `[n]` links and form-control coordinates;
-  there are no pixel screenshots. Stdout is protocol-only. Sessions, cookies
+  type, press, scroll, history navigation, JS evaluation, session history and a
+  PNG `screenshot` of the current viewport. The snapshot is text plus visible
+  `[n]` links and form-control coordinates; the screenshot is a terminal-cell
+  raster, not a browser pixel capture. Stdout is protocol-only. Sessions, cookies
   and history are memory-only, and the server is local and unauthenticated.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`

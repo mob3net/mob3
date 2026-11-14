@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -44,8 +46,10 @@ type mcpResponse struct {
 }
 
 type mcpContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	Data     string `json:"data,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
 }
 
 type mcpToolResult struct {
@@ -144,15 +148,45 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mcpToolTimeout)
 	defer cancel()
+	if p.Name == "screenshot" {
+		var shot struct {
+			Scale int `json:"scale"`
+		}
+		if err := decodeArgs(p.Arguments, &shot); err != nil {
+			return toolError(req.ID, err)
+		}
+		if shot.Scale < 1 {
+			shot.Scale = 1
+		}
+		data, err := s.a.Screenshot(shot.Scale)
+		if err != nil {
+			return toolError(req.ID, err)
+		}
+		s := s.a.Snapshot()
+		meta := s
+		if i := strings.IndexByte(meta, '\n'); i >= 0 {
+			meta = meta[:i]
+		}
+		return successResponse(req.ID, mcpToolResult{
+			Content: []mcpContent{
+				{Type: "image", Data: base64.StdEncoding.EncodeToString(data), MimeType: "image/png"},
+				{Type: "text", Text: clipText(meta, 20000)},
+			},
+		})
+	}
 	text, err := s.a.RunCommand(ctx, p.Name, p.Arguments)
 	if err != nil {
-		return successResponse(req.ID, mcpToolResult{
-			Content: []mcpContent{{Type: "text", Text: err.Error()}},
-			IsError: true,
-		})
+		return toolError(req.ID, err)
 	}
 	return successResponse(req.ID, mcpToolResult{
 		Content: []mcpContent{{Type: "text", Text: clipText(text, 20000)}},
+	})
+}
+
+func toolError(id json.RawMessage, err error) *mcpResponse {
+	return successResponse(id, mcpToolResult{
+		Content: []mcpContent{{Type: "text", Text: err.Error()}},
+		IsError: true,
 	})
 }
 
@@ -197,6 +231,13 @@ func mcpToolDefinitions() []map[string]any {
 			"name":        "snapshot",
 			"description": "Return the current page text, visible numbered links and form controls with coordinates.",
 			"inputSchema": object(map[string]any{}),
+		},
+		{
+			"name":        "screenshot",
+			"description": "Render the current page viewport as a PNG image. Scale 1 uses 8x16 pixel cells; scale 2 doubles the image.",
+			"inputSchema": object(map[string]any{
+				"scale": integer("image scale, 1-4 (default 1)"),
+			}),
 		},
 		{
 			"name": "click",

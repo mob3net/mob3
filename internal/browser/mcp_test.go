@@ -2,7 +2,9 @@ package browser
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image/png"
 	"strings"
 	"testing"
 )
@@ -86,6 +88,37 @@ func TestMCPProtocol(t *testing.T) {
 	}
 	if err, _ := resps[8]["error"].(map[string]any); err == nil || err["code"] != float64(-32601) {
 		t.Fatalf("unknown method response = %+v", resps[8])
+	}
+}
+
+func TestMCPScreenshot(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><h1>shot</h1></body></html>`,
+	})
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"navigate","arguments":{"url":"https://example.com/"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"screenshot","arguments":{"scale":1}}}`,
+	}, "\n")
+	var out, errOut bytes.Buffer
+	if code := RunMCP(a, strings.NewReader(input), &out, &errOut); code != 0 {
+		t.Fatalf("RunMCP = %d: %s", code, errOut.String())
+	}
+	resps := mcpResponses(t, out.String())
+	result, _ := resps[2]["result"].(map[string]any)
+	content, _ := result["content"].([]any)
+	if len(content) < 2 {
+		t.Fatalf("content = %+v", content)
+	}
+	img, _ := content[0].(map[string]any)
+	if img["type"] != "image" || img["mimeType"] != "image/png" {
+		t.Fatalf("image content = %+v", img)
+	}
+	raw, err := base64.StdEncoding.DecodeString(img["data"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := png.Decode(bytes.NewReader(raw)); err != nil {
+		t.Fatalf("bad PNG: %v", err)
 	}
 }
 

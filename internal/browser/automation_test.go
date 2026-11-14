@@ -1,8 +1,10 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image/png"
 	"net/url"
 	"strings"
 	"testing"
@@ -145,6 +147,39 @@ func TestAutomationScrollAndHistory(t *testing.T) {
 	}
 	if h := a.History(); !strings.Contains(h, "* https://example.com/") {
 		t.Fatalf("history = %q", h)
+	}
+}
+
+func TestAutomationScreenshot(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body><h1>shot</h1></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := a.Screenshot(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	top, bottom := a.b.viewport()
+	if got, want := img.Bounds().Dy(), (bottom-top)*pngCellH; got != want {
+		t.Fatalf("height = %d, want %d", got, want)
+	}
+	scaled, err := a.Screenshot(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img2, err := png.Decode(bytes.NewReader(scaled))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img2.Bounds().Dx() != 2*img.Bounds().Dx() {
+		t.Fatalf("scaled width = %d, want %d", img2.Bounds().Dx(), 2*img.Bounds().Dx())
 	}
 }
 

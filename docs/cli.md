@@ -16,6 +16,7 @@ falls back to dump mode and prints the rendered page.
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `-dump` | off | Render the page to stdout and exit |
+| `-png` | off | Write a PNG screenshot of the dump to stdout; implies `-dump` |
 | `-width int` | terminal width or 100 | Layout width in columns |
 | `-graphics string` | `none` | Image mode: `none`, `auto`, `kitty`, `iterm`, `blocks` |
 | `-g string` | `none` | Alias for `-graphics` |
@@ -65,6 +66,20 @@ mob3 -dump -width 120 page.html
 mob3 -dump -width 120 -no-color https://go.dev
 mob3 -dump -color https://example.com
 ```
+
+### PNG screenshots
+
+`-png` renders the dump as a PNG stream on stdout. It implies `-dump`, is
+capped at 2,000 rows, and uses an 8×16 pixel cell with Go Mono glyphs:
+
+```sh
+mob3 -png -width 120 bbc.com/news > bbc.png
+mob3 -png -g blocks -width 120 bbc.com/news > bbc-images.png
+```
+
+Image cells render as colored half-block art. The renderer is text-oriented:
+CJK and emoji glyphs are missing from the bundled Go Mono font, and there is no
+browser chrome or true pixel screenshot.
 
 ## Layout budget
 

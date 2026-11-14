@@ -15,6 +15,7 @@ func Run(args []string) int {
 	fs := flag.NewFlagSet("mob3", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dump := fs.Bool("dump", false, "render the page to stdout and exit")
+	pngOut := fs.Bool("png", false, "write a PNG screenshot of the page to stdout (implies -dump)")
 	widthFlag := fs.Int("width", 0, "layout width in columns (default: terminal width or 100)")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
@@ -61,6 +62,9 @@ func Run(args []string) int {
 		start = fs.Arg(0)
 	}
 
+	if *pngOut {
+		*dump = true
+	}
 	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
 	graphicsMode := ParseGraphicsMode(*graphics)
 	loader := NewLoader()
@@ -114,14 +118,14 @@ func Run(args []string) int {
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
 	}
 
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -144,6 +148,7 @@ func Run(args []string) int {
 	}
 	b.cliConfig = map[string]string{
 		"-dump":          onOff(*dump),
+		"-png":           onOff(*pngOut),
 		"-width":         strconv.Itoa(w),
 		"-graphics":      *graphics,
 		"-bookmarks":     bookmarksValue,
@@ -292,7 +297,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark bool, jsMemLimit int64, budget LayoutBudget) int {
+func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark, pngOut bool, jsMemLimit int64, budget LayoutBudget) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -329,6 +334,9 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 	if height > 20000 {
 		height = 20000
 	}
+	if pngOut && height > 2000 {
+		height = 2000
+	}
 	pageFG := RGB(0x1f, 0x23, 0x28)
 	if layout.Body != nil && layout.Body.Style != nil && layout.Body.Style.Color.Set {
 		pageFG = layout.Body.Style.Color
@@ -339,6 +347,17 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 	}
 	g := NewGrid(width, height, pageFG, pageBG)
 	PaintLayout(g, layout, 0, 0, height, nil, pageFG)
+	if pngOut {
+		data, err := g.PNG(1)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mob3: png: %v\n", err)
+			return 1
+		}
+		if _, err := os.Stdout.Write(data); err != nil {
+			return 1
+		}
+		return 0
+	}
 	color := !noColor && (forceColor || isTTY(os.Stdout))
 	lines := g.Lines(color)
 	for _, line := range lines {

@@ -142,20 +142,49 @@ func (a *Automation) Snapshot() string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-// pageText renders the current page viewport without browser chrome.
-func (a *Automation) pageTextLocked(vh int) string {
+// viewportGrid renders the current page viewport without browser chrome.
+func (a *Automation) viewportGridLocked(vh int) *Grid {
 	b := a.b
 	if b.layout == nil || b.page == nil {
-		return ""
+		return nil
 	}
 	b.layout.SetFixedScroll(b.scroll)
 	g := NewGrid(b.width, vh, b.pageFG(), b.pageBG())
 	PaintLayout(g, b.layout, b.scroll, 0, vh, nil, b.pageFG())
+	return g
+}
+
+// pageText renders the current page viewport without browser chrome.
+func (a *Automation) pageTextLocked(vh int) string {
+	g := a.viewportGridLocked(vh)
+	if g == nil {
+		return ""
+	}
 	lines := g.Lines(false)
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// Screenshot renders the current page viewport as a PNG. Scale 1 uses 8x16
+// pixel cells; scale 2 doubles the image.
+func (a *Automation) Screenshot(scale int) ([]byte, error) {
+	if a == nil || a.b == nil {
+		return nil, errors.New("automation is closed")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	top, bottom := a.b.viewport()
+	vh := bottom - top
+	if vh < 1 {
+		vh = 1
+	}
+	g := a.viewportGridLocked(vh)
+	if g == nil {
+		return nil, errors.New("no page loaded")
+	}
+	return g.PNG(scale)
 }
 
 func (a *Automation) linkLinesLocked(vh int) []string {

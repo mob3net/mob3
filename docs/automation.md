@@ -78,6 +78,7 @@ printf '%s\n' \
 | --- | --- | --- |
 | `navigate` | `{url}` | Snapshot after loading |
 | `snapshot` | `{}` | Current page viewport, links and form controls |
+| `screenshot` | `{scale}` | PNG image of the current page viewport |
 | `click` | `{link}` or `{selector}` or `{x,y}` | Snapshot after the click |
 | `type` | `{text}` | `typed` |
 | `press` | `{key}` | `pressed <key>` |
@@ -118,6 +119,18 @@ Inputs:
   filtered list may skip numbers.
 - `Inputs` positions are zero-based page-viewport cells, matching `click`.
 - Page text is the viewport, not the whole document. Use `scroll`.
+
+### `screenshot`
+
+```json
+{"scale":1}
+```
+
+Returns an MCP `image/png` content block of the current page viewport, plus a
+short text line with the URL. `scale` 1 uses 8×16 pixel cells; `scale` 2
+doubles the image. This is a terminal-cell raster, not a browser pixel
+screenshot: Go Mono glyphs are used, CJK/emoji glyphs may be missing, and MCP
+disables image downloads so image regions show alt text.
 
 ### `click`
 

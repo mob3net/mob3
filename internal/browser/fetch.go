@@ -1057,6 +1057,7 @@ Nothing is written to disk.</p>
 <table>
 <tr><th>Option</th><th>Description</th></tr>
 <tr><td><b>-dump</b></td><td>render the page to stdout and exit</td></tr>
+<tr><td><b>-png</b></td><td>write a PNG screenshot of the dump to stdout (implies -dump)</td></tr>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-g</b> string</td><td>alias for -graphics</td></tr>

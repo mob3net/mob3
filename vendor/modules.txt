@@ -30,6 +30,13 @@ github.com/srwiley/rasterx
 ## explicit; go 1.12
 golang.org/x/image/bmp
 golang.org/x/image/colornames
+golang.org/x/image/font
+golang.org/x/image/font/gofont/gomono
+golang.org/x/image/font/gofont/gomonobold
+golang.org/x/image/font/gofont/gomonobolditalic
+golang.org/x/image/font/gofont/gomonoitalic
+golang.org/x/image/font/opentype
+golang.org/x/image/font/sfnt
 golang.org/x/image/math/fixed
 golang.org/x/image/riff
 golang.org/x/image/vector
