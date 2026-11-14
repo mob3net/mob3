@@ -876,6 +876,84 @@ func TestFixedScrollKeepsViewportPosition(t *testing.T) {
 	}
 }
 
+func TestBoxSizingBorderBox(t *testing.T) {
+	const text = `abcdefghijklmnopqrstuvwxyz`
+	content := func(css string) int {
+		ly := build(`<div style="`+css+`">`+text+`</div>`, 40)
+		for _, f := range ly.Frags {
+			if f.Kind == fragText && strings.TrimSpace(f.Text) != "" {
+				return f.W
+			}
+		}
+		t.Fatalf("no text fragment for %q", css)
+		return 0
+	}
+	if got := content(`width:80px;padding:8px;border:1px solid;box-sizing:content-box`); got != 10 {
+		t.Fatalf("content-box width = %d, want 10", got)
+	}
+	if got := content(`width:80px;padding:8px;border:1px solid;box-sizing:border-box`); got != 6 {
+		t.Fatalf("border-box width = %d, want 6", got)
+	}
+
+	height := func(css string) int {
+		ly := build(`<div style="background:#ff0000;`+css+`"></div>`, 40)
+		for _, f := range ly.Frags {
+			if f.Kind == fragFill && f.Color == RGB(0xff, 0, 0) {
+				return f.H
+			}
+		}
+		t.Fatalf("no background fill for %q", css)
+		return 0
+	}
+	if got := height(`height:64px;padding:8px;border:1px solid;box-sizing:content-box`); got != 8 {
+		t.Fatalf("content-box height = %d, want 8", got)
+	}
+	if got := height(`height:64px;padding:8px;border:1px solid;box-sizing:border-box`); got != 4 {
+		t.Fatalf("border-box height = %d, want 4", got)
+	}
+}
+
+func TestMinMaxBoxConstraints(t *testing.T) {
+	ly := build(`<div style="width:8px;min-width:40px">abcdefghij</div>`, 40)
+	if f := textFrag(ly, "abcde"); f == nil || f.W != 5 {
+		t.Fatalf("min-width did not widen content: %+v", f)
+	}
+
+	bg := func(css string) int {
+		ly := build(`<div style="background:#00ff00;`+css+`"></div>`, 40)
+		for _, f := range ly.Frags {
+			if f.Kind == fragFill && f.Color == RGB(0, 0xff, 0) {
+				return f.H
+			}
+		}
+		return -1
+	}
+	if got := bg("height:80px;max-height:32px"); got != 2 {
+		t.Fatalf("max-height = %d rows, want 2", got)
+	}
+	if got := bg("height:80px;max-height:16px;min-height:48px"); got != 3 {
+		t.Fatalf("min-height should win over max-height: %d rows, want 3", got)
+	}
+}
+
+func TestInlineVerticalAlign(t *testing.T) {
+	ly := build(`<p><span style="font-size:32px">X</span>`+
+		`<span style="vertical-align:top">A</span>`+
+		`<span style="vertical-align:bottom">B</span></p>`, 40)
+	x := textFrag(ly, "X")
+	a := textFrag(ly, "A")
+	b := textFrag(ly, "B")
+	if x == nil || a == nil || b == nil {
+		t.Fatalf("missing fragments: X=%+v A=%+v B=%+v", x, a, b)
+	}
+	if a.Y != x.Y {
+		t.Fatalf("top-aligned Y=%d, want line top %d", a.Y, x.Y)
+	}
+	if b.Y != x.Y+1 {
+		t.Fatalf("bottom-aligned Y=%d, want %d", b.Y, x.Y+1)
+	}
+}
+
 func TestFormControlGlyphs(t *testing.T) {
 	control := func(typ string, checked bool) *Node {
 		attrs := []Attr{{Key: "type", Value: typ}}

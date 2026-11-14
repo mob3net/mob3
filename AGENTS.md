@@ -126,7 +126,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade), logical `margin`/`padding` aliases for horizontal-tb, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade), logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
@@ -209,6 +209,15 @@ Standard Go layout:
   whose average track would be under 6 cells fall back to block flow so text
   stays readable. Named areas, row spans, auto-fill/auto-fit and alignment are
   approximated.
+- **Box sizing and constraints:** `box-sizing:border-box` makes declared
+  widths/heights/min/max include padding and borders in block and absolute
+  layout and in flex item widths/basis. `min-width`, `max-width`, `min-height`
+  and `max-height` apply to block boxes; percentage heights stay ignored, and
+  `min` wins over `max` when they conflict.
+- **Inline alignment:** `vertical-align: top|bottom|text-top|text-bottom`
+  places inline runs and atomic boxes at the line-box edge; `middle` centers
+  them. `baseline`, `super` and `sub` are approximated as middle because
+  terminal rows have no usable baseline.
 - **Off-screen transforms:** a `transform` that moves content fully off-screen
   (`translateX/Y(-…)` or `scale(0…)`) marks the element hidden. This suppresses
   cloned fixed navs and closed drawers that rely on transforms instead of

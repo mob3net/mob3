@@ -329,6 +329,48 @@ func nonNeg(v int) int {
 	return v
 }
 
+// boxWidth returns the horizontal border and padding of a box in cells.
+func (l *layouter) boxWidth(st *Style, basis int) int {
+	return resolveBorderH(st.Border[3], basis, st.FontSize) +
+		resolveBorderH(st.Border[1], basis, st.FontSize) +
+		nonNeg(st.Padding[3].resolveH(basis, st.FontSize)) +
+		nonNeg(st.Padding[1].resolveH(basis, st.FontSize))
+}
+
+// boxHeight returns the vertical border and padding of a box in rows.
+func (l *layouter) boxHeight(st *Style, basis int) int {
+	return resolveBorderV(st.Border[0], basis, st.FontSize) +
+		resolveBorderV(st.Border[2], basis, st.FontSize) +
+		nonNeg(st.Padding[0].resolveV(basis, st.FontSize)) +
+		nonNeg(st.Padding[2].resolveV(basis, st.FontSize))
+}
+
+// widthValue resolves a horizontal CSS length to a content width, applying
+// border-box sizing when requested.
+func (l *layouter) widthValue(st *Style, v Length, basis int) int {
+	w := v.resolveH(basis, st.FontSize)
+	if st.BoxSizing == "border-box" {
+		w -= l.boxWidth(st, basis)
+		if w < 0 {
+			w = 0
+		}
+	}
+	return w
+}
+
+// heightValue resolves a vertical CSS length to a content height, applying
+// border-box sizing when requested.
+func (l *layouter) heightValue(st *Style, v Length, basis int) int {
+	h := v.resolveV(basis, st.FontSize)
+	if st.BoxSizing == "border-box" {
+		h -= l.boxHeight(st, basis)
+		if h < 0 {
+			h = 0
+		}
+	}
+	return h
+}
+
 func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb int) {
 	f := st.FontSize
 	ml = st.Margin[3].resolveH(availW, f)
@@ -459,12 +501,17 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, availW)
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if st.Width.Set && !st.Width.IsAuto() {
-		if w := st.Width.resolveH(availW, st.FontSize); w < contentW {
+		if w := l.widthValue(st, st.Width, availW); w < contentW {
 			contentW = w
 		}
 	}
-	if st.MaxWidth.Set {
-		if w := st.MaxWidth.resolveH(availW, st.FontSize); w >= 0 && w < contentW {
+	if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+		if w := l.widthValue(st, st.MaxWidth, availW); w < contentW {
+			contentW = w
+		}
+	}
+	if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+		if w := l.widthValue(st, st.MinWidth, availW); w > contentW {
 			contentW = w
 		}
 	}
@@ -519,8 +566,18 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	default:
 		contentH = l.flow(n, contentX, contentY, contentW)
 	}
-	if st.Height.Set && st.Height.U != UnitPercent {
-		if h := st.Height.resolveV(availW, st.FontSize); h > contentH {
+	if st.Height.Set && !st.Height.IsAuto() && st.Height.U != UnitPercent {
+		if h := l.heightValue(st, st.Height, availW); h > contentH {
+			contentH = h
+		}
+	}
+	if st.MaxHeight.Set && !st.MaxHeight.IsAuto() && st.MaxHeight.U != UnitPercent {
+		if h := l.heightValue(st, st.MaxHeight, availW); h < contentH {
+			contentH = h
+		}
+	}
+	if st.MinHeight.Set && !st.MinHeight.IsAuto() && st.MinHeight.U != UnitPercent {
+		if h := l.heightValue(st, st.MinHeight, availW); h > contentH {
 			contentH = h
 		}
 	}
@@ -706,7 +763,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	contentW := availContent
 	switch {
 	case st.Width.Set && !st.Width.IsAuto():
-		contentW = st.Width.resolveH(cbW, st.FontSize)
+		contentW = l.widthValue(st, st.Width, cbW)
 	case hasL && hasR:
 		// Stretch to fill the space between the offsets.
 	default:
@@ -1130,7 +1187,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		extra := ml + mr + bl + br + pl + pr
 		switch {
 		case st.FlexBasisSet:
-			basis := st.FlexBasis.resolveH(availW, st.FontSize)
+			basis := l.widthValue(st, st.FlexBasis, availW)
 			if basis < 0 {
 				basis = 0
 			}
@@ -1144,7 +1201,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 				growTotal += st.FlexGrow
 			}
 		case st.Width.Set && !st.Width.IsAuto():
-			w := st.Width.resolveH(availW, st.FontSize) + extra
+			w := l.widthValue(st, st.Width, availW) + extra
 			if w < 1 {
 				w = 1
 			}
@@ -2389,6 +2446,23 @@ func (c *inlineCtx) flushIfAny() {
 	}
 }
 
+// inlineY places one inline box inside its line box. Terminal rows have no
+// usable baseline, so baseline/super/sub stay centered like middle.
+func inlineY(st *Style, lineY, lineH, itemH int) int {
+	align := ""
+	if st != nil {
+		align = st.VerticalAlign
+	}
+	switch align {
+	case "top", "text-top":
+		return lineY
+	case "bottom", "text-bottom":
+		return lineY + lineH - itemH
+	default:
+		return lineY + (lineH-itemH)/2
+	}
+}
+
 func (c *inlineCtx) flush(last bool) {
 	lineH := c.l.lineH(c.base)
 	for i := range c.items {
@@ -2441,7 +2515,7 @@ func (c *inlineCtx) flush(last bool) {
 				}
 				cellW := it.w + add
 				runH := c.l.lineH(it.style)
-				yy := c.y + (lineH-runH)/2
+				yy := inlineY(it.style, c.y, lineH, runH)
 				spaces := strings.Repeat(" ", cellW)
 				if s := c.l.scale(it.style); s > 1 {
 					spaces = strings.Repeat(" ", maxInt(1, cellW/s))
@@ -2456,14 +2530,14 @@ func (c *inlineCtx) flush(last bool) {
 			pos += it.w
 		case itemWord:
 			runH := c.l.lineH(it.style)
-			yy := c.y + (lineH-runH)/2
+			yy := inlineY(it.style, c.y, lineH, runH)
 			c.l.frags = append(c.l.frags, Frag{
 				Kind: fragText, X: c.x + shift + pos, Y: yy, W: it.w, H: runH,
 				Text: it.text, Style: it.style, Node: it.node,
 			})
 			pos += it.w
 		case itemAtomic:
-			yy := c.y + (lineH-it.h)/2
+			yy := inlineY(it.style, c.y, lineH, it.h)
 			it.paint(c.x+shift+pos, yy)
 			pos += it.w
 		}

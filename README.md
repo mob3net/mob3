@@ -64,9 +64,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   form submission. The start page has justified text and a full-width
   search/URL box that resolves input the same way as the `o` prompt, including
   the `-search` fallback.
-- Common CSS: selectors, cascade and inheritance, box model, margins, borders,
-  backgrounds, text styling, lists, tables, viewport-width `@media` queries and
-  basic flex rows.
+- Common CSS: selectors, cascade and inheritance, box model (including
+  `box-sizing` and min/max sizes), margins, borders, backgrounds, text styling,
+  lists, tables, viewport-width `@media` queries and basic flex rows.
 - PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art). Images are off by default
   for speed.

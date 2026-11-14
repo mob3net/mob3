@@ -119,7 +119,11 @@ type Style struct {
 	BorderColor   Color
 	Width         Length
 	Height        Length
+	MinWidth      Length
 	MaxWidth      Length
+	MinHeight     Length
+	MaxHeight     Length
+	BoxSizing     string
 	ListStyle     string
 	Overflow      string
 	Position      string
@@ -178,6 +182,7 @@ func defaultStyle() *Style {
 		TextAlign:   "left",
 		LineHeight:  1,
 		WhiteSpace:  "normal",
+		BoxSizing:   "content-box",
 		ListStyle:   "disc",
 		BorderColor: RGB(0xd0, 0xd7, 0xde),
 	}
@@ -230,7 +235,10 @@ func resolveStyleUnits(st *Style) {
 	}
 	resolveLengthLH(&st.Width, linePx)
 	resolveLengthLH(&st.Height, linePx)
+	resolveLengthLH(&st.MinWidth, linePx)
 	resolveLengthLH(&st.MaxWidth, linePx)
+	resolveLengthLH(&st.MinHeight, linePx)
+	resolveLengthLH(&st.MaxHeight, linePx)
 	resolveLengthLH(&st.Top, linePx)
 	resolveLengthLH(&st.Right, linePx)
 	resolveLengthLH(&st.Bottom, linePx)
@@ -899,11 +907,36 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		} else {
 			st.Height = parseLength(val, st.FontSize)
 		}
+	case "min-width":
+		if lower == "auto" {
+			st.MinWidth = Length{}
+		} else {
+			st.MinWidth = parseLength(val, st.FontSize)
+		}
 	case "max-width":
-		if lower == "none" {
+		if lower == "none" || lower == "auto" {
 			st.MaxWidth = Length{}
 		} else {
 			st.MaxWidth = parseLength(val, st.FontSize)
+		}
+	case "min-height":
+		if lower == "auto" {
+			st.MinHeight = Length{}
+		} else {
+			st.MinHeight = parseLength(val, st.FontSize)
+		}
+	case "max-height":
+		if lower == "none" || lower == "auto" {
+			st.MaxHeight = Length{}
+		} else {
+			st.MaxHeight = parseLength(val, st.FontSize)
+		}
+	case "box-sizing":
+		switch lower {
+		case "border-box":
+			st.BoxSizing = "border-box"
+		case "content-box":
+			st.BoxSizing = "content-box"
 		}
 	case "list-style", "list-style-type":
 		for _, f := range splitFields(lower) {
