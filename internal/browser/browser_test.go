@@ -121,8 +121,8 @@ func TestConfigPageShowsValues(t *testing.T) {
 	}
 	text := page.Root.TextContent()
 	for _, want := range []string{"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-bookmarks", "-home", "-js-memory", "-cache", "-text-scale", "-color", "-no-color", "-ua",
-		"-search", "-version", "startup"} {
+		"-bookmarks", "-home", "-js-memory", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
+		"-ua", "-search", "-mcp", "-version", "startup"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
 		}

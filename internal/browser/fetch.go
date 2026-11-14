@@ -1074,6 +1074,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
 <tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
+<tr><td><b>-mcp</b></td><td>run the MCP automation server on stdin/stdout</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>

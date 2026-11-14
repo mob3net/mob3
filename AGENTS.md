@@ -143,6 +143,7 @@ Standard Go layout:
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | History, scrolling, link focus, prompts, status/header/footer, navigation, mouse event decoding and click-to-link hit testing, and resident-memory sampling for the footer. |
 | `automation.go` | Headless `Automation` session for scripted clients: serialized navigation, text snapshot, click by link/selector/coordinates, typing, key presses, scrolling, history, JS evaluation and session close. Uses a virtual text viewport and sets `Browser.noDraw` so nothing is written to the terminal. |
+| `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tools wrap `Automation`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
@@ -409,6 +410,15 @@ Standard Go layout:
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted. The form uses
   the same centered `max-width:900px` reading column as `about:help`.
+- **MCP automation:** `-mcp` starts a headless `Automation` session and serves
+  MCP over stdin/stdout instead of entering the terminal UI. It accepts an
+  optional start URL and `-width`; `-no-js` and `-layout-budget` are honored,
+  the viewport height is fixed at 30, and images are disabled. Tools cover
+  navigate, snapshot, click,
+  type, press, scroll, history navigation, JS evaluation and session history.
+  The snapshot is text plus visible `[n]` links and form-control coordinates;
+  there are no pixel screenshots. Stdout is protocol-only. Sessions, cookies
+  and history are memory-only, and the server is local and unauthenticated.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.

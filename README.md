@@ -90,6 +90,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   already render a dark background keep their own palette; otherwise
   backgrounds, text, links and borders are remapped to a dark palette. Images
   keep their original colors.
+- Headless MCP automation (`-mcp`): navigate, snapshot page text and links,
+  click, type, press keys, scroll, evaluate JavaScript and inspect history.
+  Text-only and memory-only; no screenshots or persistent sessions.
 - Browser-style toolbar with back/forward/reload/home, history/help buttons,
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.
@@ -146,6 +149,31 @@ Start reading Wikipedia in dark mode:
 mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
 ```
 See all available options with -h flag
+
+## Automation (MCP)
+
+`mob3 -mcp` runs a headless browser as a Model Context Protocol server over
+stdin/stdout. It accepts an optional starting URL and fixed `-width`:
+
+```json
+{
+  "mcpServers": {
+    "mob3": {
+      "command": "/path/to/mob3",
+      "args": ["-mcp", "-width", "100", "about:home"]
+    }
+  }
+}
+```
+
+Tools: `navigate`, `snapshot`, `click` (link number, CSS selector or `x`/`y`),
+`type`, `press`, `scroll`, `back`, `forward`, `reload`, `evaluate` and
+`history`. `snapshot` returns the current page viewport as text, visible links
+as `[n]` and form controls with coordinates. Results are text only: there is no
+pixel screenshot because MOB3 renders to terminal cells.
+
+The server is local and unauthenticated, sessions and storage are memory-only,
+and nothing is written to disk. Do not expose it as a network service.
 
 ## Development
 

@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -32,6 +33,7 @@ func Run(args []string) int {
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
+	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
@@ -89,6 +91,28 @@ func Run(args []string) int {
 		return 2
 	}
 
+	if *mcpMode {
+		w := *widthFlag
+		if w <= 0 {
+			w = 100
+		}
+		a := NewAutomation(w, 30)
+		defer a.Close()
+		a.b.setLoader(loader)
+		loader.noImages = true
+		a.b.noJS = *noJS
+		a.b.jsMemLimit = jsMemLimit
+		a.b.layoutBudget = budget
+		a.b.home = *home
+		a.b.reader = *reader
+		a.b.dark = *dark
+		ctx := context.Background()
+		if err := a.Navigate(ctx, start); err != nil {
+			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %v\n", err)
+		}
+		return RunMCP(a, os.Stdin, os.Stdout, os.Stderr)
+	}
+
 	if !interactive {
 		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, jsMemLimit, budget)
 	}
@@ -127,6 +151,7 @@ func Run(args []string) int {
 		"-layout-budget": budget.Name,
 		"-color":         onOff(*forceColor),
 		"-no-color":      onOff(*noColor),
+		"-mcp":           onOff(*mcpMode),
 		"-version":       Version,
 	}
 	b.color = !*noColor
