@@ -32,10 +32,12 @@ written in Go
   only for standard CSS/HTML behaviour.
 - **No debug test leftovers.** Temporary `zz_*` debug test files must be
   deleted before handing work back. Never leave them in the repository.
-- **Docs stay current.** Update `README.md` (and any other existing
-  documentation) in the same change whenever user-visible behavior, flags,
-  keys, build output, supported features or limitations change. The `docs/`
-  tree is deferred for now, but existing docs must never go stale.
+- **Docs stay current.** Update `README.md` and the relevant `docs/` page in the
+  same change whenever user-visible behavior, flags, keys, build output,
+  supported features or limitations change. Long-form docs live under `docs/`
+  (install, CLI, keys, automation, security, sites, development). `mob3 -h` and
+  `about:help` remain canonical for flags and keys; `mcpToolDefinitions()` is
+  canonical for automation tools. `README.md` stays short and links to the docs.
 - **Contributions.** Every external contribution requires the broad
   license-grant CLA in `CONTRIBUTING.md` and the PR statement it describes.
   Never merge contributed code without that agreement. Contributors keep their
@@ -926,11 +928,14 @@ Standard Go layout:
   `.github/workflows/pr.yml` runs only for pull requests and requires the exact
   statement `I have read and agree to the MOB³ Contributor License Agreement.`
   in the PR description.
-- The GitHub Pages one-pager lives on the generated `gh-pages` branch.
-  `.github/pages/build.sh` converts `README.md` with pinned `marked` (via
-  `npx`) and wraps it in `.github/pages/template.html`;
+- The GitHub Pages site lives on the generated `gh-pages` branch.
+  `.github/pages/build.sh` converts `README.md` to `index.html` and every
+  `docs/*.md` to `docs/*.html` with pinned `marked` (via `npx`), wraps each page
+  in `.github/pages/template.html`, and rewrites relative `.md` links to
+  `.html` so the same Markdown works on GitHub and the site.
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
-  pushes touching the README, page files or workflow, and on manual dispatch.
+  pushes touching the README, `docs/`, page files or workflow, and on manual
+  dispatch.
   README screenshot galleries are a centered `<div align="center">` with each
   image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
   full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three
@@ -1054,8 +1059,9 @@ Standard Go layout:
    alternatives. Fold it into the section it governs as the rule in force; do
    not append a dated history entry and drop what it supersedes. Update
    `README.md` for any user-visible change in the same edit.
-3. **Docs are deferred.** There is no `docs/` tree for now; do not create or
-   maintain a documentation mirror until the user asks for one.
+3. **Docs live in `docs/`.** Keep README short and user-facing, put long-form
+   material in the matching `docs/` page, and keep `mob3 -h`, `about:help` and
+   `mcpToolDefinitions()` as the canonical flag, key and tool sources.
 4. Keep the “Known limitations” section honest; remove items only when actually
    implemented.
 5. Add or update tests in the same change as the behavior, then run `gofmt`,

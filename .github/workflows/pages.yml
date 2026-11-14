@@ -1,4 +1,4 @@
-# Build the one-page site from README.md and publish it to GitHub Pages.
+# Build the site from README.md and docs/*.md and publish it to GitHub Pages.
 #
 # The site lives on the generated `gh-pages` branch. This workflow rebuilds it
 # whenever the README, the page template or the build script changes on `main`,
@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - README.md
+      - docs/**
       - .github/pages/**
       - .github/workflows/pages.yml
   workflow_dispatch:
@@ -54,7 +55,7 @@ jobs:
             echo "Site is unchanged; nothing to publish."
             exit 0
           fi
-          git commit -q -m "Update site from README"
+          git commit -q -m "Update site from README and docs"
           git push --force \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             gh-pages

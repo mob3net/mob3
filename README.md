@@ -8,6 +8,16 @@ Written in Go, it combines its own HTML parser, CSS cascade and layout engine, A
 
 Project page: [mob3.net](https://mob3.net).
 
+## Documentation
+
+- [Documentation index](docs/index.md)
+- [Install](docs/install.md) — releases, Docker and source builds
+- [Command line](docs/cli.md) — every flag, default and limit
+- [Keyboard and mouse](docs/keys.md)
+- [Automation with MCP](docs/automation.md) — headless control for scripts and AI tools
+- [Security and privacy](docs/security.md), [site support](docs/sites.md) and
+  [development](docs/development.md)
+
 ## Try it with Docker:
 
 ```
@@ -148,7 +158,8 @@ Start reading Wikipedia in dark mode:
 ```
 mob3 -dark -reader 'https://en.wikipedia.org/wiki/Vim_(text_editor)'
 ```
-See all available options with -h flag
+See all available options with -h flag. Every flag and default is listed in the
+[command-line reference](docs/cli.md).
 
 ## Automation (MCP)
 
@@ -173,7 +184,9 @@ as `[n]` and form controls with coordinates. Results are text only: there is no
 pixel screenshot because MOB3 renders to terminal cells.
 
 The server is local and unauthenticated, sessions and storage are memory-only,
-and nothing is written to disk. Do not expose it as a network service.
+and nothing is written to disk. Do not expose it as a network service. See the
+[full MCP reference](docs/automation.md) for the protocol, snapshot format and
+tool details.
 
 ## Development
 
