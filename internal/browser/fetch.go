@@ -1054,6 +1054,10 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b>/<b>Enter</b> quits, any other key cancels)</td></tr>
 </table>
+<p>In terminals that support the kitty keyboard protocol (kitty, WezTerm,
+Ghostty and foot), MOB3 enables it automatically, so modified keys,
+<b>Shift-Tab</b> and <b>Esc</b> are reported reliably and key releases do not
+trigger an action twice.</p>
 
 <h2>Loading</h2>
 <p>While a page loads, the URL bar fills from the left with a blue progress

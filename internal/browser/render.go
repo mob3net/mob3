@@ -745,6 +745,19 @@ func kittyTerminal() bool {
 	return false
 }
 
+// kittyKeyboardEnabled reports whether the terminal is expected to implement
+// the kitty keyboard protocol. Multiplexers are excluded because their
+// forwarding of the push/pop sequences is inconsistent.
+func kittyKeyboardEnabled() bool {
+	if inMultiplexer() || os.Getenv("STY") != "" {
+		return false
+	}
+	if kittyTerminal() {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(os.Getenv("TERM")), "foot")
+}
+
 func itermTerminal() bool {
 	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
 	return strings.Contains(program, "iterm") || strings.EqualFold(os.Getenv("LC_TERMINAL"), "iTerm2")

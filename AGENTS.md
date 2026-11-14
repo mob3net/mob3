@@ -141,7 +141,7 @@ Standard Go layout:
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
-| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences plus `alt-<key>` ESC prefixes and modified arrows/keys (`ctrl-left`, `alt-delete`, …). |
+| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol `CSI u` keys with release/event filtering. |
 | `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
@@ -387,6 +387,11 @@ Standard Go layout:
   Clicking the URL field keeps the prompt open; a press anywhere else closes
   it the same way Escape does. Inside the prompt, a click places the caret.
   Shift+drag is left to the terminal for native text selection.
+- **Terminal input:** legacy sequences and Alt prefixes decode as before. In
+  kitty, WezTerm, Ghostty and foot (but not inside tmux/screen/zellij), MOB3
+  pushes kitty keyboard flags `1|2|16` (`CSI > 19 u`) and pops them on exit.
+  `CSI u` keys map to the same symbolic tokens, key releases are ignored, and
+  the associated-text field handles shifted symbols and AltGr layouts.
 - **Find:** `/` opens an incremental, case-insensitive find bar in the footer.
   Every match in the rendered page is highlighted; the current match uses a
   stronger color. `Enter` confirms the query and closes the bar, after which
