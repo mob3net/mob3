@@ -2570,6 +2570,11 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	type row struct {
 		cells []cell
 	}
+	type placedCell struct {
+		node       *Node
+		start, end int
+		h          int
+	}
 	var rows []row
 	var collect func(*Node)
 	collect = func(parent *Node) {
@@ -2686,6 +2691,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		topY := curY
 		rowY := topY + 1
 		rowH := 1
+		var placed []placedCell
 		for _, c := range r.cells {
 			cw := c.span - 1
 			for k := 0; k < c.span && c.col+k < ncols; k++ {
@@ -2698,10 +2704,37 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			cs := *orig
 			cs.Border = [4]Length{}
 			c.node.Style = &cs
+			start := len(l.frags)
 			h := l.block(c.node, colX[c.col], rowY, cw)
+			// A cell's own background fill belongs to the cell box, not to
+			// its vertically aligned content. Cell borders are suppressed
+			// above because the table draws the collapsed grid.
+			contentStart := start
+			if start < len(l.frags) && orig.Background.opaque() {
+				if f := &l.frags[start]; f.Kind == fragFill && f.Color == orig.Background {
+					contentStart++
+				}
+			}
+			placed = append(placed, placedCell{node: c.node, start: contentStart, end: len(l.frags), h: h})
 			c.node.Style = orig
 			if h > rowH {
 				rowH = h
+			}
+		}
+		// Vertical alignment is only known once every cell in the row has
+		// been laid out and the row height is final.
+		for _, pc := range placed {
+			dy := tableCellOffset(pc.node.Style.VerticalAlign, rowH-pc.h)
+			if dy == 0 {
+				continue
+			}
+			for i := pc.start; i < pc.end; i++ {
+				if !l.frags[i].Fixed {
+					l.frags[i].Y += dy
+				}
+			}
+			if l.hasCursor && l.cursor.Y >= rowY && l.cursor.Y < rowY+pc.h {
+				l.cursor.Y += dy
 			}
 		}
 		l.addFill(x, topY, tableW, 1, bc)
@@ -2714,6 +2747,23 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	}
 	tableH := curY + 1 - y
 	return (y - startY) + tableH
+}
+
+// tableCellOffset returns the vertical shift for a table cell whose content is
+// shorter than its row. Browsers center td/th content by default, so an empty
+// vertical-align behaves like middle.
+func tableCellOffset(align string, extra int) int {
+	if extra <= 0 {
+		return 0
+	}
+	switch align {
+	case "bottom", "text-bottom":
+		return extra
+	case "top", "baseline", "text-top", "sub", "super":
+		return 0
+	default:
+		return extra / 2
+	}
 }
 
 func childByTag(n *Node, tag string) *Node {

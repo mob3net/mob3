@@ -258,7 +258,9 @@ Standard Go layout:
   this avoids `height:100%` on logos becoming 100 terminal rows.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled
   down to available width; `colspan` supported; `rowspan` ignored; empty rows
-  are skipped.
+  are skipped. Cells honour `vertical-align: top|middle|bottom` (`middle` is the
+  browser-like default; `baseline`/`text-*` map to top), shifting shorter
+  content after the row height is final. The cell's own background stays put.
 - **Lists:** markers rendered in the list padding area; disc/circle/square,
   decimal, alpha and roman styles.
 - **Images:** disabled by default (`-graphics=none`); no image requests are

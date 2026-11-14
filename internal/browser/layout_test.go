@@ -903,6 +903,47 @@ func TestFormControlGlyphs(t *testing.T) {
 	}
 }
 
+func TestTableCellVerticalAlign(t *testing.T) {
+	table := func(align string) *Layout {
+		return build(`<table><tr><td style="`+align+`">short</td>`+
+			`<td>top<br>middle<br>bottom</td></tr></table>`, 40)
+	}
+	shortY := func(ly *Layout) int {
+		f := textFrag(ly, "short")
+		if f == nil {
+			t.Fatal("short cell text missing")
+		}
+		return f.Y
+	}
+	if got, want := shortY(table("")), textFrag(table(""), "middle").Y; got != want {
+		t.Errorf("default vertical-align Y=%d, want middle Y=%d", got, want)
+	}
+	if got, want := shortY(table("vertical-align:top")), textFrag(table(""), "top").Y; got != want {
+		t.Errorf("vertical-align:top Y=%d, want top line Y=%d", got, want)
+	}
+	if got, want := shortY(table("vertical-align:bottom")), textFrag(table(""), "bottom").Y; got != want {
+		t.Errorf("vertical-align:bottom Y=%d, want bottom line Y=%d", got, want)
+	}
+}
+
+func TestTableCellBackgroundNotShifted(t *testing.T) {
+	ly := build(`<table><tr><td style="background:#ff0000;vertical-align:bottom">short</td>`+
+		`<td>top<br>middle<br>bottom</td></tr></table>`, 40)
+	top := textFrag(ly, "top")
+	if top == nil {
+		t.Fatal("reference text missing")
+	}
+	for _, f := range ly.Frags {
+		if f.Kind == fragFill && f.Color == RGB(0xff, 0, 0) {
+			if f.Y != top.Y {
+				t.Fatalf("cell background Y=%d, want cell top %d", f.Y, top.Y)
+			}
+			return
+		}
+	}
+	t.Fatal("cell background fill missing")
+}
+
 func TestFixedLinkRectsFollowScroll(t *testing.T) {
 	ly := buildViewport(`<a href="#x" style="position:fixed;bottom:0;left:0">go</a>`, 30, 10)
 	if len(ly.Links) != 1 || len(ly.Links[0].Rects) == 0 {

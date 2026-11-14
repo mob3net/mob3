@@ -109,6 +109,7 @@ type Style struct {
 	Strike        bool
 	TextTransform string
 	TextAlign     string
+	VerticalAlign string
 	TextIndent    Length
 	WhiteSpace    string
 	LineHeight    float64 // multiplier
@@ -273,7 +274,7 @@ hr { display:block; border-top:1px solid #d0d7de; margin:8px 0; height:0; }
 table { display:table; margin:4px 0; border-color:#d0d7de; }
 thead, tbody, tfoot { display:block; }
 tr { display:table-row; }
-td, th { display:table-cell; padding:2px 4px; border:1px solid #d0d7de; }
+td, th { display:table-cell; padding:2px 4px; border:1px solid #d0d7de; vertical-align:middle; }
 th { text-align:center; background:#f3f4f6; }
 caption { display:block; font-weight:bold; text-align:center; }
 img { display:inline-block; }
@@ -765,6 +766,11 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		switch lower {
 		case "left", "right", "center", "justify":
 			st.TextAlign = lower
+		}
+	case "vertical-align":
+		switch lower {
+		case "top", "middle", "bottom", "baseline", "sub", "super", "text-top", "text-bottom":
+			st.VerticalAlign = lower
 		}
 	case "text-indent":
 		st.TextIndent = parseLength(val, st.FontSize)
