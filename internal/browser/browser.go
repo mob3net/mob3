@@ -67,6 +67,7 @@ type Browser struct {
 	promptCursor    int
 	promptSelectAll bool
 	skipDraw        bool
+	noDraw          bool
 	clipboardWriter io.Writer
 
 	color   bool
@@ -3156,6 +3157,9 @@ func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
 }
 
 func (b *Browser) draw() {
+	if b.noDraw {
+		return
+	}
 	w, h := b.width, b.height
 	if w < 1 {
 		w = 1
