@@ -522,9 +522,10 @@ func parseLength(v string, fontPx float64) Length {
 		unit   Unit
 		mul    float64
 	}{
-		{"px", UnitPX, 1}, {"pt", UnitPT, 1}, {"em", UnitEM, 1},
-		{"rem", UnitREM, 1}, {"ch", UnitCH, 1}, {"lh", UnitLH, 1},
-		{"%", UnitPercent, 1},
+		// Longer suffixes must come first: "1rem" also ends with "em".
+		{"rem", UnitREM, 1}, {"em", UnitEM, 1},
+		{"px", UnitPX, 1}, {"pt", UnitPT, 1}, {"ch", UnitCH, 1},
+		{"lh", UnitLH, 1}, {"%", UnitPercent, 1},
 	}
 	for _, u := range units {
 		if strings.HasSuffix(v, u.suffix) {

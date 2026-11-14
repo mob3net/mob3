@@ -79,6 +79,31 @@ func TestThreeValueBoxShorthand(t *testing.T) {
 	}
 }
 
+func TestLengthUnitsParse(t *testing.T) {
+	doc := ParseHTML(`<p style="font-size:20px; margin:2rem 3em 4px 5ch; padding:1lh">x</p>`)
+	st := newStyleEngine(nil, 0).computeAll(doc)[doc.FindFirst("p")]
+	cases := []struct {
+		name string
+		got  Length
+		unit Unit
+		v    float64
+	}{
+		{"margin-top", st.Margin[0], UnitREM, 2},
+		{"margin-right", st.Margin[1], UnitEM, 3},
+		{"margin-bottom", st.Margin[2], UnitPX, 4},
+		{"margin-left", st.Margin[3], UnitCH, 5},
+		{"padding-top", st.Padding[0], UnitPX, 20},
+	}
+	for _, c := range cases {
+		if c.got.U != c.unit || c.got.V != c.v {
+			t.Errorf("%s = %+v, want %v %v", c.name, c.got, c.v, c.unit)
+		}
+	}
+	if got := st.Margin[0].resolveH(100, st.FontSize); got != 4 {
+		t.Errorf("2rem resolved to %d cells, want 4", got)
+	}
+}
+
 func TestLHUnitsResolveAfterCascade(t *testing.T) {
 	doc := ParseHTML(`<div style="font-size:20px; line-height:1.5">` +
 		`<p style="margin:1lh; margin-block:2lh 3lh; padding-inline:1ch; ` +
