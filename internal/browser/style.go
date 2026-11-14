@@ -1269,8 +1269,14 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 		}
 		n.Style = st
 		styles[n] = st
+		closedDetails := n.Tag == "details" && !n.HasAttr("open")
 		for _, c := range n.Children {
 			walk(c, st)
+			// A closed <details> only renders its summary. The rest of the
+			// content still exists in the DOM, but must not take layout space.
+			if closedDetails && c.Type == ElementNode && c.Tag != "summary" && c.Style != nil {
+				c.Style.Display = "none"
+			}
 		}
 	}
 	walk(root, base)

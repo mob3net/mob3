@@ -508,6 +508,50 @@ func TestHiddenInputDoesNotWidenTableCell(t *testing.T) {
 	}
 }
 
+func TestInlineWrapperWithBlockDescendantStartsNewLine(t *testing.T) {
+	ly := build(`<div><span style="display:inline"><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px"><p>alpha</p><p>beta</p></div></span></div><p>gamma</p>`, 40)
+	find := func(text string) *Frag {
+		for i := range ly.Frags {
+			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+				return &ly.Frags[i]
+			}
+		}
+		return nil
+	}
+	alpha, beta, gamma := find("alpha"), find("beta"), find("gamma")
+	if alpha == nil || beta == nil || gamma == nil {
+		t.Fatal("missing fragments")
+	}
+	if alpha.Y != beta.Y {
+		t.Fatalf("grid columns on different rows: alpha y=%d beta y=%d", alpha.Y, beta.Y)
+	}
+	if alpha.X >= beta.X {
+		t.Fatalf("grid columns not side by side: alpha x=%d beta x=%d", alpha.X, beta.X)
+	}
+	if gamma.Y <= alpha.Y {
+		t.Fatalf("following block did not start below the inline wrapper: gamma y=%d alpha y=%d", gamma.Y, alpha.Y)
+	}
+}
+
+func TestClosedDetailsHidesContent(t *testing.T) {
+	closed := build(`<details><summary>summary</summary><p>secret</p></details>`, 40)
+	for _, f := range closed.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "secret") {
+			t.Fatal("closed details rendered its content")
+		}
+	}
+	open := build(`<details open><summary>summary</summary><p>visible</p></details>`, 40)
+	found := false
+	for _, f := range open.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "visible") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("open details did not render its content")
+	}
+}
+
 func TestListMarkerBeforeText(t *testing.T) {
 	ly := build(`<ul><li>First item</li></ul>`, 30)
 	markerX, textX := -1, -1

@@ -17,6 +17,7 @@ input[type=search] { flex:1; }
 h1 { margin:24px 0 24px; }
 h2 { margin:20px 0 8px; }
 h3, h4, h5, h6 { margin:16px 0 6px; }
+h1, h2, h3, h4, h5, h6 { text-align:left; color:#1f2328; text-decoration:none; }
 p { margin:10px 0; }
 ul, ol { margin:10px 0; }
 blockquote { margin:12px 16px; }

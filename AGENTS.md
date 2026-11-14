@@ -25,6 +25,13 @@ written in Go
   change or bug fix; do not defer tests to a later pass. Tests must stay
   network-free and should cover each affected layer (parser, style, layout,
   paint, input) where practical.
+- **Report site quirks; do not chase them.** When a site relies on
+  non-standard HTML, invalid markup, or undocumented browser behaviour, report
+  what the site does instead of extending the engine to imitate it. Never add
+  engine behaviour solely to accommodate a site-specific quirk; fix the engine
+  only for standard CSS/HTML behaviour.
+- **No debug test leftovers.** Temporary `zz_*` debug test files must be
+  deleted before handing work back. Never leave them in the repository.
 - **Docs stay current.** Update `README.md` (and any other existing
   documentation) in the same change whenever user-visible behavior, flags,
   keys, build output, supported features or limitations change. The `docs/`
@@ -255,6 +262,15 @@ Standard Go layout:
   (`margin:0 auto`).
 - **Borders/grid lines** are solid colored cell rectangles, not box-drawing
   characters. Table borders use a collapsed 1-cell grid.
+- **Inline boxes with block content:** an inline element whose subtree contains
+  a block-level descendant is laid out as a block, so grids, flex rows and
+  tables nested inside an inline wrapper (common in card anchors and section
+  wrappers) still run their own layout instead of being flattened into one
+  paragraph. An explicit `inline-block` remains an atomic inline box, so menu
+  items and buttons stay on one line.
+- **`<details>`:** a closed `<details>` renders only its `<summary>`; its other
+  children are taken out of layout until the element is opened (or JS sets the
+  `open` attribute). An open `<details>` renders its full content.
 - **Inline background/space handling:** inter-word spaces are emitted as text
   fragments so backgrounds, link focus highlighting and link rectangles are
   continuous. A collapsed space takes the style and node of the text node that
@@ -448,8 +464,12 @@ Standard Go layout:
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops
   nav/sidebar/footer/forms/scripts and common junk-class subtrees, strips page
   CSS, and renders a filtered clone in a centered `max-width:600px` column.
-  Images are removed entirely, including `alt` text and `[image: ...]` labels;
-  only text, headings, links, lists, tables, quotes and code remain. The
+  Prose paragraphs are justified, but headings stay left-aligned so a wrapped
+  headline is not stretched word by word, and headings use the body text color
+  without link underlines even when the source wraps them in an `<a>`. Images
+  are removed entirely,
+  including `alt` text and `[image: ...]` labels; only text, headings, links,
+  lists, tables, quotes and code remain. The
   original page tree, URL and history are untouched. Reader mode stays enabled
   across navigation and reload until `R` or the icon is used again: each new
   page is extracted automatically, and a page with no usable article is shown
@@ -977,7 +997,9 @@ Standard Go layout:
 - No font files; no real text scaling outside kitty’s `OSC 66`.
 - Flexbox supports basic rows only (no wrap/justify/align/order); grid supports
   basic row-major tracks but not named areas or row spans. Floats and
-  `position:sticky` are approximated as block flow. Absolute, relative and
+  `position:sticky` are approximated as block flow. `display:contents` is
+  approximated as an inline wrapper (its block/grid children still lay out, but
+  they are not hoisted into a parent grid or flex row). Absolute, relative and
   fixed positioning work, but `z-index` stacking is ignored and
   relative offsets are not applied to inline boxes.
 - SVG support is partial: paths, shapes, gradients and common transforms work,
@@ -1010,12 +1032,15 @@ Standard Go layout:
 4. Keep the “Known limitations” section honest; remove items only when actually
    implemented.
 5. Add or update tests in the same change as the behavior, then run `gofmt`,
-   `go vet ./...`, and `go test ./...` before handing work back.
-6. Never introduce external Go modules or cgo without an explicit user change
+   `go vet ./...`, and `go test ./...` before handing work back. Delete any
+   temporary `zz_*` debug test files; never leave them in the repository.
+6. Report non-standard or undocumented site behaviour instead of changing the
+   engine to mimic it; fix engine behaviour only when it is standard CSS/HTML.
+7. Never introduce external Go modules or cgo without an explicit user change
    to section 2. `github.com/dop251/goja` is the only currently approved
    third-party module.
-7. Keep the README user-facing; keep this file decision-facing.
-8. End every completed change with a short one-line commit message (do not
+8. Keep the README user-facing; keep this file decision-facing.
+9. End every completed change with a short one-line commit message (do not
    create the commit unless the user asks).
 
 ## 10. JavaScript/web API compatibility reference

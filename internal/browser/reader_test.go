@@ -285,6 +285,60 @@ func TestReaderFooterLabel(t *testing.T) {
 	}
 }
 
+func TestReaderHeadingsStayLeftAligned(t *testing.T) {
+	src := `<article><h2>one two three four five six seven eight nine ten eleven twelve</h2>` +
+		`<p>alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu</p></article>`
+	ly := BuildLayout(ParseHTML(src), readerRules, 40)
+	headingY, paragraphY := -1, -1
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		if f.Text == "one" {
+			headingY = f.Y
+		}
+		if f.Text == "alpha" {
+			paragraphY = f.Y
+		}
+	}
+	if headingY < 0 || paragraphY < 0 {
+		t.Fatalf("missing heading or paragraph: heading=%d paragraph=%d", headingY, paragraphY)
+	}
+	for _, f := range ly.Frags {
+		if f.Kind != fragText || f.W <= 1 || strings.TrimSpace(f.Text) != "" {
+			continue
+		}
+		if f.Y == headingY {
+			t.Fatal("heading line was justified")
+		}
+	}
+	justified := false
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.W > 1 && strings.TrimSpace(f.Text) == "" && f.Y == paragraphY {
+			justified = true
+		}
+	}
+	if !justified {
+		t.Fatal("paragraph line was not justified")
+	}
+}
+
+func TestReaderHeadingLinksAreNotUnderlined(t *testing.T) {
+	doc := ParseHTML(`<article><a href="/story"><h2>Story title</h2></a><p>Body</p></article>`)
+	styles := newStyleEngine(readerRules, 800).computeAll(doc)
+	h2 := doc.FindFirst("h2")
+	if h2 == nil {
+		t.Fatal("missing heading")
+	}
+	st := styles[h2]
+	if st.Underline || st.Strike {
+		t.Fatal("reader heading inherited link decoration")
+	}
+	if st.Color == RGB(0x06, 0x45, 0xad) {
+		t.Fatal("reader heading inherited link color")
+	}
+}
+
 func layoutText(ly *Layout) string {
 	if ly == nil {
 		return ""

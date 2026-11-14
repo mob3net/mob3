@@ -481,6 +481,33 @@ func (l *layouter) isBlock(n *Node) bool {
 	return false
 }
 
+// hasBlockDescendant reports whether an inline box contains a block-level
+// descendant. Browsers split such an inline box around the block; treating the
+// inline wrapper as a block keeps the descendant's grid/flex children out of
+// the surrounding inline flow.
+func (l *layouter) hasBlockDescendant(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	for _, c := range n.Children {
+		if c.Type != ElementNode || c.Style == nil || c.Style.Display == "none" {
+			continue
+		}
+		if l.isBlock(c) {
+			return true
+		}
+		// An inline-block is an atomic inline box; its internal blocks do not
+		// break the surrounding line.
+		if c.Style.Display == "inline-block" {
+			continue
+		}
+		if c.Style.Display == "inline" && l.hasBlockDescendant(c) {
+			return true
+		}
+	}
+	return false
+}
+
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
@@ -1373,7 +1400,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 				l.deferAbsolute(c, x, cur)
 				continue
 			}
-			if l.isBlock(c) {
+			if l.isBlock(c) || (c.Style.Display == "inline" && l.hasBlockDescendant(c)) {
 				flush()
 				cur += l.block(c, x, cur, width)
 				continue
