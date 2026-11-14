@@ -392,7 +392,8 @@ Standard Go layout:
   mode, clipboard OSC 52 (base64 payload), kitty/iTerm2 image protocols and
   OSC 66.
 - **Dump rendering:** prints the whole document height (capped at 20,000 rows),
-  no browser chrome. Color is automatic on a TTY, forced by `-color`, disabled
+  no browser chrome; `-height N` sets an `N`-row layout viewport and limits the
+  output to `N` rows. Color is automatic on a TTY, forced by `-color`, disabled
   by `-no-color`.
 
 ## 5. Browser / UX
@@ -422,8 +423,8 @@ Standard Go layout:
   the same centered `max-width:900px` reading column as `about:help`.
 - **MCP automation:** `-mcp` starts a headless `Automation` session and serves
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
-  optional start URL and `-width`; `-no-js` and `-layout-budget` are honored,
-  the viewport height is fixed at 30, and images are disabled. Tools cover
+  optional start URL, `-width` and `-height` (default 30); `-no-js` and
+  `-layout-budget` are honored, and images are disabled. Tools cover
   navigate, snapshot, click,
   type, press, scroll, history navigation, JS evaluation, session history and a
   PNG `screenshot` of the current viewport. The snapshot is text plus visible

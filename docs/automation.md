@@ -13,7 +13,8 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 
 - Optional starting URL; otherwise `about:home`.
 - `-width` controls wrapping and coordinates.
-- The virtual viewport is fixed at 30 rows (about 27 page rows after chrome).
+- The virtual viewport is 30 rows by default; `-height N` sets it explicitly
+  (about `N-3` page rows after chrome).
 - Images are disabled.
 - `-no-js`, `-layout-budget`, `-reader`, `-dark`, bookmarks and search settings
   are honored.

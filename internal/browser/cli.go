@@ -17,6 +17,7 @@ func Run(args []string) int {
 	dump := fs.Bool("dump", false, "render the page to stdout and exit")
 	pngOut := fs.Bool("png", false, "write a PNG screenshot of the page to stdout (implies -dump)")
 	widthFlag := fs.Int("width", 0, "layout width in columns (default: terminal width or 100)")
+	heightFlag := fs.Int("height", 0, "layout viewport height in rows and output limit (0 = full page)")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
@@ -52,6 +53,10 @@ func Run(args []string) int {
 	if *showVersion {
 		fmt.Println(Version)
 		return 0
+	}
+	if *heightFlag < 0 {
+		fmt.Fprintln(os.Stderr, "mob3: -height must be 0 or positive")
+		return 2
 	}
 
 	start := *home
@@ -100,7 +105,11 @@ func Run(args []string) int {
 		if w <= 0 {
 			w = 100
 		}
-		a := NewAutomation(w, 30)
+		h := *heightFlag
+		if h <= 0 {
+			h = 30
+		}
+		a := NewAutomation(w, h)
 		defer a.Close()
 		a.b.setLoader(loader)
 		loader.noImages = true
@@ -118,14 +127,14 @@ func Run(args []string) int {
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
 	}
 
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -150,6 +159,7 @@ func Run(args []string) int {
 		"-dump":          onOff(*dump),
 		"-png":           onOff(*pngOut),
 		"-width":         strconv.Itoa(w),
+		"-height":        strconv.Itoa(*heightFlag),
 		"-graphics":      *graphics,
 		"-bookmarks":     bookmarksValue,
 		"-cache":         strconv.Itoa(*cache),
@@ -297,7 +307,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJS, reader, dark, pngOut bool, jsMemLimit int64, budget LayoutBudget) int {
+func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, jsMemLimit int64, budget LayoutBudget) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -326,8 +336,11 @@ func dumpPage(loader *Loader, target string, width int, noColor, forceColor, noJ
 	if budget.Time > 0 {
 		deadline = time.Now().Add(budget.Time)
 	}
-	layout := BuildLayoutBudgetDeadline(root, author, width, 0, false, dark, deadline, budget)
+	layout := BuildLayoutBudgetDeadline(root, author, width, viewportH, false, dark, deadline, budget)
 	height := layout.Height
+	if viewportH > 0 && height > viewportH {
+		height = viewportH
+	}
 	if height < 1 {
 		height = 1
 	}

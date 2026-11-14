@@ -2,9 +2,11 @@ package browser
 
 import (
 	"bytes"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -95,6 +97,52 @@ func TestRunDump(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte("hello from file")) {
 		t.Fatalf("dump output = %q", out)
+	}
+}
+
+func TestRunDumpHeightLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "page.html")
+	var sb strings.Builder
+	for i := 1; i <= 20; i++ {
+		sb.WriteString("<p>line")
+		sb.WriteString(strconv.Itoa(i))
+		sb.WriteString("</p>")
+	}
+	if err := os.WriteFile(path, []byte("<html><body>"+sb.String()+"</body></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-height", "5", path})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if got := strings.Count(string(out), "\n"); got > 5 {
+		t.Fatalf("dump height = %d lines, want at most 5:\n%s", got, out)
+	}
+	if !bytes.Contains(out, []byte("line1")) {
+		t.Fatalf("dump missing first text: %q", out)
+	}
+	if bytes.Contains(out, []byte("line20")) {
+		t.Fatal("dump was not cropped by -height")
+	}
+}
+
+func TestRunPNGHeight(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "page.html")
+	if err := os.WriteFile(path, []byte("<html><body><p>png height</p></body></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out := runCaptured(t, []string{"-png", "-width", "20", "-height", "5", path})
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := img.Bounds().Dy(); got > 5*pngCellH {
+		t.Fatalf("PNG height = %d, want at most %d", got, 5*pngCellH)
 	}
 }
 

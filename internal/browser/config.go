@@ -40,6 +40,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
 		{Flag: "-png", Value: get("-png", "off"), Note: "dump only"},
 		{Flag: "-width", Value: get("-width", strconv.Itoa(b.width)), Note: "startup"},
+		{Flag: "-height", Value: get("-height", "0"), Note: "startup; dump/PNG/MCP only"},
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
