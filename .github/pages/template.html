@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#334155">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)">
 <meta name="description" content="{{DESCRIPTION}}">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{{CANONICAL}}">
@@ -96,8 +97,7 @@ try {
     border-bottom: 1px solid var(--line);
   }
   .header-inner {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    display: flex;
     align-items: center;
     gap: 1rem;
     width: 100%;
@@ -142,9 +142,8 @@ try {
   }
   .search-wrap {
     position: relative;
-    justify-self: center;
-    width: min(17rem, 34vw);
-    min-width: 9rem;
+    width: min(15rem, 30vw);
+    min-width: 8rem;
   }
   .search { display: block; }
   .search input {
@@ -163,16 +162,16 @@ try {
     background: var(--surface);
   }
   .header-actions {
-    justify-self: end;
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: .5rem;
+    min-width: 0;
   }
   .search-results {
     position: absolute;
     top: calc(100% + .4rem);
-    left: 50%;
-    transform: translateX(-50%);
+    right: 0;
     z-index: 40;
     width: min(30rem, calc(100vw - 2rem));
     max-height: 60vh;
@@ -383,39 +382,42 @@ try {
     .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
     h1 { font-size: 1.6rem; }
     .header-inner {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      grid-template-areas:
-        "brand brand theme"
-        "search search search"
-        "nav nav menu";
-      gap: .4rem .6rem;
-      padding: .5rem .9rem;
+      gap: .5rem;
+      padding: .45rem .8rem;
     }
-    .header-left { grid-area: brand; }
-    /* Flatten the action group so the theme toggle keeps the top-right
-       corner, the project links get their own row and the search spans the
-       full width between them. */
-    .header-actions { display: contents; }
-    .theme-toggle { grid-area: theme; justify-self: end; }
-    .nav-toggle { grid-area: menu; }
-    .site-nav {
-      grid-area: nav;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      margin-right: 0;
-    }
-    .search-wrap {
-      grid-area: search;
-      width: 100%;
+    .header-left { min-width: 0; }
+    .header-actions {
+      gap: .25rem;
       min-width: 0;
     }
-    .search-results { width: 100%; }
+    /* The search box is desktop-only: the phone header must stay on one line. */
+    .search-wrap { display: none; }
+    .site-nav { gap: 0; margin-right: 0; }
+    .site-nav a {
+      padding: .3rem .4rem;
+      font-size: .88rem;
+    }
+    .theme-toggle, .nav-toggle { min-height: 38px; }
+    .theme-toggle { width: 38px; }
+    .nav-toggle {
+      padding: 0 .5rem;
+      font-size: .88rem;
+    }
   }
 
-  @media (max-width: 380px) {
-    .site-nav { gap: 0; }
-    .site-nav a { padding: .35rem .3rem; }
+  @media (max-width: 400px) {
+    .header-inner { gap: .35rem; padding: .45rem .55rem; }
+    .brand { font-size: 1.02rem; }
+    .site-nav a { padding: .28rem .22rem; font-size: .8rem; }
+    .theme-toggle { width: 34px; min-height: 34px; }
+    .nav-toggle { min-height: 34px; padding: 0 .4rem; font-size: .8rem; }
+  }
+  @media (max-width: 345px) {
+    .header-inner { gap: .25rem; padding: .4rem .4rem; }
+    .brand { font-size: .95rem; }
+    .site-nav a { padding: .25rem .18rem; font-size: .74rem; }
+    .theme-toggle { width: 30px; min-height: 30px; }
+    .nav-toggle { min-height: 30px; padding: 0 .3rem; font-size: .74rem; }
   }
 
   @media (prefers-color-scheme: dark) {
@@ -455,20 +457,21 @@ try {
     <div class="header-left">
       <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
     </div>
-    <div class="search-wrap">
-      <label class="search">
-        <span class="visually-hidden">Search the documentation</span>
-        <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
-      </label>
-      <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
-    </div>
     <div class="header-actions">
       <nav class="site-nav" aria-label="Project">
+        <a href="{{ROOT}}/docs/">Docs</a>
         <a href="https://github.com/mob3net/mob3">GitHub</a>
         <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
         <a href="mailto:info@mob3.net">Contact</a>
       </nav>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+      <div class="search-wrap">
+        <label class="search">
+          <span class="visually-hidden">Search the documentation</span>
+          <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+      </div>
       <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
         <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="4.2"></circle>

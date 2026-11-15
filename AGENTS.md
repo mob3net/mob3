@@ -1008,16 +1008,19 @@ Standard Go layout:
   and rounded for favicons and full-bleed white for the Apple/Android icons.
   Regenerate the PNGs if the avatar or the hero screenshot changes; do not
   hotlink GitHub, `interactive32.com` or attachment URLs from the page head.
-  The header is a three-column grid: the brand alone on the left, a compact
-  search box centered in the viewport with its results anchored under it, and
-  on the right the GitHub, Releases and Contact (`mailto:info@mob3.net`) links
-  in that order, followed by the theme toggle pinned to the far edge (the docs
-  menu button sits before the toggle and never displaces it). There is
+  The header is a flexible bar: the brand alone on the left, then a right-hand
+  group with Docs (`/docs/`), GitHub, Releases, Contact
+  (`mailto:info@mob3.net`), the docs menu button, the compact search box and
+  finally the theme toggle pinned to the far edge. The search sits immediately
+  before the theme toggle and its results anchor under it. There is
   deliberately no "Back" link and no "Documentation" tagline in the header.
-  Below 860px the header becomes a grid with brand and theme on the first row,
-  the search full width on the second, and the project links plus menu button
-  on the third; below 380px the link padding tightens so all three fit on one
-  line.
+  Below 860px the search is hidden so the brand, all four links, the menu
+  button and the theme toggle stay on one line; below 400px and 345px the link
+  padding, font sizes and control sizes shrink in two steps so the row still
+  fits a 320px terminal. The site theme follows the OS `prefers-color-scheme`
+  until the visitor uses the toggle; the choice is stored in `localStorage`
+  (`mob3-docs-theme`) for that browser only, and the `theme-color` meta tags
+  follow the OS scheme.
   README screenshot galleries are a centered `<div align="center">` with each
   image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
   full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three

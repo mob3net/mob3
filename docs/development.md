@@ -45,9 +45,10 @@ The script writes `index.html`, `docs/*.html`, `search-index.js`, `robots.txt`,
 `sitemap.xml`, the favicon and social-preview files under `assets/`, a `CNAME`
 for `mob3.net` and `.nojekyll`. Relative `.md` links are rewritten to `.html`
 for the site. Docs pages share a generated sidebar, on-page “On this page”
-contents list and a compact search box centered in the header, with GitHub,
-Releases and Contact links on the right, a light/dark theme toggle pinned to
-the far edge and a mobile menu. Every page carries a canonical URL, description, Open
+contents list and a compact search box at the right edge of the header, with
+Docs, GitHub, Releases and Contact links, a light/dark theme toggle after the
+search and a mobile menu. On phones the search is dropped so the whole header
+stays on one line. Every page carries a canonical URL, description, Open
 Graph and Twitter card tags and JSON-LD structured data, so search results and
 link previews use the intended title, summary and 1200×630 image. The assets
 under `.github/pages/assets/` and the README screenshots under
