@@ -9,7 +9,6 @@
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{{CANONICAL}}">
 <link rel="icon" href="{{ROOT}}/assets/favicon.ico" sizes="48x48">
-<link rel="icon" type="image/svg+xml" href="{{ROOT}}/assets/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ROOT}}/assets/favicon-32.png">
 <link rel="apple-touch-icon" href="{{ROOT}}/assets/apple-touch-icon.png">
 <link rel="manifest" href="{{ROOT}}/assets/site.webmanifest">
@@ -97,13 +96,20 @@ try {
     border-bottom: 1px solid var(--line);
   }
   .header-inner {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 1rem;
     width: 100%;
     max-width: var(--max-width);
     margin: 0 auto;
     padding: .6rem 1.25rem;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-width: 0;
   }
   .brand {
     display: flex;
@@ -121,15 +127,34 @@ try {
     font-size: .88rem;
     white-space: nowrap;
   }
-  .search {
-    margin-left: auto;
-    flex: 1 1 14rem;
-    min-width: 8rem;
-    max-width: 22rem;
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: .1rem;
+    margin-left: .2rem;
   }
+  .site-nav a {
+    padding: .35rem .6rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-nav a:hover {
+    color: var(--fg);
+    background: var(--bg);
+  }
+  .search-wrap {
+    position: relative;
+    justify-self: center;
+    width: min(17rem, 34vw);
+    min-width: 9rem;
+  }
+  .search { display: block; }
   .search input {
     width: 100%;
-    padding: .5rem .75rem;
+    padding: .35rem .65rem;
     font: inherit;
     font-size: 16px;
     color: var(--fg);
@@ -143,17 +168,18 @@ try {
     background: var(--surface);
   }
   .header-actions {
-    margin-left: 0;
+    justify-self: end;
     display: flex;
     align-items: center;
     gap: .5rem;
   }
   .search-results {
-    position: fixed;
-    top: 3.6rem;
-    right: max(1.25rem, calc((100vw - var(--max-width)) / 2 + 1.25rem));
+    position: absolute;
+    top: calc(100% + .4rem);
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 40;
-    width: min(32rem, calc(100vw - 2.5rem));
+    width: min(30rem, calc(100vw - 2rem));
     max-height: 60vh;
     overflow-y: auto;
     background: var(--surface);
@@ -345,8 +371,11 @@ try {
   }
   .site-footer p { margin: 0; }
 
-  @media (max-width: 860px) {
+  @media (max-width: 1100px) {
     .tagline { display: none; }
+  }
+
+  @media (max-width: 860px) {
     .nav-toggle { display: block; }
     body:not(.docs-page) .nav-toggle { display: none; }
     .docs-layout { display: block; }
@@ -362,9 +391,21 @@ try {
     body.nav-open #sidebar { display: block; }
     .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
     h1 { font-size: 1.6rem; }
-    .header-inner { gap: .6rem; padding: .5rem .9rem; }
-    .search { max-width: none; }
-    .search-results { left: .75rem; right: .75rem; width: auto; }
+    .header-inner {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem .6rem;
+      padding: .5rem .9rem;
+    }
+    .header-left { flex: 1 1 auto; }
+    .header-actions { margin-left: auto; }
+    .search-wrap {
+      order: 3;
+      flex: 1 1 100%;
+      width: 100%;
+      min-width: 0;
+    }
+    .search-results { width: 100%; }
   }
 
   @media (prefers-color-scheme: dark) {
@@ -401,13 +442,23 @@ try {
 <a class="skip" href="#content">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
-    <span class="tagline">Documentation</span>
-    <label class="search">
-      <span class="visually-hidden">Search the documentation</span>
-      <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
-    </label>
+    <div class="header-left">
+      <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
+      <span class="tagline">Documentation</span>
+      <nav class="site-nav" aria-label="Project">
+        <a href="https://github.com/mob3net/mob3">GitHub</a>
+        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
+      </nav>
+    </div>
+    <div class="search-wrap">
+      <label class="search">
+        <span class="visually-hidden">Search the documentation</span>
+        <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+    </div>
     <div class="header-actions">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
       <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
         <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="4.2"></circle>
@@ -417,11 +468,9 @@ try {
           <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
         </svg>
       </button>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
     </div>
   </div>
 </header>
-<div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
 {{LAYOUT_START}}
 {{SIDEBAR}}
 <main class="content" id="content">

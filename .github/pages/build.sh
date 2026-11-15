@@ -254,6 +254,8 @@ done
 
 rm -rf "$out/assets"
 cp -R "$root/.github/pages/assets" "$out/assets"
+rm -rf "$out/docs/screenshots"
+cp -R "$root/docs/screenshots" "$out/docs/screenshots"
 cp "$root/.github/pages/search.js" "$out/search.js"
 
 node - "$out" <<'NODE'

@@ -999,13 +999,21 @@ Standard Go layout:
   from the `page_description` map in `build.sh`, falling back to the first prose
   paragraph; docs `<title>`s carry the `— MOB³ documentation` suffix. The build
   also writes `sitemap.xml`, `robots.txt` (pointing at the sitemap) and copies
-  `.github/pages/assets/` to `assets/`. Those assets are committed binaries —
-  `favicon.svg`, `favicon-32.png`, `favicon.ico`, `apple-touch-icon.png`,
+  `.github/pages/assets/` to `assets/` plus `docs/screenshots/` to
+  `docs/screenshots/`. Those assets are committed binaries — `favicon-32.png`,
+  `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
   `og-image.png` (a 1200×630 card built from the README hero screenshot) and
-  `site.webmanifest` — so the Pages build needs no image tooling. The monogram
-  is a white **M** with an amber superscript **3** on a slate rounded square.
-  Regenerate the PNGs from the screenshot if the hero shot changes; do not
-  hotlink GitHub or `interactive32.com` URLs from the page head.
+  `site.webmanifest` — so the Pages build needs no image tooling. The icon is
+  the MOB³ GitHub avatar (a black pixel robot) on a white background, padded
+  and rounded for favicons and full-bleed white for the Apple/Android icons.
+  Regenerate the PNGs if the avatar or the hero screenshot changes; do not
+  hotlink GitHub, `interactive32.com` or attachment URLs from the page head.
+  The header layout is a three-column grid: brand, tagline and GitHub/Releases
+  links on the left, a compact search box centered in the viewport with its
+  results anchored under it, and the theme toggle pinned to the far right
+  (plus the docs menu button, which sits beside it and never displaces it).
+  There is deliberately no "Back" link. Below 1100px the tagline is hidden;
+  below 860px the search moves to its own full-width row.
   README screenshot galleries are a centered `<div align="center">` with each
   image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
   full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three
@@ -1014,7 +1022,10 @@ Standard Go layout:
   the `target="_blank"` opens a new tab on mob3.net (GitHub strips `target`
   from user content, so its images open in the same tab). The template styles
   `.content div[align="center"] img` as inline 32%-wide blocks so the same
-  markup lays out three per row on mob3.net. The README must also carry a
+  markup lays out three per row on mob3.net. Screenshots are committed under
+  `docs/screenshots/` and referenced by relative path; never hotlink GitHub
+  `user-attachments` URLs in the README, because the redirect chain makes them
+  slow to load. The README must also carry a
   visible link to `https://mob3.net` near the top (currently
   `Project page: [mob3.net](https://mob3.net).`).
   The build writes a `CNAME` for **`mob3.net`**; the site is served at
