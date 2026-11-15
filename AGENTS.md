@@ -1393,3 +1393,77 @@ After the fix: run the focused test, then `go test -mod=vendor ./...`,
 `go vet -mod=vendor ./...`, `gofmt` on touched Go files, and
 `git diff --check`. Build with `make` when CLI or binary behavior changed and
 exercise the changed path with a dump, PNG or focused test.
+
+## 12. Rendering TODO
+
+Open rendering issues, ordered by the number of affected pages in the site
+audit. Remove an item when it is fixed and covered by tests. This section is for
+engine work only; do not add site-specific exceptions.
+
+### P0 — Main content and hero placement
+
+- **Two-dimensional CSS grid.** Parse `grid-template-rows`, resolve named and
+  numeric `grid-row` lines, honour row spans and `grid-area` rows. Grids that
+  currently fall back to block flow lose or displace lead stories and hero
+  sections. `layout.go` (`grid`, `parseGridTemplate`, `gridPlacementNamed`,
+  `hasNamedGridRows`) is the entry point.
+- **`aspect-ratio`.** Support `aspect-ratio: auto 16 / 9` and numeric ratios
+  for media/hero boxes whose height is otherwise indefinite. A previous attempt
+  changed image placement; fix it with proper content/border-box handling and
+  test against image boxes.
+- **Length functions.** Add `min()`, `max()` and `clamp()` for lengths,
+  including percentages, and allow viewport units inside `calc()`. `env()` and
+  registered custom properties remain out of scope unless separately approved.
+- **Grid alignment and auto flow.** Add basic `justify-items`,
+  `justify-self`, `align-self`, `grid-auto-flow`, and `order` for grid items
+  (order currently applies only to flex).
+
+### P1 — Overflow, stacking and hidden content
+
+- **`overflow:hidden` / `clip` children.** Clip descendant fragments to the
+  clipping box, not just hide fully clipped elements. Overlays, hero captions,
+  card text and ads currently spill into adjacent columns.
+- **`z-index` stacking.** Implement basic stacking for positioned boxes so
+  overlays do not paint under/over unrelated content by tree order alone.
+- **Sticky and fixed chrome.** `position:sticky` still falls back to block
+  flow. Ensure sticky/fixed headers reserve their in-flow space where the page
+  depends on it, without duplicating menus or covering the first content rows.
+- **Visually hidden UI.** Extend detection beyond `clip:rect(1px…)` and
+  `inset(50%)`: off-screen absolute/fixed skip links and mobile menus can still
+  occupy cells or wrap into narrow columns. Suppress only boxes that are fully
+  outside the layout box and cannot become visible.
+
+### P2 — Flex and float layout
+
+- **Shrinking and min-content.** Audit flex/grid items that collapse to one
+  character per line. Respect `min-width:0`, automatic minimum sizes,
+  `flex-shrink`, `overflow` and wrapping so text never becomes a vertical
+  column.
+- **Real floats.** The current approximation makes floated items inline
+  without text wrapping. Either implement simple left/right floats
+  (shrink-to-fit, block placement, line wrapping around them) or improve the
+  approximation for floated navigation rows that should not wrap.
+- **Flex alignment edge cases.** `align-items:stretch` and `align-self` are
+  still approximate; verify icon/label rows and cards with mixed heights.
+
+### P3 — Images and generated content
+
+- **Responsive and lazy images.** Choose a sensible `srcset` candidate, handle
+  common `data-src`/placeholder patterns where scripts do not run, and avoid
+  picking a tiny candidate for hero images.
+- **Alt-label overflow.** With graphics disabled, long `[image: alt]` labels
+  can overlap neighboring columns. Truncate to the image box or use a compact
+  marker while keeping the full alt text available for the focused link.
+- **`object-fit`.** Add cover/contain handling for images with explicit boxes
+  so they do not stretch or crop incorrectly.
+- **Generated content.** Empty block `::before`/`::after` boxes work; support
+  non-empty text/icons and inline pseudo boxes where practical.
+- **Background images and gradients.** Not rendered. Ensure text contrast
+  fallbacks still work and consider loading simple `background-image` assets.
+
+### P4 — JavaScript-rendered pages
+
+- Pages whose content arrives only after client-side rendering can show a
+  skeleton or blank area. Prefer a visible fallback such as the reader-mode
+  hint or the page's noscript content when the rendered document has almost no
+  text, instead of an empty frame.
