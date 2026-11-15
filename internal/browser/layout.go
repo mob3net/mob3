@@ -3,6 +3,7 @@ package browser
 import (
 	"image"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1492,6 +1493,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		// row and keeps the text visible.
 		return l.flow(n, x, y, availW)
 	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Style.Order < items[j].Style.Order })
 	gap := 0
 	if n.Style != nil {
 		gap = nonNeg(n.Style.Gap.resolveH(availW, n.Style.FontSize))
@@ -1635,8 +1637,44 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			widths[i] = maxInt(mins[i], widths[i]*totalAvail/total)
 		}
 	}
+	used := gap * (len(items) - 1)
+	for _, w := range widths {
+		used += w
+	}
+	free := availW - used
+	if free < 0 {
+		free = 0
+	}
+	startX := x
+	extraGap := 0
+	justify := ""
+	if base != nil {
+		justify = base.JustifyContent
+	}
+	n := len(items)
+	switch justify {
+	case "end":
+		startX += free
+	case "center":
+		startX += free / 2
+	case "between":
+		if n > 1 {
+			extraGap = free / (n - 1)
+		}
+	case "around":
+		unit := free / maxInt(1, n)
+		startX += unit / 2
+		extraGap = unit
+	case "evenly":
+		unit := free / (n + 1)
+		startX += unit
+		extraGap = unit
+	}
+
+	starts := make([]int, n)
+	heights := make([]int, n)
 	maxH := 0
-	xx := x
+	xx := startX
 	for i, it := range items {
 		basis := widths[i]
 		// Percentage and calc() widths must be resolved against the
@@ -1646,16 +1684,37 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			(it.Style.Width.U == UnitPercent || it.Style.Width.Calc) {
 			basis = availW
 		}
+		starts[i] = len(l.frags)
 		var h int
 		if l.isBlock(it) {
 			h = l.block(it, xx, y, maxInt(1, basis))
 		} else {
 			h = l.inlineFlow([]*Node{it}, xx, y, maxInt(1, basis), base)
 		}
+		heights[i] = h
 		if h > maxH {
 			maxH = h
 		}
-		xx += widths[i] + gap
+		xx += widths[i] + gap + extraGap
+	}
+	align := ""
+	if base != nil {
+		align = base.AlignItems
+	}
+	if align == "center" || align == "end" {
+		for i, start := range starts {
+			dy := 0
+			if align == "center" {
+				dy = (maxH - heights[i]) / 2
+			} else {
+				dy = maxH - heights[i]
+			}
+			if dy > 0 {
+				for j := start; j < len(l.frags); j++ {
+					l.frags[j].Y += dy
+				}
+			}
+		}
 	}
 	return maxH
 }

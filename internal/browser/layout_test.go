@@ -1559,3 +1559,29 @@ func TestViewportUnits(t *testing.T) {
 	}
 	_ = ly
 }
+
+func TestFlexOrderAndJustify(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div style="display:flex">
+  <span style="order:2">A</span>
+  <span style="order:0">B</span>
+  <span style="order:1">C</span>
+</div>
+<div style="display:flex;justify-content:flex-end">
+  <div style="width:10px">D</div>
+  <div style="width:10px">E</div>
+</div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	pos := map[string][2]int{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && len(f.Text) == 1 {
+			pos[f.Text] = [2]int{f.X, f.Y}
+		}
+	}
+	if !(pos["B"][0] < pos["C"][0] && pos["C"][0] < pos["A"][0]) {
+		t.Fatalf("order not applied: %+v", pos)
+	}
+	if pos["D"][0] < 20 {
+		t.Fatalf("justify-content:flex-end did not move items right: %+v", pos)
+	}
+}

@@ -228,8 +228,10 @@ Standard Go layout:
   min-content width instead of shrinking into one-character columns.
   `flex-wrap:wrap` starts a new row when the next item's base width would
   overflow; each wrapped row is sized independently and wrapped rows stack
-  without an extra gap. `justify-content`, `align-items` and ordering are not
-  implemented. Form controls always use the inline widget path even when CSS
+  without an extra gap. `order` reorders items stably; `justify-content`
+  supports start/end/center/space-between/around/evenly, and `align-items`
+  supports start/center/end cross-axis placement. Form controls always use the
+  inline widget path even when CSS
   gives them block/flex display, so their editable value is rendered inside
   flex containers. An `inline-block` box with an explicit width and block
   descendants is laid out as a block container so page wrappers and cards keep
@@ -1155,7 +1157,8 @@ Standard Go layout:
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
-- Flexbox supports basic rows and `flex-wrap` (no justify/align/order); grid supports
+- Flexbox supports basic rows, `flex-wrap`, `order`, `justify-content` and
+  basic `align-items`; grid supports
   basic row-major tracks plus named-area column placement, but not full row
   spans. Floats are approximated as inline items without text wrapping;
   `position:sticky` falls back to block flow. `display:contents` is

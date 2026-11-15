@@ -159,6 +159,9 @@ type Style struct {
 	Clip           string
 	FlexDir        string
 	FlexWrap       string
+	JustifyContent string
+	AlignItems     string
+	Order          int
 	FlexGrow       float64
 	FlexShrink     float64
 	FlexBasis      Length
@@ -1267,6 +1270,34 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "flex-wrap":
 		if lower == "wrap" || lower == "wrap-reverse" {
 			st.FlexWrap = "wrap"
+		}
+	case "justify-content":
+		switch lower {
+		case "flex-end", "end", "right":
+			st.JustifyContent = "end"
+		case "center":
+			st.JustifyContent = "center"
+		case "space-between":
+			st.JustifyContent = "between"
+		case "space-around":
+			st.JustifyContent = "around"
+		case "space-evenly":
+			st.JustifyContent = "evenly"
+		default:
+			st.JustifyContent = "start"
+		}
+	case "align-items":
+		switch lower {
+		case "center":
+			st.AlignItems = "center"
+		case "flex-end", "end", "bottom":
+			st.AlignItems = "end"
+		default:
+			st.AlignItems = "start"
+		}
+	case "order":
+		if n, err := strconv.Atoi(lower); err == nil {
+			st.Order = n
 		}
 	case "flex-flow":
 		for _, f := range splitFields(lower) {

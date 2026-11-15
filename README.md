@@ -85,7 +85,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   the `-search` fallback.
 - Common CSS: selectors, cascade and inheritance, box model (including
   `box-sizing` and min/max sizes), margins, borders, backgrounds, text styling,
-  lists, tables, CSS custom properties, viewport-width `@media` queries, viewport units and basic flex rows.
+  lists, tables, CSS custom properties, viewport-width `@media` queries, viewport units, and basic flex rows with
+  alignment and ordering.
 - PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art); press `I` to cycle full
   graphics, blocks and none. Images are off by default for speed.
