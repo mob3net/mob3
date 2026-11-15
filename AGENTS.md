@@ -333,8 +333,8 @@ Standard Go layout:
   made and inline SVG is not rasterized, so `alt` text or labels are shown.
   When images are enabled, intrinsic size in CSS px → cells; CSS/HTML
   width/height honored;
-  aspect ratio preserved; display is capped at 60% of the viewport width and
-  24 rows, preserving the ratio; transparency composited over the underlying
+  aspect ratio preserved; display is capped at 40% of the viewport width and
+  16 rows, preserving the ratio; transparency composited over the underlying
   cell;
   PNG/JPEG/GIF/WebP/BMP and SVG. SVG is rasterized with oksvg +
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the

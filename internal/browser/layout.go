@@ -2837,10 +2837,10 @@ func (c *inlineCtx) flush(last bool) {
 	c.spaceStyle, c.spaceNode = nil, nil
 }
 
-const maxImageRows = 24
+const maxImageRows = 16
 
 func (l *layouter) imageCapWidth() int {
-	w := l.width * 3 / 5
+	w := l.width * 2 / 5
 	if w < 1 {
 		w = 1
 	}

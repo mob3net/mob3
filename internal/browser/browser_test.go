@@ -514,12 +514,16 @@ func TestImageCap(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 3000, 2000))
 	n := &Node{Type: ElementNode, Tag: "img", Img: img}
 	st := &Style{Display: "inline-block", Width: pct(100), Height: pct(100)}
-	w, h := imageSize(n, st, 100, 60)
-	if w > 60 || h > maxImageRows {
-		t.Fatalf("capped image = %dx%d", w, h)
+	w, h := imageSize(n, st, 100, 40)
+	if w != 40 || h != 13 {
+		t.Fatalf("capped image = %dx%d, want 40x13", w, h)
 	}
-	if w != 60 {
-		t.Fatalf("capped width = %d, want 60", w)
+
+	tall := image.NewNRGBA(image.Rect(0, 0, 3000, 3000))
+	n.Img = tall
+	w, h = imageSize(n, st, 100, 40)
+	if h != maxImageRows || w != 32 {
+		t.Fatalf("tall capped image = %dx%d, want 32x%d", w, h, maxImageRows)
 	}
 }
 

@@ -157,7 +157,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   background images are unsupported or approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. Animated WebP is not supported.
-- Oversized images are capped at 60% of the viewport width and 24 rows,
+- Oversized images are capped at 40% of the viewport width and 16 rows,
   preserving their aspect ratio.
 - No tabs or automatic downloads; download links and non-HTML responses open a
   popup with a copyable `curl` command instead, and multipart/file uploads are
