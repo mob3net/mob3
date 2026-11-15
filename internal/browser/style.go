@@ -126,6 +126,9 @@ type Style struct {
 	VerticalAlign string
 	TextIndent    Length
 	WhiteSpace    string
+	Content       string
+	ContentSet    bool
+	LineClamp     int
 	LineHeight    float64 // multiplier
 	Margin        [4]Length
 	Padding       [4]Length
@@ -867,12 +870,12 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		switch lower {
 		case "none":
 			st.Display = "none"
-		case "block", "flow-root", "flex", "grid", "list-item", "table",
+		case "block", "flow-root", "-webkit-box", "flex", "grid", "list-item", "table",
 			"table-row", "table-cell", "table-caption", "table-row-group",
 			"table-header-group", "table-footer-group", "inline-block",
 			"inline-flex", "inline-grid", "inline-table", "contents":
 			switch lower {
-			case "flow-root":
+			case "flow-root", "-webkit-box":
 				st.Display = "block"
 			case "grid":
 				st.Display = "grid"
@@ -996,6 +999,18 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		switch lower {
 		case "uppercase", "lowercase", "capitalize", "none":
 			st.TextTransform = lower
+		}
+	case "content":
+		switch lower {
+		case "none", "normal":
+			st.Content = ""
+			st.ContentSet = false
+		default:
+			st.Content = val
+			if len(val) >= 2 && (val[0] == '"' || val[0] == '\'') && val[len(val)-1] == val[0] {
+				st.Content = val[1 : len(val)-1]
+			}
+			st.ContentSet = true
 		}
 	case "text-decoration", "text-decoration-line":
 		f := splitFields(lower)
@@ -1261,6 +1276,10 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		if lower == "hidden" || lower == "clip" {
 			st.Overflow = "hidden"
 		}
+	case "line-clamp", "-webkit-line-clamp":
+		if n, err := strconv.Atoi(lower); err == nil && n > 0 {
+			st.LineClamp = n
+		}
 	case "position":
 		st.Position = lower
 	case "top", "right", "bottom", "left":
@@ -1422,13 +1441,116 @@ type styleEngine struct {
 	deadline   time.Time
 	media      map[string]bool
 	expired    bool
+	// Rules are indexed by their rightmost compound so each element only
+	// scans plausible candidates instead of the whole stylesheet.
+	authorIndex  *ruleIndex
+	authorBefore []Rule
+	authorAfter  []Rule
+	beforeIndex  *ruleIndex
+	afterIndex   *ruleIndex
+}
+
+// ruleIndex buckets rules by the most specific key of their rightmost
+// compound. A rule lives in exactly one bucket, and every element queries all
+// buckets that could contain a matching selector.
+type ruleIndex struct {
+	byID      map[string][]Rule
+	byClass   map[string][]Rule
+	byTag     map[string][]Rule
+	universal []Rule
+}
+
+func indexRules(rules []Rule) *ruleIndex {
+	idx := &ruleIndex{
+		byID:    make(map[string][]Rule),
+		byClass: make(map[string][]Rule),
+		byTag:   make(map[string][]Rule),
+	}
+	for _, r := range rules {
+		if len(r.Selector.Parts) == 0 {
+			idx.universal = append(idx.universal, r)
+			continue
+		}
+		p := r.Selector.Parts[len(r.Selector.Parts)-1]
+		switch {
+		case p.ID != "":
+			idx.byID[p.ID] = append(idx.byID[p.ID], r)
+		case len(p.Classes) > 0:
+			idx.byClass[p.Classes[0]] = append(idx.byClass[p.Classes[0]], r)
+		case p.Tag != "" && p.Tag != "*":
+			idx.byTag[p.Tag] = append(idx.byTag[p.Tag], r)
+		default:
+			idx.universal = append(idx.universal, r)
+		}
+	}
+	return idx
+}
+
+// candidates collects the buckets an element could match.
+func (idx *ruleIndex) candidates(n *Node) []Rule {
+	if idx == nil {
+		return nil
+	}
+	out := make([]Rule, 0, len(idx.universal)+len(idx.byTag[n.Tag]))
+	out = append(out, idx.universal...)
+	out = append(out, idx.byTag[n.Tag]...)
+	if id := n.Attr("id"); id != "" {
+		out = append(out, idx.byID[id]...)
+	}
+	classes := n.ClassList()
+	for i, c := range classes {
+		seen := false
+		for j := 0; j < i; j++ {
+			if classes[j] == c {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			out = append(out, idx.byClass[c]...)
+		}
+	}
+	return out
 }
 
 // uaRules is parsed once; rebuilding layout must not re-parse the UA sheet.
 var uaRules = ParseStylesheet(uaStylesheet)
 
 func newStyleEngine(author []Rule, viewportPx int) *styleEngine {
-	return &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx}
+	e := &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx}
+	e.authorIndex = indexRules(filterNormalRules(author))
+	e.authorBefore = filterPseudoRules(author, "before")
+	e.authorAfter = filterPseudoRules(author, "after")
+	e.beforeIndex = indexRules(e.authorBefore)
+	e.afterIndex = indexRules(e.authorAfter)
+	return e
+}
+
+func filterNormalRules(rules []Rule) []Rule {
+	out := make([]Rule, 0, len(rules))
+	for _, r := range rules {
+		if len(r.Selector.Parts) == 0 {
+			out = append(out, r)
+			continue
+		}
+		if r.Selector.Parts[len(r.Selector.Parts)-1].Pseudo == "" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func filterPseudoRules(rules []Rule, pseudo string) []Rule {
+	var out []Rule
+	for _, r := range rules {
+		if len(r.Selector.Parts) == 0 {
+			continue
+		}
+		if r.Selector.Parts[len(r.Selector.Parts)-1].Pseudo == pseudo {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func newStyleEngineDeadline(author []Rule, viewportPx int, deadline time.Time) *styleEngine {
@@ -1489,7 +1611,7 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 		if !e.outOfTime() {
 			e.applyMatching(e.ua, n, st, parent)
 			ApplyPresentationAttrs(n, st)
-			e.applyMatching(e.author, n, st, parent)
+			e.applyMatchingIndex(e.authorIndex, n, st, parent)
 			if inline := n.Attr("style"); inline != "" {
 				decls := ParseDeclarations(inline)
 				applyDecls(st, decls, parent, false, parentSize(parent))
@@ -1505,6 +1627,12 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 		}
 		n.Style = st
 		styles[n] = st
+		if len(e.authorBefore) > 0 {
+			n.Before = e.computePseudo(n, st, "before")
+		}
+		if len(e.authorAfter) > 0 {
+			n.After = e.computePseudo(n, st, "after")
+		}
 		closedDetails := n.Tag == "details" && !n.HasAttr("open")
 		for _, c := range n.Children {
 			walk(c, st)
@@ -1532,6 +1660,64 @@ func (e *styleEngine) applyMatching(rules []Rule, n *Node, st *Style, parent *St
 			matched = append(matched, r)
 		}
 	}
+	e.applyMatched(matched, st, parent)
+}
+
+func (e *styleEngine) applyMatchingIndex(idx *ruleIndex, n *Node, st *Style, parent *Style) {
+	var matched []Rule
+	rules := idx.candidates(n)
+	for i, r := range rules {
+		if i&63 == 0 && e.outOfTime() {
+			break
+		}
+		if r.Media != "" && !e.mediaMatches(r.Media) {
+			continue
+		}
+		if r.Selector.Match(n) {
+			matched = append(matched, r)
+		}
+	}
+	e.applyMatched(matched, st, parent)
+}
+
+// computePseudo builds an empty generated ::before/::after box when its rule
+// sets content: "". Non-empty content and inline pseudo-elements are skipped.
+func (e *styleEngine) computePseudo(n *Node, parent *Style, pseudo string) *Style {
+	idx := e.beforeIndex
+	if pseudo == "after" {
+		idx = e.afterIndex
+	}
+	matched := e.matchingPseudo(idx, n, pseudo)
+	if len(matched) == 0 {
+		return nil
+	}
+	st := inheritStyle(parent)
+	e.applyMatched(matched, st, parent)
+	resolveStyleUnits(st)
+	if !st.ContentSet || st.Content != "" || st.Display == "none" || st.Hidden {
+		return nil
+	}
+	return st
+}
+
+func (e *styleEngine) matchingPseudo(idx *ruleIndex, n *Node, pseudo string) []Rule {
+	var matched []Rule
+	rules := idx.candidates(n)
+	for i, r := range rules {
+		if i&63 == 0 && e.outOfTime() {
+			break
+		}
+		if r.Media != "" && !e.mediaMatches(r.Media) {
+			continue
+		}
+		if r.Selector.MatchPseudo(n, pseudo) {
+			matched = append(matched, r)
+		}
+	}
+	return matched
+}
+
+func (e *styleEngine) applyMatched(matched []Rule, st, parent *Style) {
 	if len(matched) == 0 {
 		return
 	}
@@ -1576,6 +1762,7 @@ type SelPart struct {
 	Classes []string
 	Attrs   []AttrTest
 	Pseudos []string
+	Pseudo  string // "before" or "after" for a pseudo-element selector
 	Not     []SelPart
 	Is      []SelPart
 	Comb    byte // 0, ' ', '>', '+', '~'
@@ -2213,8 +2400,15 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 				arg = strings.TrimSpace(s[j+1 : k-1])
 				j = k
 			}
-			// ::before/::after cannot match because we do not generate content.
-			if strings.HasPrefix(s[nameStart:], ":") || name == "before" || name == "after" {
+			// ::before/::after generate an empty box; other pseudo-elements
+			// cannot match because we do not generate their content.
+			if name == "before" || name == "after" {
+				p.Pseudo = name
+				spec[1]++
+				i = j
+				continue
+			}
+			if strings.HasPrefix(s[nameStart:], ":") {
 				p.Pseudos = append(p.Pseudos, "!never")
 				spec[1]++
 				i = j
@@ -2342,7 +2536,30 @@ func (s *Selector) Match(n *Node) bool {
 	if n == nil || n.Type != ElementNode || len(s.Parts) == 0 {
 		return false
 	}
+	for _, p := range s.Parts {
+		if p.Pseudo != "" {
+			return false
+		}
+	}
 	return matchPart(s.Parts, len(s.Parts)-1, n)
+}
+
+// MatchPseudo reports whether the selector matches element n as the given
+// generated pseudo-element.
+func (s *Selector) MatchPseudo(n *Node, pseudo string) bool {
+	if n == nil || n.Type != ElementNode || len(s.Parts) == 0 {
+		return false
+	}
+	last := len(s.Parts) - 1
+	for i, p := range s.Parts {
+		if p.Pseudo == "" {
+			continue
+		}
+		if i != last || p.Pseudo != pseudo {
+			return false
+		}
+	}
+	return matchPart(s.Parts, last, n)
 }
 
 func matchPart(parts []SelPart, i int, n *Node) bool {

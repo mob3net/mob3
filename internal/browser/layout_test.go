@@ -1361,3 +1361,63 @@ func TestAbsoluteImageInsideAspectPlaceholder(t *testing.T) {
 		t.Fatalf("paragraph after aspect placeholder is at row %d, want the placeholder height to use its width", after)
 	}
 }
+
+func TestFlexItemCalcWidthUsesContainer(t *testing.T) {
+	text := strings.Repeat("word ", 30)
+	ly := build(`<html><body>
+<div style="display:flex">
+  <div id="left" style="width:calc(50% - 8px)"><p>`+text+`</p></div>
+  <div style="width:calc(50% - 8px)">right</div>
+</div></body></html>`, 100)
+	lines := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		for p := f.Node; p != nil; p = p.Parent {
+			if p.Attr("id") == "left" {
+				lines[f.Y] = true
+				break
+			}
+		}
+	}
+	if len(lines) > 6 {
+		t.Fatalf("calc flex item wrapped to %d lines, want about half the container width", len(lines))
+	}
+}
+
+func TestPseudoAfterAspectBox(t *testing.T) {
+	rules := ParseStylesheet(`.box:after { content:""; display:block; padding-top:50%; }`)
+	doc := ParseHTML(`<html><body><div class="box" style="width:100%"></div><p id="after">after</p></body></html>`)
+	ly := BuildLayout(doc, rules, 40)
+	afterY := 0
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text == "after" {
+			afterY = f.Y
+		}
+	}
+	if afterY < 8 {
+		t.Fatalf("paragraph after aspect box is at row %d, want the generated box to add height", afterY)
+	}
+}
+
+func TestLineClampLimitsLines(t *testing.T) {
+	rules := ParseStylesheet(`.clamp { display:block; overflow:hidden; -webkit-line-clamp:2; line-height:1; }`)
+	doc := ParseHTML(`<html><body><div id="clamp" class="clamp">` + strings.Repeat("word ", 40) + `</div><p id="after">after</p></body></html>`)
+	ly := BuildLayout(doc, rules, 20)
+	lines := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		for p := f.Node; p != nil; p = p.Parent {
+			if p.Attr("id") == "clamp" {
+				lines[f.Y] = true
+				break
+			}
+		}
+	}
+	if len(lines) > 2 {
+		t.Fatalf("line clamp produced %d lines, want at most 2", len(lines))
+	}
+}

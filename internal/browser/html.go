@@ -35,6 +35,11 @@ type Node struct {
 	Style *Style
 	Img   image.Image
 
+	// Before and After hold generated ::before/::after box styles. Only empty
+	// block-level pseudo-elements participate in layout for now.
+	Before *Style
+	After  *Style
+
 	// Image load state, used by the loader and painter.
 	ImgFailed bool
 	ImgSrc    string

@@ -675,6 +675,18 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	default:
 		contentH = l.flow(n, contentX, contentY, contentW)
 	}
+	if st.LineClamp > 0 && st.Overflow == "hidden" {
+		// Approximate -webkit-line-clamp: keep at most N text lines inside the
+		// block and let following content move up accordingly.
+		maxH := st.LineClamp * l.lineH(st)
+		if maxH < 1 {
+			maxH = 1
+		}
+		if contentH > maxH {
+			l.trimFrags(contentY+maxH, fragStart)
+			contentH = maxH
+		}
+	}
 	if st.Height.Set && !st.Height.IsAuto() && st.Height.U != UnitPercent {
 		if h := l.heightValue(st, st.Height, availW); h > contentH {
 			contentH = h
@@ -1541,10 +1553,11 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	xx := x
 	for i, it := range items {
 		basis := widths[i]
-		// Percentage widths must be resolved against the container, not
-		// against the already-resolved item width (which would halve them a
-		// second time inside block()).
-		if it.Style != nil && it.Style.Width.Set && it.Style.Width.U == UnitPercent {
+		// Percentage and calc() widths must be resolved against the
+		// container, not against the already-resolved item width (which would
+		// apply the percentage a second time inside block()).
+		if it.Style != nil && it.Style.Width.Set && !it.Style.Width.IsAuto() &&
+			(it.Style.Width.U == UnitPercent || it.Style.Width.Calc) {
 			basis = availW
 		}
 		var h int
@@ -1634,6 +1647,9 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 			inline = nil
 		}
 	}
+	if p := pseudoElement(parent, parent.Before); p != nil && l.isBlock(p) {
+		cur += l.block(p, x, cur, width)
+	}
 	for _, c := range parent.Children {
 		if l.truncated || l.overRowLimit(cur) {
 			l.truncated = true
@@ -1656,10 +1672,37 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 		inline = append(inline, c)
 	}
 	flush()
+	if p := pseudoElement(parent, parent.After); p != nil && l.isBlock(p) {
+		cur += l.block(p, x, cur, width)
+	}
 	if cur < y {
 		return 0
 	}
 	return cur - y
+}
+
+// trimFrags removes fragments from start onward that begin at or below limit.
+func (l *layouter) trimFrags(limit, start int) {
+	if start < 0 || start > len(l.frags) {
+		return
+	}
+	out := l.frags[:start]
+	for _, f := range l.frags[start:] {
+		if f.Y >= limit {
+			continue
+		}
+		out = append(out, f)
+	}
+	l.frags = out
+}
+
+// pseudoElement wraps a generated pseudo style in a childless synthetic node
+// so the normal block layout can size it.
+func pseudoElement(parent *Node, st *Style) *Node {
+	if st == nil {
+		return nil
+	}
+	return &Node{Type: ElementNode, Tag: "#pseudo", Style: st, Parent: parent}
 }
 
 type inlineItemKind int

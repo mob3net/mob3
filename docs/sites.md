@@ -10,7 +10,8 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 - Headings, paragraphs, lists, links, tables, `<pre>` blocks, images and common
   presentational markup.
 - Responsive pages that use `@media` width queries, basic flex rows, basic grid
-  tracks, simple `calc()` sizing, forms and simple JavaScript DOM effects.
+  tracks, simple `calc()` sizing, aspect-ratio `::before`/`::after` boxes, forms
+  and simple JavaScript DOM effects.
 - Reader mode (`R` or `-reader`) for long articles.
 
 ## Often rough
