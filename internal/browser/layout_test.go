@@ -1310,3 +1310,54 @@ func TestFlexBasisCalcConstrainsText(t *testing.T) {
 		t.Fatalf("main text reaches column %d, want it constrained to the calc width", maxRight)
 	}
 }
+
+func TestBlockImageFragment(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 160, 90))
+	doc := ParseHTML(`<html><body><img id="hero" src="hero.jpg" alt="hero" style="display:block;width:32px"></body></html>`)
+	node := doc.FindFirst("img")
+	node.Img = img
+	ly := BuildLayout(doc, nil, 80)
+	for _, f := range ly.Frags {
+		if f.Kind == fragImage && f.Node == node {
+			if f.W != 4 || f.H < 1 {
+				t.Fatalf("block image = %dx%d, want 4-wide image fragment", f.W, f.H)
+			}
+			return
+		}
+	}
+	t.Fatal("display:block image did not produce an image fragment")
+}
+
+func TestAbsoluteImageInsideAspectPlaceholder(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 160, 90))
+	doc := ParseHTML(`<html><body>
+<div style="position:relative;width:100%;padding-bottom:56.25%">
+  <img id="hero" src="hero.jpg" alt="hero" style="display:block;position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%">
+</div>
+<p id="after">after</p>
+</body></html>`)
+	node := doc.FindFirst("img")
+	node.Img = img
+	ly := BuildLayout(doc, nil, 40)
+	found := false
+	for _, f := range ly.Frags {
+		if f.Kind == fragImage && f.Node == node {
+			found = true
+			if f.W <= 0 || f.H <= 0 {
+				t.Fatalf("absolute image size = %dx%d", f.W, f.H)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("absolute image did not produce an image fragment")
+	}
+	after := 0
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text == "after" {
+			after = f.Y
+		}
+	}
+	if after == 0 || after > 20 {
+		t.Fatalf("paragraph after aspect placeholder is at row %d, want the placeholder height to use its width", after)
+	}
+}

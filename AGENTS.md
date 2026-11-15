@@ -343,7 +343,10 @@ Standard Go layout:
   back to `aria-label`, `<title>` or visible text; `aria-hidden` SVGs are
   skipped. Broken images show `[image: alt]`; an empty-`alt` image with
   explicit dimensions of at least 2 cells shows a `░` marker, while 1-cell
-  decorative/tracking images render nothing.
+  decorative/tracking images render nothing. Images laid out as blocks or as
+  absolute/fixed boxes produce the same image fragments as inline images.
+  Percentage top/bottom padding and margins resolve against the containing
+  block width, so aspect-ratio wrappers keep their intended shape.
   In interactive mode with a detected graphics terminal, the same rectangles
   are filled with a real inline image
   (kitty/iTerm2) instead of half-block art; images clipped by the viewport are

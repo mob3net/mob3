@@ -432,18 +432,22 @@ func (l *layouter) heightValue(st *Style, v Length, basis int) int {
 
 func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb int) {
 	f := st.FontSize
+	// CSS resolves percentage margins and padding vertically against the
+	// containing block's width. Convert that width to a row basis so
+	// `padding-bottom: 56.25%` keeps the usual 16:9 box.
+	vBasis := int(math.Round(float64(availW) * cellW / cellH))
 	ml = st.Margin[3].resolveH(availW, f)
 	mr = st.Margin[1].resolveH(availW, f)
-	mt = st.Margin[0].resolveV(availW, f)
-	mb = st.Margin[2].resolveV(availW, f)
+	mt = st.Margin[0].resolveV(vBasis, f)
+	mb = st.Margin[2].resolveV(vBasis, f)
 	bl = resolveBorderH(st.Border[3], availW, f)
 	br = resolveBorderH(st.Border[1], availW, f)
 	bt = resolveBorderV(st.Border[0], availW, f)
 	bb = resolveBorderV(st.Border[2], availW, f)
 	pl = nonNeg(st.Padding[3].resolveH(availW, f))
 	pr = nonNeg(st.Padding[1].resolveH(availW, f))
-	pt = nonNeg(st.Padding[0].resolveV(availW, f))
-	pb = nonNeg(st.Padding[2].resolveV(availW, f))
+	pt = nonNeg(st.Padding[0].resolveV(vBasis, f))
+	pb = nonNeg(st.Padding[2].resolveV(vBasis, f))
 	return
 }
 
@@ -660,6 +664,8 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 
 	var contentH int
 	switch {
+	case n.Tag == "img":
+		contentH = l.blockImage(n, contentX, contentY, contentW)
 	case st.Display == "table":
 		contentH = l.table(n, contentX, contentY, contentW)
 	case st.Display == "grid":
@@ -2843,6 +2849,31 @@ func (l *layouter) imageCapWidth() int {
 
 // imageSize returns the terminal cell size for an image, preserving its aspect
 // ratio and applying the terminal-friendly display cap.
+// blockImage lays out an image that is itself a block or absolutely / fixed
+// positioned box. Normal inline images go through inlineCtx.addImage instead.
+func (l *layouter) blockImage(n *Node, x, y, w int) int {
+	st := n.Style
+	if n.Img == nil {
+		alt := strings.TrimSpace(n.Attr("alt"))
+		iw, ih := imageSize(n, st, w, l.imageCapWidth())
+		if alt == "" {
+			if iw >= 2 || ih >= 2 {
+				l.addText(x, y, "░", st, n)
+				return 1
+			}
+			return 0
+		}
+		l.addText(x, y, "[image: "+alt+"]", st, n)
+		return 1
+	}
+	iw, ih := imageSize(n, st, w, l.imageCapWidth())
+	l.frags = append(l.frags, Frag{Kind: fragImage, X: x, Y: y, W: iw, H: ih, Img: n.Img, Node: n})
+	return ih
+}
+
+// imageSize returns the terminal-cell size of an image, from its intrinsic
+// pixels and CSS/HTML dimensions, preserving aspect ratio and applying the
+// viewport caps.
 func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 	iw, ih := 0, 0
 	if n.Img != nil {
