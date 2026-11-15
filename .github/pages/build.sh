@@ -36,6 +36,73 @@ const [
 const template = fs.readFileSync(templatePath, "utf8");
 let body = fs.readFileSync(bodyPath, "utf8");
 
+const SITE = "https://mob3.net/";
+const isDocs = bodyClass === "docs-page";
+const fullTitle =
+  isDocs && !title.includes("MOB³") ? `${title} — MOB³ documentation` : title;
+const ogType = isDocs ? "article" : "website";
+
+// Structured data: the landing page describes the software itself, docs pages
+// describe one article inside the site.
+const ogImage = "https://mob3.net/assets/og-image.png";
+let graph;
+if (isDocs) {
+  const items = [
+    { "@type": "ListItem", position: 1, name: "Home", item: SITE },
+    { "@type": "ListItem", position: 2, name: "Documentation", item: `${SITE}docs/index.html` },
+  ];
+  if (canonical !== `${SITE}docs/index.html`) {
+    items.push({ "@type": "ListItem", position: 3, name: title, item: canonical });
+  }
+  graph = [
+    { "@type": "BreadcrumbList", itemListElement: items },
+    {
+      "@type": "TechArticle",
+      headline: title,
+      description,
+      url: canonical,
+      mainEntityOfPage: canonical,
+      inLanguage: "en",
+      image: ogImage,
+      isPartOf: { "@type": "WebSite", "@id": `${SITE}#website` },
+      publisher: { "@type": "Organization", name: "MOB³", url: SITE },
+      author: { "@type": "Person", name: "Milos Stojanovic" },
+    },
+  ];
+} else {
+  graph = [
+    {
+      "@type": "WebSite",
+      "@id": `${SITE}#website`,
+      url: SITE,
+      name: "MOB³",
+      description,
+      inLanguage: "en",
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "MOB³",
+      applicationCategory: "DeveloperApplication",
+      applicationSubCategory: "Web browser",
+      operatingSystem: "Linux, macOS",
+      description,
+      url: SITE,
+      image: ogImage,
+      downloadUrl: "https://github.com/mob3net/mob3/releases/latest",
+      codeRepository: "https://github.com/mob3net/mob3",
+      license: "https://www.gnu.org/licenses/agpl-3.0.html",
+      isAccessibleForFree: true,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      sameAs: ["https://github.com/mob3net/mob3"],
+      author: { "@type": "Person", name: "Milos Stojanovic" },
+    },
+  ];
+}
+const jsonLd = JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replace(
+  /</g,
+  "\\u003c",
+);
+
 // Keep Markdown links working on both GitHub (.md) and Pages (.html).
 body = body.replace(/href="([^"]+)"/g, (match, href) => {
   if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(href)) return match;
@@ -72,9 +139,12 @@ const tocHtml = toc.length
   : "";
 
 const values = {
-  "{{TITLE}}": title,
+  "{{TITLE}}": fullTitle,
+  "{{OG_TITLE}}": title,
   "{{DESCRIPTION}}": description,
   "{{CANONICAL}}": canonical,
+  "{{OG_TYPE}}": ogType,
+  "{{JSONLD}}": jsonLd,
   "{{ROOT}}": root,
   "{{BODY_CLASS}}": bodyClass,
   "{{LAYOUT_START}}": layoutStart,
@@ -104,6 +174,51 @@ html_escape() {
   sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
 }
 
+# Per-page descriptions for search snippets and social cards. Pages without an
+# entry fall back to their first prose paragraph.
+page_description() {
+  local src="$1" title="$2" name text
+  name="$(basename "$src" .md)"
+  case "$name" in
+    README) text="MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color." ;;
+    index) text="MOB³ documentation: install it, every command-line flag, keyboard and mouse keys, MCP automation, security, site support and development." ;;
+    use-cases) text="Who MOB³ is for: terminal users, developers checking how a page renders, and AI agents driving a headless browser over MCP." ;;
+    install) text="Install MOB³ from a release archive, the Docker image ghcr.io/mob3net/mob3, or a source build of the static Go binary." ;;
+    cli) text="Every MOB³ command-line flag with its default and limits, including -graphics, -mcp, -dump, -png, -no-js and -layout-budget." ;;
+    keys) text="MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection." ;;
+    automation) text="Drive MOB³ headlessly with its MCP server: navigation, snapshots, clicking, form filling, screenshots and setup for AI clients." ;;
+    security) text="How MOB³ handles cookies, TLS, storage and untrusted pages in memory, and why it is not a secure browser or a sandbox." ;;
+    sites) text="Which pages render well in MOB³ and which do not: supported HTML, CSS and JavaScript, plus how blocked or heavy sites appear." ;;
+    development) text="Build, test, vendor and release MOB³: Go 1.27, static CGO-free binaries, CI workflows and how the mob3.net site is generated." ;;
+    *) text="" ;;
+  esac
+  if [ -z "$text" ]; then text="$(derive_description "$src")"; fi
+  if [ -z "$text" ]; then text="MOB³ documentation — $title"; fi
+  printf '%s' "$text"
+}
+
+derive_description() {
+  local src="$1" text
+  text="$(awk '
+    !h1 { if ($0 ~ /^# /) h1 = 1; next }
+    /^[[:space:]]*```/ { fence = !fence; next }
+    fence { next }
+    !started {
+      if ($0 ~ /^[[:space:]]*$/) { skip = 0; next }
+      if (skip) next
+      if ($0 ~ /^(#|\||>|[-*+] |[0-9]+\. | {4})/) { skip = 1; next }
+      started = 1
+    }
+    started {
+      if ($0 ~ /^[[:space:]]*$/) exit
+      buf = buf (buf == "" ? "" : " ") $0
+    }
+    END { gsub(/[[:space:]]+$/, "", buf); print buf }
+  ' "$src")"
+  text="$(printf '%s' "$text" | sed -E 's/\[([^]]+)\]\([^)]*\)/\1/g; s/\*\*|__|\*|`//g')"
+  printf '%s' "$text" | awk '{ if (length($0) <= 155) { print; exit } s = substr($0, 1, 155); sub(/ [^ ]*$/, "", s); print s "…" }'
+}
+
 docs_order=(index use-cases install cli keys automation security sites development)
 
 sidebar_for() {
@@ -124,7 +239,7 @@ sidebar_for() {
 
 readme_title="$(read_title "$root/README.md" "MOB³ — a small terminal web browser in Go")"
 render_page "$root/README.md" "$out/index.html" "$readme_title" \
-  "MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color." \
+  "$(page_description "$root/README.md" "$readme_title")" \
   "https://mob3.net/" "." "" "" "" ""
 
 for src in "$root"/docs/*.md; do
@@ -132,11 +247,13 @@ for src in "$root"/docs/*.md; do
   name="$(basename "$src" .md)"
   title="$(read_title "$src" "MOB³ documentation")"
   render_page "$src" "$out/docs/$name.html" "$title" \
-    "MOB³ documentation — $title" \
+    "$(page_description "$src" "$title")" \
     "https://mob3.net/docs/$name.html" ".." \
     '<div class="docs-layout">' "$(sidebar_for "$name")" '</div>' "docs-page"
 done
 
+rm -rf "$out/assets"
+cp -R "$root/.github/pages/assets" "$out/assets"
 cp "$root/.github/pages/search.js" "$out/search.js"
 
 node - "$out" <<'NODE'
@@ -197,9 +314,27 @@ fs.writeFileSync(
   path.join(out, "search-index.js"),
   "window.MOB3_SEARCH = " + JSON.stringify(entries) + ";\n",
 );
+
+// Sitemap and robots.txt list the same pages, with the landing page first.
+const SITE = "https://mob3.net";
+const locs = entries.map((entry) =>
+  entry.path === "index.html" ? SITE + "/" : SITE + "/" + entry.path,
+);
+const urls = locs
+  .map((loc) => `  <url><loc>${loc.replace(/&/g, "&amp;")}</loc></url>`)
+  .join("\n");
+fs.writeFileSync(
+  path.join(out, "sitemap.xml"),
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+);
+fs.writeFileSync(
+  path.join(out, "robots.txt"),
+  `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`,
+);
 NODE
 
 printf 'mob3.net\n' >"$out/CNAME"
 printf '/bin/\n/_site/\n' >"$out/.gitignore"
 touch "$out/.nojekyll"
-echo "Wrote $out/index.html, $out/docs/*.html, search index and CNAME"
+echo "Wrote $out/index.html, $out/docs/*.html, assets, search index, sitemap, robots.txt and CNAME"

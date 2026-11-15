@@ -41,10 +41,16 @@ Build the site locally:
 .github/pages/build.sh /tmp/mob3-site
 ```
 
-The script writes `index.html`, `docs/*.html`, `search-index.js`, a `CNAME` for
-`mob3.net` and `.nojekyll`. Relative `.md` links are rewritten to `.html` for
-the site. Docs pages share a generated sidebar, on-page “On this page” contents
-list and header search, with a light/dark theme toggle and a mobile menu.
+The script writes `index.html`, `docs/*.html`, `search-index.js`, `robots.txt`,
+`sitemap.xml`, the favicon and social-preview files under `assets/`, a `CNAME`
+for `mob3.net` and `.nojekyll`. Relative `.md` links are rewritten to `.html`
+for the site. Docs pages share a generated sidebar, on-page “On this page”
+contents list and header search, with a light/dark theme toggle and a mobile
+menu. Every page carries a canonical URL, description, Open Graph and Twitter
+card tags and JSON-LD structured data, so search results and link previews use
+the intended title, summary and 1200×630 image. The assets under
+`.github/pages/assets/` are committed; replace `og-image.png` when the hero
+screenshot changes.
 
 ## Repository layout
 

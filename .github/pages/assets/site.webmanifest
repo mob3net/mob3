@@ -1,0 +1,15 @@
+{
+  "name": "MOB³ — a small terminal web browser",
+  "short_name": "MOB³",
+  "description": "MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#334155",
+  "icons": [
+    { "src": "/assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/assets/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

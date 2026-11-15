@@ -991,6 +991,21 @@ Standard Go layout:
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, `docs/`, page files or workflow, and on manual
   dispatch.
+  **SEO and link previews** live in the same template and build script. Each
+  page emits a canonical URL, a `<meta name="description">`, Open Graph and
+  Twitter `summary_large_image` tags, a 1200×630 `og:image`, and JSON-LD
+  (`WebSite` + free `SoftwareApplication` on the landing page,
+  `BreadcrumbList` + `TechArticle` on docs pages). Per-page descriptions come
+  from the `page_description` map in `build.sh`, falling back to the first prose
+  paragraph; docs `<title>`s carry the `— MOB³ documentation` suffix. The build
+  also writes `sitemap.xml`, `robots.txt` (pointing at the sitemap) and copies
+  `.github/pages/assets/` to `assets/`. Those assets are committed binaries —
+  `favicon.svg`, `favicon-32.png`, `favicon.ico`, `apple-touch-icon.png`,
+  `og-image.png` (a 1200×630 card built from the README hero screenshot) and
+  `site.webmanifest` — so the Pages build needs no image tooling. The monogram
+  is a white **M** with an amber superscript **3** on a slate rounded square.
+  Regenerate the PNGs from the screenshot if the hero shot changes; do not
+  hotlink GitHub or `interactive32.com` URLs from the page head.
   README screenshot galleries are a centered `<div align="center">` with each
   image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
   full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three
