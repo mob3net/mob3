@@ -318,8 +318,10 @@ Standard Go layout:
   `white-space: pre` preserves spaces/newlines; `nowrap` never wraps.
   `text-align: justify` stretches inter-word spaces on wrapped lines; the last
   line and forced breaks (`<br>`, newlines) stay left-aligned.
-- **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height are
-  hidden (`display:none`) to avoid rendering them as one-character columns.
+- **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
+  `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
+  are hidden (`display:none`) to avoid rendering them as one-character columns
+  or visible “skip to content” links.
 - **Percentage heights are ignored** because parent heights are indefinite;
   this avoids `height:100%` on logos becoming 100 terminal rows.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled

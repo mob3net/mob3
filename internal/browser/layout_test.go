@@ -1527,3 +1527,22 @@ func TestFloatLeftLaysItemsHorizontally(t *testing.T) {
 		t.Fatalf("floated items are not horizontal: %+v", pos)
 	}
 }
+
+func TestClipHiddenContent(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div style="clip:rect(1px,1px,1px,1px)">clipped</div>
+<p id="shown">shown</p></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	seen := map[string]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			seen[f.Text] = true
+		}
+	}
+	if seen["clipped"] {
+		t.Fatalf("clipped content rendered: %+v", seen)
+	}
+	if !seen["shown"] {
+		t.Fatal("visible content was dropped")
+	}
+}

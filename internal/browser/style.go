@@ -1339,7 +1339,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		case "left":
 			st.Left = l
 		}
-	case "clip":
+	case "clip", "clip-path":
 		st.Clip = lower
 	}
 }
@@ -1664,6 +1664,9 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 			}
 		}
 		resolveStyleUnits(st)
+		if clipHidesContent(st.Clip) {
+			st.Display = "none"
+		}
 		// Common screen-reader-only pattern: a 1px clipped box. Rendering it
 		// would produce one character per line, so hide it.
 		if st.Overflow == "hidden" && st.Width.Set && st.Width.U == UnitPX && st.Width.V <= 1 &&
@@ -1897,6 +1900,35 @@ func matchingParen(s string, open int) int {
 		}
 	}
 	return -1
+}
+
+func clipHidesContent(clip string) bool {
+	clip = strings.TrimSpace(strings.ToLower(clip))
+	if clip == "" {
+		return false
+	}
+	if strings.Contains(clip, "inset(50%)") || strings.Contains(clip, "inset(100%)") {
+		return true
+	}
+	if !strings.HasPrefix(clip, "rect(") || !strings.HasSuffix(clip, ")") {
+		return false
+	}
+	inner := strings.TrimSpace(clip[5 : len(clip)-1])
+	parts := splitTopLevel(inner, ',')
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "auto" {
+			return false
+		}
+		l := parseLength(part, 16)
+		if !l.Set || l.cssPx(16) > 1 {
+			return false
+		}
+	}
+	return true
 }
 
 // ParseDeclarations parses the body of a style attribute or rule block.
