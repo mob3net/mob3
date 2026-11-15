@@ -122,16 +122,11 @@ try {
     letter-spacing: .01em;
   }
   .brand:hover { color: var(--primary-dark); }
-  .tagline {
-    color: var(--muted);
-    font-size: .88rem;
-    white-space: nowrap;
-  }
   .site-nav {
     display: flex;
     align-items: center;
     gap: .1rem;
-    margin-left: .2rem;
+    margin-right: .25rem;
   }
   .site-nav a {
     padding: .35rem .6rem;
@@ -371,10 +366,6 @@ try {
   }
   .site-footer p { margin: 0; }
 
-  @media (max-width: 1100px) {
-    .tagline { display: none; }
-  }
-
   @media (max-width: 860px) {
     .nav-toggle { display: block; }
     body:not(.docs-page) .nav-toggle { display: none; }
@@ -392,20 +383,39 @@ try {
     .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
     h1 { font-size: 1.6rem; }
     .header-inner {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      grid-template-areas:
+        "brand brand theme"
+        "search search search"
+        "nav nav menu";
       gap: .4rem .6rem;
       padding: .5rem .9rem;
     }
-    .header-left { flex: 1 1 auto; }
-    .header-actions { margin-left: auto; }
+    .header-left { grid-area: brand; }
+    /* Flatten the action group so the theme toggle keeps the top-right
+       corner, the project links get their own row and the search spans the
+       full width between them. */
+    .header-actions { display: contents; }
+    .theme-toggle { grid-area: theme; justify-self: end; }
+    .nav-toggle { grid-area: menu; }
+    .site-nav {
+      grid-area: nav;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      margin-right: 0;
+    }
     .search-wrap {
-      order: 3;
-      flex: 1 1 100%;
+      grid-area: search;
       width: 100%;
       min-width: 0;
     }
     .search-results { width: 100%; }
+  }
+
+  @media (max-width: 380px) {
+    .site-nav { gap: 0; }
+    .site-nav a { padding: .35rem .3rem; }
   }
 
   @media (prefers-color-scheme: dark) {
@@ -444,11 +454,6 @@ try {
   <div class="header-inner">
     <div class="header-left">
       <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
-      <span class="tagline">Documentation</span>
-      <nav class="site-nav" aria-label="Project">
-        <a href="https://github.com/mob3net/mob3">GitHub</a>
-        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
-      </nav>
     </div>
     <div class="search-wrap">
       <label class="search">
@@ -458,6 +463,11 @@ try {
       <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
     </div>
     <div class="header-actions">
+      <nav class="site-nav" aria-label="Project">
+        <a href="https://github.com/mob3net/mob3">GitHub</a>
+        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
+        <a href="mailto:info@mob3.net">Contact</a>
+      </nav>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
       <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
         <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

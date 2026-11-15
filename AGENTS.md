@@ -1008,12 +1008,16 @@ Standard Go layout:
   and rounded for favicons and full-bleed white for the Apple/Android icons.
   Regenerate the PNGs if the avatar or the hero screenshot changes; do not
   hotlink GitHub, `interactive32.com` or attachment URLs from the page head.
-  The header layout is a three-column grid: brand, tagline and GitHub/Releases
-  links on the left, a compact search box centered in the viewport with its
-  results anchored under it, and the theme toggle pinned to the far right
-  (plus the docs menu button, which sits beside it and never displaces it).
-  There is deliberately no "Back" link. Below 1100px the tagline is hidden;
-  below 860px the search moves to its own full-width row.
+  The header is a three-column grid: the brand alone on the left, a compact
+  search box centered in the viewport with its results anchored under it, and
+  on the right the GitHub, Releases and Contact (`mailto:info@mob3.net`) links
+  in that order, followed by the theme toggle pinned to the far edge (the docs
+  menu button sits before the toggle and never displaces it). There is
+  deliberately no "Back" link and no "Documentation" tagline in the header.
+  Below 860px the header becomes a grid with brand and theme on the first row,
+  the search full width on the second, and the project links plus menu button
+  on the third; below 380px the link padding tightens so all three fit on one
+  line.
   README screenshot galleries are a centered `<div align="center">` with each
   image wrapped in an `<a href="…" target="_blank" rel="noopener">` to its
   full-size asset, at `width="32%"`, with `<br>` row breaks. This renders three
