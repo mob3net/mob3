@@ -186,6 +186,7 @@ func Run(args []string) int {
 	}
 	b.cellW, b.cellH = cellW, cellH
 	b.gfx = NewGFXRenderer(graphicsMode, cellW, cellH)
+	b.initGraphicsModes(graphicsMode)
 
 	kittyKeys := kittyKeyboardEnabled()
 	var startSeq strings.Builder

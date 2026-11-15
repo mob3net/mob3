@@ -4107,3 +4107,62 @@ func TestBackRestoresPageScroll(t *testing.T) {
 		t.Fatalf("forward scroll = %d, want 7", b.scroll)
 	}
 }
+
+func TestCycleGraphicsModes(t *testing.T) {
+	b := NewBrowser(80, 20)
+	b.cellW, b.cellH = 8, 16
+	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.graphicsMode = GraphicsKitty
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	if b.loader != nil {
+		b.loader.noImages = false
+	}
+
+	b.cycleGraphics()
+	if b.graphicsMode != GraphicsBlocks || b.gfx != nil {
+		t.Fatalf("after full graphics: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	}
+	if b.loader != nil && b.loader.noImages {
+		t.Fatal("blocks mode should keep image loading enabled")
+	}
+
+	b.cycleGraphics()
+	if b.graphicsMode != GraphicsNone || b.gfx != nil {
+		t.Fatalf("after blocks: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	}
+	if b.loader != nil && !b.loader.noImages {
+		t.Fatal("none mode should disable image loading")
+	}
+
+	b.cycleGraphics()
+	if b.graphicsMode != GraphicsKitty || b.gfx == nil {
+		t.Fatalf("after none: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	}
+	if b.loader != nil && b.loader.noImages {
+		t.Fatal("full graphics should enable image loading")
+	}
+}
+
+func TestGraphicsModeChangeRefreshesPage(t *testing.T) {
+	b := NewBrowser(80, 20)
+	b.cellW, b.cellH = 8, 16
+	b.url = mustParse(t, "https://example.com/")
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Root: ParseHTML("<html><body>ok</body></html>")}, nil
+	}
+	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.graphicsMode = GraphicsKitty
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	seq := b.loadSeq
+	b.cycleGraphics() // native -> blocks
+	if b.loadSeq == seq {
+		t.Fatal("changing to blocks did not refresh the page")
+	}
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("graphics refresh did not finish")
+	}
+}

@@ -79,6 +79,11 @@ type Browser struct {
 	gfx     *gfxRenderer
 	bigText bool
 
+	// Graphics modes available to the I key, in cycle order, and the current
+	// one. The list starts with native inline graphics when available.
+	graphicsModes []GraphicsMode
+	graphicsMode  GraphicsMode
+
 	// lastHintMode tracks hint-mode transitions so the first hint frame and
 	// the return to normal rendering both get a full repaint.
 	lastHintMode bool
@@ -2771,6 +2776,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.openLinkHints(false)
 	case "F":
 		b.openLinkHints(true)
+	case "I":
+		b.cycleGraphics()
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()
@@ -3848,6 +3855,68 @@ func (b *Browser) jsStatusText() string {
 		return "JavaScript:off"
 	}
 	return "JavaScript:on"
+}
+
+// initGraphicsModes records the cycle order: native inline graphics when
+// available, then blocks, then none. The requested mode becomes the starting
+// point, so `-graphics=none` can still be cycled up to full graphics.
+func (b *Browser) initGraphicsModes(requested GraphicsMode) {
+	current := DetectGraphics(requested)
+	native := current
+	if native != GraphicsKitty && native != GraphicsITerm {
+		detected := DetectGraphics(GraphicsAuto)
+		if detected == GraphicsKitty || detected == GraphicsITerm {
+			native = detected
+		} else {
+			native = GraphicsNone
+		}
+	}
+	modes := make([]GraphicsMode, 0, 3)
+	if native == GraphicsKitty || native == GraphicsITerm {
+		modes = append(modes, native)
+	}
+	modes = append(modes, GraphicsBlocks, GraphicsNone)
+	b.graphicsModes = modes
+	b.graphicsMode = current
+	if current == GraphicsAuto {
+		b.graphicsMode = native
+	}
+}
+
+// cycleGraphics switches full graphics -> blocks -> none -> full, skipping
+// modes the terminal does not support.
+func (b *Browser) cycleGraphics() {
+	if len(b.graphicsModes) == 0 {
+		return
+	}
+	next := b.graphicsMode
+	for i, mode := range b.graphicsModes {
+		if mode == b.graphicsMode {
+			next = b.graphicsModes[(i+1)%len(b.graphicsModes)]
+			break
+		}
+	}
+	b.setGraphicsMode(next)
+}
+
+func (b *Browser) setGraphicsMode(mode GraphicsMode) {
+	if mode == b.graphicsMode &&
+		(mode == GraphicsBlocks || mode == GraphicsNone || b.gfx != nil) {
+		return
+	}
+	b.graphicsMode = mode
+	b.gfx = NewGFXRenderer(mode, b.cellW, b.cellH)
+	if b.loader != nil {
+		b.loader.noImages = mode == GraphicsNone
+	}
+	// Every graphics change refreshes the page, including native -> blocks,
+	// so images are fetched and painted in the newly selected mode.
+	if b.url != nil {
+		b.nextScroll = b.scroll
+		b.nextScrollSet = true
+		b.reload()
+	}
+	b.status = b.graphicsStatusText()
 }
 
 // graphicsStatusText reports the resolved graphics mode: auto is shown as the

@@ -358,7 +358,9 @@ Standard Go layout:
   kitty comes first, then iTerm2, then half-block art. Auto is selected from
   environment variables. Under tmux/screen/zellij auto-detection
   falls back to half-block art because the multiplexer consumes graphics
-  escapes unless passthrough is configured.
+  escapes unless passthrough is configured. `I` cycles native graphics →
+  blocks → none (or blocks → none when native graphics are unavailable),
+  refreshing the page on every mode change while keeping the scroll row.
 - **Graphics encoding:** images are transmitted as PNG (kitty `f=100`, base64;
   iTerm2 `OSC 1337;File`). Text is still painted as ANSI cells; only image
   rectangles are overlaid. Kitty deletes previous placements each frame
@@ -482,7 +484,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
-  reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
+  reader mode, `D` toggle dark mode, `I` cycle graphics modes, `o` URL prompt,
+  `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
   `y` copy selected page text, the current URL when nothing is selected, or
