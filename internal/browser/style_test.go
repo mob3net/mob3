@@ -340,3 +340,53 @@ func TestRuleIndexCascade(t *testing.T) {
 		t.Fatalf("span style = %+v", span.Style)
 	}
 }
+
+func TestCSSVariables(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div id="a" class="a"></div>
+<div class="b"><span id="s"></span></div>
+<div id="c" class="c"></div>
+<div id="d" class="d"></div>
+</body></html>`)
+	rules := ParseStylesheet(`
+		html { --gap: 8px; --brand: #ff0000; }
+		.a { margin-left: var(--gap); width: calc(100% - var(--gap)); color: var(--brand); }
+		.b { --gap: 4px; }
+		.b span { margin-left: var(--gap); }
+		.c { margin-left: var(--missing, 3px); }
+		.d { margin-left: var(--missing); }
+	`)
+	newStyleEngine(rules, 0).computeAll(doc)
+	var a, s, c, d *Node
+	doc.FindAll(func(n *Node) bool {
+		switch n.Attr("id") {
+		case "a":
+			a = n
+		case "s":
+			s = n
+		case "c":
+			c = n
+		case "d":
+			d = n
+		}
+		return false
+	})
+	if a.Style.Margin[3].V != 8 {
+		t.Fatalf("var margin = %+v, want 8px", a.Style.Margin[3])
+	}
+	if !a.Style.Width.Calc || a.Style.Width.CalcPct != 100 || a.Style.Width.CalcPx != -8 {
+		t.Fatalf("var calc width = %+v", a.Style.Width)
+	}
+	if a.Style.Color.R != 255 {
+		t.Fatalf("var color = %+v", a.Style.Color)
+	}
+	if s.Style.Margin[3].V != 4 {
+		t.Fatalf("inherited override = %+v, want 4px", s.Style.Margin[3])
+	}
+	if c.Style.Margin[3].V != 3 {
+		t.Fatalf("var fallback = %+v, want 3px", c.Style.Margin[3])
+	}
+	if d.Style.Margin[3].Set {
+		t.Fatalf("unresolved var should drop the declaration: %+v", d.Style.Margin[3])
+	}
+}

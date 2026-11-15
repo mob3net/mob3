@@ -112,6 +112,8 @@ func (l Length) resolveV(basis int, fontPx float64) int {
 // Style is a computed style. Lengths remain unresolved so percentages can be
 // resolved against the containing block during layout.
 type Style struct {
+	// Vars carries inherited CSS custom properties used by var().
+	Vars           map[string]string
 	Display        string
 	Hidden         bool
 	HiddenExplicit bool
@@ -226,6 +228,12 @@ func inheritStyle(parent *Style) *Style {
 		st.ListStyle = parent.ListStyle
 		st.Hidden = parent.Hidden
 		st.BorderColor = parent.BorderColor
+		if len(parent.Vars) > 0 {
+			st.Vars = make(map[string]string, len(parent.Vars))
+			for k, v := range parent.Vars {
+				st.Vars[k] = v
+			}
+		}
 	}
 	return st
 }
@@ -852,8 +860,16 @@ func isBorderStyle(s string) bool {
 }
 
 func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, fontBase float64) {
+	// Custom properties must be available before declarations that use them,
+	// even when the var() reference appears earlier in the same block.
 	for _, d := range decls {
-		if d.Important != important {
+		if d.Important != important || !strings.HasPrefix(d.Prop, "--") {
+			continue
+		}
+		applyDecl(st, d.Prop, d.Value, parent)
+	}
+	for _, d := range decls {
+		if d.Important != important || strings.HasPrefix(d.Prop, "--") {
 			continue
 		}
 		applyDecl(st, d.Prop, d.Value, parent)
@@ -861,10 +877,28 @@ func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, f
 }
 
 func applyDecl(st *Style, prop, val string, parent *Style) {
-	prop = strings.ToLower(strings.TrimSpace(prop))
+	prop = strings.TrimSpace(prop)
+	if strings.HasPrefix(prop, "--") {
+		if st.Vars == nil {
+			st.Vars = map[string]string{}
+		}
+		st.Vars[prop] = strings.TrimSpace(val)
+		return
+	}
+	prop = strings.ToLower(prop)
 	val = strings.TrimSpace(val)
 	if val == "" {
 		return
+	}
+	if strings.Contains(strings.ToLower(val), "var(") {
+		expanded, ok := expandVars(val, st.Vars, 0)
+		if !ok {
+			return
+		}
+		val = expanded
+		if val == "" {
+			return
+		}
 	}
 	lower := strings.ToLower(val)
 	switch prop {
@@ -1800,6 +1834,71 @@ type Rule struct {
 	Media    string // @media condition that must match, or empty
 }
 
+// expandVars substitutes var(--name[, fallback]) references using the
+// inherited custom property map. It returns false for an unresolved reference
+// without a fallback, which drops the declaration like an invalid CSS value.
+func expandVars(value string, vars map[string]string, depth int) (string, bool) {
+	if depth > 16 {
+		return "", false
+	}
+	for {
+		lower := strings.ToLower(value)
+		idx := strings.Index(lower, "var(")
+		if idx < 0 {
+			return value, true
+		}
+		end := matchingParen(value, idx+3)
+		if end < 0 {
+			return "", false
+		}
+		inner := value[idx+4 : end]
+		parts := splitTopLevel(inner, ',')
+		name := strings.TrimSpace(parts[0])
+		repl, ok := vars[name]
+		if !ok {
+			if len(parts) < 2 {
+				return "", false
+			}
+			repl = strings.TrimSpace(strings.Join(parts[1:], ","))
+		}
+		expanded, ok := expandVars(repl, vars, depth+1)
+		if !ok {
+			return "", false
+		}
+		value = value[:idx] + expanded + value[end+1:]
+	}
+}
+
+// matchingParen returns the index of the ')' matching the '(' at open.
+func matchingParen(s string, open int) int {
+	if open < 0 || open >= len(s) || s[open] != '(' {
+		return -1
+	}
+	depth := 0
+	for i := open; i < len(s); i++ {
+		switch s[i] {
+		case '\'':
+			i = skipString(s, i)
+			if i >= len(s) {
+				return -1
+			}
+		case '"':
+			i = skipString(s, i)
+			if i >= len(s) {
+				return -1
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
 // ParseDeclarations parses the body of a style attribute or rule block.
 func ParseDeclarations(s string) []Declaration {
 	var out []Declaration
@@ -1812,7 +1911,11 @@ func ParseDeclarations(s string) []Declaration {
 		if idx < 0 {
 			continue
 		}
-		prop := strings.ToLower(strings.TrimSpace(chunk[:idx]))
+		rawProp := strings.TrimSpace(chunk[:idx])
+		prop := strings.ToLower(rawProp)
+		if strings.HasPrefix(rawProp, "--") {
+			prop = rawProp
+		}
 		val := strings.TrimSpace(chunk[idx+1:])
 		if prop == "" || val == "" {
 			continue

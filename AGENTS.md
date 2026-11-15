@@ -143,7 +143,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, and simple `calc()` arithmetic), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, simple `calc()` arithmetic and inherited CSS custom properties with `var()` substitution), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles (including empty overlay anchors), display list (`Frag`s) in document coordinates, plus text width/truncation helpers, wide-character measurement, `display:contents` expansion and measure that ignores out-of-flow children. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
@@ -1173,7 +1173,10 @@ Standard Go layout:
   unsupported. Empty block-level `::before`/`::after` boxes (including the
   `padding-top` aspect-ratio pattern) are generated; other generated content is
   not. `-webkit-line-clamp` is approximated by clipping after N lines.
-  No CSS variables, animations, transitions, `@import`, or background images. `<dialog>` open state controls rendering, but modal
+  CSS custom properties support simple `var()` substitution, including
+  fallbacks; registered properties and Houdini APIs are not supported. No
+  animations, transitions, `@import`, or background images. `<dialog>` open
+  state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or
   top-layer stacking.
 - Modern CSS-heavy sites may look rough; content-focused pages, docs, and old
@@ -1270,7 +1273,7 @@ Known unsupported families (do not present these as available):
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,
-  full float layout, `position:sticky`, `z-index` stacking, CSS variables, animations,
+  full float layout, `position:sticky`, `z-index` stacking, animations,
   transitions, non-empty generated content, `@import`, background images, full
   flexbox.
 
