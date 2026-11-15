@@ -2036,7 +2036,7 @@ func TestBookmarksPage(t *testing.T) {
 
 func TestHistoryPage(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.history = []string{"https://example.com/a", "about:start"}
+	b.history = []historyEntry{{URL: "https://example.com/a"}, {URL: "about:start"}}
 	b.histIdx = 1
 	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
 	if err != nil {
@@ -2280,7 +2280,7 @@ func TestHistoryHeaderShortcutUnderline(t *testing.T) {
 
 func TestHistoryShortcutKey(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.history = []string{"https://example.com/a"}
+	b.history = []historyEntry{{URL: "https://example.com/a"}}
 	b.histIdx = 0
 	b.HandleKey("H")
 	select {
@@ -3973,5 +3973,130 @@ func TestConsoleClearCommandAndToolLogRing(t *testing.T) {
 	run(consoleLogs, "clear")
 	if len(b.jsLog) != 0 || b.jsErr {
 		t.Fatalf("JS clear left %d messages, error=%v", len(b.jsLog), b.jsErr)
+	}
+}
+
+func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		var doc strings.Builder
+		doc.WriteString(`<html><body><p><a href="#target">jump</a></p>`)
+		for i := 0; i < 40; i++ {
+			doc.WriteString("<p>filler line</p>")
+		}
+		doc.WriteString(`<div id="target">target</div></body></html>`)
+		return &Page{URL: u, Base: u, Title: "test", Root: ParseHTML(doc.String())}, nil
+	}
+	finish := func() {
+		t.Helper()
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatal("navigation did not finish")
+		}
+	}
+	b.Navigate("https://example.com/", true)
+	finish()
+	if len(b.history) != 1 {
+		t.Fatalf("history = %+v, want one entry", b.history)
+	}
+
+	b.scroll = 2
+	idx := -1
+	for i, li := range b.layout.Links {
+		if li.Href == "#target" {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("anchor link not laid out")
+	}
+	b.focus = idx
+	b.followFocused()
+
+	if len(b.history) != 2 {
+		t.Fatalf("history after anchor = %+v, want two entries", b.history)
+	}
+	if b.url == nil || b.url.Fragment != "target" {
+		t.Fatalf("url after anchor = %v", b.url)
+	}
+	anchorScroll := b.scroll
+	if anchorScroll == 2 {
+		t.Fatal("anchor did not scroll")
+	}
+
+	// Scrolling on the anchored entry should be remembered by forward.
+	b.scroll = anchorScroll + 5
+	b.clampScroll()
+	rememberedScroll := b.scroll
+	b.back()
+	if b.url == nil || b.url.Fragment != "" {
+		t.Fatalf("url after back = %v", b.url)
+	}
+	if b.scroll != 2 {
+		t.Fatalf("back scroll = %d, want 2", b.scroll)
+	}
+
+	b.forward()
+	if b.url == nil || b.url.Fragment != "target" {
+		t.Fatalf("url after forward = %v", b.url)
+	}
+	if b.scroll != rememberedScroll {
+		t.Fatalf("forward scroll = %d, want %d", b.scroll, rememberedScroll)
+	}
+}
+
+func TestBackRestoresPageScroll(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Title: "test", Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
+	}
+	navigate := func(target string) {
+		t.Helper()
+		b.Navigate(target, true)
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("navigation to %s did not finish", target)
+		}
+	}
+	navigate("https://example.com/a")
+	b.scroll = 5
+	navigate("https://example.com/b")
+	if b.scroll != 0 {
+		t.Fatalf("new page scroll = %d, want 0", b.scroll)
+	}
+	b.scroll = 7
+	b.back()
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("back did not finish")
+	}
+	if b.url == nil || b.url.Path != "/a" {
+		t.Fatalf("url after back = %v", b.url)
+	}
+	if b.scroll != 5 {
+		t.Fatalf("back scroll = %d, want 5", b.scroll)
+	}
+	b.forward()
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("forward did not finish")
+	}
+	if b.url == nil || b.url.Path != "/b" {
+		t.Fatalf("url after forward = %v", b.url)
+	}
+	if b.scroll != 7 {
+		t.Fatalf("forward scroll = %d, want 7", b.scroll)
 	}
 }

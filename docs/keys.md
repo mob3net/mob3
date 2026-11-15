@@ -29,6 +29,11 @@ key, mouse and form reference for the running build.
 | `q` / `Ctrl-C` | Ask to confirm quitting (`y`/`Enter` quits; any other key cancels) |
 | `Esc` | Stop loading, leave a field, clear a selection, or show the exit hint |
 
+Back and Forward remember the scroll position you last had on each history
+entry. In-page `#` links become history entries too, so `h` returns to where you
+were before following the anchor, and Forward returns to the anchored section.
+If only the fragment changes, the page is not reloaded.
+
 ## URL prompt
 
 `o` or clicking the URL bar opens the prompt prefilled with the current URL and

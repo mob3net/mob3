@@ -687,8 +687,11 @@ Standard Go layout:
   Memory is `/proc/self/statm` RSS on Linux
   with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
   while the JS console is open, so terminal selection is not disturbed.
-- **History:** a URL string stack with forward truncation; fragment-only links
-  scroll within the page instead of pushing history.
+- **History:** the session history stores each URL with its last scroll
+  position. Fragment-only `#` links push a history entry and scroll in place;
+  `h`/Back and Forward return to the stored scroll position, using an in-place
+  update when only the fragment changes. Visiting a different URL starts at the
+  top unless it is a history entry being restored.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored

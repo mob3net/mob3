@@ -128,8 +128,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   kitty, WezTerm, Ghostty and foot, `/` incremental find (including multi-word
   phrases) with highlighted matches
   (also in the console HTML tab), a draggable page scrollbar, history (including
-  a top-right History page
-  listing the session's links), bookmarks imported with `-bookmarks` from a
+  a top-right History page listing the session's links, with `#` anchors as
+  entries and back/forward restoring each page's last scroll position),
+  bookmarks imported with `-bookmarks` from a
   Netscape HTML export, scrolling, focus, link hover targets in the footer,
   text selection, and a `!` JavaScript console.
 

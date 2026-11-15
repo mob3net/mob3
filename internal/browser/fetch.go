@@ -1189,7 +1189,10 @@ which lists this session's pages as links, most recent first. The
 <b>★ Bookmarks</b> button appears only when MOB³ was started with
 <b>-bookmarks file.html</b>, and opens <b>about:bookmarks</b>. That flag imports
 a Netscape bookmark export (the HTML format used by Chrome, Firefox, Safari and
-Edge). Nothing is saved after MOB³ exits.</p>
+Edge). Nothing is saved after MOB³ exits. Back and Forward remember the scroll
+position you last had on each history entry. In-page <b>#</b> links become
+history entries, so going back returns to where you were before following the
+anchor. If only the fragment changes, the page is not reloaded.</p>
 
 <h2>Config</h2>
 <p>The <b>⚙</b> icon in the top bar opens <b>about:config</b>. It lists every

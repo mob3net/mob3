@@ -57,11 +57,14 @@ type Browser struct {
 	dark bool
 
 	// History and bookmarks.
-	history   []string
-	histIdx   int
-	histMu    sync.RWMutex
-	home      string
-	cliConfig map[string]string
+	history []historyEntry
+	histIdx int
+	histMu  sync.RWMutex
+	// nextScroll is consumed by the next navigation started from history.
+	nextScroll    int
+	nextScrollSet bool
+	home          string
+	cliConfig     map[string]string
 
 	prompt          bool
 	promptText      string
@@ -174,6 +177,18 @@ type loadResult struct {
 	method      string
 	body        []byte
 	contentType string
+	// restoreScroll, when set, overrides the usual start-at-top behaviour.
+	// It is used by history back/forward to return to the position the user
+	// last had on that entry.
+	restoreScroll    int
+	hasRestoreScroll bool
+}
+
+// historyEntry is one session-history position. Scroll records the document
+// row the user last had on that entry so back and forward can return to it.
+type historyEntry struct {
+	URL    string
+	Scroll int
 }
 
 // cellPos is a cell in document coordinates (row 0 is the top of the page).
@@ -248,7 +263,11 @@ func (b *Browser) setLoader(l *Loader) {
 func (b *Browser) historySnapshot() ([]string, int) {
 	b.histMu.RLock()
 	defer b.histMu.RUnlock()
-	return append([]string(nil), b.history...), b.histIdx
+	urls := make([]string, len(b.history))
+	for i, entry := range b.history {
+		urls[i] = entry.URL
+	}
+	return urls, b.histIdx
 }
 
 // hasBookmarks reports whether a bookmark file was supplied to the browser.
@@ -313,6 +332,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		input = b.url.String()
 		forceBlocks = true
 		push = false
+		b.nextScrollSet = false
 	}
 	u, err := ResolveInput(input, b.url, b.searchTemplate())
 	if err != nil {
@@ -323,6 +343,9 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	if method == "" {
 		method = http.MethodGet
 	}
+	restoreScroll, hasRestoreScroll := b.nextScroll, b.nextScrollSet
+	b.nextScrollSet = false
+	b.recordHistoryScroll()
 	if isAboutConfigURL(u) && b.reader {
 		b.status = "Config is not available in reader mode — press R to turn it off"
 		b.draw()
@@ -338,7 +361,10 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		b.loadSeq++
 		b.applyConfig(u.Query())
 		page := b.configPage(u, len(u.Query()) > 0)
-		b.finishLoad(loadResult{seq: b.loadSeq, page: page, u: u, push: push, method: http.MethodGet})
+		b.finishLoad(loadResult{
+			seq: b.loadSeq, page: page, u: u, push: push, method: http.MethodGet,
+			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
+		})
 		return
 	}
 	if u.Scheme == "file" && b.url != nil {
@@ -381,6 +407,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		case b.loadCh <- loadResult{
 			seq: seq, page: page, err: loadErr, u: u, push: push,
 			method: method, body: body, contentType: contentType,
+			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
 		}:
 		case <-ctx.Done():
 		}
@@ -487,6 +514,11 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	b.page = page
 	b.url = page.URL
+	if b.url != nil && res.u != nil && res.u.Fragment != "" && b.url.Fragment == "" {
+		u := *b.url
+		u.Fragment = res.u.Fragment
+		b.url = &u
+	}
 	b.lastMethod = res.method
 	b.lastBody = res.body
 	b.lastContentType = res.contentType
@@ -531,11 +563,15 @@ func (b *Browser) finishLoad(res loadResult) {
 	} else if readerFailed {
 		b.status = "Reader mode unavailable"
 	}
-	if res.push {
-		b.pushHistory(page.URL.String())
-	}
 	if frag := res.u.Fragment; frag != "" {
 		b.scrollToAnchor(frag)
+	}
+	if res.hasRestoreScroll {
+		b.scroll = res.restoreScroll
+		b.clampScroll()
+	}
+	if res.push {
+		b.pushHistory(b.url.String(), b.scroll)
 	}
 	b.prev = nil
 }
@@ -602,20 +638,32 @@ func metaRefreshTarget(page *Page) string {
 	return ""
 }
 
-func (b *Browser) pushHistory(u string) {
+// recordHistoryScroll stores the current scroll offset on the active entry.
+func (b *Browser) recordHistoryScroll() {
 	b.histMu.Lock()
 	defer b.histMu.Unlock()
-	if b.histIdx >= 0 && b.histIdx < len(b.history) && b.history[b.histIdx] == u {
+	if b.histIdx >= 0 && b.histIdx < len(b.history) {
+		b.history[b.histIdx].Scroll = b.scroll
+	}
+}
+
+func (b *Browser) pushHistory(u string, scroll int) {
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
+	if b.histIdx >= 0 && b.histIdx < len(b.history) && b.history[b.histIdx].URL == u {
+		b.history[b.histIdx].Scroll = scroll
 		return
 	}
 	if b.histIdx+1 < len(b.history) {
 		b.history = b.history[:b.histIdx+1]
 	}
-	b.history = append(b.history, u)
+	b.history = append(b.history, historyEntry{URL: u, Scroll: scroll})
 	b.histIdx = len(b.history) - 1
 }
 
 func (b *Browser) back() {
+	b.clearLinkHints()
+	b.recordHistoryScroll()
 	b.histMu.Lock()
 	if b.histIdx <= 0 {
 		b.histMu.Unlock()
@@ -623,12 +671,14 @@ func (b *Browser) back() {
 		return
 	}
 	b.histIdx--
-	u := b.history[b.histIdx]
+	entry := b.history[b.histIdx]
 	b.histMu.Unlock()
-	b.Navigate(u, false)
+	b.navigateHistoryEntry(entry)
 }
 
 func (b *Browser) forward() {
+	b.clearLinkHints()
+	b.recordHistoryScroll()
 	b.histMu.Lock()
 	if b.histIdx < 0 || b.histIdx+1 >= len(b.history) {
 		b.histMu.Unlock()
@@ -636,9 +686,30 @@ func (b *Browser) forward() {
 		return
 	}
 	b.histIdx++
-	u := b.history[b.histIdx]
+	entry := b.history[b.histIdx]
 	b.histMu.Unlock()
-	b.Navigate(u, false)
+	b.navigateHistoryEntry(entry)
+}
+
+// navigateHistoryEntry moves to a history entry. When the target is the same
+// document as the current page, it updates the fragment and scroll offset in
+// place without another network load.
+func (b *Browser) navigateHistoryEntry(entry historyEntry) {
+	if b.url != nil && b.page != nil && b.page.Root != nil {
+		if u, err := url.Parse(entry.URL); err == nil && sameDocument(u, b.url) {
+			b.url = u
+			b.scroll = entry.Scroll
+			b.clampScroll()
+			b.focus = -1
+			b.hover = -1
+			b.status = ""
+			b.prev = nil
+			return
+		}
+	}
+	b.nextScroll = entry.Scroll
+	b.nextScrollSet = true
+	b.Navigate(entry.URL, false)
 }
 
 func (b *Browser) reload() {
@@ -934,12 +1005,16 @@ func (b *Browser) followFocused() {
 						b.status = readerLinkUnavailable
 						return
 					}
-				} else if b.scrollToAnchor(u.Fragment) {
-					return
 				} else {
-					if b.reader {
+					b.recordHistoryScroll()
+					if !b.scrollToAnchor(u.Fragment) && b.reader {
 						b.status = readerLinkUnavailable
+						return
 					}
+					b.url = u
+					b.pushHistory(u.String(), b.scroll)
+					b.status = ""
+					b.prev = nil
 					return
 				}
 			}
