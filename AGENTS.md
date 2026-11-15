@@ -1277,3 +1277,85 @@ Known unsupported families (do not present these as available):
 Do not add a stub just to silence an error when a library would then depend on
 behavior MOB³ cannot provide; document it here instead or implement the real
 subset.
+
+## 11. Debugging guide
+
+This is the working recipe for layout, rendering and engine bugs. Keep probes
+temporary and remove them before handing work back.
+
+### Reproduce first
+
+- Save the page and its CSS locally with `curl` into `/tmp`; keep the site URL
+  in the shell command only, never in code or docs.
+- Render at several widths and compare:
+  `./bin/mob3 -dump -width 80|100|120|140 -no-color "$URL"`.
+- Use `-layout-budget none` to distinguish a real empty/overlapping layout from
+  a budget-truncated one. Use `-graphics blocks` to see image boxes and
+  `-graphics none` to inspect alt-label behavior.
+- Use `grep`/ripgrep on the saved HTML and downloaded CSS for class names,
+  media queries, `display`, `position`, `float`, `grid-*`, `flex*`, `calc(`,
+  `transform`, `content`, and `visibility`.
+
+### Layout probe
+
+The fastest reliable tool is a temporary `internal/browser/zz_debug_test.go`
+that builds a real layout and logs only the suspicious nodes:
+
+```go
+loader := NewLoader()
+page, err := loader.Load(url, nil)
+ly := BuildLayout(page.Root, page.Author, width)
+```
+
+For local files, parse the saved HTML and pass the same author rules the loader
+would collect. Important: **pass `page.Author`**, not `nil`; `nil` hides the
+real CSS cascade and produces misleading results.
+
+Log selectively:
+
+- `ly.Truncated`, `len(ly.Frags)`, `len(ly.Links)`, `ly.Height`.
+- For a suspicious text fragment: `Kind`, `X`, `Y`, `W`, `H`, `Text`, `Link`,
+  then walk `f.Node` parents and log `ly.Styles[n]` (`Display`, `Position`,
+  `Float`, `Width`, `Height`, `Margin`, `Padding`, flex/grid fields).
+- For links: href plus rect count; check whether card text is inside an anchor
+  or relies on an empty overlay anchor.
+- For images: whether `f.Img` is nil and whether the visible text is a real
+  fragment or an `[image: alt]` label.
+
+Run with `go test -mod=vendor ./internal/browser -run TestZZ -v -count=1` and
+pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
+
+### Instrument only when needed
+
+When the fragment output is not enough, add temporary `println` probes inside
+`blockLayout`, `layoutAbsolute`, `flexRow` or `grid`, logging `y`, `availW`,
+`contentW`, `contentH`, `totalH`, flex widths and placements. Remove every
+probe before finishing.
+
+### Timing and limits
+
+Use a temporary probe that times `BuildLayout` at 80/100/120 columns and logs
+`ly.Truncated`. If a page is slow, suspect selector matching and layout limits
+before network/JS. Compare `-layout-budget none` with the default run.
+
+### Pitfalls learned
+
+- `Style.Height` is the CSS declaration, not the laid-out box height. Use
+  fragments and rects to reason about real geometry.
+- `awk '{ print length($0) }'` counts bytes; use a short Python `len(line)` on
+  decoded text for terminal columns.
+- Long `[image: alt]` labels can overlap columns when images are disabled. That
+  is not necessarily a layout bug; check whether enabling images removes it.
+- Hidden inherited from `html`/`body` is an anti-FOUC pattern and is ignored;
+  an explicitly hidden box is still hidden.
+- `display:contents` and floats are approximations: check the computed styles
+  and the layout path (`flow`, `flexRow`, `grid`, `table`) before changing the
+  cascade.
+- Do not name specific sites in tests, comments, docs or commit messages.
+
+### Validate
+
+After the fix: run the focused test, then `go test -mod=vendor ./...`,
+`go vet -mod=vendor ./...`, `gofmt` on touched Go files, and
+`git diff --check`. Build with `make` when CLI or binary behavior changed and
+exercise the changed path with a dump, PNG or focused test.
