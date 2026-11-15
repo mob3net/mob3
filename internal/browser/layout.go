@@ -530,6 +530,9 @@ func (l *layouter) isBlock(n *Node) bool {
 	if n.Style.Display == "none" {
 		return false
 	}
+	if n.Style.Float != "" {
+		return false
+	}
 	// Controls are rendered as inline form widgets even when a stylesheet
 	// gives them display:block/flex; the block path does not paint their
 	// value/widget.
@@ -3092,6 +3095,11 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 func (l *layouter) table(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
+	}
+	for _, c := range layoutChildren(n) {
+		if c.Type == ElementNode && c.Style != nil && c.Style.Float != "" {
+			return l.flow(n, x, y, availW)
+		}
 	}
 	if l.truncated || l.overRowLimit(y) {
 		l.truncated = true

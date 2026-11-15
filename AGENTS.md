@@ -178,8 +178,8 @@ Standard Go layout:
 - **Scope:** ambitious CSS subset rather than text-only or solid-basics — own
   CSS parser, cascade, specificity, inheritance, selectors, box model, tables,
   lists, backgrounds, borders and text styling. Basic row-direction flexbox and
-  basic CSS grid are supported; floating and `position:sticky` layout are still
-  approximated as block flow.
+  basic CSS grid are supported; floating layout is approximated as inline items
+  without text wrapping, and `position:sticky` falls back to block flow.
 - **Positioning:** `position:relative` and `position:absolute` are supported.
   Absolute boxes are taken out of flow and resolved against the nearest
   positioned ancestor's padding box, falling back to the page for root-level
@@ -258,6 +258,8 @@ Standard Go layout:
   (`translateX/Y(-…)` or `scale(0…)`) marks the element hidden. This suppresses
   cloned fixed navs and closed drawers that rely on transforms instead of
   `display:none`.
+- **Anti-FOUC visibility:** `visibility:hidden` on `html` or `body` is ignored
+  so the page and its fixed chrome render; explicit hidden boxes remain hidden.
 - **Cell mapping:** `1 column = 8 CSS px`, `1 row = 16 CSS px`. Two image rows
   are packed into one terminal cell vertically to preserve image aspect ratio.
 - **Line height:** computed with `floor(fontSize * lineHeight / 16)`, minimum
@@ -1153,8 +1155,8 @@ Standard Go layout:
 - No font files; no real text scaling outside kitty’s `OSC 66`.
 - Flexbox supports basic rows and `flex-wrap` (no justify/align/order); grid supports
   basic row-major tracks plus named-area column placement, but not full row
-  spans. Floats and
-  `position:sticky` are approximated as block flow. `display:contents` is
+  spans. Floats are approximated as inline items without text wrapping;
+  `position:sticky` falls back to block flow. `display:contents` is
   expanded so its children participate directly in the parent's flow, flex row
   or grid. Absolute, relative and
   fixed positioning work, but `z-index` stacking is ignored and
@@ -1268,7 +1270,7 @@ Known unsupported families (do not present these as available):
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,
-  floats, `position:sticky`, `z-index` stacking, CSS variables, animations,
+  full float layout, `position:sticky`, `z-index` stacking, CSS variables, animations,
   transitions, non-empty generated content, `@import`, background images, full
   flexbox.
 

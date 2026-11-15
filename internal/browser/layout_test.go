@@ -1508,3 +1508,22 @@ func TestEmptyOverlayAnchorIsLinkable(t *testing.T) {
 	}
 	t.Fatal("empty overlay anchor did not become a link")
 }
+
+func TestFloatLeftLaysItemsHorizontally(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<ul style="display:table">
+  <li style="float:left">A</li>
+  <li style="float:left">B</li>
+  <li style="float:left">C</li>
+</ul></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	pos := map[string][2]int{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && (f.Text == "A" || f.Text == "B" || f.Text == "C") {
+			pos[f.Text] = [2]int{f.X, f.Y}
+		}
+	}
+	if pos["A"][1] != pos["B"][1] || pos["B"][1] != pos["C"][1] || pos["B"][0] <= pos["A"][0] || pos["C"][0] <= pos["B"][0] {
+		t.Fatalf("floated items are not horizontal: %+v", pos)
+	}
+}

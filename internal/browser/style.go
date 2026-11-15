@@ -112,57 +112,59 @@ func (l Length) resolveV(basis int, fontPx float64) int {
 // Style is a computed style. Lengths remain unresolved so percentages can be
 // resolved against the containing block during layout.
 type Style struct {
-	Display       string
-	Hidden        bool
-	Color         Color
-	Background    Color
-	FontSize      float64
-	Bold          bool
-	Italic        bool
-	Underline     bool
-	Strike        bool
-	TextTransform string
-	TextAlign     string
-	VerticalAlign string
-	TextIndent    Length
-	WhiteSpace    string
-	Content       string
-	ContentSet    bool
-	LineClamp     int
-	LineHeight    float64 // multiplier
-	Margin        [4]Length
-	Padding       [4]Length
-	Border        [4]Length
-	BorderColor   Color
-	Width         Length
-	Height        Length
-	MinWidth      Length
-	MaxWidth      Length
-	MinHeight     Length
-	MaxHeight     Length
-	BoxSizing     string
-	ListStyle     string
-	Overflow      string
-	Position      string
-	Top           Length
-	Right         Length
-	Bottom        Length
-	Left          Length
-	Clip          string
-	FlexDir       string
-	FlexWrap      string
-	FlexGrow      float64
-	FlexShrink    float64
-	FlexBasis     Length
-	FlexBasisSet  bool
-	Gap           Length
-	RowGap        Length
-	GridCols      string
-	GridAreas     string
-	GridArea      string
-	GridColumn    string
-	GridRow       string
-	GridAutoFlow  string
+	Display        string
+	Hidden         bool
+	HiddenExplicit bool
+	Color          Color
+	Background     Color
+	FontSize       float64
+	Bold           bool
+	Italic         bool
+	Underline      bool
+	Strike         bool
+	TextTransform  string
+	TextAlign      string
+	VerticalAlign  string
+	TextIndent     Length
+	WhiteSpace     string
+	Content        string
+	ContentSet     bool
+	LineClamp      int
+	LineHeight     float64 // multiplier
+	Margin         [4]Length
+	Padding        [4]Length
+	Border         [4]Length
+	BorderColor    Color
+	Width          Length
+	Height         Length
+	MinWidth       Length
+	MaxWidth       Length
+	MinHeight      Length
+	MaxHeight      Length
+	BoxSizing      string
+	ListStyle      string
+	Overflow       string
+	Position       string
+	Float          string
+	Top            Length
+	Right          Length
+	Bottom         Length
+	Left           Length
+	Clip           string
+	FlexDir        string
+	FlexWrap       string
+	FlexGrow       float64
+	FlexShrink     float64
+	FlexBasis      Length
+	FlexBasisSet   bool
+	Gap            Length
+	RowGap         Length
+	GridCols       string
+	GridAreas      string
+	GridArea       string
+	GridColumn     string
+	GridRow        string
+	GridAutoFlow   string
 }
 
 // TextScale is the visual size multiplier used by terminal text sizing. Runs
@@ -1282,6 +1284,13 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		if n, err := strconv.Atoi(lower); err == nil && n > 0 {
 			st.LineClamp = n
 		}
+	case "float":
+		switch lower {
+		case "left", "right", "inline-start", "inline-end":
+			st.Float = lower
+		default:
+			st.Float = ""
+		}
 	case "position":
 		st.Position = lower
 	case "top", "right", "bottom", "left":
@@ -1626,6 +1635,12 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 		if st.Overflow == "hidden" && st.Width.Set && st.Width.U == UnitPX && st.Width.V <= 1 &&
 			st.Height.Set && st.Height.U == UnitPX && st.Height.V <= 1 {
 			st.Display = "none"
+		}
+		if (n.Tag == "body" || n.Tag == "html") && st.Hidden {
+			// Treat body/html visibility:hidden as the common anti-FOUC guard
+			// that scripts remove; the rest of the document is already being
+			// rendered, so inheriting it would only hide fixed chrome.
+			st.Hidden = false
 		}
 		n.Style = st
 		styles[n] = st
