@@ -1982,16 +1982,23 @@ func (c *inlineCtx) collect(n *Node) {
 			c.addImage(n, st)
 			return
 		}
-		label := strings.TrimSpace(n.Attr("aria-label"))
-		if label == "" {
-			if t := n.FindFirst("title"); t != nil {
-				label = strings.TrimSpace(t.TextContent())
-			}
+		if strings.EqualFold(n.Attr("aria-hidden"), "true") {
+			return
+		}
+		label := ""
+		if t := n.FindFirst("title"); t != nil {
+			label = strings.TrimSpace(t.TextContent())
 		}
 		if label == "" {
 			label = strings.TrimSpace(visibleText(n))
 		}
-		if label == "" || strings.EqualFold(n.Attr("aria-hidden"), "true") {
+		if label == "" && strings.TrimSpace(n.Attr("aria-label")) != "" {
+			// An aria-label on an icon-only SVG is an accessibility name, not
+			// page text. Rendering it into a tiny icon slot truncates it into
+			// garbage, so use a compact icon marker instead.
+			label = "▣"
+		}
+		if label == "" {
 			return
 		}
 		c.addLabel(label, st, n)

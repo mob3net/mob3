@@ -352,8 +352,9 @@ Standard Go layout:
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
   response; inline `<svg>` is serialized back to XML with SVG camelCase names
   restored and rasterized before layout. If inline SVG decoding fails it falls
-  back to `aria-label`, `<title>` or visible text; `aria-hidden` SVGs are
-  skipped. Broken images show `[image: alt]`; an empty-`alt` image with
+  back to a `<title>` or visible text; an icon-only SVG with only an
+  `aria-label` renders a one-cell `▣` marker instead of its accessibility name.
+  `aria-hidden` SVGs are skipped. Broken images show `[image: alt]`; an empty-`alt` image with
   explicit dimensions of at least 2 cells shows a `░` marker, while 1-cell
   decorative/tracking images render nothing. Images laid out as blocks or as
   absolute/fixed boxes produce the same image fragments as inline images.

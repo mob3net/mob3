@@ -260,18 +260,21 @@ func TestOffscreenTransformHidden(t *testing.T) {
 }
 
 func TestInlineSVGFallbackLabel(t *testing.T) {
-	ly := build(`<div><svg aria-label="Google"><path d="M0 0"/></svg><svg aria-hidden="true"></svg></div>`, 40)
+	ly := build(`<div><svg aria-label="Google"><path d="M0 0"/></svg><svg aria-hidden="true"></svg><svg><title>Visible title</title></svg></div>`, 40)
 	text := ""
 	for _, f := range ly.Frags {
 		if f.Kind == fragText {
 			text += f.Text
 		}
 	}
-	if !strings.Contains(text, "Google") {
-		t.Fatalf("inline SVG label missing: %q", text)
+	if !strings.Contains(text, "▣") {
+		t.Fatalf("icon-only SVG placeholder missing: %q", text)
 	}
-	if strings.Contains(text, "[svg]") || strings.Contains(text, "aria-hidden") {
-		t.Fatalf("unexpected SVG placeholder: %q", text)
+	if !strings.Contains(text, "Visible title") {
+		t.Fatalf("SVG title fallback missing: %q", text)
+	}
+	if strings.Contains(text, "Google") || strings.Contains(text, "aria-hidden") {
+		t.Fatalf("unexpected SVG accessible-name text: %q", text)
 	}
 }
 

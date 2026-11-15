@@ -388,8 +388,8 @@ func TestInlineSVGSkippedByDefault(t *testing.T) {
 			text.WriteString(f.Text)
 		}
 	}
-	if !strings.Contains(text.String(), "logo") {
-		t.Fatalf("inline SVG label fallback missing: %q", text.String())
+	if !strings.Contains(text.String(), "▣") {
+		t.Fatalf("inline SVG icon marker missing: %q", text.String())
 	}
 }
 
