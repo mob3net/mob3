@@ -31,8 +31,9 @@ type linkHint struct {
 // openLinkHints starts link-hint mode and labels every link that intersects
 // the current viewport. Each label is picked from the link's own text: the
 // first unused letter for up to 26 links, then two letters for link-heavy
-// pages.
-func (b *Browser) openLinkHints() {
+// pages. With ask set (the F key), choosing a hint shows its destination and
+// waits for confirmation instead of following immediately.
+func (b *Browser) openLinkHints(ask bool) {
 	if b.layout == nil || len(b.layout.Links) == 0 {
 		b.status = "No links on this page"
 		return
@@ -52,6 +53,9 @@ func (b *Browser) openLinkHints() {
 	b.hintItems = append(b.hintItems, buildLinkHints(visible, b.collectHintGlyphs(visible, top, bottom))...)
 	b.linkHints = true
 	b.hintPrefix = ""
+	b.hintAsk = ask
+	b.hintConfirm = false
+	b.hintConfirmLink = -1
 	b.status = "Follow link (Esc cancels)"
 }
 
@@ -235,6 +239,7 @@ func (b *Browser) clearLinkHints() {
 	b.linkHints = false
 	b.hintItems = nil
 	b.hintPrefix = ""
+	b.hintAsk = false
 	b.status = ""
 }
 
@@ -281,20 +286,63 @@ func (b *Browser) typeLinkHint(letter string) {
 	}
 	b.hintPrefix = next
 	if matches == 1 {
-		b.followLinkHint(match)
+		b.chooseLinkHint(match)
 		return
 	}
 	b.status = fmt.Sprintf("Follow link: %s (Esc cancels)", next)
 }
 
-// followLinkHint follows the link selected by a hint and leaves hint mode.
-func (b *Browser) followLinkHint(link int) {
+// chooseLinkHint follows a chosen hint immediately, or with F shows the
+// resolved destination in the footer and waits for Enter/y confirmation.
+func (b *Browser) chooseLinkHint(link int) {
+	ask := b.hintAsk
 	b.clearLinkHints()
-	if link < 0 {
+	if !ask {
+		b.focus = link
+		b.followFocused()
 		return
 	}
-	b.focus = link
-	b.followFocused()
+	b.hintConfirm = true
+	b.hintConfirmLink = link
+	target := ""
+	if b.layout != nil && link >= 0 && link < len(b.layout.Links) {
+		target = b.resolveHref(b.layout.Links[link].Href)
+	}
+	b.status = target + "  (Enter/y follows · Esc cancels)"
+}
+
+// clearHintConfirm cancels a pending F confirmation without navigating.
+func (b *Browser) clearHintConfirm() {
+	if !b.hintConfirm {
+		return
+	}
+	b.hintConfirm = false
+	b.hintConfirmLink = -1
+	b.status = ""
+}
+
+// handleHintConfirmKey accepts Enter/y to follow the chosen link. Escape, n or
+// any other key cancels the confirmation; the key is then processed normally.
+func (b *Browser) handleHintConfirmKey(k string) bool {
+	link := b.hintConfirmLink
+	switch k {
+	case "enter", "y", "Y":
+		b.clearHintConfirm()
+		if link >= 0 {
+			b.focus = link
+			b.followFocused()
+		}
+		return false
+	case "esc", "n", "N", "ctrl-c":
+		b.clearHintConfirm()
+		b.status = exitHint
+		return false
+	}
+	b.clearHintConfirm()
+	if k == "F" {
+		return false
+	}
+	return b.HandleKey(k)
 }
 
 // visibleLinkRect returns the first rectangle of li that intersects the

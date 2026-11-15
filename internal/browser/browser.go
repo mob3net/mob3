@@ -130,6 +130,10 @@ type Browser struct {
 	linkHints  bool
 	hintItems  []linkHint
 	hintPrefix string
+	// hintAsk is set by F; choosing a hint then waits for confirmation.
+	hintAsk         bool
+	hintConfirm     bool
+	hintConfirmLink int
 
 	htmlPage  *Page
 	htmlWidth int
@@ -487,6 +491,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		return
 	}
 	b.clearLinkHints()
+	b.clearHintConfirm()
 	b.selectMenu = nil
 	b.selectHits = nil
 	b.quitPending = false
@@ -728,6 +733,7 @@ func (b *Browser) rebuild() {
 		return
 	}
 	b.clearLinkHints()
+	b.clearHintConfirm()
 	start := time.Now()
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
 	root, author := b.page.Root, b.page.Author
@@ -840,6 +846,7 @@ func (b *Browser) clampScroll() {
 
 func (b *Browser) scrollBy(n int) {
 	b.clearLinkHints()
+	b.clearHintConfirm()
 	b.hover = -1
 	b.scroll += n
 	b.clampScroll()
@@ -2446,6 +2453,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if b.linkHints && (ev.Press || ev.Wheel != 0) {
 		b.clearLinkHints()
 	}
+	if b.hintConfirm && (ev.Press || ev.Wheel != 0) {
+		b.clearHintConfirm()
+	}
 	x := ev.X - 1
 	y := ev.Y - 1
 	if x < 0 || y < 0 || x >= b.width || y >= b.height {
@@ -2685,6 +2695,9 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.linkHints {
 		return b.handleLinkHintKey(k)
 	}
+	if b.hintConfirm {
+		return b.handleHintConfirmKey(k)
+	}
 	if k == "/" {
 		b.openFind(findScopePage)
 		return false
@@ -2734,7 +2747,9 @@ func (b *Browser) HandleKey(k string) bool {
 	case "o":
 		b.openURLPrompt()
 	case "f":
-		b.openLinkHints()
+		b.openLinkHints(false)
+	case "F":
+		b.openLinkHints(true)
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()
@@ -3545,7 +3560,10 @@ func (b *Browser) draw() {
 			}
 			leftStyle := fs
 			leftColor := footerFG
-			if b.status != "" && b.hoveredLink() == nil {
+			if b.hintConfirm {
+				leftColor = RGB(0x9a, 0x5b, 0x00)
+				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+			} else if b.status != "" && b.hoveredLink() == nil {
 				switch statusLevelFor(b.status) {
 				case statusWarning:
 					leftColor = RGB(0x9a, 0x5b, 0x00)
@@ -3760,6 +3778,9 @@ func statusLevelFor(s string) statusLevel {
 }
 
 func (b *Browser) footerLeft() string {
+	if b.hintConfirm && b.status != "" {
+		return " " + b.status
+	}
 	if li := b.hoveredLink(); li != nil {
 		return " → " + b.resolveHref(li.Href)
 	}

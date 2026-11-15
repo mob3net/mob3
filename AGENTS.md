@@ -153,7 +153,7 @@ Standard Go layout:
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tool calls delegate to `Automation.RunCommand`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
-| `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, and following the chosen link. |
+| `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, following the chosen link, and the F destination-confirmation step. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
@@ -480,7 +480,8 @@ Standard Go layout:
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
-  `n`/`N` next/previous find match, `f` link hints, `u` show URL,
+  `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
+  destination confirmation, `u` show URL,
   `y` copy selected page text (or the download popup's curl command) and clear
   the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for

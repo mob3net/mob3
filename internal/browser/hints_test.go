@@ -305,3 +305,54 @@ func TestPaintLinkHintsHighlightsText(t *testing.T) {
 		t.Fatal("the unselected o should keep its normal style")
 	}
 }
+
+func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
+	b := hintTestBrowser(t, `<html><body>
+<p><a href="#one">Documentation</a></p>
+<div id="one">target</div>
+</body></html>`, 50, 20)
+	b.HandleKey("F")
+	if !b.linkHints || !b.hintAsk {
+		t.Fatal("F did not open confirmation hint mode")
+	}
+	b.HandleKey("d")
+	if b.linkHints || !b.hintConfirm {
+		t.Fatalf("choosing a hint: active=%v confirm=%v", b.linkHints, b.hintConfirm)
+	}
+	if b.focus != -1 {
+		t.Fatalf("focus = %d, want no navigation before confirmation", b.focus)
+	}
+	if strings.HasPrefix(b.status, "Follow ") {
+		t.Fatalf("status still starts with Follow: %q", b.status)
+	}
+	if !strings.Contains(b.status, "https://example.com/#one") {
+		t.Fatalf("status = %q, want the resolved target", b.status)
+	}
+
+	b.HandleKey("enter")
+	if b.hintConfirm {
+		t.Fatal("Enter did not confirm the link")
+	}
+	if b.focus != 0 {
+		t.Fatalf("focus = %d, want 0 after confirmation", b.focus)
+	}
+}
+
+func TestCapitalFConfirmationCancel(t *testing.T) {
+	b := hintTestBrowser(t, `<html><body>
+<p><a href="#one">Documentation</a></p>
+<div id="one">target</div>
+</body></html>`, 50, 20)
+	b.HandleKey("F")
+	b.HandleKey("d")
+	b.HandleKey("esc")
+	if b.hintConfirm {
+		t.Fatal("Esc left the confirmation open")
+	}
+	if b.focus != -1 {
+		t.Fatalf("focus = %d, want no navigation after cancel", b.focus)
+	}
+	if b.status != exitHint {
+		t.Fatalf("status = %q, want the exit hint", b.status)
+	}
+}

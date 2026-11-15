@@ -1103,6 +1103,7 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; Ctrl/Alt+Left/Right move by word, Alt/Ctrl+Backspace or Ctrl-W delete a segment, Alt-D deletes forward)</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
+<tr><td><b>F</b></td><td>same as <b>f</b>, but show the destination and wait for <b>Enter</b>/<b>y</b></td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
@@ -1147,9 +1148,11 @@ already used by another link is chosen, so <b>Documentation</b> marks its
 link-heavy pages a hint whose first letter is unique still shows only that one
 letter; hints sharing a first letter use two adjacent letters, with no gap
 between them. Type those letters to
-follow the link; either case works. If several labels share a first letter, the
-others disappear, the typed letter stops being highlighted, and only the
-remaining letters stay marked. Unknown letters are
+follow the link; either case works. Press <b>F</b> instead to see the resolved
+destination highlighted in yellow in the footer and confirm with <b>Enter</b>
+or <b>y</b>; <b>Esc</b> or <b>n</b> cancels. If several labels share a first letter, the others
+disappear, the typed letter stops being highlighted, and only the remaining
+letters stay marked. Unknown letters are
 ignored. <b>Esc</b> or scrolling dismisses the hints, and links outside the
 viewport are never labeled. A link with no text, such as an image link, gets
 free label letters drawn inside its box. While hints are

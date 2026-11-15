@@ -22,6 +22,7 @@ key, mouse and form reference for the running build.
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
 | `f` | Highlight letters in the visible links and follow one by typing them |
+| `F` | Same as `f`, but show the destination and wait for `Enter`/`y` confirmation |
 | `u` | Show the current URL in the footer |
 | `H` | Session history |
 | `?` | Help page |
@@ -78,7 +79,10 @@ text is never changed. Up to 26 links the first letter not already used by
 another link is highlighted (case-insensitive), so `Documentation` uses `D` and
 a later `Dog` uses `o` if `d` is taken. On link-heavy pages a hint whose first
 letter is unique still shows only that one letter; hints sharing a first letter
-use two adjacent letters, with no gap between them. Type the highlighted letters to follow the link; either case works.
+use two adjacent letters, with no gap between them. Type the highlighted letters to follow the link; either case works. Press `F`
+instead of `f` to see the resolved destination highlighted in yellow in the
+footer and confirm with `Enter` or `y` before navigating; `Esc` or `n`
+cancels.
 If several labels share a first letter, the others disappear, the typed letter
 is no longer highlighted, and only the remaining letters stay marked. Unknown letters are ignored. `Esc`
 cancels hint mode, and scrolling with the wheel or scrollbar also dismisses the
