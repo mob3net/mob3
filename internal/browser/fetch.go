@@ -1103,7 +1103,7 @@ Nothing is written to disk.</p>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
-<tr><td><b>y</b></td><td>copy selected text or the download curl command</td></tr>
+<tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, or the download curl command</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>

@@ -3129,7 +3129,13 @@ func (b *Browser) selectedText() string {
 func (b *Browser) copySelection() {
 	text := b.selectedText()
 	if text == "" {
-		b.status = "No selection"
+		if b.url == nil || b.url.String() == "" {
+			b.status = "No URL"
+			return
+		}
+		if b.copyText(b.url.String()) {
+			b.status = "Copied URL"
+		}
 		return
 	}
 	if b.copyText(text) {

@@ -485,8 +485,8 @@ Standard Go layout:
   reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
-  `y` copy selected page text (or the download popup's curl command) and clear
-  the highlight,
+  `y` copy selected page text, the current URL when nothing is selected, or
+  the download popup's curl command, and clear the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears

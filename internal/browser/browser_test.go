@@ -3477,15 +3477,18 @@ func TestCopySelectionUsesOSC52(t *testing.T) {
 	}
 }
 
-func TestCopySelectionWithoutSelection(t *testing.T) {
+func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
 	b := NewBrowser(40, 10)
+	b.url = mustParse(t, "https://example.com/page")
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 	b.HandleKey("y")
-	if buf.Len() != 0 {
-		t.Fatalf("wrote clipboard data without a selection: %q", buf.String())
+	raw := strings.TrimSuffix(strings.TrimPrefix(buf.String(), "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || string(decoded) != "https://example.com/page" {
+		t.Fatalf("clipboard text = %q, %v", decoded, err)
 	}
-	if b.status != "No selection" {
+	if b.status != "Copied URL" {
 		t.Fatalf("status = %q", b.status)
 	}
 }

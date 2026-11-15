@@ -24,6 +24,7 @@ key, mouse and form reference for the running build.
 | `f` | Highlight letters in the visible links and follow one by typing them |
 | `F` | Same as `f`, but show the destination and wait for `Enter`/`y` confirmation |
 | `u` | Show the current URL in the footer |
+| `y` | Copy selected text, or the current URL when nothing is selected |
 | `H` | Session history |
 | `?` | Help page |
 | `!` | JavaScript console |
@@ -118,7 +119,8 @@ uploads are unsupported.
 ## Mouse
 
 - Hover a link to show its target in the footer.
-- Drag to select page text; `y` copies it through OSC 52.
+- Drag to select page text; `y` copies it through OSC 52. With no
+  selection, `y` copies the current URL.
 - Click a link to follow it; a download link opens the `curl` popup instead.
 - Click the URL bar to open the prompt; click outside to close it.
 - Click in the prompt to move the caret.
