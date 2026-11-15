@@ -126,6 +126,7 @@ try {
     display: flex;
     align-items: center;
     gap: .1rem;
+    margin-right: .25rem;
   }
   .site-nav a {
     padding: .35rem .6rem;
@@ -384,7 +385,7 @@ try {
       gap: .5rem;
       padding: .45rem .8rem;
     }
-    .header-left { min-width: 0; gap: .3rem; }
+    .header-left { min-width: 0; }
     .header-actions {
       gap: .25rem;
       min-width: 0;
@@ -396,7 +397,7 @@ try {
       padding: .3rem .4rem;
       font-size: .88rem;
     }
-    .theme-toggle, .nav-toggle { min-height: 38px; flex: 0 0 auto; }
+    .theme-toggle, .nav-toggle { min-height: 38px; }
     .theme-toggle { width: 38px; }
     .nav-toggle {
       padding: 0 .5rem;
@@ -412,13 +413,11 @@ try {
     .nav-toggle { min-height: 34px; padding: 0 .4rem; font-size: .8rem; }
   }
   @media (max-width: 345px) {
-    .header-inner { gap: .2rem; padding: .4rem .3rem; }
-    .header-left { gap: .2rem; }
-    .header-actions { gap: .2rem; }
-    .brand { font-size: .92rem; }
-    .site-nav a { padding: .24rem .12rem; font-size: .72rem; }
-    .theme-toggle { width: 28px; min-height: 28px; }
-    .nav-toggle { min-height: 28px; padding: 0 .25rem; font-size: .72rem; }
+    .header-inner { gap: .25rem; padding: .4rem .4rem; }
+    .brand { font-size: .95rem; }
+    .site-nav a { padding: .25rem .18rem; font-size: .74rem; }
+    .theme-toggle { width: 30px; min-height: 30px; }
+    .nav-toggle { min-height: 30px; padding: 0 .3rem; font-size: .74rem; }
   }
 
   @media (prefers-color-scheme: dark) {
@@ -457,14 +456,14 @@ try {
   <div class="header-inner">
     <div class="header-left">
       <a class="brand" href="{{ROOT}}/index.html">MOB³</a>
+    </div>
+    <div class="header-actions">
       <nav class="site-nav" aria-label="Project">
         <a href="{{ROOT}}/docs/">Docs</a>
         <a href="https://github.com/mob3net/mob3">GitHub</a>
         <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
         <a href="mailto:info@mob3.net">Contact</a>
       </nav>
-    </div>
-    <div class="header-actions">
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
       <div class="search-wrap">
         <label class="search">
