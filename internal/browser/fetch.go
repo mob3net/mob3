@@ -1097,6 +1097,7 @@ Nothing is written to disk.</p>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>I</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
+<tr><td><b>X</b></td><td>hide or show fixed-position elements</td></tr>
 <tr><td><b>o</b></td><td>open a URL prompt</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>

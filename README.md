@@ -134,7 +134,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   bookmarks imported with `-bookmarks` from a
   Netscape HTML export, scrolling, focus, link hover targets in the footer,
   text selection (`y` copies selected text, or the current URL when nothing is
-  selected), and a `!` JavaScript console.
+  selected), fixed-overlay hiding (`X`), and a `!` JavaScript console.
 
 **Rough edges**
 

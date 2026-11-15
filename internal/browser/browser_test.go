@@ -4166,3 +4166,15 @@ func TestGraphicsModeChangeRefreshesPage(t *testing.T) {
 		t.Fatal("graphics refresh did not finish")
 	}
 }
+
+func TestFixedElementsToggleKey(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("X")
+	if !b.hideFixed || b.status != "Fixed elements hidden" {
+		t.Fatalf("after X: hideFixed=%v status=%q", b.hideFixed, b.status)
+	}
+	b.HandleKey("X")
+	if b.hideFixed || b.status != "Fixed elements shown" {
+		t.Fatalf("after second X: hideFixed=%v status=%q", b.hideFixed, b.status)
+	}
+}

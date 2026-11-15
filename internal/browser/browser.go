@@ -84,6 +84,9 @@ type Browser struct {
 	graphicsModes []GraphicsMode
 	graphicsMode  GraphicsMode
 
+	// hideFixed suppresses position:fixed boxes for the current page.
+	hideFixed bool
+
 	// lastHintMode tracks hint-mode transitions so the first hint frame and
 	// the return to normal rendering both get a full repaint.
 	lastHintMode bool
@@ -763,7 +766,7 @@ func (b *Browser) rebuild() {
 	if b.layoutBudget.Time > 0 {
 		deadline = start.Add(b.layoutBudget.Time)
 	}
-	b.layout = BuildLayoutBudgetDeadline(root, author, b.width, b.viewportHeight(), b.bigText, b.dark, deadline, b.layoutBudget)
+	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, b.width, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	if b.layout != nil {
@@ -2778,6 +2781,14 @@ func (b *Browser) HandleKey(k string) bool {
 		b.openLinkHints(true)
 	case "I":
 		b.cycleGraphics()
+	case "X":
+		b.hideFixed = !b.hideFixed
+		b.rebuild()
+		if b.hideFixed {
+			b.status = "Fixed elements hidden"
+		} else {
+			b.status = "Fixed elements shown"
+		}
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()

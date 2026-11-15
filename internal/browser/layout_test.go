@@ -1421,3 +1421,24 @@ func TestLineClampLimitsLines(t *testing.T) {
 		t.Fatalf("line clamp produced %d lines, want at most 2", len(lines))
 	}
 }
+
+func TestHideFixedElements(t *testing.T) {
+	doc := ParseHTML(`<html><body><p>body</p><div id="fx" style="position:fixed;top:0;left:0">fixed</div></body></html>`)
+	show := BuildLayoutBudgetDeadlineOptions(doc, nil, 40, 10, false, false, false, time.Time{}, DefaultLayoutBudget)
+	hidden := BuildLayoutBudgetDeadlineOptions(doc, nil, 40, 10, false, false, true, time.Time{}, DefaultLayoutBudget)
+	fixedFrags := func(ly *Layout) int {
+		n := 0
+		for _, f := range ly.Frags {
+			if f.Fixed {
+				n++
+			}
+		}
+		return n
+	}
+	if fixedFrags(show) == 0 {
+		t.Fatal("normal layout has no fixed fragments")
+	}
+	if got := fixedFrags(hidden); got != 0 {
+		t.Fatalf("hidden layout has %d fixed fragments", got)
+	}
+}

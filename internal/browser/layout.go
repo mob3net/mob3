@@ -126,6 +126,7 @@ type layouter struct {
 	expired   bool
 	maxFrags  int
 	maxRows   int
+	hideFixed bool
 
 	// cb is the padding box of the nearest positioned ancestor, used to
 	// resolve absolute offsets. nil at the root, where rootCB stands in.
@@ -202,34 +203,40 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutViewportDeadline is BuildLayoutDeadline with the terminal
 // viewport height, so position:fixed boxes can anchor to the visible area.
 func BuildLayoutViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
 // to page, text, border and background colors after layout.
 func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, true, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, true, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkViewportDeadline is BuildLayoutViewportDeadline with the dark
 // palette applied.
 func BuildLayoutDarkViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, true, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, true, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutBudgetDeadline is BuildLayoutViewportDeadline with explicit
 // layout limits.
 func BuildLayoutBudgetDeadline(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time, budget LayoutBudget) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, dark, deadline, budget)
+	return BuildLayoutBudgetDeadlineOptions(root, author, width, viewportH, bigText, dark, false, deadline, budget)
 }
 
-func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark bool, deadline time.Time, budget LayoutBudget) *Layout {
+// BuildLayoutBudgetDeadlineOptions is BuildLayoutBudgetDeadline with additional
+// display switches. hideFixed removes position:fixed boxes from the result.
+func BuildLayoutBudgetDeadlineOptions(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed bool, deadline time.Time, budget LayoutBudget) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, deadline, budget)
+}
+
+func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed bool, deadline time.Time, budget LayoutBudget) *Layout {
 	if width < 1 {
 		width = 1
 	}
@@ -239,7 +246,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark 
 	engine := newStyleEngineDeadline(author, width*cellW, deadline)
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows}
+	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -847,6 +854,9 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	n := a.node
 	st := n.Style
 	if st == nil || st.Display == "none" || st.Hidden {
+		return
+	}
+	if a.fixed && l.hideFixed {
 		return
 	}
 	cb := a.cb

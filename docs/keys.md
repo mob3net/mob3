@@ -19,6 +19,7 @@ key, mouse and form reference for the running build.
 | `R` | Toggle reader mode |
 | `D` | Toggle dark mode |
 | `I` | Cycle graphics modes: full graphics, blocks, none |
+| `X` | Hide or show fixed-position elements |
 | `o` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |

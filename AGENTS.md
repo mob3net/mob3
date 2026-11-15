@@ -484,8 +484,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
-  reader mode, `D` toggle dark mode, `I` cycle graphics modes, `o` URL prompt,
-  `/` find in page,
+  reader mode, `D` toggle dark mode, `I` cycle graphics modes, `X` hide/show
+  fixed elements, `o` URL prompt, `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
   `y` copy selected page text, the current URL when nothing is selected, or
