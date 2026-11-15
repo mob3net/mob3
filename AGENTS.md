@@ -32,6 +32,9 @@ written in Go
   only for standard CSS/HTML behaviour.
 - **No debug test leftovers.** Temporary `zz_*` debug test files must be
   deleted before handing work back. Never leave them in the repository.
+- **No site names in the codebase.** Do not mention specific websites in code,
+  comments, tests, commit messages or documentation. Describe layout and
+  compatibility behavior generically instead.
 - **Docs stay current.** Update `README.md` and the relevant `docs/` page in the
   same change whenever user-visible behavior, flags, keys, build output,
   supported features or limitations change. Long-form docs live under `docs/`
