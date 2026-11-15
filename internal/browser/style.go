@@ -40,6 +40,10 @@ const (
 	UnitPT
 	UnitCH
 	UnitLH
+	UnitVW
+	UnitVH
+	UnitVMin
+	UnitVMax
 )
 
 // Length is a CSS length or auto.
@@ -247,35 +251,73 @@ func resolveLengthLH(l *Length, linePx float64) {
 	}
 }
 
-func resolveStyleUnits(st *Style) {
+func (e *styleEngine) resolveStyleUnits(st *Style) {
 	lh := st.LineHeight
 	if lh <= 0 {
 		lh = 1
 	}
 	linePx := st.FontSize * lh
+	resolveViewportLength(&st.TextIndent, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.TextIndent, linePx)
 	for i := range st.Margin {
+		resolveViewportLength(&st.Margin[i], float64(e.viewportPx), e.viewportH)
 		resolveLengthLH(&st.Margin[i], linePx)
 	}
 	for i := range st.Padding {
+		resolveViewportLength(&st.Padding[i], float64(e.viewportPx), e.viewportH)
 		resolveLengthLH(&st.Padding[i], linePx)
 	}
 	for i := range st.Border {
+		resolveViewportLength(&st.Border[i], float64(e.viewportPx), e.viewportH)
 		resolveLengthLH(&st.Border[i], linePx)
 	}
+	resolveViewportLength(&st.Width, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Width, linePx)
+	resolveViewportLength(&st.Height, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Height, linePx)
+	resolveViewportLength(&st.MinWidth, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.MinWidth, linePx)
+	resolveViewportLength(&st.MaxWidth, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.MaxWidth, linePx)
+	resolveViewportLength(&st.MinHeight, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.MinHeight, linePx)
+	resolveViewportLength(&st.MaxHeight, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.MaxHeight, linePx)
+	resolveViewportLength(&st.Top, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Top, linePx)
+	resolveViewportLength(&st.Right, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Right, linePx)
+	resolveViewportLength(&st.Bottom, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Bottom, linePx)
+	resolveViewportLength(&st.Left, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Left, linePx)
+	resolveViewportLength(&st.FlexBasis, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.FlexBasis, linePx)
+	resolveViewportLength(&st.Gap, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.Gap, linePx)
+	resolveViewportLength(&st.RowGap, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.RowGap, linePx)
+}
+
+// resolveViewportLength converts vw/vh/vmin/vmax lengths to px.
+func resolveViewportLength(l *Length, vw, vh float64) {
+	if !l.Set || l.Calc {
+		return
+	}
+	var px float64
+	switch l.U {
+	case UnitVW:
+		px = l.V / 100 * vw
+	case UnitVH:
+		px = l.V / 100 * vh
+	case UnitVMin:
+		px = l.V / 100 * math.Min(vw, vh)
+	case UnitVMax:
+		px = l.V / 100 * math.Max(vw, vh)
+	default:
+		return
+	}
+	*l = Length{V: px, U: UnitPX, Set: true}
 }
 
 // UA stylesheet: base document styling expressed in the same CSS subset the
@@ -565,9 +607,14 @@ func parseLength(v string, fontPx float64) Length {
 		mul    float64
 	}{
 		// Longer suffixes must come first: "1rem" also ends with "em".
+		{"vmin", UnitVMin, 1}, {"vmax", UnitVMax, 1},
 		{"rem", UnitREM, 1}, {"em", UnitEM, 1},
 		{"px", UnitPX, 1}, {"pt", UnitPT, 1}, {"ch", UnitCH, 1},
-		{"lh", UnitLH, 1}, {"%", UnitPercent, 1},
+		{"lh", UnitLH, 1}, {"vw", UnitVW, 1}, {"vh", UnitVH, 1},
+		{"dvw", UnitVW, 1}, {"dvh", UnitVH, 1},
+		{"svw", UnitVW, 1}, {"svh", UnitVH, 1},
+		{"lvw", UnitVW, 1}, {"lvh", UnitVH, 1},
+		{"%", UnitPercent, 1},
 	}
 	for _, u := range units {
 		if strings.HasSuffix(v, u.suffix) {
@@ -1482,6 +1529,7 @@ type styleEngine struct {
 	ua         []Rule
 	author     []Rule
 	viewportPx int
+	viewportH  float64
 	dark       bool
 	deadline   time.Time
 	media      map[string]bool
@@ -1563,6 +1611,7 @@ var uaRules = ParseStylesheet(uaStylesheet)
 
 func newStyleEngine(author []Rule, viewportPx int) *styleEngine {
 	e := &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx}
+	e.viewportH = 24 * cellH
 	e.authorIndex = indexRules(filterNormalRules(author))
 	e.authorBefore = filterPseudoRules(author, "before")
 	e.authorAfter = filterPseudoRules(author, "after")
@@ -1663,7 +1712,7 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 				applyDecls(st, decls, parent, true, parentSize(parent))
 			}
 		}
-		resolveStyleUnits(st)
+		e.resolveStyleUnits(st)
 		if clipHidesContent(st.Clip) {
 			st.Display = "none"
 		}
@@ -1747,7 +1796,7 @@ func (e *styleEngine) computePseudo(n *Node, parent *Style, pseudo string) *Styl
 	}
 	st := inheritStyle(parent)
 	e.applyMatched(matched, st, parent)
-	resolveStyleUnits(st)
+	e.resolveStyleUnits(st)
 	if !st.ContentSet || st.Content != "" || st.Display == "none" || st.Hidden {
 		return nil
 	}

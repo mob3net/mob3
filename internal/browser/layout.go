@@ -247,6 +247,9 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		deadline = time.Time{}
 	}
 	engine := newStyleEngineDeadline(author, width*cellW, deadline)
+	if viewportH > 0 {
+		engine.viewportH = float64(viewportH) * cellH
+	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
 	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows}

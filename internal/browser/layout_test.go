@@ -1546,3 +1546,16 @@ func TestClipHiddenContent(t *testing.T) {
 		t.Fatal("visible content was dropped")
 	}
 }
+
+func TestViewportUnits(t *testing.T) {
+	doc := ParseHTML(`<html><body><div id="v" style="width:50vw;height:25vh"></div></body></html>`)
+	ly := BuildLayoutBudgetDeadlineOptions(doc, nil, 80, 20, false, false, false, time.Time{}, DefaultLayoutBudget)
+	v := doc.FindFirst("div")
+	if v.Style.Width.U != UnitPX || v.Style.Width.V != 320 {
+		t.Fatalf("50vw width = %+v, want 320px", v.Style.Width)
+	}
+	if v.Style.Height.U != UnitPX || v.Style.Height.V != 80 {
+		t.Fatalf("25vh height = %+v, want 80px", v.Style.Height)
+	}
+	_ = ly
+}
