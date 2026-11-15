@@ -1102,6 +1102,7 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>o</b></td><td>open a URL (prefilled and selected; Ctrl/Alt+Left/Right move by word, Alt/Ctrl+Backspace or Ctrl-W delete a segment, Alt-D deletes forward)</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
+<tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
@@ -1136,6 +1137,24 @@ boundaries and wrapped lines. The query line accepts the same word motion and
 word deletion keys as the URL prompt. In the JS console, press <b>/</b> while
 the <b>HTML</b> tab is active to search the raw source and jump to matching
 lines.</p>
+
+<h2>Link hints</h2>
+<p>Press <b>f</b> to mark every link visible in the current viewport by
+highlighting letters from the link's own text with a yellow background and an
+underline. The page text stays unchanged. Up to 26 links the first letter not
+already used by another link is chosen, so <b>Documentation</b> marks its
+<b>D</b> and a later <b>Dog</b> uses its <b>o</b> if <b>d</b> is taken. On
+link-heavy pages a hint whose first letter is unique still shows only that one
+letter; hints sharing a first letter use two adjacent letters, with no gap
+between them. Type those letters to
+follow the link; either case works. If several labels share a first letter, the
+others disappear, the typed letter stops being highlighted, and only the
+remaining letters stay marked. Unknown letters are
+ignored. <b>Esc</b> or scrolling dismisses the hints, and links outside the
+viewport are never labeled. A link with no text, such as an image link, gets
+free label letters drawn inside its box. While hints are
+shown, images use half-block art so the terminal's inline image protocol does
+not cover the hint letters.</p>
 
 <h2>Reader mode</h2>
 <p>Press <b>R</b> or click the <b>Reader:on</b>/<b>Reader:off</b> label in the

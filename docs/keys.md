@@ -21,6 +21,7 @@ key, mouse and form reference for the running build.
 | `o` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
+| `f` | Highlight letters in the visible links and follow one by typing them |
 | `u` | Show the current URL in the footer |
 | `H` | Session history |
 | `?` | Help page |
@@ -63,6 +64,23 @@ between matches. `Down`/`Up` also move while the bar is open. `Esc` closes the
 bar but keeps highlights; a later `Esc` clears them.
 
 The find bar supports the same word-editing keys as the URL prompt.
+
+## Link hints
+
+`f` marks the links visible in the current viewport by highlighting letters
+from the link's own text with a yellow background and an underline. The page
+text is never changed. Up to 26 links the first letter not already used by
+another link is highlighted (case-insensitive), so `Documentation` uses `D` and
+a later `Dog` uses `o` if `d` is taken. On link-heavy pages a hint whose first
+letter is unique still shows only that one letter; hints sharing a first letter
+use two adjacent letters, with no gap between them. Type the highlighted letters to follow the link; either case works.
+If several labels share a first letter, the others disappear, the typed letter
+is no longer highlighted, and only the remaining letters stay marked. Unknown letters are ignored. `Esc`
+cancels hint mode, and scrolling with the wheel or scrollbar also dismisses the
+hints. Links outside the viewport are never labeled. A link with no text, such
+as an image link, gets free label letters drawn inside its box without
+brackets. While hints are shown, images are rendered as half-block art so the
+terminal's inline image protocol does not cover the hint letters.
 
 ## Forms
 

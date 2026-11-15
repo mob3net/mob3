@@ -153,6 +153,7 @@ Standard Go layout:
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tool calls delegate to `Automation.RunCommand`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
+| `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, and following the chosen link. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
@@ -479,7 +480,7 @@ Standard Go layout:
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `o` URL prompt, `/` find in page,
-  `n`/`N` next/previous find match, `u` show URL,
+  `n`/`N` next/previous find match, `f` link hints, `u` show URL,
   `y` copy selected page text (or the download popup's curl command) and clear
   the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
@@ -512,6 +513,23 @@ Standard Go layout:
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`. The query line takes the same Ctrl/Alt word motion and
   Alt/Ctrl+Backspace, Ctrl-W and Alt-D word deletion as the URL prompt.
+- **Link hints:** `f` labels every link visible in the current viewport by
+  picking letters from the link's own text and drawing them with a yellow
+  background and underline; the page text itself is unchanged. Up to 26 links
+  use the first letter not already used by an earlier link (case-insensitive),
+  so `Documentation` starts with `D` and a later `Dog` uses `o` if `d` is
+  taken. On link-heavy pages a hint whose first letter is unique still shows
+  only that one letter; hints that share a first letter use two adjacent
+  letters from the text, never letters with a gap between them.
+  Typing a letter narrows the labels, clears the already typed letters from
+  the highlights and follows the link when only one matches; the key is
+  case-insensitive. Unknown letters are ignored, `Esc`
+  cancels, and scrolling (wheel or scrollbar) or any page rebuild dismisses the
+  hints. Only links intersecting the viewport are labelled; a link with no text
+  letters (such as an image link) gets free label letters drawn inside its box.
+  While hints are shown, images are drawn as half-block art
+  instead of native inline graphics, so the terminal image protocol cannot
+  cover the hint letters.
 - **Dark mode:** `D` or the footer `Dark:on`/`Dark:off` label toggles dark
   mode. Pages are styled with `prefers-color-scheme: dark`, so sites can serve
   their own dark CSS; `matchMedia` reflects the same scheme. When the resolved

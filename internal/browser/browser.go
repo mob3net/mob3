@@ -76,6 +76,10 @@ type Browser struct {
 	gfx     *gfxRenderer
 	bigText bool
 
+	// lastHintMode tracks hint-mode transitions so the first hint frame and
+	// the return to normal rendering both get a full repaint.
+	lastHintMode bool
+
 	noJS         bool
 	noBigText    bool
 	jsMemLimit   int64
@@ -118,6 +122,11 @@ type Browser struct {
 	findScope   int
 	findMatches []findMatch
 	findIdx     int
+
+	// Vimium-style link hints for the links visible in the viewport.
+	linkHints  bool
+	hintItems  []linkHint
+	hintPrefix string
 
 	htmlPage  *Page
 	htmlWidth int
@@ -450,6 +459,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	if res.seq != b.loadSeq {
 		return
 	}
+	b.clearLinkHints()
 	b.selectMenu = nil
 	b.selectHits = nil
 	b.quitPending = false
@@ -646,6 +656,7 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	b.clearLinkHints()
 	start := time.Now()
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
 	root, author := b.page.Root, b.page.Author
@@ -757,6 +768,7 @@ func (b *Browser) clampScroll() {
 }
 
 func (b *Browser) scrollBy(n int) {
+	b.clearLinkHints()
 	b.hover = -1
 	b.scroll += n
 	b.clampScroll()
@@ -2356,6 +2368,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.handleConsoleMouse(ev)
 		return false
 	}
+	if b.linkHints && (ev.Press || ev.Wheel != 0) {
+		b.clearLinkHints()
+	}
 	x := ev.X - 1
 	y := ev.Y - 1
 	if x < 0 || y < 0 || x >= b.width || y >= b.height {
@@ -2592,6 +2607,9 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.inputFocus != nil {
 		return b.handleInputKey(k)
 	}
+	if b.linkHints {
+		return b.handleLinkHintKey(k)
+	}
 	if k == "/" {
 		b.openFind(findScopePage)
 		return false
@@ -2640,6 +2658,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.toggleDark()
 	case "o":
 		b.openURLPrompt()
+	case "f":
+		b.openLinkHints()
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()
@@ -3188,7 +3208,10 @@ func (b *Browser) draw() {
 	top, bottom := b.viewport()
 	var placements []ImagePlacement
 	var collect *[]ImagePlacement
-	if b.gfx != nil {
+	// While hints are shown, draw images as half-block art instead of native
+	// inline graphics so the hint letters are painted above them. Inline image
+	// protocols are composited by the terminal after the text grid.
+	if b.inlineImagesEnabled() {
 		collect = &placements
 	}
 	if b.layout != nil {
@@ -3198,6 +3221,7 @@ func (b *Browser) draw() {
 	b.paintInputCursor(g, top, bottom)
 	b.paintSelection(g, top, bottom)
 	b.paintFindPage(g, top, bottom)
+	b.paintLinkHints(g, top, bottom)
 	b.drawScrollBar(g, top, bottom)
 
 	headerBG := RGB(0x1f, 0x29, 0x37)
@@ -3529,6 +3553,12 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	// can never show through the skipped cells.
 	if b.scroll != b.lastScroll {
 		b.lastScroll = b.scroll
+		b.prev = nil
+	}
+	// Entering or leaving hint mode switches between native inline images and
+	// half-block art. Repaint everything so no stale terminal image survives.
+	if b.linkHints != b.lastHintMode {
+		b.lastHintMode = b.linkHints
 		b.prev = nil
 	}
 	needClear := b.prev == nil || len(b.prev) != len(lines)
