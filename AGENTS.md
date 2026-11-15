@@ -1332,6 +1332,29 @@ When the fragment output is not enough, add temporary `println` probes inside
 `contentW`, `contentH`, `totalH`, flex widths and placements. Remove every
 probe before finishing.
 
+### Chromium cross-check
+
+If Chromium is installed locally, use it as a visual and computed-style oracle.
+It is a debugging tool only, never a project dependency.
+
+- Screenshot at the same CSS viewport as the terminal:
+  `chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars
+  --window-size=$((columns*8)),$((rows*16)) --screenshot=/tmp/page.png "$URL"`.
+- Render the same viewport with
+  `./bin/mob3 -png -width "$columns" -height "$rows" "$URL" > /tmp/mob3.png`.
+- For computed styles and real rectangles without Puppeteer, start
+  `chromium --headless=new --no-sandbox --disable-gpu
+  --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+  --window-size=... about:blank`, open a target with
+  `PUT /json/new?<encoded-url>`, then connect to its
+  `webSocketDebuggerUrl` from Node's global `WebSocket` and use
+  `Page.enable` plus `Runtime.evaluate` to return
+  `getBoundingClientRect()` and `getComputedStyle()` values.
+- Keep the Node script in `/tmp`; it is not part of the repository.
+- Compare structure, media-query results, padding reserved for fixed headers,
+  and whether nav items sit on one line. Do not expect pixel parity: Chromium
+  uses real CSS pixels and fonts, while MOB³ uses terminal cells.
+
 ### Timing and limits
 
 Use a temporary probe that times `BuildLayout` at 80/100/120 columns and logs
