@@ -140,7 +140,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade), logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, and simple `calc()` arithmetic), logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
@@ -1154,8 +1154,10 @@ Standard Go layout:
 - Reader mode is heuristic: unusual layouts can lose content or retain
   clutter, it renders a snapshot rather than live JS updates, and images,
   forms and other interactive controls are removed.
-- No CSS variables, animations, transitions, generated content, `@import`, or
-  background images. `<dialog>` open state controls rendering, but modal
+- `calc()` supports `+`, `-`, `*`, `/`, percentages, px/em/rem/pt/ch/lh and
+  parentheses; viewport units, `var()` and `env()` inside lengths are
+  unsupported. No CSS variables, animations, transitions, generated content,
+  `@import`, or background images. `<dialog>` open state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or
   top-layer stacking.
 - Modern CSS-heavy sites may look rough; content-focused pages, docs, and old

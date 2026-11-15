@@ -288,3 +288,31 @@ func TestMediaQueries(t *testing.T) {
 		t.Errorf("1200px kept %q", wide)
 	}
 }
+
+func TestCalcLengths(t *testing.T) {
+	cases := []struct {
+		value string
+		basis int
+		want  int
+	}{
+		{"calc(100% - 312px)", 60, 21},
+		{"calc(33rem - 24px)", 100, 63},
+		{"calc(250 / 970 * 100%)", 100, 26},
+		{"calc(100% - (1rem + 19px))", 80, 76},
+		{"calc(60% + 8px)", 50, 31},
+	}
+	for _, tc := range cases {
+		l := parseLength(tc.value, 16)
+		if !l.Set || !l.Calc {
+			t.Fatalf("parseLength(%q) = %+v, want a calc length", tc.value, l)
+		}
+		if got := l.resolveH(tc.basis, 16); got != tc.want {
+			t.Errorf("%q at %d columns = %d, want %d", tc.value, tc.basis, got, tc.want)
+		}
+	}
+	for _, bad := range []string{"calc(50vw - 650px)", "calc(var(--gap) + 1px)"} {
+		if l := parseLength(bad, 16); l.Set {
+			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
+		}
+	}
+}

@@ -1274,3 +1274,39 @@ func TestFixedLinkRectsFollowScroll(t *testing.T) {
 		t.Fatalf("scrolled fixed link Y = %d, want 12", r.Y)
 	}
 }
+
+func TestFlexBasisCalcConstrainsText(t *testing.T) {
+	text := strings.Repeat("alpha beta gamma delta ", 30)
+	ly := build(`<html><body>
+<div style="display:flex;width:720px">
+  <div id="main" style="flex:0 0 calc(100% - 312px)"><p>`+text+`</p></div>
+  <div style="flex:0 0 300px">side</div>
+</div></body></html>`, 100)
+	maxRight := 0
+	lines := 0
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		inside := false
+		for p := f.Node; p != nil; p = p.Parent {
+			if p.Attr("id") == "main" {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			continue
+		}
+		lines++
+		if f.X+f.W > maxRight {
+			maxRight = f.X + f.W
+		}
+	}
+	if lines < 5 {
+		t.Fatalf("main text produced %d lines, want wrapping", lines)
+	}
+	if maxRight > 70 {
+		t.Fatalf("main text reaches column %d, want it constrained to the calc width", maxRight)
+	}
+}

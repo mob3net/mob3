@@ -48,12 +48,20 @@ type Length struct {
 	U    Unit
 	Set  bool
 	Auto bool
+	// Calc marks a simple calc() result as the linear combination
+	// CalcPct percent of the basis plus CalcPx CSS pixels.
+	Calc    bool
+	CalcPct float64
+	CalcPx  float64
 }
 
 func px(v float64) Length     { return Length{V: v, U: UnitPX, Set: true} }
 func pct(v float64) Length    { return Length{V: v, U: UnitPercent, Set: true} }
 func (l Length) IsAuto() bool { return !l.Set || l.Auto }
 func (l Length) cssPx(fontPx float64) float64 {
+	if l.Calc {
+		return l.CalcPx
+	}
 	switch l.U {
 	case UnitPX:
 		return l.V
@@ -78,6 +86,9 @@ func (l Length) resolveH(basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
 	}
+	if l.Calc {
+		return int(math.Round(l.CalcPx/cellW + float64(basis)*l.CalcPct/100))
+	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
 	}
@@ -88,6 +99,9 @@ func (l Length) resolveH(basis int, fontPx float64) int {
 func (l Length) resolveV(basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
+	}
+	if l.Calc {
+		return int(math.Round(l.CalcPx/cellH + float64(basis)*l.CalcPct/100))
 	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
@@ -520,6 +534,9 @@ func hslToRGB(h, s, l float64) (uint8, uint8, uint8) {
 
 func parseLength(v string, fontPx float64) Length {
 	v = strings.ToLower(strings.TrimSpace(v))
+	if strings.HasPrefix(v, "calc(") && strings.HasSuffix(v, ")") {
+		return parseCalcLength(v[len("calc("):len(v)-1], fontPx)
+	}
 	if v == "auto" {
 		return Length{Auto: true}
 	}
@@ -553,6 +570,196 @@ func parseLength(v string, fontPx float64) Length {
 		return Length{V: f, U: UnitPX, Set: true}
 	}
 	return Length{}
+}
+
+// calcValue is a simple calc() value: a percentage of the basis plus a CSS
+// pixel length. scalar marks a unitless number used only inside * and /.
+type calcValue struct {
+	pct, px float64
+	scalar  bool
+}
+
+// parseCalcLength evaluates the simple arithmetic that covers common CSS
+// calc() uses: percentages and absolute units combined with + - * / and
+// parentheses. Font-relative units are resolved with fontPx.
+func parseCalcLength(expr string, fontPx float64) Length {
+	pos := 0
+	v, ok := parseCalcSum(expr, &pos, fontPx)
+	skipCalcSpace(expr, &pos)
+	if !ok || pos != len(expr) || v.scalar {
+		return Length{}
+	}
+	return Length{Set: true, Calc: true, CalcPct: v.pct, CalcPx: v.px}
+}
+
+func skipCalcSpace(s string, pos *int) {
+	for *pos < len(s) && (s[*pos] == ' ' || s[*pos] == '\t' || s[*pos] == '\n' || s[*pos] == '\r') {
+		*pos++
+	}
+}
+
+func parseCalcSum(s string, pos *int, fontPx float64) (calcValue, bool) {
+	left, ok := parseCalcProduct(s, pos, fontPx)
+	if !ok {
+		return calcValue{}, false
+	}
+	for {
+		skipCalcSpace(s, pos)
+		if *pos >= len(s) || (s[*pos] != '+' && s[*pos] != '-') {
+			break
+		}
+		op := s[*pos]
+		*pos++
+		right, ok := parseCalcProduct(s, pos, fontPx)
+		if !ok || left.scalar != right.scalar {
+			return calcValue{}, false
+		}
+		if op == '+' {
+			left.pct += right.pct
+			left.px += right.px
+		} else {
+			left.pct -= right.pct
+			left.px -= right.px
+		}
+	}
+	return left, true
+}
+
+func parseCalcProduct(s string, pos *int, fontPx float64) (calcValue, bool) {
+	left, ok := parseCalcFactor(s, pos, fontPx)
+	if !ok {
+		return calcValue{}, false
+	}
+	for {
+		skipCalcSpace(s, pos)
+		if *pos >= len(s) || (s[*pos] != '*' && s[*pos] != '/') {
+			break
+		}
+		op := s[*pos]
+		*pos++
+		right, ok := parseCalcFactor(s, pos, fontPx)
+		if !ok {
+			return calcValue{}, false
+		}
+		if op == '*' {
+			switch {
+			case left.scalar && right.scalar:
+				left.px *= right.px
+			case left.scalar:
+				k := left.px
+				left = calcValue{pct: right.pct * k, px: right.px * k}
+			case right.scalar:
+				left.pct *= right.px
+				left.px *= right.px
+			default:
+				return calcValue{}, false
+			}
+		} else {
+			if !right.scalar || right.px == 0 {
+				return calcValue{}, false
+			}
+			if left.scalar {
+				left.px /= right.px
+			} else {
+				left.pct /= right.px
+				left.px /= right.px
+			}
+		}
+	}
+	return left, true
+}
+
+func parseCalcFactor(s string, pos *int, fontPx float64) (calcValue, bool) {
+	skipCalcSpace(s, pos)
+	sign := 1.0
+	if *pos < len(s) && (s[*pos] == '+' || s[*pos] == '-') {
+		if s[*pos] == '-' {
+			sign = -1
+		}
+		*pos++
+		skipCalcSpace(s, pos)
+	}
+	if *pos < len(s) && s[*pos] == '(' {
+		*pos++
+		v, ok := parseCalcSum(s, pos, fontPx)
+		if !ok {
+			return calcValue{}, false
+		}
+		skipCalcSpace(s, pos)
+		if *pos >= len(s) || s[*pos] != ')' {
+			return calcValue{}, false
+		}
+		*pos++
+		v.pct *= sign
+		v.px *= sign
+		return v, true
+	}
+	start := *pos
+	digits := false
+	for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
+		*pos++
+		digits = true
+	}
+	if *pos < len(s) && s[*pos] == '.' {
+		*pos++
+		for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
+			*pos++
+			digits = true
+		}
+	}
+	if !digits {
+		return calcValue{}, false
+	}
+	if *pos < len(s) && (s[*pos] == 'e' || s[*pos] == 'E') {
+		save := *pos
+		*pos++
+		if *pos < len(s) && (s[*pos] == '+' || s[*pos] == '-') {
+			*pos++
+		}
+		exp := false
+		for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
+			*pos++
+			exp = true
+		}
+		if !exp {
+			*pos = save
+		}
+	}
+	num, err := strconv.ParseFloat(s[start:*pos], 64)
+	if err != nil {
+		return calcValue{}, false
+	}
+	num *= sign
+	unitStart := *pos
+	for *pos < len(s) && ((s[*pos] >= 'a' && s[*pos] <= 'z') || s[*pos] == '%') {
+		*pos++
+	}
+	unit := s[unitStart:*pos]
+	if unit == "" {
+		return calcValue{px: num, scalar: true}, true
+	}
+	if unit == "%" {
+		return calcValue{pct: num}, true
+	}
+	u := UnitNone
+	switch unit {
+	case "px":
+		u = UnitPX
+	case "em":
+		u = UnitEM
+	case "rem":
+		u = UnitREM
+	case "pt":
+		u = UnitPT
+	case "ch":
+		u = UnitCH
+	case "lh":
+		u = UnitLH
+	default:
+		return calcValue{}, false
+	}
+	l := Length{V: num, U: u, Set: true}
+	return calcValue{px: l.cssPx(fontPx)}, true
 }
 
 func parseFontSize(v string, parentPx float64) (float64, bool) {
