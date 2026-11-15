@@ -1442,3 +1442,69 @@ func TestHideFixedElements(t *testing.T) {
 		t.Fatalf("hidden layout has %d fixed fragments", got)
 	}
 }
+
+func TestDisplayContentsExpandsInFlex(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div style="display:flex">
+  <div style="display:contents">
+    <span id="a" style="flex:0 0 50%">A</span>
+    <span id="b" style="flex:0 0 50%">B</span>
+  </div>
+</div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	ax, bx := -1, -1
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text == "A" {
+			ax = f.X
+		}
+		if f.Kind == fragText && f.Text == "B" {
+			bx = f.X
+		}
+	}
+	if ax < 0 || bx < 0 || bx <= ax {
+		t.Fatalf("contents children did not become flex items: A=%d B=%d", ax, bx)
+	}
+}
+
+func TestMeasureSkipsOutOfFlowChildren(t *testing.T) {
+	doc := ParseHTML(`<html><body><div id="box"><span style="position:absolute;width:100px">very wide absolute label</span></div></body></html>`)
+	styles := newStyleEngine(nil, 0).computeAll(doc)
+	l := &layouter{styles: styles, width: 40}
+	box := doc.FindFirst("div")
+	maxW, minW := l.measure(box)
+	if maxW > 10 || minW > 10 {
+		t.Fatalf("measure included out-of-flow child: max=%d min=%d", maxW, minW)
+	}
+}
+
+func TestNamedGridLines(t *testing.T) {
+	rules := ParseStylesheet(`.g{display:grid;grid-template-columns:[a] repeat(4,1fr) [b]}.item{grid-column:a/b}`)
+	doc := ParseHTML(`<html><body><div class="g"><div class="item">` + strings.Repeat("word ", 30) + `</div></div></body></html>`)
+	ly := BuildLayout(doc, rules, 40)
+	lines := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			lines[f.Y] = true
+		}
+	}
+	if len(lines) > 8 {
+		t.Fatalf("named-line grid item wrapped to %d lines, want the four-track span", len(lines))
+	}
+}
+
+func TestEmptyOverlayAnchorIsLinkable(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div style="position:relative;width:80px;height:40px">
+  <a href="/article" style="position:absolute;top:0;right:0;bottom:0;left:0"></a>
+</div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	for _, li := range ly.Links {
+		if li.Href == "/article" {
+			if len(li.Rects) == 0 || li.Rects[0].W < 2 || li.Rects[0].H < 1 {
+				t.Fatalf("overlay link rects = %+v", li.Rects)
+			}
+			return
+		}
+	}
+	t.Fatal("empty overlay anchor did not become a link")
+}

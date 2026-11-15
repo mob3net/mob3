@@ -16,6 +16,9 @@ const (
 	fragFill fragKind = iota
 	fragText
 	fragImage
+	// fragLink is an invisible box for an empty anchor, so overlay links that
+	// cover a whole card remain clickable and focusable.
+	fragLink
 )
 
 // Form controls use single-cell Unicode glyphs so a checkbox plus its label
@@ -945,6 +948,9 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	frags := make([]Frag, len(l.frags)-start)
 	copy(frags, l.frags[start:])
 	l.frags = l.frags[:start]
+	if n.Tag == "a" && n.HasAttr("href") && rect.W > 0 && rect.H > 0 && noContentFrags(frags) {
+		frags = append(frags, Frag{Kind: fragLink, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Node: n})
+	}
 	l.cb = prevCB
 	l.curFixed = prevFixed
 
@@ -990,6 +996,7 @@ func splitGridParts(s string) []string {
 	var out []string
 	start := 0
 	depth := 0
+	brackets := 0
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '(':
@@ -998,8 +1005,14 @@ func splitGridParts(s string) []string {
 			if depth > 0 {
 				depth--
 			}
+		case '[':
+			brackets++
+		case ']':
+			if brackets > 0 {
+				brackets--
+			}
 		case ' ', '\t', '\n', '\r', ',':
-			if depth == 0 {
+			if depth == 0 && brackets == 0 {
 				if part := strings.TrimSpace(s[start:i]); part != "" {
 					out = append(out, part)
 				}
@@ -1013,15 +1026,49 @@ func splitGridParts(s string) []string {
 	return out
 }
 
+func hasNamedGridRows(n *Node) bool {
+	for _, child := range layoutChildren(n) {
+		if child.Type != ElementNode || child.Style == nil {
+			continue
+		}
+		row := strings.TrimSpace(strings.ToLower(child.Style.GridRow))
+		if row == "" {
+			continue
+		}
+		for _, r := range row {
+			if (r >= 'a' && r <= 'z') || r == '_' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func parseGridTracks(raw string, avail int, font float64) []gridTrack {
+	tracks, _ := parseGridTemplate(raw, avail, font)
+	return tracks
+}
+
+// parseGridTemplate returns tracks plus named grid lines. A bracketed line
+// name group sits between tracks; its names map to the 0-based line index at
+// that position, so `grid-column: content-start/content-end` resolves without
+// creating phantom tracks.
+func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[string][]int) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || strings.EqualFold(raw, "none") || strings.HasPrefix(strings.ToLower(raw), "subgrid") {
-		return nil
+		return nil, nil
 	}
 	var out []gridTrack
+	lines := map[string][]int{}
 	for _, part := range splitGridParts(raw) {
 		part = strings.TrimSpace(part)
 		if part == "" {
+			continue
+		}
+		if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
+			for _, name := range strings.Fields(part[1 : len(part)-1]) {
+				lines[name] = append(lines[name], len(out))
+			}
 			continue
 		}
 		lower := strings.ToLower(part)
@@ -1037,7 +1084,7 @@ func parseGridTracks(raw string, avail int, font float64) []gridTrack {
 				count = n
 			}
 			rest := strings.Join(fields[1:], ",")
-			tracks := parseGridTracks(rest, avail, font)
+			tracks, _ := parseGridTemplate(rest, avail, font)
 			for i := 0; i < count && i < 64; i++ {
 				out = append(out, tracks...)
 			}
@@ -1068,7 +1115,7 @@ func parseGridTracks(raw string, avail int, font float64) []gridTrack {
 			}
 		}
 	}
-	return out
+	return out, lines
 }
 
 func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
@@ -1138,6 +1185,11 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
 }
 
 func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
+	return gridPlacementNamed(raw, cols, nil)
+}
+
+// gridPlacementNamed resolves numeric lines, spans and named grid lines.
+func gridPlacementNamed(raw string, cols int, lines map[string][]int) (start, span int, explicit bool) {
 	raw = strings.TrimSpace(strings.ToLower(raw))
 	if raw == "" {
 		return -1, 1, false
@@ -1150,16 +1202,28 @@ func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
 		}
 		return -1, 1, true
 	}
-	line, err := strconv.Atoi(first)
-	if err != nil {
+	line := 0
+	lineOK := false
+	if name := strings.TrimSpace(first); name != "" {
+		if indexes := lines[name]; len(indexes) > 0 {
+			start = indexes[0]
+			lineOK = true
+		} else if n, err := strconv.Atoi(name); err == nil {
+			line = n
+			lineOK = true
+		}
+	}
+	if !lineOK {
 		return -1, 1, false
 	}
-	start = line - 1
-	if start < 0 {
-		start = cols + line
-	}
-	if start < 0 {
-		start = 0
+	if lineOK && line != 0 {
+		start = line - 1
+		if start < 0 {
+			start = cols + line
+		}
+		if start < 0 {
+			start = 0
+		}
 	}
 	span = 1
 	if len(parts) > 1 {
@@ -1167,6 +1231,10 @@ func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
 		if strings.HasPrefix(endRaw, "span ") {
 			if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(endRaw, "span "))); err == nil && n > 0 {
 				span = n
+			}
+		} else if indexes := lines[endRaw]; len(indexes) > 0 {
+			if end := indexes[len(indexes)-1]; end > start {
+				span = end - start
 			}
 		} else if endLine, err := strconv.Atoi(endRaw); err == nil {
 			if endLine < 0 {
@@ -1255,8 +1323,10 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 	if st == nil {
 		return l.flow(n, x, y, availW)
 	}
-	tracks := parseGridTracks(st.GridCols, availW, st.FontSize)
-	if len(tracks) == 0 {
+	tracks, gridLines := parseGridTemplate(st.GridCols, availW, st.FontSize)
+	if len(tracks) == 0 || hasNamedGridRows(n) {
+		// Named row lines need full two-dimensional placement. Without it,
+		// stacking the items is more readable than letting them overlap.
 		return l.flow(n, x, y, availW)
 	}
 	gap := st.Gap.resolveH(availW, st.FontSize)
@@ -1272,7 +1342,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 	// An auto track placed by a named area is at least as wide as that area's
 	// content; take the space from fr tracks so a CTA or label does not end up
 	// one character wide.
-	for _, child := range n.Children {
+	for _, child := range layoutChildren(n) {
 		if child.Type != ElementNode || child.Style == nil {
 			continue
 		}
@@ -1327,7 +1397,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 	col := 0
 	rowH := 0
 	startY := y
-	for _, child := range n.Children {
+	for _, child := range layoutChildren(n) {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
 		}
@@ -1335,7 +1405,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			l.deferAbsolute(child, x, y)
 			continue
 		}
-		start, span, explicit := gridPlacement(child.Style.GridColumn, len(widths))
+		start, span, explicit := gridPlacementNamed(child.Style.GridColumn, len(widths), gridLines)
 		if name := child.Style.GridArea; name != "" {
 			if a, ok := areas[name]; ok {
 				start, span, explicit = a.start, a.span, true
@@ -1402,7 +1472,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		return 0
 	}
 	var items []*Node
-	for _, c := range n.Children {
+	for _, c := range layoutChildren(n) {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display != "none" {
 			if isOutOfFlow(c.Style) {
 				l.deferAbsolute(c, x, y)
@@ -1645,6 +1715,26 @@ func roman(n int) string {
 
 // flow lays out a block's children: consecutive inline content is grouped into
 // anonymous inline blocks, block-level children stack vertically.
+// layoutChildren expands display:contents wrappers, whose children take part
+// in the parent's layout as if the wrapper did not generate a box.
+func layoutChildren(parent *Node) []*Node {
+	var out []*Node
+	var add func(*Node)
+	add = func(n *Node) {
+		if n.Type == ElementNode && n.Style != nil && n.Style.Display == "contents" {
+			for _, c := range n.Children {
+				add(c)
+			}
+			return
+		}
+		out = append(out, n)
+	}
+	for _, c := range parent.Children {
+		add(c)
+	}
+	return out
+}
+
 func (l *layouter) flow(parent *Node, x, y, width int) int {
 	if l.outOfTime() {
 		return 0
@@ -1660,7 +1750,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 	if p := pseudoElement(parent, parent.Before); p != nil && l.isBlock(p) {
 		cur += l.block(p, x, cur, width)
 	}
-	for _, c := range parent.Children {
+	for _, c := range layoutChildren(parent) {
 		if l.truncated || l.overRowLimit(cur) {
 			l.truncated = true
 			break
@@ -1689,6 +1779,15 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 		return 0
 	}
 	return cur - y
+}
+
+func noContentFrags(frags []Frag) bool {
+	for _, f := range frags {
+		if f.Kind == fragText || f.Kind == fragImage {
+			return false
+		}
+	}
+	return true
 }
 
 // trimFrags removes fragments from start onward that begin at or below limit.
@@ -3453,6 +3552,22 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return 0, 0
 	}
 	st := n.Style
+	if st.Display == "contents" {
+		maxW, minW := 0, 0
+		for _, c := range n.Children {
+			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
+				continue
+			}
+			mw, mi := l.measure(c)
+			if mw > maxW {
+				maxW = mw
+			}
+			if mi > minW {
+				minW = mi
+			}
+		}
+		return maxW, minW
+	}
 	if n.Tag == "img" {
 		cw, _ := imageSize(n, st, 1000, l.imageCapWidth())
 		return cw, cw
@@ -3489,6 +3604,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	}
 	if isBlock {
 		for _, c := range n.Children {
+			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
+				continue
+			}
 			mw, mi := l.measure(c)
 			if mw > maxW {
 				maxW = mw
@@ -3507,6 +3625,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	total := 0
 	space := false
 	for _, c := range n.Children {
+		if c.Type == ElementNode && c.Style != nil && (c.Style.Display == "none" || isOutOfFlow(c.Style)) {
+			continue
+		}
 		if c.Type == ElementNode && c.Tag == "br" {
 			if total > maxW {
 				maxW = total

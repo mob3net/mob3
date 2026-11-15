@@ -342,6 +342,13 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			} else {
 				g.Text(f.X, y, f.Text, st, fg)
 			}
+		case fragLink:
+			if f.Link != nil && f.Link == focus {
+				g.Fill(f.X, f.Y, f.W, 1, focusBG)
+				g.Fill(f.X, f.Y+f.H-1, f.W, 1, focusBG)
+				g.Fill(f.X, f.Y, 1, f.H, focusBG)
+				g.Fill(f.X+f.W-1, f.Y, 1, f.H, focusBG)
+			}
 		case fragImage:
 			if f.Img == nil {
 				continue

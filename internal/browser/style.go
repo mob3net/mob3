@@ -881,8 +881,10 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 				st.Display = "grid"
 			case "flex", "inline-flex":
 				st.Display = "flex"
-			case "inline-grid", "contents":
+			case "inline-grid":
 				st.Display = "inline"
+			case "contents":
+				st.Display = "contents"
 			case "inline-table":
 				st.Display = "table"
 			default:

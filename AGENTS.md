@@ -144,7 +144,7 @@ Standard Go layout:
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
 | `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, and simple `calc()` arithmetic), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. |
-| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles, display list (`Frag`s) in document coordinates, plus text width/truncation helpers and wide-character measurement. |
+| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles (including empty overlay anchors), display list (`Frag`s) in document coordinates, plus text width/truncation helpers, wide-character measurement, `display:contents` expansion and measure that ignores out-of-flow children. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
@@ -191,6 +191,9 @@ Standard Go layout:
   moving siblings, and the containing block it establishes moves with it.
   `z-index` is ignored, `sticky` falls back to block flow, and relative
   offsets are applied to block boxes only (inline relative is ignored).
+- **Overlay links:** an empty anchor with an absolute or fixed box contributes
+  an invisible `fragLink` rectangle, so card overlay links are clickable and
+  appear in Tab order; a focused overlay link gets a yellow border.
 - **Fixed positioning:** `position:fixed` boxes are anchored to the terminal
   viewport instead of the document. Layout receives the current viewport height
   from the browser, resolves `top`/`right`/`bottom`/`left` against it, excludes
@@ -234,7 +237,7 @@ Standard Go layout:
   atomic inline box.
 - **CSS grid:** `display:grid` lays children in row-major order over tracks
   parsed from `grid-template-columns` (lengths, percentages, `fr`, `auto`,
-  `repeat()`, `minmax()`), honours `gap`/`column-gap`/`row-gap`,
+  `repeat()`, `minmax()`, named lines), honours `gap`/`column-gap`/`row-gap`,
   `grid-column`/`span`, and sizes row heights from the tallest item. Dense grids
   whose average track would be under 6 cells fall back to block flow so text
   stays readable. Named `grid-template-areas` place children by their
@@ -1152,8 +1155,8 @@ Standard Go layout:
   basic row-major tracks plus named-area column placement, but not full row
   spans. Floats and
   `position:sticky` are approximated as block flow. `display:contents` is
-  approximated as an inline wrapper (its block/grid children still lay out, but
-  they are not hoisted into a parent grid or flex row). Absolute, relative and
+  expanded so its children participate directly in the parent's flow, flex row
+  or grid. Absolute, relative and
   fixed positioning work, but `z-index` stacking is ignored and
   relative offsets are not applied to inline boxes.
 - SVG support is partial: paths, shapes, gradients and common transforms work,
@@ -1264,8 +1267,8 @@ Known unsupported families (do not present these as available):
   credentialed cross-origin requests, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
-- CSS/layout: full grid row spans, floats, `position:sticky`,
-  `z-index` stacking, CSS variables, animations,
+- CSS/layout: named grid rows fall back to block flow; full grid row spans,
+  floats, `position:sticky`, `z-index` stacking, CSS variables, animations,
   transitions, non-empty generated content, `@import`, background images, full
   flexbox.
 
