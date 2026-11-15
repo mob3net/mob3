@@ -525,8 +525,11 @@ Standard Go layout:
   Typing a letter narrows the labels, clears the already typed letters from
   the highlights and follows the link when only one matches; the key is
   case-insensitive. Unknown letters are ignored, `Esc`
-  cancels, and scrolling (wheel or scrollbar) or any page rebuild dismisses the
-  hints. Only links intersecting the viewport are labelled; a link with no text
+  cancels, and scrolling (wheel or scrollbar) dismisses the hints. Timer-driven
+  page rebuilds recompute the hints and keep the session, typed prefix and any
+  pending F confirmation instead of dismissing them. Only links intersecting
+  the viewport are
+  labelled; a link with no text
   letters (such as an image link) gets free label letters drawn inside its box.
   While hints are shown, images are drawn as half-block art
   instead of native inline graphics, so the terminal image protocol cannot

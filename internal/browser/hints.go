@@ -59,6 +59,27 @@ func (b *Browser) openLinkHints(ask bool) {
 	b.status = "Follow link (Esc cancels)"
 }
 
+// reopenLinkHints restores an active hint session after a layout rebuild. The
+// typed prefix is kept only when at least two hints still match, which is the
+// only state the interactive key handler leaves active.
+func (b *Browser) reopenLinkHints(ask bool, prefix string) {
+	b.openLinkHints(ask)
+	if !b.linkHints || prefix == "" {
+		return
+	}
+	matches := 0
+	for _, h := range b.hintItems {
+		if strings.HasPrefix(h.label, prefix) {
+			matches++
+		}
+	}
+	if matches < 2 {
+		return
+	}
+	b.hintPrefix = prefix
+	b.status = fmt.Sprintf("Follow link: %s (Esc cancels)", prefix)
+}
+
 // collectHintGlyphs returns the visible letters of each requested link in
 // document order, with their terminal cells.
 func (b *Browser) collectHintGlyphs(links []int, top, bottom int) map[int][]hintGlyph {
@@ -302,6 +323,11 @@ func (b *Browser) chooseLinkHint(link int) {
 		b.followFocused()
 		return
 	}
+	b.beginHintConfirm(link)
+}
+
+// beginHintConfirm shows a chosen F link and waits for confirmation.
+func (b *Browser) beginHintConfirm(link int) {
 	b.hintConfirm = true
 	b.hintConfirmLink = link
 	target := ""
@@ -309,6 +335,27 @@ func (b *Browser) chooseLinkHint(link int) {
 		target = b.resolveHref(b.layout.Links[link].Href)
 	}
 	b.status = target + "  (Enter/y follows · Esc cancels)"
+}
+
+// findHintLink locates an equivalent link after a layout rebuild, preferring
+// the same DOM node and falling back to the same href.
+func (b *Browser) findHintLink(node *Node, href string) int {
+	if b.layout == nil {
+		return -1
+	}
+	if node != nil {
+		for i, li := range b.layout.Links {
+			if li.Node == node {
+				return i
+			}
+		}
+	}
+	for i, li := range b.layout.Links {
+		if li.Href == href {
+			return i
+		}
+	}
+	return -1
 }
 
 // clearHintConfirm cancels a pending F confirmation without navigating.

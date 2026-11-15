@@ -329,6 +329,15 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 		t.Fatalf("status = %q, want the resolved target", b.status)
 	}
 
+	// Timer-driven rebuilds must not discard the pending confirmation.
+	b.rebuild()
+	if !b.hintConfirm {
+		t.Fatal("rebuild cleared the confirmation")
+	}
+	if !strings.Contains(b.status, "https://example.com/#one") {
+		t.Fatalf("status after rebuild = %q, want the resolved target", b.status)
+	}
+
 	b.HandleKey("enter")
 	if b.hintConfirm {
 		t.Fatal("Enter did not confirm the link")
@@ -354,5 +363,38 @@ func TestCapitalFConfirmationCancel(t *testing.T) {
 	}
 	if b.status != exitHint {
 		t.Fatalf("status = %q, want the exit hint", b.status)
+	}
+}
+
+func TestLinkHintsSurviveRebuild(t *testing.T) {
+	var doc strings.Builder
+	doc.WriteString("<html><body>")
+	for i := 0; i < 27; i++ {
+		doc.WriteString(`<div><a href="#x">Upgrading</a></div>`)
+	}
+	doc.WriteString("</body></html>")
+	b := hintTestBrowser(t, doc.String(), 40, 60)
+	b.HandleKey("f")
+	if !b.linkHints {
+		t.Fatal("f did not open hint mode")
+	}
+	b.rebuild()
+	if !b.linkHints || len(b.hintItems) != 27 {
+		t.Fatalf("rebuild dismissed hints: active=%v hints=%d", b.linkHints, len(b.hintItems))
+	}
+
+	b.HandleKey("a")
+	if !b.linkHints || b.hintPrefix != "a" {
+		t.Fatalf("typing a: active=%v prefix=%q", b.linkHints, b.hintPrefix)
+	}
+	b.rebuild()
+	if !b.linkHints || b.hintPrefix != "a" {
+		t.Fatalf("rebuild lost the typed prefix: active=%v prefix=%q", b.linkHints, b.hintPrefix)
+	}
+
+	// Scrolling is still an explicit dismissal.
+	b.scrollBy(1)
+	if b.linkHints {
+		t.Fatal("scrolling did not dismiss the hints")
 	}
 }

@@ -732,6 +732,20 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	// Timer-driven DOM changes (for example marquee animations) rebuild the
+	// page constantly. Keep an active hint session alive and recompute its
+	// hints against the new layout instead of dismissing it.
+	wasHints := b.linkHints
+	hintAsk := b.hintAsk
+	hintPrefix := b.hintPrefix
+	wasConfirm := b.hintConfirm
+	var confirmNode *Node
+	confirmHref := ""
+	if wasConfirm && b.layout != nil && b.hintConfirmLink >= 0 && b.hintConfirmLink < len(b.layout.Links) {
+		li := b.layout.Links[b.hintConfirmLink]
+		confirmNode = li.Node
+		confirmHref = li.Href
+	}
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	start := time.Now()
@@ -760,6 +774,13 @@ func (b *Browser) rebuild() {
 	}
 	b.hover = -1
 	b.clampScroll()
+	if wasHints {
+		b.reopenLinkHints(hintAsk, hintPrefix)
+	} else if wasConfirm {
+		if link := b.findHintLink(confirmNode, confirmHref); link >= 0 {
+			b.beginHintConfirm(link)
+		}
+	}
 }
 
 // toggleReader switches between the page and an extracted article view without
