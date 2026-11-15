@@ -1008,11 +1008,11 @@ Standard Go layout:
   and rounded for favicons and full-bleed white for the Apple/Android icons.
   Regenerate the PNGs if the avatar or the hero screenshot changes; do not
   hotlink GitHub, `interactive32.com` or attachment URLs from the page head.
-  The header is a flexible bar: the brand alone on the left, then a right-hand
-  group with Docs (`/docs/`), GitHub, Releases, Contact
-  (`mailto:info@mob3.net`), the docs menu button, the compact search box and
-  finally the theme toggle pinned to the far edge. The search sits immediately
-  before the theme toggle and its results anchor under it. There is
+  The header is a flexible bar: the brand, then the Docs (`/docs/`), GitHub,
+  Releases and Contact (`mailto:info@mob3.net`) links on the left; the docs
+  menu button, the compact search box and the theme toggle on the right, with
+  the search immediately before the toggle and the toggle pinned to the far
+  edge. Search results anchor under the box, right-aligned. There is
   deliberately no "Back" link and no "Documentation" tagline in the header.
   Below 860px the search is hidden so the brand, all four links, the menu
   button and the theme toggle stay on one line; below 400px and 345px the link
