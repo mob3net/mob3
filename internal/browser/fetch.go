@@ -1080,11 +1080,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>
-<p>The start page's search/URL box resolves input exactly like the <b>o</b>
-prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
-<p class="muted">Examples: <b>mob3 https://go.dev</b>,
-<b>mob3 'golang tutorial'</b>,
-<b>mob3 -dump -width 120 -no-color page.html</b>.</p>
+<p class="muted">The start page's search box works like the <b>o</b> prompt.</p>
 
 <h2>Keyboard</h2>
 <table>
@@ -1094,117 +1090,58 @@ prompt, including the <b>-search</b> fallback. It works without JavaScript.</p>
 <tr><td><b>Ctrl-D</b> / <b>Ctrl-U</b></td><td>scroll half a screen</td></tr>
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
 <tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link</td></tr>
-<tr><td><b>Enter</b></td><td>follow the focused link, submit the focused field, or insert a newline in a textarea</td></tr>
+<tr><td><b>Enter</b></td><td>follow a link, submit a field, or insert a textarea newline</td></tr>
 <tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
-<tr><td><b>o</b></td><td>open a URL (prefilled and selected; Ctrl/Alt+Left/Right move by word, Alt/Ctrl+Backspace or Ctrl-W delete a segment, Alt-D deletes forward)</td></tr>
+<tr><td><b>o</b></td><td>open a URL prompt</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>F</b></td><td>same as <b>f</b>, but show the destination and wait for <b>Enter</b>/<b>y</b></td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
-<tr><td><b>y</b></td><td>copy the selected page text, or the curl command in the download popup (OSC 52)</td></tr>
+<tr><td><b>y</b></td><td>copy selected text or the download curl command</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
-<tr><td><b>Esc</b></td><td>stop loading, leave a field, clear a selection, or show the exit hint</td></tr>
-<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>ask to confirm quitting (<b>y</b>/<b>Enter</b> quits, any other key cancels)</td></tr>
+<tr><td><b>Esc</b></td><td>stop loading or leave the current mode</td></tr>
+<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit after confirmation</td></tr>
 </table>
-<p>In terminals that support the kitty keyboard protocol (kitty, WezTerm,
-Ghostty and foot), MOB3 enables it automatically, so modified keys,
-<b>Shift-Tab</b> and <b>Esc</b> are reported reliably and key releases do not
-trigger an action twice.</p>
-
-<h2>Loading</h2>
-<p>While a page loads, the URL bar fills from the left with a blue progress
-bar. It completes when the page arrives and clears a moment later. <b>Esc</b>
-or the <b>×</b> toolbar button stops the load.</p>
+<p class="muted">Kitty, WezTerm, Ghostty and foot get enhanced key reporting automatically.</p>
 
 <h2>Find</h2>
-<p>Press <b>/</b> to open the find bar in the footer. Typing searches
-incrementally and highlights every case-insensitive match; the current match is
-orange. <b>Enter</b> confirms the query and closes the bar, then <b>n</b> and
-<b>N</b> move to the next and previous match, wrapping around. While the bar is
-open, <b>Down</b>/<b>Up</b> also move to the next/previous match. <b>Esc</b>
-closes the bar but keeps the highlights; pressing <b>Esc</b> again clears them.
-Find works on every page, including
-this help page and <b>about:bookmarks</b>. Queries may contain spaces: runs of
-whitespace are treated as one space, and a phrase can match across word
-boundaries and wrapped lines. The query line accepts the same word motion and
-word deletion keys as the URL prompt. In the JS console, press <b>/</b> while
-the <b>HTML</b> tab is active to search the raw source and jump to matching
-lines.</p>
+<p><b>/</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>
+closes it and <b>n</b>/<b>N</b> move between matches. <b>Esc</b> closes it; a
+second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b>
+searches the raw source.</p>
 
 <h2>Link hints</h2>
-<p>Press <b>f</b> to mark every link visible in the current viewport by
-highlighting letters from the link's own text with a yellow background and an
-underline. The page text stays unchanged. Up to 26 links the first letter not
-already used by another link is chosen, so <b>Documentation</b> marks its
-<b>D</b> and a later <b>Dog</b> uses its <b>o</b> if <b>d</b> is taken. On
-link-heavy pages a hint whose first letter is unique still shows only that one
-letter; hints sharing a first letter use two adjacent letters, with no gap
-between them. Type those letters to
-follow the link; either case works. Press <b>F</b> instead to see the resolved
-destination highlighted in yellow in the footer and confirm with <b>Enter</b>
-or <b>y</b>; <b>Esc</b> or <b>n</b> cancels. If several labels share a first letter, the others
-disappear, the typed letter stops being highlighted, and only the remaining
-letters stay marked. Unknown letters are
-ignored. <b>Esc</b> or scrolling dismisses the hints, and links outside the
-viewport are never labeled. A link with no text, such as an image link, gets
-free label letters drawn inside its box. While hints are
-shown, images use half-block art so the terminal's inline image protocol does
-not cover the hint letters.</p>
+<p><b>f</b> highlights a letter from each visible link; type it to follow the
+link. Links sharing a first letter use two adjacent letters. <b>F</b> shows the
+destination in yellow first and waits for <b>Enter</b>/<b>y</b>; <b>Esc</b> or
+<b>n</b> cancels. <b>Esc</b> or scrolling dismisses the hints.</p>
 
 <h2>Reader mode</h2>
-<p>Press <b>R</b> or click the <b>Reader:on</b>/<b>Reader:off</b> label in the
-footer to extract the main article from the current page and show it in a
-narrow reading column with navigation, sidebars, images, forms and other page
-chrome removed. Press <b>R</b> or click the label again to return to the normal
-page and its previous scroll position. Reader mode stays enabled when you navigate or reload: each
-new page is extracted automatically, and a page with no usable article is shown
-normally while the preference remains on. Start MOB³ with <b>-reader</b> to
-enable reader mode from the first page. The config page is unavailable while
-reader mode is on; turn reader mode off first. Reader mode is a snapshot of the
-live page. Links that point at a missing in-page target, such as modal
-triggers using <b>#</b>, show <b>Reader mode: link is not available</b> in the
-footer instead of reloading or jumping to the top.</p>
+<p><b>R</b> toggles a clean article view and stays on across pages. Start with
+<b>-reader</b> to enable it at launch. The config page is unavailable while
+reader mode is on.</p>
 
 <h2>Dark mode</h2>
-<p>Press <b>D</b> or click the <b>Dark:on</b>/<b>Dark:off</b> label in the footer
-to enable dark mode. Sites are asked for their dark styles through
-<b>prefers-color-scheme: dark</b>; pages that already render a dark background
-keep their own palette. Otherwise page backgrounds, text, links and borders are
-remapped to a dark palette. Images keep their original colors. Start MOB³ with
-<b>-dark</b> to enable dark mode from the first page. Dark mode stays enabled
-when you navigate or reload.</p>
-<p>The footer also shows <b>JavaScript:on</b>/<b>JavaScript:off</b> and the
-resolved <b>Graphics</b> mode (for example <b>Graphics:blocks</b> or
-<b>Graphics:kitty</b>). A script error turns the JavaScript label into red
-<b>JavaScript:Error</b>; click the label to open the JavaScript console.</p>
+<p><b>D</b> toggles a dark palette and asks sites for
+<b>prefers-color-scheme: dark</b>. Start with <b>-dark</b> to enable it at
+launch.</p>
 
 <h2>History and bookmarks</h2>
-<p>The <b>≡ History</b> button in the top bar opens <b>about:history</b>,
-which lists this session's pages as links, most recent first. The
-<b>★ Bookmarks</b> button appears only when MOB³ was started with
-<b>-bookmarks file.html</b>, and opens <b>about:bookmarks</b>. That flag imports
-a Netscape bookmark export (the HTML format used by Chrome, Firefox, Safari and
-Edge). Nothing is saved after MOB³ exits. Back and Forward remember the scroll
-position you last had on each history entry. In-page <b>#</b> links become
-history entries, so going back returns to where you were before following the
-anchor. If only the fragment changes, the page is not reloaded.</p>
+<p>The <b>≡ History</b> button lists the session history; <b>#</b> links and
+scroll positions are kept. The <b>★ Bookmarks</b> button appears with
+<b>-bookmarks file.html</b>. Nothing is saved after MOB³ exits.</p>
 
 <h2>Config</h2>
-<p>The <b>⚙</b> icon in the top bar opens <b>about:config</b>. It lists every
-command-line option with its current value. Editable values apply in memory
-for this session; options marked <b>startup</b> are read-only and need a
-restart, while <b>dump only</b> options apply only to dump runs. On/off
-options use checkboxes. The top of the page shows the current viewport in
-characters and pixels (for example <b>80x17 characters (640x272 pixels)</b>).
-Nothing is saved after MOB³ exits.</p>
+<p>The <b>⚙</b> icon opens <b>about:config</b>. Changes apply to this session
+only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 
 <h2>Mouse</h2>
 <table>
@@ -1231,33 +1168,14 @@ Nothing is saved after MOB³ exits.</p>
 </table>
 
 <h2>Downloads</h2>
-<p>MOB³ does not save files. Clicking a link with a <b>download</b> attribute,
-or opening a URL whose response is not HTML, shows a download popup with a
-a ready-to-copy <b>curl</b> command shown as plain text. Press <b>y</b> to copy the command through
-OSC 52 and close the popup; <b>Esc</b>, <b>Enter</b> or <b>q</b> closes it
-without copying. Nothing is written to disk by MOB³ itself.</p>
+<p>MOB³ never saves files. Download links and non-HTML responses open a popup
+with a <b>curl</b> command; <b>y</b> copies it, and <b>Esc</b>/<b>Enter</b>/<b>q</b>
+closes it.</p>
 
 <h2>Forms</h2>
-<p>Click a text input or textarea to type. Textareas show at least two rows and
-wrap their text; an explicit <b>rows</b> value up to 12 is honoured. The focused
-field shows a block caret: <b>Left</b>/<b>Right</b> (or <b>Ctrl-B</b>/<b>Ctrl-F</b>)
-move by character, <b>Home</b>/<b>End</b> by line, <b>Alt-B</b>/<b>Alt-F</b> or
-<b>Ctrl/Alt+Left/Right</b> by word, and textarea <b>Up</b>/<b>Down</b> move
-between lines. <b>Alt/Ctrl+Backspace</b>, <b>Ctrl-W</b> and <b>Alt-D</b> delete
-words; <b>Delete</b> removes forward, <b>Backspace</b> deletes backwards,
-<b>Ctrl-U</b> clears, <b>Enter</b> submits (or inserts a newline in a textarea),
-and <b>Esc</b> leaves the field.
-Checkboxes and radios toggle on click, and clicking a label activates its
-associated control. Clicking a select opens a popup with every
-option; use <b>Up</b>/<b>Down</b> and <b>Enter</b>, or click an option, and
-<b>Esc</b> closes it. A multi-select shows all its options as a list; clicking
-an option toggles it.
-GET and urlencoded POST forms work; multipart and file uploads are not
-supported. Required fields, pattern matching, maxlength, readonly and
-disabled are enforced. Date, time, month and week fields use typed formats;
-range sliders adjust with <b>Left</b>/<b>Right</b> or by clicking their
-<b>-</b>/<b>+</b> ends; color fields show a live
-swatch and accept <b>#rrggbb</b>.</p>
+<p>Click a field to edit; <b>Enter</b> submits, <b>Esc</b> leaves. Checkboxes,
+radios, selects, date/time/month/week, range and color fields work. GET and
+urlencoded POST forms submit; multipart and file uploads are not supported.</p>
 
 <h2>Try it</h2>
 <p>These links run JavaScript in this page:</p>
@@ -1298,48 +1216,11 @@ submitted.</p>
 </form>
 
 <h2>JavaScript console</h2>
-<p>Press <b>!</b> to see <b>console</b> output, full script errors, the
-current page's requests, its in-memory storage, the raw page HTML and a
-read-only <b>Tools</b> tab. A one-row menu at the top has five tabs:
-<b>JS logs</b>, <b>Requests</b>, <b>Storage</b>, <b>HTML</b> and <b>Tools</b>.
-The logs tab is active by default and contains the
-<b>&gt;</b> JavaScript input row at the bottom of its body. Click a tab (or use
-<b>Tab</b>/<b>Shift-Tab</b>) to switch sections. The active tab is blue.
-Press <b>i</b> or <b>Enter</b>, or click the <b>&gt;</b> row, to focus the
-input, type an expression and press <b>Enter</b> to run it; the result appears
-in the logs above the input. <b>Up</b>/<b>Down</b> (or <b>Ctrl-P</b>/<b>Ctrl-N</b>)
-recall earlier inputs from the console history; the JS logs and Tools tabs keep
-separate histories and each keeps the line you were typing as a draft. The Tools tab has its own input row for read-only
-inspection commands: <b>help</b>, <b>form</b>, <b>links</b>, <b>requests</b>,
-<b>logs</b>, <b>source</b>, <b>snapshot</b> and <b>history</b>. Commands are
-echoed into the tab, results scroll like a log, and <b>help</b> lists the
-arguments. The scrollback keeps the newest 500 lines. Type <b>clear</b> (or
-<b>cls</b>) in either the Tools or JS logs input to empty that tab's
-scrollback; in the JS input it clears the log instead of evaluating. A <b>[selector]</b> is an optional CSS selector such as
-<b>#content</b>, <b>.card</b>, <b>form#search</b>, <b>input[name=q]</b> or
-<b>main a</b>; omit it to inspect all forms/links or the full page source. Editing forms, navigation, waiting and screenshots remain available
-in the headless MCP server (<b>mob3 -mcp</b>). The input supports the same
-word-editing keys as the URL prompt. <b>j</b>/<b>k</b> and the wheel scroll the
-open logs/Requests/Storage/HTML/Tools section, <b>g</b>/<b>G</b> jump to the
-ends,
-<b>Esc</b>, <b>!</b> or the footer <b>&gt;_</b> icon closes, and <b>q</b>
-asks to confirm quitting while the input row is not focused.
-Request URLs are shown as plain text (not clickable). Cache hits replace the
-size column with <b>cached</b>, and the bottom of the request list shows the
-cache bytes used, total budget and entry count. Storage lists the
-current page's cookies (including HttpOnly cookies, marked) plus its
-localStorage and sessionStorage entries. HTML shows the raw fetched page
-source before JavaScript changes the DOM, wrapped to the console width and
-opening at the top of the file. The JS
-log and input draft reset when
-a new page loads successfully; a failed load keeps the old log. The Tools
-scrollback is kept across page loads.
-Because clicking is used to switch sections, use <b>Shift</b>-drag for
-terminal text selection and copy while the console is open.</p>
-<p>Script <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open a modal
-dialog. Use <b>Enter</b>/<b>Esc</b> to answer; confirm accepts <b>Y</b>/<b>N</b>.
-Every modal has a <b>×</b> in its top-right corner that closes it with the
-mouse, and clicking the dimmed backdrop also closes it.</p>
+<p><b>!</b> opens logs, requests, storage, the page HTML and Tools. Use
+<b>Tab</b> to switch tabs, <b>i</b>/<b>Enter</b> to focus the input, <b>Enter</b>
+to run JavaScript, <b>j</b>/<b>k</b> to scroll and <b>Esc</b> to close. Use
+<b>Shift</b>-drag to select text while the console is open. Script
+<b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open modal dialogs.</p>
 
 <p><a href="about:start">Back to the start page</a></p>
 </body></html>`
