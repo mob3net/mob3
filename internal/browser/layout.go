@@ -1736,6 +1736,10 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	}
 	if align == "center" || align == "end" {
 		for i, start := range starts {
+			end := len(l.frags)
+			if i+1 < len(starts) {
+				end = starts[i+1]
+			}
 			dy := 0
 			if align == "center" {
 				dy = (maxH - heights[i]) / 2
@@ -1743,7 +1747,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 				dy = maxH - heights[i]
 			}
 			if dy > 0 {
-				for j := start; j < len(l.frags); j++ {
+				for j := start; j < end; j++ {
 					l.frags[j].Y += dy
 				}
 			}
@@ -2196,6 +2200,7 @@ type inlineCtx struct {
 	base       *Style
 	items      []inlineItem
 	curW       int
+	hasContent bool
 	space      bool
 	spaceStyle *Style
 	spaceNode  *Node
@@ -2452,6 +2457,7 @@ func (c *inlineCtx) addPre(s string, st *Style, node *Node) {
 		}
 		c.appendRune(r, st, node)
 		c.curW += rw
+		c.hasContent = true
 	}
 }
 
@@ -2483,7 +2489,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		if spaceStyle == nil {
 			spaceStyle = st
 		}
-		if c.curW > 0 {
+		if c.hasContent {
 			if !nowrap && c.curW+spaceW+width > c.lineMaxW() {
 				c.flush(false)
 			} else {
@@ -2505,6 +2511,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 			}
 			c.appendRune(r, st, node)
 			c.curW += rw
+			c.hasContent = true
 		}
 		return
 	}
@@ -2513,6 +2520,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 	}
 	c.items = append(c.items, inlineItem{kind: itemWord, text: w, style: st, node: node, w: width})
 	c.curW += width
+	c.hasContent = true
 }
 
 func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
@@ -3291,7 +3299,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	}
 	nowrap := it.style != nil && it.style.WhiteSpace == "nowrap"
 	spaceW := c.charW(' ', it.style)
-	if c.space && c.curW > 0 {
+	if c.space && c.hasContent {
 		spaceStyle, spaceNode := c.spaceStyle, c.spaceNode
 		if spaceStyle == nil {
 			spaceStyle = it.style
@@ -3310,6 +3318,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	}
 	c.items = append(c.items, it)
 	c.curW += it.w
+	c.hasContent = true
 }
 
 func (c *inlineCtx) flushIfAny() {
@@ -3418,6 +3427,7 @@ func (c *inlineCtx) flush(last bool) {
 	c.y += lineH
 	c.items = c.items[:0]
 	c.curW = 0
+	c.hasContent = false
 	c.space = false
 	c.spaceStyle, c.spaceNode = nil, nil
 }

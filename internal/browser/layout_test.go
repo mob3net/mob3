@@ -1518,6 +1518,30 @@ func TestInlinePaddingSeparatesLinks(t *testing.T) {
 	}
 }
 
+func TestLeadingWhitespaceDoesNotWrapPaddedLinks(t *testing.T) {
+	ly := build(`<div style="width:10em"><a href="#a" style="padding-left:1em">Products</a>
+<a href="#b" style="padding-left:1em">Contact</a></div>`, 40)
+	var first, second *Frag
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText {
+			continue
+		}
+		switch strings.TrimSpace(f.Text) {
+		case "Products":
+			first = f
+		case "Contact":
+			second = f
+		}
+	}
+	if first == nil || second == nil {
+		t.Fatal("link text missing")
+	}
+	if first.Y != second.Y {
+		t.Fatalf("padded links wrapped: Products y=%d Contact y=%d", first.Y, second.Y)
+	}
+}
+
 func TestEmptyOverlayAnchorIsLinkable(t *testing.T) {
 	doc := ParseHTML(`<html><body>
 <div style="position:relative;width:80px;height:40px">
@@ -1728,6 +1752,33 @@ func TestFloatTableCaptionDoesNotInflateWidth(t *testing.T) {
 		}
 	}
 	t.Fatal("no text beside the floated figure")
+}
+
+func TestFlexAlignShiftsOnlyOwnItem(t *testing.T) {
+	ly := build(`<div style="display:flex;align-items:center"><div id="a" style="height:3em">A</div><span id="b">B</span></div><div id="c">C</div>`, 40)
+	pos := map[string]Frag{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			if id := fragOwnerID(f); id == "a" || id == "b" || id == "c" {
+				pos[id] = f
+			}
+		}
+	}
+	if _, ok := pos["a"]; !ok {
+		t.Fatalf("missing flex fragments: %+v", pos)
+	}
+	if _, ok := pos["b"]; !ok {
+		t.Fatalf("missing flex fragments: %+v", pos)
+	}
+	if _, ok := pos["c"]; !ok {
+		t.Fatalf("missing flex fragments: %+v", pos)
+	}
+	if pos["b"].Y != pos["a"].Y+1 {
+		t.Fatalf("centered item y=%d, want %d", pos["b"].Y, pos["a"].Y+1)
+	}
+	if pos["c"].Y != pos["a"].Y+3 {
+		t.Fatalf("content after flex row shifted: y=%d, want %d", pos["c"].Y, pos["a"].Y+3)
+	}
 }
 
 func TestFlexOrderAndJustify(t *testing.T) {

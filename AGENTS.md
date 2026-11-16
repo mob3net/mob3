@@ -250,7 +250,9 @@ Standard Go layout:
   overflow; each wrapped row is sized independently and wrapped rows stack
   without an extra gap. `order` reorders items stably; `justify-content`
   supports start/end/center/space-between/around/evenly, and `align-items`
-  supports start/center/end cross-axis placement. Form controls always use the
+  supports start/center/end cross-axis placement. Cross-axis alignment shifts
+  only that item's own fragments, so later siblings and following content keep
+  their positions. Form controls always use the
   inline widget path even when CSS
   gives them block/flex display, so their editable value is rendered inside
   flex containers. An `inline-block` box with an explicit width and block
