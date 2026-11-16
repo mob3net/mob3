@@ -2318,9 +2318,58 @@ func (c *inlineCtx) collect(n *Node) {
 		c.flushIfAny()
 		return
 	}
+	if st.Display == "inline" || st.Display == "inline-block" {
+		left, right := c.inlineEdges(st)
+		if left > 0 {
+			c.items = append(c.items, inlineItem{kind: itemSpace, w: left, style: st, node: n})
+			c.curW += left
+		}
+		for _, ch := range n.Children {
+			c.collect(ch)
+		}
+		if right > 0 {
+			c.items = append(c.items, inlineItem{kind: itemSpace, w: right, style: st, node: n})
+			c.curW += right
+		}
+		return
+	}
 	for _, ch := range n.Children {
 		c.collect(ch)
 	}
+}
+
+// inlineEdges returns the horizontal margin, border and padding reserved
+// around an inline box. A positive spacing smaller than a terminal cell is
+// rounded up to one cell so menu links with small CSS padding do not glue
+// together.
+func (c *inlineCtx) inlineEdges(st *Style) (int, int) {
+	if st == nil {
+		return 0, 0
+	}
+	avail := c.maxW
+	if avail < 1 {
+		avail = 1
+	}
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := c.l.boxMetrics(st, avail)
+	left := ml + bl + pl
+	right := mr + br + pr
+	if left == 0 && (lengthPositive(st.Margin[3]) || lengthPositive(st.Border[3]) || lengthPositive(st.Padding[3])) {
+		left = 1
+	}
+	if right == 0 && (lengthPositive(st.Margin[1]) || lengthPositive(st.Border[1]) || lengthPositive(st.Padding[1])) {
+		right = 1
+	}
+	return left, right
+}
+
+func lengthPositive(l Length) bool {
+	if !l.Set || l.Auto {
+		return false
+	}
+	if l.Calc {
+		return l.CalcPx > 0 || l.CalcPct > 0
+	}
+	return l.V > 0
 }
 
 // lineH returns the line box height for st, including large-glyph scaling.

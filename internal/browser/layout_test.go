@@ -1495,6 +1495,29 @@ func TestNamedGridLines(t *testing.T) {
 	}
 }
 
+func TestInlinePaddingSeparatesLinks(t *testing.T) {
+	ly := build(`<p><a href="#a" style="padding-right:3px">Vesti</a><a href="#b">Društvo</a></p>`, 40)
+	var first, second *Frag
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText {
+			continue
+		}
+		switch strings.TrimSpace(f.Text) {
+		case "Vesti":
+			first = f
+		case "Društvo":
+			second = f
+		}
+	}
+	if first == nil || second == nil {
+		t.Fatal("link text missing")
+	}
+	if second.X <= first.X+first.W {
+		t.Fatalf("links are glued: first ends at %d, second starts at %d", first.X+first.W, second.X)
+	}
+}
+
 func TestEmptyOverlayAnchorIsLinkable(t *testing.T) {
 	doc := ParseHTML(`<html><body>
 <div style="position:relative;width:80px;height:40px">

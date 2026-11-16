@@ -331,7 +331,9 @@ Standard Go layout:
   contains the whitespace, not the following word, so a link never absorbs or
   underlines the space before it. Inline and inline-block backgrounds (nav
   links, buttons) are painted behind their text fragments; block backgrounds
-  are painted once with the box.
+  are painted once with the box. Inline horizontal margins, borders and padding
+  reserve cells in the line; a positive spacing smaller than one cell rounds up
+  to one cell, so adjacent menu links do not glue together.
 - **Contrast fallback:** when resolved text and effective background colors are
   too close (for example white text whose background came from an unsupported
   gradient or CSS variable), foreground switches to near-black on light
