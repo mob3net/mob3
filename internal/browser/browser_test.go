@@ -815,6 +815,46 @@ func TestFixedWidthInputPatchesFragments(t *testing.T) {
 	}
 }
 
+func TestInputTabMovesFocus(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go">
+<input name="a" value="one">
+<input name="disabled" value="skip" disabled>
+<input name="hidden" type="hidden" value="skip">
+<input name="b" value="two">
+<textarea name="c">three</textarea>
+<input name="readonly" value="skip" readonly>
+<input name="d" value="four">
+</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	a := inputByName(doc, "a")
+	b.setInputFocus(a)
+
+	b.HandleKey("tab")
+	if b.inputFocus == nil || b.inputFocus.Attr("name") != "b" {
+		t.Fatalf("tab from a landed on %v", b.inputFocus)
+	}
+	b.HandleKey("tab")
+	if b.inputFocus == nil || b.inputFocus.Attr("name") != "c" {
+		t.Fatalf("tab from b landed on %v", b.inputFocus)
+	}
+	b.HandleKey("tab")
+	if b.inputFocus == nil || b.inputFocus.Attr("name") != "d" {
+		t.Fatalf("tab from textarea landed on %v", b.inputFocus)
+	}
+	b.HandleKey("tab")
+	if b.inputFocus == nil || b.inputFocus.Attr("name") != "a" {
+		t.Fatalf("tab did not wrap to a: %v", b.inputFocus)
+	}
+	b.HandleKey("backtab")
+	if b.inputFocus == nil || b.inputFocus.Attr("name") != "d" {
+		t.Fatalf("backtab did not wrap to d: %v", b.inputFocus)
+	}
+}
+
 func TestInputWordEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="https://en.wikipedia.org/wiki/Wyoming"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")

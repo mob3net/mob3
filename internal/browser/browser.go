@@ -1588,6 +1588,71 @@ func (b *Browser) setInputFocus(n *Node) {
 	b.rebuild()
 }
 
+// focusNextInput moves focus to the next or previous visible text-like control
+// in document order, wrapping at the ends. It backs Tab and Shift-Tab while a
+// field is focused.
+func (b *Browser) focusNextInput(current *Node, delta int) {
+	if b.page == nil || b.page.Root == nil || current == nil {
+		return
+	}
+	controls := b.page.Root.FindAll(func(n *Node) bool {
+		if !isTextInput(n) || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
+			return false
+		}
+		return true
+	})
+	if len(controls) == 0 {
+		return
+	}
+	idx := -1
+	for i, n := range controls {
+		if n == current {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		next := controls[0]
+		if delta < 0 {
+			next = controls[len(controls)-1]
+		}
+		b.setInputFocus(next)
+		b.ensureInputVisible(next)
+		return
+	}
+	next := controls[(idx+delta+len(controls))%len(controls)]
+	if next == current {
+		return
+	}
+	b.setInputFocus(next)
+	b.ensureInputVisible(next)
+}
+
+// ensureInputVisible scrolls a focused control into the viewport.
+func (b *Browser) ensureInputVisible(n *Node) {
+	if b.layout == nil || n == nil {
+		return
+	}
+	top, bottom := b.viewport()
+	vh := bottom - top
+	if vh < 1 {
+		vh = 1
+	}
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Node != n || f.Fixed {
+			continue
+		}
+		if f.Y < b.scroll {
+			b.scroll = f.Y - 1
+		} else if f.Y+f.H >= b.scroll+vh {
+			b.scroll = f.Y + f.H - vh + 1
+		}
+		b.clampScroll()
+		return
+	}
+}
+
 func (b *Browser) setInputValue(n *Node, v string) {
 	if n == nil {
 		return
@@ -3131,8 +3196,11 @@ func (b *Browser) handleInputKey(k string) bool {
 		n.InputCursor = 0
 		b.setInputValue(n, "")
 		return false
-	case "tab", "backtab":
-		b.setInputFocus(nil)
+	case "tab":
+		b.focusNextInput(n, 1)
+		return false
+	case "backtab":
+		b.focusNextInput(n, -1)
 		return false
 	case "ctrl-c":
 		return true
@@ -3163,8 +3231,11 @@ func (b *Browser) handleRangeKey(n *Node, k string) bool {
 	case "enter":
 		b.submitInput()
 		return false
-	case "tab", "backtab":
-		b.setInputFocus(nil)
+	case "tab":
+		b.focusNextInput(n, 1)
+		return false
+	case "backtab":
+		b.focusNextInput(n, -1)
 		return false
 	case "ctrl-c":
 		return true

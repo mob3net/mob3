@@ -672,7 +672,10 @@ Standard Go layout:
   their value; only the visible rows are produced, so typing into a huge value
   stays cheap. A text-like control with an explicit CSS width pads its widget
   to that width; in a flex row it fills the width allocated by flex (the home
-  search box is `flex:1` beside the `Go` button). Required controls,
+  search box is `flex:1` beside the `Go` button). `Tab`/`Shift-Tab` move
+  focus to the next/previous visible text-like control in document order,
+  wrapping at the ends; disabled, hidden and read-only controls are skipped.
+  Required controls,
   `pattern`, `maxlength`, `readonly` and
   `disabled` are enforced; disabled controls are not submitted. Date, time,
   datetime-local, month and week inputs are edited as typed text with format
