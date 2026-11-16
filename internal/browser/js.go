@@ -395,6 +395,9 @@ func (b *Browser) runJSTimers() bool {
 		return false
 	}
 	b.js.consumeDirty()
+	if !b.reader {
+		b.refreshImages()
+	}
 	b.rebuild()
 	return true
 }

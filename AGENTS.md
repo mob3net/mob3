@@ -385,7 +385,12 @@ Standard Go layout:
   aspect ratio preserved; display is capped at 40% of the viewport width and
   16 rows, preserving the ratio; transparency composited over the underlying
   cell;
-  PNG/JPEG/GIF/WebP/BMP and SVG. SVG is rasterized with oksvg +
+  PNG/JPEG/GIF/WebP/BMP and SVG. `srcset` candidates are chosen for the
+  40%-wide terminal target (smallest width at least as wide, else the widest),
+  `<picture>` `<source>` media/type entries are honoured, and common
+  `data-src`/`data-srcset` lazy placeholders are used when no standard source is
+  present. After page scripts and timer rebuilds, images whose `src`/`srcset`
+  changed are loaded again. SVG is rasterized with oksvg +
   rasterx (partial SVG2), capped to 1024 px. External SVG is decoded from the
   response; inline `<svg>` is serialized back to XML with SVG camelCase names
   restored and rasterized before layout. If inline SVG decoding fails it falls
@@ -1120,7 +1125,9 @@ Standard Go layout:
   nothing is written to disk. The limit is editable in `about:config`. The
   separate back/forward page cache is described under History.
 - Images load concurrently (max 6) and use the session resource cache per
-  resolved URL for reloads.
+  resolved URL for reloads. Initial loading also selects `srcset`/`picture`
+  candidates, and images added or changed by page scripts (including lazy
+  `data-src` hydration) are loaded after scripts and timer-driven rebuilds.
 - Blocked responses are replaced with a locally generated “Site blocked” page
   with a `about:retry` **Try anyway** link; by default they do not run the
   site’s challenge scripts or load its assets. Clicking the link re-fetches the
@@ -1615,9 +1622,10 @@ engine work only; do not add site-specific exceptions.
 
 ### P3 — Images and generated content
 
-- **Responsive and lazy images.** Choose a sensible `srcset` candidate, handle
-  common `data-src`/placeholder patterns where scripts do not run, and avoid
-  picking a tiny candidate for hero images.
+- **Image candidate fallback.** When a `<picture>` source candidate fails to
+  decode (for example an AVIF URL without a `type` hint), the `img` fallback is
+  not retried, and `srcset` URLs containing literal commas are split as
+  candidates.
 - **Alt-label overflow.** With graphics disabled, long `[image: alt]` labels
   can overlap neighboring columns. Truncate to the image box or use a compact
   marker while keeping the full alt text available for the focused link.

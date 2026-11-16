@@ -322,6 +322,9 @@ func (b *Browser) setLoader(l *Loader) {
 	b.loader = l
 	if l != nil {
 		l.historyFn = b.historySnapshot
+		if b.width > 0 {
+			l.imageViewportPx = b.width * 8
+		}
 	}
 }
 
@@ -637,6 +640,9 @@ func (b *Browser) finishLoad(res loadResult) {
 		} else {
 			readerFailed = true
 		}
+	}
+	if !b.reader {
+		b.refreshImages()
 	}
 	b.rebuild()
 	b.scroll = 0
@@ -1022,9 +1028,25 @@ func (b *Browser) reload() {
 	b.navigateRequest(method, b.url.String(), b.lastBody, b.lastContentType, false)
 }
 
+// refreshImages loads images that appeared or changed after the document's
+// first image pass, such as lazy-loading scripts copying data-src into src or
+// inserting new image elements. It returns true when a new source was found.
+func (b *Browser) refreshImages() bool {
+	if b == nil || b.loader == nil || b.loader.noImages || b.page == nil || b.page.Root == nil {
+		return false
+	}
+	allowFile := b.page.URL != nil && b.page.URL.Scheme == "file"
+	return b.loader.loadImages(context.Background(), b.page.Root, b.page.Base, allowFile)
+}
+
 func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
+	}
+	// Scripts may set image sources on any interaction that triggers a rebuild.
+	// Scanning here is cheap when nothing changed.
+	if b.js != nil && !b.reader {
+		b.refreshImages()
 	}
 	b.hoverRebuildPending = false
 	// Timer-driven DOM changes (for example marquee animations) rebuild the

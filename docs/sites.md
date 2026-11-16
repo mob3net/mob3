@@ -21,6 +21,9 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   `EventTarget`, `CSS.escape`, `customElements`, `ReadableStream`, `Path2D`,
   Web Animations stubs and inert `Worker`s. Dynamic `import()` resolves to an
   empty module namespace instead of failing the whole script.
+- Responsive and lazy images: `srcset` candidates, `<picture>` sources and
+  common `data-src`/`data-srcset` placeholders are selected, and images added
+  or changed by scripts are loaded after the page runs.
 - Reader mode (`R` or `-reader`) for long articles.
 
 ## Often rough

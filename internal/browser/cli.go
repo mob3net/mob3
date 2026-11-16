@@ -323,6 +323,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 			width = 100
 		}
 	}
+	loader.imageViewportPx = width * 8
 	page, err := loader.Load(target, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: %s\n", stripTerminalControls(err.Error()))
@@ -333,6 +334,10 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		runner.noJS = false
 		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
+		if !loader.noImages {
+			allowFile := page.URL != nil && page.URL.Scheme == "file"
+			loader.loadImages(context.Background(), page.Root, page.Base, allowFile)
+		}
 	}
 	root, author := page.Root, page.Author
 	if reader {
