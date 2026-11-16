@@ -2193,19 +2193,20 @@ type inlineItem struct {
 }
 
 type inlineCtx struct {
-	l          *layouter
-	x, y       int
-	baseX      int
-	baseW      int
-	maxW       int
-	imageCapW  int
-	base       *Style
-	items      []inlineItem
-	curW       int
-	hasContent bool
-	space      bool
-	spaceStyle *Style
-	spaceNode  *Node
+	l           *layouter
+	x, y        int
+	baseX       int
+	baseW       int
+	maxW        int
+	imageCapW   int
+	base        *Style
+	items       []inlineItem
+	curW        int
+	hasContent  bool
+	space       bool
+	spaceStyle  *Style
+	spaceNode   *Node
+	breakBefore bool
 }
 
 // lineBounds returns the left edge and width available for the line that
@@ -2331,9 +2332,12 @@ func (c *inlineCtx) collect(n *Node) {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: left, style: st, node: n})
 			c.curW += left
 		}
+		savedBreak := c.breakBefore
+		c.breakBefore = true
 		for _, ch := range n.Children {
 			c.collect(ch)
 		}
+		c.breakBefore = savedBreak
 		if right > 0 {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: right, style: st, node: n})
 			c.curW += right
@@ -2480,6 +2484,12 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 	if w == "" {
 		return
 	}
+	if c.breakBefore {
+		c.breakBefore = false
+		if (c.base == nil || c.base.WhiteSpace != "nowrap") && c.curW > 0 && c.curW+c.l.textWidth(w, st) > c.lineMaxW() {
+			c.flush(false)
+		}
+	}
 	width := c.l.textWidth(w, st)
 	if width <= 0 {
 		return
@@ -2502,7 +2512,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		c.space = false
 		c.spaceStyle, c.spaceNode = nil, nil
 	}
-	if width > c.lineMaxW() && !nowrap {
+	if width > c.lineMaxW() && (c.base == nil || c.base.WhiteSpace != "nowrap") {
 		for _, r := range w {
 			rw := c.charW(r, st)
 			if rw == 0 {
@@ -3534,6 +3544,36 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 }
 
 // table lays out a display:table subtree with collapsed one-cell grid borders.
+// growColumns adds extra cells to columns in proportion to their remaining
+// max-content slack, so a wide data column grows more than a short label one.
+func growColumns(cols, caps []int, extra int) {
+	if extra <= 0 || len(cols) == 0 {
+		return
+	}
+	weights := make([]int, len(cols))
+	sum := 0
+	for i := range cols {
+		slack := caps[i] - cols[i]
+		if slack < 0 {
+			slack = 0
+		}
+		weights[i] = slack
+		sum += slack
+	}
+	assigned := 0
+	for i, w := range weights {
+		add := extra / len(cols)
+		if sum > 0 {
+			add = extra * w / sum
+		}
+		if i == len(weights)-1 {
+			add = extra - assigned
+		}
+		cols[i] += add
+		assigned += add
+	}
+}
+
 // distributeSpan raises the columns of a spanning cell so their total reaches
 // target, splitting the deficit in proportion to their current widths.
 func distributeSpan(cols []int, col, span, target int) {
@@ -3685,7 +3725,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			// Legacy table cells carry width hints. They size the column, not
 			// the cell's content box, so percentage/fixed widths must be folded
 			// into the column targets below.
-			if st := c.node.Style; st != nil && st.Width.Set && !st.Width.IsAuto() {
+			if st := c.node.Style; c.span == 1 && st != nil && st.Width.Set && !st.Width.IsAuto() {
 				if st.Width.U == UnitPercent {
 					hasPct = true
 					for k := 0; k < c.span && c.col+k < ncols; k++ {
@@ -3750,6 +3790,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	// Percentage columns resolve against the table width, so a table using
 	// them fills the available width and lets the auto columns take the rest.
 	if hasPct {
+		caps := append([]int(nil), colW...)
 		inner := tableTarget - (ncols + 1)
 		if inner < 1 {
 			inner = 1
@@ -3774,6 +3815,9 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 				w := 1
 				if pctSum > 0 {
 					w = int(math.Round(float64(remaining) * colPct[i] / float64(pctSum)))
+				}
+				if w < colMin[i] {
+					w = colMin[i]
 				}
 				if w < 1 {
 					w = 1
@@ -3804,9 +3848,8 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			colW[widest]--
 			assigned--
 		}
-		for i := 0; assigned < inner; i = (i + 1) % ncols {
-			colW[i]++
-			assigned++
+		if assigned < inner {
+			growColumns(colW, caps, inner-assigned)
 		}
 		// The percentage layout now becomes the minimum, so the shrink pass
 		// below cannot replace it with unnormalised min-content widths.
@@ -3974,6 +4017,10 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			// it again to the content box would shrink the content to a
 			// fraction of its own column.
 			cs.Width = Length{}
+			// Table content must not paint outside its cell; nowrap link lists
+			// and oversized inline content would otherwise spill across the
+			// grid lines.
+			cs.Overflow = "hidden"
 			c.node.Style = &cs
 			start := len(l.frags)
 			h := l.block(c.node, colX[c.col], rowY, cw)

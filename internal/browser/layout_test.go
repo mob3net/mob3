@@ -1870,3 +1870,36 @@ func TestTablePercentageColumnsFit(t *testing.T) {
 		t.Fatalf("overflowing percentage table = %d, want 40", got)
 	}
 }
+
+func TestNowrapInlineElementsWrapBetweenBoxes(t *testing.T) {
+	ly := build(`<div style="width:20ch"><a style="white-space:nowrap">aaaaaaaaaaaa</a><a style="white-space:nowrap">bbbbbbbbbbbb</a></div>`, 40)
+	var a, b *Frag
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && strings.HasPrefix(f.Text, "aaa") {
+			a = f
+		}
+		if f.Kind == fragText && strings.HasPrefix(f.Text, "bbb") {
+			b = f
+		}
+	}
+	if a == nil || b == nil {
+		t.Fatalf("links missing: a=%v b=%v", a != nil, b != nil)
+	}
+	if b.Y <= a.Y {
+		t.Fatalf("second nowrap link did not wrap: %d -> %d", a.Y, b.Y)
+	}
+}
+
+func TestLongNowrapInlineContentSplits(t *testing.T) {
+	ly := build(`<div style="width:10ch"><a style="white-space:nowrap">abcdefghijklmno</a></div>`, 40)
+	lines := map[int]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text != "" {
+			lines[f.Y] = true
+		}
+	}
+	if len(lines) < 2 {
+		t.Fatalf("long nowrap inline content did not split: %d line(s)", len(lines))
+	}
+}

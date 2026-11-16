@@ -354,7 +354,10 @@ Standard Go layout:
 - **Wide characters:** East Asian/emoji width 2, combining marks width 0,
   continuation cells marked and skipped in ANSI output.
 - **Text wrapping:** greedy word wrapping; overlong words are hard-split;
-  `white-space: pre` preserves spaces/newlines; `nowrap` never wraps.
+  `white-space: pre` preserves spaces/newlines. `nowrap` prevents breaks inside
+  a run, but separate nowrap inline boxes may wrap between each other, and a
+  nowrap run wider than its line is hard-split unless the containing block is
+  nowrap, so terminal lines do not overflow.
   `text-align: justify` stretches inter-word spaces on wrapped lines; the last
   line and forced breaks (`<br>`, newlines) stay left-aligned.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
