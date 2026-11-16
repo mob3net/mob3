@@ -2038,13 +2038,16 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 	}
 }
 
-func TestFooterPercentFarRight(t *testing.T) {
+func TestFooterOmitsScrollPercent(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.layout = &Layout{Height: 107}
 	b.scroll = 50
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	if !strings.Contains(line, "50%") || !strings.HasSuffix(line, ">_") {
+	if strings.Contains(line, "%") {
+		t.Fatalf("footer still shows a scroll percentage: %q", line)
+	}
+	if !strings.HasSuffix(line, ">_") {
 		t.Fatalf("footer = %q", line)
 	}
 }
@@ -2055,10 +2058,8 @@ func TestFooterShowsUsage(t *testing.T) {
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
 	line := b.prev[len(b.prev)-1]
-	for _, want := range []string{"MEM 18MB", "0%"} {
-		if !strings.Contains(line, want) {
-			t.Errorf("footer = %q, want %q", line, want)
-		}
+	if !strings.Contains(line, "MEM 18MB") {
+		t.Errorf("footer = %q, want MEM 18MB", line)
 	}
 	for _, unwanted := range []string{"CPU", "Tab:", "q: quit", "h/l", "q Quit", "? Help"} {
 		if strings.Contains(line, unwanted) {
@@ -2124,7 +2125,7 @@ func TestFooterUsageDropsOnNarrow(t *testing.T) {
 	if strings.Contains(line, "MEM") {
 		t.Fatalf("narrow footer still shows usage: %q", line)
 	}
-	if !strings.Contains(line, "0%") || !strings.HasSuffix(line, ">_") {
+	if !strings.HasSuffix(line, ">_") {
 		t.Fatalf("narrow footer = %q", line)
 	}
 }
@@ -2665,7 +2666,7 @@ func TestFooterRightCollapsesLeftToRight(t *testing.T) {
 	b := NewBrowser(160, 10)
 	b.usage = procUsage{rss: 18 << 20}
 	full := b.footerRight(100)
-	for _, want := range []string{"JavaScript:on", "Graphics:none", "Dark:off", "Reader:off", "MEM 18MB", "0%"} {
+	for _, want := range []string{"JavaScript:on", "Graphics:none", "Dark:off", "Reader:off", "MEM 18MB"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("wide footer missing %q: %q", want, full)
 		}
@@ -2676,10 +2677,10 @@ func TestFooterRightCollapsesLeftToRight(t *testing.T) {
 		gone  []string
 	}{
 		{60, "JavaScript:on", []string{"Graphics:none"}},
-		{45, "Dark:off", []string{"JavaScript:on"}},
-		{35, "Reader:off", []string{"Dark:off"}},
+		{40, "Dark:off", []string{"JavaScript:on"}},
+		{25, "Reader:off", []string{"Dark:off"}},
 		{20, "MEM 18MB", []string{"Reader:off"}},
-		{10, "0%", []string{"MEM 18MB", "Reader:off", "Dark:off", "JavaScript:on", "Graphics:none"}},
+		{10, "MEM 18MB", []string{"Reader:off", "Dark:off", "JavaScript:on", "Graphics:none"}},
 	}
 	for _, tc := range cases {
 		got := b.footerRight(tc.width)

@@ -766,20 +766,22 @@ Standard Go layout:
   so value changes patch only that control's fragments; an auto-width control
   relayouts when its box grows or shrinks.
 - **Footer:** shows the hovered link target or status on the left and, on the
-  right, current resident memory (`MEM 18MB`), the scroll percentage,
+  right, current resident memory (`MEM 18MB`),
   resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
   becomes red bold `JavaScript:Error` when a script fails), clickable
   `Graphics:<mode>`, `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels
   before the memory
-  readout, and a clickable `>_` console icon pinned to the far right edge.
+  readout, and a clickable `>_` console icon pinned to the far right edge. The
+  scroll percentage is not shown in the footer; the `scroll` automation tool
+  still reports it.
   Clicking the `JavaScript:on`/`JavaScript:off` label toggles scripting for the
   session and reloads the current page, exactly like `J`; the console is
   opened by the `>_` icon or `!`.
   Clicking the `Graphics:<mode>` label cycles graphics modes exactly like `i`,
   and the `i` in that label is underlined to advertise the shortcut.
   Right-side items collapse from left to right as the terminal narrows:
-  `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and memory,
-  leaving the scroll percentage last. The right-side budget depends only on
+  `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and finally
+  memory. The right-side budget depends only on
   terminal width (it may use at most half the footer), so at least half is
   always kept for the left status/URL and a long message never collapses the
   right state.

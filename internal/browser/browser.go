@@ -4682,12 +4682,6 @@ func (b *Browser) draw() {
 				reserve += consoleW + 2
 			}
 			rightBudget := w/2 - reserve - footerGap
-			// Never truncate the scroll percentage just because the console
-			// reserve and gap eat into the right half; the left side yields.
-			const pctWidth = 4 // "100%"
-			if rightBudget < pctWidth && w >= reserve+pctWidth {
-				rightBudget = pctWidth
-			}
 			if rightBudget < 1 {
 				rightBudget = 1
 			}
@@ -5057,14 +5051,12 @@ func (b *Browser) graphicsStatusText() string {
 // then the JS state, dark, reader and memory, leaving the scroll percentage
 // last.
 func (b *Browser) footerRight(width int) string {
-	pctText := fmt.Sprintf("%3d%%", b.scrollPercent())
 	parts := []string{
 		b.graphicsStatusText(),
 		b.jsStatusText(),
 		b.darkStatusText(),
 		b.readerStatusText(),
 		b.usage.footer(),
-		pctText,
 	}
 	var base string
 	for drop := 0; drop < len(parts); drop++ {
@@ -5073,9 +5065,6 @@ func (b *Browser) footerRight(width int) string {
 			base = candidate
 			break
 		}
-	}
-	if base == "" {
-		return truncateWidth(pctText, width)
 	}
 	return base
 }
