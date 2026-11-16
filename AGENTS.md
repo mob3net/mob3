@@ -365,13 +365,20 @@ Standard Go layout:
   this avoids `height:100%` on logos becoming 100 terminal rows.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled
   down to available width while keeping each column at its min-content width
-  and shrinking only columns that have slack. Legacy cell `width` hints size the
-  column, not the cell content box: percentage widths fill the available table
-  width (auto columns take the remainder) and fixed widths act as minimums.
-  A table narrower than its container is centred or right-aligned when the
-  inherited `text-align` says so (so `<center><table>` works), and the legacy
-  `nowrap` attribute maps to `white-space:nowrap`. `colspan` supported;
-  `rowspan` ignored; empty rows are skipped. Cells honour
+  and shrinking only columns that have slack. A table `width` declaration
+  (including `width:100%`) sets the used table width and expands narrow tables;
+  when even the min-content total does not fit, columns scale down proportionally
+  instead of overflowing the page. Legacy cell `width` hints size the column,
+  not the cell content box: percentage columns are normalised against the
+  space left by auto columns (so percentages totalling over 100% still fit) and
+  fixed widths act as minimums. A spanning cell constrains the sum of its
+  columns, with the deficit shared in proportion to the columns' other content
+  rather than forcing every column to an equal share. Internal column borders
+  are skipped across a `colspan` cell. A table narrower than its container is
+  centred or right-aligned when the inherited `text-align` says so (so
+  `<center><table>` works), and the legacy `nowrap` attribute maps to
+  `white-space:nowrap`. `colspan` supported; `rowspan` ignored; empty rows are
+  skipped. Cells honour
   `vertical-align: top|middle|bottom` (`middle` is the browser-like default;
   `baseline`/`text-*` map to top), shifting shorter content after the row height
   is final. The cell's own background stays put. Hidden inputs take no space,

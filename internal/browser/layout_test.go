@@ -1846,3 +1846,27 @@ func TestHiddenAttributeHidesElement(t *testing.T) {
 		t.Fatal("visible sibling was lost")
 	}
 }
+
+func firstTableFillWidth(ly *Layout) int {
+	width := 0
+	for _, f := range ly.Frags {
+		if f.Kind == fragFill && f.W > width {
+			width = f.W
+		}
+	}
+	return width
+}
+
+func TestTableWidthDeclaration(t *testing.T) {
+	ly := build(`<table style="width:100%"><tr><td>a</td><td>b</td></tr></table>`, 40)
+	if got := firstTableFillWidth(ly); got != 40 {
+		t.Fatalf("width:100%% table = %d, want 40", got)
+	}
+}
+
+func TestTablePercentageColumnsFit(t *testing.T) {
+	ly := build(`<table style="width:100%"><tr><th style="width:70%">A</th><th style="width:70%">B</th></tr></table>`, 40)
+	if got := firstTableFillWidth(ly); got != 40 {
+		t.Fatalf("overflowing percentage table = %d, want 40", got)
+	}
+}

@@ -2005,7 +2005,9 @@ func (l *layouter) shrinkFitWidth(n *Node, avail int) int {
 	extra := ml + mr + bl + br + pl + pr
 	st := n.Style
 	if st != nil && st.Width.Set && !st.Width.IsAuto() {
-		if w := l.widthValue(st, st.Width, avail); w > maxW {
+		// A specified width replaces the max-content shrink-to-fit width; the
+		// content wraps inside it. Min-content still wins when it is larger.
+		if w := l.widthValue(st, st.Width, avail); w > 0 {
 			maxW = w
 		}
 	}
@@ -3532,6 +3534,41 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 }
 
 // table lays out a display:table subtree with collapsed one-cell grid borders.
+// distributeSpan raises the columns of a spanning cell so their total reaches
+// target, splitting the deficit in proportion to their current widths.
+func distributeSpan(cols []int, col, span, target int) {
+	if span < 1 || col < 0 || col >= len(cols) {
+		return
+	}
+	end := col + span
+	if end > len(cols) {
+		end = len(cols)
+	}
+	sum := 0
+	for i := col; i < end; i++ {
+		sum += cols[i]
+	}
+	if sum >= target {
+		return
+	}
+	deficit := target - sum
+	weights := append([]int(nil), cols[col:end]...)
+	assigned := 0
+	for i, w := range weights {
+		add := 0
+		if sum > 0 {
+			add = deficit * w / sum
+		} else {
+			add = deficit / len(weights)
+		}
+		if i == len(weights)-1 {
+			add = deficit - assigned
+		}
+		cols[col+i] += add
+		assigned += add
+	}
+}
+
 func (l *layouter) table(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
@@ -3624,21 +3661,26 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 	colW := make([]int, ncols)
 	colPct := make([]float64, ncols)
 	hasPct := false
+	type spanCell struct {
+		col, span int
+		pref, min int
+	}
+	var spans []spanCell
 	for _, r := range rows {
 		for _, c := range r.cells {
 			if c.col >= ncols {
 				continue
 			}
 			pref, min := l.measure(c.node)
-			perPref := (pref + c.span - 1) / c.span
-			perMin := (min + c.span - 1) / c.span
-			for k := 0; k < c.span && c.col+k < ncols; k++ {
-				if perPref > colW[c.col+k] {
-					colW[c.col+k] = perPref
+			if c.span == 1 {
+				if pref > colW[c.col] {
+					colW[c.col] = pref
 				}
-				if perMin > colMin[c.col+k] {
-					colMin[c.col+k] = perMin
+				if min > colMin[c.col] {
+					colMin[c.col] = min
 				}
+			} else {
+				spans = append(spans, spanCell{col: c.col, span: c.span, pref: pref, min: min})
 			}
 			// Legacy table cells carry width hints. They size the column, not
 			// the cell's content box, so percentage/fixed widths must be folded
@@ -3666,6 +3708,14 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			}
 		}
 	}
+	// A spanning cell constrains the sum of its columns, not each column
+	// individually. Distribute any deficit in proportion to the existing
+	// non-spanning widths so one wide colspan row cannot force every column to
+	// an equal, oversized share.
+	for _, sc := range spans {
+		distributeSpan(colMin, sc.col, sc.span, sc.min)
+		distributeSpan(colW, sc.col, sc.span, sc.pref)
+	}
 	for i := range colW {
 		if colMin[i] < 1 {
 			colMin[i] = 1
@@ -3677,60 +3727,97 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			colW[i] = 3
 		}
 	}
+	// A table width declaration sets the used table width. Percentages resolve
+	// against the containing block; fixed lengths are in CSS pixels. Without
+	// one, auto tables keep their shrink-to-fit width.
+	tableTarget := availW
+	hasWidth := false
+	if st.Width.Set && !st.Width.IsAuto() {
+		w := 0
+		if st.Width.U == UnitPercent {
+			w = int(math.Round(float64(availW) * st.Width.V / 100))
+		} else {
+			w = st.Width.resolveH(availW, st.FontSize)
+		}
+		if w > 0 {
+			if w > availW {
+				w = availW
+			}
+			tableTarget = w
+			hasWidth = true
+		}
+	}
 	// Percentage columns resolve against the table width, so a table using
 	// them fills the available width and lets the auto columns take the rest.
 	if hasPct {
-		inner := availW - (ncols + 1)
+		inner := tableTarget - (ncols + 1)
 		if inner < 1 {
 			inner = 1
 		}
-		used, autoWeight := 0, 0
-		var autoCols []int
+		// Auto columns keep their min-content width first; percentage columns
+		// then share what remains, normalised when their declared percentages
+		// add up to more than 100%.
+		autoSum, pctSum := 0, 0
 		for i := 0; i < ncols; i++ {
 			if colPct[i] > 0 {
-				w := int(math.Round(float64(inner) * colPct[i] / 100))
-				if w < colMin[i] {
-					w = colMin[i]
-				}
-				colW[i] = w
-				used += w
-				continue
+				pctSum += int(math.Round(colPct[i]))
+			} else {
+				autoSum += colMin[i]
 			}
-			autoCols = append(autoCols, i)
-			autoWeight += colW[i]
 		}
-		remaining := inner - used
-		if remaining < 0 {
-			remaining = 0
+		remaining := inner - autoSum
+		if remaining < 1 {
+			remaining = 1
 		}
-		if len(autoCols) > 0 {
-			assigned := 0
-			for n, i := range autoCols {
-				w := 0
-				if n == len(autoCols)-1 {
-					w = remaining - assigned
-				} else if autoWeight > 0 {
-					w = remaining * colW[i] / autoWeight
-				} else {
-					w = remaining / len(autoCols)
-				}
-				if w < colMin[i] {
-					w = colMin[i]
+		for i := 0; i < ncols; i++ {
+			if colPct[i] > 0 {
+				w := 1
+				if pctSum > 0 {
+					w = int(math.Round(float64(remaining) * colPct[i] / float64(pctSum)))
 				}
 				if w < 1 {
 					w = 1
 				}
 				colW[i] = w
-				assigned += w
+			} else {
+				colW[i] = colMin[i]
+				if colW[i] < 1 {
+					colW[i] = 1
+				}
 			}
 		}
+		// Absorb integer rounding so the table uses exactly the target width.
+		assigned := 0
+		for _, w := range colW {
+			assigned += w
+		}
+		for assigned > inner {
+			widest := 0
+			for i := range colW {
+				if colW[i] > colW[widest] {
+					widest = i
+				}
+			}
+			if colW[widest] <= 1 {
+				break
+			}
+			colW[widest]--
+			assigned--
+		}
+		for i := 0; assigned < inner; i = (i + 1) % ncols {
+			colW[i]++
+			assigned++
+		}
+		// The percentage layout now becomes the minimum, so the shrink pass
+		// below cannot replace it with unnormalised min-content widths.
+		copy(colMin, colW)
 	}
 	total := ncols + 1
 	for _, w := range colW {
 		total += w
 	}
-	if total > availW {
-		avail := availW - (ncols + 1)
+	if total > tableTarget {
+		avail := tableTarget - (ncols + 1)
 		if avail < 1 {
 			avail = 1
 		}
@@ -3742,7 +3829,38 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		}
 		switch {
 		case minSum >= avail:
-			copy(colW, colMin)
+			// Even the min-content widths do not fit (common in nested navbox
+			// tables). Scale columns down proportionally instead of letting the
+			// table overflow the page.
+			assigned := 0
+			for i := range colW {
+				w := 0
+				if minSum > 0 {
+					w = avail * colMin[i] / minSum
+				}
+				if w < 1 {
+					w = 1
+				}
+				colW[i] = w
+				assigned += w
+			}
+			for assigned > avail {
+				widest := 0
+				for i := range colW {
+					if colW[i] > colW[widest] {
+						widest = i
+					}
+				}
+				if colW[widest] <= 1 {
+					break
+				}
+				colW[widest]--
+				assigned--
+			}
+			for i := 0; assigned < avail; i = (i + 1) % len(colW) {
+				colW[i]++
+				assigned++
+			}
 		case sum > avail:
 			budget := avail - minSum
 			slackSum := sum - minSum
@@ -3777,6 +3895,35 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		total = ncols + 1
 		for _, w := range colW {
 			total += w
+		}
+	}
+	// A declared width (notably width:100%) also expands a narrower table.
+	if hasWidth || hasPct {
+		avail := tableTarget - (ncols + 1)
+		if avail < 1 {
+			avail = 1
+		}
+		sum := 0
+		for _, w := range colW {
+			sum += w
+		}
+		if sum < avail {
+			extra := avail - sum
+			weights := append([]int(nil), colW...)
+			assigned := 0
+			for i, w := range weights {
+				add := 0
+				if sum > 0 {
+					add = extra * w / sum
+				} else {
+					add = extra / len(weights)
+				}
+				if i == len(weights)-1 {
+					add = extra - assigned
+				}
+				colW[i] += add
+				assigned += add
+			}
 		}
 	}
 	tableW := ncols + 1
@@ -3865,6 +4012,16 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		l.addFill(x, rowY+rowH, tableW, 1, bc)
 		l.addFill(x, topY, 1, rowH+2, bc)
 		for i := 0; i < ncols; i++ {
+			internal := false
+			for _, c := range r.cells {
+				if i >= c.col && i < c.col+c.span-1 {
+					internal = true
+					break
+				}
+			}
+			if internal {
+				continue
+			}
 			l.addFill(colX[i]+colW[i], topY, 1, rowH+2, bc)
 		}
 		curY = rowY + rowH
