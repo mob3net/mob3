@@ -704,7 +704,10 @@ Standard Go layout:
   lines (keeping the column); typing and Backspace edit at the caret, and a
   long focused input scrolls around the caret. Ctrl-B/F move by character;
   Alt-B/F or Ctrl/Alt+Left/Right move by word; Alt/Ctrl+Backspace, Ctrl-W and
-  Alt-D delete words; Delete removes forward. Ctrl-U clears, and Esc finishes;
+  Alt-D delete words; Delete removes forward. Ctrl-A selects the whole value
+  and paints it with a selection background: typing, Backspace or Delete
+  replaces the value, and any caret move or leaving the field cancels the
+  selection. Ctrl-U clears, and Esc finishes;
   Enter submits from other fields but inserts a newline at the caret in a
   textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap

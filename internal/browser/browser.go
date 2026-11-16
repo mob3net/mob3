@@ -125,22 +125,25 @@ type Browser struct {
 	lastRebuild time.Time
 	lastBuild   time.Duration
 
-	inputFocus    *Node
-	controlFocus  *Node
-	controlOption *Node
-	consoleOpen   bool
-	consoleScroll int
-	reqScroll     int
-	storageScroll int
-	htmlScroll    int
-	toolScroll    int
-	toolLog       []string
-	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
-	consoleText   string
-	consoleCursor int
-	consoleEdit   bool // the input row inside the logs or tools section has focus
-	consoleHist   consoleHistory
-	toolHist      consoleHistory
+	inputFocus *Node
+	// inputSelectAll marks the focused field's whole value as selected by
+	// Ctrl-A. Typing or deleting replaces the value; caret moves cancel it.
+	inputSelectAll bool
+	controlFocus   *Node
+	controlOption  *Node
+	consoleOpen    bool
+	consoleScroll  int
+	reqScroll      int
+	storageScroll  int
+	htmlScroll     int
+	toolScroll     int
+	toolLog        []string
+	consolePane    int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
+	consoleText    string
+	consoleCursor  int
+	consoleEdit    bool // the input row inside the logs or tools section has focus
+	consoleHist    consoleHistory
+	toolHist       consoleHistory
 
 	findActive  bool
 	findText    string
@@ -2153,6 +2156,7 @@ func nearestForm(n *Node) *Node {
 }
 
 func (b *Browser) clearInputFocus() {
+	b.inputSelectAll = false
 	if b.inputFocus != nil {
 		b.inputFocus.InputFocused = false
 		b.inputFocus = nil
@@ -2163,6 +2167,7 @@ func (b *Browser) setInputFocus(n *Node) {
 	if b.inputFocus == n {
 		return
 	}
+	b.inputSelectAll = false
 	b.clearControlFocus()
 	if old := b.inputFocus; old != nil {
 		old.InputFocused = false
@@ -3715,13 +3720,24 @@ func (b *Browser) handleInputKey(k string) bool {
 	if cur < 0 || cur > len(value) {
 		cur = len(value)
 	}
+	all := b.inputSelectAll
+	if k != "ctrl-a" {
+		b.inputSelectAll = false
+	}
 	switch k {
+	case "ctrl-a":
+		b.inputSelectAll = true
+		return false
 	case "esc":
 		b.setInputFocus(nil)
 		b.status = exitHint
 		return false
 	case "enter":
 		if n.Tag == "textarea" {
+			if all {
+				value = ""
+				cur = 0
+			}
 			if utf8.RuneCountInString(value) < 2048 && !inputAtMaxLength(n, value) {
 				n.InputCursor = cur + 1
 				b.setInputValue(n, value[:cur]+"\n"+value[cur:])
@@ -3785,6 +3801,11 @@ func (b *Browser) handleInputKey(k string) bool {
 		b.refreshInputCursor(n)
 		return false
 	case "backspace":
+		if all {
+			n.InputCursor = 0
+			b.setInputValue(n, "")
+			return false
+		}
 		if cur > 0 {
 			prev := prevRuneBoundary(value, cur)
 			n.InputCursor = prev
@@ -3792,6 +3813,11 @@ func (b *Browser) handleInputKey(k string) bool {
 		}
 		return false
 	case "alt-backspace", "ctrl-backspace", "ctrl-w":
+		if all {
+			n.InputCursor = 0
+			b.setInputValue(n, "")
+			return false
+		}
 		cut := prevWordBoundary(value, cur)
 		if cut < cur {
 			n.InputCursor = cut
@@ -3799,6 +3825,11 @@ func (b *Browser) handleInputKey(k string) bool {
 		}
 		return false
 	case "delete":
+		if all {
+			n.InputCursor = 0
+			b.setInputValue(n, "")
+			return false
+		}
 		if cur < len(value) {
 			next := nextRuneBoundary(value, cur)
 			n.InputCursor = cur
@@ -3806,6 +3837,11 @@ func (b *Browser) handleInputKey(k string) bool {
 		}
 		return false
 	case "alt-delete", "ctrl-delete", "alt-d":
+		if all {
+			n.InputCursor = 0
+			b.setInputValue(n, "")
+			return false
+		}
 		end := forwardWordBoundary(value, cur)
 		if end > cur {
 			n.InputCursor = cur
@@ -3828,6 +3864,10 @@ func (b *Browser) handleInputKey(k string) bool {
 	if utf8.RuneCountInString(k) == 1 {
 		r, _ := utf8.DecodeRuneInString(k)
 		if r >= 32 && r != 127 && len([]rune(value)) < 2048 && !inputAtMaxLength(n, value) {
+			if all {
+				value = ""
+				cur = 0
+			}
 			n.InputCursor = cur + len(k)
 			b.setInputValue(n, value[:cur]+k+value[cur:])
 		}
@@ -4215,9 +4255,44 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 }
 
 // draw renders the UI and writes changed lines to the terminal.
+// paintInputSelection paints the selected value area of the focused field after
+// Ctrl-A. The brackets and any padding outside the value stay in the field's
+// normal focused colors.
+func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
+	n := b.inputFocus
+	if !b.inputSelectAll || n == nil || b.layout == nil {
+		return
+	}
+	selBG := RGB(0x1f, 0x4f, 0x9f)
+	selFG := RGB(0xf8, 0xfa, 0xfc)
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind != fragText || f.Node != n || f.W < 4 {
+			continue
+		}
+		y := f.Y - b.scroll + top
+		if y < top || y >= bottom || y >= g.H {
+			continue
+		}
+		for x := f.X + 2; x < f.X+f.W-2; x++ {
+			if x < 0 || x >= g.W {
+				continue
+			}
+			cell := &g.Cells[y*g.W+x]
+			if cell.Img {
+				continue
+			}
+			cell.BG = selBG
+			if cell.R != ' ' && cell.R != 0 {
+				cell.FG = selFG
+			}
+		}
+	}
+}
+
 // paintInputCursor draws the caret over a focused input or textarea.
 func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
-	if b.layout == nil || !b.layout.HasCursor {
+	if b.layout == nil || !b.layout.HasCursor || b.inputSelectAll {
 		return
 	}
 	r := b.layout.Cursor
@@ -4263,6 +4338,7 @@ func (b *Browser) draw() {
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
 	b.paintControlFocus(g, top, bottom)
+	b.paintInputSelection(g, top, bottom)
 	b.paintInputCursor(g, top, bottom)
 	b.paintSelection(g, top, bottom)
 	b.paintFindPage(g, top, bottom)

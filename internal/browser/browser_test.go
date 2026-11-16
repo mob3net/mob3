@@ -1015,6 +1015,74 @@ func TestInputTabMovesFocus(t *testing.T) {
 	}
 }
 
+func TestInputCtrlASelectsAll(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="hello world"></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.color = true
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	q := inputByName(doc, "q")
+	b.setInputFocus(q)
+
+	b.HandleKey("ctrl-a")
+	if !b.inputSelectAll {
+		t.Fatal("ctrl-a did not select the field value")
+	}
+	drawQuiet(b)
+	found := false
+	for _, line := range b.prev {
+		if strings.Contains(line, "48;2;31;79;159") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("selected field is not painted with the selection background: %v", b.prev)
+	}
+
+	// Typing replaces the whole selection.
+	b.HandleKey("Z")
+	if got := inputValue(q); got != "Z" {
+		t.Fatalf("typing over selection = %q, want Z", got)
+	}
+	if b.inputSelectAll {
+		t.Fatal("selection survived typing")
+	}
+	if q.InputCursor != 1 {
+		t.Fatalf("cursor = %d, want 1", q.InputCursor)
+	}
+
+	// Backspace and Delete also clear the whole selection.
+	b.setInputValue(q, "hello")
+	q.InputCursor = 5
+	b.HandleKey("ctrl-a")
+	b.HandleKey("backspace")
+	if got := inputValue(q); got != "" {
+		t.Fatalf("backspace over selection = %q", got)
+	}
+	b.setInputValue(q, "hello")
+	q.InputCursor = 5
+	b.HandleKey("ctrl-a")
+	b.HandleKey("delete")
+	if got := inputValue(q); got != "" {
+		t.Fatalf("delete over selection = %q", got)
+	}
+
+	// Moving the caret cancels the selection without editing.
+	b.setInputValue(q, "hello")
+	q.InputCursor = 5
+	b.HandleKey("ctrl-a")
+	b.HandleKey("left")
+	if b.inputSelectAll {
+		t.Fatal("cursor movement kept the selection")
+	}
+	if got := inputValue(q); got != "hello" {
+		t.Fatalf("cursor movement edited the value: %q", got)
+	}
+}
+
 func TestInputWordEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="https://en.wikipedia.org/wiki/Wyoming"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
