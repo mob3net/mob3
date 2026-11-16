@@ -1166,3 +1166,96 @@ func TestExternalScriptCollected(t *testing.T) {
 		t.Fatalf("text = %q", got)
 	}
 }
+
+func TestPlatformStubs(t *testing.T) {
+	page := newJSPage(`<html><head><title>t</title></head><body>
+<div id="wrap" class="box"><p class="c" name="x">one</p><p class="c">two</p>
+<a id="lnk" href="/a">link</a><iframe id="f"></iframe></div>
+</body></html>`, ``)
+	b := NewBrowser(60, 20)
+	b.startJS(page)
+	if b.js == nil {
+		t.Fatal("runtime not created")
+	}
+	j := b.js
+	check := func(expr, want string) {
+		t.Helper()
+		v, err := j.runCode("stub check", expr)
+		if err != nil {
+			t.Fatalf("%s: %v", expr, err)
+		}
+		if got := v.String(); got != want {
+			t.Fatalf("%s = %q, want %q", expr, got, want)
+		}
+	}
+
+	check(`String(location)`, "https://example.com/")
+	check(`new URL(location).origin`, "https://example.com")
+	check(`typeof IntersectionObserver`, "function")
+	check(`typeof ResizeObserver`, "function")
+	check(`typeof PerformanceObserver`, "function")
+	check(`typeof NodeList`, "function")
+	check(`typeof HTMLCollection`, "function")
+	check(`typeof EventTarget`, "function")
+	check(`typeof CSS`, "object")
+	check(`typeof CSS.escape`, "function")
+	check(`CSS.escape("a b")`, `a\ b`)
+	check(`typeof customElements.define`, "function")
+	check(`typeof Path2D`, "function")
+	check(`typeof ReadableStream`, "function")
+	check(`typeof Worker`, "function")
+	check(`typeof Element.prototype.animate`, "function")
+	check(`document.body.dataset instanceof DOMStringMap`, "true")
+	check(`document.getElementsByName("x").length`, "1")
+	check(`document.getElementById("wrap").getElementsByClassName("c").length`, "2")
+	check(`document.forms.length`, "0")
+	check(`document.images.length`, "0")
+	check(`document.links.length`, "1")
+	check(`document.getElementById("wrap").style.getPropertyPriority("color")`, "")
+	check(`new URLSearchParams("b=2&a=1").size`, "2")
+	check(`new URLSearchParams("b=2&a=1").entries().length`, "2")
+	check(`Array.from(new URLSearchParams("b=2&a=1")).map(function (p) { return p[0]; }).join(",")`, "a,b")
+	check(`(function () { var p = new URLSearchParams("b=2&a=1"); p.sort(); return p.toString(); })()`, "a=1&b=2")
+	check(`document.getElementById("f").contentDocument !== null`, "true")
+	check(`document.getElementById("f").contentWindow.document === document.getElementById("f").contentDocument`, "true")
+	check(`document.getElementById("f").contentDocument.body !== document.body`, "true")
+
+	// A ReadableStream reader consumes queued chunks.
+	check(`(function () {
+		var s = new ReadableStream({ start: function (c) { c.enqueue("a"); c.close(); } });
+		var r = s.getReader(), out = [];
+		r.read().then(function (x) { out.push(x.value); return r.read(); }).then(function (x) { out.push(String(x.done)); window.__stream = out.join(":"); });
+		return "started";
+	})()`, "started")
+	for i := 0; i < 10 && j.vm.Get("__stream") == nil; i++ {
+		j.tick(time.Now().Add(time.Second))
+	}
+	if v := j.vm.Get("__stream"); v == nil || v.String() != "a:true" {
+		t.Fatalf("ReadableStream result = %v", v)
+	}
+
+	// IntersectionObserver reports one synthetic intersecting entry.
+	_, err := j.runCode("observer", `window.__seen = 0; new IntersectionObserver(function (entries) { window.__seen = entries.length; }).observe(document.body);`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	j.tick(time.Now().Add(time.Second))
+	if v := j.vm.Get("__seen"); v == nil || v.String() != "1" {
+		t.Fatalf("IntersectionObserver entries = %v", v)
+	}
+}
+
+func TestJSFetchRequestObjectWithoutURL(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch({ method: "GET" }).then(
+			function () { document.title = "resolved"; },
+			function (e) { document.title = "rejected:" + e.name; }
+		);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "rejected:TypeError" {
+		t.Fatalf("title = %q", page.Title)
+	}
+}

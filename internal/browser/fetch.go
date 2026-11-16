@@ -734,6 +734,12 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 			return nil, "", u, 0, e
 		}
 		defer resp.Body.Close()
+		if enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))); enc != "" && enc != "identity" && !resp.Uncompressed {
+			// Go's transport decodes gzip transparently and removes the header.
+			// Anything still marked (brotli, zstd, …) would be parsed as raw
+			// bytes and produce meaningless output, so report it instead.
+			return nil, "", u, resp.StatusCode, errors.New("unsupported Content-Encoding: " + enc)
+		}
 		b, e := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize))
 		if e != nil {
 			return nil, "", u, resp.StatusCode, e

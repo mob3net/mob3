@@ -144,7 +144,43 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 		}
 		return goja.Undefined()
 	}))
+	entriesArray := func() *goja.Object {
+		keys := make([]string, 0, len(vals))
+		for k := range vals {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		arr := make([]interface{}, 0, len(keys))
+		for _, k := range keys {
+			for _, v := range vals[k] {
+				arr = append(arr, j.vm.NewArray(k, v))
+			}
+		}
+		return j.vm.NewArray(arr...)
+	}
+	_ = o.Set("entries", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		return entriesArray()
+	}))
+	_ = o.SetSymbol(goja.SymIterator, j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		arr := entriesArray()
+		fn, ok := goja.AssertFunction(arr.Get("values"))
+		if !ok {
+			return goja.Undefined()
+		}
+		it, _ := fn(arr)
+		return it
+	}))
 	_ = o.Set("sort", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		keys := make([]string, 0, len(vals))
+		for k := range vals {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		sorted := make(url.Values, len(vals))
+		for _, k := range keys {
+			sorted[k] = vals[k]
+		}
+		vals = sorted
 		return goja.Undefined()
 	}))
 	_ = o.Set("toString", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
@@ -296,7 +332,11 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 	body := ""
 	headers := map[string][]string{}
 	if ro := jsObject(input); ro != nil {
-		target = ro.Get("url").String()
+		u := ro.Get("url")
+		if u == nil || goja.IsUndefined(u) || goja.IsNull(u) || u.String() == "" {
+			return fail("Failed to parse URL")
+		}
+		target = u.String()
 		if m := ro.Get("method"); m != nil && !goja.IsUndefined(m) && m.String() != "" {
 			method = m.String()
 		}
@@ -566,9 +606,13 @@ func (j *jsRuntime) parseHeaders(v goja.Value) map[string][]string {
 				if pair == nil {
 					continue
 				}
-				key := strings.ToLower(strings.TrimSpace(pair.Get("0").String()))
+				keyValue, valueValue := pair.Get("0"), pair.Get("1")
+				if keyValue == nil || valueValue == nil {
+					continue
+				}
+				key := strings.ToLower(strings.TrimSpace(keyValue.String()))
 				if key != "" {
-					out[key] = append(out[key], pair.Get("1").String())
+					out[key] = append(out[key], valueValue.String())
 				}
 			}
 			return out

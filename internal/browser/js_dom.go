@@ -717,6 +717,29 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		nodes := n.FindAll(func(x *Node) bool { return tag == "*" || x.Tag == tag })
 		return j.nodeArray(nodes)
 	})
+	j.method(o, "getElementsByClassName", func(call goja.FunctionCall) goja.Value {
+		want := strings.Fields(call.Argument(0).String())
+		if len(want) == 0 {
+			return j.nodeArray(nil)
+		}
+		nodes := n.FindAll(func(x *Node) bool {
+			classes := x.ClassList()
+			for _, w := range want {
+				found := false
+				for _, c := range classes {
+					if c == w {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return false
+				}
+			}
+			return true
+		})
+		return j.nodeArray(nodes)
+	})
 	j.method(o, "click", func(call goja.FunctionCall) goja.Value {
 		j.fireNodeEvent(n, "click")
 		j.markDirty()
@@ -983,6 +1006,25 @@ func (j *jsRuntime) newDetachedDocument(title string) *goja.Object {
 		nodes := html.FindAll(func(x *Node) bool { return tag == "*" || x.Tag == tag })
 		return j.nodeArray(nodes)
 	})
+	j.method(doc, "getElementsByName", func(call goja.FunctionCall) goja.Value {
+		want := call.Argument(0).String()
+		nodes := html.FindAll(func(x *Node) bool { return attrValue(x, "name") == want })
+		return j.nodeArray(nodes)
+	})
+	collection := func(pick func(*Node) bool) func() goja.Value {
+		return func() goja.Value {
+			return j.nodeArray(html.FindAll(pick))
+		}
+	}
+	j.accessor(doc, "forms", collection(func(x *Node) bool { return x.Tag == "form" }), nil)
+	j.accessor(doc, "images", collection(func(x *Node) bool { return x.Tag == "img" }), nil)
+	j.accessor(doc, "links", collection(func(x *Node) bool {
+		return (x.Tag == "a" || x.Tag == "area") && x.HasAttr("href")
+	}), nil)
+	j.accessor(doc, "anchors", collection(func(x *Node) bool {
+		return x.Tag == "a" && x.HasAttr("name")
+	}), nil)
+	j.accessor(doc, "scripts", collection(func(x *Node) bool { return x.Tag == "script" }), nil)
 	return doc
 }
 
@@ -1303,6 +1345,25 @@ func (j *jsRuntime) documentObject() *goja.Object {
 		nodes := root.FindAll(func(x *Node) bool { return tag == "*" || x.Tag == tag })
 		return j.nodeArray(nodes)
 	})
+	j.method(o, "getElementsByName", func(call goja.FunctionCall) goja.Value {
+		want := call.Argument(0).String()
+		nodes := root.FindAll(func(x *Node) bool { return attrValue(x, "name") == want })
+		return j.nodeArray(nodes)
+	})
+	collection := func(pick func(*Node) bool) func() goja.Value {
+		return func() goja.Value {
+			return j.nodeArray(root.FindAll(pick))
+		}
+	}
+	j.accessor(o, "forms", collection(func(x *Node) bool { return x.Tag == "form" }), nil)
+	j.accessor(o, "images", collection(func(x *Node) bool { return x.Tag == "img" }), nil)
+	j.accessor(o, "links", collection(func(x *Node) bool {
+		return (x.Tag == "a" || x.Tag == "area") && x.HasAttr("href")
+	}), nil)
+	j.accessor(o, "anchors", collection(func(x *Node) bool {
+		return x.Tag == "a" && x.HasAttr("name")
+	}), nil)
+	j.accessor(o, "scripts", collection(func(x *Node) bool { return x.Tag == "script" }), nil)
 	j.method(o, "createElement", func(call goja.FunctionCall) goja.Value {
 		tag := strings.ToLower(strings.TrimSpace(call.Argument(0).String()))
 		if tag == "" {
@@ -1560,6 +1621,17 @@ func (j *jsRuntime) styleObject(n *Node) *goja.Object {
 	})
 	j.method(o, "getPropertyValue", func(call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(styleGet(n, call.Argument(0).String()))
+	})
+	j.method(o, "getPropertyPriority", func(goja.FunctionCall) goja.Value {
+		return j.vm.ToValue("")
+	})
+	j.method(o, "item", func(call goja.FunctionCall) goja.Value {
+		idx := int(call.Argument(0).ToInteger())
+		decls := ParseDeclarations(attrValue(n, "style"))
+		if idx >= 0 && idx < len(decls) {
+			return j.vm.ToValue(decls[idx].Prop)
+		}
+		return j.vm.ToValue("")
 	})
 	j.method(o, "removeProperty", func(call goja.FunctionCall) goja.Value {
 		prop := call.Argument(0).String()

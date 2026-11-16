@@ -31,6 +31,7 @@ func (j *jsRuntime) installCompat() {
 		return j.selectionObject()
 	}))
 	j.installCompatConstructors()
+	j.installPlatformStubs()
 }
 
 // installCompatConstructors defines JS constructor wrappers around the Go
@@ -881,6 +882,9 @@ func (j *jsRuntime) iteratorObject(items []goja.Value) goja.Value {
 // feature-detect.
 func (j *jsRuntime) installElementCompat(o *goja.Object, n *Node) {
 	target := j.vm.NewObject()
+	if j.domStringMapProto != nil {
+		_ = target.SetPrototype(j.domStringMapProto)
+	}
 	proxy := j.vm.NewProxy(target, &goja.ProxyTrapConfig{
 		Has: func(target *goja.Object, prop string) bool {
 			return n.HasAttr("data-" + camelToKebab(prop))

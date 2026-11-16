@@ -16,6 +16,11 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 - Older pages that declare a single-byte charset (Windows-1250/1251/1253/1257
   and ISO-8859-2/5/7 and similar) are decoded correctly from the
   `Content-Type` header or `<meta charset>`.
+- Classic bundles that only need platform APIs to exist: `IntersectionObserver`
+  and `ResizeObserver` (one synthetic entry per target), `NodeList`,
+  `EventTarget`, `CSS.escape`, `customElements`, `ReadableStream`, `Path2D`,
+  Web Animations stubs and inert `Worker`s. Dynamic `import()` resolves to an
+  empty module namespace instead of failing the whole script.
 - Reader mode (`R` or `-reader`) for long articles.
 
 ## Often rough

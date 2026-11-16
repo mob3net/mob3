@@ -164,6 +164,8 @@ Standard Go layout:
 | `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes, `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
+| `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, and an isolated inert iframe `contentDocument`/`contentWindow`. |
+| `js_import.go` | Dynamic `import()` and `import.meta` source rewrite (string/comment/template/regex aware) plus the empty-namespace import stub, because goja cannot parse dynamic imports and modules remain unsupported. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
@@ -865,7 +867,10 @@ Standard Go layout:
   command in their own terminal. `Content-Disposition` is not inspected, so
   attachment HTML pages still render normally.
 - **JavaScript scope:** classic inline and external scripts run in document
-  order after load and before layout. DOM subset: `getElementById`,
+  order after load and before layout. Dynamic `import()` and `import.meta` are
+  rewritten to a host stub before execution: the import resolves to an empty
+  namespace and logs a warning (once per URL) instead of failing to parse the
+  whole bundle. Static module imports/exports are still unsupported. DOM subset: `getElementById`,
   `querySelector(All)`, `getElementsByTagName`, `createElement`,
   `createTextNode`, attributes, `textContent`/`innerText`/`innerHTML`,
   `classList`, `style` (common properties plus `setProperty`/`cssText`),
@@ -885,7 +890,15 @@ Standard Go layout:
   `document` and `window`. `element.click()` dispatches a click. `NodeFilter`,
   `Node.*` constants and `performance.timing`/`navigation` are present.
   `MessageChannel` delivers `postMessage` through the timer queue;
-  `MutationObserver` is a no-op observer. Canvas `getContext("2d")` returns a
+  `MutationObserver` is a no-op observer. `IntersectionObserver` and
+  `ResizeObserver` report one synthetic entry per observed target via the timer
+  queue (intersecting/current layout rect); `PerformanceObserver` is inert.
+  `NodeList`, `HTMLCollection`, `EventTarget`, `DOMStringMap`, `CSS`,
+  `ShadowRoot`, `customElements`, `Path2D`, `ReadableStream` (in-memory reader),
+  `Worker` (inert) and Web Animations (`Element.animate` returns a finished
+  animation) exist so feature detection succeeds. Iframes expose an isolated,
+  inert `contentDocument`/`contentWindow`; writing into it never touches the
+  page. Canvas `getContext("2d")` returns a
   no-op context (no pixel buffer); WebGL returns `null`.
 - **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
@@ -1058,6 +1071,10 @@ Standard Go layout:
   generated documents. `-layout-budget=low|standard|high|none` selects the
   preset; `none` removes the safety limits entirely. The frame is rendered
   partially and marked truncated when a limit is hit.
+- **Content-Encoding:** Go's transport decodes gzip transparently. Any other
+  remaining `Content-Encoding` (brotli, zstd, …) is reported as an unsupported
+  encoding error instead of being parsed as raw HTML/CSS/JS, because the
+  vendored dependency policy has no Brotli decoder.
 - **XHR and fetch:** JavaScript `XMLHttpRequest` and `fetch` always allow
   same-origin requests (default ports normalized). Simple cross-origin requests
   (GET/HEAD/POST with safelisted headers) are sent with an `Origin` header and
@@ -1249,6 +1266,12 @@ Standard Go layout:
   elements registry are absent, and `MessageChannel` delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
+- Dynamic `import()` resolves to an empty module namespace; the rest of a
+  classic bundle keeps running, but imports depending on real exports still
+  fail. Iframes have no browsing context and expose an inert stub document.
+  Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
+  and do not track scrolling or resizing. `ReadableStream` is an in-memory
+  reader, not a streaming fetch body; `Worker` never executes.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
@@ -1370,6 +1393,13 @@ Works well:
   `crypto.getRandomValues`/`randomUUID`, `structuredClone`, `AbortController`/
   `AbortSignal`, `btoa`/`atob`, `Blob`/`File`/`FileReader`, `FormData`,
   `URL.createObjectURL` and `queueMicrotask`.
+- Platform stubs (`js_stubs.go`): `EventTarget`, `NodeList`/`HTMLCollection`,
+  `DOMStringMap`, `CSS` (`escape`/`supports`), `ShadowRoot`, `customElements`
+  registry, `IntersectionObserver`/`ResizeObserver` (one synthetic entry),
+  `PerformanceObserver` (inert), `Path2D`, an in-memory `ReadableStream`,
+  inert `Worker`, Web Animations, and isolated iframe content documents.
+- Dynamic imports (`js_import.go`): `import()` and `import.meta` are rewritten
+  before execution; imports resolve to an empty namespace.
 
 Intentional limits of the shims:
 - `structuredClone` covers primitives, plain objects, arrays, Date, Map, Set
@@ -1383,6 +1413,10 @@ Intentional limits of the shims:
   preorder list on each step.
 - Measurement APIs are approximate: scripts run before layout, so
   `getComputedStyle` and rectangles may reflect defaults until after load.
+- Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
+  and do not follow scrolling or resizing. `ReadableStream` is an in-memory
+  reader, `Worker` never runs, and iframe documents are inert stubs. Dynamic
+  imports resolve to an empty namespace, so real module exports are missing.
 - Inline `style` exposes `transition`/`transform`, animation properties and
   their vendor-prefixed aliases so libraries' CSS feature detection succeeds,
   but transitions and animations are not rendered.
@@ -1390,11 +1424,13 @@ Intentional limits of the shims:
   and `async` are ignored.
 
 Known unsupported families (do not present these as available):
-- Platform: WebAssembly, Workers/SharedWorker/ServiceWorker, WebSocket,
-  EventSource, IndexedDB, Cache API, WebAudio, WebGL, WebRTC, Notifications,
-  geolocation, clipboard, permissions, mediaDevices, PaymentRequest.
-- DOM: Shadow DOM/`attachShadow`, custom elements registry, real
-  Intersection/Resize/Performance observers, iframe browsing contexts,
+- Platform: WebAssembly, real Workers/SharedWorker/ServiceWorker threads
+  (`Worker` is an inert stub), WebSocket, EventSource, IndexedDB, Cache API,
+  WebAudio, WebGL, WebRTC, Notifications, geolocation, clipboard, permissions,
+  mediaDevices, PaymentRequest.
+- DOM: Shadow DOM/`attachShadow`, custom element upgrades (the registry is a
+  stub), real asynchronous Intersection/Resize/Performance observers
+  (observers fire one synthetic entry), iframe browsing contexts (inert stub),
   `<template>.content`, video/audio playback.
 - Network/browser: streaming fetch, upload progress, CORS preflight and
   credentialed cross-origin requests, `sendBeacon`,

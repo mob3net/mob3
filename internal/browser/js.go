@@ -27,23 +27,24 @@ type jsRuntime struct {
 	nodes map[*Node]*goja.Object
 	rev   map[*goja.Object]*Node
 
-	docObj         *goja.Object
-	winObj         *goja.Object
-	navObj         *goja.Object
-	perfObj        *goja.Object
-	locObj         *goja.Object
-	histObj        *goja.Object
-	elementProtos  map[string]*goja.Object
-	elementCtors   []string
-	elementProto   *goja.Object
-	textProto      *goja.Object
-	docProto       *goja.Object
-	headerObjs     map[*goja.Object]map[string][]string
-	start          time.Time
-	pendingNav     string
-	pendingReplace bool
-	pendingForm    *jsFormSubmission
-	dialogActive   atomic.Bool
+	docObj            *goja.Object
+	winObj            *goja.Object
+	navObj            *goja.Object
+	perfObj           *goja.Object
+	locObj            *goja.Object
+	histObj           *goja.Object
+	elementProtos     map[string]*goja.Object
+	elementCtors      []string
+	elementProto      *goja.Object
+	textProto         *goja.Object
+	docProto          *goja.Object
+	domStringMapProto *goja.Object
+	headerObjs        map[*goja.Object]map[string][]string
+	start             time.Time
+	pendingNav        string
+	pendingReplace    bool
+	pendingForm       *jsFormSubmission
+	dialogActive      atomic.Bool
 
 	storageLocal       *goja.Object
 	storageSession     *goja.Object
@@ -242,6 +243,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		}
 	}
 	j.installCompat()
+	j.installDynamicImport()
 	return j
 }
 
@@ -270,7 +272,7 @@ func (b *Browser) startJS(page *Page) {
 				j.currentScript = v
 			}
 		}
-		if _, err := j.runCode(name, sc.Code); err != nil {
+		if _, err := j.runCode(name, rewriteDynamicImport(sc.Code)); err != nil {
 			j.reportError(err)
 		}
 	}
@@ -499,6 +501,11 @@ func (j *jsRuntime) locationObject() *goja.Object {
 		j.requestNavigationReplace(href)
 		return goja.Undefined()
 	}))
+	stringify := j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(href)
+	})
+	_ = o.Set("toString", stringify)
+	_ = o.Set("valueOf", stringify)
 	return o
 }
 

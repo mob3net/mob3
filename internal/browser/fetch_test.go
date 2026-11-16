@@ -1032,3 +1032,24 @@ func mustURL(t *testing.T, raw string) *url.URL {
 	}
 	return u
 }
+
+type brTransport struct{}
+
+func (brTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	h := make(http.Header)
+	h.Set("Content-Type", "text/html")
+	h.Set("Content-Encoding", "br")
+	return &http.Response{
+		Status: "200 OK", StatusCode: 200, Proto: "HTTP/1.1", Header: h,
+		Body: io.NopCloser(strings.NewReader("not really brotli")), Request: req,
+	}, nil
+}
+
+func TestUnsupportedContentEncoding(t *testing.T) {
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: brTransport{}}
+	_, err := loader.Load("https://example.com/", nil)
+	if err == nil || !strings.Contains(err.Error(), "unsupported Content-Encoding") {
+		t.Fatalf("err = %v, want an unsupported encoding error", err)
+	}
+}
