@@ -237,6 +237,24 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 	if base <= 0 || total <= 0 {
 		return
 	}
+	if strings.TrimSpace(s) == "" {
+		// Scaling a whitespace-only run draws its underline at the unscaled
+		// baseline, which shows up as stray lines inside or below large text.
+		// Leave plain blank cells instead; the surrounding words keep their
+		// own scaled underline.
+		var blank Style
+		if st != nil {
+			blank = *st
+		}
+		blank.Underline = false
+		blank.Strike = false
+		for ry := 0; ry < scale; ry++ {
+			for i := 0; i < total; i++ {
+				g.Put(x+i, y+ry, ' ', &blank, fg, bg)
+			}
+		}
+		return
+	}
 	var b strings.Builder
 	// Use the minimal documented form: scale only. With w omitted (w=0), the
 	// terminal derives the cell width itself, which matches the layout width

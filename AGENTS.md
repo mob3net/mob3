@@ -303,7 +303,10 @@ Standard Go layout:
   scaled runs overlap other text in the same cells falls back to normal-size
   text for that page, so dense multi-column layouts are not garbled. Control
   characters are stripped before text is embedded in the OSC sequence, so page
-  text cannot inject terminal escapes.
+  text cannot inject terminal escapes. Whitespace-only runs are painted as
+  plain blank cells instead of scaled text, because scaling a space makes
+  terminals draw its underline at the unscaled baseline as stray lines inside
+  or below large headings; the surrounding words keep their scaled underline.
 - **No font files:** the terminal font is used for all glyphs; font size affects
   line height and emphasis, not glyph scale outside kitty.
 - **UA page style:** the grid defaults to a white page background and

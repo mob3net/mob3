@@ -439,3 +439,18 @@ func TestIsSVG(t *testing.T) {
 		t.Fatal("PNG misdetected as SVG")
 	}
 }
+
+func TestBigTextWhitespaceHasNoScaledUnderline(t *testing.T) {
+	g := NewGrid(10, 4, RGB(0, 0, 0), RGB(255, 255, 255))
+	st := &Style{FontSize: 32, LineHeight: 1, Underline: true}
+	g.TextBig(0, 0, " ", st, RGB(0, 0, 0), Color{}, 2)
+	for _, idx := range []int{0, 1, 10, 11} {
+		c := g.Cells[idx]
+		if c.Raw != "" || c.Skip || c.Underline {
+			t.Fatalf("cell %d still renders a scaled underlined space: raw=%q skip=%v underline=%v", idx, c.Raw, c.Skip, c.Underline)
+		}
+		if c.R != ' ' {
+			t.Fatalf("cell %d is not blank: %q", idx, c.R)
+		}
+	}
+}
