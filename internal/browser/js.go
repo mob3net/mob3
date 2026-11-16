@@ -27,22 +27,23 @@ type jsRuntime struct {
 	nodes map[*Node]*goja.Object
 	rev   map[*goja.Object]*Node
 
-	docObj        *goja.Object
-	winObj        *goja.Object
-	navObj        *goja.Object
-	perfObj       *goja.Object
-	locObj        *goja.Object
-	histObj       *goja.Object
-	elementProtos map[string]*goja.Object
-	elementCtors  []string
-	elementProto  *goja.Object
-	textProto     *goja.Object
-	docProto      *goja.Object
-	headerObjs    map[*goja.Object]map[string][]string
-	start         time.Time
-	pendingNav    string
-	pendingForm   *jsFormSubmission
-	dialogActive  atomic.Bool
+	docObj         *goja.Object
+	winObj         *goja.Object
+	navObj         *goja.Object
+	perfObj        *goja.Object
+	locObj         *goja.Object
+	histObj        *goja.Object
+	elementProtos  map[string]*goja.Object
+	elementCtors   []string
+	elementProto   *goja.Object
+	textProto      *goja.Object
+	docProto       *goja.Object
+	headerObjs     map[*goja.Object]map[string][]string
+	start          time.Time
+	pendingNav     string
+	pendingReplace bool
+	pendingForm    *jsFormSubmission
+	dialogActive   atomic.Bool
 
 	storageLocal       *goja.Object
 	storageSession     *goja.Object
@@ -490,9 +491,12 @@ func (j *jsRuntime) locationObject() *goja.Object {
 		return goja.Undefined()
 	}
 	_ = o.Set("assign", j.vm.ToValue(assign))
-	_ = o.Set("replace", j.vm.ToValue(assign))
+	_ = o.Set("replace", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		j.requestNavigationReplace(call.Argument(0).String())
+		return goja.Undefined()
+	}))
 	_ = o.Set("reload", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
-		j.requestNavigation(href)
+		j.requestNavigationReplace(href)
 		return goja.Undefined()
 	}))
 	return o
@@ -519,6 +523,16 @@ func (j *jsRuntime) requestNavigation(raw string) {
 		return
 	}
 	j.pendingNav = u.String()
+	j.pendingReplace = false
+}
+
+// requestNavigationReplace queues a navigation that replaces the current
+// history entry, as location.replace() and location.reload() require.
+func (j *jsRuntime) requestNavigationReplace(raw string) {
+	j.requestNavigation(raw)
+	if j.pendingNav != "" {
+		j.pendingReplace = true
+	}
 }
 
 func (j *jsRuntime) historyObject() *goja.Object {

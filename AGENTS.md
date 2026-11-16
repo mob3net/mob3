@@ -801,6 +801,11 @@ Standard Go layout:
   document without fetching, parsing or re-running scripts. Its timers pause
   while cached and resume where they left off, and the oldest cached page is
   dropped beyond the cap. `about:` pages and downloads are never cached.
+  `location.replace` and `location.reload` update the active history entry
+  instead of pushing a new one, and a page that redirects before it settles is
+  recorded first so the entry it replaces exists. Consecutive scripted and
+  meta-refresh redirects stop after 20 hops with `Redirect loop stopped`
+  instead of loading and growing the session forever.
   Nothing is persisted.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and

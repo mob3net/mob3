@@ -1154,7 +1154,10 @@ scroll positions are kept. Up to ten visited pages stay in an in-memory
 back/forward cache, so <b>Back</b> and <b>Forward</b> restore a page, its
 JavaScript state and your scroll position without reloading it. The
 <b>★ Bookmarks</b> button appears with
-<b>-bookmarks file.html</b>. Nothing is saved after MOB³ exits.</p>
+<b>-bookmarks file.html</b>. Nothing is saved after MOB³ exits. Script and
+meta-refresh redirect chains stop after 20 hops with
+<b>Redirect loop stopped</b>, so a page that redirects to itself cannot loop
+forever.</p>
 
 <h2>Config</h2>
 <p>The <b>⚙</b> icon opens <b>about:config</b>. Changes apply to this session

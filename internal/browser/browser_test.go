@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -4887,5 +4888,126 @@ func TestFixedElementsToggleKey(t *testing.T) {
 	b.HandleKey("X")
 	if b.hideFixed || b.status != "Fixed elements shown" {
 		t.Fatalf("after second X: hideFixed=%v status=%q", b.hideFixed, b.status)
+	}
+}
+
+func TestJSLocationReplaceKeepsHistoryEntry(t *testing.T) {
+	cases := []struct {
+		name     string
+		script   string
+		wantURLs []string
+	}{
+		{
+			name:     "replace",
+			script:   `location.replace("/next")`,
+			wantURLs: []string{"https://example.com/next"},
+		},
+		{
+			name:     "assign",
+			script:   `location.assign("/next")`,
+			wantURLs: []string{"https://example.com/start", "https://example.com/next"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := NewBrowser(80, 10)
+			b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+				u, err := url.Parse(target)
+				if err != nil {
+					return nil, err
+				}
+				doc := `<html><body>plain</body></html>`
+				page := &Page{URL: u, Base: u, Root: ParseHTML(doc)}
+				if u.Path == "/start" {
+					page.Scripts = []Script{{Code: tc.script, Src: "test"}}
+				}
+				return page, nil
+			}
+			b.Navigate("https://example.com/start", true)
+			for i := 0; i < 2; i++ {
+				select {
+				case res := <-b.loadCh:
+					b.finishLoad(res)
+				case <-time.After(2 * time.Second):
+					t.Fatalf("load %d did not finish", i+1)
+				}
+			}
+			var got []string
+			for _, e := range b.history {
+				got = append(got, e.URL)
+			}
+			if strings.Join(got, " ") != strings.Join(tc.wantURLs, " ") {
+				t.Fatalf("history = %v, want %v", got, tc.wantURLs)
+			}
+		})
+	}
+}
+
+func TestScriptRedirectLoopStops(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u, err := url.Parse(target)
+		if err != nil {
+			return nil, err
+		}
+		doc := `<html><body>loop</body></html>`
+		return &Page{URL: u, Base: u, Root: ParseHTML(doc),
+			Scripts: []Script{{Code: `location.replace(location.href + "x")`, Src: "test"}}}, nil
+	}
+	b.Navigate("https://example.com/start", true)
+	stopped := false
+	for i := 0; i < maxAutoNavigations+3; i++ {
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatal("redirect loop stalled without a result")
+		}
+		if strings.HasPrefix(b.status, "Redirect loop stopped") {
+			stopped = true
+			break
+		}
+	}
+	if !stopped {
+		t.Fatalf("redirect loop was not stopped; status = %q", b.status)
+	}
+	if b.loading {
+		t.Fatal("a load is still running after the loop was stopped")
+	}
+	if len(b.history) != 1 {
+		t.Fatalf("history grew to %d entries: %v", len(b.history), b.history)
+	}
+}
+
+func TestMetaRefreshLoopStops(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u, err := url.Parse(target)
+		if err != nil {
+			return nil, err
+		}
+		n, _ := strconv.Atoi(u.Query().Get("n"))
+		doc := `<html><head><meta http-equiv="refresh" content="0;url=/loop?n=` + strconv.Itoa(n+1) + `"></head><body>loop</body></html>`
+		return &Page{URL: u, Base: u, Root: ParseHTML(doc)}, nil
+	}
+	b.Navigate("https://example.com/loop?n=0", true)
+	stopped := false
+	for i := 0; i < maxAutoNavigations+3; i++ {
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatal("meta refresh loop stalled without a result")
+		}
+		if strings.HasPrefix(b.status, "Redirect loop stopped") {
+			stopped = true
+			break
+		}
+	}
+	if !stopped {
+		t.Fatalf("meta refresh loop was not stopped; status = %q", b.status)
+	}
+	if b.loading {
+		t.Fatal("a load is still running after the loop was stopped")
 	}
 }

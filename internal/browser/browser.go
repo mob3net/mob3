@@ -69,8 +69,13 @@ type Browser struct {
 	// nextScroll is consumed by the next navigation started from history.
 	nextScroll    int
 	nextScrollSet bool
-	home          string
-	cliConfig     map[string]string
+	// autoNavigations counts consecutive scripted/meta redirects so a
+	// self-redirect loop can be stopped. loopStopped reports that the cap was
+	// hit while applying the current page.
+	autoNavigations int
+	loopStopped     bool
+	home            string
+	cliConfig       map[string]string
 
 	prompt          bool
 	promptText      string
@@ -228,6 +233,12 @@ type historyEntry struct {
 // maxCachedPages bounds the session's back/forward page cache. Oldest entries
 // are dropped first; nothing is written to disk.
 const maxCachedPages = 10
+
+// maxAutoNavigations caps a chain of consecutive scripted or meta-refresh
+// redirects. Each one needs a fresh page load, so a site that redirects to
+// itself would otherwise loop forever and grow the URL and history without
+// bound. User-started navigations and any page that settles reset the count.
+const maxAutoNavigations = 20
 
 // cachedPage is a fully applied page kept for back and forward navigation. The
 // DOM, scripts' runtime state and reader extraction survive, so returning to
@@ -529,6 +540,8 @@ func (b *Browser) stopLoading() {
 	if !b.loading {
 		return
 	}
+	b.autoNavigations = 0
+	b.loopStopped = false
 	b.loadSeq++
 	b.cancelLoadNow()
 	b.status = "Stopped loading"
@@ -552,6 +565,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.loading = false
 	b.finishProgress()
 	if res.err != nil {
+		b.autoNavigations = 0
+		b.loopStopped = false
 		b.status = "Error: " + res.err.Error()
 		if b.page == nil {
 			doc := "<html><body><h2>Could not load page</h2><p>" + EscapeHTML(res.err.Error()) + "</p></body></html>"
@@ -587,14 +602,31 @@ func (b *Browser) finishLoad(res loadResult) {
 	if !b.noJS {
 		removeNoscript(page.Root)
 	}
+	loopStopped := false
 	if target := metaRefreshTarget(page); target != "" && target != page.URL.String() {
-		b.Navigate(target, true)
-		return
+		if b.autoNavigations >= maxAutoNavigations {
+			loopStopped = true
+		} else {
+			// Record this document first: a page that immediately redirects
+			// would otherwise never become a history entry, and a
+			// location.replace redirect would have no entry to update.
+			b.prepareHistory(res.push)
+			b.autoNavigations++
+			b.Navigate(target, true)
+			return
+		}
 	}
 	b.resetConsole()
 	b.startJS(page)
+	if b.js != nil && (b.js.pendingNav != "" || b.js.pendingForm != nil) {
+		b.prepareHistory(res.push)
+	}
 	if b.consumePendingJS() {
 		return
+	}
+	if b.loopStopped {
+		b.loopStopped = false
+		loopStopped = true
 	}
 	b.readerRoot = nil
 	b.readerSavedScroll = 0
@@ -611,7 +643,10 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.focus = -1
 	b.clearControlFocus()
 	b.status = b.pageLoadStatus(page, readerFailed)
-	if note != "" && b.status == "" {
+	switch {
+	case loopStopped:
+		b.status = "Redirect loop stopped"
+	case note != "" && b.status == "":
 		b.status = note
 	}
 	if frag := res.u.Fragment; frag != "" {
@@ -621,9 +656,14 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.scroll = res.restoreScroll
 		b.clampScroll()
 	}
-	if res.push {
-		b.pushHistory(b.url.String(), b.scroll)
+	if b.url != nil {
+		if res.push {
+			b.pushHistory(b.url.String(), b.scroll)
+		} else {
+			b.replaceHistoryEntry(b.url.String(), b.scroll)
+		}
 	}
+	b.autoNavigations = 0
 	b.prev = nil
 }
 
@@ -664,8 +704,19 @@ func (b *Browser) consumePendingJS() bool {
 		return false
 	}
 	target := b.js.pendingNav
+	replace := b.js.pendingReplace
 	b.js.pendingNav = ""
-	b.Navigate(target, true)
+	b.js.pendingReplace = false
+	if b.autoNavigations >= maxAutoNavigations {
+		b.loopStopped = true
+		return false
+	}
+	b.autoNavigations++
+	if replace {
+		b.Navigate(target, false)
+	} else {
+		b.Navigate(target, true)
+	}
 	return true
 }
 
@@ -857,6 +908,44 @@ func (b *Browser) pushHistory(u string, scroll int) {
 	}
 	b.history = append(b.history, historyEntry{URL: u, Scroll: scroll})
 	b.histIdx = len(b.history) - 1
+}
+
+// prepareHistory records the current document in the session history before a
+// potential automatic redirect. push is the navigation's normal push flag; a
+// replace navigation only needs an entry when none exists yet.
+func (b *Browser) prepareHistory(push bool) {
+	if b.url == nil {
+		return
+	}
+	if push {
+		b.pushHistory(b.url.String(), 0)
+		return
+	}
+	b.histMu.RLock()
+	empty := b.histIdx < 0
+	b.histMu.RUnlock()
+	if empty {
+		b.pushHistory(b.url.String(), 0)
+	}
+}
+
+// replaceHistoryEntry updates the active history entry in place after a
+// navigation that must not create a new entry (location.replace and reload).
+func (b *Browser) replaceHistoryEntry(u string, scroll int) {
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
+	if b.histIdx < 0 || b.histIdx >= len(b.history) {
+		return
+	}
+	e := &b.history[b.histIdx]
+	if e.URL != u {
+		if e.cached != nil && e.cached.js != nil {
+			e.cached.js.stop()
+		}
+		e.cached = nil
+	}
+	e.URL = u
+	e.Scroll = scroll
 }
 
 func (b *Browser) back() {
@@ -4802,6 +4891,7 @@ func statusLevelFor(s string) statusLevel {
 		strings.HasPrefix(s, "Form: "),
 		strings.HasPrefix(s, "Site blocked"),
 		strings.HasPrefix(s, "HTTP "),
+		strings.HasPrefix(s, "Redirect loop stopped"),
 		strings.HasPrefix(s, "Blocked local file navigation"),
 		strings.HasPrefix(s, "Config is not available in reader mode"),
 		strings.HasPrefix(s, "Reader mode:"),
