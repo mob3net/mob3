@@ -264,6 +264,86 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		setAttr(n, "class", v.String())
 		j.markDirty()
 	})
+	reflectString := func(jsName, attr string) {
+		j.accessor(o, jsName, func() goja.Value { return j.vm.ToValue(attrValue(n, attr)) }, func(v goja.Value) {
+			setAttr(n, attr, v.String())
+			j.markDirty()
+		})
+	}
+	reflectBool := func(jsName, attr string) {
+		j.accessor(o, jsName, func() goja.Value { return j.vm.ToValue(n.HasAttr(attr)) }, func(v goja.Value) {
+			if v.ToBoolean() {
+				setAttr(n, attr, "")
+			} else {
+				removeAttr(n, attr)
+			}
+			j.markDirty()
+		})
+	}
+	reflectString("title", "title")
+	reflectString("lang", "lang")
+	reflectString("dir", "dir")
+	reflectString("accessKey", "accesskey")
+	reflectString("slot", "slot")
+	reflectBool("hidden", "hidden")
+	reflectBool("inert", "inert")
+	j.accessor(o, "draggable", func() goja.Value {
+		return j.vm.ToValue(attrValue(n, "draggable") == "true")
+	}, func(v goja.Value) {
+		if v.ToBoolean() {
+			setAttr(n, "draggable", "true")
+		} else {
+			setAttr(n, "draggable", "false")
+		}
+		j.markDirty()
+	})
+	j.accessor(o, "spellcheck", func() goja.Value {
+		if attrValue(n, "spellcheck") == "false" {
+			return j.vm.ToValue(false)
+		}
+		return j.vm.ToValue(true)
+	}, func(v goja.Value) {
+		if v.ToBoolean() {
+			setAttr(n, "spellcheck", "true")
+		} else {
+			setAttr(n, "spellcheck", "false")
+		}
+		j.markDirty()
+	})
+	j.accessor(o, "translate", func() goja.Value {
+		return j.vm.ToValue(attrValue(n, "translate") != "no")
+	}, func(v goja.Value) {
+		if v.ToBoolean() {
+			setAttr(n, "translate", "yes")
+		} else {
+			setAttr(n, "translate", "no")
+		}
+		j.markDirty()
+	})
+	j.accessor(o, "contentEditable", func() goja.Value {
+		if v := attrValue(n, "contenteditable"); v != "" {
+			return j.vm.ToValue(v)
+		}
+		return j.vm.ToValue("inherit")
+	}, func(v goja.Value) {
+		setAttr(n, "contenteditable", v.String())
+		j.markDirty()
+	})
+	j.accessor(o, "isContentEditable", func() goja.Value {
+		return j.vm.ToValue(isEditableNode(n))
+	}, nil)
+	j.accessor(o, "tabIndex", func() goja.Value {
+		return j.vm.ToValue(nodeTabIndex(n))
+	}, func(v goja.Value) {
+		setAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
+		j.markDirty()
+	})
+	j.accessor(o, "outerText", func() goja.Value {
+		return j.vm.ToValue(n.TextContent())
+	}, func(v goja.Value) {
+		replaceNodeWithText(n, v.String())
+		j.markDirty()
+	})
 	j.accessor(o, "href", func() goja.Value { return j.vm.ToValue(attrValue(n, "href")) }, func(v goja.Value) {
 		setAttr(n, "href", v.String())
 		j.markDirty()
@@ -748,6 +828,82 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
+	j.accessor(o, "baseURI", func() goja.Value {
+		if j.page != nil && j.page.Base != nil {
+			return j.vm.ToValue(j.page.Base.String())
+		}
+		return j.vm.ToValue("")
+	}, nil)
+	j.accessor(o, "nodeValue", func() goja.Value { return goja.Null() }, func(goja.Value) {})
+	j.accessor(o, "clientTop", func() goja.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "clientLeft", func() goja.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "shadowRoot", func() goja.Value { return goja.Null() }, nil)
+	j.method(o, "hasAttributes", func(goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(len(n.Attrs) > 0)
+	})
+	j.method(o, "getAttributeNode", func(call goja.FunctionCall) goja.Value {
+		name := call.Argument(0).String()
+		for i := range n.Attrs {
+			if strings.EqualFold(n.Attrs[i].Key, name) {
+				return j.attributeObject(n, n.Attrs[i])
+			}
+		}
+		return goja.Null()
+	})
+	j.method(o, "setAttributeNode", func(call goja.FunctionCall) goja.Value {
+		attr := jsObject(call.Argument(0))
+		if attr == nil {
+			return goja.Null()
+		}
+		name, value := attr.Get("name"), attr.Get("value")
+		if name == nil || value == nil {
+			return goja.Null()
+		}
+		setAttr(n, name.String(), value.String())
+		j.markDirty()
+		return goja.Null()
+	})
+	j.method(o, "removeAttributeNode", func(call goja.FunctionCall) goja.Value {
+		attr := jsObject(call.Argument(0))
+		if attr == nil {
+			return goja.Null()
+		}
+		name := attr.Get("name")
+		if name == nil {
+			return goja.Null()
+		}
+		for i := range n.Attrs {
+			if strings.EqualFold(n.Attrs[i].Key, name.String()) {
+				removeAttr(n, n.Attrs[i].Key)
+				j.markDirty()
+				return call.Argument(0)
+			}
+		}
+		return goja.Null()
+	})
+	j.method(o, "isSameNode", func(call goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(j.unwrap(call.Argument(0)) == n)
+	})
+	j.method(o, "isEqualNode", func(call goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(nodesEqual(n, j.unwrap(call.Argument(0))))
+	})
+	j.method(o, "lookupNamespaceURI", func(goja.FunctionCall) goja.Value { return goja.Null() })
+	j.method(o, "checkVisibility", func(goja.FunctionCall) goja.Value {
+		visible := !n.HasAttr("hidden")
+		if st := n.Style; st != nil && (st.Display == "none" || st.Hidden) {
+			visible = false
+		}
+		return j.vm.ToValue(visible)
+	})
+	j.method(o, "scroll", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.method(o, "scrollTo", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.method(o, "scrollBy", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.method(o, "setPointerCapture", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.method(o, "releasePointerCapture", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.method(o, "hasPointerCapture", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.method(o, "requestFullscreen", func(goja.FunctionCall) goja.Value {
+		return j.resolvedPromise(nil)
+	})
 	j.installElementCompat(o, n)
 }
 
@@ -1028,6 +1184,32 @@ func (j *jsRuntime) newDetachedDocument(title string) *goja.Object {
 		return x.Tag == "a" && x.HasAttr("name")
 	}), nil)
 	j.accessor(doc, "scripts", collection(func(x *Node) bool { return x.Tag == "script" }), nil)
+	j.method(doc, "querySelector", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(j.querySelector(html, call.Argument(0).String(), true))
+	})
+	j.method(doc, "querySelectorAll", func(call goja.FunctionCall) goja.Value {
+		return j.nodeArray(j.querySelectorAll(html, call.Argument(0).String(), true))
+	})
+	j.method(doc, "getElementsByClassName", func(call goja.FunctionCall) goja.Value {
+		want := strings.Fields(call.Argument(0).String())
+		nodes := html.FindAll(func(x *Node) bool {
+			classes := x.ClassList()
+			for _, w := range want {
+				found := false
+				for _, c := range classes {
+					if c == w {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return false
+				}
+			}
+			return len(want) > 0
+		})
+		return j.nodeArray(nodes)
+	})
 	return doc
 }
 
@@ -1036,6 +1218,9 @@ func (j *jsRuntime) newDetachedDocument(title string) *goja.Object {
 // elements get sensible defaults.
 func (j *jsRuntime) computedStyleObject(n *Node) *goja.Object {
 	o := j.vm.NewObject()
+	if j.cssStyleProto != nil {
+		_ = o.SetPrototype(j.cssStyleProto)
+	}
 	st := (*Style)(nil)
 	if n != nil {
 		st = n.Style
@@ -1319,6 +1504,51 @@ func (j *jsRuntime) documentObject() *goja.Object {
 	j.method(o, "close", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
 	j.accessor(o, "visibilityState", func() goja.Value { return j.vm.ToValue("visible") }, nil)
 	j.accessor(o, "hidden", func() goja.Value { return j.vm.ToValue(false) }, nil)
+	_ = o.Set("characterSet", "UTF-8")
+	_ = o.Set("charset", "UTF-8")
+	_ = o.Set("contentType", "text/html")
+	_ = o.Set("referrer", "")
+	_ = o.Set("lastModified", "")
+	_ = o.Set("adoptedStyleSheets", j.vm.NewArray())
+	j.accessor(o, "designMode", func() goja.Value { return j.vm.ToValue("off") }, func(goja.Value) {})
+	_ = o.Set("fullscreenEnabled", true)
+	j.accessor(o, "fullscreenElement", func() goja.Value { return goja.Null() }, nil)
+	j.method(o, "exitFullscreen", func(goja.FunctionCall) goja.Value { return j.resolvedPromise(nil) })
+	j.method(o, "execCommand", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.method(o, "createComment", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+	})
+	pointNode := func(px, py float64) *Node {
+		if j.b == nil || j.b.layout == nil {
+			return nil
+		}
+		cw, ch := j.b.cellW, j.b.cellH
+		if cw <= 0 {
+			cw = 8
+		}
+		if ch <= 0 {
+			ch = 16
+		}
+		x := int(px) / cw
+		y := int(py)/ch + j.b.scroll
+		if x < 0 || x >= j.b.width || y < 0 {
+			return nil
+		}
+		n := j.b.nodeAt(x, y)
+		for n != nil && n.Type != ElementNode {
+			n = n.Parent
+		}
+		return n
+	}
+	j.method(o, "elementFromPoint", func(call goja.FunctionCall) goja.Value {
+		return j.wrap(pointNode(call.Argument(0).ToFloat(), call.Argument(1).ToFloat()))
+	})
+	j.method(o, "elementsFromPoint", func(call goja.FunctionCall) goja.Value {
+		if n := pointNode(call.Argument(0).ToFloat(), call.Argument(1).ToFloat()); n != nil {
+			return j.nodeArray([]*Node{n})
+		}
+		return j.nodeArray(nil)
+	})
 	_ = o.Set("location", j.locObj)
 	if j.page.URL != nil {
 		u := j.page.URL.String()
@@ -1367,6 +1597,9 @@ func (j *jsRuntime) documentObject() *goja.Object {
 		return x.Tag == "a" && x.HasAttr("name")
 	}), nil)
 	j.accessor(o, "scripts", collection(func(x *Node) bool { return x.Tag == "script" }), nil)
+	embeds := collection(func(x *Node) bool { return x.Tag == "embed" || x.Tag == "object" })
+	j.accessor(o, "embeds", embeds, nil)
+	j.accessor(o, "plugins", embeds, nil)
 	j.method(o, "createElement", func(call goja.FunctionCall) goja.Value {
 		tag := strings.ToLower(strings.TrimSpace(call.Argument(0).String()))
 		if tag == "" {
@@ -1611,6 +1844,9 @@ func styleSet(n *Node, prop, value string) {
 
 func (j *jsRuntime) styleObject(n *Node) *goja.Object {
 	o := j.vm.NewObject()
+	if j.cssStyleProto != nil {
+		_ = o.SetPrototype(j.cssStyleProto)
+	}
 	j.accessor(o, "cssText", func() goja.Value {
 		return j.vm.ToValue(attrValue(n, "style"))
 	}, func(v goja.Value) {
@@ -1655,6 +1891,19 @@ func (j *jsRuntime) styleObject(n *Node) *goja.Object {
 	return o
 }
 
+func (j *jsRuntime) attributeObject(n *Node, a Attr) *goja.Object {
+	o := j.vm.NewObject()
+	_ = o.Set("name", a.Key)
+	_ = o.Set("nodeName", a.Key)
+	_ = o.Set("localName", a.Key)
+	_ = o.Set("value", a.Value)
+	_ = o.Set("nodeValue", a.Value)
+	_ = o.Set("specified", true)
+	_ = o.Set("namespaceURI", goja.Null())
+	_ = o.Set("ownerElement", j.wrap(n))
+	return o
+}
+
 // attributesObject returns a NamedNodeMap-like array over the element's
 // attributes. It is rebuilt on each access so later attribute changes are
 // reflected, matching the live DOM map closely enough for libraries.
@@ -1662,16 +1911,7 @@ func (j *jsRuntime) attributesObject(n *Node) *goja.Object {
 	attrs := make([]*goja.Object, len(n.Attrs))
 	vals := make([]interface{}, len(n.Attrs))
 	for i := range n.Attrs {
-		a := n.Attrs[i]
-		o := j.vm.NewObject()
-		_ = o.Set("name", a.Key)
-		_ = o.Set("nodeName", a.Key)
-		_ = o.Set("localName", a.Key)
-		_ = o.Set("value", a.Value)
-		_ = o.Set("nodeValue", a.Value)
-		_ = o.Set("specified", true)
-		_ = o.Set("namespaceURI", goja.Null())
-		_ = o.Set("ownerElement", j.wrap(n))
+		o := j.attributeObject(n, n.Attrs[i])
 		attrs[i] = o
 		vals[i] = o
 	}
@@ -1723,6 +1963,9 @@ func (j *jsRuntime) attributesObject(n *Node) *goja.Object {
 
 func (j *jsRuntime) classListObject(n *Node) *goja.Object {
 	o := j.vm.NewObject()
+	if j.domTokenListProto != nil {
+		_ = o.SetPrototype(j.domTokenListProto)
+	}
 	get := func() []string { return n.ClassList() }
 	put := func(list []string) {
 		setAttr(n, "class", strings.Join(list, " "))
@@ -1875,4 +2118,98 @@ func isVoidTag(tag string) bool {
 		return true
 	}
 	return false
+}
+
+func isEditableNode(n *Node) bool {
+	for x := n; x != nil; x = x.Parent {
+		v := strings.ToLower(attrValue(x, "contenteditable"))
+		switch v {
+		case "false":
+			return false
+		case "", "true", "plaintext-only":
+			if x.HasAttr("contenteditable") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func nodeTabIndex(n *Node) int {
+	if n == nil {
+		return -1
+	}
+	if n.HasAttr("tabindex") {
+		if v, err := strconv.Atoi(strings.TrimSpace(attrValue(n, "tabindex"))); err == nil {
+			return v
+		}
+	}
+	if isEditableNode(n) {
+		return 0
+	}
+	switch strings.ToLower(n.Tag) {
+	case "a", "area":
+		if n.HasAttr("href") {
+			return 0
+		}
+	case "button", "select", "textarea", "iframe", "summary", "object", "embed":
+		return 0
+	case "input":
+		if !strings.EqualFold(attrValue(n, "type"), "hidden") {
+			return 0
+		}
+	case "audio", "video":
+		if n.HasAttr("controls") {
+			return 0
+		}
+	}
+	return -1
+}
+
+func replaceNodeWithText(n *Node, text string) {
+	if n == nil {
+		return
+	}
+	if n.Parent == nil {
+		n.Children = nil
+		if text != "" {
+			n.Children = []*Node{{Type: TextNode, Text: text, Parent: n}}
+		}
+		return
+	}
+	parent := n.Parent
+	if text == "" {
+		detach(n)
+		return
+	}
+	textNode := &Node{Type: TextNode, Text: text, Parent: parent}
+	insertNode(parent, textNode, n)
+	detach(n)
+}
+
+func nodesEqual(a, b *Node) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Type != b.Type || a.Tag != b.Tag || a.Text != b.Text || len(a.Attrs) != len(b.Attrs) || len(a.Children) != len(b.Children) {
+		return false
+	}
+	for i := range a.Attrs {
+		found := false
+		for j := range b.Attrs {
+			if a.Attrs[i] == b.Attrs[j] {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	for i := range a.Children {
+		if !nodesEqual(a.Children[i], b.Children[i]) {
+			return false
+		}
+	}
+	return true
 }

@@ -1209,6 +1209,13 @@ func preorderNodes(root *Node) []*Node {
 
 func (j *jsRuntime) newTreeWalker(root *Node, whatToShow, filter goja.Value, iterator bool) *goja.Object {
 	o := j.vm.NewObject()
+	if iterator {
+		if j.nodeIteratorProto != nil {
+			_ = o.SetPrototype(j.nodeIteratorProto)
+		}
+	} else if j.treeWalkerProto != nil {
+		_ = o.SetPrototype(j.treeWalkerProto)
+	}
 	accept := j.walkerAccept(whatToShow, filter)
 	var cur *Node
 	if !iterator {

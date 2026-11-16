@@ -39,6 +39,11 @@ type jsRuntime struct {
 	textProto         *goja.Object
 	docProto          *goja.Object
 	domStringMapProto *goja.Object
+	domTokenListProto *goja.Object
+	cssStyleProto     *goja.Object
+	mediaQueryProto   *goja.Object
+	treeWalkerProto   *goja.Object
+	nodeIteratorProto *goja.Object
 	headerObjs        map[*goja.Object]map[string][]string
 	start             time.Time
 	pendingNav        string
@@ -421,6 +426,9 @@ func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
 	return func(call goja.FunctionCall) goja.Value {
 		q := call.Argument(0).String()
 		o := j.vm.NewObject()
+		if j.mediaQueryProto != nil {
+			_ = o.SetPrototype(j.mediaQueryProto)
+		}
 		_ = o.Set("media", q)
 		_ = o.Set("matches", mediaMatches(q, j.b.width*cellW, j.b.dark))
 		_ = o.Set("onchange", goja.Null())
@@ -587,6 +595,11 @@ func (j *jsRuntime) navigatorObject() *goja.Object {
 	_ = o.Set("languages", j.vm.NewArray("en-US", "en"))
 	_ = o.Set("cookieEnabled", true)
 	_ = o.Set("onLine", true)
+	_ = o.Set("sendBeacon", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+		// Beacon delivery is not implemented; accepting the call keeps
+		// analytics and unload handlers from throwing.
+		return j.vm.ToValue(true)
+	}))
 	return o
 }
 
@@ -707,7 +720,68 @@ func (j *jsRuntime) windowObject() *goja.Object {
 	_ = o.Set("sessionStorage", j.storageSession)
 	_ = o.Set("innerWidth", j.b.width*8)
 	_ = o.Set("innerHeight", j.b.height*16)
+	_ = o.Set("outerWidth", j.b.width*8)
+	_ = o.Set("outerHeight", j.b.height*16)
 	_ = o.Set("devicePixelRatio", 1)
+	cellH := j.b.cellH
+	if cellH <= 0 {
+		cellH = 16
+	}
+	scrollPx := func() int { return j.b.scroll * cellH }
+	j.accessor(o, "scrollX", func() goja.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "scrollY", func() goja.Value { return j.vm.ToValue(scrollPx()) }, nil)
+	j.accessor(o, "pageXOffset", func() goja.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "pageYOffset", func() goja.Value { return j.vm.ToValue(scrollPx()) }, nil)
+	origin, secure := "", false
+	if j.page != nil && j.page.URL != nil {
+		u := j.page.URL
+		if u.Scheme == "http" || u.Scheme == "https" {
+			origin = u.Scheme + "://" + u.Host
+			secure = u.Scheme == "https"
+		}
+	}
+	_ = o.Set("origin", origin)
+	_ = o.Set("isSecureContext", secure)
+	_ = o.Set("crossOriginIsolated", false)
+	_ = o.Set("name", "")
+	_ = o.Set("frames", o)
+	_ = o.Set("length", 0)
+	_ = o.Set("opener", goja.Null())
+	_ = o.Set("closed", false)
+	_ = o.Set("frameElement", goja.Null())
+	scrollWindowTo := func(call goja.FunctionCall) goja.Value {
+		top := 0.0
+		if obj := jsObject(call.Argument(0)); obj != nil {
+			if v := obj.Get("top"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+				top = v.ToFloat()
+			}
+		} else {
+			top = call.Argument(1).ToFloat()
+		}
+		j.b.scroll = int(top) / cellH
+		j.b.clampScroll()
+		return goja.Undefined()
+	}
+	_ = o.Set("scroll", j.vm.ToValue(scrollWindowTo))
+	_ = o.Set("scrollTo", j.vm.ToValue(scrollWindowTo))
+	_ = o.Set("scrollBy", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		delta := 0.0
+		if obj := jsObject(call.Argument(0)); obj != nil {
+			if v := obj.Get("top"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+				delta = v.ToFloat()
+			}
+		} else {
+			delta = call.Argument(1).ToFloat()
+		}
+		j.b.scroll += int(delta) / cellH
+		j.b.clampScroll()
+		return goja.Undefined()
+	}))
+	windowNoop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	for _, name := range []string{"focus", "blur", "stop", "close", "postMessage"} {
+		_ = o.Set(name, windowNoop)
+	}
+	_ = o.Set("open", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Null() }))
 	_ = o.Set("getComputedStyle", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 		return j.computedStyleObject(j.unwrap(call.Argument(0)))
 	}))

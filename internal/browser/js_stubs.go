@@ -294,7 +294,105 @@ func (j *jsRuntime) installPlatformStubs() {
 	}
 	if (typeof document !== "undefined") {
 		document.getAnimations = document.getAnimations || function () { return []; };
+		if (!document.startViewTransition) {
+			document.startViewTransition = function (callback) {
+				if (typeof callback === "function") {
+					try { callback(); } catch (e) {}
+				}
+				return {
+					ready: Promise.resolve(), finished: Promise.resolve(),
+					updateCallbackDone: Promise.resolve(),
+					skipTransition: function () {}
+				};
+			};
+		}
 	}
+
+
+	// Constructors commonly checked with instanceof or used to create values.
+	ctor("DOMTokenList");
+	ctor("CSSStyleDeclaration");
+	ctor("CSSStyleSheet");
+	ctor("StyleSheet");
+	ctor("MediaQueryList");
+	ctor("NodeIterator");
+	ctor("TreeWalker");
+	ctor("CanvasRenderingContext2D");
+
+	function ImageData(width, height, data) {
+		if (width && typeof width === "object") {
+			this.width = width.width | 0;
+			this.height = width.height | 0;
+			this.data = width.data || new Uint8ClampedArray(this.width * this.height * 4);
+			return;
+		}
+		this.width = width | 0;
+		this.height = height | 0;
+		this.data = data || new Uint8ClampedArray(this.width * this.height * 4);
+	}
+	define("ImageData", ImageData);
+
+	// Event subclasses that pages construct directly.
+	function eventSubclass(name) {
+		if (typeof globalThis[name] !== "undefined") { return; }
+		var C = function (type, init) {
+			if (!(this instanceof C)) { return new C(type, init); }
+			Event.call(this, type, init);
+			if (init) {
+				for (var k in init) {
+					if (k === "bubbles" || k === "cancelable" || k === "composed") { continue; }
+					try { this[k] = init[k]; } catch (e) {}
+				}
+			}
+		};
+		C.prototype = Object.create(Event.prototype);
+		C.prototype.constructor = C;
+		define(name, C);
+	}
+	["DragEvent", "ClipboardEvent", "WheelEvent", "SubmitEvent", "StorageEvent",
+		"PopStateEvent", "HashChangeEvent", "BeforeUnloadEvent", "PageTransitionEvent",
+		"AnimationEvent", "TransitionEvent", "MediaQueryListEvent",
+		"TouchEvent", "CompositionEvent", "FormDataEvent"].forEach(eventSubclass);
+
+	function DataTransfer() {
+		this.dropEffect = "none";
+		this.effectAllowed = "all";
+		this.items = [];
+		this.types = [];
+		this.files = [];
+		this._data = {};
+	}
+	DataTransfer.prototype.setData = function (type, data) {
+		this._data[type] = String(data);
+		if (this.types.indexOf(type) < 0) { this.types.push(type); }
+	};
+	DataTransfer.prototype.getData = function (type) { return this._data[type] || ""; };
+	DataTransfer.prototype.clearData = function (type) {
+		if (type === undefined) { this._data = {}; this.types = []; }
+		else { delete this._data[type]; this.types = this.types.filter(function (t) { return t !== type; }); }
+	};
+	DataTransfer.prototype.setDragImage = function () {};
+	define("DataTransfer", DataTransfer);
+
+	// DOMParser parses HTML fragments into a detached document. XML and SVG
+	// modes use the same HTML parser; XMLSerializer uses our serialized HTML.
+	function DOMParser() {}
+	DOMParser.prototype.parseFromString = function (text, type) {
+		var doc = document.implementation.createHTMLDocument("");
+		try {
+			doc.body.innerHTML = String(text);
+		} catch (e) {}
+		return doc;
+	};
+	define("DOMParser", DOMParser);
+	function XMLSerializer() {}
+	XMLSerializer.prototype.serializeToString = function (node) {
+		if (!node) { return ""; }
+		if (node.nodeType === 9 && node.documentElement) { node = node.documentElement; }
+		if (node.outerHTML !== undefined) { return String(node.outerHTML); }
+		return String(node.textContent || "");
+	};
+	define("XMLSerializer", XMLSerializer);
 
 	// An iframe has no browsing context. Give it an isolated, inert document so
 	// scripts that write into it do not touch the real page.
@@ -362,11 +460,19 @@ func (j *jsRuntime) installPlatformStubs() {
 		j.reportError(err)
 		return
 	}
-	if v := j.vm.Get("DOMStringMap"); v != nil {
-		if o, ok := v.(*goja.Object); ok {
-			if proto, ok := o.Get("prototype").(*goja.Object); ok {
-				j.domStringMapProto = proto
-			}
+	protoOf := func(name string) *goja.Object {
+		v := j.vm.Get(name)
+		o, ok := v.(*goja.Object)
+		if !ok {
+			return nil
 		}
+		proto, _ := o.Get("prototype").(*goja.Object)
+		return proto
 	}
+	j.domStringMapProto = protoOf("DOMStringMap")
+	j.domTokenListProto = protoOf("DOMTokenList")
+	j.cssStyleProto = protoOf("CSSStyleDeclaration")
+	j.mediaQueryProto = protoOf("MediaQueryList")
+	j.treeWalkerProto = protoOf("TreeWalker")
+	j.nodeIteratorProto = protoOf("NodeIterator")
 }

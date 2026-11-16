@@ -161,10 +161,10 @@ Standard Go layout:
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
-| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, `innerHTML`, style and class lists, canvas placeholders. |
+| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
-| `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `Element.prototype.matches`/`closest` /vendor-alias delegates for saved-by-reference polyfills, and an isolated inert iframe `contentDocument`/`contentWindow`. |
+| `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `DOMParser`/`XMLSerializer`, `DataTransfer`, extra event subclasses, interface constructors (`DOMTokenList`, `CSSStyleDeclaration`, `MediaQueryList`, `TreeWalker`, …), `Element.prototype.matches`/`closest` /vendor-alias delegates, and isolated inert iframe `contentDocument`/`contentWindow`. |
 | `js_import.go` | Dynamic `import()` and `import.meta` source rewrite (string/comment/template/regex aware) plus the empty-namespace import stub, because goja cannot parse dynamic imports and modules remain unsupported. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
@@ -316,7 +316,8 @@ Standard Go layout:
   line height and emphasis, not glyph scale outside kitty.
 - **UA page style:** the grid defaults to a white page background and
   near-black text, with an `8px` `body` margin so pages get the usual browser
-  gutter unless author CSS overrides it. The UA sheet does not paint `html` or
+  gutter unless author CSS overrides it. The UA sheet hides `[hidden]` with
+  `display:none`, matching the HTML presentational hint. The UA sheet does not paint `html` or
   `body` backgrounds itself, so an author wrapper or an unsupported gradient
   leaves room for the fallback below.
 - **Page background fallback:** when neither `html` nor `body` has an opaque
@@ -889,6 +890,12 @@ Standard Go layout:
   `dispatchEvent` (with bubbling and `preventDefault`) works on elements,
   `document` and `window`. `element.click()` dispatches a click. `NodeFilter`,
   `Node.*` constants and `performance.timing`/`navigation` are present.
+  Elements expose `baseURI`, `clientTop`/`clientLeft`, `nodeValue` (null),
+  `isSameNode`/`isEqualNode`, `hasAttributes`, attribute-node methods,
+  `checkVisibility`, element scroll no-ops, pointer-capture no-ops,
+  `requestFullscreen`, and `shadowRoot` (null). `DOMParser` parses HTML into a
+  detached document; `XMLSerializer` uses the HTML serializer; `DataTransfer`
+  is in-memory; `document.startViewTransition` runs its callback immediately.
   `MessageChannel` delivers `postMessage` through the timer queue;
   `MutationObserver` is a no-op observer. `IntersectionObserver` and
   `ResizeObserver` report one synthetic entry per observed target via the timer
@@ -902,14 +909,20 @@ Standard Go layout:
   no-op context (no pixel buffer); WebGL returns `null`.
 - **JS globals:** `window` exposes `document`, `navigator` (matching User-Agent,
   language, platform), `location`, `performance`, `innerWidth`/`innerHeight`,
-  `screen`, `self`/`top`/`parent`, timers, `requestAnimationFrame`, events,
-  `getComputedStyle` and `console`. `Image`/`Audio` construct DOM elements. `document` exposes
+  `screen`, `self`/`top`/`parent`, `outerWidth`/`outerHeight`, `scrollX`/
+  `scrollY`/`pageXOffset`/`pageYOffset`, `origin`, `isSecureContext`,
+  `frames`/`length`, timers, `requestAnimationFrame`, events, `scroll`/
+  `scrollTo`/`scrollBy`, `getComputedStyle` and `console`. `navigator`
+  includes `sendBeacon` (accepted, not delivered). `Image`/`Audio` construct DOM elements. `document` exposes
   `location`, visibility state, `defaultView`, `domain`,
   `document.implementation`
   (`hasFeature`/`createHTMLDocument`), and image elements expose
   `src`/`alt`/`width`/
   `height`/`complete`/`natural*`. `URL`/`URLSearchParams`,
-  `document.currentScript`/`baseURI`, `document.write`/`writeln`,
+  `document.currentScript`/`baseURI`, `characterSet`/`charset`,
+  `contentType`, `referrer`, `lastModified`, `adoptedStyleSheets`,
+  `embeds`/`plugins`, `fullscreenEnabled`, `createComment`,
+  `elementFromPoint`/`elementsFromPoint`, `document.write`/`writeln`,
   `document.cookie`, and in-memory `localStorage`/`sessionStorage` are
   available. Storage supports `getItem`/`setItem`/`removeItem`/`clear`/`key`/
   `length` plus named property reads, writes and `delete` against the same

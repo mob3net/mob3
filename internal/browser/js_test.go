@@ -1228,6 +1228,42 @@ func TestPlatformStubs(t *testing.T) {
 	check(`document.getElementById("f").contentWindow.document === document.getElementById("f").contentDocument`, "true")
 	check(`document.getElementById("f").contentDocument.body !== document.body`, "true")
 
+	check(`document.getElementById("lnk").tabIndex`, "0")
+	check(`document.getElementById("wrap").tabIndex`, "-1")
+	check(`(function () { var d = document.createElement("div"); d.hidden = true; return d.hasAttribute("hidden") + ":" + d.hidden; })()`, "true:true")
+	check(`(function () { var d = document.createElement("div"); d.title = "t"; d.lang = "fr"; d.dir = "rtl"; return [d.getAttribute("title"), d.getAttribute("lang"), d.getAttribute("dir")].join(","); })()`, "t,fr,rtl")
+	check(`(function () { var d = document.createElement("div"); d.contentEditable = "true"; return d.contentEditable + ":" + d.isContentEditable; })()`, "true:true")
+	check(`document.getElementById("lnk").hasAttributes()`, "true")
+	check(`document.getElementById("lnk").getAttributeNode("href").value`, "/a")
+	check(`document.getElementById("lnk").isSameNode(document.getElementById("lnk"))`, "true")
+	check(`document.getElementById("lnk").isEqualNode(document.getElementById("lnk"))`, "true")
+	check(`document.getElementById("lnk").baseURI`, "https://example.com/")
+	check(`document.getElementById("lnk").nodeValue`, "null")
+	check(`document.getElementById("lnk").shadowRoot`, "null")
+	check(`document.getElementById("lnk").clientTop + ":" + document.getElementById("lnk").clientLeft`, "0:0")
+	check(`document.getElementById("lnk").checkVisibility()`, "true")
+	check(`document.characterSet + ":" + document.contentType`, "UTF-8:text/html")
+	check(`document.adoptedStyleSheets.length`, "0")
+	check(`document.embeds.length + ":" + document.plugins.length`, "0:0")
+	check(`document.designMode`, "off")
+	check(`document.fullscreenEnabled`, "true")
+	check(`typeof document.elementFromPoint`, "function")
+	check(`document.querySelector("p").requestFullscreen() !== null`, "true")
+	check(`document.exitFullscreen() !== null`, "true")
+	check(`document.startViewTransition(function () {}).finished instanceof Promise`, "true")
+	check(`document.getElementById("wrap").classList instanceof DOMTokenList`, "true")
+	check(`document.getElementById("wrap").style instanceof CSSStyleDeclaration`, "true")
+	check(`window.matchMedia("(min-width:1px)") instanceof MediaQueryList`, "true")
+	check(`window.scrollY`, "0")
+	check(`window.origin`, "https://example.com")
+	check(`window.isSecureContext`, "true")
+	check(`window.outerWidth === window.innerWidth`, "true")
+	check(`navigator.sendBeacon("/x", "data")`, "true")
+	check(`new DragEvent("dragstart", { bubbles: true }).type`, "dragstart")
+	check(`(function () { var d = new DataTransfer(); d.setData("text/plain", "hi"); return d.getData("text/plain") + ":" + d.types.length; })()`, "hi:1")
+	check(`(function () { var d = new DOMParser().parseFromString("<p class=x>hi</p>", "text/html"); return d.querySelector("p").textContent; })()`, "hi")
+	check(`(function () { var d = document.createElement("div"); d.textContent = "x"; return new XMLSerializer().serializeToString(d); })()`, "<div>x</div>")
+
 	// A ReadableStream reader consumes queued chunks.
 	check(`(function () {
 		var s = new ReadableStream({ start: function (c) { c.enqueue("a"); c.close(); } });
@@ -1265,5 +1301,25 @@ func TestJSFetchRequestObjectWithoutURL(t *testing.T) {
 	b.startJS(page)
 	if page.Title != "rejected:TypeError" {
 		t.Fatalf("title = %q", page.Title)
+	}
+}
+
+func TestWindowScrollAliases(t *testing.T) {
+	page := newJSPage(`<html><body><p>x</p></body></html>`, ``)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	b.layout = &Layout{Height: 100}
+	if _, err := b.js.runCode("scroll", `window.scrollTo(0, 32); window.scrollBy(0, 16);`); err != nil {
+		t.Fatal(err)
+	}
+	if b.scroll != 3 {
+		t.Fatalf("scroll row = %d, want 3", b.scroll)
+	}
+	v, err := b.js.runCode("scrollY", `String(window.scrollY) + ":" + String(window.pageYOffset)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.String() != "48:48" {
+		t.Fatalf("scroll aliases = %q", v.String())
 	}
 }

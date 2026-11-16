@@ -1830,3 +1830,19 @@ func TestFlexOrderAndJustify(t *testing.T) {
 		t.Fatalf("justify-content:flex-end did not move items right: %+v", pos)
 	}
 }
+
+func TestHiddenAttributeHidesElement(t *testing.T) {
+	ly := build(`<div hidden>secret</div><p>visible</p>`, 40)
+	seen := map[string]bool{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			seen[f.Text] = true
+		}
+	}
+	if seen["secret"] {
+		t.Fatal("hidden element is still laid out")
+	}
+	if !seen["visible"] {
+		t.Fatal("visible sibling was lost")
+	}
+}
