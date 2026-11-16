@@ -555,11 +555,13 @@ Standard Go layout:
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`. The query line takes the same Ctrl/Alt word motion and
   Alt/Ctrl+Backspace, Ctrl-W and Alt-D word deletion as the URL prompt.
-- **Link hints:** `f` labels every link and editable text field visible in the
-  current viewport by
+- **Link hints:** `f` labels every visible link and form control by
   picking letters from the target's own text and drawing them with a yellow
-  background and underline; the page text itself is unchanged. Choosing a field
-  focuses it for typing instead of navigating. Up to 26 targets
+  background and underline; the page text itself is unchanged. Choosing an
+  editable field focuses it for typing; checkboxes and radios toggle or select,
+  a single select opens its option popup, multi-select options toggle, buttons
+  activate, range inputs focus for arrow adjustment, and file inputs show the
+  upload notice. Up to 26 targets
   use the first letter not already used by an earlier link (case-insensitive),
   so `Documentation` starts with `D` and a later `Dog` uses `o` if `d` is
   taken. On link-heavy pages a hint whose first letter is unique still shows

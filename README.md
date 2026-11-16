@@ -119,8 +119,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   backgrounds, text, links and borders are remapped to a dark palette. Images
   keep their original colors.
 - Vimium-style link hints (`f`): highlights letters from each visible link or
-  editable field, then follows the link or focuses the field when you type them;
-  `F`
+  form control, then follows the link or activates the control when you type
+  them; `F`
   shows the destination highlighted in yellow first and waits for confirmation;
   `Esc` or scrolling dismisses the hints.
 - Headless MCP automation (`-mcp`): navigate, snapshot page text and links,

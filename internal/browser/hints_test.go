@@ -253,6 +253,64 @@ func TestLinkHintsNoTextFreeLetters(t *testing.T) {
 	}
 }
 
+func TestLinkHintsOperateFormControls(t *testing.T) {
+	b := hintTestBrowser(t, `<html><body>
+<form action="/go">
+<input type="checkbox" name="check">
+<input type="radio" name="pick" value="one" checked>
+<input type="radio" name="pick" value="two">
+<select multiple name="multi"><option selected>Alpha</option><option>Beta</option></select>
+<select name="one"><option>Gamma</option><option>Delta</option></select>
+<button type="button">Press</button>
+</form></body></html>`, 60, 30)
+	doc := b.page.Root
+	check := doc.FindFirst("input")
+	radios := doc.FindAll(func(n *Node) bool { return n.Tag == "input" && n.Attr("type") == "radio" })
+	multi := doc.FindFirst("select")
+	single := doc.FindAll(func(n *Node) bool { return n.Tag == "select" && !n.HasAttr("multiple") })
+	if len(radios) != 2 || multi == nil || len(single) != 1 || check == nil {
+		t.Fatal("test form is incomplete")
+	}
+	beta := selectOptions(multi)[1]
+	choose := func(match func(*Node) bool) {
+		t.Helper()
+		b.HandleKey("f")
+		if !b.linkHints {
+			t.Fatal("f did not open hints")
+		}
+		label := ""
+		for _, h := range b.hintItems {
+			if target := b.hintTargetAt(h.target); target.node != nil && match(target.node) {
+				label = h.label
+				break
+			}
+		}
+		if label == "" {
+			t.Fatalf("no hint for control")
+		}
+		for _, ch := range label {
+			b.HandleKey(string(ch))
+		}
+	}
+
+	choose(func(n *Node) bool { return n == check })
+	if !check.HasAttr("checked") {
+		t.Fatal("checkbox hint did not toggle it")
+	}
+	choose(func(n *Node) bool { return n == radios[1] })
+	if !radios[1].HasAttr("checked") || radios[0].HasAttr("checked") {
+		t.Fatal("radio hint did not select it")
+	}
+	choose(func(n *Node) bool { return n == beta })
+	if !beta.HasAttr("selected") {
+		t.Fatal("multi-select hint did not toggle the option")
+	}
+	choose(func(n *Node) bool { return n == single[0] })
+	if b.selectMenu == nil {
+		t.Fatal("select hint did not open the option popup")
+	}
+}
+
 func TestLinkHintsFocusInputFields(t *testing.T) {
 	b := hintTestBrowser(t, `<html><body>
 <p><a href="#one">Documentation</a></p>

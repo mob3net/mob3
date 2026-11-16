@@ -53,15 +53,29 @@ func (b *Browser) openLinkHints(ask bool) {
 	}
 	if b.page != nil && b.page.Root != nil {
 		for _, n := range b.page.Root.FindAll(func(n *Node) bool {
-			return isTextInput(n) && n.Style != nil && n.Style.Display != "none" && !n.Style.Hidden
+			if !isHintControl(n) || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
+				return false
+			}
+			return true
 		}) {
+			if n.Tag == "select" && n.HasAttr("multiple") {
+				for _, opt := range selectOptions(n) {
+					if isDisabledControl(opt) || opt.Style == nil || opt.Style.Display == "none" {
+						continue
+					}
+					if _, ok := b.visibleInputRect(opt, top, bottom); ok {
+						targets = append(targets, hintTarget{link: -1, node: opt})
+					}
+				}
+				continue
+			}
 			if _, ok := b.visibleInputRect(n, top, bottom); ok {
 				targets = append(targets, hintTarget{link: -1, node: n})
 			}
 		}
 	}
 	if len(targets) == 0 {
-		b.status = "No links or fields in view"
+		b.status = "No links or controls in view"
 		return
 	}
 	ids := make([]int, len(targets))
@@ -76,7 +90,7 @@ func (b *Browser) openLinkHints(ask bool) {
 	b.hintAsk = ask
 	b.hintConfirm = false
 	b.hintConfirmLink = -1
-	b.status = "Choose link or field (Esc cancels)"
+	b.status = "Choose link or control (Esc cancels)"
 }
 
 // visibleInputRect returns the first visible fragment rectangle of an editable
@@ -381,15 +395,16 @@ func (b *Browser) typeLinkHint(letter string) {
 	b.status = fmt.Sprintf("Choose hint: %s (Esc cancels)", next)
 }
 
-// chooseHint follows a chosen link or focuses a chosen editable field. With F,
-// links wait for destination confirmation; fields focus immediately.
+// chooseHint follows a chosen link or activates a chosen form control. With F,
+// links wait for destination confirmation; controls act immediately.
 func (b *Browser) chooseHint(target int) {
 	t := b.hintTargetAt(target)
 	ask := b.hintAsk
+	top, bottom := b.viewport()
+	r, _ := b.hintTargetRect(target, top, bottom)
 	b.clearLinkHints()
 	if t.node != nil {
-		b.setInputFocus(t.node)
-		b.ensureInputVisible(t.node)
+		b.activateHintControl(t.node, r)
 		return
 	}
 	if t.link < 0 {
@@ -401,6 +416,71 @@ func (b *Browser) chooseHint(target int) {
 		return
 	}
 	b.beginHintConfirm(t.link)
+}
+
+// isHintControl reports whether a control is reachable through f hints.
+func isHintControl(n *Node) bool {
+	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
+		return false
+	}
+	switch n.Tag {
+	case "option":
+		return false
+	case "button":
+		return true
+	case "textarea":
+		return isTextInput(n)
+	case "select":
+		return true
+	case "input":
+		if isTextInput(n) || isRangeInput(n) || isFileInput(n) {
+			return true
+		}
+		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
+		case "checkbox", "radio", "submit", "button", "reset", "image":
+			return true
+		}
+	}
+	return false
+}
+
+// activateHintControl applies the same action as clicking a form control.
+func (b *Browser) activateHintControl(n *Node, r Rect) {
+	if n == nil {
+		return
+	}
+	switch {
+	case isFileInput(n):
+		b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")
+	case isToggleControl(n):
+		b.toggleControl(n)
+	case isTextInput(n), isRangeInput(n):
+		b.setInputFocus(n)
+		b.ensureInputVisible(n)
+	case isButtonControl(n):
+		x, y := r.X, r.Y
+		if r.W <= 0 || r.H <= 0 {
+			x, y = r.X+1, r.Y
+		}
+		b.clickContent(x, y)
+	}
+}
+
+func isButtonControl(n *Node) bool {
+	if n == nil || n.Type != ElementNode {
+		return false
+	}
+	if n.Tag == "button" {
+		return true
+	}
+	if n.Tag != "input" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
+	case "submit", "button", "reset", "image":
+		return true
+	}
+	return false
 }
 
 // hintTargetAt resolves a hint target index. Tests and older hint-only pages
