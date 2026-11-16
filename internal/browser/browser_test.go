@@ -782,6 +782,49 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 }
 
+func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
+	page := newJSPage(`<html><body>
+<a id="a" href="/next" onclick="event.preventDefault(); throw new Error('boom');">next</a>
+</body></html>`, ``)
+	b := NewBrowser(60, 12)
+	b.page = page
+	b.url = page.URL
+	b.setLoader(NewLoader())
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
+	}
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	b.focus = 0
+	withQuietStdout(t, b.followFocused)
+	if !b.loading {
+		t.Fatal("a throwing click handler swallowed the link navigation")
+	}
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("fallback navigation did not finish")
+	}
+}
+
+func TestPreventedLinkClickWithoutErrorStays(t *testing.T) {
+	page := newJSPage(`<html><body>
+<a id="a" href="/next" onclick="event.preventDefault();">next</a>
+</body></html>`, ``)
+	b := NewBrowser(60, 12)
+	b.page = page
+	b.url = page.URL
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	b.focus = 0
+	b.followFocused()
+	if b.loading {
+		t.Fatal("a healthy preventDefault handler should suppress navigation")
+	}
+}
+
 func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 	page := newJSPage(`<html><body>
 <p><a id="a" href="#" onclick="document.body.setAttribute('data-clicked','yes'); return false;">show an alert</a></p>

@@ -1682,16 +1682,34 @@ func (b *Browser) followFocused() {
 	}
 	// Run the link's click handlers before navigating. Bare "#" links often
 	// open dialogs or menus from JavaScript and cancel the default navigation.
-	if b.js != nil && li.Node != nil && b.liveNode(li.Node) && b.js.dispatchClick(li.Node) {
-		if b.js.consumeDirty() {
-			b.rebuild()
+	if b.js != nil && li.Node != nil && b.liveNode(li.Node) {
+		prevented := b.js.dispatchClick(li.Node)
+		if prevented && !(b.js.eventErr && linkFallbackOK(li.Href)) {
+			if b.js.consumeDirty() {
+				b.rebuild()
+			}
+			b.consumePendingJS()
+			return
 		}
-		b.consumePendingJS()
-		return
 	}
 	if b.consumePendingJS() {
 		return
 	}
+	b.followLink(li)
+}
+
+// linkFallbackOK reports whether a prevented link click should still navigate
+// because its handler threw an error and left no replacement action.
+func linkFallbackOK(href string) bool {
+	low := strings.ToLower(strings.TrimSpace(href))
+	if low == "" || strings.HasPrefix(low, "#") || strings.HasPrefix(low, "javascript:") ||
+		strings.HasPrefix(low, "mailto:") || strings.HasPrefix(low, "tel:") {
+		return false
+	}
+	return true
+}
+
+func (b *Browser) followLink(li *LinkInfo) {
 	href := li.Href
 	low := strings.ToLower(strings.TrimSpace(href))
 	if strings.HasPrefix(low, "javascript:") {
@@ -3156,12 +3174,19 @@ func (b *Browser) clickContent(x, docY int) {
 	b.clearControlFocus()
 	if idx := b.linkAt(x, docY); idx >= 0 {
 		li := b.layout.Links[idx]
-		if b.js != nil && b.liveNode(li.Node) && b.js.dispatchClick(li.Node) {
-			if b.js.consumeDirty() {
-				b.rebuild()
+		if b.js != nil && b.liveNode(li.Node) {
+			if b.js.dispatchClick(li.Node) {
+				if b.js.eventErr && linkFallbackOK(li.Href) {
+					b.focus = idx
+					b.followLink(li)
+					return
+				}
+				if b.js.consumeDirty() {
+					b.rebuild()
+				}
+				b.consumePendingJS()
+				return
 			}
-			b.consumePendingJS()
-			return
 		}
 		if b.consumePendingJS() {
 			return

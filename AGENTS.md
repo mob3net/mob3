@@ -958,7 +958,9 @@ Standard Go layout:
   Following a link by keyboard or mouse dispatches its `click` handlers first;
   a handler that returns false or calls `preventDefault()` suppresses
   navigation, so `href="#" onclick="…; return false"` actions work from `f`,
-  Tab/Enter and clicks. `setTimeout`/`setInterval`
+  Tab/Enter and clicks. If a handler throws during the click and the link has a
+  real href, navigation continues anyway, so a broken page script cannot leave
+  normal links dead. `setTimeout`/`setInterval`
   are pumped by a 50 ms interactive tick with a 10 ms interval floor; console
   messages go to the `!` console, `console.error` turns the footer JavaScript
   label red, and

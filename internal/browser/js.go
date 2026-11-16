@@ -72,6 +72,8 @@ type jsRuntime struct {
 	dirty    bool
 	stopped  bool
 	titleSet func(string)
+	// eventErr records that a handler threw during the current event dispatch.
+	eventErr bool
 	// frozenAt records when the runtime was detached from the browser for the
 	// back/forward page cache, so timers can resume where they left off.
 	frozenAt time.Time
@@ -644,6 +646,7 @@ func (j *jsRuntime) call(fn goja.Callable, this goja.Value, args ...goja.Value) 
 		return callErr
 	})
 	if err != nil {
+		j.eventErr = true
 		j.reportError(err)
 		return nil, false
 	}
@@ -936,6 +939,7 @@ func (j *jsRuntime) fireNodeEvent(n *Node, typ string) bool {
 	if j == nil || j.stopped || n == nil {
 		return false
 	}
+	j.eventErr = false
 	ev := &jsEvent{typ: typ, target: j.wrap(n)}
 	evObj := j.eventObject(ev)
 	for p := n; p != nil && !ev.stopped; p = p.Parent {
@@ -996,6 +1000,7 @@ func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj goja.Value, ev *js
 	}
 	fv, err := j.runCode("inline "+attr, "(function(event){"+code+"\n})")
 	if err != nil {
+		j.eventErr = true
 		j.reportError(err)
 		return
 	}
