@@ -327,13 +327,18 @@ func (j *jsRuntime) resume() {
 // due. It reports false when no timers are pending, so the event loop can sleep
 // instead of waking on a fixed tick.
 func (b *Browser) nextJSTimerDelay() (time.Duration, bool) {
-	if b.js == nil || b.consoleOpen || len(b.js.timers) == 0 {
+	if b.consoleOpen {
 		return 0, false
 	}
 	var next time.Time
-	for _, t := range b.js.timers {
-		if next.IsZero() || t.due.Before(next) {
-			next = t.due
+	if b.hoverRebuildPending {
+		next = b.hoverRebuildAt
+	}
+	if b.js != nil {
+		for _, t := range b.js.timers {
+			if next.IsZero() || t.due.Before(next) {
+				next = t.due
+			}
 		}
 	}
 	if next.IsZero() {
@@ -348,12 +353,20 @@ func (b *Browser) nextJSTimerDelay() (time.Duration, bool) {
 
 // runJSTimers executes due timers and reports whether the UI should redraw.
 func (b *Browser) runJSTimers() bool {
-	if b.js == nil || b.consoleOpen {
+	now := time.Now()
+	if b.consoleOpen {
 		// Keep the console view stable while the user selects/copies output;
 		// timer-driven redraws would clear the terminal selection.
 		return false
 	}
-	now := time.Now()
+	if b.hoverRebuildPending && !now.Before(b.hoverRebuildAt) {
+		b.hoverRebuildPending = false
+		b.rebuild()
+		return true
+	}
+	if b.js == nil {
+		return false
+	}
 	b.js.tick(now)
 	if b.consumePendingJS() {
 		return false

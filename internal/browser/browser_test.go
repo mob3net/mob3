@@ -2466,6 +2466,50 @@ func TestJSReportErrorUsesFooterHint(t *testing.T) {
 	}
 }
 
+func TestHoverRebuildIsDebounced(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div class="menu"><a href="#m">Menu</a>
+<div class="sub"><a href="#x">Item</a></div></div>
+</body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.keys = make(chan string)
+	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
+	b.url = u
+	b.rebuild()
+	var menu *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == "Menu" {
+			menu = &b.layout.Frags[i]
+		}
+	}
+	if menu == nil {
+		t.Fatal("menu link missing")
+	}
+	layout := b.layout
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	if b.layout != layout {
+		t.Fatal("hover rebuilt the page immediately instead of debouncing")
+	}
+	if !b.hoverRebuildPending {
+		t.Fatal("hover did not schedule a rebuild")
+	}
+	b.hoverRebuildAt = time.Now().Add(-time.Millisecond)
+	if !b.runJSTimers() {
+		t.Fatal("deferred hover rebuild did not run")
+	}
+	found := false
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == "Item" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("deferred hover rebuild did not open the menu")
+	}
+}
+
 func TestHoverOpensJSMenu(t *testing.T) {
 	page := newJSPage(`<html><body>
 <div id="menu">Menu<div id="sub" style="display:none">Item</div></div>

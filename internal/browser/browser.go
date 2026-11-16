@@ -47,8 +47,12 @@ type Browser struct {
 	hover         int
 	hoverNode     *Node
 	pageHasHover  bool
-	jsErr         bool
-	status        string
+	// hoverRebuildPending coalesces the style pass for pointer hover changes so
+	// moving across a large page cannot rebuild the whole document per cell.
+	hoverRebuildPending bool
+	hoverRebuildAt      time.Time
+	jsErr               bool
+	status              string
 
 	// Reader mode renders an extracted article document instead of the page.
 	reader            bool
@@ -913,6 +917,7 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	b.hoverRebuildPending = false
 	// Timer-driven DOM changes (for example marquee animations) rebuild the
 	// page constantly. Keep an active hint session alive and recompute its
 	// hints against the new layout instead of dismissing it.
@@ -1152,9 +1157,30 @@ func (b *Browser) setPageHover(n *Node) {
 	if b.js != nil {
 		dirty = b.js.consumeDirty()
 	}
+	// Hover-driven style passes are delayed in interactive sessions so fast
+	// pointer movement does not rebuild the page for every cell. Automation
+	// and tests without an event loop need the result synchronously.
 	if b.pageHasHover || dirty {
-		b.rebuild()
+		if b.keys != nil {
+			b.hoverRebuildPending = true
+			b.hoverRebuildAt = time.Now().Add(hoverRebuildDelay)
+		} else {
+			b.rebuild()
+		}
 	}
+}
+
+// hoverRebuildDelay leaves enough time for the pointer to settle on a menu
+// item while still feeling immediate.
+const hoverRebuildDelay = 120 * time.Millisecond
+
+func (b *Browser) flushHoverRebuild() bool {
+	if !b.hoverRebuildPending {
+		return false
+	}
+	b.hoverRebuildPending = false
+	b.rebuild()
+	return true
 }
 
 func markHoverChain(n *Node, on bool) {
@@ -2858,8 +2884,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		}
 		b.scrollBy(step)
 		top, bottom := b.viewport()
-		docY := b.scroll + (y - top)
-		b.setPageHover(b.nodeAt(x, docY))
 		b.updateHover(x, y, top, bottom)
 		return false
 	}

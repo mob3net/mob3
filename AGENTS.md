@@ -646,9 +646,10 @@ Standard Go layout:
   under the pointer and its ancestors as `:hover` and fires
   mouseover/mouseenter/mouseout/mouseleave, so CSS and JavaScript hover menus
   open. Pointer hit testing uses text fragments and laid-out element boxes, so
-  padded menu items stay hovered while the pointer moves between them. A style
-  pass runs on a hover change when the page has `:hover` rules
-  or a handler mutated the DOM; leaving the page area clears the hover chain.
+  padded menu items stay hovered while the pointer moves between them. Hover
+  style passes are coalesced with a short delay, so fast pointer motion and
+  wheel scrolling do not rebuild the page per cell; the menu opens once the
+  pointer settles. Leaving the page area clears the hover chain.
   Left press starts a drag
   selection in document coordinates; dragging updates and auto-scrolls it,
   and release keeps the highlight. The highlight tints only rendered text
