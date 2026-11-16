@@ -36,6 +36,7 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 ## Tips
 
 - `-no-js` shows the no-script fallback, which is sometimes more useful.
+  `J` toggles scripting and reloads the page for the rest of the session.
 - `R` extracts the main article and removes navigation, sidebars and images.
 - `D` asks sites for `prefers-color-scheme: dark` and keeps an author dark
   palette when the page already renders a dark background.

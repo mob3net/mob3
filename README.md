@@ -102,7 +102,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   same-origin `fetch`/`XMLHttpRequest` plus simple CORS cross-origin requests,
   and in-memory storage/cookies. Script
   errors turn the footer `JavaScript` label into a red `JavaScript:Error`;
-  click it to open the console.
+  `J` or clicking that label toggles scripting for the session and reloads the
+  page, while `!` opens the console.
 - JavaScript console (`!`): tabbed view of logs, requests, cookies and
   in-memory storage, the raw page HTML, and a Tools tab for read-only page
   inspection (`help`, `form`, `links`, `requests`, `logs`, `source`,

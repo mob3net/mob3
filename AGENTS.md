@@ -528,7 +528,8 @@ Standard Go layout:
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
-  reader mode, `D` toggle dark mode, `i` cycle graphics modes, `X` hide/show
+  reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
+  `i` cycle graphics modes, `X` hide/show
   fixed elements, `o` URL prompt, `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
@@ -598,6 +599,15 @@ Standard Go layout:
   The preference persists across navigation and reload, and `-dark` starts with
   it enabled, including in `-dump` mode. It also applies on top of reader
   mode.
+- **JavaScript toggle:** `J` or the footer `JavaScript:on`/`JavaScript:off`
+  label switches scripting off/on for the rest of the session and reloads the
+  current URL, so the page's no-script fallback is applied immediately. The
+  reload reuses the last method and body. The back/forward page cache is
+  cleared because cached pages carry the previous mode's DOM and runtime.
+  The footer reports `JavaScript off — press J to re-enable` or
+  `JavaScript on`; `-no-js` and `about:config` set the starting state and
+  nothing is persisted. The JS console remains available through `!` and the
+  `>_` icon, showing that scripting is disabled when a command is entered.
 - **Reader mode:** `R` or the footer `Reader:on`/`Reader:off` label toggles an
   extracted article view. Extraction runs on the live DOM, prefers
   `<article>`/`<main>`/`role=main`, scores other prose containers, drops
@@ -677,6 +687,8 @@ Standard Go layout:
   buttons act on click, right click and the mouse back button go back, the
   mouse forward button goes forward, clicking the footer `Dark:on`/`Dark:off`
   or `Reader:on`/`Reader:off` labels toggles those modes, clicking the footer
+  `JavaScript:on`/`JavaScript:off` label toggles scripting for the session and
+  reloads the page, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. Interactive
@@ -748,8 +760,10 @@ Standard Go layout:
   `Graphics:<mode>`, `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels
   before the memory
   readout, and a clickable `>_` console icon pinned to the far right edge.
-  Clicking the JavaScript label opens the JS console, like the `>_` icon;
-  clicking the `Graphics:<mode>` label cycles graphics modes exactly like `i`,
+  Clicking the `JavaScript:on`/`JavaScript:off` label toggles scripting for the
+  session and reloads the current page, exactly like `J`; the console is
+  opened by the `>_` icon or `!`.
+  Clicking the `Graphics:<mode>` label cycles graphics modes exactly like `i`,
   and the `i` in that label is underlined to advertise the shortcut.
   Right-side items collapse from left to right as the terminal narrows:
   `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and memory,
@@ -759,10 +773,12 @@ Standard Go layout:
   right state.
   At least three blank cells
   separate the left status/link text from the right-side state. The first letter
-  of the Dark
-  and Reader labels is underlined to suggest the `D`/`R` shortcuts. Each label
-  is blue and bold
-  while its mode is on; the console icon toggles the JS console and stays
+  of the JavaScript, Dark
+  and Reader labels is underlined to suggest the `J`/`D`/`R` shortcuts, even
+  when the JavaScript label is in its red error state. Each
+  label is blue and bold
+  while its mode is on (JavaScript counts as on while scripts are enabled); the
+  console icon toggles the JS console and stays
   visible and clickable inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green

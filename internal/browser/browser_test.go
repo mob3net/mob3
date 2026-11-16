@@ -2381,9 +2381,12 @@ func TestJSErrorFooterLabel(t *testing.T) {
 	if !strings.Contains(line, "38;2;179;29;29") {
 		t.Fatalf("JavaScript:Error is not red: %q", line)
 	}
+	if !strings.Contains(line, "0;1;4;38;2;179;29;29") {
+		t.Fatalf("JavaScript:Error J is not underlined: %q", line)
+	}
 	var hit *headerHit
 	for i := range b.footerHits {
-		if b.footerHits[i].kind == headerConsole && b.footerHits[i].w > 2 {
+		if b.footerHits[i].kind == headerJS {
 			hit = &b.footerHits[i]
 			break
 		}
@@ -2394,8 +2397,11 @@ func TestJSErrorFooterLabel(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
 	})
-	if !b.consoleOpen {
-		t.Fatal("clicking JavaScript state did not open the console")
+	if !b.noJS {
+		t.Fatal("clicking JavaScript state did not turn scripts off")
+	}
+	if b.consoleOpen {
+		t.Fatal("clicking JavaScript state opened the console")
 	}
 }
 
@@ -2404,7 +2410,7 @@ func TestJavaScriptFooterLabelClick(t *testing.T) {
 	drawQuiet(b)
 	var hit *headerHit
 	for i := range b.footerHits {
-		if b.footerHits[i].kind == headerConsole && b.footerHits[i].w > 2 {
+		if b.footerHits[i].kind == headerJS {
 			hit = &b.footerHits[i]
 			break
 		}
@@ -2415,8 +2421,83 @@ func TestJavaScriptFooterLabelClick(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
 	})
-	if !b.consoleOpen {
-		t.Fatal("clicking JavaScript:on did not open the console")
+	if !b.noJS {
+		t.Fatal("clicking JavaScript:on did not disable scripts")
+	}
+	if b.loader == nil || !b.loader.noScripts {
+		t.Fatal("loader still fetches scripts after the toggle")
+	}
+	if b.consoleOpen {
+		t.Fatal("clicking JavaScript:on opened the console")
+	}
+}
+
+func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
+	b := NewBrowser(80, 10)
+	u := mustParse(t, "https://example.com/")
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML("<html><body>scripted</body></html>")}
+	b.url = u
+	b.lastMethod = "GET"
+	b.rebuild()
+
+	requested := make(chan string, 1)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		requested <- target
+		p := &Page{URL: u, Base: u, Root: ParseHTML("<html><body>no scripts</body></html>")}
+		return p, nil
+	}
+	b.HandleKey("J")
+	if !b.noJS {
+		t.Fatal("J did not disable JavaScript")
+	}
+	if b.loader == nil || !b.loader.noScripts {
+		t.Fatal("loader still fetches scripts after J")
+	}
+	select {
+	case target := <-requested:
+		if target != u.String() {
+			t.Fatalf("reload target = %q", target)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("J did not reload the page")
+	}
+	var res loadResult
+	select {
+	case res = <-b.loadCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reload result did not arrive")
+	}
+	b.finishLoad(res)
+	if b.noJS != true {
+		t.Fatal("applying the reload enabled JavaScript again")
+	}
+	if b.status != "JavaScript off — press J to re-enable" {
+		t.Fatalf("status = %q", b.status)
+	}
+
+	// Pressing it again re-enables scripting for the session.
+	b.pendingStatus = ""
+	b.HandleKey("J")
+	if b.noJS {
+		t.Fatal("second J did not enable JavaScript")
+	}
+	if b.loader.noScripts {
+		t.Fatal("loader still skips scripts after the second J")
+	}
+}
+
+func TestJavaScriptToggleDropsPageCache(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.history = []historyEntry{
+		{URL: "https://example.com/a", cached: &cachedPage{js: &jsRuntime{}}},
+		{URL: "https://example.com/b", cached: &cachedPage{}},
+	}
+	b.histIdx = 1
+	b.dropCachedPages()
+	for i, e := range b.history {
+		if e.cached != nil {
+			t.Fatalf("history %d still cached", i)
+		}
 	}
 }
 

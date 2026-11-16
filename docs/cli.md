@@ -117,7 +117,8 @@ hit, the page renders partially and the status says
 `-js-memory` sets the per-script/callback heap budget. Every script also runs
 under a 2-second CPU watchdog. `0` disables the heap watchdog but not the CPU
 timeout. `-no-js` disables both script fetching and execution; `<noscript>`
-content is then shown.
+content is then shown. Press `J` (or click the footer JavaScript label) to
+toggle this for the session and reload the current page.
 
 `-cache` is a session-only LRU budget for CSS/JS response bodies and decoded
 images. Nothing is written to disk, and cache hits appear in the `!` console.

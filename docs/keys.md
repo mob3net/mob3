@@ -18,6 +18,7 @@ key, mouse and form reference for the running build.
 | `r` | Reload |
 | `R` | Toggle reader mode |
 | `D` | Toggle dark mode |
+| `J` | Toggle JavaScript and reload the page without or with scripts |
 | `i` | Cycle graphics modes: full graphics, blocks, none |
 | `X` | Hide or show fixed-position elements |
 | `o` | Open the URL prompt |
@@ -142,8 +143,8 @@ uploads are unsupported.
 - Click in the prompt to move the caret.
 - Click `←`, `→`, `⟳`, `⌂`, History, Bookmarks, Help or `⚙` in the toolbar.
 - Right click goes back; the mouse back/forward buttons navigate.
-- Click `Dark:on`/`Dark:off`, `Reader:on`/`Reader:off` or the `>_` icon in the
-  footer.
+- Click `Dark:on`/`Dark:off`, `Reader:on`/`Reader:off`,
+  `JavaScript:on`/`JavaScript:off` or the `>_` icon in the footer.
 - The wheel scrolls three lines; drag the right-edge scrollbar to jump.
 
 Shift+mouse reports from the terminal are ignored so the terminal can keep a

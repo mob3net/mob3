@@ -1096,6 +1096,7 @@ Nothing is written to disk.</p>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
+<tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
 <tr><td><b>X</b></td><td>hide or show fixed-position elements</td></tr>
 <tr><td><b>o</b></td><td>open a URL prompt</td></tr>
@@ -1140,6 +1141,13 @@ reader mode is on.</p>
 <b>prefers-color-scheme: dark</b>. Start with <b>-dark</b> to enable it at
 launch.</p>
 
+<h2>JavaScript</h2>
+<p><b>J</b> or clicking the footer <b>JavaScript:on</b>/<b>JavaScript:off</b>
+label toggles scripting for the rest of the session and reloads the page, so
+the no-script fallback is shown immediately. Start with <b>-no-js</b> to begin
+with scripting disabled. The current state stays visible in the footer;
+<b>JavaScript:Error</b> means a script failed.</p>
+
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button lists the session history; <b>#</b> links and
 scroll positions are kept. Up to ten visited pages stay in an in-memory
@@ -1167,6 +1175,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>i</b></td></tr>
+<tr><td>click the footer <b>JavaScript:on</b>/<b>JavaScript:off</b> label</td><td>toggle JavaScript and reload the page, like <b>J</b></td></tr>
 <tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>
 <tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>

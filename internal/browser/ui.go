@@ -395,7 +395,7 @@ func (b *Browser) runConsoleInput() {
 	}
 	b.logJS("input", src)
 	if b.js == nil {
-		b.logJS("error", "JavaScript is disabled (-no-js)")
+		b.logJS("error", "JavaScript is disabled — press J to enable")
 		return
 	}
 	v, err := b.js.runCode("console", src)

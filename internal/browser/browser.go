@@ -101,11 +101,14 @@ type Browser struct {
 	// terminal image survives.
 	lastNativeImages bool
 
-	noJS         bool
-	noBigText    bool
-	jsMemLimit   int64
-	layoutBudget LayoutBudget
-	js           *jsRuntime
+	noJS bool
+	// pendingStatus replaces the computed load status once, so a JavaScript
+	// toggle can report its new state instead of clearing the footer.
+	pendingStatus string
+	noBigText     bool
+	jsMemLimit    int64
+	layoutBudget  LayoutBudget
+	js            *jsRuntime
 
 	loadCh       chan loadResult
 	loadSeq      int
@@ -260,6 +263,7 @@ const (
 	headerHelp
 	headerConfig
 	headerConsole
+	headerJS
 	headerReader
 	headerDark
 	headerGraphics
@@ -533,6 +537,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	if res.seq != b.loadSeq {
 		return
 	}
+	note := b.pendingStatus
+	b.pendingStatus = ""
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	b.selectMenu = nil
@@ -602,6 +608,9 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.focus = -1
 	b.clearControlFocus()
 	b.status = b.pageLoadStatus(page, readerFailed)
+	if note != "" && b.status == "" {
+		b.status = note
+	}
 	if frag := res.u.Fragment; frag != "" {
 		b.scrollToAnchor(frag)
 	}
@@ -1040,6 +1049,46 @@ func (b *Browser) toggleDark() {
 	b.status = "Dark mode on"
 	if !b.dark {
 		b.status = "Dark mode off"
+	}
+}
+
+// toggleJavaScript switches page scripting for the rest of the session. The
+// current document is fetched again so its no-script or scripted variant is
+// applied; the page's existing DOM is not reused.
+func (b *Browser) toggleJavaScript() {
+	b.noJS = !b.noJS
+	if b.loader != nil {
+		b.loader.noScripts = b.noJS
+	}
+	if b.noJS {
+		b.pendingStatus = "JavaScript off — press J to re-enable"
+	} else {
+		b.pendingStatus = "JavaScript on"
+	}
+	if b.url == nil {
+		b.status = b.pendingStatus
+		b.pendingStatus = ""
+		b.draw()
+		return
+	}
+	b.reload()
+	// Cached pages keep the previous mode's DOM and runtime, so drop them.
+	b.dropCachedPages()
+}
+
+// dropCachedPages clears the back/forward page cache. It is used when a
+// session-wide setting changes, because restoring a page built under the old
+// setting would be inconsistent.
+func (b *Browser) dropCachedPages() {
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
+	for i := range b.history {
+		if c := b.history[i].cached; c != nil {
+			if c.js != nil {
+				c.js.stop()
+			}
+			b.history[i].cached = nil
+		}
 	}
 }
 
@@ -3377,6 +3426,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				case headerConsole:
 					b.toggleConsole()
 					return false
+				case headerJS:
+					b.toggleJavaScript()
+					return false
 				case headerReader:
 					b.toggleReader()
 					return false
@@ -3600,6 +3652,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.toggleReader()
 	case "D":
 		b.toggleDark()
+	case "J":
+		b.toggleJavaScript()
 	case "o":
 		b.openURLPrompt()
 	case "f":
@@ -4493,7 +4547,7 @@ func (b *Browser) draw() {
 					err  bool
 				}{
 					{b.graphicsStatusText(), headerGraphics, false, false},
-					{b.jsStatusText(), headerConsole, false, b.jsErr},
+					{b.jsStatusText(), headerJS, !b.noJS, b.jsErr},
 					{b.darkStatusText(), headerDark, b.dark, false},
 					{b.readerStatusText(), headerReader, b.reader, false},
 				}
@@ -4507,10 +4561,7 @@ func (b *Browser) draw() {
 					switch {
 					case label.err:
 						errStyle := &Style{Bold: true, Color: RGB(0xb3, 0x1d, 0x1d), FontSize: 16, LineHeight: 1}
-						g.Text(lx, fy, label.text, errStyle, errStyle.Color)
-					case label.kind == headerConsole:
-						// Already drawn with the normal footer style; only the
-						// click region is needed here.
+						drawShortcutLabel(g, lx, fy, label.text, errStyle, errStyle.Color)
 					case label.kind == headerGraphics:
 						// Underline the i in "Graphics" to advertise the i key.
 						drawUnderlinedRune(g, lx, fy, label.text, 'i', fs, fs.Color)
