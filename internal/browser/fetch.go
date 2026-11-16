@@ -24,6 +24,7 @@ import (
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/net/publicsuffix"
+	"golang.org/x/text/encoding/charmap"
 )
 
 const (
@@ -871,33 +872,71 @@ func decodeBody(data []byte, ctype string) string {
 			charset = rest[:end]
 		}
 	}
-	switch charset {
-	case "iso-8859-1", "latin1", "latin-1", "windows-1252", "cp1252":
-		return decodeLatin1(data, charset == "windows-1252" || charset == "cp1252")
+	if cm, ok := lookupCharset(charset); ok {
+		if decoded, err := cm.NewDecoder().Bytes(data); err == nil {
+			return string(decoded)
+		}
 	}
 	return strings.ToValidUTF8(string(data), "\uFFFD")
 }
 
-func decodeLatin1(data []byte, windows1252 bool) string {
-	var b strings.Builder
-	b.Grow(len(data))
-	for _, c := range data {
-		r := rune(c)
-		if windows1252 && c >= 0x80 && c <= 0x9f {
-			if mapped, ok := cp1252Extra[c]; ok {
-				r = mapped
-			}
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
+// singleByteCharsets maps legacy single-byte charset labels to their decoder.
+// Labels are matched after lowercasing and treating '_' like '-'. Anything not
+// listed here is read as UTF-8.
+var singleByteCharsets = map[string]*charmap.Charmap{
+	"iso-8859-1":   charmap.ISO8859_1,
+	"iso8859-1":    charmap.ISO8859_1,
+	"latin1":       charmap.ISO8859_1,
+	"latin-1":      charmap.ISO8859_1,
+	"l1":           charmap.ISO8859_1,
+	"cp819":        charmap.ISO8859_1,
+	"windows-1252": charmap.Windows1252,
+	"cp1252":       charmap.Windows1252,
+	"iso-8859-2":   charmap.ISO8859_2,
+	"iso8859-2":    charmap.ISO8859_2,
+	"latin2":       charmap.ISO8859_2,
+	"latin-2":      charmap.ISO8859_2,
+	"l2":           charmap.ISO8859_2,
+	"windows-1250": charmap.Windows1250,
+	"cp1250":       charmap.Windows1250,
+	"iso-8859-3":   charmap.ISO8859_3,
+	"latin3":       charmap.ISO8859_3,
+	"iso-8859-4":   charmap.ISO8859_4,
+	"latin4":       charmap.ISO8859_4,
+	"iso-8859-5":   charmap.ISO8859_5,
+	"cyrillic":     charmap.ISO8859_5,
+	"windows-1251": charmap.Windows1251,
+	"cp1251":       charmap.Windows1251,
+	"iso-8859-7":   charmap.ISO8859_7,
+	"greek":        charmap.ISO8859_7,
+	"greek8":       charmap.ISO8859_7,
+	"windows-1253": charmap.Windows1253,
+	"cp1253":       charmap.Windows1253,
+	"iso-8859-9":   charmap.ISO8859_9,
+	"latin5":       charmap.ISO8859_9,
+	"windows-1254": charmap.Windows1254,
+	"cp1254":       charmap.Windows1254,
+	"iso-8859-10":  charmap.ISO8859_10,
+	"latin6":       charmap.ISO8859_10,
+	"iso-8859-13":  charmap.ISO8859_13,
+	"latin7":       charmap.ISO8859_13,
+	"windows-1257": charmap.Windows1257,
+	"cp1257":       charmap.Windows1257,
+	"iso-8859-14":  charmap.ISO8859_14,
+	"latin8":       charmap.ISO8859_14,
+	"iso-8859-15":  charmap.ISO8859_15,
+	"latin9":       charmap.ISO8859_15,
+	"latin-9":      charmap.ISO8859_15,
+	"iso-8859-16":  charmap.ISO8859_16,
+	"latin10":      charmap.ISO8859_16,
 }
 
-var cp1252Extra = map[byte]rune{
-	0x80: '€', 0x82: '‚', 0x83: 'ƒ', 0x84: '„', 0x85: '…', 0x86: '†', 0x87: '‡',
-	0x88: 'ˆ', 0x89: '‰', 0x8a: 'Š', 0x8b: '‹', 0x8c: 'Œ', 0x8e: 'Ž',
-	0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”', 0x95: '•', 0x96: '–', 0x97: '—',
-	0x98: '˜', 0x99: '™', 0x9a: 'š', 0x9b: '›', 0x9c: 'œ', 0x9e: 'ž', 0x9f: 'Ÿ',
+// lookupCharset resolves a charset label to a single-byte decoder.
+func lookupCharset(label string) (*charmap.Charmap, bool) {
+	label = strings.ToLower(strings.TrimSpace(label))
+	label = strings.ReplaceAll(label, "_", "-")
+	cm, ok := singleByteCharsets[label]
+	return cm, ok
 }
 
 func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Rule {

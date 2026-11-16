@@ -148,7 +148,7 @@ Standard Go layout:
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles (including empty overlay anchors), display list (`Frag`s) in document coordinates, plus text width/truncation helpers, wide-character measurement, `display:contents` expansion and measure that ignores out-of-flow children. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
-| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8/Latin-1/CP1252), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
@@ -1071,6 +1071,11 @@ Standard Go layout:
   data) documents cannot load file resources, navigate the viewport to `file:`
   URLs, or XHR local files. Local documents retain access to local resources.
 - Charset from Content-Type, falling back to `<meta charset>` sniffing.
+  UTF-8 is the default. Legacy single-byte labels decode through the vendored
+  `x/text/encoding/charmap` tables: Latin-1/Windows-1252, ISO-8859-2/3/4/5/7/9/
+  10/13/14/15/16 and Windows-1250/1251/1253/1254/1257, with common aliases
+  (`latin2`, `cp1250`, `greek`, `cyrillic`, …). Unlisted charsets are read as
+  UTF-8.
 - Stylesheets from `<style>`, `<link rel=stylesheet>`, and inline styles;
   `@import` is not supported. Parsing is cancellable and capped at 4 MiB of
   source, 50k rules, 256 KiB per declaration block, 4 KiB per selector and

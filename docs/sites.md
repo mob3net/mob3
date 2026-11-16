@@ -13,6 +13,9 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   tracks, simple `calc()` and viewport-unit sizing, aspect-ratio
   `::before`/`::after` boxes, forms
   and simple JavaScript DOM effects.
+- Older pages that declare a single-byte charset (Windows-1250/1251/1253/1257
+  and ISO-8859-2/5/7 and similar) are decoded correctly from the
+  `Content-Type` header or `<meta charset>`.
 - Reader mode (`R` or `-reader`) for long articles.
 
 ## Often rough

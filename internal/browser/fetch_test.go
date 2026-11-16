@@ -704,14 +704,31 @@ func TestResolveURL(t *testing.T) {
 }
 
 func TestDecodeBodyCharsets(t *testing.T) {
-	if got := decodeBody([]byte{0xe9}, "text/html; charset=iso-8859-1"); got != "é" {
-		t.Fatalf("latin1 = %q", got)
+	cases := []struct {
+		name  string
+		ctype string
+		in    []byte
+		want  string
+	}{
+		{"latin1", "text/html; charset=iso-8859-1", []byte{0xe9}, "é"},
+		{"cp1252", "text/html; charset=windows-1252", []byte{0x93, 'h', 'i', 0x94}, "“hi”"},
+		{"utf8", "text/html", []byte("hé"), "hé"},
+		{"cp1250", "text/html; charset=windows-1250",
+			[]byte{0xc8, 0x65, 0x73, 0x6b, 0xe1, 0x20, 0x63, 0xed, 0x72, 0x6b, 0x65, 0x76}, "Česká církev"},
+		{"cp1251", "text/html; charset=windows-1251",
+			[]byte{0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2}, "Привет"},
+		{"iso-8859-7", "text/html; charset=iso-8859-7",
+			[]byte{0xc5, 0xeb, 0xeb, 0xdc, 0xe4, 0xe1}, "Ελλάδα"},
+		{"iso-8859-2 alias", "text/html; charset=ISO_8859-2",
+			[]byte{0x50, 0xf8, 0xed, 0x6c, 0x69, 0xb9, 0x20, 0xbe, 0x6c, 0x75, 0xbb, 0x6f, 0x75, 0xe8, 0x6b, 0xfd}, "Příliš žluťoučký"},
+		{"meta charset", "text/html",
+			append([]byte(`<meta charset=windows-1250>`), 0xc8, 0x65, 0x73, 0x6b, 0xe1), "<meta charset=windows-1250>Česká"},
+		{"unknown", "text/html; charset=x-unknown", []byte("hé"), "hé"},
 	}
-	if got := decodeBody([]byte{0x93, 'h', 'i', 0x94}, "text/html; charset=windows-1252"); got != "“hi”" {
-		t.Fatalf("cp1252 = %q", got)
-	}
-	if got := decodeBody([]byte("hé"), "text/html"); got != "hé" {
-		t.Fatalf("utf8 = %q", got)
+	for _, c := range cases {
+		if got := decodeBody(c.in, c.ctype); got != c.want {
+			t.Errorf("%s = %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 
