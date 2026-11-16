@@ -3789,6 +3789,11 @@ func (b *Browser) HandleKey(k string) bool {
 	case "o":
 		b.openURLPrompt()
 	case "f":
+		if li := b.currentFindLink(); li != nil {
+			b.focus = li.Index
+			b.followFocused()
+			return false
+		}
 		b.openLinkHints(false)
 	case "F":
 		b.openLinkHints(true)

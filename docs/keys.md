@@ -71,7 +71,9 @@ fallback.
 `/` opens the incremental find bar. Typing searches case-insensitively and
 highlights every match. `Enter` confirms and closes the bar; `n`/`N` then move
 between matches. `Down`/`Up` also move while the bar is open. `Esc` closes the
-bar but keeps highlights; a later `Esc` clears them.
+bar but keeps highlights; a later `Esc` clears them. If the current match is
+inside a link, the footer shows `(f → <resolved URL>)` and `f` follows that
+link directly; clear the search to get normal `f` link hints back.
 
 The find bar supports the same word-editing keys as the URL prompt.
 

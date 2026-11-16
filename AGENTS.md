@@ -587,7 +587,11 @@ Standard Go layout:
   whitespace runs collapse to one space, and phrases match across word
   fragments and wrapped lines, with every rectangle of a multi-line match
   highlighted. It works on every rendered page, including `about:help` and
-  `about:bookmarks`. The query line takes the same Ctrl/Alt word motion and
+  `about:bookmarks`. When the current match lies inside a link, the footer
+  appends `(f → <resolved URL>)` (or `(f follows this link)` for a bare or empty
+  href) and `f` follows that link directly instead of opening link hints;
+  clearing the search restores normal `f` hint mode. The
+  query line takes the same Ctrl/Alt word motion and
   Alt/Ctrl+Backspace, Ctrl-W and Alt-D word deletion as the URL prompt.
 - **Link hints:** `f` labels every visible link and form control by
   picking letters from the target's own text and drawing them with a yellow

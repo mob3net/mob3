@@ -193,3 +193,41 @@ func TestFindHTMLConsole(t *testing.T) {
 		t.Fatalf("HTML match background = %+v, want %+v", got, b.findMatchBG(true))
 	}
 }
+
+func TestFindStatusHintsLinkMatch(t *testing.T) {
+	root := ParseHTML(`<html><body><p><a href="#one">evidence link</a></p><p>plain evidence text</p><div id="one">target</div></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(80, 20)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.url = u
+	b.layout = BuildLayout(root, nil, 80)
+
+	// The first match is the link text.
+	typeFindQuery(t, b, func() { b.HandleKey("/") }, "evidence")
+	b.handleFindKey("enter")
+	if !strings.Contains(b.status, "(f → https://example.com/#one)") {
+		t.Fatalf("link match status = %q", b.status)
+	}
+
+	// f follows the matched link rather than opening hint mode.
+	b.HandleKey("f")
+	if b.findActive || b.url == nil || b.url.Fragment != "one" {
+		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.findActive, b.url)
+	}
+
+	// The second match is plain text, so the hint disappears.
+	b.HandleKey("/")
+	b.findCursor = len(b.findText)
+	b.handleFindKey("ctrl-u")
+	for _, r := range "plain" {
+		b.handleFindKey(string(r))
+	}
+	b.handleFindKey("enter")
+	if strings.Contains(b.status, "(f ") {
+		t.Fatalf("plain match status = %q", b.status)
+	}
+	b.HandleKey("f")
+	if !b.linkHints {
+		t.Fatal("f on a plain match did not open link hints")
+	}
+}

@@ -69,7 +69,31 @@ func (b *Browser) findStatusText() string {
 	if idx < 0 || idx >= len(b.findMatches) {
 		idx = 0
 	}
-	return fmt.Sprintf("Find %d/%d: %s", idx+1, len(b.findMatches), b.findText)
+	status := fmt.Sprintf("Find %d/%d: %s", idx+1, len(b.findMatches), b.findText)
+	if li := b.currentFindLink(); li != nil {
+		if target := b.resolveHref(li.Href); target != "" && target != "#" {
+			status += " (f → " + target + ")"
+		} else {
+			status += " (f follows this link)"
+		}
+	}
+	return status
+}
+
+// currentFindLink returns the link containing the current page find match.
+func (b *Browser) currentFindLink() *LinkInfo {
+	if b.findScope != findScopePage || b.layout == nil || len(b.findMatches) == 0 {
+		return nil
+	}
+	idx := b.findIdx
+	if idx < 0 || idx >= len(b.findMatches) {
+		idx = 0
+	}
+	m := b.findMatches[idx]
+	if m.frag < 0 || m.frag >= len(b.layout.Frags) {
+		return nil
+	}
+	return b.layout.Frags[m.frag].Link
 }
 
 func (b *Browser) findBarCount() string {

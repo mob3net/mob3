@@ -1325,7 +1325,9 @@ Nothing is written to disk.</p>
 <p><b>/</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>
 closes it and <b>n</b>/<b>N</b> move between matches. <b>Esc</b> closes it; a
 second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b>
-searches the raw source.</p>
+searches the raw source. If the current match is inside a link, the footer
+shows <b>(f → resolved URL)</b> and <b>f</b> follows it directly; clearing the
+search restores normal link hints.</p>
 
 <h2>Link hints</h2>
 <p>Press <b>f</b> to follow a link: it highlights a letter from each visible
