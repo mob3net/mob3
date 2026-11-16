@@ -859,7 +859,10 @@ Standard Go layout:
   text (link underlines are dropped) so content does not leak into the modal
   edges. The body also has a blank spacer row below the title bar and
   above the hint, and a `×` in the top-right corner that closes the modal with
-  the mouse. Clicking the dimmed backdrop also closes the modal.
+  the mouse. Clicking the dimmed backdrop also closes the modal. While a modal
+  or select popup is open, native inline images are disabled in favour of
+  half-block art so terminal image placements cannot paint over the modal;
+  native images return when it closes.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
   block script execution until answered. Alert closes on Enter/Space/Esc;
   confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text

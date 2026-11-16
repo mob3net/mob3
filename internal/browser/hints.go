@@ -410,10 +410,13 @@ func (b *Browser) visibleLinkRect(li *LinkInfo, top, bottom int) (Rect, bool) {
 }
 
 // inlineImagesEnabled reports whether the current frame should use native
-// terminal image protocols. Hint mode falls back to half-block art so hints
-// painted into the text grid stay above the images.
+// terminal image protocols. Hint mode and any open modal fall back to
+// half-block art so text painted above the images cannot be covered by them.
 func (b *Browser) inlineImagesEnabled() bool {
-	return b.gfx != nil && !b.linkHints
+	if b.gfx == nil || b.linkHints {
+		return false
+	}
+	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil
 }
 
 // paintLinkHints draws the chosen letters of each matching link with a yellow

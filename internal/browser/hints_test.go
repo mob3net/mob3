@@ -213,6 +213,31 @@ func TestLinkHintsDisableInlineImages(t *testing.T) {
 	}
 }
 
+func TestModalsDisableInlineImages(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	modals := []struct {
+		name  string
+		set   func()
+		clear func()
+	}{
+		{"dialog", func() { b.dialog = &jsDialog{} }, func() { b.dialog = nil }},
+		{"download", func() { b.download = &downloadDialog{} }, func() { b.download = nil }},
+		{"notice", func() { b.notice = &noticeDialog{} }, func() { b.notice = nil }},
+		{"select", func() { b.selectMenu = &selectMenuDialog{} }, func() { b.selectMenu = nil }},
+	}
+	for _, m := range modals {
+		m.set()
+		if b.inlineImagesEnabled() {
+			t.Fatalf("%s: inline images should be disabled while a modal is open", m.name)
+		}
+		m.clear()
+		if !b.inlineImagesEnabled() {
+			t.Fatalf("%s: inline images should resume after the modal closes", m.name)
+		}
+	}
+}
+
 func TestLinkHintsNoTextFreeLetters(t *testing.T) {
 	hints := buildLinkHints([]int{0, 1}, map[int][]hintGlyph{
 		0: {{ch: 'd', r: 'D', x: 1, y: 1}},

@@ -87,9 +87,10 @@ type Browser struct {
 	// hideFixed suppresses position:fixed boxes for the current page.
 	hideFixed bool
 
-	// lastHintMode tracks hint-mode transitions so the first hint frame and
-	// the return to normal rendering both get a full repaint.
-	lastHintMode bool
+	// lastNativeImages tracks graphics-mode transitions (hints or a modal
+	// opening/closing) so the next frame is fully repainted and no stale
+	// terminal image survives.
+	lastNativeImages bool
 
 	noJS         bool
 	noBigText    bool
@@ -3890,10 +3891,11 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.lastScroll = b.scroll
 		b.prev = nil
 	}
-	// Entering or leaving hint mode switches between native inline images and
-	// half-block art. Repaint everything so no stale terminal image survives.
-	if b.linkHints != b.lastHintMode {
-		b.lastHintMode = b.linkHints
+	// Entering or leaving hint/modal mode switches between native inline
+	// images and half-block art. Repaint everything so no stale terminal
+	// image survives.
+	if native := b.inlineImagesEnabled(); native != b.lastNativeImages {
+		b.lastNativeImages = native
 		b.prev = nil
 	}
 	needClear := b.prev == nil || len(b.prev) != len(lines)
