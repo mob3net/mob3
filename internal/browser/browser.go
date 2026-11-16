@@ -1224,6 +1224,18 @@ func (b *Browser) followFocused() {
 		b.status = "No link selected (press Tab)"
 		return
 	}
+	// Run the link's click handlers before navigating. Bare "#" links often
+	// open dialogs or menus from JavaScript and cancel the default navigation.
+	if b.js != nil && li.Node != nil && b.liveNode(li.Node) && b.js.dispatchClick(li.Node) {
+		if b.js.consumeDirty() {
+			b.rebuild()
+		}
+		b.consumePendingJS()
+		return
+	}
+	if b.consumePendingJS() {
+		return
+	}
 	href := li.Href
 	low := strings.ToLower(strings.TrimSpace(href))
 	if strings.HasPrefix(low, "javascript:") {

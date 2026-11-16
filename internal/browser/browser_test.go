@@ -782,6 +782,27 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 }
 
+func TestKeyboardLinkRunsClickHandler(t *testing.T) {
+	page := newJSPage(`<html><body>
+<p><a id="a" href="#" onclick="document.body.setAttribute('data-clicked','yes'); return false;">show an alert</a></p>
+</body></html>`, ``)
+	b := NewBrowser(60, 12)
+	b.page = page
+	b.url = page.URL
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	b.scroll = 1
+	b.focus = 0
+	b.followFocused()
+	body := page.Root.FindFirst("body")
+	if body == nil || body.Attr("data-clicked") != "yes" {
+		t.Fatal("keyboard follow did not run the link click handler")
+	}
+	if len(b.history) != 0 {
+		t.Fatalf("prevented click navigated: history=%d", len(b.history))
+	}
+}
+
 func TestFixedWidthInputPatchesFragments(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go">
 <input name="q" style="width:24em" value=""></form></body></html>`)
