@@ -175,6 +175,78 @@ type Style struct {
 	GridColumn     string
 	GridRow        string
 	GridAutoFlow   string
+	ObjectFit      string
+	ObjectPosX     float64
+	ObjectPosY     float64
+	AspectRatio    float64
+}
+
+func parseObjectPosition(v string, st *Style) {
+	fields := splitFields(strings.ToLower(strings.TrimSpace(v)))
+	if len(fields) == 0 {
+		return
+	}
+	parse := func(s string) (float64, bool) {
+		switch s {
+		case "left", "top":
+			return 0, true
+		case "center":
+			return 0.5, true
+		case "right", "bottom":
+			return 1, true
+		}
+		if strings.HasSuffix(s, "%") {
+			if f, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64); err == nil {
+				if f < 0 {
+					f = 0
+				}
+				if f > 100 {
+					f = 100
+				}
+				return f / 100, true
+			}
+		}
+		return 0, false
+	}
+	x, xok := parse(fields[0])
+	if len(fields) == 1 {
+		if fields[0] == "top" || fields[0] == "bottom" {
+			st.ObjectPosX, st.ObjectPosY = 0.5, x
+			return
+		}
+		if xok {
+			st.ObjectPosX = x
+		}
+		return
+	}
+	y, yok := parse(fields[1])
+	if xok {
+		st.ObjectPosX = x
+	}
+	if yok {
+		st.ObjectPosY = y
+	}
+}
+
+func parseAspectRatio(v string, st *Style) {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if strings.HasPrefix(v, "auto") {
+		v = strings.TrimSpace(strings.TrimPrefix(v, "auto"))
+	}
+	if v == "" {
+		return
+	}
+	if i := strings.IndexByte(v, '/'); i >= 0 {
+		w, err1 := strconv.ParseFloat(strings.TrimSpace(v[:i]), 64)
+		h, err2 := strconv.ParseFloat(strings.TrimSpace(v[i+1:]), 64)
+		if err1 == nil && err2 == nil && w > 0 && h > 0 {
+			st.AspectRatio = w / h
+		}
+		return
+	}
+	if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+		st.AspectRatio = f
+	}
 }
 
 // TextScale is the visual size multiplier used by terminal text sizing. Runs
@@ -217,6 +289,8 @@ func defaultStyle() *Style {
 		BoxSizing:   "content-box",
 		ListStyle:   "disc",
 		BorderColor: RGB(0xd0, 0xd7, 0xde),
+		ObjectPosX:  0.5,
+		ObjectPosY:  0.5,
 	}
 }
 
@@ -1419,6 +1493,15 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "position":
 		st.Position = lower
+	case "object-fit":
+		switch lower {
+		case "fill", "contain", "cover", "none", "scale-down":
+			st.ObjectFit = lower
+		}
+	case "object-position":
+		parseObjectPosition(val, st)
+	case "aspect-ratio":
+		parseAspectRatio(val, st)
 	case "top", "right", "bottom", "left":
 		l := parseLength(val, st.FontSize)
 		switch prop {

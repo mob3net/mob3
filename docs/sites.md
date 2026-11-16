@@ -11,7 +11,7 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   presentational markup.
 - Responsive pages that use `@media` width queries, basic flex rows, basic grid
   tracks, simple `calc()` and viewport-unit sizing, aspect-ratio
-  `::before`/`::after` boxes, forms
+  `::before`/`::after` boxes, images sized with `object-fit`, forms
   and simple JavaScript DOM effects.
 - Older pages that declare a single-byte charset (Windows-1250/1251/1253/1257
   and ISO-8859-2/5/7 and similar) are decoded correctly from the

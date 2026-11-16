@@ -433,7 +433,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				})
 				continue
 			}
-			paintImage(g, f.Img, f.X, y0, f.W, y1-y0, imgTop, f.H)
+			paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
 			if f.Link != nil && f.Link == focus {
 				g.Fill(f.X, y, f.W, 1, focusBG)
 				g.Fill(f.X, y+f.H-1, f.W, 1, focusBG)
@@ -446,8 +446,11 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 
 // paintImage draws an image as half-block art. rowStart and totalRows describe
 // which part of the (possibly clipped) image we are drawing.
-func paintImage(g *Grid, img image.Image, x, y, w, h, rowStart, totalRows int) {
+func paintImage(g *Grid, img image.Image, crop image.Rectangle, x, y, w, h, rowStart, totalRows int) {
 	b := img.Bounds()
+	if crop.Dx() > 0 && crop.Dy() > 0 {
+		b = crop
+	}
 	iw, ih := b.Dx(), b.Dy()
 	if iw <= 0 || ih <= 0 || w <= 0 || h <= 0 || totalRows <= 0 {
 		return

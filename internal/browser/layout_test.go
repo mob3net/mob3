@@ -1903,3 +1903,81 @@ func TestLongNowrapInlineContentSplits(t *testing.T) {
 		t.Fatalf("long nowrap inline content did not split: %d line(s)", len(lines))
 	}
 }
+
+func TestObjectFitCoverAndContain(t *testing.T) {
+	doc := ParseHTML(`<img id="c" style="display:block;width:160px;height:160px;object-fit:cover">
+<img id="t" style="display:block;width:160px;height:160px;object-fit:contain">`)
+	src := image.NewRGBA(image.Rect(0, 0, 200, 100))
+	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		img.Img = src
+	}
+	ly := BuildLayout(doc, nil, 100)
+	got := map[string]*Frag{}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragImage && f.Node != nil {
+			got[f.Node.Attr("id")] = f
+		}
+	}
+	cover := got["c"]
+	if cover == nil || cover.W != 20 || cover.H != 10 {
+		t.Fatalf("cover frag = %+v", cover)
+	}
+	if cover.Crop.Dx() != 100 || cover.Crop.Dy() != 100 {
+		t.Fatalf("cover crop = %v, want 100x100", cover.Crop)
+	}
+	contain := got["t"]
+	if contain == nil || contain.W != 20 || contain.H != 5 {
+		t.Fatalf("contain frag = %+v", contain)
+	}
+	if contain.Crop != (image.Rectangle{}) {
+		t.Fatalf("contain crop = %v, want full image", contain.Crop)
+	}
+}
+
+func TestObjectFitNone(t *testing.T) {
+	doc := ParseHTML(`<img id="s" style="display:block;width:160px;height:160px;object-fit:none">
+<img id="l" style="display:block;width:80px;height:80px;object-fit:none;object-position:right bottom">`)
+	small := image.NewRGBA(image.Rect(0, 0, 80, 80))
+	large := image.NewRGBA(image.Rect(0, 0, 400, 400))
+	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		if img.Attr("id") == "s" {
+			img.Img = small
+		} else {
+			img.Img = large
+		}
+	}
+	ly := BuildLayout(doc, nil, 100)
+	got := map[string]*Frag{}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragImage && f.Node != nil {
+			got[f.Node.Attr("id")] = f
+		}
+	}
+	// 80x80 px fits inside a 20x10 cell box and stays at its intrinsic size.
+	if f := got["s"]; f == nil || f.W != 10 || f.H != 5 || f.Crop != (image.Rectangle{}) {
+		t.Fatalf("small none frag = %+v", f)
+	}
+	// 400x400 px overflows a 10x5 cell box and is cropped from the bottom-right.
+	f := got["l"]
+	if f == nil || f.W != 10 || f.H != 5 {
+		t.Fatalf("large none frag = %+v", f)
+	}
+	if f.Crop.Dx() != 80 || f.Crop.Dy() != 80 || f.Crop.Max != (image.Point{400, 400}) {
+		t.Fatalf("large none crop = %v, want 80x80 at bottom-right", f.Crop)
+	}
+}
+
+func TestBlockAspectRatio(t *testing.T) {
+	ly := build(`<div style="width:160px;aspect-ratio:2/1"></div>after`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "after") {
+			if f.Y != 5 {
+				t.Fatalf("text after aspect-ratio box y = %d, want 5", f.Y)
+			}
+			return
+		}
+	}
+	t.Fatal("text after box missing")
+}

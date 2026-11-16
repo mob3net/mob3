@@ -365,7 +365,9 @@ Standard Go layout:
   are hidden (`display:none`) to avoid rendering them as one-character columns
   or visible “skip to content” links.
 - **Percentage heights are ignored** because parent heights are indefinite;
-  this avoids `height:100%` on logos becoming 100 terminal rows.
+  this avoids `height:100%` on logos becoming 100 terminal rows. The exception
+  is an absolutely positioned image whose containing block height is known:
+  `height:100%` is resolved so `object-fit` can fill or crop into that box.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled
   down to available width while keeping each column at its min-content width
   and shrinking only columns that have slack. A table `width` declaration
@@ -394,7 +396,11 @@ Standard Go layout:
   width/height honored;
   aspect ratio preserved; display is capped at 40% of the viewport width and
   16 rows, preserving the ratio; transparency composited over the underlying
-  cell;
+  cell. A definite CSS box (both width and height, including an absolutely
+  positioned percentage height) is filled according to `object-fit` (`fill`,
+  `cover`, `contain`, `none`, `scale-down`) with `object-position`, bypassing
+  those display caps; `aspect-ratio` supplies an auto block height from the
+  box width;
   PNG/JPEG/GIF/WebP/BMP and SVG. `srcset` candidates are chosen for the
   40%-wide terminal target (smallest width at least as wide, else the widest),
   `<picture>` `<source>` media/type entries are honoured, and common
@@ -1599,10 +1605,6 @@ engine work only; do not add site-specific exceptions.
   currently fall back to block flow lose or displace lead stories and hero
   sections. `layout.go` (`grid`, `parseGridTemplate`, `gridPlacementNamed`,
   `hasNamedGridRows`) is the entry point.
-- **`aspect-ratio`.** Support `aspect-ratio: auto 16 / 9` and numeric ratios
-  for media/hero boxes whose height is otherwise indefinite. A previous attempt
-  changed image placement; fix it with proper content/border-box handling and
-  test against image boxes.
 - **Length functions.** Add `min()`, `max()` and `clamp()` for lengths,
   including percentages, and allow viewport units inside `calc()`. `env()` and
   registered custom properties remain out of scope unless separately approved.
@@ -1643,8 +1645,6 @@ engine work only; do not add site-specific exceptions.
 - **Alt-label overflow.** With graphics disabled, long `[image: alt]` labels
   can overlap neighboring columns. Truncate to the image box or use a compact
   marker while keeping the full alt text available for the focused link.
-- **`object-fit`.** Add cover/contain handling for images with explicit boxes
-  so they do not stretch or crop incorrectly.
 - **Generated content.** Empty block `::before`/`::after` boxes work; support
   non-empty text/icons and inline pseudo boxes where practical.
 - **Background images and gradients.** Not rendered. Ensure text contrast

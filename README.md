@@ -170,7 +170,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. Animated WebP is not supported.
 - Oversized images are capped at 40% of the viewport width and 16 rows,
-  preserving their aspect ratio.
+  preserving their aspect ratio. Images with a definite CSS box (both width and
+  height) use `object-fit`/`object-position` and fill or crop into that box
+  instead of hitting those caps.
 - No tabs or automatic downloads; download links and non-HTML responses open a
   popup with a copyable `curl` command instead, and multipart/file uploads are
   not implemented (clicking a file input shows an unsupported notice). Selected

@@ -91,7 +91,7 @@ func TestUniformHalfBlockUsesSpace(t *testing.T) {
 		}
 	}
 	g := NewGrid(2, 2, RGB(0, 0, 0), RGB(255, 255, 255))
-	paintImage(g, img, 0, 0, 2, 2, 0, 2)
+	paintImage(g, img, image.Rectangle{}, 0, 0, 2, 2, 0, 2)
 	want := Color{R: 10, G: 20, B: 30, A: 255, Set: true}
 	for _, c := range g.Cells[:4] {
 		if c.R != ' ' {
