@@ -228,6 +228,7 @@ const (
 	headerConsole
 	headerReader
 	headerDark
+	headerGraphics
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -2564,6 +2565,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				case headerDark:
 					b.toggleDark()
 					return false
+				case headerGraphics:
+					b.cycleGraphics()
+					return false
 				}
 			}
 		}
@@ -3631,6 +3635,7 @@ func (b *Browser) draw() {
 					on   bool
 					err  bool
 				}{
+					{b.graphicsStatusText(), headerGraphics, false, false},
 					{b.jsStatusText(), headerConsole, false, b.jsErr},
 					{b.darkStatusText(), headerDark, b.dark, false},
 					{b.readerStatusText(), headerReader, b.reader, false},
@@ -3646,7 +3651,7 @@ func (b *Browser) draw() {
 					case label.err:
 						errStyle := &Style{Bold: true, Color: RGB(0xb3, 0x1d, 0x1d), FontSize: 16, LineHeight: 1}
 						g.Text(lx, fy, label.text, errStyle, errStyle.Color)
-					case label.kind == headerConsole:
+					case label.kind == headerConsole || label.kind == headerGraphics:
 						// Already drawn with the normal footer style; only the
 						// click region is needed here.
 					default:

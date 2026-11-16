@@ -686,9 +686,11 @@ Standard Go layout:
   right, current resident memory (`MEM 18MB`), the scroll percentage,
   resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
   becomes red bold `JavaScript:Error` when a script fails), clickable
-  `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels before the memory
+  `Graphics:<mode>`, `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels
+  before the memory
   readout, and a clickable `>_` console icon pinned to the far right edge.
-  Clicking the JavaScript label opens the JS console, like the `>_` icon.
+  Clicking the JavaScript label opens the JS console, like the `>_` icon;
+  clicking the `Graphics:<mode>` label cycles graphics modes exactly like `I`.
   Right-side items collapse from left to right as the terminal narrows:
   `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and memory,
   leaving the scroll percentage last. The right-side budget depends only on

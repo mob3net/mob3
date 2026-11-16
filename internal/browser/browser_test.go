@@ -2187,6 +2187,31 @@ func TestJavaScriptFooterLabelClick(t *testing.T) {
 	}
 }
 
+func TestGraphicsFooterLabelClick(t *testing.T) {
+	b := NewBrowser(180, 10)
+	b.cellW, b.cellH = 8, 16
+	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.graphicsMode = GraphicsKitty
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	drawQuiet(b)
+	var hit *headerHit
+	for i := range b.footerHits {
+		if b.footerHits[i].kind == headerGraphics {
+			hit = &b.footerHits[i]
+			break
+		}
+	}
+	if hit == nil {
+		t.Fatalf("Graphics label has no click region: %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
+	})
+	if b.graphicsMode != GraphicsBlocks || b.gfx != nil {
+		t.Fatalf("clicking Graphics did not cycle modes: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	}
+}
+
 func TestFooterGapBeforeRightState(t *testing.T) {
 	b := NewBrowser(100, 10)
 	drawQuiet(b)
