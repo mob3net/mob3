@@ -1249,7 +1249,12 @@ func (b *Browser) scrollBy(n int) {
 	b.hover = -1
 	b.scroll += n
 	b.clampScroll()
-	if !strings.HasPrefix(b.status, "HTTP ") && !strings.HasPrefix(b.status, "Error") {
+	switch {
+	case b.findText != "":
+		// Keep the confirmed find status visible while scrolling; only Esc
+		// clears the search and its footer line.
+		b.status = b.findStatusText()
+	case !strings.HasPrefix(b.status, "HTTP ") && !strings.HasPrefix(b.status, "Error"):
 		b.status = ""
 	}
 }

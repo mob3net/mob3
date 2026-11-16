@@ -585,7 +585,9 @@ Standard Go layout:
 - **Find:** `/` opens an incremental, case-insensitive find bar in the footer.
   Every match in the rendered page is highlighted; the current match uses a
   stronger color. `Enter` confirms the query and closes the bar, after which
-  `n`/`N` navigate matches. While the bar is open, `Down` moves to the next
+  `n`/`N` navigate matches. The footer keeps showing the match count and query
+  while scrolling with the keyboard, paging keys or the wheel; only `Esc`
+  clears the search and that footer line. While the bar is open, `Down` moves to the next
   match and `Up` to the previous one, with wrap-around. `Esc` also closes the
   bar but keeps highlights; a later `Esc` clears them. The same find bar
   searches the console's HTML tab (`/` while that tab is active), including

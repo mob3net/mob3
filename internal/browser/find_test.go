@@ -231,3 +231,51 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 		t.Fatal("f on a plain match did not open link hints")
 	}
 }
+
+func TestFindStatusPersistsWhileScrolling(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString(`<html><body><p>alpha first</p>`)
+	for i := 0; i < 80; i++ {
+		sb.WriteString("<p>filler line</p>")
+	}
+	sb.WriteString(`</body></html>`)
+	root := ParseHTML(sb.String())
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.layout = BuildLayout(root, nil, 60)
+
+	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha")
+	b.handleFindKey("enter")
+	want := b.findStatusText()
+	if want == "" || b.status != want {
+		t.Fatalf("confirmed find status = %q, want %q", b.status, want)
+	}
+
+	// Scrolling with keys and the wheel leaves the find status in place.
+	for _, key := range []string{"j", "j", "k", " ", "b", "ctrl-d", "ctrl-u"} {
+		b.HandleKey(key)
+		if b.status != want {
+			t.Fatalf("after %q status = %q, want %q", key, b.status, want)
+		}
+	}
+	b.scrollBy(3)
+	if b.status != want {
+		t.Fatalf("after wheel scroll status = %q, want %q", b.status, want)
+	}
+
+	// n/N still navigate and describe the new match.
+	b.HandleKey("n")
+	if b.findText == "" || b.status != b.findStatusText() {
+		t.Fatalf("after n status = %q, want %q", b.status, b.findStatusText())
+	}
+
+	// Escape is the only key that resets the search.
+	b.HandleKey("esc")
+	if b.findText != "" || len(b.findMatches) != 0 {
+		t.Fatalf("Esc did not clear find state: %q %d", b.findText, len(b.findMatches))
+	}
+	if b.status == want {
+		t.Fatalf("Esc kept the find status %q", b.status)
+	}
+}
