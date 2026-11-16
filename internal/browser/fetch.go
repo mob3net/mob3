@@ -1121,8 +1121,9 @@ second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b>
 searches the raw source.</p>
 
 <h2>Link hints</h2>
-<p><b>f</b> highlights a letter from each visible link; type it to follow the
-link. Links sharing a first letter use two adjacent letters. <b>F</b> shows the
+<p>Press <b>f</b> to follow a link: it highlights a letter from each visible
+link, and typing it follows that link. Links sharing a first letter use two
+adjacent letters. <b>F</b> shows the
 destination in yellow first and waits for <b>Enter</b>/<b>y</b>; <b>Esc</b> or
 <b>n</b> cancels. <b>Esc</b> or scrolling dismisses the hints.</p>
 
@@ -1284,7 +1285,7 @@ const startPageHTML = `<!DOCTYPE html>
 <h3>Getting started</h3>
 <ul>
 <li>Press <b>o</b> and type a URL, then Enter.</li>
-<li>Press <b>Tab</b> to cycle links, <b>Enter</b> to follow one.</li>
+<li>Press <b>f</b> to follow a link.</li>
 <li>Scroll with <b>j</b>/<b>k</b>, <b>Space</b>/<b>b</b>, or the arrow keys.</li>
 <li><b>h</b> goes back, <b>l</b> goes forward, <b>r</b> reloads, <b>q</b> asks before quitting.</li>
 <li>Press <b>?</b> for the full help page.</li>

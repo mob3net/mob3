@@ -76,9 +76,10 @@ The find bar supports the same word-editing keys as the URL prompt.
 
 ## Link hints
 
-`f` marks the links visible in the current viewport by highlighting letters
-from the link's own text with a yellow background and an underline. The page
-text is never changed. Up to 26 links the first letter not already used by
+Press `f` to follow a link. It marks the links visible in the current viewport
+by highlighting letters from the link's own text with a yellow background and
+an underline. The page text is never changed. Up to 26 links the first letter
+not already used by
 another link is highlighted (case-insensitive), so `Documentation` uses `D` and
 a later `Dog` uses `o` if `d` is taken. On link-heavy pages a hint whose first
 letter is unique still shows only that one letter; hints sharing a first letter

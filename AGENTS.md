@@ -514,7 +514,9 @@ Standard Go layout:
   help and config. Every toolbar item is clickable via per-frame button hit
   regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
-  take priority over browser-style alternatives. `j/k` line scroll, `Space/b`
+  take priority over browser-style alternatives. `f` follows links; `Tab` and
+  `Enter` remain fallbacks.
+  `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `I` cycle graphics modes, `X` hide/show
