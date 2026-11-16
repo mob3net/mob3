@@ -84,6 +84,9 @@ type Browser struct {
 	prev    []string
 	gfx     *gfxRenderer
 	bigText bool
+	// bigTextBlocked disables kitty scaled text for a page whose scaled runs
+	// overlap neighbouring columns.
+	bigTextBlocked bool
 
 	// Graphics modes available to the I key, in cycle order, and the current
 	// one. The list starts with native inline graphics when available.
@@ -568,6 +571,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.lastBody = res.body
 	b.lastContentType = res.contentType
 	b.layout = nil
+	b.bigTextBlocked = false
 	// <noscript> is not active when scripting is enabled. Remove it before
 	// evaluating meta refresh, otherwise no-JS bypass pages redirect us to
 	// their "enable JavaScript" endpoint.
@@ -800,6 +804,7 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 	b.lastBody = c.body
 	b.lastContentType = c.contentType
 	b.layout = nil
+	b.bigTextBlocked = false
 	b.resetConsole()
 	if c.js != nil {
 		b.js = c.js
@@ -953,7 +958,21 @@ func (b *Browser) rebuild() {
 	if !b.noDraw && layoutWidth >= 2 {
 		layoutWidth--
 	}
+	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked
 	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
+	if b.bigText && layoutTextOverlaps(b.layout) {
+		// Scaled kitty glyphs are wider than their base font. On dense
+		// multi-column pages that pushes text from one column over another, so
+		// this page falls back to normal-size text for the rest of its session.
+		b.bigTextBlocked = true
+		b.bigText = false
+		start = time.Now()
+		deadline = time.Time{}
+		if b.layoutBudget.Time > 0 {
+			deadline = start.Add(b.layoutBudget.Time)
+		}
+		b.layout = BuildLayoutBudgetDeadlineOptions(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, deadline, b.layoutBudget)
+	}
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()

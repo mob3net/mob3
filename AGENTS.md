@@ -295,7 +295,9 @@ Standard Go layout:
   scaled above 1. Do not send the optional `w` key: metadata uses `:` between
   keys, and terminals that only parse `s` render a `w=...` prefix as literal
   text. Disabled on non-kitty terminals, in dump mode, and with
-  `-text-scale=off`, where the bold/line-height hierarchy remains. Control
+  `-text-scale=off`, where the bold/line-height hierarchy remains. A page whose
+  scaled runs overlap other text in the same cells falls back to normal-size
+  text for that page, so dense multi-column layouts are not garbled. Control
   characters are stripped before text is embedded in the OSC sequence, so page
   text cannot inject terminal escapes.
 - **No font files:** the terminal font is used for all glyphs; font size affects

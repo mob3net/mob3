@@ -142,6 +142,7 @@ func (b *Browser) applyConfig(q url.Values) {
 			b.noBigText = true
 		case "auto", "on", "true", "":
 			b.noBigText = false
+			b.bigTextBlocked = false
 		}
 	}
 	if v, ok := q["ua"]; ok && len(v) > 0 && b.loader != nil {

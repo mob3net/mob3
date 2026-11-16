@@ -3740,6 +3740,20 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 	}
 }
 
+func TestLayoutTextOverlapDetection(t *testing.T) {
+	ly := &Layout{Frags: []Frag{
+		{Kind: fragText, Text: "one", X: 0, Y: 0, W: 5, H: 1},
+		{Kind: fragText, Text: "two", X: 5, Y: 0, W: 5, H: 1},
+	}}
+	if layoutTextOverlaps(ly) {
+		t.Fatal("adjacent text runs reported as overlapping")
+	}
+	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "bad", X: 3, Y: 0, W: 5, H: 2})
+	if !layoutTextOverlaps(ly) {
+		t.Fatal("overlapping text runs were not detected")
+	}
+}
+
 func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<html><body><p>text that wraps normally</p></body></html>`)

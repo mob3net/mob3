@@ -2112,6 +2112,40 @@ func (l *layouter) clipFragments(start int, r Rect) {
 	l.frags = out
 }
 
+// layoutTextOverlaps reports whether two non-blank text runs occupy the same
+// cell on any row. Scaled kitty text can expose this on dense multi-column
+// layouts; the caller then falls back to normal-size text for the page.
+func layoutTextOverlaps(ly *Layout) bool {
+	if ly == nil {
+		return false
+	}
+	type span struct{ x, end int }
+	rows := make(map[int][]span)
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText || f.W <= 0 || f.H <= 0 || strings.TrimSpace(f.Text) == "" {
+			continue
+		}
+		for y := f.Y; y < f.Y+f.H; y++ {
+			rows[y] = append(rows[y], span{x: f.X, end: f.X + f.W})
+		}
+	}
+	for _, spans := range rows {
+		sort.Slice(spans, func(i, j int) bool {
+			if spans[i].x != spans[j].x {
+				return spans[i].x < spans[j].x
+			}
+			return spans[i].end < spans[j].end
+		})
+		for i := 1; i < len(spans); i++ {
+			if spans[i].x < spans[i-1].end {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // trimTextLeft removes the first cells from s, preserving rune boundaries.
 func trimTextLeft(s string, cells int) string {
 	for cells > 0 && s != "" {
