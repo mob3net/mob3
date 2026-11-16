@@ -92,6 +92,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   graphics, blocks and none. Images are off by default for speed.
 - Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB
   default budget and `-cache` to change or disable it.
+- In-memory back/forward cache for up to 10 visited pages: Back and Forward
+  restore the page, its DOM and its JavaScript state without a network reload,
+  and pause page timers while a page is cached. Nothing is written to disk.
 - Light JavaScript: DOM queries and mutation, `classList`/`style`, click
   handlers, timers, alert/confirm/prompt and native `<dialog>` open/close,
   same-origin `fetch`/`XMLHttpRequest` plus simple CORS cross-origin requests,

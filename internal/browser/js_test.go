@@ -20,6 +20,26 @@ func newJSPage(html, code string) *Page {
 	}
 }
 
+func TestJSRuntimeFreezeShiftsTimers(t *testing.T) {
+	base := time.Now()
+	j := &jsRuntime{timers: map[int]*jsTimer{
+		1: {id: 1, due: base.Add(100 * time.Millisecond)},
+	}}
+	j.freeze()
+	if j.frozenAt.IsZero() {
+		t.Fatal("freeze did not mark the runtime")
+	}
+	j.frozenAt = base.Add(-2 * time.Second)
+	j.resume()
+	if !j.frozenAt.IsZero() {
+		t.Fatal("resume left the runtime frozen")
+	}
+	want := base.Add(2100 * time.Millisecond)
+	if got := j.timers[1].due; got.Sub(want) > 10*time.Millisecond || want.Sub(got) > 10*time.Millisecond {
+		t.Fatalf("timer due = %v, want about %v", got, want)
+	}
+}
+
 func TestSelectorParseCache(t *testing.T) {
 	page := &Page{Root: ParseHTML(`<html><body><p class="x">hi</p></body></html>`)}
 	b := NewBrowser(40, 10)

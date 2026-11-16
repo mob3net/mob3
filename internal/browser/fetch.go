@@ -1138,7 +1138,10 @@ launch.</p>
 
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button lists the session history; <b>#</b> links and
-scroll positions are kept. The <b>★ Bookmarks</b> button appears with
+scroll positions are kept. Up to ten visited pages stay in an in-memory
+back/forward cache, so <b>Back</b> and <b>Forward</b> restore a page, its
+JavaScript state and your scroll position without reloading it. The
+<b>★ Bookmarks</b> button appears with
 <b>-bookmarks file.html</b>. Nothing is saved after MOB³ exits.</p>
 
 <h2>Config</h2>

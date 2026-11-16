@@ -198,9 +198,30 @@ type loadResult struct {
 
 // historyEntry is one session-history position. Scroll records the document
 // row the user last had on that entry so back and forward can return to it.
+// Cached holds the applied page so back and forward restore it without a
+// network load, as long as it is still in the bounded in-memory page cache.
 type historyEntry struct {
 	URL    string
 	Scroll int
+	cached *cachedPage
+}
+
+// maxCachedPages bounds the session's back/forward page cache. Oldest entries
+// are dropped first; nothing is written to disk.
+const maxCachedPages = 10
+
+// cachedPage is a fully applied page kept for back and forward navigation. The
+// DOM, scripts' runtime state and reader extraction survive, so returning to
+// the entry skips fetching, parsing and script execution.
+type cachedPage struct {
+	page              *Page
+	js                *jsRuntime
+	readerRoot        *Node
+	readerSavedScroll int
+	method            string
+	body              []byte
+	contentType       string
+	at                time.Time
 }
 
 // cellPos is a cell in document coordinates (row 0 is the top of the page).
@@ -366,7 +387,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	}
 	if isAboutConfigURL(u) {
 		b.clearInputFocus()
-		b.stopJS()
+		b.suspendCurrentPage()
 		b.cancelLoadNow()
 		if b.loader != nil {
 			b.loader.beginPage()
@@ -389,7 +410,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		}
 	}
 	b.clearInputFocus()
-	b.stopJS()
+	b.suspendCurrentPage()
 	b.cancelLoadNow()
 	if b.loader != nil {
 		b.loader.beginPage()
@@ -565,18 +586,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.rebuild()
 	b.scroll = 0
 	b.focus = -1
-	b.status = ""
-	if page.Blocked {
-		b.status = "Site blocked — browser check not supported"
-	} else if page.Status >= 400 {
-		b.status = fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
-	} else if page.HasModules {
-		b.status = moduleUnsupportedStatus
-	} else if b.layout != nil && b.layout.Truncated {
-		b.status = layoutTruncatedStatus
-	} else if readerFailed {
-		b.status = "Reader mode unavailable"
-	}
+	b.status = b.pageLoadStatus(page, readerFailed)
 	if frag := res.u.Fragment; frag != "" {
 		b.scrollToAnchor(frag)
 	}
@@ -588,6 +598,24 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.pushHistory(b.url.String(), b.scroll)
 	}
 	b.prev = nil
+}
+
+// pageLoadStatus returns the status line for a freshly applied page, or an
+// empty string when the page loaded cleanly.
+func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
+	switch {
+	case page.Blocked:
+		return "Site blocked — browser check not supported"
+	case page.Status >= 400:
+		return fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
+	case page.HasModules:
+		return moduleUnsupportedStatus
+	case b.layout != nil && b.layout.Truncated:
+		return layoutTruncatedStatus
+	case readerFailed:
+		return "Reader mode unavailable"
+	}
+	return ""
 }
 
 // consumePendingJS applies a queued location.href/assign navigation or
@@ -661,6 +689,134 @@ func (b *Browser) recordHistoryScroll() {
 	}
 }
 
+// suspendCurrentPage keeps the applied page for back/forward when it belongs
+// to the active history entry, and detaches its JavaScript runtime without
+// destroying it so timers and DOM state resume on return. Pages that cannot be
+// cached (about: pages, downloads) simply have their runtime stopped.
+func (b *Browser) suspendCurrentPage() {
+	cached := b.cacheCurrentPage()
+	if b.js != nil {
+		if cached {
+			b.js.freeze()
+		} else {
+			b.js.stop()
+		}
+		b.js = nil
+	}
+}
+
+// cacheCurrentPage stores the applied page on the active history entry. It
+// reports whether the page was cached.
+func (b *Browser) cacheCurrentPage() bool {
+	if b.page == nil || b.page.Root == nil || b.url == nil || b.page.Download {
+		return false
+	}
+	switch b.url.Scheme {
+	case "", "about", "data", "javascript", "mailto", "tel":
+		return false
+	}
+	c := &cachedPage{
+		page:              b.page,
+		js:                b.js,
+		readerRoot:        b.readerRoot,
+		readerSavedScroll: b.readerSavedScroll,
+		method:            b.lastMethod,
+		body:              b.lastBody,
+		contentType:       b.lastContentType,
+		at:                time.Now(),
+	}
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
+	if b.histIdx < 0 || b.histIdx >= len(b.history) {
+		return false
+	}
+	if b.history[b.histIdx].URL != b.url.String() {
+		return false
+	}
+	b.history[b.histIdx].cached = c
+	b.history[b.histIdx].Scroll = b.scroll
+	b.trimPageCacheLocked()
+	return true
+}
+
+// trimPageCacheLocked drops the least recently cached pages when the cache
+// exceeds maxCachedPages. The caller holds histMu.
+func (b *Browser) trimPageCacheLocked() {
+	type slot struct {
+		idx int
+		at  time.Time
+	}
+	var slots []slot
+	for i := range b.history {
+		if b.history[i].cached != nil {
+			slots = append(slots, slot{idx: i, at: b.history[i].cached.at})
+		}
+	}
+	for len(slots) > maxCachedPages {
+		oldest := 0
+		for i := 1; i < len(slots); i++ {
+			if slots[i].at.Before(slots[oldest].at) {
+				oldest = i
+			}
+		}
+		b.history[slots[oldest].idx].cached = nil
+		slots = append(slots[:oldest], slots[oldest+1:]...)
+	}
+}
+
+// applyCachedPage restores a page kept by the back/forward cache without any
+// network or script work. The scroll position and reader extraction from the
+// entry are reapplied.
+func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
+	c := entry.cached
+	b.suspendCurrentPage()
+	b.clearInputFocus()
+	b.cancelLoadNow()
+	if b.loader != nil {
+		b.loader.beginPage()
+	}
+	b.loadSeq++
+	b.histMu.Lock()
+	b.histIdx = idx
+	// Restoring counts as the entry's most recent use, so keep it cached even
+	// when trimming evicted it while another page was being stashed.
+	c.at = time.Now()
+	b.history[idx].cached = c
+	b.histMu.Unlock()
+	b.page = c.page
+	b.url = c.page.URL
+	b.lastMethod = c.method
+	b.lastBody = c.body
+	b.lastContentType = c.contentType
+	b.layout = nil
+	b.resetConsole()
+	if c.js != nil {
+		b.js = c.js
+		c.js.resume()
+	}
+	b.readerRoot = nil
+	b.readerSavedScroll = 0
+	readerFailed := false
+	if b.reader {
+		if c.readerRoot != nil {
+			b.readerRoot = c.readerRoot
+			b.readerSavedScroll = c.readerSavedScroll
+		} else if root, ok := extractReaderPage(c.page.Root, c.page.Title); ok {
+			b.readerRoot = root
+		} else {
+			readerFailed = true
+		}
+	}
+	b.rebuild()
+	b.scroll = entry.Scroll
+	b.clampScroll()
+	b.focus = -1
+	b.hover = -1
+	b.clearSelection()
+	b.status = b.pageLoadStatus(c.page, readerFailed)
+	b.prev = nil
+}
+
 func (b *Browser) pushHistory(u string, scroll int) {
 	b.histMu.Lock()
 	defer b.histMu.Unlock()
@@ -684,10 +840,10 @@ func (b *Browser) back() {
 		b.status = "No previous page"
 		return
 	}
-	b.histIdx--
-	entry := b.history[b.histIdx]
+	idx := b.histIdx - 1
+	entry := b.history[idx]
 	b.histMu.Unlock()
-	b.navigateHistoryEntry(entry)
+	b.navigateHistoryEntry(idx, entry)
 }
 
 func (b *Browser) forward() {
@@ -699,18 +855,22 @@ func (b *Browser) forward() {
 		b.status = "No next page"
 		return
 	}
-	b.histIdx++
-	entry := b.history[b.histIdx]
+	idx := b.histIdx + 1
+	entry := b.history[idx]
 	b.histMu.Unlock()
-	b.navigateHistoryEntry(entry)
+	b.navigateHistoryEntry(idx, entry)
 }
 
 // navigateHistoryEntry moves to a history entry. When the target is the same
 // document as the current page, it updates the fragment and scroll offset in
-// place without another network load.
-func (b *Browser) navigateHistoryEntry(entry historyEntry) {
+// place without another network load. Otherwise a cached page is restored
+// directly and anything else is fetched normally.
+func (b *Browser) navigateHistoryEntry(idx int, entry historyEntry) {
 	if b.url != nil && b.page != nil && b.page.Root != nil {
 		if u, err := url.Parse(entry.URL); err == nil && sameDocument(u, b.url) {
+			b.histMu.Lock()
+			b.histIdx = idx
+			b.histMu.Unlock()
 			b.url = u
 			b.scroll = entry.Scroll
 			b.clampScroll()
@@ -721,6 +881,14 @@ func (b *Browser) navigateHistoryEntry(entry historyEntry) {
 			return
 		}
 	}
+	if entry.cached != nil {
+		b.applyCachedPage(idx, entry)
+		return
+	}
+	b.suspendCurrentPage()
+	b.histMu.Lock()
+	b.histIdx = idx
+	b.histMu.Unlock()
 	b.nextScroll = entry.Scroll
 	b.nextScrollSet = true
 	b.Navigate(entry.URL, false)

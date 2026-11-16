@@ -72,6 +72,9 @@ type jsRuntime struct {
 	dirty    bool
 	stopped  bool
 	titleSet func(string)
+	// frozenAt records when the runtime was detached from the browser for the
+	// back/forward page cache, so timers can resume where they left off.
+	frozenAt time.Time
 }
 
 type jsListener struct {
@@ -292,6 +295,32 @@ func (b *Browser) stopJS() {
 func (j *jsRuntime) stop() {
 	j.stopped = true
 	j.timers = nil
+}
+
+// freeze detaches a cached runtime from the event loop; its timers do not run
+// until the page is resumed.
+func (j *jsRuntime) freeze() {
+	if j == nil || !j.frozenAt.IsZero() {
+		return
+	}
+	j.frozenAt = time.Now()
+}
+
+// resume reattaches a frozen runtime and shifts pending timers by the time the
+// page spent in the back/forward cache, so a paused interval does not fire a
+// burst of catch-up callbacks.
+func (j *jsRuntime) resume() {
+	if j == nil || j.frozenAt.IsZero() {
+		return
+	}
+	paused := time.Since(j.frozenAt)
+	j.frozenAt = time.Time{}
+	if paused <= 0 {
+		return
+	}
+	for _, t := range j.timers {
+		t.due = t.due.Add(paused)
+	}
 }
 
 // nextJSTimerDelay reports how long until the earliest scheduled JS timer is

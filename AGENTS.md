@@ -84,7 +84,8 @@ written in Go
   configuration, history, cookie, cache, log or download files; closing MOB³
   saves nothing. The download popup only copies a `curl` command and writes
   nothing. History, cookies, `localStorage`/`sessionStorage`, the image
-  cache and all JS state live in memory only. The running browser writes no
+  cache, the back/forward page cache and all JS state live in memory only. The
+  running browser writes no
   files at all. Disk reads are limited to explicit local `file:` pages
   and their local resources, an explicitly passed `-bookmarks` file, plus
   `/proc/self/statm` for the Linux memory footer; OS-level reads performed by
@@ -716,7 +717,13 @@ Standard Go layout:
   position. Fragment-only `#` links push a history entry and scroll in place;
   `h`/Back and Forward return to the stored scroll position, using an in-place
   update when only the fragment changes. Visiting a different URL starts at the
-  top unless it is a history entry being restored.
+  top unless it is a history entry being restored. Applied documents are kept in
+  an in-memory back/forward cache of up to 10 pages, with their DOM, styles,
+  decoded images and JavaScript runtime; Back and Forward restore a cached
+  document without fetching, parsing or re-running scripts. Its timers pause
+  while cached and resume where they left off, and the oldest cached page is
+  dropped beyond the cap. `about:` pages and downloads are never cached.
+  Nothing is persisted.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored
@@ -973,7 +980,8 @@ Standard Go layout:
   Only successful GET CSS/JS responses and decoded images are stored; page
   documents, POST, `data:` and `file:` reads are not cached, and
   `Cache-Control: no-store` responses are skipped. Hits avoid network requests;
-  nothing is written to disk. The limit is editable in `about:config`.
+  nothing is written to disk. The limit is editable in `about:config`. The
+  separate back/forward page cache is described under History.
 - Images load concurrently (max 6) and use the session resource cache per
   resolved URL for reloads.
 - Blocked responses are replaced with a locally generated “Site blocked” page

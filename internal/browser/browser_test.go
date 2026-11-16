@@ -4084,9 +4084,11 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 func TestBackRestoresPageScroll(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	loads := 0
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		loads++
 		u := mustParse(t, target)
-		return &Page{URL: u, Base: u, Title: "test", Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
+		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
 	}
 	navigate := func(target string) {
 		t.Helper()
@@ -4106,11 +4108,8 @@ func TestBackRestoresPageScroll(t *testing.T) {
 	}
 	b.scroll = 7
 	b.back()
-	select {
-	case res := <-b.loadCh:
-		b.finishLoad(res)
-	case <-time.After(2 * time.Second):
-		t.Fatal("back did not finish")
+	if loads != 2 {
+		t.Fatalf("back refetched the page: loads = %d", loads)
 	}
 	if b.url == nil || b.url.Path != "/a" {
 		t.Fatalf("url after back = %v", b.url)
@@ -4118,18 +4117,120 @@ func TestBackRestoresPageScroll(t *testing.T) {
 	if b.scroll != 5 {
 		t.Fatalf("back scroll = %d, want 5", b.scroll)
 	}
+	if b.page == nil || b.page.Title != "https://example.com/a" {
+		t.Fatalf("back did not restore the cached page: %+v", b.page)
+	}
 	b.forward()
-	select {
-	case res := <-b.loadCh:
-		b.finishLoad(res)
-	case <-time.After(2 * time.Second):
-		t.Fatal("forward did not finish")
+	if loads != 2 {
+		t.Fatalf("forward refetched the page: loads = %d", loads)
 	}
 	if b.url == nil || b.url.Path != "/b" {
 		t.Fatalf("url after forward = %v", b.url)
 	}
 	if b.scroll != 7 {
 		t.Fatalf("forward scroll = %d, want 7", b.scroll)
+	}
+}
+
+func TestBackKeepsPageJavaScriptState(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	loads := 0
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		loads++
+		u := mustParse(t, target)
+		page := &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body><h1>page</h1></body></html>`)}
+		if strings.HasSuffix(target, "/a") {
+			page.Scripts = []Script{{Code: `window.__runs = (window.__runs || 0) + 1; document.title = "A" + window.__runs;`}}
+		}
+		return page, nil
+	}
+	navigate := func(target string) {
+		t.Helper()
+		b.Navigate(target, true)
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("navigation to %s did not finish", target)
+		}
+	}
+	withQuietStdout(t, func() { navigate("https://example.com/a") })
+	if b.page.Title != "A1" {
+		t.Fatalf("script title = %q", b.page.Title)
+	}
+	navigate("https://example.com/b")
+	withQuietStdout(t, b.back)
+	if loads != 2 {
+		t.Fatalf("back refetched the page: loads = %d", loads)
+	}
+	if b.page.Title != "A1" {
+		t.Fatalf("cached title = %q, want A1", b.page.Title)
+	}
+	if b.js == nil {
+		t.Fatal("cached page lost its JavaScript runtime")
+	}
+	v, err := b.js.runCode("test", "window.__runs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.String(); got != "1" {
+		t.Fatalf("script reran on back: __runs = %s", got)
+	}
+}
+
+func TestPageCacheIsBounded(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body><p>x</p></body></html>`)}, nil
+	}
+	for i := 0; i < maxCachedPages+3; i++ {
+		target := fmt.Sprintf("https://example.com/p%d", i)
+		b.Navigate(target, true)
+		select {
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("navigation %d did not finish", i)
+		}
+	}
+	cached := 0
+	for _, entry := range b.history {
+		if entry.cached != nil {
+			cached++
+		}
+	}
+	if cached != maxCachedPages {
+		t.Fatalf("cached pages = %d, want %d", cached, maxCachedPages)
+	}
+	// The most recent page must still be cached for an immediate back.
+	last := b.history[len(b.history)-2]
+	if last.cached == nil {
+		t.Fatal("most recent page was evicted from the cache")
+	}
+}
+
+func TestAboutPagesAreNotCached(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	b.Navigate("https://example.com/a", true)
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("navigation did not finish")
+	}
+	b.Navigate("about:help", true)
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("help navigation did not finish")
+	}
+	if b.history[b.histIdx].cached != nil {
+		t.Fatal("about:help was cached")
 	}
 }
 
