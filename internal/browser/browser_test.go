@@ -648,6 +648,27 @@ func TestMouseDragSelection(t *testing.T) {
 		t.Fatal("selection was not highlighted")
 	}
 
+	// A release report carrying the motion bit still ends the drag.
+	b.clearSelection()
+	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: row, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: false, Motion: true})
+	if b.selecting {
+		t.Fatal("release with motion bit kept the selection drag active")
+	}
+	if !b.hasSelection() {
+		t.Fatal("selection was lost after a release with the motion bit")
+	}
+
+	// Releasing outside the page also ends the drag.
+	b.clearSelection()
+	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: row, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: 1, Press: false})
+	if b.selecting {
+		t.Fatal("release over the toolbar kept the selection drag active")
+	}
+
 	// Escape clears the selection.
 	b.HandleKey("esc")
 	if b.hasSelection() {
@@ -2136,6 +2157,27 @@ func TestPageScrollbarMouse(t *testing.T) {
 	}
 	if b.scrollDrag {
 		t.Fatal("scrollbar drag did not end")
+	}
+
+	// A release report may carry the motion bit; it must still end the drag.
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: false, Motion: true})
+	if b.scrollDrag {
+		t.Fatal("release with motion bit kept the scrollbar drag active")
+	}
+	dragEnd := b.scroll
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false, Motion: true})
+	if b.scroll != dragEnd {
+		t.Fatalf("pointer motion after release scrolled: %d -> %d", dragEnd, b.scroll)
+	}
+
+	// Releasing over the toolbar also ends the drag.
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 2, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: 0, Press: false})
+	if b.scrollDrag {
+		t.Fatal("release over the toolbar kept the scrollbar drag active")
 	}
 
 	short := NewBrowser(20, 10)

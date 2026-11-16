@@ -3396,6 +3396,13 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.skipDraw = true
 		return false
 	}
+	// A release always ends a scrollbar drag, even when the report also
+	// carries the motion bit or lands on the toolbar, footer or outside the
+	// page. Otherwise the next pointer move would keep scrolling.
+	if b.scrollDrag && !ev.Press {
+		b.scrollDrag = false
+		return false
+	}
 	if b.download != nil {
 		switch b.modalMouseAction(ev) {
 		case "close", "outside":
@@ -3449,6 +3456,15 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if x < 0 || y < 0 || x >= b.width || y >= b.height {
 		b.setPageHover(nil)
 		return false
+	}
+	if !ev.Press && b.selecting {
+		top, bottom := b.viewport()
+		if y < top || y >= bottom {
+			b.selecting = false
+			if b.hasSelection() {
+				b.status = b.selectionSummary()
+			}
+		}
 	}
 	if ev.Wheel != 0 {
 		step := 3
@@ -3557,14 +3573,14 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.scrollDrag = false
 		return false
 	}
-	if ev.Motion {
-		if b.selecting {
-			b.updateSelection(x, y, top, bottom)
-		} else {
-			docY := b.scroll + (y - top)
-			b.setPageHover(b.nodeAt(x, docY))
-			b.updateHover(x, y, top, bottom)
-		}
+	if ev.Motion && !b.selecting {
+		docY := b.scroll + (y - top)
+		b.setPageHover(b.nodeAt(x, docY))
+		b.updateHover(x, y, top, bottom)
+		return false
+	}
+	if ev.Motion && ev.Press {
+		b.updateSelection(x, y, top, bottom)
 		return false
 	}
 	if ev.Press {

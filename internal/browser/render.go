@@ -373,6 +373,12 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			if bigText {
 				scale = st.TextScale()
 			}
+			if scale > 1 && y+scale > bottomRow {
+				// A scaled run from the last content row would be drawn over
+				// the footer or another chrome row. Keep it normal size so the
+				// terminal cannot paint outside the page viewport.
+				scale = 1
+			}
 			bg := textBackground(f)
 			if bg.opaque() {
 				g.Fill(f.X, y, f.W, scale, bg)

@@ -307,6 +307,9 @@ Standard Go layout:
   plain blank cells instead of scaled text, because scaling a space makes
   terminals draw its underline at the unscaled baseline as stray lines inside
   or below large headings; the surrounding words keep their scaled underline.
+  A scaled run that would extend past the last page row (over the footer or
+  another chrome row) is painted at normal size, because the terminal draws
+  scaled glyphs outside the cell grid.
 - **No font files:** the terminal font is used for all glyphs; font size affects
   line height and emphasis, not glyph scale outside kitty.
 - **UA page style:** the grid defaults to a white page background and
@@ -694,7 +697,10 @@ Standard Go layout:
   reloads the page, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
-  on the right edge: click or drag it to jump through the document. Interactive
+  on the right edge: click or drag it to jump through the document. Any button
+  release ends a scrollbar or selection drag, even when the release report also
+  carries the motion bit or lands on the toolbar, footer or outside the page,
+  so a released drag can never keep following the pointer. Interactive
   layout is one column narrower than the terminal so page text, images and
   overlays never paint underneath the scrollbar column; overflowing fragments
   that still reach it are blanked before the scrollbar is drawn. `Esc`

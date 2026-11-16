@@ -454,3 +454,25 @@ func TestBigTextWhitespaceHasNoScaledUnderline(t *testing.T) {
 		}
 	}
 }
+
+func TestBigTextStaysInsideViewport(t *testing.T) {
+	ly := &Layout{Frags: []Frag{
+		{Kind: fragText, X: 0, Y: 2, W: 3, H: 2, Text: "Big", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: fragText, X: 0, Y: 4, W: 6, H: 2, Text: "Banana", Style: &Style{FontSize: 32, LineHeight: 1}},
+	}}
+	g := NewGrid(20, 6, RGB(0, 0, 0), RGB(255, 255, 255))
+	// Rows 0-4 are the page viewport; row 5 is the footer.
+	PaintLayoutBig(g, ly, 0, 0, 5, nil, RGB(0, 0, 0), nil, true)
+	if g.Cells[2*20].Raw == "" {
+		t.Fatal("a scaled run that fits the viewport was not scaled")
+	}
+	if g.Cells[5*20].Raw != "" || g.Cells[5*20].Skip {
+		t.Fatal("scaled text from the last content row painted into the footer row")
+	}
+	if g.Cells[4*20].Raw != "" {
+		t.Fatal("last-row text was still sent as scaled text")
+	}
+	if g.Cells[4*20].R != 'B' {
+		t.Fatalf("last-row text is missing: %q", g.Cells[4*20].R)
+	}
+}
