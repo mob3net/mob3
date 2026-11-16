@@ -1185,7 +1185,8 @@ closes it.</p>
 <p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through
 links and form controls. <b>Enter</b> submits, <b>Esc</b> leaves, <b>Space</b>
 or <b>Enter</b> activates a focused checkbox, radio, select, button or link,
-and arrows change radio groups, selects and ranges. Checkboxes,
+and arrows change radio groups, selects and ranges (<b>h</b>/<b>l</b> and
+<b>j</b>/<b>k</b> also work there). Checkboxes,
 radios, selects, date/time/month/week, range and color fields work. GET and
 urlencoded POST forms submit; multipart and file uploads are not supported.</p>
 

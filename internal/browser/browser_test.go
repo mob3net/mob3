@@ -877,13 +877,29 @@ func TestTabReachesAllFormControls(t *testing.T) {
 	if b.controlFocus != radios[0] {
 		t.Fatalf("tab did not reach radio group: %v", b.controlFocus)
 	}
-	b.HandleKey("right")
+	b.HandleKey("l")
 	if !radios[1].HasAttr("checked") || b.controlFocus != radios[1] {
-		t.Fatal("right arrow did not move the radio selection")
+		t.Fatal("l did not move the radio selection")
+	}
+	b.HandleKey("h")
+	if !radios[0].HasAttr("checked") || b.controlFocus != radios[0] {
+		t.Fatal("h did not move the radio selection back")
+	}
+	b.HandleKey("right")
+	if !radios[1].HasAttr("checked") {
+		t.Fatal("arrow did not move the radio selection")
 	}
 	b.HandleKey("tab")
 	if b.controlFocus != single {
 		t.Fatalf("tab from radio group reached %v", b.controlFocus)
+	}
+	b.HandleKey("j")
+	if !selectOptions(single)[1].HasAttr("selected") {
+		t.Fatal("j did not change the single select")
+	}
+	b.HandleKey("k")
+	if !selectOptions(single)[0].HasAttr("selected") {
+		t.Fatal("k did not change the single select back")
 	}
 	b.HandleKey("right")
 	if !selectOptions(single)[1].HasAttr("selected") {
@@ -893,10 +909,10 @@ func TestTabReachesAllFormControls(t *testing.T) {
 	if b.controlFocus != multi {
 		t.Fatalf("tab did not reach multi-select: %v", b.controlFocus)
 	}
-	b.HandleKey("down")
+	b.HandleKey("j")
 	beta := selectOptions(multi)[1]
 	if b.controlOption != beta {
-		t.Fatalf("down did not move the active option: %v", b.controlOption)
+		t.Fatalf("j did not move the active option: %v", b.controlOption)
 	}
 	b.HandleKey(" ")
 	if !beta.HasAttr("selected") {

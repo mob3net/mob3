@@ -102,7 +102,8 @@ terminal's inline image protocol does not cover the hint letters.
 `Tab`/`Shift-Tab` move through links and form controls in document order.
 A focused checkbox, radio, button or link is activated with `Space`/`Enter`;
 arrows change radio groups, single selects and ranges, and move the active
-option in a multi-select, where `Space` toggles it.
+option in a multi-select, where `Space` toggles it. On radios, selects and
+ranges, `h`/`l` work like Left/Right and `j`/`k` like Down/Up.
 
 Click a text input or textarea to focus it. The focused field shows a block
 caret.

@@ -697,7 +697,9 @@ Standard Go layout:
   `Enter` activates the focused control: checkboxes and radios toggle/select,
   buttons click, links navigate, and single selects open their popup. Arrows
   change a focused single select or range slider; in a multi-select they move
-  the active option and `Space` toggles it.
+  the active option and `Space` toggles it. `h`/`j`/`k`/`l` act as left/down/up/right
+  alternatives on focused radios, selects and range sliders, while arrows keep
+  working.
   Required controls,
   `pattern`, `maxlength`, `readonly` and
   `disabled` are enforced; disabled controls are not submitted. Date, time,

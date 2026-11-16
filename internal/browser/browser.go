@@ -1466,9 +1466,41 @@ func (b *Browser) handleControlKey(k string) bool {
 	case "right", "down":
 		b.controlStep(1)
 		return false
+	case "h":
+		if controlUsesArrows(b.controlFocus) {
+			b.controlStep(-1)
+			return false
+		}
+	case "k":
+		if controlUsesArrows(b.controlFocus) {
+			b.controlStep(-1)
+			return false
+		}
+	case "l":
+		if controlUsesArrows(b.controlFocus) {
+			b.controlStep(1)
+			return false
+		}
+	case "j":
+		if controlUsesArrows(b.controlFocus) {
+			b.controlStep(1)
+			return false
+		}
 	}
 	b.clearControlFocus()
 	return b.HandleKey(k)
+}
+
+// controlUsesArrows reports whether the focused control reacts to arrow keys,
+// so h/j/k/l can stand in for them without stealing page navigation keys.
+func controlUsesArrows(n *Node) bool {
+	if n == nil {
+		return false
+	}
+	if isRangeInput(n) || n.Tag == "select" {
+		return true
+	}
+	return n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio")
 }
 
 func (b *Browser) activateControlFocus() {

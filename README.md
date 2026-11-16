@@ -133,7 +133,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   page title.
 - Keyboard and mouse navigation, including the kitty keyboard protocol in
   kitty, WezTerm, Ghostty and foot, a standard Tab order through links and form
-  controls (Space/Enter activate, arrows change selects, radios and ranges),
+  controls (Space/Enter activate, arrows or h/j/k/l change selects, radios and ranges),
   `/` incremental find (including multi-word
   phrases) with highlighted matches
   (also in the console HTML tab), a draggable page scrollbar, history (including
