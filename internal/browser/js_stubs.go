@@ -84,6 +84,8 @@ func (j *jsRuntime) installPlatformStubs() {
 	};
 	ctor("DOMStringMap");
 	ctor("ShadowRoot");
+	ctor("Attr");
+	ctor("NamedNodeMap");
 
 	// CSS escape/supports are used by selector-building libraries and by
 	// feature detection. supports() is permissive: layout support is separate.

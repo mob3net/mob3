@@ -382,6 +382,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 	j.accessor(o, "classList", func() goja.Value {
 		return j.classListObject(n)
 	}, nil)
+	j.accessor(o, "attributes", func() goja.Value {
+		return j.attributesObject(n)
+	}, nil)
 	j.accessor(o, "onclick", func() goja.Value {
 		if m := j.propListeners[n]; m != nil {
 			if l, ok := m["click"]; ok {
@@ -1650,6 +1653,72 @@ func (j *jsRuntime) styleObject(n *Node) *goja.Object {
 		})
 	}
 	return o
+}
+
+// attributesObject returns a NamedNodeMap-like array over the element's
+// attributes. It is rebuilt on each access so later attribute changes are
+// reflected, matching the live DOM map closely enough for libraries.
+func (j *jsRuntime) attributesObject(n *Node) *goja.Object {
+	attrs := make([]*goja.Object, len(n.Attrs))
+	vals := make([]interface{}, len(n.Attrs))
+	for i := range n.Attrs {
+		a := n.Attrs[i]
+		o := j.vm.NewObject()
+		_ = o.Set("name", a.Key)
+		_ = o.Set("nodeName", a.Key)
+		_ = o.Set("localName", a.Key)
+		_ = o.Set("value", a.Value)
+		_ = o.Set("nodeValue", a.Value)
+		_ = o.Set("specified", true)
+		_ = o.Set("namespaceURI", goja.Null())
+		_ = o.Set("ownerElement", j.wrap(n))
+		attrs[i] = o
+		vals[i] = o
+	}
+	m := j.vm.NewArray(vals...)
+	j.method(m, "item", func(call goja.FunctionCall) goja.Value {
+		idx := int(call.Argument(0).ToInteger())
+		if idx >= 0 && idx < len(attrs) {
+			return attrs[idx]
+		}
+		return goja.Null()
+	})
+	j.method(m, "getNamedItem", func(call goja.FunctionCall) goja.Value {
+		name := call.Argument(0).String()
+		for i := range n.Attrs {
+			if strings.EqualFold(n.Attrs[i].Key, name) {
+				return attrs[i]
+			}
+		}
+		return goja.Null()
+	})
+	j.method(m, "removeNamedItem", func(call goja.FunctionCall) goja.Value {
+		name := call.Argument(0).String()
+		for i := range attrs {
+			if strings.EqualFold(n.Attrs[i].Key, name) {
+				removed := attrs[i]
+				removeAttr(n, n.Attrs[i].Key)
+				j.markDirty()
+				return removed
+			}
+		}
+		return goja.Null()
+	})
+	j.method(m, "setNamedItem", func(call goja.FunctionCall) goja.Value {
+		attr := jsObject(call.Argument(0))
+		if attr == nil {
+			return goja.Null()
+		}
+		name := attr.Get("name")
+		value := attr.Get("value")
+		if name == nil || value == nil {
+			return goja.Null()
+		}
+		setAttr(n, name.String(), value.String())
+		j.markDirty()
+		return goja.Null()
+	})
+	return m
 }
 
 func (j *jsRuntime) classListObject(n *Node) *goja.Object {
