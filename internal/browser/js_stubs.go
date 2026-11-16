@@ -267,6 +267,28 @@ func (j *jsRuntime) installPlatformStubs() {
 	if (typeof Element !== "undefined" && Element.prototype) {
 		Element.prototype.animate = Element.prototype.animate || animation;
 		Element.prototype.getAnimations = Element.prototype.getAnimations || function () { return []; };
+		// Polyfills often save Element.prototype.matches/closest and call them
+		// with a DOM node as the receiver. The node wrappers carry their own
+		// methods, so the prototype entries only need to delegate to them.
+		function delegateMethod(name, fallback) {
+			if (Element.prototype[name]) { return; }
+			Element.prototype[name] = function () {
+				var own = this[name];
+				if (typeof own === "function" && own !== Element.prototype[name]) {
+					return own.apply(this, arguments);
+				}
+				return fallback;
+			};
+		}
+		delegateMethod("matches", false);
+		delegateMethod("closest", null);
+		delegateMethod("getBoundingClientRect", null);
+		if (!Element.prototype.msMatchesSelector) {
+			Element.prototype.msMatchesSelector = Element.prototype.matches;
+		}
+		if (!Element.prototype.webkitMatchesSelector) {
+			Element.prototype.webkitMatchesSelector = Element.prototype.matches;
+		}
 	}
 	if (typeof document !== "undefined") {
 		document.getAnimations = document.getAnimations || function () { return []; };
