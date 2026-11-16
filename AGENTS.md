@@ -393,7 +393,7 @@ Standard Go layout:
   kitty comes first, then iTerm2, then half-block art. Auto is selected from
   environment variables. Under tmux/screen/zellij auto-detection
   falls back to half-block art because the multiplexer consumes graphics
-  escapes unless passthrough is configured. `I` cycles native graphics →
+  escapes unless passthrough is configured. `i` cycles native graphics →
   blocks → none (or blocks → none when native graphics are unavailable),
   refreshing the page on every mode change while keeping the scroll row.
 - **Graphics encoding:** images are transmitted as PNG (kitty `f=100`, base64;
@@ -522,7 +522,7 @@ Standard Go layout:
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
-  reader mode, `D` toggle dark mode, `I` cycle graphics modes, `X` hide/show
+  reader mode, `D` toggle dark mode, `i` cycle graphics modes, `X` hide/show
   fixed elements, `o` URL prompt, `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
@@ -743,7 +743,8 @@ Standard Go layout:
   before the memory
   readout, and a clickable `>_` console icon pinned to the far right edge.
   Clicking the JavaScript label opens the JS console, like the `>_` icon;
-  clicking the `Graphics:<mode>` label cycles graphics modes exactly like `I`.
+  clicking the `Graphics:<mode>` label cycles graphics modes exactly like `i`,
+  and the `i` in that label is underlined to advertise the shortcut.
   Right-side items collapse from left to right as the terminal narrows:
   `Graphics` goes first, then `JavaScript`, `Dark:…`, `Reader:…` and memory,
   leaving the scroll percentage last. The right-side budget depends only on

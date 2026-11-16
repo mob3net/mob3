@@ -90,7 +90,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   left/right floats with line wrapping and `clear`, and `overflow` clipping
   for bounded panels.
 - PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with `-graphics` (`auto`,
-  `kitty`, `iterm`, or `blocks` for half-block art); press `I` to cycle full
+  `kitty`, `iterm`, or `blocks` for half-block art); press `i` to cycle full
   graphics, blocks and none. Images are off by default for speed.
 - Session-only memory cache for CSS, scripts and decoded images, with a 32 MiB
   default budget and `-cache` to change or disable it.

@@ -2445,6 +2445,19 @@ func TestGraphicsFooterLabelClick(t *testing.T) {
 	}
 }
 
+func TestGraphicsLabelUnderlinesShortcut(t *testing.T) {
+	g := NewGrid(30, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	st := &Style{FontSize: 16, LineHeight: 1}
+	drawUnderlinedRune(g, 0, 0, "Graphics:none", 'i', st, RGB(0xff, 0xff, 0xff))
+	idx := strings.Index("Graphics:none", "i")
+	if !g.Cells[idx].Underline {
+		t.Fatal("i in Graphics is not underlined")
+	}
+	if g.Cells[idx-1].Underline {
+		t.Fatal("wrong letter underlined before i")
+	}
+}
+
 func TestFooterGapBeforeRightState(t *testing.T) {
 	b := NewBrowser(100, 10)
 	drawQuiet(b)

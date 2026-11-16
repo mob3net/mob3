@@ -88,7 +88,7 @@ type Browser struct {
 	// overlap neighbouring columns.
 	bigTextBlocked bool
 
-	// Graphics modes available to the I key, in cycle order, and the current
+	// Graphics modes available to the i key, in cycle order, and the current
 	// one. The list starts with native inline graphics when available.
 	graphicsModes []GraphicsMode
 	graphicsMode  GraphicsMode
@@ -3606,7 +3606,7 @@ func (b *Browser) HandleKey(k string) bool {
 		b.openLinkHints(false)
 	case "F":
 		b.openLinkHints(true)
-	case "I":
+	case "i":
 		b.cycleGraphics()
 	case "X":
 		b.hideFixed = !b.hideFixed
@@ -4123,6 +4123,27 @@ func drawShortcutLabel(g *Grid, x, y int, label string, st *Style, fg Color) {
 	}
 }
 
+// drawUnderlinedRune draws label with the first occurrence of target
+// underlined, used when a footer label's shortcut is not its first letter.
+func drawUnderlinedRune(g *Grid, x, y int, label string, target rune, st *Style, fg Color) {
+	idx := strings.IndexRune(label, target)
+	if idx < 0 {
+		g.Text(x, y, label, st, fg)
+		return
+	}
+	if prefix := label[:idx]; prefix != "" {
+		g.Text(x, y, prefix, st, fg)
+		x += stringWidth(prefix)
+	}
+	under := *st
+	under.Underline = true
+	g.Put(x, y, target, &under, fg, Color{})
+	x += runeWidth(target)
+	if rest := label[idx+len(string(target)):]; rest != "" {
+		g.Text(x, y, rest, st, fg)
+	}
+}
+
 // drawHeaderButton paints one top-bar button and records its click region.
 func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerKind, bg, fg Color, st *Style) int {
 	bw := stringWidth(label)
@@ -4487,9 +4508,12 @@ func (b *Browser) draw() {
 					case label.err:
 						errStyle := &Style{Bold: true, Color: RGB(0xb3, 0x1d, 0x1d), FontSize: 16, LineHeight: 1}
 						g.Text(lx, fy, label.text, errStyle, errStyle.Color)
-					case label.kind == headerConsole || label.kind == headerGraphics:
+					case label.kind == headerConsole:
 						// Already drawn with the normal footer style; only the
 						// click region is needed here.
+					case label.kind == headerGraphics:
+						// Underline the i in "Graphics" to advertise the i key.
+						drawUnderlinedRune(g, lx, fy, label.text, 'i', fs, fs.Color)
 					default:
 						labelStyle := fs
 						if label.on {

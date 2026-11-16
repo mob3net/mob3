@@ -1096,7 +1096,7 @@ Nothing is written to disk.</p>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
-<tr><td><b>I</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
+<tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
 <tr><td><b>X</b></td><td>hide or show fixed-position elements</td></tr>
 <tr><td><b>o</b></td><td>open a URL prompt</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
@@ -1166,7 +1166,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
 <tr><td>right click</td><td>go back</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
-<tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>I</b></td></tr>
+<tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>i</b></td></tr>
 <tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>
 <tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
