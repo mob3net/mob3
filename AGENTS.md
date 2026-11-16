@@ -144,7 +144,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, `vw`/`vh`/`vmin`/`vmax`, simple `calc()` arithmetic and inherited CSS custom properties with `var()` substitution), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. |
+| `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, `vw`/`vh`/`vmin`/`vmax`, simple `calc()` arithmetic and inherited CSS custom properties with `var()` substitution), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, `:hover`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. |
 | `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles (including empty overlay anchors), display list (`Frag`s) in document coordinates, plus text width/truncation helpers, wide-character measurement, `display:contents` expansion and measure that ignores out-of-flow children. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
@@ -642,7 +642,14 @@ Standard Go layout:
   with `\x1b[?1006h`; disable all three on exit. SGR (`\x1b[<b;x;yM/m`) and
   legacy X10 (`\x1b[M` + 3 bytes) events, including motion reports, become
   `mouse:` input tokens. Hovering a link shows its resolved target in the
-  footer and clears when the pointer leaves it. Left press starts a drag
+  footer and clears when the pointer leaves it. Hover also marks the element
+  under the pointer and its ancestors as `:hover` and fires
+  mouseover/mouseenter/mouseout/mouseleave, so CSS and JavaScript hover menus
+  open. Pointer hit testing uses text fragments and laid-out element boxes, so
+  padded menu items stay hovered while the pointer moves between them. A style
+  pass runs on a hover change when the page has `:hover` rules
+  or a handler mutated the DOM; leaving the page area clears the hover chain.
+  Left press starts a drag
   selection in document coordinates; dragging updates and auto-scrolls it,
   and release keeps the highlight. The highlight tints only rendered text
   fragments, not empty margins or unrelated columns on the same row. A press

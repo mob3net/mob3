@@ -2445,6 +2445,113 @@ func TestJSReportErrorUsesFooterHint(t *testing.T) {
 	}
 }
 
+func TestHoverOpensJSMenu(t *testing.T) {
+	page := newJSPage(`<html><body>
+<div id="menu">Menu<div id="sub" style="display:none">Item</div></div>
+</body></html>`, `document.getElementById("menu").addEventListener("mouseover", function () {
+  document.getElementById("sub").style.display = "block";
+});`)
+	b := NewBrowser(60, 20)
+	b.page = page
+	b.url = page.URL
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	findText := func(s string) *Frag {
+		for i := range b.layout.Frags {
+			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
+				return &b.layout.Frags[i]
+			}
+		}
+		return nil
+	}
+	menu := findText("Menu")
+	if menu == nil {
+		t.Fatal("menu text missing")
+	}
+	top, _ := b.viewport()
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	})
+	if findText("Item") == nil {
+		t.Fatal("mouseover handler did not open the menu")
+	}
+}
+
+func TestHoverMenuSurvivesPaddingGaps(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div class="menu"><a href="#m">Menu</a>
+<div class="sub"><a href="#x">Item</a></div></div>
+</body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(
+		`.menu .sub{display:none;position:absolute}.menu:hover .sub{display:block}.sub a{display:block;padding:1em}`)}
+	b.url = u
+	b.rebuild()
+	textFrag := func(s string) *Frag {
+		for i := range b.layout.Frags {
+			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
+				return &b.layout.Frags[i]
+			}
+		}
+		return nil
+	}
+	menu := textFrag("Menu")
+	if menu == nil {
+		t.Fatal("menu link missing")
+	}
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	item := textFrag("Item")
+	if item == nil {
+		t.Fatal("hover did not open the menu")
+	}
+	// Move into the link's top padding, where there is no text fragment.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: item.X + 1, Y: item.Y - 1 - b.scroll + top + 1})
+	if textFrag("Item") == nil {
+		t.Fatal("moving through the menu padding closed it")
+	}
+	for p := b.hoverNode; p != nil; p = p.Parent {
+		if p.Attr("class") == "menu" {
+			return
+		}
+	}
+	t.Fatalf("pointer is not inside the menu hover chain: %v", b.hoverNode)
+}
+
+func TestHoverOpensCSSMenu(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<div class="menu"><a href="#m">Menu</a>
+<div class="sub"><a href="#x">Item</a></div></div>
+</body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
+	b.url = u
+	b.rebuild()
+	findText := func(s string) *Frag {
+		for i := range b.layout.Frags {
+			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
+				return &b.layout.Frags[i]
+			}
+		}
+		return nil
+	}
+	menu := findText("Menu")
+	if menu == nil {
+		t.Fatal("menu link missing")
+	}
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	if findText("Item") == nil {
+		t.Fatal("hover did not open the CSS menu")
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: 1, Y: 1})
+	if findText("Item") != nil {
+		t.Fatal("leaving the menu did not close it")
+	}
+}
+
 func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="/target">target</a></p></body></html>`)
 	u := mustParse(t, "https://example.com/page")

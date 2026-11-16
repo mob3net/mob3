@@ -45,6 +45,8 @@ type Browser struct {
 	scroll        int
 	focus         int
 	hover         int
+	hoverNode     *Node
+	pageHasHover  bool
 	jsErr         bool
 	status        string
 
@@ -938,6 +940,7 @@ func (b *Browser) rebuild() {
 		deadline = start.Add(b.layoutBudget.Time)
 	}
 	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, b.width, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
+	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	if b.layout != nil {
@@ -1114,6 +1117,46 @@ func (b *Browser) hoveredLink() *LinkInfo {
 		return nil
 	}
 	return b.layout.Links[b.hover]
+}
+
+// setPageHover updates the element chain used for CSS :hover and dispatches
+// pointer enter/leave events. A style pass runs only when the page has hover
+// rules or a handler mutated the DOM.
+func (b *Browser) setPageHover(n *Node) {
+	if n == b.hoverNode {
+		return
+	}
+	old := b.hoverNode
+	if old != nil {
+		markHoverChain(old, false)
+		if b.js != nil && b.liveNode(old) {
+			b.js.fireNodeEvent(old, "mouseout")
+			b.js.fireNodeEvent(old, "mouseleave")
+		}
+	}
+	b.hoverNode = n
+	dirty := false
+	if n != nil {
+		markHoverChain(n, true)
+		if b.js != nil && b.liveNode(n) {
+			b.js.fireNodeEvent(n, "mouseover")
+			b.js.fireNodeEvent(n, "mouseenter")
+		}
+	}
+	if b.js != nil {
+		dirty = b.js.consumeDirty()
+	}
+	if b.pageHasHover || dirty {
+		b.rebuild()
+	}
+}
+
+func markHoverChain(n *Node, on bool) {
+	for p := n; p != nil; p = p.Parent {
+		if p.Type == ElementNode {
+			p.Hovered = on
+		}
+	}
 }
 
 // updateHover records the link under the pointer in content coordinates for
@@ -2607,6 +2650,16 @@ func (b *Browser) nodeAt(x, y int) *Node {
 	if b.layout == nil {
 		return nil
 	}
+	var best *Node
+	bestLayer, bestArea, bestDepth := -1, 0, 0
+	consider := func(n *Node, layer, area, depth int) {
+		if n == nil {
+			return
+		}
+		if layer > bestLayer || (layer == bestLayer && (area < bestArea || (area == bestArea && depth > bestDepth))) {
+			best, bestLayer, bestArea, bestDepth = n, layer, area, depth
+		}
+	}
 	for i := len(b.layout.Frags) - 1; i >= 0; i-- {
 		f := &b.layout.Frags[i]
 		if f.Node == nil || (f.Kind != fragText && f.Kind != fragImage) {
@@ -2617,11 +2670,40 @@ func (b *Browser) nodeAt(x, y int) *Node {
 		}
 		for p := f.Node; p != nil; p = p.Parent {
 			if p.Type == ElementNode {
-				return p
+				consider(p, overlayLayer(p), -1, nodeDepth(p))
+				break
 			}
 		}
 	}
-	return nil
+	// Padding and background gaps have no text fragment. Use laid-out element
+	// boxes so hover menus remain reachable while moving between their items.
+	for n, r := range b.layout.Boxes {
+		if r.W <= 0 || r.H <= 0 || x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
+			continue
+		}
+		consider(n, overlayLayer(n), r.W*r.H, nodeDepth(n))
+	}
+	return best
+}
+
+// overlayLayer ranks positioned boxes above normal flow for hit testing.
+func overlayLayer(n *Node) int {
+	for p := n; p != nil; p = p.Parent {
+		if p.Style != nil && (p.Style.Position == "absolute" || p.Style.Position == "fixed") {
+			return 2
+		}
+	}
+	return 0
+}
+
+func nodeDepth(n *Node) int {
+	d := 0
+	for p := n; p != nil; p = p.Parent {
+		if p.Type == ElementNode {
+			d++
+		}
+	}
+	return d
 }
 
 // liveNode reports whether n belongs to the current page document. Reader mode
@@ -2748,6 +2830,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	x := ev.X - 1
 	y := ev.Y - 1
 	if x < 0 || y < 0 || x >= b.width || y >= b.height {
+		b.setPageHover(nil)
 		return false
 	}
 	if ev.Wheel != 0 {
@@ -2757,12 +2840,15 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		}
 		b.scrollBy(step)
 		top, bottom := b.viewport()
+		docY := b.scroll + (y - top)
+		b.setPageHover(b.nodeAt(x, docY))
 		b.updateHover(x, y, top, bottom)
 		return false
 	}
 	if y < b.headerRows() && b.height >= 2 {
 		if ev.Motion {
 			b.hover = -1
+			b.setPageHover(nil)
 		}
 		if !ev.Press || ev.Motion {
 			return false
@@ -2807,6 +2893,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	if y == b.height-1 {
 		if ev.Motion {
 			b.hover = -1
+			b.setPageHover(nil)
 			return false
 		}
 		if ev.Press {
@@ -2856,6 +2943,8 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		if b.selecting {
 			b.updateSelection(x, y, top, bottom)
 		} else {
+			docY := b.scroll + (y - top)
+			b.setPageHover(b.nodeAt(x, docY))
 			b.updateHover(x, y, top, bottom)
 		}
 		return false

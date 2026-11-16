@@ -72,6 +72,10 @@ type Layout struct {
 	PageBG Color
 	Body   *Node
 	HTML   *Node
+	// Boxes holds border-box rectangles for laid-out block elements. Hover and
+	// click hit testing falls back to them when the pointer is over padding or
+	// background rather than a text fragment.
+	Boxes map[*Node]Rect
 
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
@@ -124,6 +128,7 @@ type layouter struct {
 	styles    map[*Node]*Style
 	width     int
 	frags     []Frag
+	boxes     map[*Node]Rect
 	bigText   bool
 	truncated bool
 	deadline  time.Time
@@ -264,7 +269,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows}
+	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -332,7 +337,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	out := &Layout{
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
 		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
-		Cursor: l.cursor, HasCursor: l.hasCursor,
+		Cursor: l.cursor, HasCursor: l.hasCursor, Boxes: l.boxes,
 	}
 	out.buildLinks()
 	// A page that already renders a dark background is using its own dark
@@ -787,9 +792,11 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	// Relative offsets move the box and its painted subtree without affecting
 	// siblings. Shift the containing block it establishes as well, so nested
 	// absolute descendants follow.
+	rx, ry := 0, 0
 	if st.Position == "relative" {
 		dx, dy := l.relativeOffset(st, parentCB)
 		if dx != 0 || dy != 0 {
+			rx, ry = dx, dy
 			for i := fragStart; i < len(l.frags); i++ {
 				l.frags[i].X += dx
 				l.frags[i].Y += dy
@@ -803,6 +810,9 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 				l.abs[i].staticY += dy
 			}
 		}
+	}
+	if st.Position != "fixed" {
+		l.boxes[n] = Rect{X: boxX + rx, Y: top + ry, W: boxW, H: totalH}
 	}
 	return mt + totalH + mb, Rect{X: boxX, Y: top, W: boxW, H: totalH}
 }

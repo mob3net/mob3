@@ -1927,6 +1927,49 @@ type Rule struct {
 	Media    string // @media condition that must match, or empty
 }
 
+// rulesUseHover reports whether any selector depends on the :hover state, so
+// pointer motion only triggers a style pass when it can matter.
+func rulesUseHover(rules []Rule) bool {
+	for _, r := range rules {
+		if selectorUsesHover(r.Selector) {
+			return true
+		}
+	}
+	return false
+}
+
+func selectorUsesHover(s Selector) bool {
+	for _, p := range s.Parts {
+		if partUsesHover(p) {
+			return true
+		}
+	}
+	return false
+}
+
+func partUsesHover(p SelPart) bool {
+	for _, ps := range p.Pseudos {
+		name := ps
+		if i := strings.IndexByte(ps, '('); i >= 0 {
+			name = ps[:i]
+		}
+		if name == "hover" {
+			return true
+		}
+	}
+	for _, np := range p.Not {
+		if partUsesHover(np) {
+			return true
+		}
+	}
+	for _, np := range p.Is {
+		if partUsesHover(np) {
+			return true
+		}
+	}
+	return false
+}
+
 // expandVars substitutes var(--name[, fallback]) references using the
 // inherited custom property map. It returns false for an unresolved reference
 // without a fallback, which drops the declaration like an invalid CSS value.
@@ -3049,7 +3092,9 @@ func matchPseudo(ps string, n *Node) bool {
 		return n.HasAttr("disabled")
 	case "enabled":
 		return !n.HasAttr("disabled")
-	case "never", "hover", "focus", "active", "visited", "target":
+	case "hover":
+		return n.Hovered
+	case "never", "focus", "active", "visited", "target":
 		return false
 	}
 	return false

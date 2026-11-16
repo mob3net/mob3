@@ -49,6 +49,8 @@ type Node struct {
 	ValueSet     bool
 	InputFocused bool
 	InputCursor  int // byte offset of the caret while focused
+	// Hovered marks the pointer's element chain for CSS :hover matching.
+	Hovered bool
 
 	// HTMLDialogElement state.
 	DialogReturnValue string

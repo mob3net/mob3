@@ -123,6 +123,9 @@ uploads are unsupported.
 ## Mouse
 
 - Hover a link to show its target in the footer.
+- Hovering also applies CSS `:hover` and fires mouse-over/enter events, so
+  hover menus open and stay open while moving between padded items; leaving the
+  page clears the hover state.
 - Drag to select page text; `y` copies it through OSC 52. With no
   selection, `y` copies the current URL.
 - Click a link to follow it; a download link opens the `curl` popup instead.
