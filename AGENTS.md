@@ -191,7 +191,9 @@ Standard Go layout:
   following blocks below matching floats. Floats are scoped to the block flow
   that establishes them; flex and grid items ignore
   `float`, as in CSS. A float nested inside an inline wrapper is still laid
-  out as an inline box.
+  out as an inline box. A floated `display:table` figure shrinks to its
+  content (usually the image) width; its caption wraps to that width instead of
+  inflating it.
 - **Overflow clipping:** a box with `overflow:hidden`, `clip`, `auto` or
   `scroll` (including the `hidden auto` shorthand) clips descendant fragments
   to its content box. Text and images that only partially fit are dropped;

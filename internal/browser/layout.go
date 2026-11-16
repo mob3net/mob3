@@ -3948,6 +3948,11 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 				continue
 			}
+			// A table caption (including a figure caption) wraps to the table
+			// width; its own long text must not inflate the intrinsic width.
+			if st.Display == "table" && c.Type == ElementNode && (c.Tag == "caption" || c.Tag == "figcaption") {
+				continue
+			}
 			mw, mi := l.measure(c)
 			if mw > maxW {
 				maxW = mw

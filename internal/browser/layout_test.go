@@ -1691,6 +1691,22 @@ func TestFloatContainedByOverflow(t *testing.T) {
 	t.Fatal("text after the float container missing")
 }
 
+func TestFloatTableCaptionDoesNotInflateWidth(t *testing.T) {
+	ly := build(`<html><body>
+<figure style="display:table;float:left"><div style="width:5em;height:2em">F</div>
+<figcaption>a very long figcaption that must wrap to the table width instead of widening it</figcaption></figure>
+<p id="p">one two three four five six seven eight nine ten eleven twelve</p></body></html>`, 60)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && fragOwnerID(f) == "p" && strings.TrimSpace(f.Text) != "" && f.Y < 4 {
+			if f.X > 15 {
+				t.Fatalf("figcaption inflated the float width: text x=%d %q", f.X, f.Text)
+			}
+			return
+		}
+	}
+	t.Fatal("no text beside the floated figure")
+}
+
 func TestFlexOrderAndJustify(t *testing.T) {
 	doc := ParseHTML(`<html><body>
 <div style="display:flex">
