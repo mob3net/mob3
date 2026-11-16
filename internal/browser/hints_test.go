@@ -162,7 +162,7 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 		t.Fatalf("page links = %d, want 2", len(b.layout.Links))
 	}
 	b.HandleKey("f")
-	if len(b.hintItems) != 1 || b.hintItems[0].link != 0 {
+	if len(b.hintItems) != 1 || b.hintItems[0].target != 0 {
 		t.Fatalf("visible hints = %+v, want only the top link", b.hintItems)
 	}
 }
@@ -253,15 +253,48 @@ func TestLinkHintsNoTextFreeLetters(t *testing.T) {
 	}
 }
 
+func TestLinkHintsFocusInputFields(t *testing.T) {
+	b := hintTestBrowser(t, `<html><body>
+<p><a href="#one">Documentation</a></p>
+<form action="/go"><input name="q" value="Search here"></form>
+</body></html>`, 50, 20)
+
+	b.HandleKey("f")
+	if !b.linkHints {
+		t.Fatal("f did not open hints")
+	}
+	var input *Node
+	label := ""
+	for _, h := range b.hintItems {
+		if target := b.hintTargetAt(h.target); target.node != nil {
+			input = target.node
+			label = h.label
+			break
+		}
+	}
+	if input == nil || label == "" {
+		t.Fatalf("input field has no hint: %+v", b.hintItems)
+	}
+	for _, ch := range label {
+		b.HandleKey(string(ch))
+	}
+	if b.inputFocus != input {
+		t.Fatalf("hint did not focus the input: %v", b.inputFocus)
+	}
+	if b.linkHints {
+		t.Fatal("hint mode stayed active after focusing a field")
+	}
+}
+
 func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Links: make([]*LinkInfo, 3)}
 	b.linkHints = true
 	b.hintPrefix = "g"
 	b.hintItems = []linkHint{
-		{link: 0, label: "ab", chars: []hintChar{{r: 'a', x: 1}, {r: 'b', x: 2}}},
-		{link: 1, label: "gx", chars: []hintChar{{r: 'g', x: 5}, {r: 'x', x: 6}}},
-		{link: 2, label: "gy", chars: []hintChar{{r: 'g', x: 8}, {r: 'y', x: 9}}},
+		{target: 0, label: "ab", chars: []hintChar{{r: 'a', x: 1}, {r: 'b', x: 2}}},
+		{target: 1, label: "gx", chars: []hintChar{{r: 'g', x: 5}, {r: 'x', x: 6}}},
+		{target: 2, label: "gy", chars: []hintChar{{r: 'g', x: 8}, {r: 'y', x: 9}}},
 	}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
@@ -282,7 +315,7 @@ func TestPaintLinkHintFallbackInsideBox(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Links: []*LinkInfo{{Rects: []Rect{{X: 3, Y: 0, W: 10, H: 1}}}}}
 	b.linkHints = true
-	b.hintItems = []linkHint{{link: 0, label: "bx"}}
+	b.hintItems = []linkHint{{target: 0, label: "bx"}}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
 	for i, want := range "bx" {

@@ -555,9 +555,11 @@ Standard Go layout:
   highlighted. It works on every rendered page, including `about:help` and
   `about:bookmarks`. The query line takes the same Ctrl/Alt word motion and
   Alt/Ctrl+Backspace, Ctrl-W and Alt-D word deletion as the URL prompt.
-- **Link hints:** `f` labels every link visible in the current viewport by
-  picking letters from the link's own text and drawing them with a yellow
-  background and underline; the page text itself is unchanged. Up to 26 links
+- **Link hints:** `f` labels every link and editable text field visible in the
+  current viewport by
+  picking letters from the target's own text and drawing them with a yellow
+  background and underline; the page text itself is unchanged. Choosing a field
+  focuses it for typing instead of navigating. Up to 26 targets
   use the first letter not already used by an earlier link (case-insensitive),
   so `Documentation` starts with `D` and a later `Dog` uses `o` if `d` is
   taken. On link-heavy pages a hint whose first letter is unique still shows
@@ -568,10 +570,10 @@ Standard Go layout:
   case-insensitive. Unknown letters are ignored, `Esc`
   cancels, and scrolling (wheel or scrollbar) dismisses the hints. Timer-driven
   page rebuilds recompute the hints and keep the session, typed prefix and any
-  pending F confirmation instead of dismissing them. Only links intersecting
+  pending F confirmation instead of dismissing them. Only targets intersecting
   the viewport are
-  labelled; a link with no text
-  letters (such as an image link) gets free label letters drawn inside its box.
+  labelled; a target with no text
+  letters (such as an image link or an empty field) gets free label letters drawn inside its box.
   While hints are shown, images are drawn as half-block art
   instead of native inline graphics, so the terminal image protocol cannot
   cover the hint letters.

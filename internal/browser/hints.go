@@ -20,43 +20,84 @@ type hintChar struct {
 	x, y int
 }
 
-// linkHint is one Vimium-style link hint: the index into Layout.Links, the
-// letters that follow it, and the text cells to highlight.
+// linkHint is one Vimium-style hint: the target it activates, the letters
+// that follow it, and the text cells to highlight. target indexes hintTargets.
 type linkHint struct {
-	link  int
-	label string
-	chars []hintChar
+	target int
+	label  string
+	chars  []hintChar
 }
 
-// openLinkHints starts link-hint mode and labels every link that intersects
-// the current viewport. Each label is picked from the link's own text: the
-// first unused letter for up to 26 links, then two letters for link-heavy
-// pages. With ask set (the F key), choosing a hint shows its destination and
-// waits for confirmation instead of following immediately.
+// hintTarget is a link or editable field reachable through link hints.
+type hintTarget struct {
+	link int   // Layout.Links index for a link target
+	node *Node // editable control for a field target
+}
+
+// openLinkHints starts hint mode and labels every link and editable field that
+// intersects the current viewport. Each label is picked from the target's own
+// text: the first unused letter for up to 26 targets, then two letters for
+// target-heavy pages. With ask set (the F key), choosing a link shows its
+// destination and waits for confirmation; fields are focused directly.
 func (b *Browser) openLinkHints(ask bool) {
-	if b.layout == nil || len(b.layout.Links) == 0 {
-		b.status = "No links on this page"
+	if b.layout == nil {
+		b.status = "No links or fields on this page"
 		return
 	}
 	top, bottom := b.viewport()
-	visible := make([]int, 0, len(b.layout.Links))
+	var targets []hintTarget
 	for i, li := range b.layout.Links {
 		if _, ok := b.visibleLinkRect(li, top, bottom); ok {
-			visible = append(visible, i)
+			targets = append(targets, hintTarget{link: i})
 		}
 	}
-	if len(visible) == 0 {
-		b.status = "No links in view"
+	if b.page != nil && b.page.Root != nil {
+		for _, n := range b.page.Root.FindAll(func(n *Node) bool {
+			return isTextInput(n) && n.Style != nil && n.Style.Display != "none" && !n.Style.Hidden
+		}) {
+			if _, ok := b.visibleInputRect(n, top, bottom); ok {
+				targets = append(targets, hintTarget{link: -1, node: n})
+			}
+		}
+	}
+	if len(targets) == 0 {
+		b.status = "No links or fields in view"
 		return
 	}
+	ids := make([]int, len(targets))
+	for i := range targets {
+		ids[i] = i
+	}
+	b.hintTargets = targets
 	b.hintItems = b.hintItems[:0]
-	b.hintItems = append(b.hintItems, buildLinkHints(visible, b.collectHintGlyphs(visible, top, bottom))...)
+	b.hintItems = append(b.hintItems, buildLinkHints(ids, b.collectHintGlyphs(targets, top, bottom))...)
 	b.linkHints = true
 	b.hintPrefix = ""
 	b.hintAsk = ask
 	b.hintConfirm = false
 	b.hintConfirmLink = -1
-	b.status = "Follow link (Esc cancels)"
+	b.status = "Choose link or field (Esc cancels)"
+}
+
+// visibleInputRect returns the first visible fragment rectangle of an editable
+// control.
+func (b *Browser) visibleInputRect(n *Node, top, bottom int) (Rect, bool) {
+	if b.layout == nil {
+		return Rect{}, false
+	}
+	viewTop := b.scroll
+	viewBottom := b.scroll + (bottom - top)
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Kind != fragText || f.Node != n || f.Fixed {
+			continue
+		}
+		if f.Y >= viewBottom || f.Y+f.H <= viewTop {
+			continue
+		}
+		return Rect{X: f.X, Y: f.Y, W: f.W, H: f.H}, true
+	}
+	return Rect{}, false
 }
 
 // reopenLinkHints restores an active hint session after a layout rebuild. The
@@ -77,32 +118,58 @@ func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 		return
 	}
 	b.hintPrefix = prefix
-	b.status = fmt.Sprintf("Follow link: %s (Esc cancels)", prefix)
+	b.status = fmt.Sprintf("Choose hint: %s (Esc cancels)", prefix)
 }
 
-// collectHintGlyphs returns the visible letters of each requested link in
-// document order, with their terminal cells.
-func (b *Browser) collectHintGlyphs(links []int, top, bottom int) map[int][]hintGlyph {
-	wanted := make(map[int]bool, len(links))
-	for _, link := range links {
-		wanted[link] = true
+// hintTargetRect returns the visible box of a hint target.
+func (b *Browser) hintTargetRect(target int, top, bottom int) (Rect, bool) {
+	t := b.hintTargetAt(target)
+	if t.node != nil {
+		return b.visibleInputRect(t.node, top, bottom)
 	}
-	out := make(map[int][]hintGlyph, len(links))
+	if b.layout == nil || t.link < 0 || t.link >= len(b.layout.Links) {
+		return Rect{}, false
+	}
+	return b.visibleLinkRect(b.layout.Links[t.link], top, bottom)
+}
+
+// collectHintGlyphs returns the visible letters of each requested target in
+// document order, with their terminal cells.
+func (b *Browser) collectHintGlyphs(targets []hintTarget, top, bottom int) map[int][]hintGlyph {
+	linkIDs := make(map[int]int, len(targets))
+	inputIDs := make(map[*Node]int, len(targets))
+	for id, t := range targets {
+		if t.node != nil {
+			inputIDs[t.node] = id
+		} else {
+			linkIDs[t.link] = id
+		}
+	}
+	out := make(map[int][]hintGlyph, len(targets))
 	viewTop := b.scroll
 	viewBottom := b.scroll + (bottom - top)
 	for i := range b.layout.Frags {
 		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Text == "" || f.Link == nil {
+		if f.Kind != fragText || f.Text == "" {
 			continue
 		}
-		link := f.Link.Index
-		if !wanted[link] || f.Y < viewTop || f.Y >= viewBottom {
+		id := -1
+		if f.Link != nil {
+			if tid, ok := linkIDs[f.Link.Index]; ok {
+				id = tid
+			}
+		} else if f.Node != nil {
+			if tid, ok := inputIDs[f.Node]; ok {
+				id = tid
+			}
+		}
+		if id < 0 || f.Y < viewTop || f.Y >= viewBottom {
 			continue
 		}
 		x := f.X
 		for _, r := range f.Text {
 			if ch, ok := hintLetter(r); ok {
-				out[link] = append(out[link], hintGlyph{ch: ch, r: r, x: x, y: f.Y})
+				out[id] = append(out[id], hintGlyph{ch: ch, r: r, x: x, y: f.Y})
 			}
 			x += runeWidth(r)
 		}
@@ -175,9 +242,9 @@ func assignSingleHints(links []int, glyphs map[int][]hintGlyph) ([]linkHint, boo
 			}
 			used[idx] = true
 			hints = append(hints, linkHint{
-				link:  link,
-				label: string(g.ch),
-				chars: []hintChar{{r: g.r, x: g.x, y: g.y}},
+				target: link,
+				label:  string(g.ch),
+				chars:  []hintChar{{r: g.r, x: g.x, y: g.y}},
 			})
 			chosen = true
 			break
@@ -203,7 +270,7 @@ func assignSingleHints(links []int, glyphs map[int][]hintGlyph) ([]linkHint, boo
 			return nil, false
 		}
 		used[free] = true
-		hints = append(hints, linkHint{link: link, label: string(byte('a' + free))})
+		hints = append(hints, linkHint{target: link, label: string(byte('a' + free))})
 	}
 	return hints, true
 }
@@ -226,7 +293,7 @@ func assignPairHints(links []int, glyphs map[int][]hintGlyph) []linkHint {
 			chars = nil
 		}
 		used[label] = true
-		hints = append(hints, linkHint{link: link, label: label, chars: chars})
+		hints = append(hints, linkHint{target: link, label: label, chars: chars})
 	}
 	return hints
 }
@@ -259,6 +326,7 @@ func (b *Browser) clearLinkHints() {
 	}
 	b.linkHints = false
 	b.hintItems = nil
+	b.hintTargets = nil
 	b.hintPrefix = ""
 	b.hintAsk = false
 	b.status = ""
@@ -290,8 +358,8 @@ func (b *Browser) handleLinkHintKey(k string) bool {
 	return b.HandleKey(k)
 }
 
-// typeLinkHint narrows the visible hints by one letter and follows the link
-// when only one hint still matches.
+// typeLinkHint narrows the visible hints by one letter and activates the
+// target when only one hint still matches.
 func (b *Browser) typeLinkHint(letter string) {
 	next := b.hintPrefix + letter
 	matches := 0
@@ -299,7 +367,7 @@ func (b *Browser) typeLinkHint(letter string) {
 	for _, h := range b.hintItems {
 		if strings.HasPrefix(h.label, next) {
 			matches++
-			match = h.link
+			match = h.target
 		}
 	}
 	if matches == 0 {
@@ -307,23 +375,44 @@ func (b *Browser) typeLinkHint(letter string) {
 	}
 	b.hintPrefix = next
 	if matches == 1 {
-		b.chooseLinkHint(match)
+		b.chooseHint(match)
 		return
 	}
-	b.status = fmt.Sprintf("Follow link: %s (Esc cancels)", next)
+	b.status = fmt.Sprintf("Choose hint: %s (Esc cancels)", next)
 }
 
-// chooseLinkHint follows a chosen hint immediately, or with F shows the
-// resolved destination in the footer and waits for Enter/y confirmation.
-func (b *Browser) chooseLinkHint(link int) {
+// chooseHint follows a chosen link or focuses a chosen editable field. With F,
+// links wait for destination confirmation; fields focus immediately.
+func (b *Browser) chooseHint(target int) {
+	t := b.hintTargetAt(target)
 	ask := b.hintAsk
 	b.clearLinkHints()
+	if t.node != nil {
+		b.setInputFocus(t.node)
+		b.ensureInputVisible(t.node)
+		return
+	}
+	if t.link < 0 {
+		return
+	}
 	if !ask {
-		b.focus = link
+		b.focus = t.link
 		b.followFocused()
 		return
 	}
-	b.beginHintConfirm(link)
+	b.beginHintConfirm(t.link)
+}
+
+// hintTargetAt resolves a hint target index. Tests and older hint-only pages
+// without hintTargets fall back to treating the index as a link index.
+func (b *Browser) hintTargetAt(i int) hintTarget {
+	if i >= 0 && i < len(b.hintTargets) {
+		return b.hintTargets[i]
+	}
+	if b.layout != nil && i >= 0 && i < len(b.layout.Links) {
+		return hintTarget{link: i}
+	}
+	return hintTarget{link: -1}
 }
 
 // beginHintConfirm shows a chosen F link and waits for confirmation.
@@ -458,13 +547,10 @@ func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
 	}
 }
 
-// paintLinkHintFallback draws free label letters inside a link box that has no
-// usable text, such as an image link.
+// paintLinkHintFallback draws free label letters inside a target box that has
+// no usable text, such as an image link or an empty field.
 func (b *Browser) paintLinkHintFallback(g *Grid, h linkHint, top, bottom int) {
-	if h.link < 0 || h.link >= len(b.layout.Links) {
-		return
-	}
-	r, ok := b.visibleLinkRect(b.layout.Links[h.link], top, bottom)
+	r, ok := b.hintTargetRect(h.target, top, bottom)
 	if !ok {
 		return
 	}

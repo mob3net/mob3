@@ -136,9 +136,10 @@ type Browser struct {
 	findIdx     int
 
 	// Vimium-style link hints for the links visible in the viewport.
-	linkHints  bool
-	hintItems  []linkHint
-	hintPrefix string
+	linkHints   bool
+	hintItems   []linkHint
+	hintTargets []hintTarget
+	hintPrefix  string
 	// hintAsk is set by F; choosing a hint then waits for confirmation.
 	hintAsk         bool
 	hintConfirm     bool
