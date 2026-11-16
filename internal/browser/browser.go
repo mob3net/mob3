@@ -1655,8 +1655,32 @@ func (b *Browser) updateInputFragments(n *Node) bool {
 		return true
 	}
 	label := formLabel(n)
-	if label == "" || len(frags) != 1 || stringWidth(label) != frags[0].W {
+	if label == "" || len(frags) != 1 {
 		return false
+	}
+	w := stringWidth(label)
+	boxW := frags[0].W
+	if w != boxW {
+		// A fixed-width or flex-stretched control keeps the same box while the
+		// value changes; rewrite the label inside it instead of rebuilding the
+		// whole page. Auto-width controls must relayout when their box grows or
+		// shrinks.
+		fixed := false
+		if st := n.Style; st != nil {
+			fixed = st.FlexGrow > 0 || (st.Width.Set && !st.Width.IsAuto())
+		}
+		if !fixed {
+			return false
+		}
+		if w > boxW {
+			label = truncateWidth(label, boxW)
+		} else if pad := boxW - w; pad > 0 {
+			if strings.HasSuffix(label, "]") {
+				label = strings.TrimSuffix(label, "]") + strings.Repeat(" ", pad) + "]"
+			} else {
+				label += strings.Repeat(" ", pad)
+			}
+		}
 	}
 	frags[0].Text = label
 	if col, ok := inputCursorOffset(n, label); ok {

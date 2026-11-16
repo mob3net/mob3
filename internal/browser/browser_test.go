@@ -782,6 +782,39 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 }
 
+func TestFixedWidthInputPatchesFragments(t *testing.T) {
+	doc := ParseHTML(`<html><body><form action="/go">
+<input name="q" style="width:24em" value=""></form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	q := inputByName(doc, "q")
+	b.setInputFocus(q)
+	layout := b.layout
+	b.setInputValue(q, "wikipedia search")
+	if b.layout != layout {
+		t.Fatal("fixed-width input triggered a full rebuild")
+	}
+	var frag *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == q {
+			frag = &b.layout.Frags[i]
+			break
+		}
+	}
+	if frag == nil {
+		t.Fatal("fixed-width input fragment missing")
+	}
+	if !strings.Contains(frag.Text, "wikipedia search") {
+		t.Fatalf("fragment not updated in place: %q", frag.Text)
+	}
+	if stringWidth(frag.Text) != frag.W {
+		t.Fatalf("fragment width changed: %d cells for %q", frag.W, frag.Text)
+	}
+}
+
 func TestInputWordEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="https://en.wikipedia.org/wiki/Wyoming"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")

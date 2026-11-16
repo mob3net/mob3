@@ -701,7 +701,9 @@ Standard Go layout:
   `value`, `checked` and `form` on elements. Editable fields use a prominent
   light-blue background with bold text; the focused field switches to a solid
   blue background with white text, and its placeholder/hint disappears while
-  focused.
+  focused. A fixed-width or flex-stretched control keeps its box while typing,
+  so value changes patch only that control's fragments; an auto-width control
+  relayouts when its box grows or shrinks.
 - **Footer:** shows the hovered link target or status on the left and, on the
   right, current resident memory (`MEM 18MB`), the scroll percentage,
   resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
