@@ -3557,6 +3557,23 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 	}
 }
 
+func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	doc := ParseHTML(`<html><body><p>text that wraps normally</p></body></html>`)
+	b := NewBrowser(20, 6)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	if b.layout.Width != 19 {
+		t.Fatalf("interactive layout width = %d, want 19", b.layout.Width)
+	}
+	b.noDraw = true
+	b.rebuild()
+	if b.layout.Width != 20 {
+		t.Fatalf("headless layout width = %d, want 20", b.layout.Width)
+	}
+}
+
 func TestBrowserFixedLayoutUsesViewportHeight(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`)
@@ -3569,8 +3586,9 @@ func TestBrowserFixedLayoutUsesViewportHeight(t *testing.T) {
 		t.Fatal("fixed fragment not laid out")
 	}
 	wantY := b.viewportHeight() - 1
-	if bar.Y != wantY || bar.X != 27 {
-		t.Fatalf("fixed box at (%d,%d), want (27,%d)", bar.X, bar.Y, wantY)
+	wantX := b.layout.Width - 3
+	if bar.Y != wantY || bar.X != wantX {
+		t.Fatalf("fixed box at (%d,%d), want (%d,%d)", bar.X, bar.Y, wantX, wantY)
 	}
 }
 

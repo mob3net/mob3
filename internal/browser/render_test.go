@@ -8,6 +8,21 @@ import (
 	"testing"
 )
 
+func TestClearGlyphsKeepsBackground(t *testing.T) {
+	g := NewGrid(20, 3, RGB(0, 0, 0), RGB(255, 255, 255))
+	bg := RGB(0x10, 0x20, 0x30)
+	g.Fill(19, 1, 1, 1, bg)
+	g.Put(19, 1, 'X', &Style{Bold: true, Underline: true}, RGB(0xff, 0, 0), bg)
+	g.ClearGlyphs(19, 1, 1, 1)
+	c := g.Cells[1*g.W+19]
+	if c.R != ' ' || c.Bold || c.Underline {
+		t.Fatalf("glyph not cleared: %+v", c)
+	}
+	if c.BG != bg {
+		t.Fatalf("background changed: %+v", c.BG)
+	}
+}
+
 func TestParseGraphicsMode(t *testing.T) {
 	cases := map[string]GraphicsMode{
 		"auto": GraphicsAuto, "": GraphicsAuto, "kitty": GraphicsKitty,

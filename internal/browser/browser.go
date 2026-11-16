@@ -939,7 +939,13 @@ func (b *Browser) rebuild() {
 	if b.layoutBudget.Time > 0 {
 		deadline = start.Add(b.layoutBudget.Time)
 	}
-	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, b.width, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
+	layoutWidth := b.width
+	// Interactive pages reserve the rightmost column for the scrollbar, so
+	// text and images wrap before it instead of painting underneath it.
+	if !b.noDraw && layoutWidth >= 2 {
+		layoutWidth--
+	}
+	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
@@ -3727,6 +3733,11 @@ func (b *Browser) draw() {
 	b.paintSelection(g, top, bottom)
 	b.paintFindPage(g, top, bottom)
 	b.paintLinkHints(g, top, bottom)
+	if !b.noDraw && b.width >= 2 {
+		// Overflowing content (wide nowrap blocks, absolute boxes) may still
+		// reach the terminal edge. Keep the reserved scrollbar column blank.
+		g.ClearGlyphs(b.width-1, top, 1, bottom-top)
+	}
 	b.drawScrollBar(g, top, bottom)
 
 	headerBG := RGB(0x1f, 0x29, 0x37)

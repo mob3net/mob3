@@ -666,7 +666,10 @@ Standard Go layout:
   or `Reader:on`/`Reader:off` labels toggles those modes, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
-  on the right edge: click or drag it to jump through the document. `Esc`
+  on the right edge: click or drag it to jump through the document. Interactive
+  layout is one column narrower than the terminal so page text, images and
+  overlays never paint underneath the scrollbar column; overflowing fragments
+  that still reach it are blanked before the scrollbar is drawn. `Esc`
   clears the selection. `y` copies the selected page text through the terminal
   OSC 52 clipboard sequence and then clears the highlight (subject to
   terminal/multiplexer support).
