@@ -80,7 +80,8 @@ Press `f` to follow a link. It marks the links visible in the current viewport
 by highlighting letters from the link's own text with a yellow background and
 an underline. Form controls are labelled the same way: text fields focus,
 checkboxes and radios toggle, a select opens its options, multi-select options
-toggle, and buttons activate. The page text is never changed. Up to 26 links
+toggle, and buttons activate. The chosen control stays focused for Space/Enter
+and arrow or h/j/k/l keys. The page text is never changed. Up to 26 links
 the first letter not already used by
 another link is highlighted (case-insensitive), so `Documentation` uses `D` and
 a later `Dog` uses `o` if `d` is taken. On link-heavy pages a hint whose first

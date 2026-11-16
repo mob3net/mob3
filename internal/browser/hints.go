@@ -444,26 +444,53 @@ func isHintControl(n *Node) bool {
 	return false
 }
 
-// activateHintControl applies the same action as clicking a form control.
+// activateHintControl applies the same action as clicking a form control and
+// leaves that control focused for follow-up keyboard use.
 func (b *Browser) activateHintControl(n *Node, r Rect) {
 	if n == nil {
 		return
 	}
 	switch {
 	case isFileInput(n):
+		b.focusControlTarget(n, nil)
 		b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")
+	case n.Tag == "option":
+		sel := nearestSelect(n)
+		if sel == nil {
+			return
+		}
+		b.focusControlTarget(sel, n)
+		b.toggleControl(n)
 	case isToggleControl(n):
+		b.focusControlTarget(n, nil)
 		b.toggleControl(n)
 	case isTextInput(n), isRangeInput(n):
 		b.setInputFocus(n)
 		b.ensureInputVisible(n)
 	case isButtonControl(n):
+		b.focusControlTarget(n, nil)
 		x, y := r.X, r.Y
 		if r.W <= 0 || r.H <= 0 {
 			x, y = r.X+1, r.Y
 		}
 		b.clickContent(x, y)
+		if b.liveNode(n) {
+			b.focusControlTarget(n, nil)
+		}
 	}
+}
+
+func (b *Browser) focusControlTarget(n *Node, option *Node) {
+	if n == nil {
+		return
+	}
+	b.focus = -1
+	b.controlFocus = n
+	b.controlOption = option
+	if n.Tag == "select" && n.HasAttr("multiple") && option == nil {
+		b.controlOption = firstSelectOption(n)
+	}
+	b.status = tabControlStatus(n)
 }
 
 func isButtonControl(n *Node) bool {

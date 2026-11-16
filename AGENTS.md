@@ -562,7 +562,8 @@ Standard Go layout:
   editable field focuses it for typing; checkboxes and radios toggle or select,
   a single select opens its option popup, multi-select options toggle, buttons
   activate, range inputs focus for arrow adjustment, and file inputs show the
-  upload notice. Up to 26 targets
+  upload notice. The chosen control stays focused, so `Space`/`Enter` and the
+  arrow or `h`/`j`/`k`/`l` keys keep working on it. Up to 26 targets
   use the first letter not already used by an earlier link (case-insensitive),
   so `Documentation` starts with `D` and a later `Dog` uses `o` if `d` is
   taken. On link-heavy pages a hint whose first letter is unique still shows

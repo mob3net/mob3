@@ -1124,7 +1124,8 @@ searches the raw source.</p>
 <p>Press <b>f</b> to follow a link: it highlights a letter from each visible
 link, and typing it follows that link. Form controls are highlighted too:
 choosing a text field focuses it, checkboxes and radios toggle, a select opens
-its options, multi-select options toggle, and buttons activate. Links sharing a
+its options, multi-select options toggle, and buttons activate. The chosen
+control stays focused for follow-up keys. Links sharing a
 first letter use two adjacent letters. <b>F</b> shows the
 destination in yellow first and waits for <b>Enter</b>/<b>y</b>; <b>Esc</b> or
 <b>n</b> cancels. <b>Esc</b> or scrolling dismisses the hints.</p>

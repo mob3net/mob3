@@ -297,17 +297,33 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if !check.HasAttr("checked") {
 		t.Fatal("checkbox hint did not toggle it")
 	}
+	if b.controlFocus != check {
+		t.Fatalf("checkbox hint did not focus it: %v", b.controlFocus)
+	}
+	b.HandleKey(" ")
+	if check.HasAttr("checked") {
+		t.Fatal("space did not toggle the focused checkbox")
+	}
 	choose(func(n *Node) bool { return n == radios[1] })
 	if !radios[1].HasAttr("checked") || radios[0].HasAttr("checked") {
 		t.Fatal("radio hint did not select it")
+	}
+	if b.controlFocus != radios[1] {
+		t.Fatalf("radio hint did not focus it: %v", b.controlFocus)
 	}
 	choose(func(n *Node) bool { return n == beta })
 	if !beta.HasAttr("selected") {
 		t.Fatal("multi-select hint did not toggle the option")
 	}
+	if b.controlFocus != multi || b.controlOption != beta {
+		t.Fatalf("multi-select hint did not focus the option: control=%v option=%v", b.controlFocus, b.controlOption)
+	}
 	choose(func(n *Node) bool { return n == single[0] })
 	if b.selectMenu == nil {
 		t.Fatal("select hint did not open the option popup")
+	}
+	if b.controlFocus != single[0] {
+		t.Fatalf("select hint did not focus it: %v", b.controlFocus)
 	}
 }
 
