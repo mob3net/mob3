@@ -145,6 +145,9 @@ type layouter struct {
 	// abs collects absolutely positioned boxes. They are kept out of normal
 	// flow and laid out after it, so they paint above in-flow content.
 	abs []*absBox
+	// floats holds active floated boxes for the current flow. Inline lines
+	// shorten around them and the containing flow reserves their height.
+	floats []floatBox
 
 	// cursor is the focused form caret cell, in document coordinates.
 	cursor    Rect
@@ -168,6 +171,14 @@ type absBox struct {
 	staticX int
 	staticY int
 	fixed   bool
+}
+
+// floatBox is one floated box in document coordinates. Floats shorten the
+// line boxes that overlap their vertical range but stay out of normal flow.
+type floatBox struct {
+	side        string // "left" or "right"
+	top, bottom int
+	left, right int
 }
 
 // outOfTime reports whether the layout pass has exceeded its deadline. The
@@ -678,6 +689,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 		l.addFill(boxX, top, boxW, 1, st.Background)
 		bgIndex = len(l.frags) - 1
 	}
+	clipStart := len(l.frags)
 
 	var contentH int
 	switch {
@@ -721,6 +733,17 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	}
 	if forceContentH > contentH {
 		contentH = forceContentH
+	}
+	// An overflow container clips its descendants to its content box. This
+	// matters for scrollable panels: a child's max-height must not let its
+	// overflowing text paint over following content.
+	if st.Overflow != "" {
+		l.clipFragments(clipStart, Rect{
+			X: boxX + bl,
+			Y: top + bt,
+			W: pl + contentW + pr,
+			H: pt + contentH + pb,
+		})
 	}
 	if newCB != nil {
 		newCB.h = pt + contentH + pb
@@ -1804,6 +1827,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 	if l.outOfTime() {
 		return 0
 	}
+	startFloats := len(l.floats)
 	cur := y
 	var inline []*Node
 	flush := func() {
@@ -1828,6 +1852,15 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 				l.deferAbsolute(c, x, cur)
 				continue
 			}
+			if c.Style.Float != "" {
+				flush()
+				cur = l.placeFloat(c, x, cur, width)
+				continue
+			}
+			if c.Style.Clear != "" {
+				flush()
+				cur = l.clearY(c.Style.Clear, cur)
+			}
 			if l.isBlock(c) || l.inlineWrapperIsBlock(c) {
 				flush()
 				cur += l.block(c, x, cur, width)
@@ -1840,10 +1873,144 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 	if p := pseudoElement(parent, parent.After); p != nil && l.isBlock(p) {
 		cur += l.block(p, x, cur, width)
 	}
+	// The flow contains its floats: their height extends it and they stop
+	// affecting content after the flow. This keeps unrelated sections from
+	// inheriting each other's float bands.
+	for _, f := range l.floats[startFloats:] {
+		if f.bottom > cur {
+			cur = f.bottom
+		}
+	}
+	l.floats = l.floats[:startFloats]
 	if cur < y {
 		return 0
 	}
 	return cur - y
+}
+
+// floatBand returns the horizontal range available for a line at y, after
+// shortening it around any active floated boxes.
+func (l *layouter) floatBand(x, y, width int) (int, int) {
+	left, right := x, x+width
+	for _, f := range l.floats {
+		if y >= f.bottom || y+1 <= f.top {
+			continue
+		}
+		if f.side == "right" {
+			if f.left < right {
+				right = f.left
+			}
+		} else if f.right > left {
+			left = f.right
+		}
+	}
+	if left > right {
+		left = right
+	}
+	return left, right
+}
+
+// clearY moves y below the floats selected by a CSS clear value.
+func (l *layouter) clearY(clear string, y int) int {
+	for _, f := range l.floats {
+		if f.bottom <= y {
+			continue
+		}
+		switch clear {
+		case "both":
+			y = f.bottom
+		case "left", "inline-start":
+			if f.side == "left" {
+				y = f.bottom
+			}
+		case "right", "inline-end":
+			if f.side == "right" {
+				y = f.bottom
+			}
+		}
+	}
+	return y
+}
+
+// placeFloat lays out a floated child at the left or right edge of the current
+// line band. It stays out of normal flow; only its height counts.
+func (l *layouter) placeFloat(n *Node, x, y, width int) int {
+	st := n.Style
+	if st == nil {
+		return y
+	}
+	if st.Clear != "" {
+		y = l.clearY(st.Clear, y)
+	}
+	left, right := l.floatBand(x, y, width)
+	avail := right - left
+	if avail < 1 {
+		avail = 1
+	}
+	fw := l.shrinkFitWidth(n, avail)
+	fx := left
+	side := "left"
+	if st.Float == "right" || st.Float == "inline-end" {
+		fx = right - fw
+		if fx < left {
+			fx = left
+		}
+		side = "right"
+	}
+	fragStart := len(l.frags)
+	absStart := len(l.abs)
+	h, rect := l.blockLayout(n, fx, y, fw, 0)
+	boxLeft, boxRight := rect.X, rect.X+rect.W
+	if side == "right" && boxRight < right && rect.W > 0 {
+		// A right float with a narrower declared width is aligned to the
+		// right edge of the band rather than the left edge it was measured at.
+		dx := right - boxRight
+		for i := fragStart; i < len(l.frags); i++ {
+			l.frags[i].X += dx
+		}
+		for i := absStart; i < len(l.abs); i++ {
+			l.abs[i].staticX += dx
+		}
+		boxLeft += dx
+		boxRight += dx
+	}
+	if boxRight <= boxLeft || h <= 0 {
+		return y
+	}
+	l.floats = append(l.floats, floatBox{
+		side: side, top: y, bottom: y + h, left: boxLeft, right: boxRight,
+	})
+	return y
+}
+
+// shrinkFitWidth returns the shrink-to-fit border-box width of a floated box
+// within avail cells.
+func (l *layouter) shrinkFitWidth(n *Node, avail int) int {
+	maxW, minW := l.measure(n)
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(n.Style, avail)
+	extra := ml + mr + bl + br + pl + pr
+	st := n.Style
+	if st != nil && st.Width.Set && !st.Width.IsAuto() {
+		if w := l.widthValue(st, st.Width, avail); w > maxW {
+			maxW = w
+		}
+	}
+	maxW += extra
+	minW += extra
+	if maxW < 1 {
+		maxW = 1
+	}
+	if minW < 1 {
+		minW = 1
+	}
+	w := maxW
+	if w > avail {
+		w = avail
+	}
+	if w < minW {
+		w = minW
+	}
+	return w
 }
 
 func noContentFrags(frags []Frag) bool {
@@ -1868,6 +2035,81 @@ func (l *layouter) trimFrags(limit, start int) {
 		out = append(out, f)
 	}
 	l.frags = out
+}
+
+// clipFragments drops or trims fragments from start onward to the clip rect.
+// Text and images that only partially fit vertically are dropped; fills and
+// link boxes are trimmed so panels do not paint over their own boundaries.
+func (l *layouter) clipFragments(start int, r Rect) {
+	if start < 0 || start > len(l.frags) || r.W <= 0 || r.H <= 0 {
+		return
+	}
+	right, bottom := r.X+r.W, r.Y+r.H
+	out := l.frags[:start]
+	for _, f := range l.frags[start:] {
+		if f.Fixed {
+			out = append(out, f)
+			continue
+		}
+		if f.Y+f.H <= r.Y || f.Y >= bottom || f.X+f.W <= r.X || f.X >= right {
+			continue
+		}
+		if f.Kind == fragText || f.Kind == fragImage {
+			// Glyphs and bitmaps cannot be cut cleanly; keep only the parts
+			// that fit entirely inside the clip box.
+			if f.Y < r.Y || f.Y+f.H > bottom {
+				continue
+			}
+			if f.X < r.X {
+				if f.Kind == fragImage {
+					continue
+				}
+				cut := r.X - f.X
+				f.Text = trimTextLeft(f.Text, cut)
+				f.X = r.X
+				f.W -= cut
+			}
+			if f.X+f.W > right {
+				if f.Kind == fragImage {
+					continue
+				}
+				f.W = right - f.X
+				f.Text = truncateWidth(f.Text, f.W)
+			}
+		} else {
+			if f.Y < r.Y {
+				cut := r.Y - f.Y
+				f.Y += cut
+				f.H -= cut
+			}
+			if f.Y+f.H > bottom {
+				f.H = bottom - f.Y
+			}
+			if f.X < r.X {
+				cut := r.X - f.X
+				f.X = r.X
+				f.W -= cut
+			}
+			if f.X+f.W > right {
+				f.W = right - f.X
+			}
+		}
+		if f.W <= 0 || f.H <= 0 {
+			continue
+		}
+		out = append(out, f)
+	}
+	l.frags = out
+}
+
+// trimTextLeft removes the first cells from s, preserving rune boundaries.
+func trimTextLeft(s string, cells int) string {
+	for cells > 0 && s != "" {
+		r, size := utf8.DecodeRuneInString(s)
+		cells -= runeWidth(r)
+		s = s[size:]
+	}
+	return s
 }
 
 // pseudoElement wraps a generated pseudo style in a childless synthetic node
@@ -1899,6 +2141,8 @@ type inlineItem struct {
 type inlineCtx struct {
 	l          *layouter
 	x, y       int
+	baseX      int
+	baseW      int
 	maxW       int
 	imageCapW  int
 	base       *Style
@@ -1907,6 +2151,22 @@ type inlineCtx struct {
 	space      bool
 	spaceStyle *Style
 	spaceNode  *Node
+}
+
+// lineBounds returns the left edge and width available for the line that
+// starts at the current row, shortened around any active floats.
+func (c *inlineCtx) lineBounds() (int, int) {
+	left, right := c.l.floatBand(c.baseX, c.y, c.baseW)
+	w := right - left
+	if w < 1 {
+		w = 1
+	}
+	return left, w
+}
+
+func (c *inlineCtx) lineMaxW() int {
+	_, w := c.lineBounds()
+	return w
 }
 
 func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
@@ -1920,7 +2180,7 @@ func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 	if base == nil {
 		base = defaultStyle()
 	}
-	c := &inlineCtx{l: l, x: x, y: y, maxW: width, imageCapW: l.imageCapWidth(), base: base}
+	c := &inlineCtx{l: l, x: x, y: y, baseX: x, baseW: width, maxW: width, imageCapW: l.imageCapWidth(), base: base}
 	if width < 1 {
 		c.maxW = 1
 	}
@@ -2090,7 +2350,7 @@ func (c *inlineCtx) addPre(s string, st *Style, node *Node) {
 		if rw == 0 {
 			continue
 		}
-		if c.curW+rw > c.maxW && c.curW > 0 {
+		if c.curW+rw > c.lineMaxW() && c.curW > 0 {
 			c.flush(false)
 		}
 		c.appendRune(r, st, node)
@@ -2127,7 +2387,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 			spaceStyle = st
 		}
 		if c.curW > 0 {
-			if !nowrap && c.curW+spaceW+width > c.maxW {
+			if !nowrap && c.curW+spaceW+width > c.lineMaxW() {
 				c.flush(false)
 			} else {
 				c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
@@ -2137,13 +2397,13 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		c.space = false
 		c.spaceStyle, c.spaceNode = nil, nil
 	}
-	if width > c.maxW && !nowrap {
+	if width > c.lineMaxW() && !nowrap {
 		for _, r := range w {
 			rw := c.charW(r, st)
 			if rw == 0 {
 				continue
 			}
-			if c.curW+rw > c.maxW && c.curW > 0 {
+			if c.curW+rw > c.lineMaxW() && c.curW > 0 {
 				c.flush(false)
 			}
 			c.appendRune(r, st, node)
@@ -2151,7 +2411,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		}
 		return
 	}
-	if !nowrap && c.curW > 0 && c.curW+width > c.maxW {
+	if !nowrap && c.curW > 0 && c.curW+width > c.lineMaxW() {
 		c.flush(false)
 	}
 	c.items = append(c.items, inlineItem{kind: itemWord, text: w, style: st, node: node, w: width})
@@ -2162,8 +2422,9 @@ func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
 	if label == "" {
 		return
 	}
-	if w := stringWidth(label); w > c.maxW && c.maxW > 0 {
-		label = truncateWidth(label, c.maxW)
+	maxW := c.lineMaxW()
+	if w := stringWidth(label); w > maxW && maxW > 0 {
+		label = truncateWidth(label, maxW)
 	}
 	w := stringWidth(label)
 	if w < 1 {
@@ -2190,8 +2451,9 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 	if label == "" {
 		return
 	}
-	if w := stringWidth(label); w > c.maxW && c.maxW > 0 {
-		label = truncateWidth(label, c.maxW)
+	maxW := c.lineMaxW()
+	if w := stringWidth(label); w > maxW && maxW > 0 {
+		label = truncateWidth(label, maxW)
 	}
 	w := stringWidth(label)
 	if w < 1 {
@@ -2204,12 +2466,12 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		target := 0
 		switch {
 		case st.FlexGrow > 0:
-			target = c.maxW
+			target = maxW
 		case st.Width.Set && !st.Width.IsAuto():
-			target = st.Width.resolveH(c.maxW, st.FontSize)
+			target = st.Width.resolveH(maxW, st.FontSize)
 		}
 		if target > w {
-			w = minInt(target, c.maxW)
+			w = minInt(target, maxW)
 			if strings.HasSuffix(label, "]") {
 				pad := w - stringWidth(label)
 				label = label[:len(label)-1] + strings.Repeat(" ", pad) + "]"
@@ -2899,12 +3161,13 @@ func visibleText(n *Node) string {
 }
 
 func (c *inlineCtx) addImage(n *Node, st *Style) {
+	maxW := c.lineMaxW()
 	if n.Img == nil {
 		alt := n.Attr("alt")
 		if alt == "" {
 			// An explicitly sized broken image gets a small placeholder;
 			// 1-cell decorative images (tracking pixels) stay invisible.
-			if w, h := imageSize(n, st, c.maxW, c.imageCapW); w >= 2 || h >= 2 {
+			if w, h := imageSize(n, st, maxW, c.imageCapW); w >= 2 || h >= 2 {
 				c.addLabel("░", st, n)
 			}
 			return
@@ -2912,7 +3175,7 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 		c.addLabel("[image: "+alt+"]", st, n)
 		return
 	}
-	w, h := imageSize(n, st, c.maxW, c.imageCapW)
+	w, h := imageSize(n, st, maxW, c.imageCapW)
 	w2, h2 := w, h
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: w, h: h, style: st, node: n,
@@ -2936,7 +3199,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 		if spaceStyle == nil {
 			spaceStyle = it.style
 		}
-		if !nowrap && c.curW+spaceW+it.w > c.maxW {
+		if !nowrap && c.curW+spaceW+it.w > c.lineMaxW() {
 			c.flush(false)
 		} else {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
@@ -2945,7 +3208,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	}
 	c.space = false
 	c.spaceStyle, c.spaceNode = nil, nil
-	if !nowrap && c.curW > 0 && c.curW+it.w > c.maxW {
+	if !nowrap && c.curW > 0 && c.curW+it.w > c.lineMaxW() {
 		c.flush(false)
 	}
 	c.items = append(c.items, it)
@@ -2990,18 +3253,19 @@ func (c *inlineCtx) flush(last bool) {
 			lineH = h
 		}
 	}
+	bandX, bandW := c.lineBounds()
 	shift := 0
 	switch c.base.TextAlign {
 	case "center":
-		shift = (c.maxW - c.curW) / 2
+		shift = (bandW - c.curW) / 2
 	case "right":
-		shift = c.maxW - c.curW
+		shift = bandW - c.curW
 	}
 	if shift < 0 {
 		shift = 0
 	}
 	perSpace, remainder := 0, 0
-	if c.base.TextAlign == "justify" && !last && c.curW < c.maxW {
+	if c.base.TextAlign == "justify" && !last && c.curW < bandW {
 		spaces := 0
 		for i := range c.items {
 			if c.items[i].kind == itemSpace && c.items[i].w > 0 {
@@ -3009,7 +3273,7 @@ func (c *inlineCtx) flush(last bool) {
 			}
 		}
 		if spaces > 0 {
-			extra := c.maxW - c.curW
+			extra := bandW - c.curW
 			perSpace = extra / spaces
 			remainder = extra % spaces
 		}
@@ -3033,7 +3297,7 @@ func (c *inlineCtx) flush(last bool) {
 					spaces = strings.Repeat(" ", maxInt(1, cellW/s))
 				}
 				c.l.frags = append(c.l.frags, Frag{
-					Kind: fragText, X: c.x + shift + pos, Y: yy, W: cellW, H: runH,
+					Kind: fragText, X: bandX + shift + pos, Y: yy, W: cellW, H: runH,
 					Text: spaces, Style: it.style, Node: it.node,
 				})
 				pos += cellW
@@ -3044,13 +3308,13 @@ func (c *inlineCtx) flush(last bool) {
 			runH := c.l.lineH(it.style)
 			yy := inlineY(it.style, c.y, lineH, runH)
 			c.l.frags = append(c.l.frags, Frag{
-				Kind: fragText, X: c.x + shift + pos, Y: yy, W: it.w, H: runH,
+				Kind: fragText, X: bandX + shift + pos, Y: yy, W: it.w, H: runH,
 				Text: it.text, Style: it.style, Node: it.node,
 			})
 			pos += it.w
 		case itemAtomic:
 			yy := inlineY(it.style, c.y, lineH, it.h)
-			it.paint(c.x+shift+pos, yy)
+			it.paint(bandX+shift+pos, yy)
 			pos += it.w
 		}
 	}

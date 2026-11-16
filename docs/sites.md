@@ -21,8 +21,8 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   elements and CSS-in-JS.
 - Sites that require a browser check, CAPTCHA, unusual TLS or a specific
   certificate.
-- Complex grid/flex layouts, sticky positioning, z-index stacking, floats,
-  animations and generated content.
+- Complex grid/flex layouts, sticky positioning, z-index stacking, full float
+  behavior, animations and generated content.
 - Visual results from canvas, WebGL, video and WebAudio.
 - Multipart/file-upload forms.
 

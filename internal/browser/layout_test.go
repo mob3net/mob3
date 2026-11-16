@@ -1563,6 +1563,134 @@ func TestViewportUnits(t *testing.T) {
 	_ = ly
 }
 
+func TestOverflowClippingStopsSpill(t *testing.T) {
+	ly := build(`<html><body>
+<div id="box" style="max-height:2em;overflow:hidden">
+  <div>one</div><div>two</div><div>three</div><div>four</div>
+</div>
+<p id="after">after</p></body></html>`, 40)
+	seen := map[string]Frag{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			if s := strings.TrimSpace(f.Text); s != "" {
+				seen[s] = f
+			}
+		}
+	}
+	if _, ok := seen["three"]; ok {
+		t.Fatal("overflowing line three was not clipped")
+	}
+	if _, ok := seen["four"]; ok {
+		t.Fatal("overflowing line four was not clipped")
+	}
+	two, ok := seen["two"]
+	if !ok {
+		t.Fatal("visible line two missing")
+	}
+	after, ok := seen["after"]
+	if !ok {
+		t.Fatal("content after the clipped box missing")
+	}
+	if after.Y <= two.Y {
+		t.Fatalf("content after the clipped box overlaps it: two y=%d after y=%d", two.Y, after.Y)
+	}
+}
+
+func TestOverflowClipsHorizontalRun(t *testing.T) {
+	ly := build(`<html><body><div style="width:2em;overflow:hidden;white-space:nowrap">abcdefgh</div></body></html>`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "abcdefgh") {
+			t.Fatalf("nowrap run was not clipped: %+v", f)
+		}
+	}
+}
+
+func fragOwnerID(f Frag) string {
+	for n := f.Node; n != nil; n = n.Parent {
+		if id := n.Attr("id"); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+func TestFloatLeftWrapsText(t *testing.T) {
+	ly := build(`<html><body>
+<div id="f" style="float:left;width:10em;height:3em;background:#eee">F</div>
+<p id="p">one two three four five six seven eight nine ten eleven twelve thirteen fourteen</p>
+</body></html>`, 40)
+	var narrowed, full bool
+	for _, f := range ly.Frags {
+		if f.Kind != fragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
+			continue
+		}
+		if f.Y < 4 {
+			if f.X < 21 {
+				t.Fatalf("line beside the float starts inside it: x=%d %q", f.X, f.Text)
+			}
+			narrowed = true
+		} else if f.X <= 1 {
+			full = true
+		}
+	}
+	if !narrowed || !full {
+		t.Fatalf("text did not wrap beside and below the float: narrowed=%v full=%v", narrowed, full)
+	}
+}
+
+func TestFloatRightNarrowsLines(t *testing.T) {
+	ly := build(`<html><body>
+<div id="f" style="float:right;width:10em;height:3em">F</div>
+<p id="p">one two three four five six seven eight nine ten eleven twelve thirteen fourteen</p>
+</body></html>`, 40)
+	found := false
+	for _, f := range ly.Frags {
+		if f.Kind != fragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
+			continue
+		}
+		if f.Y < 4 {
+			if f.X+f.W > 19 {
+				t.Fatalf("line beside the right float overlaps it: x=%d w=%d %q", f.X, f.W, f.Text)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no text lines were laid out beside the right float")
+	}
+}
+
+func TestClearMovesBelowFloat(t *testing.T) {
+	ly := build(`<html><body>
+<div style="float:left;width:5em;height:3em">F</div>
+<p id="clear" style="clear:left">after</p>
+</body></html>`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && fragOwnerID(f) == "clear" {
+			if f.X > 1 || f.Y < 4 {
+				t.Fatalf("cleared block did not move below the float: x=%d y=%d %q", f.X, f.Y, f.Text)
+			}
+			return
+		}
+	}
+	t.Fatal("cleared block text missing")
+}
+
+func TestFloatContainedByOverflow(t *testing.T) {
+	ly := build(`<html><body>
+<div style="overflow:hidden"><div style="float:left;width:5em;height:2em">F</div></div>
+<p id="after">after</p></body></html>`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && fragOwnerID(f) == "after" {
+			if f.X > 1 {
+				t.Fatalf("float leaked out of its formatting context: x=%d", f.X)
+			}
+			return
+		}
+	}
+	t.Fatal("text after the float container missing")
+}
+
 func TestFlexOrderAndJustify(t *testing.T) {
 	doc := ParseHTML(`<html><body>
 <div style="display:flex">

@@ -85,8 +85,10 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   the `-search` fallback.
 - Common CSS: selectors, cascade and inheritance, box model (including
   `box-sizing` and min/max sizes), margins, borders, backgrounds, text styling,
-  lists, tables, CSS custom properties, viewport-width `@media` queries, viewport units, and basic flex rows with
-  alignment and ordering.
+  lists, tables, CSS custom properties, viewport-width `@media` queries,
+  viewport units, simple `calc()`, basic flex rows with alignment and ordering,
+  left/right floats with line wrapping and `clear`, and `overflow` clipping
+  for bounded panels.
 - PNG/JPEG/GIF/WebP/BMP/SVG/data-URI images when enabled with `-graphics` (`auto`,
   `kitty`, `iterm`, or `blocks` for half-block art); press `I` to cycle full
   graphics, blocks and none. Images are off by default for speed.
@@ -156,10 +158,11 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes,
   Shadow DOM, custom elements, real observers or full History API.
 - Basic CSS grid rows are supported, along with `position:relative`,
-  `position:absolute` and `position:fixed`; floats, `position:sticky`,
-  `z-index`, CSS
-  variables, animations, transitions, generated content, `@import` and
-  background images are unsupported or approximated as block flow.
+  `position:absolute` and `position:fixed`, left/right floats with line
+  wrapping and `clear`, and `overflow` clipping for bounded boxes.
+  `position:sticky`, `z-index`, CSS variables, animations, transitions,
+  generated content, `@import` and background images are unsupported or
+  approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. Animated WebP is not supported.
 - Oversized images are capped at 40% of the viewport width and 16 rows,

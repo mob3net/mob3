@@ -179,8 +179,25 @@ Standard Go layout:
 - **Scope:** ambitious CSS subset rather than text-only or solid-basics — own
   CSS parser, cascade, specificity, inheritance, selectors, box model, tables,
   lists, backgrounds, borders and text styling. Basic row-direction flexbox and
-  basic CSS grid are supported; floating layout is approximated as inline items
-  without text wrapping, and `position:sticky` falls back to block flow.
+  basic CSS grid are supported; left/right floats are placed at the current
+  row, shrink to fit, shorten following line boxes and honour `clear`, and
+  `position:sticky` falls back to block flow.
+- **Floats:** `float:left`/`right` (and the `inline-start`/`inline-end`
+  aliases) take the box out of normal flow. Floats are placed at the current
+  flow row, shrink to fit their content or declared width, and successive
+  inline lines wrap around their vertical range. Lines resume the full width
+  once they pass the float's bottom, and the containing flow reserves the
+  float's height when the text ends early. `clear:left|right|both` moves
+  following blocks below matching floats. Floats are scoped to the block flow
+  that establishes them; flex and grid items ignore
+  `float`, as in CSS. A float nested inside an inline wrapper is still laid
+  out as an inline box.
+- **Overflow clipping:** a box with `overflow:hidden`, `clip`, `auto` or
+  `scroll` (including the `hidden auto` shorthand) clips descendant fragments
+  to its content box. Text and images that only partially fit are dropped;
+  fills and link boxes are trimmed. Absolutely positioned descendants are
+  laid out in the later pass and are not clipped. This keeps scrollable panels
+  with `max-height` from painting over following content.
 - **Positioning:** `position:relative` and `position:absolute` are supported.
   Absolute boxes are taken out of flow and resolved against the nearest
   positioned ancestor's padding box, falling back to the page for root-level
@@ -1171,8 +1188,11 @@ Standard Go layout:
 - Flexbox supports basic rows, `flex-wrap`, `order`, `justify-content` and
   basic `align-items`; grid supports
   basic row-major tracks plus named-area column placement, but not full row
-  spans. Floats are approximated as inline items without text wrapping;
-  `position:sticky` falls back to block flow. `display:contents` is
+  spans. Left/right floats shrink to fit, wrap following lines and honour
+  `clear`; floats are scoped to their block flow, lines that cross
+  a float's bottom resume the full width, and floats inside inline wrappers
+  remain inline. `position:sticky` falls back to block
+  flow. `display:contents` is
   expanded so its children participate directly in the parent's flow, flex row
   or grid. Absolute, relative and
   fixed positioning work, but `z-index` stacking is ignored and
@@ -1291,7 +1311,9 @@ Known unsupported families (do not present these as available):
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,
-  full float layout, `position:sticky`, `z-index` stacking, animations,
+  floats inside inline wrappers and across nested blocks, float edge cases
+  that cross nested formatting contexts, `position:sticky`, `z-index`
+  stacking, animations,
   transitions, non-empty generated content, `@import`, background images, full
   flexbox.
 
@@ -1392,9 +1414,9 @@ before network/JS. Compare `-layout-budget none` with the default run.
   is not necessarily a layout bug; check whether enabling images removes it.
 - Hidden inherited from `html`/`body` is an anti-FOUC pattern and is ignored;
   an explicitly hidden box is still hidden.
-- `display:contents` and floats are approximations: check the computed styles
-  and the layout path (`flow`, `flexRow`, `grid`, `table`) before changing the
-  cascade.
+- `display:contents` and float scoping are approximations: check the computed
+  styles and the layout path (`flow`, `flexRow`, `grid`, `table`) before
+  changing the cascade.
 - Do not name specific sites in tests, comments, docs or commit messages.
 
 ### Validate
@@ -1430,9 +1452,6 @@ engine work only; do not add site-specific exceptions.
 
 ### P1 — Overflow, stacking and hidden content
 
-- **`overflow:hidden` / `clip` children.** Clip descendant fragments to the
-  clipping box, not just hide fully clipped elements. Overlays, hero captions,
-  card text and ads currently spill into adjacent columns.
 - **`z-index` stacking.** Implement basic stacking for positioned boxes so
   overlays do not paint under/over unrelated content by tree order alone.
 - **Sticky and fixed chrome.** `position:sticky` still falls back to block
@@ -1449,10 +1468,9 @@ engine work only; do not add site-specific exceptions.
   character per line. Respect `min-width:0`, automatic minimum sizes,
   `flex-shrink`, `overflow` and wrapping so text never becomes a vertical
   column.
-- **Real floats.** The current approximation makes floated items inline
-  without text wrapping. Either implement simple left/right floats
-  (shrink-to-fit, block placement, line wrapping around them) or improve the
-  approximation for floated navigation rows that should not wrap.
+- **Float edge cases.** Floats crossing nested block flows and
+  block background/border interplay are approximated; floats inside inline
+  wrappers are laid out inline. Add coverage before changing the float pass.
 - **Flex alignment edge cases.** `align-items:stretch` and `align-self` are
   still approximate; verify icon/label rows and cards with mixed heights.
 

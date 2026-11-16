@@ -152,6 +152,7 @@ type Style struct {
 	Overflow       string
 	Position       string
 	Float          string
+	Clear          string
 	Top            Length
 	Right          Length
 	Bottom         Length
@@ -1389,7 +1390,9 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.Hidden = true
 		}
 	case "overflow", "overflow-x", "overflow-y":
-		if lower == "hidden" || lower == "clip" {
+		// A shorthand such as "hidden auto" still clips both axes in a
+		// terminal; only a fully visible value leaves descendants unclipped.
+		if lower != "" && lower != "visible" {
 			st.Overflow = "hidden"
 		}
 	case "line-clamp", "-webkit-line-clamp":
@@ -1402,6 +1405,13 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.Float = lower
 		default:
 			st.Float = ""
+		}
+	case "clear":
+		switch lower {
+		case "left", "right", "both", "inline-start", "inline-end":
+			st.Clear = lower
+		default:
+			st.Clear = ""
 		}
 	case "position":
 		st.Position = lower

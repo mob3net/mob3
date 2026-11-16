@@ -260,6 +260,21 @@ func TestStylesheetBudgets(t *testing.T) {
 	}
 }
 
+func TestMediaCalcWidthQueries(t *testing.T) {
+	if !mediaMatches("(max-width:calc(1680px - 1px))", 960, false) {
+		t.Fatal("max-width calc did not match a narrower viewport")
+	}
+	if mediaMatches("(max-width:calc(1120px - 1px))", 1200, false) {
+		t.Fatal("max-width calc matched a wider viewport")
+	}
+	if !mediaMatches("(min-width:calc(640px - 1px))", 960, false) {
+		t.Fatal("min-width calc did not match a wider viewport")
+	}
+	if mediaMatches("(min-width:calc(640px - 1px))", 320, false) {
+		t.Fatal("min-width calc matched a narrower viewport")
+	}
+}
+
 func TestMediaQueries(t *testing.T) {
 	rules := ParseStylesheet(`
 		@media print { p { color: red } }
