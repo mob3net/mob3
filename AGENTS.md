@@ -242,9 +242,11 @@ Standard Go layout:
   200k; the default), `high` (5s, 1M, 1M) and `none` (disables all three,
   which can freeze the UI on hostile pages). A zero limit disables that
   individual check.
-- **Flexbox row:** `display:flex`/`inline-flex` with row direction lays children
+- **Flexbox row:** `display:flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
-  shrink-to-fit items and `gap`/`column-gap`. Items keep at least their
+  shrink-to-fit items and `gap`/`column-gap`. `inline-flex` and `inline-grid`
+  are treated as atomic inline-block boxes so buttons and badges stay inside
+  the surrounding line instead of becoming full-width rows. Items keep at least their
   min-content width instead of shrinking into one-character columns.
   `flex-wrap:wrap` starts a new row when the next item's base width would
   overflow; each wrapped row is sized independently and wrapped rows stack

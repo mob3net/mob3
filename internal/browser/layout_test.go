@@ -1518,6 +1518,30 @@ func TestInlinePaddingSeparatesLinks(t *testing.T) {
 	}
 }
 
+func TestInlineFlexStaysInLine(t *testing.T) {
+	ly := build(`<div><span style="display:inline-flex;padding:0 4px">Get Started</span>
+<span style="display:inline-flex;padding:0 4px">Documentation</span></div>`, 60)
+	var first, second *Frag
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText {
+			continue
+		}
+		switch strings.TrimSpace(f.Text) {
+		case "Get":
+			first = f
+		case "Documentation":
+			second = f
+		}
+	}
+	if first == nil || second == nil {
+		t.Fatal("button text missing")
+	}
+	if first.Y != second.Y {
+		t.Fatalf("inline-flex buttons stacked: y=%d and y=%d", first.Y, second.Y)
+	}
+}
+
 func TestLeadingWhitespaceDoesNotWrapPaddedLinks(t *testing.T) {
 	ly := build(`<div style="width:10em"><a href="#a" style="padding-left:1em">Products</a>
 <a href="#b" style="padding-left:1em">Contact</a></div>`, 40)

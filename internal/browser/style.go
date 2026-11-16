@@ -966,10 +966,13 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 				st.Display = "block"
 			case "grid":
 				st.Display = "grid"
-			case "flex", "inline-flex":
+			case "flex":
 				st.Display = "flex"
-			case "inline-grid":
-				st.Display = "inline"
+			case "inline-flex", "inline-grid":
+				// Inline-level flex/grid boxes stay in the surrounding line;
+				// treating them as atomic inline-block boxes keeps their
+				// padding and prevents buttons from becoming full-width rows.
+				st.Display = "inline-block"
 			case "contents":
 				st.Display = "contents"
 			case "inline-table":
