@@ -3754,6 +3754,7 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 }
 
 func TestLayoutTextOverlapDetection(t *testing.T) {
+	big := &Style{FontSize: 32}
 	ly := &Layout{Frags: []Frag{
 		{Kind: fragText, Text: "one", X: 0, Y: 0, W: 5, H: 1},
 		{Kind: fragText, Text: "two", X: 5, Y: 0, W: 5, H: 1},
@@ -3761,9 +3762,15 @@ func TestLayoutTextOverlapDetection(t *testing.T) {
 	if layoutTextOverlaps(ly) {
 		t.Fatal("adjacent text runs reported as overlapping")
 	}
-	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "bad", X: 3, Y: 0, W: 5, H: 2})
+	// Ordinary normal-size overlays do not disable scaled text.
+	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "bad", X: 3, Y: 0, W: 5, H: 1})
+	if layoutTextOverlaps(ly) {
+		t.Fatal("normal-size overlay disabled scaled text")
+	}
+	// A scaled run sharing cells with another run does.
+	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "BIG", X: 2, Y: 0, W: 6, H: 1, Style: big})
 	if !layoutTextOverlaps(ly) {
-		t.Fatal("overlapping text runs were not detected")
+		t.Fatal("overlapping scaled text was not detected")
 	}
 }
 

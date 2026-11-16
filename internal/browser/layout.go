@@ -2112,22 +2112,26 @@ func (l *layouter) clipFragments(start int, r Rect) {
 	l.frags = out
 }
 
-// layoutTextOverlaps reports whether two non-blank text runs occupy the same
-// cell on any row. Scaled kitty text can expose this on dense multi-column
-// layouts; the caller then falls back to normal-size text for the page.
+// layoutTextOverlaps reports whether a scaled (kitty large-type) run shares
+// cells with any other text run. Normal-size overlays are ignored; only scaled
+// text spilling into neighbouring columns indicates a garbled layout.
 func layoutTextOverlaps(ly *Layout) bool {
 	if ly == nil {
 		return false
 	}
-	type span struct{ x, end int }
+	type span struct {
+		x, end int
+		scaled bool
+	}
 	rows := make(map[int][]span)
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
 		if f.Kind != fragText || f.W <= 0 || f.H <= 0 || strings.TrimSpace(f.Text) == "" {
 			continue
 		}
+		scaled := f.Style != nil && f.Style.TextScale() > 1
 		for y := f.Y; y < f.Y+f.H; y++ {
-			rows[y] = append(rows[y], span{x: f.X, end: f.X + f.W})
+			rows[y] = append(rows[y], span{x: f.X, end: f.X + f.W, scaled: scaled})
 		}
 	}
 	for _, spans := range rows {
@@ -2138,7 +2142,7 @@ func layoutTextOverlaps(ly *Layout) bool {
 			return spans[i].end < spans[j].end
 		})
 		for i := 1; i < len(spans); i++ {
-			if spans[i].x < spans[i-1].end {
+			if spans[i].x < spans[i-1].end && (spans[i].scaled || spans[i-1].scaled) {
 				return true
 			}
 		}
