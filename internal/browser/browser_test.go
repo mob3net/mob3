@@ -836,6 +836,82 @@ func TestFixedWidthInputPatchesFragments(t *testing.T) {
 	}
 }
 
+func TestTabReachesAllFormControls(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+<a href="#x">Link</a>
+<form action="/go">
+<input type="checkbox" name="check">
+<input type="radio" name="pick" value="one" checked>
+<input type="radio" name="pick" value="two">
+<select name="single"><option>One</option><option>Two</option></select>
+<select multiple name="multi"><option selected>Alpha</option><option>Beta</option></select>
+<button type="button" name="btn">Press</button>
+</form></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	check := doc.FindFirst("input")
+	radios := doc.FindAll(func(n *Node) bool { return n.Tag == "input" && n.Attr("type") == "radio" })
+	single := doc.FindFirst("select")
+	multi := doc.FindAll(func(n *Node) bool { return n.Tag == "select" && n.HasAttr("multiple") })[0]
+	btn := doc.FindFirst("button")
+	if check == nil || len(radios) != 2 || single == nil || multi == nil || btn == nil {
+		t.Fatal("test form is incomplete")
+	}
+
+	b.HandleKey("tab")
+	if b.focus != 0 {
+		t.Fatalf("first tab focused link %d", b.focus)
+	}
+	b.HandleKey("tab")
+	if b.controlFocus != check {
+		t.Fatalf("tab did not reach checkbox: %v", b.controlFocus)
+	}
+	b.HandleKey(" ")
+	if !check.HasAttr("checked") {
+		t.Fatal("space did not toggle the checkbox")
+	}
+	b.HandleKey("tab")
+	if b.controlFocus != radios[0] {
+		t.Fatalf("tab did not reach radio group: %v", b.controlFocus)
+	}
+	b.HandleKey("right")
+	if !radios[1].HasAttr("checked") || b.controlFocus != radios[1] {
+		t.Fatal("right arrow did not move the radio selection")
+	}
+	b.HandleKey("tab")
+	if b.controlFocus != single {
+		t.Fatalf("tab from radio group reached %v", b.controlFocus)
+	}
+	b.HandleKey("right")
+	if !selectOptions(single)[1].HasAttr("selected") {
+		t.Fatal("right arrow did not change the single select")
+	}
+	b.HandleKey("tab")
+	if b.controlFocus != multi {
+		t.Fatalf("tab did not reach multi-select: %v", b.controlFocus)
+	}
+	b.HandleKey("down")
+	beta := selectOptions(multi)[1]
+	if b.controlOption != beta {
+		t.Fatalf("down did not move the active option: %v", b.controlOption)
+	}
+	b.HandleKey(" ")
+	if !beta.HasAttr("selected") {
+		t.Fatal("space did not toggle the multi-select option")
+	}
+	b.HandleKey("tab")
+	if b.controlFocus != btn {
+		t.Fatalf("tab did not reach button: %v", b.controlFocus)
+	}
+	b.HandleKey("esc")
+	if b.controlFocus != nil {
+		t.Fatal("escape did not clear control focus")
+	}
+}
+
 func TestInputTabMovesFocus(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go">
 <input name="a" value="one">
@@ -863,8 +939,12 @@ func TestInputTabMovesFocus(t *testing.T) {
 		t.Fatalf("tab from b landed on %v", b.inputFocus)
 	}
 	b.HandleKey("tab")
+	if b.inputFocus != nil || b.controlFocus == nil || b.controlFocus.Attr("name") != "readonly" {
+		t.Fatalf("tab from textarea landed on input=%v control=%v", b.inputFocus, b.controlFocus)
+	}
+	b.HandleKey("tab")
 	if b.inputFocus == nil || b.inputFocus.Attr("name") != "d" {
-		t.Fatalf("tab from textarea landed on %v", b.inputFocus)
+		t.Fatalf("tab from readonly landed on %v", b.inputFocus)
 	}
 	b.HandleKey("tab")
 	if b.inputFocus == nil || b.inputFocus.Attr("name") != "a" {

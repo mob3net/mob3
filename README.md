@@ -132,7 +132,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   a bookmarks button when `-bookmarks` is supplied, a config gear and a centered
   page title.
 - Keyboard and mouse navigation, including the kitty keyboard protocol in
-  kitty, WezTerm, Ghostty and foot, `/` incremental find (including multi-word
+  kitty, WezTerm, Ghostty and foot, a standard Tab order through links and form
+  controls (Space/Enter activate, arrows change selects, radios and ranges),
+  `/` incremental find (including multi-word
   phrases) with highlighted matches
   (also in the console HTML tab), a draggable page scrollbar, history (including
   a top-right History page listing the session's links, with `#` anchors as

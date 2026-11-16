@@ -120,6 +120,8 @@ type Browser struct {
 	lastBuild   time.Duration
 
 	inputFocus    *Node
+	controlFocus  *Node
+	controlOption *Node
 	consoleOpen   bool
 	consoleScroll int
 	reqScroll     int
@@ -594,6 +596,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.rebuild()
 	b.scroll = 0
 	b.focus = -1
+	b.clearControlFocus()
 	b.status = b.pageLoadStatus(page, readerFailed)
 	if frag := res.u.Fragment; frag != "" {
 		b.scrollToAnchor(frag)
@@ -1201,24 +1204,413 @@ func (b *Browser) updateHover(x, y, top, bottom int) {
 	b.hover = idx
 }
 
-func (b *Browser) focusStep(delta int) {
-	if b.layout == nil || len(b.layout.Links) == 0 {
-		b.status = "No links on this page"
+// tabTarget is one stop in the standard Tab order: a link or a form control.
+type tabTarget struct {
+	link int
+	node *Node
+}
+
+type radioKey struct {
+	form *Node
+	name string
+}
+
+// tabTargets returns links and form controls in document order. Radio groups
+// take one stop at their first button; arrows move within the group.
+func (b *Browser) tabTargets() []tabTarget {
+	if b.page == nil || b.page.Root == nil || b.layout == nil {
+		return nil
+	}
+	linkByNode := make(map[*Node]int, len(b.layout.Links))
+	for i, li := range b.layout.Links {
+		if li.Node == nil {
+			continue
+		}
+		if _, ok := linkByNode[li.Node]; !ok {
+			linkByNode[li.Node] = i
+		}
+	}
+	var out []tabTarget
+	seenRadio := make(map[radioKey]bool)
+	b.page.Root.FindAll(func(n *Node) bool {
+		if link, ok := linkByNode[n]; ok {
+			out = append(out, tabTarget{link: link, node: n})
+			return false
+		}
+		if !isTabControl(n) {
+			return false
+		}
+		if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") && n.Tag == "input" {
+			name := n.Attr("name")
+			if name != "" {
+				key := radioKey{form: nearestForm(n), name: name}
+				if seenRadio[key] {
+					return false
+				}
+				seenRadio[key] = true
+			}
+		}
+		out = append(out, tabTarget{link: -1, node: n})
+		return false
+	})
+	// A radio group's Tab stop is its checked button, or the first one.
+	for i := range out {
+		n := out[i].node
+		if n == nil || n.Tag != "input" || !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") {
+			continue
+		}
+		for _, r := range radioGroupNodes(n) {
+			if r.HasAttr("checked") {
+				out[i].node = r
+				break
+			}
+		}
+	}
+	return out
+}
+
+// isTabControl reports whether n participates in the standard Tab order.
+func isTabControl(n *Node) bool {
+	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
+		return false
+	}
+	for p := n; p != nil; p = p.Parent {
+		if p.Type != ElementNode || p.Style == nil {
+			continue
+		}
+		if p.Style.Display == "none" || p.Style.Hidden {
+			return false
+		}
+	}
+	switch n.Tag {
+	case "input":
+		return !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "hidden")
+	case "select", "textarea", "button":
+		return true
+	}
+	return false
+}
+
+func (b *Browser) currentTabNode() *Node {
+	if b.inputFocus != nil {
+		return b.inputFocus
+	}
+	if b.controlFocus != nil {
+		return b.controlFocus
+	}
+	if b.layout != nil && b.focus >= 0 && b.focus < len(b.layout.Links) {
+		return b.layout.Links[b.focus].Node
+	}
+	return nil
+}
+
+// tabStep moves through the standard Tab order, wrapping at the ends.
+func (b *Browser) tabStep(delta int) {
+	targets := b.tabTargets()
+	if len(targets) == 0 {
+		b.clearInputFocus()
+		b.clearControlFocus()
+		b.focus = -1
+		b.status = "No focusable elements"
 		return
 	}
-	n := len(b.layout.Links)
-	if b.focus < 0 {
-		if delta > 0 {
-			b.focus = 0
-		} else {
-			b.focus = n - 1
+	cur := b.currentTabNode()
+	idx := -1
+	for i, t := range targets {
+		if t.node == cur {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 && cur != nil {
+		// Arrow movement can leave focus on a later radio in a group; Tab
+		// continues from the group's single stop.
+		if cur.Tag == "input" && strings.EqualFold(strings.TrimSpace(cur.Attr("type")), "radio") && cur.Attr("name") != "" {
+			key := radioKey{form: nearestForm(cur), name: cur.Attr("name")}
+			for i, t := range targets {
+				n := t.node
+				if n != nil && n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") &&
+					nearestForm(n) == key.form && n.Attr("name") == key.name {
+					idx = i
+					break
+				}
+			}
+		}
+	}
+	next := 0
+	if idx < 0 {
+		if delta < 0 {
+			next = len(targets) - 1
 		}
 	} else {
-		b.focus = (b.focus + delta + n) % n
+		next = (idx + delta + len(targets)) % len(targets)
 	}
-	b.ensureFocusVisible()
-	li := b.layout.Links[b.focus]
-	b.status = fmt.Sprintf("%d/%d  %s", b.focus+1, n, b.resolveHref(li.Href))
+	b.setTabFocus(targets[next], next+1, len(targets))
+}
+
+// setTabFocus makes one Tab target current: a link is focused visually, a text
+// field starts editing, and other controls get a highlight and key handling.
+func (b *Browser) setTabFocus(t tabTarget, index, total int) {
+	if t.link < 0 && isTextInput(t.node) {
+		b.focus = -1
+		b.setInputFocus(t.node)
+		b.ensureInputVisible(t.node)
+		return
+	}
+	if b.inputFocus != nil {
+		// Leave the field through the normal blur path so change handlers run.
+		b.setInputFocus(nil)
+	} else {
+		b.clearControlFocus()
+	}
+	if t.link >= 0 {
+		b.focus = t.link
+		b.ensureFocusVisible()
+		li := b.layout.Links[t.link]
+		b.status = fmt.Sprintf("%d/%d  %s", index, total, b.resolveHref(li.Href))
+		return
+	}
+	b.focus = -1
+	b.controlFocus = t.node
+	if t.node.Tag == "select" && t.node.HasAttr("multiple") {
+		b.controlOption = firstSelectOption(t.node)
+	}
+	if b.controlOption != nil {
+		b.ensureInputVisible(b.controlOption)
+	} else {
+		b.ensureInputVisible(b.controlFocus)
+	}
+	b.status = tabControlStatus(t.node)
+}
+
+func tabControlStatus(n *Node) string {
+	if n == nil {
+		return ""
+	}
+	if n.Tag == "input" {
+		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
+		case "checkbox":
+			return "Checkbox: Space toggles · Tab moves · Esc clears"
+		case "radio":
+			return "Radio: arrows choose · Space selects"
+		case "range":
+			return "Range: arrows adjust · Tab moves"
+		case "file":
+			return "File input (uploads unsupported)"
+		}
+	}
+	switch n.Tag {
+	case "select":
+		if n.HasAttr("multiple") {
+			return "Multi-select: arrows move · Space toggles"
+		}
+		return "Select: arrows change · Enter opens"
+	case "button":
+		return "Button: Enter activates"
+	}
+	return "Tab moves · Esc clears"
+}
+
+func (b *Browser) clearControlFocus() {
+	b.controlFocus = nil
+	b.controlOption = nil
+}
+
+// paintControlFocus highlights the focused non-text control, or the active
+// option inside a multi-select list box.
+func (b *Browser) paintControlFocus(g *Grid, top, bottom int) {
+	if b.layout == nil || b.controlFocus == nil {
+		return
+	}
+	target := b.controlFocus
+	if b.controlOption != nil {
+		target = b.controlOption
+	}
+	bg := RGB(0xff, 0xd7, 0x00)
+	fg := RGB(0x1f, 0x23, 0x28)
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Node != target || f.Kind != fragText && f.Kind != fragImage {
+			continue
+		}
+		y := f.Y - b.scroll + top
+		if y < top || y >= bottom {
+			continue
+		}
+		g.Highlight(f.X, y, f.W, 1, bg, fg)
+	}
+}
+
+// handleControlKey processes keys while a non-text form control is focused.
+func (b *Browser) handleControlKey(k string) bool {
+	switch k {
+	case "esc", "ctrl-c":
+		b.clearControlFocus()
+		if k == "ctrl-c" {
+			return b.HandleKey(k)
+		}
+		b.status = exitHint
+		return false
+	case "tab":
+		b.tabStep(1)
+		return false
+	case "backtab":
+		b.tabStep(-1)
+		return false
+	case "enter", " ", "space":
+		b.activateControlFocus()
+		return false
+	case "left", "up":
+		b.controlStep(-1)
+		return false
+	case "right", "down":
+		b.controlStep(1)
+		return false
+	}
+	b.clearControlFocus()
+	return b.HandleKey(k)
+}
+
+func (b *Browser) activateControlFocus() {
+	n := b.controlFocus
+	if n == nil {
+		return
+	}
+	top, bottom := b.viewport()
+	r, _ := b.visibleInputRect(n, top, bottom)
+	if n.Tag == "select" && n.HasAttr("multiple") && b.controlOption != nil {
+		b.toggleControl(b.controlOption)
+		return
+	}
+	b.activateHintControl(n, r)
+}
+
+func (b *Browser) controlStep(dir int) {
+	n := b.controlFocus
+	if n == nil {
+		return
+	}
+	if isRangeInput(n) {
+		b.adjustRange(n, float64(dir))
+		return
+	}
+	if n.Tag == "select" {
+		if n.HasAttr("multiple") {
+			b.stepMultiSelect(n, dir)
+		} else {
+			b.stepSingleSelect(n, dir)
+		}
+		return
+	}
+	if n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") {
+		b.stepRadio(n, dir)
+	}
+}
+
+func (b *Browser) stepRadio(n *Node, dir int) {
+	group := radioGroupNodes(n)
+	if len(group) == 0 {
+		return
+	}
+	idx := 0
+	for i, r := range group {
+		if r == n {
+			idx = i
+			break
+		}
+	}
+	next := group[(idx+dir+len(group))%len(group)]
+	b.controlFocus = next
+	b.toggleControl(next)
+	b.ensureInputVisible(next)
+	b.status = tabControlStatus(next)
+}
+
+func radioGroupNodes(n *Node) []*Node {
+	if n == nil || n.Tag != "input" || n.Attr("name") == "" {
+		return []*Node{n}
+	}
+	scope := nearestForm(n)
+	if scope == nil {
+		for scope = n; scope.Parent != nil; scope = scope.Parent {
+		}
+	}
+	name := n.Attr("name")
+	var out []*Node
+	scope.FindAll(func(x *Node) bool {
+		if x.Tag == "input" && strings.EqualFold(strings.TrimSpace(x.Attr("type")), "radio") &&
+			x.Attr("name") == name && !isDisabledControl(x) && x.Style != nil && x.Style.Display != "none" {
+			out = append(out, x)
+		}
+		return false
+	})
+	if len(out) == 0 {
+		return []*Node{n}
+	}
+	return out
+}
+
+func (b *Browser) stepMultiSelect(sel *Node, dir int) {
+	opts := selectOptions(sel)
+	if len(opts) == 0 {
+		return
+	}
+	idx := 0
+	for i, opt := range opts {
+		if opt == b.controlOption {
+			idx = i
+			break
+		}
+	}
+	for tries := 0; tries < len(opts); tries++ {
+		idx = (idx + dir + len(opts)) % len(opts)
+		if !isDisabledControl(opts[idx]) && opts[idx].Style != nil && opts[idx].Style.Display != "none" {
+			break
+		}
+	}
+	b.controlOption = opts[idx]
+	b.ensureInputVisible(b.controlOption)
+	b.status = tabControlStatus(sel)
+}
+
+func (b *Browser) stepSingleSelect(sel *Node, dir int) {
+	opts := selectOptions(sel)
+	if len(opts) == 0 {
+		return
+	}
+	idx := 0
+	for i, opt := range opts {
+		if opt.HasAttr("selected") {
+			idx = i
+			break
+		}
+	}
+	for tries := 0; tries < len(opts); tries++ {
+		idx = (idx + dir + len(opts)) % len(opts)
+		if !isDisabledControl(opts[idx]) {
+			break
+		}
+	}
+	for _, opt := range opts {
+		removeAttr(opt, "selected")
+	}
+	setAttr(opts[idx], "selected", "")
+	b.fireSelectChange(sel)
+}
+
+func firstSelectOption(sel *Node) *Node {
+	opts := selectOptions(sel)
+	for _, opt := range opts {
+		if opt.HasAttr("selected") && !isDisabledControl(opt) && opt.Style != nil && opt.Style.Display != "none" {
+			return opt
+		}
+	}
+	for _, opt := range opts {
+		if !isDisabledControl(opt) && opt.Style != nil && opt.Style.Display != "none" {
+			return opt
+		}
+	}
+	return nil
 }
 
 func (b *Browser) ensureFocusVisible() {
@@ -1653,6 +2045,7 @@ func (b *Browser) setInputFocus(n *Node) {
 	if b.inputFocus == n {
 		return
 	}
+	b.clearControlFocus()
 	if old := b.inputFocus; old != nil {
 		old.InputFocused = false
 		old.InputCursor = 0
@@ -1674,46 +2067,6 @@ func (b *Browser) setInputFocus(n *Node) {
 		b.status = ""
 	}
 	b.rebuild()
-}
-
-// focusNextInput moves focus to the next or previous visible text-like control
-// in document order, wrapping at the ends. It backs Tab and Shift-Tab while a
-// field is focused.
-func (b *Browser) focusNextInput(current *Node, delta int) {
-	if b.page == nil || b.page.Root == nil || current == nil {
-		return
-	}
-	controls := b.page.Root.FindAll(func(n *Node) bool {
-		if !isTextInput(n) || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
-			return false
-		}
-		return true
-	})
-	if len(controls) == 0 {
-		return
-	}
-	idx := -1
-	for i, n := range controls {
-		if n == current {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
-		next := controls[0]
-		if delta < 0 {
-			next = controls[len(controls)-1]
-		}
-		b.setInputFocus(next)
-		b.ensureInputVisible(next)
-		return
-	}
-	next := controls[(idx+delta+len(controls))%len(controls)]
-	if next == current {
-		return
-	}
-	b.setInputFocus(next)
-	b.ensureInputVisible(next)
 }
 
 // ensureInputVisible scrolls a focused control into the viewport.
@@ -2768,6 +3121,7 @@ func (b *Browser) liveNode(n *Node) bool {
 // clickContent follows a link under the pointer, or clears link focus.
 // JavaScript click handlers run first and may prevent navigation.
 func (b *Browser) clickContent(x, docY int) {
+	b.clearControlFocus()
 	if idx := b.linkAt(x, docY); idx >= 0 {
 		li := b.layout.Links[idx]
 		if b.js != nil && b.liveNode(li.Node) && b.js.dispatchClick(li.Node) {
@@ -3115,6 +3469,9 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.inputFocus != nil {
 		return b.handleInputKey(k)
 	}
+	if b.controlFocus != nil {
+		return b.handleControlKey(k)
+	}
 	if b.linkHints {
 		return b.handleLinkHintKey(k)
 	}
@@ -3152,9 +3509,9 @@ func (b *Browser) HandleKey(k string) bool {
 	case "G", "end":
 		b.scroll = b.maxScroll()
 	case "tab":
-		b.focusStep(1)
+		b.tabStep(1)
 	case "backtab":
-		b.focusStep(-1)
+		b.tabStep(-1)
 	case "enter":
 		b.followFocused()
 	case "h", "left":
@@ -3202,6 +3559,7 @@ func (b *Browser) HandleKey(k string) bool {
 			b.clearFind()
 		}
 		b.focus = -1
+		b.clearControlFocus()
 		b.clearSelection()
 		b.status = exitHint
 	case "!":
@@ -3329,10 +3687,10 @@ func (b *Browser) handleInputKey(k string) bool {
 		b.setInputValue(n, "")
 		return false
 	case "tab":
-		b.focusNextInput(n, 1)
+		b.tabStep(1)
 		return false
 	case "backtab":
-		b.focusNextInput(n, -1)
+		b.tabStep(-1)
 		return false
 	case "ctrl-c":
 		return true
@@ -3364,10 +3722,10 @@ func (b *Browser) handleRangeKey(n *Node, k string) bool {
 		b.submitInput()
 		return false
 	case "tab":
-		b.focusNextInput(n, 1)
+		b.tabStep(1)
 		return false
 	case "backtab":
-		b.focusNextInput(n, -1)
+		b.tabStep(-1)
 		return false
 	case "ctrl-c":
 		return true
@@ -3753,6 +4111,7 @@ func (b *Browser) draw() {
 		b.layout.SetFixedScroll(b.scroll)
 	}
 	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
+	b.paintControlFocus(g, top, bottom)
 	b.paintInputCursor(g, top, bottom)
 	b.paintSelection(g, top, bottom)
 	b.paintFindPage(g, top, bottom)

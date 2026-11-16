@@ -517,7 +517,8 @@ Standard Go layout:
   take priority over browser-style alternatives. `f` follows links; `Tab` and
   `Enter` remain fallbacks.
   `j/k` line scroll, `Space/b`
-  page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab` links,
+  page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
+  focusable elements (links and controls; `f` hints are the quick path),
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `I` cycle graphics modes, `X` hide/show
   fixed elements, `o` URL prompt, `/` find in page,
@@ -690,8 +691,13 @@ Standard Go layout:
   stays cheap. A text-like control with an explicit CSS width pads its widget
   to that width; in a flex row it fills the width allocated by flex (the home
   search box is `flex:1` beside the `Go` button). `Tab`/`Shift-Tab` move
-  focus to the next/previous visible text-like control in document order,
-  wrapping at the ends; disabled, hidden and read-only controls are skipped.
+  through links and form controls in document order, wrapping at the ends;
+  disabled and hidden elements are skipped, read-only fields are focusable,
+  and a radio group takes one stop with arrows moving within it. `Space` or
+  `Enter` activates the focused control: checkboxes and radios toggle/select,
+  buttons click, links navigate, and single selects open their popup. Arrows
+  change a focused single select or range slider; in a multi-select they move
+  the active option and `Space` toggles it.
   Required controls,
   `pattern`, `maxlength`, `readonly` and
   `disabled` are enforced; disabled controls are not submitted. Date, time,

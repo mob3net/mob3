@@ -1089,7 +1089,7 @@ Nothing is written to disk.</p>
 <tr><td><b>Space</b> / <b>b</b></td><td>scroll down / up one screen</td></tr>
 <tr><td><b>Ctrl-D</b> / <b>Ctrl-U</b></td><td>scroll half a screen</td></tr>
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
-<tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link, or text field while editing</td></tr>
+<tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link or form control</td></tr>
 <tr><td><b>Enter</b></td><td>follow a link, submit a field, or insert a textarea newline</td></tr>
 <tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
 <tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
@@ -1182,8 +1182,10 @@ with a <b>curl</b> command; <b>y</b> copies it, and <b>Esc</b>/<b>Enter</b>/<b>q
 closes it.</p>
 
 <h2>Forms</h2>
-<p>Click a field to edit; <b>Enter</b> submits, <b>Esc</b> leaves, and
-<b>Tab</b>/<b>Shift-Tab</b> move to the next/previous text field. Checkboxes,
+<p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through
+links and form controls. <b>Enter</b> submits, <b>Esc</b> leaves, <b>Space</b>
+or <b>Enter</b> activates a focused checkbox, radio, select, button or link,
+and arrows change radio groups, selects and ranges. Checkboxes,
 radios, selects, date/time/month/week, range and color fields work. GET and
 urlencoded POST forms submit; multipart and file uploads are not supported.</p>
 

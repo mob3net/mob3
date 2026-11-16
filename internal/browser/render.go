@@ -76,6 +76,21 @@ func (g *Grid) Fill(x, y, w, h int, c Color) {
 	}
 }
 
+// Highlight recolors the background and foreground of existing cells without
+// changing their glyphs, used for focused form controls.
+func (g *Grid) Highlight(x, y, w, h int, bg, fg Color) {
+	x0, y0 := maxInt(x, 0), maxInt(y, 0)
+	x1, y1 := minInt(x+w, g.W), minInt(y+h, g.H)
+	for yy := y0; yy < y1; yy++ {
+		row := yy * g.W
+		for xx := x0; xx < x1; xx++ {
+			cell := &g.Cells[row+xx]
+			cell.BG = bg
+			cell.FG = fg
+		}
+	}
+}
+
 // ClearGlyphs blanks the characters in a rectangle while keeping each cell's
 // background, used to reserve the scrollbar column without erasing page fills.
 func (g *Grid) ClearGlyphs(x, y, w, h int) {

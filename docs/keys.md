@@ -11,7 +11,7 @@ key, mouse and form reference for the running build.
 | `Space` / `b` | Scroll one screen down / up |
 | `Ctrl-D` / `Ctrl-U` | Scroll half a screen |
 | `g` / `G` | Top / bottom of the page |
-| `Tab` / `Shift-Tab` | Next / previous link |
+| `Tab` / `Shift-Tab` | Next / previous link or form control |
 | `Enter` | Follow the focused link, submit the focused field, or insert a newline in a textarea |
 | `h` / `Left` | Back |
 | `l` / `Right` | Forward |
@@ -98,6 +98,11 @@ brackets. While hints are shown, images are rendered as half-block art so the
 terminal's inline image protocol does not cover the hint letters.
 
 ## Forms
+
+`Tab`/`Shift-Tab` move through links and form controls in document order.
+A focused checkbox, radio, button or link is activated with `Space`/`Enter`;
+arrows change radio groups, single selects and ranges, and move the active
+option in a multi-select, where `Space` toggles it.
 
 Click a text input or textarea to focus it. The focused field shows a block
 caret.
