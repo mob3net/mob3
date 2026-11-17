@@ -2305,3 +2305,42 @@ func TestFlexPercentageItemsKeepAssignedSlots(t *testing.T) {
 		t.Fatalf("flex items overflow their 50-cell row: %+v %+v", rs, rm)
 	}
 }
+
+func TestAbsoluteChildOfShiftedAbsoluteBox(t *testing.T) {
+	doc := ParseHTML(`<div style="position:relative;width:400px;height:64px">` +
+		`<div id="w" style="position:absolute;right:0;top:0">` +
+		`<div id="c" style="position:absolute;right:0;top:0;width:40px;height:16px">X</div>` +
+		`</div></div>`)
+	ly := BuildLayout(doc, nil, 100)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "X") {
+			if f.X < 40 {
+				t.Fatalf("absolute child x = %d, want near the parent's right edge", f.X)
+			}
+			return
+		}
+	}
+	t.Fatal("absolute child text missing")
+}
+
+func TestImageLabelReservesCSSHeight(t *testing.T) {
+	ly := build(`<div style="width:160px"><img alt="pic" style="display:block;width:80px;height:64px">after</div>`, 40)
+	labelY, afterY := -1, -1
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		if strings.Contains(f.Text, "[image:") {
+			labelY = f.Y
+		}
+		if strings.Contains(f.Text, "after") {
+			afterY = f.Y
+		}
+	}
+	if labelY < 0 || afterY < 0 {
+		t.Fatal("label or trailing text missing")
+	}
+	if afterY-labelY != 4 {
+		t.Fatalf("image label reserved %d rows, want 4", afterY-labelY)
+	}
+}

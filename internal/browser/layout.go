@@ -127,6 +127,7 @@ func ParseLayoutBudget(name string) (LayoutBudget, bool) {
 
 type layouter struct {
 	styles    map[*Node]*Style
+	cbs       map[*Node]*cbRect
 	width     int
 	frags     []Frag
 	boxes     map[*Node]Rect
@@ -283,7 +284,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect)}
+	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -718,6 +719,9 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	if positioned {
 		newCB = &cbRect{x: boxX + bl, y: top + bt, w: pl + contentW + pr}
 		l.cb = newCB
+		if l.cbs != nil {
+			l.cbs[n] = newCB
+		}
 		defer func() { l.cb = parentCB }()
 	}
 
@@ -1037,6 +1041,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 		l.forcedImageH = st.Height.resolveV(cbH, st.FontSize)
 	}
 	start := len(l.frags)
+	absStart := len(l.abs)
 	_, rect := l.blockLayout(n, x, y, availW, forceH, true)
 	l.forcedImageH = prevImageH
 	frags := make([]Frag, len(l.frags)-start)
@@ -1072,6 +1077,16 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 		for i := range frags {
 			frags[i].X += dx
 			frags[i].Y += dy
+		}
+		// The box shifted after layout, so its containing block and any
+		// auto-placed absolute descendants must move with it.
+		if c := l.cbs[n]; c != nil {
+			c.x += dx
+			c.y += dy
+		}
+		for i := absStart; i < len(l.abs); i++ {
+			l.abs[i].staticX += dx
+			l.abs[i].staticY += dy
 		}
 	}
 	l.frags = append(l.frags, frags...)
@@ -2680,6 +2695,23 @@ func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
 	})
 }
 
+// addLabelBox reserves the image's layout box and paints the label on its
+// first row, so a disabled or broken image keeps the space it would occupy.
+func (c *inlineCtx) addLabelBox(label string, st *Style, node *Node, w, h int) {
+	if w < 1 {
+		w = 1
+	}
+	if h < 1 {
+		h = 1
+	}
+	c.addAtomicBox(inlineItem{
+		kind: itemAtomic, w: w, h: h, style: st, node: node,
+		paint: func(x, y int) {
+			c.l.addText(x, y, label, st, node)
+		},
+	})
+}
+
 func (c *inlineCtx) addForm(n *Node, st *Style) {
 	if n.Tag == "textarea" {
 		c.addTextarea(n, st)
@@ -3415,7 +3447,7 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 			}
 			return
 		}
-		c.addLabel(imageAltLabel(alt, w), st, n)
+		c.addLabelBox(imageAltLabel(alt, w), st, n, w, h)
 		return
 	}
 	w, h := imageSize(n, st, maxW, c.imageCapW)
@@ -3607,7 +3639,14 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 			return 0
 		}
 		l.addText(x, y, imageAltLabel(alt, iw), st, n)
-		return 1
+		altH := ih
+		if boxH > altH {
+			altH = boxH
+		}
+		if altH < 1 {
+			altH = 1
+		}
+		return altH
 	}
 	iw, ih := imageSize(n, st, w, l.imageCapWidth())
 	l.frags = append(l.frags, Frag{Kind: fragImage, X: x, Y: y, W: iw, H: ih, Img: n.Img, Node: n})
@@ -3764,7 +3803,6 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 		if ch <= 0 {
 			ch = 1
 		}
-		ch = 1
 	}
 	if cw < 1 {
 		cw = 1

@@ -222,6 +222,10 @@ Standard Go layout:
   tree order, and their fragments feed link rectangles, find and dark mode
   normally. Relative offsets shift a block and its painted subtree without
   moving siblings, and the containing block it establishes moves with it.
+  The same applies to an absolute box placed by `right`/`bottom`: when its
+  final position is applied after layout, the containing block it establishes
+  and its auto-placed absolute descendants move with it, so nested cards and
+  badges stay at the intended edge.
   `z-index` is ignored, `sticky` falls back to block flow, and relative
   offsets are applied to block boxes only (inline relative is ignored).
 - **Overlay links:** an empty anchor with an absolute or fixed box contributes
@@ -446,7 +450,9 @@ Standard Go layout:
   back to a `<title>` or visible text; an icon-only SVG with only an
   `aria-label` renders a one-cell `▣` marker instead of its accessibility name.
   `aria-hidden` SVGs are skipped. Broken images show `[image: alt]` clipped to
-  the image's box width (a box narrower than 8 cells uses a `▣` marker); an
+  the image's box width and reserve the image's CSS box height, so a missing
+  logo does not collapse its header row (a box narrower than 8 cells uses a
+  `▣` marker); an
   empty-`alt` image with explicit dimensions of at least 2 cells shows a `░`
   marker, while 1-cell decorative/tracking images render nothing. Images laid out as blocks or as
   absolute/fixed boxes produce the same image fragments as inline images.
