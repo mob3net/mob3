@@ -3410,15 +3410,16 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 	maxW := c.lineMaxW()
 	if n.Img == nil || c.l.imagesOff {
 		alt := n.Attr("alt")
+		w, h := imageSize(n, st, maxW, c.imageCapW)
 		if alt == "" {
 			// An explicitly sized broken image gets a small placeholder;
 			// 1-cell decorative images (tracking pixels) stay invisible.
-			if w, h := imageSize(n, st, maxW, c.imageCapW); w >= 2 || h >= 2 {
+			if w >= 2 || h >= 2 {
 				c.addLabel("░", st, n)
 			}
 			return
 		}
-		c.addLabel("[image: "+alt+"]", st, n)
+		c.addLabel(imageAltLabel(alt, w), st, n)
 		return
 	}
 	w, h := imageSize(n, st, maxW, c.imageCapW)
@@ -3609,7 +3610,7 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 			}
 			return 0
 		}
-		l.addText(x, y, "[image: "+alt+"]", st, n)
+		l.addText(x, y, imageAltLabel(alt, iw), st, n)
 		return 1
 	}
 	iw, ih := imageSize(n, st, w, l.imageCapWidth())
@@ -3722,6 +3723,16 @@ func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int 
 		add(x, y, boxW, boxH, image.Rectangle{})
 		return boxH
 	}
+}
+
+// imageAltLabel is the text shown for an image that is not rasterized. It is
+// clipped to the image box so a long alt cannot spill into neighbouring
+// columns; very narrow boxes get a compact marker instead.
+func imageAltLabel(alt string, max int) string {
+	if max < 8 {
+		return "▣"
+	}
+	return truncateWidth("[image: "+alt+"]", max)
 }
 
 // imageSize returns the terminal-cell size of an image, from its intrinsic

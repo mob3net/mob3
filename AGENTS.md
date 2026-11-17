@@ -440,9 +440,10 @@ Standard Go layout:
   restored and rasterized before layout. If inline SVG decoding fails it falls
   back to a `<title>` or visible text; an icon-only SVG with only an
   `aria-label` renders a one-cell `▣` marker instead of its accessibility name.
-  `aria-hidden` SVGs are skipped. Broken images show `[image: alt]`; an empty-`alt` image with
-  explicit dimensions of at least 2 cells shows a `░` marker, while 1-cell
-  decorative/tracking images render nothing. Images laid out as blocks or as
+  `aria-hidden` SVGs are skipped. Broken images show `[image: alt]` clipped to
+  the image's box width (a box narrower than 8 cells uses a `▣` marker); an
+  empty-`alt` image with explicit dimensions of at least 2 cells shows a `░`
+  marker, while 1-cell decorative/tracking images render nothing. Images laid out as blocks or as
   absolute/fixed boxes produce the same image fragments as inline images.
   Percentage top/bottom padding and margins resolve against the containing
   block width, so aspect-ratio wrappers keep their intended shape.
@@ -1692,9 +1693,6 @@ engine work only; do not add site-specific exceptions.
   decode (for example an AVIF URL without a `type` hint), the `img` fallback is
   not retried, and `srcset` URLs containing literal commas are split as
   candidates.
-- **Alt-label overflow.** With graphics disabled, long `[image: alt]` labels
-  can overlap neighboring columns. Truncate to the image box or use a compact
-  marker while keeping the full alt text available for the focused link.
 - **Generated content.** Empty block `::before`/`::after` boxes work; support
   non-empty text/icons and inline pseudo boxes where practical.
 - **Background images and gradients.** Not rendered. Ensure text contrast

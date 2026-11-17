@@ -2233,3 +2233,46 @@ func TestGridAutoItemStaysInItsTrack(t *testing.T) {
 		t.Fatalf("second column x offset = %d, want 15", rb.X-ra.X)
 	}
 }
+
+func TestImageAltLabelClipsToBox(t *testing.T) {
+	long := strings.Repeat("very long alternative text ", 6)
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"inline", `<div style="width:160px"><img alt="` + long + `" style="width:100%"></div>`},
+		{"absolute", `<div style="position:relative;width:160px;height:90px"><img alt="` + long + `" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ly := build(tc.src, 100)
+			found := false
+			for _, f := range ly.Frags {
+				if f.Kind == fragText && strings.HasPrefix(strings.TrimSpace(f.Text), "[image:") {
+					found = true
+					if f.W > 20 || f.X+f.W > 21 {
+						t.Fatalf("alt label = x %d w %d, want within a 20-cell box", f.X, f.W)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("no alt label fragment")
+			}
+		})
+	}
+}
+
+func TestImageAltLabelUsesMarkerInTinyBox(t *testing.T) {
+	ly := build(`<div style="width:32px"><img alt="long alternative text" style="width:100%"></div>`, 100)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			if strings.HasPrefix(f.Text, "[image:") {
+				t.Fatalf("tiny image drew a full label: %q", f.Text)
+			}
+			if strings.Contains(f.Text, "▣") {
+				return
+			}
+		}
+	}
+	t.Fatal("tiny image did not use the compact marker")
+}
