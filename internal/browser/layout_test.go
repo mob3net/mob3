@@ -2094,3 +2094,57 @@ func TestInlineSpacePrecedesCodeEdge(t *testing.T) {
 		t.Fatalf("text after code = %+v, want b at column 6", c)
 	}
 }
+
+func TestMeasureCollapsesWhitespace(t *testing.T) {
+	if mw, mi := measureInlineText("\n   alpha   beta \n", "normal", 1); mw != 10 || mi != 5 {
+		t.Fatalf("normal text measure = %d,%d, want 10,5", mw, mi)
+	}
+	if mw, _ := measureInlineText(" a  b ", "pre", 1); mw != 6 {
+		t.Fatalf("pre text measure = %d, want 6 preserved cells", mw)
+	}
+}
+
+func TestFloatRowMaxContentIsSum(t *testing.T) {
+	doc := ParseHTML(`<div style="width:400px"><div id="nav" style="float:left"><span style="float:left">aaaa</span> <span style="float:left">bbbb</span></div></div>`)
+	ly := BuildLayout(doc, nil, 50)
+	var nav *Node
+	doc.FindAll(func(n *Node) bool {
+		if n.Attr("id") == "nav" {
+			nav = n
+		}
+		return false
+	})
+	if nav == nil {
+		t.Fatal("nav missing")
+	}
+	if box := ly.Boxes[nav]; box.W != 8 {
+		t.Fatalf("float container width = %d, want 8 (sum of both floats)", box.W)
+	}
+	var rows []int
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && (strings.TrimSpace(f.Text) == "aaaa" || strings.TrimSpace(f.Text) == "bbbb") {
+			rows = append(rows, f.Y)
+		}
+	}
+	if len(rows) != 2 || rows[0] != rows[1] {
+		t.Fatalf("float rows = %v, want both on one row", rows)
+	}
+}
+
+func TestDefiniteWidthCountsInMeasure(t *testing.T) {
+	doc := ParseHTML(`<div style="width:400px"><div id="box" style="float:left"><div style="width:48px;height:16px"></div></div></div>`)
+	ly := BuildLayout(doc, nil, 50)
+	var box *Node
+	doc.FindAll(func(n *Node) bool {
+		if n.Attr("id") == "box" {
+			box = n
+		}
+		return false
+	})
+	if box == nil {
+		t.Fatal("box missing")
+	}
+	if b := ly.Boxes[box]; b.W != 6 {
+		t.Fatalf("float around a 48px child = %d cells, want 6", b.W)
+	}
+}

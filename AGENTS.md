@@ -191,7 +191,9 @@ Standard Go layout:
   resolve against the containing block, not the remaining float band, and a
   declared width is not re-resolved against the float's own used width; a
   declared width also caps the content's min-content width, so a long word
-  cannot widen the float. Lines resume the full width
+  cannot widen the float. A block containing floats contributes their summed
+  width as its max-content width, so shrink-to-fit and flex items reserve a
+  full float row instead of one float. Lines resume the full width
   once they pass the float's bottom, and the containing flow reserves the
   float's height when the text ends early. `clear:left|right|both` moves
   following blocks below matching floats. Floats are scoped to the block flow
@@ -372,7 +374,11 @@ Standard Go layout:
   nowrap run wider than its line is hard-split unless the containing block is
   nowrap, so terminal lines do not overflow.
   `text-align: justify` stretches inter-word spaces on wrapped lines; the last
-  line and forced breaks (`<br>`, newlines) stay left-aligned.
+  line and forced breaks (`<br>`, newlines) stay left-aligned. Intrinsic width
+  measurement collapses whitespace runs to one space and ignores leading,
+  trailing and indentation-only whitespace, matching inline layout, and an
+  element's explicit absolute width fixes its measured width so shrink-to-fit
+  containers do not ignore it.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
   `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
   are hidden (`display:none`) to avoid rendering them as one-character columns

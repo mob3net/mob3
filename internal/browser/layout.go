@@ -4388,21 +4388,14 @@ func (l *layouter) paddingH(n *Node) (int, int) {
 
 // measure estimates the max-content and min-content widths (in cells) of a
 // subtree. It is used to size table columns.
-func (l *layouter) measure(n *Node) (maxW, minW int) {
-	if n == nil {
-		return 0, 0
-	}
-	if n.Type == TextNode {
-		if n.Style == nil {
-			return 0, 0
-		}
-		s := expandTabs(n.Text)
-		s = applyTextTransform(s, n.Style.TextTransform)
-		sc := l.scale(n.Style)
+// measureInlineText returns the max-content and min-content widths of one
+// text run. Normal and nowrap text collapse whitespace runs to a single space,
+// and leading, trailing and indentation-only whitespace contributes nothing,
+// matching inline layout. Pre text preserves spaces and line breaks.
+func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
+	if whiteSpace == "pre" {
 		for _, line := range strings.Split(s, "\n") {
-			lineMax := 0
-			word := 0
-			wordMax := 0
+			lineMax, word, wordMax := 0, 0, 0
 			for _, r := range line {
 				if r == ' ' || r == '\t' || r == '\r' || r == '\f' {
 					if word > wordMax {
@@ -4426,9 +4419,49 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 				minW = wordMax
 			}
 		}
-		if n.Style.WhiteSpace == "nowrap" || n.Style.WhiteSpace == "pre" {
-			minW = maxW
+		return maxW, maxW
+	}
+	lineMax, word, wordMax := 0, 0, 0
+	pendingSpace, content := false, false
+	for _, r := range s {
+		if r == ' ' || r == '\n' || r == '\t' || r == '\r' || r == '\f' {
+			if word > wordMax {
+				wordMax = word
+			}
+			word = 0
+			pendingSpace = content
+			continue
 		}
+		if pendingSpace {
+			lineMax += sc
+			pendingSpace = false
+		}
+		rw := runeWidth(r) * sc
+		lineMax += rw
+		word += rw
+		content = true
+	}
+	if word > wordMax {
+		wordMax = word
+	}
+	if whiteSpace == "nowrap" {
+		wordMax = lineMax
+	}
+	return lineMax, wordMax
+}
+
+func (l *layouter) measure(n *Node) (maxW, minW int) {
+	if n == nil {
+		return 0, 0
+	}
+	if n.Type == TextNode {
+		if n.Style == nil {
+			return 0, 0
+		}
+		s := expandTabs(n.Text)
+		s = applyTextTransform(s, n.Style.TextTransform)
+		sc := l.scale(n.Style)
+		maxW, minW = measureInlineText(s, n.Style.WhiteSpace, sc)
 		return maxW, minW
 	}
 	if n.Type != ElementNode || n.Style == nil || n.Style.Display == "none" {
@@ -4480,12 +4513,26 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return w, w
 	}
 	pad, _ := l.paddingH(n)
+	if st.Width.Set && !st.Width.IsAuto() && !st.Width.Calc && st.Width.U != UnitPercent {
+		// A definite absolute width fixes the element's used width for
+		// intrinsic sizing too, so shrink-to-fit containers do not ignore
+		// explicitly sized children such as logos.
+		w := st.Width.resolveH(l.width, st.FontSize)
+		if st.BoxSizing == "border-box" {
+			w -= pad
+			if w < 0 {
+				w = 0
+			}
+		}
+		return w + pad, w + pad
+	}
 	isBlock := false
 	switch st.Display {
 	case "block", "grid", "list-item", "table":
 		isBlock = true
 	}
 	if isBlock {
+		floatSum := 0
 		for _, c := range n.Children {
 			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 				continue
@@ -4496,12 +4543,20 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 				continue
 			}
 			mw, mi := l.measure(c)
-			if mw > maxW {
+			if c.Type == ElementNode && c.Style != nil && c.Style.Float != "" {
+				// Floats share a line until the width runs out, so their
+				// max-content contribution is the sum of their widths.
+				ml, mr, _, _, _, _, _, _, _, _, _, _ := l.boxMetrics(c.Style, l.width)
+				floatSum += mw + ml + mr
+			} else if mw > maxW {
 				maxW = mw
 			}
 			if mi > minW {
 				minW = mi
 			}
+		}
+		if floatSum > maxW {
+			maxW = floatSum
 		}
 		if st.WhiteSpace == "nowrap" || st.WhiteSpace == "pre" {
 			minW = maxW
@@ -4528,32 +4583,9 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			s := expandTabs(c.Text)
 			s = applyTextTransform(s, c.Style.TextTransform)
 			sc := l.scale(c.Style)
-			partMax, partMin := 0, 0
-			for _, line := range strings.Split(s, "\n") {
-				lineMax := 0
-				word := 0
-				for _, r := range line {
-					if r == ' ' || r == '\t' || r == '\r' || r == '\f' {
-						if word > partMin {
-							partMin = word
-						}
-						word = 0
-						lineMax += sc
-						continue
-					}
-					rw := runeWidth(r) * sc
-					lineMax += rw
-					word += rw
-				}
-				if word > partMin {
-					partMin = word
-				}
-				if lineMax > partMax {
-					partMax = lineMax
-				}
-			}
+			partMax, partMin := measureInlineText(s, c.Style.WhiteSpace, sc)
 			total += partMax
-			if space {
+			if space && partMax > 0 {
 				total += sc
 			}
 			if partMin > minW {
