@@ -368,13 +368,16 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 		}
 		chrome = append(chrome, Rect{X: f.X, Y: y0, W: f.W, H: y1 - y0})
 	}
-	paintBlocks := func(f *Frag, y0, y1 int) bool {
+	hitsChrome := func(x, y, w, h int) bool {
 		for _, r := range chrome {
-			if f.X < r.X+r.W && f.X+f.W > r.X && y0 < r.Y+r.H && y1 > r.Y {
+			if x < r.X+r.W && x+w > r.X && y < r.Y+r.H && y+h > r.Y {
 				return true
 			}
 		}
 		return false
+	}
+	paintBlocks := func(f *Frag, y0, y1 int) bool {
+		return hitsChrome(f.X, y0, f.W, y1-y0)
 	}
 	paintOne := func(f *Frag) {
 		y := f.Y - scroll + topRow
@@ -407,10 +410,12 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			if bigText {
 				scale = st.TextScale()
 			}
-			if scale > 1 && y+scale > bottomRow {
+			if scale > 1 && (y+scale > bottomRow || hitsChrome(f.X, y, f.W*scale, scale)) {
 				// A scaled run from the last content row would be drawn over
-				// the footer or another chrome row. Keep it normal size so the
-				// terminal cannot paint outside the page viewport.
+				// the footer or another chrome row, and a run touching fixed
+				// chrome (such as a cookie bar) would spill its large glyphs
+				// over that fill because the terminal draws scaled text above
+				// the cell grid. Keep it normal size in both cases.
 				scale = 1
 			}
 			bg := textBackground(f)

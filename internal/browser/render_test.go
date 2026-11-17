@@ -478,6 +478,36 @@ func TestBigTextStaysInsideViewport(t *testing.T) {
 	}
 }
 
+func TestBigTextDisabledUnderFixedChrome(t *testing.T) {
+	fill := RGB(0x20, 0x20, 0x20)
+	// A large heading whose scaled box (rows 4-5) touches a fixed bar on row
+	// 5 must be painted at normal size: the terminal composites OSC 66 scaled
+	// text above the cell grid, so the big glyphs would cover the bar.
+	ly := &Layout{Frags: []Frag{
+		{Kind: fragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+	}}
+	g := NewGrid(20, 8, RGB(255, 255, 255), RGB(255, 255, 255))
+	PaintLayoutBig(g, ly, 0, 0, 8, nil, RGB(0, 0, 0), nil, true)
+	if raw := g.Cells[4*20].Raw; raw != "" {
+		t.Fatalf("scaled text touching fixed chrome was sent as OSC 66: %q", raw)
+	}
+	if g.Cells[4*20].Skip || g.Cells[4*20].R != 'A' {
+		t.Fatalf("normal-size fallback missing: cell=%+v", g.Cells[4*20])
+	}
+
+	// Clear of the bar, the same run keeps its scaled output.
+	ly = &Layout{Frags: []Frag{
+		{Kind: fragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: fragFill, X: 0, Y: 7, W: 20, H: 1, Color: fill, Fixed: true},
+	}}
+	g = NewGrid(20, 10, RGB(255, 255, 255), RGB(255, 255, 255))
+	PaintLayoutBig(g, ly, 0, 0, 10, nil, RGB(0, 0, 0), nil, true)
+	if raw := g.Cells[4*20].Raw; !strings.Contains(raw, "\x1b]66;s=2;AB\x07") {
+		t.Fatalf("unobstructed scaled text was not painted: %q", raw)
+	}
+}
+
 func TestColor256Palette(t *testing.T) {
 	cases := []struct {
 		c    Color

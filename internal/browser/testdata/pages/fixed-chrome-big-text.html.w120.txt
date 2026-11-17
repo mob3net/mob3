@@ -1,0 +1,12 @@
+ Fixed notice bar
+
+
+ Large heading
+
+
+ Body text below the large heading. Its scaled letters must not overlap the fixed bar above.
+
+ Second large heading
+
+
+ Closing paragraph.

@@ -338,7 +338,10 @@ Standard Go layout:
   or below large headings; the surrounding words keep their scaled underline.
   A scaled run that would extend past the last page row (over the footer or
   another chrome row) is painted at normal size, because the terminal draws
-  scaled glyphs outside the cell grid.
+  scaled glyphs outside the cell grid. A scaled run whose scaled box intersects
+  an opaque fixed-chrome fill (a cookie bar or fixed header) is likewise
+  painted at normal size: terminal-side scaled text composites above the cell
+  grid and would spill large glyphs over the fixed fill that is painted later.
 - **No font files:** the terminal font is used for all glyphs; font size affects
   line height and emphasis, not glyph scale outside kitty.
 - **UA page style:** the grid defaults to a white page background and
