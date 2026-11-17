@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+fieldset { margin: 0 0 8px 0; padding: 8px; border: 1px solid #ccc; }
+legend { padding: 0 4px; }
+label { display: block; margin-bottom: 4px; }
+input[type=text], input[type=email], input[type=password] { width: 160px; }
+textarea { width: 240px; height: 64px; }
+</style>
+</head>
+<body>
+<form action="/submit" method="get">
+<fieldset>
+  <legend>Account</legend>
+  <label>Name <input type="text" name="name" value="Ada Lovelace"></label>
+  <label>Password <input type="password" name="pass" value="secret"></label>
+  <label>Email <input type="email" name="email" placeholder="you@example.com"></label>
+  <label><input type="checkbox" name="news" checked> Newsletter</label>
+  <label><input type="radio" name="plan" value="a" checked> Basic</label>
+  <label><input type="radio" name="plan" value="b"> Pro</label>
+</fieldset>
+<label>Plan <select name="plan"><option>Basic</option><option selected>Pro</option></select></label>
+<label>Tags <select name="tags" multiple><option selected>One</option><option>Two</option></select></label>
+<label>Comment <textarea name="comment">Short note</textarea></label>
+<button type="submit">Send</button>
+<input type="reset" value="Reset">
+</form>
+</body>
+</html>

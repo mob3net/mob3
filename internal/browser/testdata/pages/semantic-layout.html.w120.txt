@@ -1,0 +1,33 @@
+
+  Site header
+ Alpha Beta Gamma
+
+
+ Article title
+
+
+
+ Paragraph text wraps beside the aside until the float ends, then uses the full width.           Side note in a
+                                                                                                 floated column with
+                                                                                                 a few words.
+   Boxed section with padding and border.
+
+
+                                                     Centered line.
+
+
+                                                                                                    Right-aligned line.
+
+
+ Justified text stretches the spaces on wrapped lines so both edges line up neatly.
+
+
+  inline  blocks  sit together.
+
+  block box
+  second block box
+
+ A very long nowrap run that must not wrap even though it exceeds the column width.
+
+
+  Footer text

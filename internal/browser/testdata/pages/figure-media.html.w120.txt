@@ -1,0 +1,17 @@
+
+
+  [diagram]
+
+
+
+
+ Figure caption under the diagram.
+
+
+ Image with alt: [image: A wide landscape photo after.
+
+
+ Broken image with size: ▣      end.
+
+
+ [video] [audio] [canvas] star icon

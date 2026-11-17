@@ -23,24 +23,6 @@ Tests must not require network access. Use the existing fake loader and
 `httptest`-free helpers where possible. Add or update tests in the same change
 as behaviour.
 
-### Layout fixtures
-
-`internal/browser/testdata/pages/*.html` holds small synthetic pages.
-`TestLayoutFixtures` renders each at 80 and 120 columns and compares the
-terminal text with the checked-in `*.w80.txt`/`*.w120.txt` goldens. Read the
-fixture files to see which layout features each one exercises.
-
-- Keep fixtures self-contained: inline `<style>` only, no images, scripts or
-  external assets, and generic names/content — never copy a real site.
-- Add a fixture whenever a layout bug needs a combination of rules that a
-  focused unit test cannot express.
-- After an intentional layout change, regenerate and review the diff:
-
-```sh
-go test ./internal/browser -run TestLayoutFixtures -update
-```
-
-
 ## Documentation
 
 - `README.md` is the short landing page: what MOB³ is, how to run it, and what

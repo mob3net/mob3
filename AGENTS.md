@@ -24,12 +24,15 @@ written in Go
 - **Tests as you go.** Add or update tests in the same change as every behavior
   change or bug fix; do not defer tests to a later pass. Tests must stay
   network-free and should cover each affected layer (parser, style, layout,
-  paint, input) where practical. Layout bugs that involve several rules also
-  get a small synthetic fixture under `internal/browser/testdata/pages/`
-  rendered by `TestLayoutFixtures`; refresh its goldens with
+  paint, input) where practical. **Always add or update a golden layout
+  fixture when fixing or changing layout or rendering-engine behaviour**, even
+  when focused unit tests already exist; unit tests do not replace the golden.
+  Fixtures live under `internal/browser/testdata/pages/` and are rendered by
+  `TestLayoutFixtures`; refresh goldens with
   `go test ./internal/browser -run TestLayoutFixtures -update` and review the
   diff. Fixtures use inline `<style>` only, no external assets, and generic
-  names and content.
+  names and content. Imported-stylesheet goldens live under
+  `internal/browser/testdata/import/` and use the real loader.
 - **Report site quirks; do not chase them.** When a site relies on
   non-standard HTML, invalid markup, or undocumented browser behaviour, report
   what the site does instead of extending the engine to imitate it. Never add

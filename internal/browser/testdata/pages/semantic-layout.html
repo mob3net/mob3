@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+header, footer { padding: 4px; background: #eee; }
+nav a { margin-right: 8px; }
+main { margin: 8px 0; }
+article header { background: none; padding: 0; }
+aside { float: right; width: 160px; padding: 4px; border: 1px solid #ccc; margin-left: 8px; }
+section { margin-bottom: 8px; }
+.center { text-align: center; }
+.right { text-align: right; }
+.justify { text-align: justify; }
+.box { padding: 4px; margin: 4px 0; border: 1px solid #999; background: #f5f5f5; }
+.inline { display: inline; padding: 2px; background: #ddd; }
+.block { display: block; width: 200px; padding: 4px; background: #eee; }
+.nowrap { white-space: nowrap; }
+</style>
+</head>
+<body>
+<header>Site header</header>
+<nav><a href="/a">Alpha</a><a href="/b">Beta</a><a href="/c">Gamma</a></nav>
+<main>
+<article>
+  <header><h1>Article title</h1></header>
+  <aside>Side note in a floated column with a few words.</aside>
+  <p>Paragraph text wraps beside the aside until the float ends, then uses the full width.</p>
+  <section class="box">Boxed section with padding and border.</section>
+  <p class="center">Centered line.</p>
+  <p class="right">Right-aligned line.</p>
+  <p class="justify">Justified text stretches the spaces on wrapped lines so both edges line up neatly.</p>
+  <p><span class="inline">inline</span><span class="inline">blocks</span> sit together.</p>
+  <div class="block">block box</div>
+  <div class="block">second block box</div>
+  <p class="nowrap">A very long nowrap run that must not wrap even though it exceeds the column width.</p>
+</article>
+</main>
+<footer>Footer text</footer>
+</body>
+</html>

@@ -1,0 +1,19 @@
+
+
+
+    Account
+   Name [ Ada Lovelace     ]
+   Password [ ••••••           ]
+   Email [ you@example.com  ]
+   ☑ Newsletter
+   ◉ Basic
+   ○ Pro
+
+
+
+ Plan [ Pro ▾ ]
+ Tags ☑ One
+      ☐ Two
+ Comment [ Short note                     ]
+         [                                ]
+ [ Send ] [ Reset ]
