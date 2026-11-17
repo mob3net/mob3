@@ -165,7 +165,7 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   `position:absolute` and `position:fixed`, left/right floats with line
   wrapping and `clear`, and `overflow` clipping for bounded boxes.
   `position:sticky`, `z-index`, CSS variables, animations, transitions,
-  generated content, `@import` and background images are unsupported or
+  generated content and background images are unsupported or
   approximated as block flow.
 - SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
   CSS-in-SVG may be missing. Animated WebP is not supported.

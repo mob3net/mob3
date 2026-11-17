@@ -958,12 +958,52 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 	ctx = withRequestKind(ctx, "css")
 	var out []Rule
 	order := 0
-	add := func(rules []Rule) {
+	add := func(rules []Rule, media string) {
 		for i := range rules {
+			if media != "" {
+				rules[i].Media = combineMedia(media, rules[i].Media)
+			}
 			rules[i].Order = order
 			order++
 			out = append(out, rules[i])
 		}
+	}
+	seen := make(map[string]bool)
+	imported := 0
+	const maxImportDepth = 8
+	const maxImportedSheets = 40
+	var addSheet func(src string, sheetURL *url.URL, depth int, media string)
+	addSheet = func(src string, sheetURL *url.URL, depth int, media string) {
+		if depth < maxImportDepth && imported < maxImportedSheets {
+			for _, imp := range cssImports(src) {
+				if imported >= maxImportedSheets {
+					break
+				}
+				ref := sheetURL
+				if ref == nil {
+					ref = base
+				}
+				if ref == nil {
+					continue
+				}
+				u, err := ref.Parse(imp.href)
+				if err != nil {
+					continue
+				}
+				key := u.String()
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				imported++
+				data, _, final, status, err := l.fetchCtx(ctx, u, allowFile)
+				if err != nil || status < 200 || status >= 400 || final == nil {
+					continue
+				}
+				addSheet(string(data), final, depth+1, combineMedia(media, imp.media))
+			}
+		}
+		add(ParseStylesheetContext(ctx, src), media)
 	}
 	nodes := root.FindAll(func(n *Node) bool {
 		if n.Tag == "style" {
@@ -981,7 +1021,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 			continue
 		}
 		if n.Tag == "style" {
-			add(ParseStylesheetContext(ctx, n.TextContent()))
+			addSheet(n.TextContent(), base, 0, media)
 			continue
 		}
 		href := n.Attr("href")
@@ -989,13 +1029,35 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 		if err != nil {
 			continue
 		}
-		data, _, _, status, err := l.fetchCtx(ctx, u, allowFile)
+		key := u.String()
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		data, _, final, status, err := l.fetchCtx(ctx, u, allowFile)
 		if err != nil || status < 200 || status >= 400 {
 			continue
 		}
-		add(ParseStylesheetContext(ctx, string(data)))
+		if final == nil {
+			final = u
+		}
+		addSheet(string(data), final, 0, media)
 	}
 	return out
+}
+
+// combineMedia joins an @import/link media condition with a rule's own @media
+// condition. A comma-listed import condition is approximated.
+func combineMedia(a, b string) string {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + " and " + b
 }
 
 // srcsetCandidate is one entry from a srcset attribute.

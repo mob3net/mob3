@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -445,5 +446,51 @@ func TestFlexWrapNowrap(t *testing.T) {
 	n := doc.FindFirst("div")
 	if n.Style.FlexWrap != "nowrap" {
 		t.Fatalf("flex-wrap = %q, want nowrap (!important)", n.Style.FlexWrap)
+	}
+}
+
+func TestCSSImportsParsing(t *testing.T) {
+	src := `/* @import "ignored.css"; */
+@import url("a.css");
+@import 'b.css' screen and (max-width: 600px);
+p { content: "@import nope.css"; }
+@media screen { .x { color: red } }
+@import "c.css" print;`
+	got := cssImports(src)
+	if len(got) != 3 {
+		t.Fatalf("imports = %+v, want 3", got)
+	}
+	if got[0].href != "a.css" || got[0].media != "" {
+		t.Fatalf("first import = %+v", got[0])
+	}
+	if got[1].href != "b.css" || got[1].media != "screen and (max-width: 600px)" {
+		t.Fatalf("second import = %+v", got[1])
+	}
+	if got[2].href != "c.css" || got[2].media != "print" {
+		t.Fatalf("third import = %+v", got[2])
+	}
+}
+
+func TestFontShorthandWeights(t *testing.T) {
+	cases := []struct {
+		css   string
+		size  float64
+		lineH float64
+	}{
+		{`font: 400 12px/18px Arial`, 12, 1.5},
+		{`font: italic 400 14px/21px Arial`, 14, 1.5},
+		{`font: bold 1.4em/38px Arial`, 22.4, 38.0 / 22.4},
+	}
+	for _, tc := range cases {
+		doc := ParseHTML(`<p style="` + tc.css + `">x</p>`)
+		rules := ParseStylesheet("")
+		_ = BuildLayout(doc, rules, 40)
+		n := doc.FindFirst("p")
+		if n.Style.FontSize != tc.size {
+			t.Fatalf("%s: font-size = %v, want %v", tc.css, n.Style.FontSize, tc.size)
+		}
+		if math.Abs(n.Style.LineHeight-tc.lineH) > 0.01 {
+			t.Fatalf("%s: line-height = %v, want %v", tc.css, n.Style.LineHeight, tc.lineH)
+		}
 	}
 }

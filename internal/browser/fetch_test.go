@@ -1121,3 +1121,32 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 		t.Fatal("layout has no image fragment after applying the batch")
 	}
 }
+
+func TestLoaderResolvesCSSImports(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("b.css", `.b{color:#0000ff}`)
+	write("a.css", `@import "b.css"; .a{color:#ff0000}`)
+	write("page.html", `<html><head><link rel="stylesheet" href="a.css"></head><body><p class="a">a</p><p class="b">b</p></body></html>`)
+	loader := NewLoader()
+	page, err := loader.Load("file://"+filepath.Join(dir, "page.html"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Author) != 2 {
+		t.Fatalf("author rules = %d, want imported + local", len(page.Author))
+	}
+	ly := BuildLayout(page.Root, page.Author, 40)
+	a := page.Root.FindAll(func(n *Node) bool { return n.Attr("class") == "a" })[0]
+	bb := page.Root.FindAll(func(n *Node) bool { return n.Attr("class") == "b" })[0]
+	if ly.Styles[a].Color.R != 255 {
+		t.Fatalf("local rule not applied: %+v", ly.Styles[a].Color)
+	}
+	if ly.Styles[bb].Color.B != 255 {
+		t.Fatalf("imported rule not applied: %+v", ly.Styles[bb].Color)
+	}
+}

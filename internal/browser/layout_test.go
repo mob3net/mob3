@@ -2358,3 +2358,16 @@ func TestFlexAutoMarginPushesItemRight(t *testing.T) {
 	}
 	t.Fatal("auto-margin item text missing")
 }
+
+func TestExplicitHeightDoesNotGrow(t *testing.T) {
+	ly := build(`<div style="height:16px"><div style="height:80px">tall</div></div>after`, 40)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "after") {
+			if f.Y != 1 {
+				t.Fatalf("content after fixed-height box y = %d, want 1", f.Y)
+			}
+			return
+		}
+	}
+	t.Fatal("trailing text missing")
+}

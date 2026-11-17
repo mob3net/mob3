@@ -764,9 +764,9 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 		}
 	}
 	if st.Height.Set && !st.Height.IsAuto() && st.Height.U != UnitPercent {
-		if h := l.heightValue(st, st.Height, availW); h > contentH {
-			contentH = h
-		}
+		// An explicit height is the used height, not a minimum: overflowing
+		// children may paint outside the box unless overflow clips them.
+		contentH = l.heightValue(st, st.Height, availW)
 	}
 	if st.MaxHeight.Set && !st.MaxHeight.IsAuto() && st.MaxHeight.U != UnitPercent {
 		if h := l.heightValue(st, st.MaxHeight, availW); h < contentH {

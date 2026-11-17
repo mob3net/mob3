@@ -1323,3 +1323,21 @@ func TestWindowScrollAliases(t *testing.T) {
 		t.Fatalf("scroll aliases = %q", v.String())
 	}
 }
+
+func TestElementMetricsReadInlineStyle(t *testing.T) {
+	page := newJSPage(`<html><body><div id="d" style="width:320px;height:100px"></div></body></html>`, ``)
+	b := NewBrowser(80, 24)
+	b.page = page
+	b.url = page.URL
+	b.startJS(page)
+	if b.js == nil {
+		t.Fatal("no JS runtime")
+	}
+	v, err := b.js.vm.RunString(`(function(){var d=document.getElementById("d");return d.offsetWidth+","+d.offsetHeight+","+Math.round(d.getBoundingClientRect().width)})()`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.String(); got != "320,100,320" {
+		t.Fatalf("metrics = %q, want 320,100,320", got)
+	}
+}

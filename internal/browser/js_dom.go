@@ -392,37 +392,41 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.initFormObject(o, n)
 	}
 	vw, vh := j.b.width*8, j.b.height*16
-	metric := func(viewportValue int) func() goja.Value {
+	metric := func(width bool) func() goja.Value {
 		return func() goja.Value {
-			if n.Tag == "html" || n.Tag == "body" {
-				return j.vm.ToValue(viewportValue)
+			if width {
+				return j.vm.ToValue(j.elementWidthPx(n, vw))
 			}
-			return j.vm.ToValue(0)
+			return j.vm.ToValue(j.elementHeightPx(n, vh))
 		}
 	}
-	j.accessor(o, "clientWidth", metric(vw), nil)
-	j.accessor(o, "clientHeight", metric(vh), nil)
-	j.accessor(o, "offsetWidth", metric(vw), nil)
-	j.accessor(o, "offsetHeight", metric(vh), nil)
-	j.accessor(o, "scrollWidth", metric(vw), nil)
-	j.accessor(o, "scrollHeight", metric(vh), nil)
+	j.accessor(o, "clientWidth", metric(true), nil)
+	j.accessor(o, "clientHeight", metric(false), nil)
+	j.accessor(o, "offsetWidth", metric(true), nil)
+	j.accessor(o, "offsetHeight", metric(false), nil)
+	j.accessor(o, "scrollWidth", metric(true), nil)
+	j.accessor(o, "scrollHeight", metric(false), nil)
 	j.accessor(o, "offsetTop", func() goja.Value { return j.vm.ToValue(0) }, nil)
 	j.accessor(o, "offsetLeft", func() goja.Value { return j.vm.ToValue(0) }, nil)
 	j.accessor(o, "offsetParent", func() goja.Value { return goja.Null() }, nil)
 	j.accessor(o, "scrollTop", func() goja.Value { return j.vm.ToValue(0) }, func(goja.Value) {})
 	j.accessor(o, "scrollLeft", func() goja.Value { return j.vm.ToValue(0) }, func(goja.Value) {})
 	j.method(o, "getBoundingClientRect", func(call goja.FunctionCall) goja.Value {
-		r := j.vm.NewObject()
-		w, h := 0, 0
-		if n.Tag == "html" || n.Tag == "body" {
-			w, h = vw, vh
+		w := j.elementWidthPx(n, vw)
+		h := j.elementHeightPx(n, vh)
+		x, y := 0, 0
+		if j.b.layout != nil {
+			if r, ok := j.b.layout.Boxes[n]; ok {
+				x, y = r.X*8, r.Y*16
+			}
 		}
-		_ = r.Set("x", 0)
-		_ = r.Set("y", 0)
-		_ = r.Set("top", 0)
-		_ = r.Set("left", 0)
-		_ = r.Set("right", w)
-		_ = r.Set("bottom", h)
+		r := j.vm.NewObject()
+		_ = r.Set("x", x)
+		_ = r.Set("y", y)
+		_ = r.Set("top", y)
+		_ = r.Set("left", x)
+		_ = r.Set("right", x+w)
+		_ = r.Set("bottom", y+h)
 		_ = r.Set("width", w)
 		_ = r.Set("height", h)
 		return r
@@ -1807,6 +1811,98 @@ var styleProps = map[string]string{
 	"webkitTransform":          "transform",
 	"MozTransition":            "transition",
 	"MozTransform":             "transform",
+}
+
+// cssLengthPx resolves a CSS length string to whole CSS pixels for the DOM
+// measurement APIs. Percentages use the supplied viewport basis.
+func cssLengthPx(v string, font, basis float64) (int, bool) {
+	if strings.TrimSpace(v) == "" {
+		return 0, false
+	}
+	l := parseLength(v, font)
+	if !l.Set || l.Auto {
+		return 0, false
+	}
+	return lengthPx(l, font, basis)
+}
+
+func lengthPx(l Length, font, basis float64) (int, bool) {
+	if !l.Set || l.Auto {
+		return 0, false
+	}
+	switch {
+	case l.Calc:
+		return int(l.CalcPx + basis*l.CalcPct/100 + 0.5), true
+	case l.U == UnitPercent:
+		return int(basis*l.V/100 + 0.5), true
+	}
+	return int(l.cssPx(font) + 0.5), true
+}
+
+func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
+	if n == nil {
+		return 0
+	}
+	if n.Tag == "html" || n.Tag == "body" {
+		return viewport
+	}
+	font := 16.0
+	if n.Style != nil && n.Style.FontSize > 0 {
+		font = n.Style.FontSize
+	}
+	if v := styleGet(n, "width"); v != "" {
+		if px, ok := cssLengthPx(v, font, float64(viewport)); ok {
+			return px
+		}
+	}
+	if n.Style != nil && n.Style.Width.Set && !n.Style.Width.IsAuto() {
+		basis := 0.0
+		if n.Style.Width.U == UnitPercent {
+			basis = float64(viewport)
+		}
+		if px, ok := lengthPx(n.Style.Width, font, basis); ok {
+			return px
+		}
+	}
+	if j.b.layout != nil {
+		if r, ok := j.b.layout.Boxes[n]; ok && r.W > 0 {
+			return r.W * 8
+		}
+	}
+	return 0
+}
+
+func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {
+	if n == nil {
+		return 0
+	}
+	if n.Tag == "html" || n.Tag == "body" {
+		return viewport
+	}
+	font := 16.0
+	if n.Style != nil && n.Style.FontSize > 0 {
+		font = n.Style.FontSize
+	}
+	if v := styleGet(n, "height"); v != "" {
+		if px, ok := cssLengthPx(v, font, float64(viewport)); ok {
+			return px
+		}
+	}
+	if n.Style != nil && n.Style.Height.Set && !n.Style.Height.IsAuto() {
+		basis := 0.0
+		if n.Style.Height.U == UnitPercent {
+			basis = float64(viewport)
+		}
+		if px, ok := lengthPx(n.Style.Height, font, basis); ok {
+			return px
+		}
+	}
+	if j.b.layout != nil {
+		if r, ok := j.b.layout.Boxes[n]; ok && r.H > 0 {
+			return r.H * 16
+		}
+	}
+	return 0
 }
 
 func styleGet(n *Node, prop string) string {

@@ -1106,13 +1106,21 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		st.Italic = lower == "italic" || lower == "oblique"
 	case "font":
 		fields := splitFields(val)
-		for i, f := range fields {
+		for _, f := range fields {
 			fl := strings.ToLower(f)
-			if fl == "bold" || fl == "bolder" {
+			switch {
+			case fl == "bold" || fl == "bolder":
 				st.Bold = true
-			}
-			if fl == "italic" || fl == "oblique" {
+				continue
+			case fl == "italic" || fl == "oblique":
 				st.Italic = true
+				continue
+			case fl == "normal" || fl == "small-caps" || fl == "lighter":
+				continue
+			}
+			// A bare 100..900 token is a font-weight, not a pixel size.
+			if n, err := strconv.Atoi(fl); err == nil && n >= 100 && n <= 900 && n%100 == 0 {
+				continue
 			}
 			sizePart := f
 			lh := ""
@@ -1120,7 +1128,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 				lh = sizePart[j+1:]
 				sizePart = sizePart[:j]
 			}
-			if sz, ok := parseFontSize(sizePart, parentSize(parent)); ok && i < 4 {
+			if sz, ok := parseFontSize(sizePart, parentSize(parent)); ok {
 				st.FontSize = sz
 				if lh != "" {
 					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil {
@@ -2223,6 +2231,118 @@ func ParseDeclarations(s string) []Declaration {
 		out = append(out, Declaration{Prop: prop, Value: val, Important: imp})
 	}
 	return out
+}
+
+// cssImport is one @import rule: a URL and an optional media condition.
+type cssImport struct {
+	href  string
+	media string
+}
+
+// cssImports extracts top-level @import rules without parsing the rest of the
+// sheet. Comments, strings and nested blocks are skipped so @import text in
+// values or media queries is not mistaken for a rule.
+func cssImports(src string) []cssImport {
+	var out []cssImport
+	i, depth := 0, 0
+	for i < len(src) {
+		if strings.HasPrefix(src[i:], "/*") {
+			j := strings.Index(src[i+2:], "*/")
+			if j < 0 {
+				break
+			}
+			i += 2 + j + 2
+			continue
+		}
+		c := src[i]
+		if c == '"' || c == '\'' {
+			q := c
+			i++
+			for i < len(src) && src[i] != q {
+				if src[i] == '\\' {
+					i++
+				}
+				i++
+			}
+			i++
+			continue
+		}
+		if c == '{' {
+			depth++
+			i++
+			continue
+		}
+		if c == '}' {
+			if depth > 0 {
+				depth--
+			}
+			i++
+			continue
+		}
+		if depth == 0 && (c == '@' || c == 'A') && strings.HasPrefix(strings.ToLower(src[i:]), "@import") {
+			j := i + len("@import")
+			if j < len(src) {
+				n := src[j]
+				if n == ' ' || n == '\t' || n == '\n' || n == '\r' || n == '"' || n == '\'' || n == 'u' || n == 'U' {
+					end := j
+					for end < len(src) && src[end] != ';' && src[end] != '}' {
+						end++
+					}
+					if href, media := parseImportSpec(src[j:end]); href != "" {
+						out = append(out, cssImport{href: href, media: media})
+					}
+					i = end
+					if i < len(src) && src[i] == ';' {
+						i++
+					}
+					continue
+				}
+			}
+		}
+		i++
+	}
+	return out
+}
+
+func parseImportSpec(spec string) (href, media string) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(strings.ToLower(spec), "url(") {
+		inner := spec[4:]
+		if j := strings.IndexByte(inner, ')'); j >= 0 {
+			href = strings.Trim(strings.TrimSpace(inner[:j]), "\"'")
+			spec = strings.TrimSpace(inner[j+1:])
+		}
+	} else if spec[0] == '"' || spec[0] == '\'' {
+		q := spec[0]
+		if j := strings.IndexByte(spec[1:], q); j >= 0 {
+			href = spec[1 : 1+j]
+			spec = strings.TrimSpace(spec[2+j:])
+		}
+	} else {
+		fields := strings.Fields(spec)
+		if len(fields) > 0 {
+			href = fields[0]
+			spec = strings.TrimSpace(strings.TrimPrefix(spec, fields[0]))
+		}
+	}
+	if href == "" {
+		return "", ""
+	}
+	// Ignore unsupported @import modifiers, keeping any real media condition.
+	for {
+		low := strings.ToLower(spec)
+		if strings.HasPrefix(low, "layer(") || strings.HasPrefix(low, "supports(") {
+			if j := strings.IndexByte(spec, ')'); j >= 0 {
+				spec = strings.TrimSpace(spec[j+1:])
+				continue
+			}
+		}
+		break
+	}
+	return href, strings.TrimSpace(spec)
 }
 
 // ParseStylesheet parses a stylesheet into rules, preserving source order.
