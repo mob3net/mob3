@@ -25,13 +25,10 @@ as behaviour.
 
 ### Layout fixtures
 
-`internal/browser/testdata/pages/*.html` holds small synthetic pages covering
-layout combinations: flex headers and cards, inline menus, floated sidebars and
-figures, grid tracks and named areas, absolute/fixed positioning, inline code
-and indented markup, details/lists, tables, `calc()`/viewport sizing and
-inline-block wrappers. `TestLayoutFixtures` renders each at 80 and 120 columns
-and compares the terminal text with the checked-in `*.w80.txt`/`*.w120.txt`
-goldens.
+`internal/browser/testdata/pages/*.html` holds small synthetic pages.
+`TestLayoutFixtures` renders each at 80 and 120 columns and compares the
+terminal text with the checked-in `*.w80.txt`/`*.w120.txt` goldens. Read the
+fixture files to see which layout features each one exercises.
 
 - Keep fixtures self-contained: inline `<style>` only, no images, scripts or
   external assets, and generic names/content — never copy a real site.

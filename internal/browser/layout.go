@@ -1533,17 +1533,8 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 				cellW += gap
 			}
 		}
-		if !explicit {
-			if mw, _ := l.measure(child); mw > cellW {
-				for span < len(widths)-col {
-					cellW += gap + widths[col+span]
-					span++
-					if cellW >= mw {
-						break
-					}
-				}
-			}
-		}
+		// An auto-placed item stays in its assigned track and wraps its
+		// content; max-content width never expands its span across columns.
 		h := l.block(child, cellX, y, cellW)
 		if h > rowH {
 			rowH = h

@@ -6,9 +6,7 @@
 body { font-size: 16px; margin: 0; padding: 8px; }
 .dash { display: grid; grid-template-columns: 1fr 2fr; column-gap: 8px; row-gap: 4px; }
 .card { border: 1px solid #ccc; padding: 6px; }
-.c1 { grid-column: 1; }
-.c2 { grid-column: 2; }
-.wide { grid-column: 1 / span 2; }
+.wide { grid-column: span 2; }
 .area { display: grid; grid-template-areas: "head head" "side main"; grid-template-columns: 80px 1fr; gap: 4px; }
 .area h2 { grid-area: head; margin: 0; }
 .side { grid-area: side; background: #eee; padding: 4px; }
@@ -17,8 +15,8 @@ body { font-size: 16px; margin: 0; padding: 8px; }
 </head>
 <body>
 <div class="dash">
-  <div class="card c1">Left column text that wraps</div>
-  <div class="card c2">Right column with more words to fill the wider track</div>
+  <div class="card">Left column text that wraps</div>
+  <div class="card">Right column with more words to fill the wider track</div>
   <div class="card wide">Wide summary across both columns</div>
 </div>
 <div class="area">
