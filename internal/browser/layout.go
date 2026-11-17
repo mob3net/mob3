@@ -1738,6 +1738,36 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	if free < 0 {
 		free = 0
 	}
+	// Auto margins absorb the free space before justify-content does.
+	autoL := make([]int, len(items))
+	autoR := make([]int, len(items))
+	autoCount := 0
+	for _, it := range items {
+		if it.Style == nil {
+			continue
+		}
+		if it.Style.Margin[3].Auto {
+			autoCount++
+		}
+		if it.Style.Margin[1].Auto {
+			autoCount++
+		}
+	}
+	if free > 0 && autoCount > 0 {
+		per := free / autoCount
+		for i, it := range items {
+			if it.Style == nil {
+				continue
+			}
+			if it.Style.Margin[3].Auto {
+				autoL[i] = per
+			}
+			if it.Style.Margin[1].Auto {
+				autoR[i] = per
+			}
+		}
+		free = 0
+	}
 	startX := x
 	extraGap := 0
 	justify := ""
@@ -1769,6 +1799,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	maxH := 0
 	xx := startX
 	for i, it := range items {
+		xx += autoL[i]
 		basis := maxInt(1, widths[i])
 		starts[i] = len(l.frags)
 		var h int
@@ -1784,7 +1815,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		if h > maxH {
 			maxH = h
 		}
-		xx += widths[i] + gap + extraGap
+		xx += widths[i] + gap + extraGap + autoR[i]
 	}
 	align := ""
 	if base != nil {

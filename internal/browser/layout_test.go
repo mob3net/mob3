@@ -2344,3 +2344,17 @@ func TestImageLabelReservesCSSHeight(t *testing.T) {
 		t.Fatalf("image label reserved %d rows, want 4", afterY-labelY)
 	}
 }
+
+func TestFlexAutoMarginPushesItemRight(t *testing.T) {
+	ly := build(`<div style="display:flex;width:400px"><span>Brand</span>`+
+		`<div style="margin-left:auto">Right</div></div>`, 100)
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && strings.Contains(f.Text, "Right") {
+			if f.X < 40 {
+				t.Fatalf("auto-margin item x = %d, want near the right edge", f.X)
+			}
+			return
+		}
+	}
+	t.Fatal("auto-margin item text missing")
+}

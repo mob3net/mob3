@@ -273,8 +273,10 @@ Standard Go layout:
   keeps items on one line. A flex item's assigned width is used as its box
   width without re-resolving percentage widths inside block layout, so padded
   percentage columns keep their slots and do not overlap the next column. `order` reorders items stably; `justify-content`
-  supports start/end/center/space-between/around/evenly, and `align-items`
-  supports start/center/end cross-axis placement. Cross-axis alignment shifts
+  supports start/end/center/space-between/around/evenly, `margin:auto` on a
+  flex item absorbs the free space before justify-content (so
+  `margin-left:auto` pushes an item to the right), and `align-items` supports
+  start/center/end cross-axis placement. Cross-axis alignment shifts
   only that item's own fragments, so later siblings and following content keep
   their positions. Form controls always use the
   inline widget path even when CSS
