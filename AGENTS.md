@@ -1026,7 +1026,7 @@ Standard Go layout:
   switches sections, and `Tab`/`Shift-Tab` cycle through the same five tabs.
   Mouse reporting stays enabled so tabs and the input row can be clicked (plain
   terminal drag-selection needs the Shift override).
-  `i` or `Enter` (or a click on the input row) focuses the input; typing edits a
+  `:` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
   usual JS timeout/memory guards. The input row supports the same Ctrl/Alt
   word-motion and word-deletion keys as the URL prompt. It keeps its gray
@@ -1051,11 +1051,11 @@ Standard Go layout:
   evaluating JavaScript. These commands must never start or wait for a
   navigation, because the interactive event loop owns load results;
   navigational and mutating tools stay in `-mcp`.
-  `Esc`/`!` close and `q` asks to confirm quitting when the input row is not
-  focused (`q` is
-  literal text while typing). The footer keeps its clickable `>_` icon while
-  the console is open; clicking it closes the console the same way `Esc` does
-  (including the usual exit hint).
+  `Esc` leaves the input row when it is focused and closes the console on the
+  next press; `!` closes immediately, and `q` asks to confirm quitting when
+  the input row is not focused (`q` is literal text while typing). The footer
+  keeps its clickable `>_` icon while the console is open; clicking it closes
+  the console the same way `Esc` does (including the usual exit hint).
   The JS log and input draft reset when a new page is successfully applied,
   before that page's scripts run; failed loads keep the previous page's log.
   Requests list status, method, size, kind and URL (plain text, not clickable)

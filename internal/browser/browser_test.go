@@ -4154,6 +4154,10 @@ func TestConsoleJavaScriptInputRow(t *testing.T) {
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.consoleOpen = true
 	b.handleConsoleKey("i")
+	if b.consoleEdit {
+		t.Fatal("i should not focus the console input")
+	}
+	b.handleConsoleKey(":")
 	if b.consolePane != consoleLogs || !b.consoleEdit {
 		t.Fatalf("console state = pane %d edit %v, want logs input", b.consolePane, b.consoleEdit)
 	}
@@ -5088,4 +5092,23 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 	if b.loading {
 		t.Fatal("a load is still running after the loop was stopped")
 	}
+}
+
+func TestConsoleEscLeavesInputBeforeClosing(t *testing.T) {
+	b := NewBrowser(60, 20)
+	withQuietStdout(t, func() {
+		b.consoleOpen = true
+		b.consoleEdit = true
+		b.handleConsoleKey("esc")
+		if !b.consoleOpen {
+			t.Fatal("first Esc closed the console")
+		}
+		if b.consoleEdit {
+			t.Fatal("first Esc did not leave the input row")
+		}
+		b.handleConsoleKey("esc")
+		if b.consoleOpen {
+			t.Fatal("second Esc did not close the console")
+		}
+	})
 }

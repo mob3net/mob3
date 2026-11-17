@@ -178,7 +178,7 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		b.consoleCyclePane(1)
 	case "backtab":
 		b.consoleCyclePane(-1)
-	case "i", "enter":
+	case ":", "enter":
 		b.focusConsoleInput()
 	case "n":
 		if b.findText != "" && b.findScope == findScopeHTML {
@@ -293,8 +293,8 @@ func (b *Browser) handleConsoleInputKey(k string) bool {
 	}
 	switch k {
 	case "esc":
-		b.toggleConsole()
-		b.status = exitHint
+		// Leave the input first; a second Esc closes the console.
+		b.consoleEdit = false
 		return false
 	case "ctrl-c":
 		return true
@@ -1088,7 +1088,7 @@ func (b *Browser) drawConsole(w, h int) {
 							g.Put(xx, inputY, ' ', &Style{Bold: true}, bg, RGB(0xf8, 0xfa, 0xfc))
 						}
 					} else if b.consoleText == "" {
-						hint := "JavaScript input: i or Enter"
+						hint := "JavaScript input"
 						if b.consolePane == consoleTools {
 							hint = "Tools: help · form · links · requests · logs · source · snapshot"
 						}
@@ -1116,7 +1116,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if hintW < 1 {
 			hintW = 1
 		}
-		hint := " Click/Tab: switch section · i: input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hint := " Click/Tab: switch section · : focus input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
 		hintFG := fg
 		if b.quitPending {
 			hint = " " + quitConfirmText

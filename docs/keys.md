@@ -39,6 +39,13 @@ entry. In-page `#` links become history entries too, so `h` returns to where you
 were before following the anchor, and Forward returns to the anchored section.
 If only the fragment changes, the page is not reloaded.
 
+## Console
+
+`!` or the `>_` footer icon opens the console. Inside it, `:` or `Enter` focuses
+the JavaScript input row, `Tab`/`Shift-Tab` switch sections, `j`/`k` and
+`g`/`G` scroll the active section. `Esc` leaves the input row first and closes
+the console on the next press; `!` closes it immediately.
+
 ## URL prompt
 
 `o` or clicking the URL bar opens the prompt prefilled with the current URL and
