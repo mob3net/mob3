@@ -494,6 +494,12 @@ Standard Go layout:
   stderr. The only raw escapes written are app-generated ANSI styling, mouse
   mode, clipboard OSC 52 (base64 payload), kitty/iTerm2 image protocols and
   OSC 66.
+- **Color depth:** cell output uses 24-bit `38;2`/`48;2` SGR by default. macOS
+  Terminal.app (`TERM_PROGRAM=Apple_Terminal`) does not implement those
+  sequences and garbles the toolbar and footer, so it gets xterm 256-color
+  output (`38;5`/`48;5`), with each RGB mapped to the nearest 6x6x6 cube or
+  grayscale ramp entry. A `COLORTERM` value of `truecolor` or `24bit` keeps
+  truecolor output; `-no-color` still disables color entirely.
 - **Dump rendering:** prints the whole document height (capped at 20,000 rows),
   no browser chrome; `-height N` sets an `N`-row layout viewport and limits the
   output to `N` rows. Color is automatic on a TTY, forced by `-color`, disabled

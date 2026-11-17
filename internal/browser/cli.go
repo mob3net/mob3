@@ -99,6 +99,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", *layoutBudget)
 		return 2
 	}
+	SetColorMode(DetectColorMode())
 
 	if *mcpMode {
 		w := *widthFlag

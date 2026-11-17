@@ -60,7 +60,9 @@ Dump mode always uses half-block art for images that were loaded.
 
 `-dump` prints the whole document height (capped at 20,000 rows) without browser
 chrome. Color is automatic on a TTY, forced by `-color`, and disabled by
-`-no-color`.
+`-no-color`. Output uses 24-bit color, except on macOS Terminal.app where it
+falls back to the 256-color palette because that terminal does not support
+24-bit SGR sequences.
 
 ```sh
 mob3 -dump -width 120 page.html

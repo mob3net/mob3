@@ -476,3 +476,54 @@ func TestBigTextStaysInsideViewport(t *testing.T) {
 		t.Fatalf("last-row text is missing: %q", g.Cells[4*20].R)
 	}
 }
+
+func TestColor256Palette(t *testing.T) {
+	cases := []struct {
+		c    Color
+		want int
+	}{
+		{RGB(0, 0, 0), 16},
+		{RGB(255, 255, 255), 231},
+		{RGB(255, 0, 0), 196},
+		{RGB(0, 255, 0), 46},
+		{RGB(0, 0, 255), 21},
+	}
+	for _, tc := range cases {
+		if got := color256(tc.c); got != tc.want {
+			t.Errorf("color256(%v) = %d, want %d", tc.c, got, tc.want)
+		}
+	}
+}
+
+func TestColorModeCodes(t *testing.T) {
+	old := terminalColorMode
+	defer SetColorMode(old)
+	SetColorMode(Color256)
+	if got := fgCode(RGB(255, 0, 0)); got != "38;5;196" {
+		t.Fatalf("256 fg = %q", got)
+	}
+	if got := bgCode(RGB(0, 0, 255)); got != "48;5;21" {
+		t.Fatalf("256 bg = %q", got)
+	}
+	SetColorMode(ColorTrueColor)
+	if got := fgCode(RGB(255, 0, 0)); got != "38;2;255;0;0" {
+		t.Fatalf("truecolor fg = %q", got)
+	}
+}
+
+func TestDetectColorMode(t *testing.T) {
+	t.Setenv("COLORTERM", "")
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	if got := DetectColorMode(); got != Color256 {
+		t.Fatalf("Apple_Terminal mode = %v, want 256", got)
+	}
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	if got := DetectColorMode(); got != ColorTrueColor {
+		t.Fatalf("iTerm mode = %v, want truecolor", got)
+	}
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	t.Setenv("COLORTERM", "truecolor")
+	if got := DetectColorMode(); got != ColorTrueColor {
+		t.Fatalf("truecolor COLORTERM mode = %v, want truecolor", got)
+	}
+}

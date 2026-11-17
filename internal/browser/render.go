@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -667,9 +668,43 @@ func ansiFor(c Cell) string {
 	return b.String()
 }
 
+// ColorMode selects the SGR color depth used for cell output.
+type ColorMode int
+
+const (
+	// ColorTrueColor uses 24-bit 38;2/48;2 sequences.
+	ColorTrueColor ColorMode = iota
+	// Color256 uses the xterm 256-color palette with 38;5/48;5 sequences.
+	Color256
+)
+
+var terminalColorMode = ColorTrueColor
+
+// SetColorMode sets the SGR color depth used by the renderer.
+func SetColorMode(mode ColorMode) {
+	terminalColorMode = mode
+}
+
+// DetectColorMode reports the color depth to use. macOS Terminal.app does not
+// implement 24-bit SGR sequences and garbles them, so it gets 256-color output;
+// terminals that advertise truecolor through COLORTERM keep 24-bit output.
+func DetectColorMode() ColorMode {
+	ct := strings.ToLower(os.Getenv("COLORTERM"))
+	if strings.Contains(ct, "truecolor") || strings.Contains(ct, "24bit") {
+		return ColorTrueColor
+	}
+	if strings.EqualFold(os.Getenv("TERM_PROGRAM"), "Apple_Terminal") {
+		return Color256
+	}
+	return ColorTrueColor
+}
+
 func fgCode(c Color) string {
 	if !c.Set {
 		return "39"
+	}
+	if terminalColorMode == Color256 {
+		return "38;5;" + strconv.Itoa(color256(c))
 	}
 	return "38;2;" + strconv.Itoa(int(c.R)) + ";" + strconv.Itoa(int(c.G)) + ";" + strconv.Itoa(int(c.B))
 }
@@ -678,7 +713,42 @@ func bgCode(c Color) string {
 	if !c.Set {
 		return "49"
 	}
+	if terminalColorMode == Color256 {
+		return "48;5;" + strconv.Itoa(color256(c))
+	}
 	return "48;2;" + strconv.Itoa(int(c.R)) + ";" + strconv.Itoa(int(c.G)) + ";" + strconv.Itoa(int(c.B))
+}
+
+// color256 maps an RGB color to the closest index in the xterm 256-color
+// palette: the 6x6x6 color cube or the 24-step grayscale ramp, whichever is
+// nearer.
+func color256(c Color) int {
+	r, g, b := int(c.R), int(c.G), int(c.B)
+	ri := int(math.Round(float64(r) / 255 * 5))
+	gi := int(math.Round(float64(g) / 255 * 5))
+	bi := int(math.Round(float64(b) / 255 * 5))
+	levels := [6]int{0, 95, 135, 175, 215, 255}
+	cr, cg, cb := levels[ri], levels[gi], levels[bi]
+	cubeDist := sq(cr-r) + sq(cg-g) + sq(cb-b)
+
+	avg := (r + g + b) / 3
+	gi64 := int(math.Round((float64(avg) - 8) / 10))
+	if gi64 < 0 {
+		gi64 = 0
+	}
+	if gi64 > 23 {
+		gi64 = 23
+	}
+	gray := 8 + 10*gi64
+	grayDist := sq(gray-r) + sq(gray-g) + sq(gray-b)
+	if grayDist < cubeDist {
+		return 232 + gi64
+	}
+	return 16 + 36*ri + 6*gi + bi
+}
+
+func sq(v int) int {
+	return v * v
 }
 
 // Lines renders the grid to ANSI strings, one per row.
