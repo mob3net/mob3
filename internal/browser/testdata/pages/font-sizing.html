@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 8px; }
+.header { height: 32px; padding: 4px; background: #eee; overflow: hidden; }
+.header p { margin: 0; font: 400 18px/24px Arial, Helvetica, sans-serif; }
+.body { margin-top: 8px; font: 400 12px/18px Arial, Helvetica, sans-serif; }
+.tall { height: 16px; border: 1px solid #ccc; overflow: hidden; }
+.tall div { height: 64px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <p>Header line one</p>
+  <p>Header line two overflows the fixed height</p>
+  <p>Header line three is clipped</p>
+</div>
+<div class="body">Normal body text set by a font shorthand with a numeric weight.</div>
+<div class="tall"><div>overflows</div></div>
+<p>After the fixed-height box.</p>
+</body>
+</html>

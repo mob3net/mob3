@@ -1,0 +1,6 @@
+
+
+ Base stylesheet text in the normal flow.
+
+
+       Imported stylesheet text is indented by its padding.

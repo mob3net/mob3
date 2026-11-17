@@ -106,3 +106,38 @@ func itoaFixture(n int) string {
 	}
 	return string(b)
 }
+
+// TestLayoutImportedCSSGolden covers @import resolution through the real
+// loader. The page links a stylesheet that imports another one; rules from both
+// sheets must affect the rendered layout.
+func TestLayoutImportedCSSGolden(t *testing.T) {
+	dir, err := filepath.Abs("testdata/import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageFile := filepath.Join(dir, "page.html")
+	page, err := NewLoader().Load("file://"+pageFile, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Author) < 2 {
+		t.Fatalf("author rules = %d, want imported and local rules", len(page.Author))
+	}
+	for _, width := range fixtureWidths {
+		got := renderFixture(page.Root, page.Author, width)
+		golden := pageFile + ".w" + itoaFixture(width) + ".txt"
+		if *updateFixtures {
+			if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		want, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatalf("%s: %v (run go test -run 'TestLayoutImportedCSSGolden' -update)", golden, err)
+		}
+		if got != string(want) {
+			t.Errorf("%s mismatch at width %d\n--- want ---\n%s\n--- got ---\n%s", pageFile, width, want, got)
+		}
+	}
+}
