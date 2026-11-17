@@ -900,6 +900,18 @@ Standard Go layout:
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored
   by sequence number. Loading another URL cancels the previous load.
+  In interactive mode page documents are applied and painted before their
+  images: `Loader.deferImages` skips image downloads during the page load, the
+  text (with alt labels) is shown immediately, and a background batch fetches
+  and decodes the images without touching the DOM. Decoded results stream back
+  in batches of up to 16; the event loop applies each batch and redraws, so
+  images appear progressively. Navigation cancels the batch and stale results
+  are discarded by page sequence. Timer-driven rebuilds queue
+  another background batch instead of loading images synchronously, so scripts
+  that dirty the DOM cannot block input. `Esc` cancels a running image batch
+  (status `Stopped loading images`) and pauses further background loads for the
+  current page; the next navigation or graphics change resumes loading. Dump
+  and automation loads stay synchronous.
 - **Refused schemes:** `javascript:`, `mailto:` and `tel:` links show a status
   message.
 - **URL input rules:** opening the URL prompt (`o`, `:` or clicking the URL

@@ -131,6 +131,9 @@ func Run(args []string) int {
 		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
 	}
 
+	// Interactive pages show text first and fetch images in the background so
+	// image-heavy pages do not delay the first paint.
+	loader.deferImages = true
 	stdin := os.Stdin
 	state, err := makeRaw(stdin)
 	if err != nil {
@@ -290,6 +293,10 @@ func Run(args []string) int {
 			}
 		case res := <-b.loadCh:
 			b.finishLoad(res)
+		case batch := <-b.imageCh:
+			if !b.applyDeferredImageBatch(batch) {
+				b.skipDraw = true
+			}
 		case <-timerC:
 			// The loop body repaints once per event. Skip that repaint unless a
 			// JS timer rebuilt the page: an idle page must not repaint at every

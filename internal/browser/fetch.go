@@ -94,6 +94,9 @@ type Loader struct {
 	// It is the default so the browser stays fast; -graphics=none keeps it,
 	// and any other graphics mode turns it off.
 	noImages bool
+	// deferImages makes Load skip image downloads so the caller can show the
+	// page first and fetch them in the background.
+	deferImages bool
 	// imageViewportPx is the CSS-pixel viewport width used to choose srcset and
 	// picture candidates. It is 800 when no browser width is available.
 	imageViewportPx int
@@ -439,7 +442,9 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		page.HasModules = hasModuleScripts(root)
 	}
 	l.loadInlineSVGs(root)
-	l.loadImages(ctx, root, page.Base, allowFile)
+	if !l.deferImages {
+		l.loadImages(ctx, root, page.Base, allowFile)
+	}
 	return page, nil
 }
 
@@ -1152,6 +1157,137 @@ func parseSrcset(s string) []srcsetCandidate {
 // loadImages downloads images referenced by the document. It reports whether
 // any image gained a new source, so a post-script refresh can decide whether a
 // rebuild is needed.
+// imageTask is one image to fetch without touching the DOM, so the work can run
+// on a background goroutine.
+type imageTask struct {
+	node *Node
+	src  string
+	url  *url.URL
+}
+
+// imageLoadResult is one decoded image (or failure) returned to the main loop.
+type imageLoadResult struct {
+	Node   *Node
+	Src    string
+	Img    image.Image
+	Failed bool
+}
+
+// imageTasks collects images that still need loading. It must run on the main
+// layout goroutine because it reads node attributes.
+func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
+	if l.noImages || root == nil || base == nil {
+		return nil
+	}
+	var tasks []imageTask
+	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		src := imageSource(n, l.imageViewportPx)
+		if src == "" {
+			continue
+		}
+		if n.ImgSrc == src && (n.Img != nil || n.ImgFailed) {
+			continue
+		}
+		t := imageTask{node: n, src: src}
+		if u, err := base.Parse(src); err == nil {
+			t.url = u
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
+// fetchImageResult downloads and decodes one image, using the session cache.
+func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
+	key := u.String()
+	if cached, rawSize, ok := l.cache.getImage(key); ok {
+		l.recordCacheHit(gen, "GET", key, "img", rawSize)
+		return cached, true
+	}
+	data, ctype, _, status, err := l.fetchCtx(ctx, u, allowFile)
+	if err != nil || status < 200 || status >= 400 {
+		return nil, false
+	}
+	var img image.Image
+	if isSVG(ctype, data) {
+		img, err = decodeSVG(data)
+	} else {
+		cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(data))
+		if cfgErr != nil || !imageConfigOK(cfg) {
+			return nil, false
+		}
+		if ctx.Err() != nil {
+			return nil, false
+		}
+		var decodeErr error
+		img, _, decodeErr = image.Decode(bytes.NewReader(data))
+		err = decodeErr
+	}
+	if err != nil {
+		return nil, false
+	}
+	l.cache.putImage(key, img, len(data))
+	return img, true
+}
+
+// imageResultStream fetches the queued images concurrently and streams decoded
+// results as they finish. It never writes to the DOM, so it can run off the
+// main loop; the caller applies results when it owns the event loop.
+func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask, allowFile bool) <-chan imageLoadResult {
+	out := make(chan imageLoadResult)
+	if len(tasks) == 0 {
+		close(out)
+		return out
+	}
+	ctx = withRequestKind(ctx, "img")
+	gen := requestMetaFrom(ctx).gen
+	if gen == 0 {
+		gen = l.currentPageGeneration()
+	}
+	go func() {
+		defer close(out)
+		sem := make(chan struct{}, 6)
+		var wg sync.WaitGroup
+		for i := range tasks {
+			t := tasks[i]
+			if t.url == nil {
+				select {
+				case out <- imageLoadResult{Node: t.node, Src: t.src, Failed: true}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+			wg.Add(1)
+			go func(t imageTask) {
+				defer wg.Done()
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				defer func() { <-sem }()
+				img, ok := l.fetchImageResult(ctx, t.url, allowFile, gen)
+				select {
+				case out <- imageLoadResult{Node: t.node, Src: t.src, Img: img, Failed: !ok}:
+				case <-ctx.Done():
+				}
+			}(t)
+		}
+		wg.Wait()
+	}()
+	return out
+}
+
+// loadImageTaskResults collects the stream for callers that want one batch.
+func (l *Loader) loadImageTaskResults(ctx context.Context, tasks []imageTask, allowFile bool) []imageLoadResult {
+	var results []imageLoadResult
+	for r := range l.imageResultStream(ctx, tasks, allowFile) {
+		results = append(results, r)
+	}
+	return results
+}
+
 func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allowFile bool) bool {
 	if l.noImages {
 		return false

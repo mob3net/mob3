@@ -1053,3 +1053,71 @@ func TestUnsupportedContentEncoding(t *testing.T) {
 		t.Fatalf("err = %v, want an unsupported encoding error", err)
 	}
 }
+
+func TestDeferredImagesLoadLater(t *testing.T) {
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "p.png")
+	f, err := os.Create(imgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	f.Close()
+	htmlPath := filepath.Join(dir, "page.html")
+	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png" alt="pic"></body></html>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader()
+	loader.noImages = false
+	loader.deferImages = true
+	page, err := loader.Load("file://"+htmlPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := page.Root.FindFirst("img")
+	if img == nil {
+		t.Fatal("image missing")
+	}
+	if img.Img != nil || img.ImgFailed {
+		t.Fatal("deferred load fetched the image during Load")
+	}
+
+	tasks := loader.imageTasks(page.Root, page.Base)
+	if len(tasks) != 1 {
+		t.Fatalf("image tasks = %d, want 1", len(tasks))
+	}
+	results := loader.loadImageTaskResults(context.Background(), tasks, true)
+	if len(results) != 1 || results[0].Img == nil || results[0].Failed {
+		t.Fatalf("background results = %+v", results)
+	}
+
+	// Applying the batch installs the decoded image without a page reload.
+	b := NewBrowser(60, 20)
+	b.loader = loader
+	b.page = page
+	b.url = page.URL
+	b.loadSeq = 1
+	b.deferredImages = true
+	if !b.applyDeferredImageBatch(imageBatch{seq: 1, results: results, done: true}) {
+		t.Fatal("batch did not apply")
+	}
+	if img.Img == nil {
+		t.Fatal("image not installed")
+	}
+	if b.deferredImages {
+		t.Fatal("deferred flag stayed set")
+	}
+	found := false
+	for _, f := range b.layout.Frags {
+		if f.Kind == fragImage && f.Node == img {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("layout has no image fragment after applying the batch")
+	}
+}

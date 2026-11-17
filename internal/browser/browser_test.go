@@ -5241,3 +5241,67 @@ func TestURLPromptHistoryKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestEscapeStopsDeferredImageLoad(t *testing.T) {
+	doc := ParseHTML(`<html><body><img src="pic.png" alt="pic"></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	loader := NewLoader()
+	loader.noImages = false
+	loader.deferImages = true
+	b := NewBrowser(60, 20)
+	b.loader = loader
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.loadSeq = 1
+	b.deferredImages = true
+	b.imageCancel = func() {}
+
+	b.HandleKey("esc")
+	if b.deferredImages {
+		t.Fatal("Esc left the deferred image load active")
+	}
+	if !b.imagesPaused {
+		t.Fatal("Esc did not pause deferred images")
+	}
+	if b.status != "Stopped loading images" {
+		t.Fatalf("status = %q", b.status)
+	}
+
+	// A later timer-driven rebuild must not restart the paused batch.
+	b.js = &jsRuntime{}
+	b.rebuild()
+	if b.deferredImages {
+		t.Fatal("rebuild restarted a paused image load")
+	}
+}
+
+func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
+	doc := ParseHTML(`<html><body><img src="pic.png" alt="pic"></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.loader = NewLoader()
+	b.loader.noImages = false
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.loadSeq = 1
+	b.deferredImages = true
+	img := doc.FindFirst("img")
+	if img == nil {
+		t.Fatal("image missing")
+	}
+	batch := imageBatch{seq: 1, results: []imageLoadResult{{
+		Node: img, Src: "pic.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
+	}}}
+	if !b.applyDeferredImageBatch(batch) {
+		t.Fatal("partial batch did not apply")
+	}
+	if !b.deferredImages {
+		t.Fatal("a partial batch cleared the deferred state")
+	}
+	if b.applyDeferredImageBatch(imageBatch{seq: 1, done: true}) {
+		t.Fatal("done-only batch reported changes")
+	}
+	if b.deferredImages {
+		t.Fatal("the done batch did not finish the deferred load")
+	}
+}

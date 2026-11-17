@@ -395,9 +395,8 @@ func (b *Browser) runJSTimers() bool {
 		return false
 	}
 	b.js.consumeDirty()
-	if !b.reader {
-		b.refreshImages()
-	}
+	// rebuild handles image refresh; with deferred images it queues a
+	// background batch instead of blocking the event loop.
 	b.rebuild()
 	return true
 }
