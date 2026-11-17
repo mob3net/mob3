@@ -2029,3 +2029,68 @@ func TestFloatDeclaredWidthCapsMinContent(t *testing.T) {
 		t.Fatalf("float width = %d, want 2 despite a longer word", box.W)
 	}
 }
+
+func TestInlineEdgesRoundTotalOnce(t *testing.T) {
+	doc := ParseHTML(`<p>a<code style="margin:0 4px;border:1px solid;padding:4px">x</code>b</p>`)
+	ly := BuildLayout(doc, nil, 40)
+	pos := map[string]int{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText {
+			switch strings.TrimSpace(f.Text) {
+			case "x":
+				pos["x"] = f.X
+			case "b":
+				pos["b"] = f.X
+			}
+		}
+	}
+	// 9px of edge per side is about one 8px cell, not one cell per edge.
+	if pos["x"] != 2 || pos["b"] != 4 {
+		t.Fatalf("inline code positions x=%d b=%d, want x=2 b=4", pos["x"], pos["b"])
+	}
+
+	// A single sub-cell edge still reserves one cell.
+	tiny := build(`<p>a<span style="padding:1px">x</span>b</p>`, 40)
+	pos = map[string]int{}
+	for _, f := range tiny.Frags {
+		if f.Kind == fragText {
+			switch strings.TrimSpace(f.Text) {
+			case "x":
+				pos["x"] = f.X
+			}
+		}
+	}
+	if pos["x"] != 2 {
+		t.Fatalf("1px padding inline x=%d, want 2 (1px rounds up to one cell)", pos["x"])
+	}
+}
+
+func TestInlineSpacePrecedesCodeEdge(t *testing.T) {
+	doc := ParseHTML(`<p>a <code style="background:#000;padding:0 4px">x</code> b</p>`)
+	ly := BuildLayout(doc, nil, 40)
+	type cell struct {
+		text string
+		bg   bool
+	}
+	cells := map[int]cell{}
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		bg := f.Style != nil && f.Style.Background.Set
+		cells[f.X] = cell{strings.TrimSpace(f.Text), bg}
+	}
+	// a(0) space(1, page background) edge(2, code background) x(3) ...
+	if c, ok := cells[1]; !ok || c.bg {
+		t.Fatalf("space before code = %+v, want unstyled page space", c)
+	}
+	if c, ok := cells[2]; !ok || !c.bg {
+		t.Fatalf("code left edge = %+v, want code background", c)
+	}
+	if c, ok := cells[3]; !ok || c.text != "x" {
+		t.Fatalf("code text = %+v, want x at column 3", c)
+	}
+	if c, ok := cells[6]; !ok || c.text != "b" {
+		t.Fatalf("text after code = %+v, want b at column 6", c)
+	}
+}

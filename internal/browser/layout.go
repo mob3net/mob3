@@ -2391,6 +2391,9 @@ func (c *inlineCtx) collect(n *Node) {
 		return
 	}
 	if st.Display == "inline" || st.Display == "inline-block" {
+		// The inter-word space that precedes the box must stay outside its
+		// margin/padding, or the box's edge cells appear before the space.
+		c.flushPendingSpace(st)
 		left, right := c.inlineEdges(st)
 		if left > 0 {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: left, style: st, node: n})
@@ -2414,9 +2417,10 @@ func (c *inlineCtx) collect(n *Node) {
 }
 
 // inlineEdges returns the horizontal margin, border and padding reserved
-// around an inline box. A positive spacing smaller than a terminal cell is
-// rounded up to one cell so menu links with small CSS padding do not glue
-// together.
+// around an inline box. The three edges on each side are summed in CSS px and
+// rounded to cells once, so several sub-cell values (such as a 1px border and
+// 4px padding and margin) take one cell rather than one cell each. A positive
+// total still reserves at least one cell so menu links do not glue together.
 func (c *inlineCtx) inlineEdges(st *Style) (int, int) {
 	if st == nil {
 		return 0, 0
@@ -2425,16 +2429,65 @@ func (c *inlineCtx) inlineEdges(st *Style) (int, int) {
 	if avail < 1 {
 		avail = 1
 	}
-	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := c.l.boxMetrics(st, avail)
-	left := ml + bl + pl
-	right := mr + br + pr
-	if left == 0 && (lengthPositive(st.Margin[3]) || (st.BorderStyle[3] && lengthPositive(st.Border[3])) || lengthPositive(st.Padding[3])) {
-		left = 1
+	return inlineEdgeCells(st, 3, avail), inlineEdgeCells(st, 1, avail)
+}
+
+// inlineEdgeCells sums one side's margin, border and padding and converts the
+// total to terminal cells in a single rounding step.
+func inlineEdgeCells(st *Style, side, basis int) int {
+	total := 0.0
+	add := func(l Length) {
+		if !l.Set || l.Auto {
+			return
+		}
+		switch {
+		case l.Calc:
+			total += l.CalcPx/cellW + float64(basis)*l.CalcPct/100
+		case l.U == UnitPercent:
+			total += float64(basis) * l.V / 100
+		default:
+			total += l.cssPx(st.FontSize) / cellW
+		}
 	}
-	if right == 0 && (lengthPositive(st.Margin[1]) || (st.BorderStyle[1] && lengthPositive(st.Border[1])) || lengthPositive(st.Padding[1])) {
-		right = 1
+	add(st.Margin[side])
+	if st.BorderStyle[side] {
+		add(st.Border[side])
 	}
-	return left, right
+	add(st.Padding[side])
+	if total <= 0 {
+		return 0
+	}
+	n := int(math.Round(total))
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// flushPendingSpace emits the inter-word space collected before an inline box
+// so the box's left edge comes after it. It mirrors addWord's space handling.
+func (c *inlineCtx) flushPendingSpace(next *Style) {
+	if !c.space {
+		return
+	}
+	c.space = false
+	if !c.hasContent {
+		return
+	}
+	spaceStyle := c.spaceStyle
+	if spaceStyle == nil {
+		spaceStyle = next
+	}
+	if spaceStyle == nil {
+		return
+	}
+	spaceW := c.charW(' ', spaceStyle)
+	if (c.base == nil || c.base.WhiteSpace != "nowrap") && c.curW+spaceW > c.lineMaxW() {
+		c.flush(false)
+		return
+	}
+	c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: c.spaceNode})
+	c.curW += spaceW
 }
 
 func lengthPositive(l Length) bool {
