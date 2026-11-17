@@ -1352,7 +1352,10 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.FlexDir = "row"
 		}
 	case "flex-wrap":
-		if lower == "wrap" || lower == "wrap-reverse" {
+		switch lower {
+		case "nowrap", "no-wrap":
+			st.FlexWrap = "nowrap"
+		case "wrap", "wrap-reverse":
 			st.FlexWrap = "wrap"
 		}
 	case "justify-content":

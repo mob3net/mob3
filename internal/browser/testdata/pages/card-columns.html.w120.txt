@@ -1,10 +1,9 @@
 
 
 
-   Long headline that              Short headline                  Another headline with
-   wraps inside a narrow           Sport                           several words
-   card                                                            Culture
-   News
+   Long headline that wraps        Short headline                  Another headline with
+   inside a narrow card            Sport                           several words
+   News                                                            Culture
 
 
 

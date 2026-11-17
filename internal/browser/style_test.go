@@ -437,3 +437,13 @@ func TestBorderStyleNoneSuppressesWidth(t *testing.T) {
 		t.Fatalf("border-left-style:none width = %d, want 0", bl)
 	}
 }
+
+func TestFlexWrapNowrap(t *testing.T) {
+	doc := ParseHTML(`<div class="row nowrap"></div>`)
+	rules := ParseStylesheet(`.row{flex-wrap:wrap}.nowrap{flex-wrap:nowrap !important}`)
+	_ = BuildLayout(doc, rules, 100)
+	n := doc.FindFirst("div")
+	if n.Style.FlexWrap != "nowrap" {
+		t.Fatalf("flex-wrap = %q, want nowrap (!important)", n.Style.FlexWrap)
+	}
+}

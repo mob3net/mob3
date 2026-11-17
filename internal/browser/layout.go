@@ -1754,20 +1754,16 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	maxH := 0
 	xx := startX
 	for i, it := range items {
-		basis := widths[i]
-		// Percentage and calc() widths must be resolved against the
-		// container, not against the already-resolved item width (which would
-		// apply the percentage a second time inside block()).
-		if it.Style != nil && it.Style.Width.Set && !it.Style.Width.IsAuto() &&
-			(it.Style.Width.U == UnitPercent || it.Style.Width.Calc) {
-			basis = availW
-		}
+		basis := maxInt(1, widths[i])
 		starts[i] = len(l.frags)
 		var h int
 		if l.isBlock(it) {
-			h = l.block(it, xx, y, maxInt(1, basis))
+			// The flex line already resolved this item's width, including
+			// percentages and grow/shrink; do not apply Width again inside
+			// block layout or the box drifts from its assigned slot.
+			h, _ = l.blockLayout(it, xx, y, basis, 0, true)
 		} else {
-			h = l.inlineFlow([]*Node{it}, xx, y, maxInt(1, basis), base)
+			h = l.inlineFlow([]*Node{it}, xx, y, basis, base)
 		}
 		heights[i] = h
 		if h > maxH {

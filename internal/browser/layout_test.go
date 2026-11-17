@@ -2276,3 +2276,32 @@ func TestImageAltLabelUsesMarkerInTinyBox(t *testing.T) {
 	}
 	t.Fatal("tiny image did not use the compact marker")
 }
+
+func TestFlexPercentageItemsKeepAssignedSlots(t *testing.T) {
+	doc := ParseHTML(`<div style="display:flex;width:400px">` +
+		`<div id="s" style="width:25%;padding:0 24px;box-sizing:border-box;border-right:1px solid #ccc">Side</div>` +
+		`<div id="m" style="width:75%;padding:0 24px;box-sizing:border-box">Main</div></div>`)
+	ly := BuildLayout(doc, nil, 100)
+	var side, main *Node
+	doc.FindAll(func(n *Node) bool {
+		switch n.Attr("id") {
+		case "s":
+			side = n
+		case "m":
+			main = n
+		}
+		return false
+	})
+	if side == nil || main == nil {
+		t.Fatal("flex items missing")
+	}
+	rs, rm := ly.Boxes[side], ly.Boxes[main]
+	if rm.X < rs.X+rs.W {
+		t.Fatalf("main starts at %d before the sidebar ends at %d: %+v %+v", rm.X, rs.X+rs.W, rs, rm)
+	}
+	// Percentage rounding can add a cell or two; the important property is
+	// that the columns keep their own slots.
+	if rs.W+rm.W > 52 {
+		t.Fatalf("flex items overflow their 50-cell row: %+v %+v", rs, rm)
+	}
+}
