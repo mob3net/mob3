@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClearGlyphsKeepsBackground(t *testing.T) {
@@ -542,5 +543,72 @@ func TestLinesMonoKeepsAttributes(t *testing.T) {
 	plain := g.Lines(false)[0]
 	if strings.Contains(plain, "\x1b[") {
 		t.Fatalf("plain dump kept escapes: %q", plain)
+	}
+}
+
+func TestFixedChromePaintsAboveContent(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0">` +
+		`<div style="position:fixed;top:0;left:0;width:200px;background:#000">TOP</div>` +
+		`<div style="height:16px">LINE1</div><div style="height:16px">LINE2</div>` +
+		`<div style="height:16px">LINE3</div><div style="height:16px">LINE4</div>` +
+		`</body></html>`)
+	ly := BuildLayoutBudgetDeadline(doc, nil, 40, 10, false, false, time.Time{}, DefaultLayoutBudget)
+	rowText := func(g *Grid, y int) string {
+		var b strings.Builder
+		for x := 0; x < g.W; x++ {
+			r := g.Cells[y*g.W+x].R
+			if r == 0 {
+				r = ' '
+			}
+			b.WriteRune(r)
+		}
+		return b.String()
+	}
+	for _, scroll := range []int{0, 3} {
+		ly.SetFixedScroll(scroll)
+		g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
+		PaintLayout(g, ly, scroll, 0, 10, nil, RGB(255, 255, 255))
+		row := rowText(g, 0)
+		if strings.TrimSpace(row) != "TOP" {
+			t.Fatalf("scroll %d: fixed header row = %q, want only TOP", scroll, row)
+		}
+	}
+}
+
+func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	fill := RGB(0x20, 0x20, 0x20)
+	g := NewGrid(20, 10, RGB(255, 255, 255), RGB(255, 255, 255))
+
+	// An image scrolling under a fixed chrome fill must not become a native
+	// placement, because the terminal would composite it over the chrome.
+	ly := &Layout{Frags: []Frag{
+		{Kind: fragImage, X: 0, Y: 5, W: 2, H: 2, Img: img},
+		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+	}}
+	var placements []ImagePlacement
+	PaintLayoutGraphics(g, ly, 5, 0, 10, nil, RGB(255, 255, 255), &placements)
+	if len(placements) != 0 {
+		t.Fatalf("image under fixed chrome produced %d placements, want half-block art", len(placements))
+	}
+
+	// An image outside the chrome band keeps its native placement.
+	ly = &Layout{Frags: []Frag{{Kind: fragImage, X: 0, Y: 8, W: 2, H: 1, Img: img}}}
+	placements = nil
+	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
+	if len(placements) != 1 {
+		t.Fatalf("image below chrome produced %d placements, want 1", len(placements))
+	}
+
+	// A fixed image (for example a logo in the fixed header) is part of the
+	// chrome and keeps its native placement.
+	ly = &Layout{Frags: []Frag{
+		{Kind: fragImage, X: 0, Y: 5, W: 2, H: 1, Img: img, Fixed: true},
+		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+	}}
+	placements = nil
+	PaintLayoutGraphics(g, ly, 5, 0, 10, nil, RGB(255, 255, 255), &placements)
+	if len(placements) != 1 {
+		t.Fatalf("fixed image produced %d placements, want 1", len(placements))
 	}
 }

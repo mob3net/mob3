@@ -232,8 +232,10 @@ Standard Go layout:
   from the browser, resolves `top`/`right`/`bottom`/`left` against it, excludes
   fixed fragments from page height and scrolling, and marks them so the draw
   path re-anchors them by the scroll offset each frame (link rectangles are
-  rebuilt when the offset changes). Resizing rebuilds layout with the new
-  viewport height. In dump mode, where no viewport exists, fixed boxes fall back
+  rebuilt when the offset changes). Fixed fragments paint after the scrolling
+  page, so fixed headers, bars and banners stay above content that scrolls
+  underneath them; a fixed fill also clears the cells it covers so page glyphs
+  cannot show through. Resizing rebuilds layout with the new viewport height. In dump mode, where no viewport exists, fixed boxes fall back
   to page-anchored absolute placement so their content still renders.
   `position:sticky` remains approximated as block flow.
 - **Responsive media queries:** `@media` conditions are stored per rule and
@@ -452,7 +454,10 @@ Standard Go layout:
   (kitty/iTerm2) instead of half-block art; images clipped by the viewport are
   cropped to the visible cell rows. A focused linked image loses its border
   highlight because inline graphics paint above text; the footer still shows
-  the target.
+  the target. A page image whose visible rows intersect an opaque fixed-chrome
+  fill falls back to half-block art for that frame, because terminal image
+  placements are composited above the text grid and cannot be erased by the
+  fixed fill; fixed images (such as a logo inside a fixed header) stay native.
 - **Graphics protocol preference:** default is `none` (no image loading or
   drawing, for speed). When enabled with `-graphics=auto|kitty|iterm|blocks`,
   kitty comes first, then iTerm2, then half-block art. Auto is selected from

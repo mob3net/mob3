@@ -350,23 +350,53 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	}
 	focusBG := RGB(0xff, 0xe0, 0x66)
 	focusFG := RGB(0x1f, 0x23, 0x28)
+	// Fixed chrome backgrounds are painted after the page. Native terminal
+	// images are composited above the text grid and cannot be erased by those
+	// fills, so images that scroll under fixed chrome fall back to half-block
+	// art instead of a placement.
+	var chrome []Rect
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		y := f.Y - scroll + topRow
-		if y >= bottomRow {
+		if !f.Fixed || f.Kind != fragFill || !f.Color.opaque() {
 			continue
 		}
-		if y+f.H <= topRow || y >= g.H {
+		y := f.Y - scroll + topRow
+		y0 := maxInt(y, topRow)
+		y1 := minInt(y+f.H, bottomRow)
+		if y1 <= y0 {
 			continue
+		}
+		chrome = append(chrome, Rect{X: f.X, Y: y0, W: f.W, H: y1 - y0})
+	}
+	paintBlocks := func(f *Frag, y0, y1 int) bool {
+		for _, r := range chrome {
+			if f.X < r.X+r.W && f.X+f.W > r.X && y0 < r.Y+r.H && y1 > r.Y {
+				return true
+			}
+		}
+		return false
+	}
+	paintOne := func(f *Frag) {
+		y := f.Y - scroll + topRow
+		if y >= bottomRow {
+			return
+		}
+		if y+f.H <= topRow || y >= g.H {
+			return
 		}
 		switch f.Kind {
 		case fragFill:
 			clippedTop := maxInt(y, topRow)
 			clippedBot := minInt(y+f.H, bottomRow)
+			if f.Fixed {
+				// Fixed chrome paints after the page, so its fills must also
+				// erase glyphs from content that scrolled underneath.
+				g.ClearGlyphs(f.X, clippedTop, f.W, clippedBot-clippedTop)
+			}
 			g.Fill(f.X, clippedTop, f.W, clippedBot-clippedTop, f.Color)
 		case fragText:
 			if y < topRow || y >= bottomRow {
-				continue
+				return
 			}
 			st := f.Style
 			fg := st.Color
@@ -418,15 +448,15 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			}
 		case fragImage:
 			if f.Img == nil {
-				continue
+				return
 			}
 			y0 := maxInt(y, topRow)
 			y1 := minInt(y+f.H, bottomRow)
 			if y0 >= y1 {
-				continue
+				return
 			}
 			imgTop := y0 - y
-			if placements != nil {
+			if placements != nil && (f.Fixed || !paintBlocks(f, y0, y1)) {
 				src := ""
 				if f.Node != nil {
 					src = f.Node.ImgSrc
@@ -435,7 +465,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 					Img: f.Img, Src: src, X: f.X, Y: y0, W: f.W, H: y1 - y0,
 					RowStart: imgTop, TotalRows: f.H,
 				})
-				continue
+				return
 			}
 			paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
 			if f.Link != nil && f.Link == focus {
@@ -444,6 +474,18 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				g.Fill(f.X, y, 1, f.H, focusBG)
 				g.Fill(f.X+f.W-1, y, 1, f.H, focusBG)
 			}
+		}
+	}
+	// Paint the scrolling page first and viewport-anchored (fixed) chrome
+	// last, so headers and bars stay above content that scrolls under them.
+	for i := range ly.Frags {
+		if !ly.Frags[i].Fixed {
+			paintOne(&ly.Frags[i])
+		}
+	}
+	for i := range ly.Frags {
+		if ly.Frags[i].Fixed {
+			paintOne(&ly.Frags[i])
 		}
 	}
 }
