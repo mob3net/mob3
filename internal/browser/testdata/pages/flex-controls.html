@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px; border: 1px solid #ccc; }
+.item { padding: 2px; background: #eee; }
+.item.wide { flex: 1; min-width: 0; }
+.order-a { order: 2; }
+.order-b { order: 1; }
+.column { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.badge { display: inline-flex; padding: 0 4px; background: #ddd; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="item order-a">Second visually</span>
+  <span class="item order-b">First visually</span>
+  <span class="item wide">A long label that shrinks inside the remaining space</span>
+</div>
+<div class="column"><div>Stacked one</div><div>Stacked two</div></div>
+<p>Badge: <span class="badge">new</span> after text.</p>
+</body>
+</html>

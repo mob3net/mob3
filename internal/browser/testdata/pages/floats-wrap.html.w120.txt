@@ -1,0 +1,11 @@
+
+  Left float                                                                                               Right float
+  content that    Normal paragraph text wraps around both floats until their vertical range ends, then continues across
+  takes several   the full width of the page again.
+  words.
+ Figure box
+ A caption
+ that wrapsFirst clipped line
+ under the
+ figure
+ width     After the clipped box.

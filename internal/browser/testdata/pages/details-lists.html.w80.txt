@@ -1,0 +1,22 @@
+
+
+ Lists
+
+
+ I. First item
+II. Second item
+
+
+ a. Alpha item
+ b. Beta item
+
+
+  ▪ Square item
+
+ Closed details
+ Open details
+
+ Visible paragraph
+
+
+   Quoted text with a decorative border.

@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.float-left { float: left; width: 120px; padding: 4px; margin-right: 8px; background: #eee; }
+.float-right { float: right; width: 90px; padding: 4px; margin-left: 8px; background: #eee; }
+.clear { clear: both; }
+.clip { overflow: hidden; max-height: 32px; border: 1px solid #ccc; }
+figure { float: left; margin: 0 8px 8px 0; display: table; }
+figcaption { display: table-caption; caption-side: bottom; font-size: 85%; }
+</style>
+</head>
+<body>
+<div class="float-left">Left float content that takes several words.</div>
+<div class="float-right">Right float</div>
+<p>Normal paragraph text wraps around both floats until their vertical range ends, then continues across the full width of the page again.</p>
+<div class="clear"></div>
+<figure><span>Figure box</span><figcaption>A caption that wraps under the figure width</figcaption></figure>
+<div class="clip"><p>First clipped line</p><p>Second clipped line</p><p>Third clipped line</p></div>
+<p>After the clipped box.</p>
+</body>
+</html>

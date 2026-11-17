@@ -1,0 +1,17 @@
+
+  One         Two
+
+
+ Text before
+
+ Block child
+ Second child
+ text after.
+
+  Cell A
+
+
+  Cell B
+
+
+ Auto one                               Auto two

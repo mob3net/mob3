@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #999; padding: 3px; }
+td.top { vertical-align: top; }
+td.mid { vertical-align: middle; }
+td.bot { vertical-align: bottom; }
+td.pct { width: 35%; }
+td.nowrap { white-space: nowrap; }
+</style>
+</head>
+<body>
+<table>
+<tr><th>Key</th><th>Description</th><th>Value</th></tr>
+<tr><td class="top">top</td><td class="pct">Taller content that wraps to several lines in this column</td><td class="mid">middle</td></tr>
+<tr><td class="bot">bottom</td><td class="nowrap" nowrap>A very long line that must not wrap</td><td>last</td></tr>
+<tr><td colspan="2">Merged footer cell</td><td>0</td></tr>
+</table>
+</body>
+</html>

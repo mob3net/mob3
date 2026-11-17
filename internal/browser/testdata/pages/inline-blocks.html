@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.row { display: flex; gap: 8px; margin-bottom: 8px; }
+.chip { display: inline-block; padding: 2px 6px; border: 1px solid #ccc; }
+.wrap-inline-block { display: inline-block; width: 200px; border: 1px solid #ccc; padding: 4px; }
+.contents { display: contents; }
+.contents .cell { border: 1px solid #ccc; padding: 2px; }
+.grid { display: grid; grid-template-columns: auto auto; gap: 4px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="row"><span class="chip">One</span><span class="chip">Two</span></div>
+<p>Text before <span class="wrap-inline-block"><div>Block child</div><div>Second child</div></span> text after.</p>
+<div class="contents"><div class="cell">Cell A</div><div class="cell">Cell B</div></div>
+<div class="grid"><span>Auto one</span><span>Auto two</span></div>
+</body>
+</html>

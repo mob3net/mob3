@@ -1,0 +1,13 @@
+
+
+   Left column text that     Right column with more words to fill the wider
+   wraps                     track
+
+
+
+   Wide summary across both columns
+
+
+ Area heading
+
+  Side       Main content for the named area

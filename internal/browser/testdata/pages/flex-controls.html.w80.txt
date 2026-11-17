@@ -1,0 +1,10 @@
+
+
+    A long label that shrinks inside the        First          Second
+   remaining space                             visually       visually
+
+
+ Stacked one
+ Stacked two
+
+ Badge:  new  after text.

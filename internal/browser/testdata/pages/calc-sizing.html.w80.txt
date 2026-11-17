@@ -1,0 +1,16 @@
+
+
+
+        Centered column sized with calc(100% - 80px) and auto margins.
+
+
+  Half width with min/max constraints.
+
+  Viewport unit width.
+
+
+
+    Line-height padding.
+
+
+   Logical margins and padding for horizontal text.

@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; line-height: 1.5; }
+.centered { width: calc(100% - 80px); margin: 0 auto; padding: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+.half { width: 50%; min-width: 200px; max-width: 420px; padding: 4px; background: #eee; }
+.vwbox { width: 40vw; padding: 2px; border: 1px solid #ccc; }
+.lhbox { padding: 0.5lh; border: 1px solid #ccc; }
+.logical { margin-block: 4px; margin-inline-start: 12px; padding-inline-end: 8px; }
+</style>
+</head>
+<body>
+<div class="centered">Centered column sized with calc(100% - 80px) and auto margins.</div>
+<div class="half">Half width with min/max constraints.</div>
+<div class="vwbox">Viewport unit width.</div>
+<div class="lhbox">Line-height padding.</div>
+<p class="logical">Logical margins and padding for horizontal text.</p>
+</body>
+</html>
