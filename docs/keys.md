@@ -19,7 +19,7 @@ key, mouse and form reference for the running build.
 | `R` | Toggle reader mode |
 | `D` | Toggle dark mode |
 | `J` | Toggle JavaScript and reload the page without or with scripts |
-| `i` | Cycle graphics modes: full graphics, blocks, none |
+| `i` | Cycle graphics modes in place: full graphics, blocks, none (no reload) |
 | `X` | Hide or show fixed-position elements |
 | `o` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |

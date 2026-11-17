@@ -137,6 +137,9 @@ type layouter struct {
 	maxFrags  int
 	maxRows   int
 	hideFixed bool
+	// imagesOff lays decoded images out as alt labels without clearing them,
+	// so graphics mode changes can hide images without reloading the page.
+	imagesOff bool
 	// forcedImageH is a resolved percentage height for an absolutely
 	// positioned image whose containing block height is known.
 	forcedImageH int
@@ -227,25 +230,25 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutViewportDeadline is BuildLayoutDeadline with the terminal
 // viewport height, so position:fixed boxes can anchor to the visible area.
 func BuildLayoutViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
 // to page, text, border and background colors after layout.
 func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, true, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, true, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkViewportDeadline is BuildLayoutViewportDeadline with the dark
 // palette applied.
 func BuildLayoutDarkViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, true, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, true, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutBudgetDeadline is BuildLayoutViewportDeadline with explicit
@@ -257,10 +260,17 @@ func BuildLayoutBudgetDeadline(root *Node, author []Rule, width, viewportH int, 
 // BuildLayoutBudgetDeadlineOptions is BuildLayoutBudgetDeadline with additional
 // display switches. hideFixed removes position:fixed boxes from the result.
 func BuildLayoutBudgetDeadlineOptions(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed bool, deadline time.Time, budget LayoutBudget) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, deadline, budget)
+	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, false, deadline, budget)
 }
 
-func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed bool, deadline time.Time, budget LayoutBudget) *Layout {
+// BuildLayoutBudgetDeadlineImages is BuildLayoutBudgetDeadlineOptions with an
+// imagesOff switch. When set, decoded images are laid out as their alt labels
+// without reloading the page, matching a load with images disabled.
+func BuildLayoutBudgetDeadlineImages(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, imagesOff, deadline, budget)
+}
+
+func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
 	if width < 1 {
 		width = 1
 	}
@@ -273,7 +283,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect)}
+	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -3396,7 +3406,7 @@ func visibleText(n *Node) string {
 
 func (c *inlineCtx) addImage(n *Node, st *Style) {
 	maxW := c.lineMaxW()
-	if n.Img == nil {
+	if n.Img == nil || c.l.imagesOff {
 		alt := n.Attr("alt")
 		if alt == "" {
 			// An explicitly sized broken image gets a small placeholder;
@@ -3581,10 +3591,10 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 	if boxH <= 0 && st.Height.Set && st.Height.U != UnitPercent {
 		boxH = st.Height.resolveV(w, st.FontSize)
 	}
-	if boxH > 0 && st.ObjectFit != "" && n.Img != nil {
+	if boxH > 0 && st.ObjectFit != "" && n.Img != nil && !l.imagesOff {
 		return l.addFittedImage(n, st, x, y, w, boxH)
 	}
-	if n.Img == nil {
+	if n.Img == nil || l.imagesOff {
 		alt := strings.TrimSpace(n.Attr("alt"))
 		iw, ih := imageSize(n, st, w, l.imageCapWidth())
 		if alt == "" {

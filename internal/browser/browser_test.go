@@ -4898,27 +4898,62 @@ func TestCycleGraphicsModes(t *testing.T) {
 	}
 }
 
-func TestGraphicsModeChangeRefreshesPage(t *testing.T) {
+func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	b := NewBrowser(80, 20)
 	b.cellW, b.cellH = 8, 16
-	b.url = mustParse(t, "https://example.com/")
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
-		u := mustParse(t, target)
-		return &Page{URL: u, Base: u, Root: ParseHTML("<html><body>ok</body></html>")}, nil
+	u := mustParse(t, "https://example.com/")
+	doc := ParseHTML(`<html><body><p>before</p><img alt="pic" src="pic.png"><p>after</p></body></html>`)
+	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		img.Img = image.NewRGBA(image.Rect(0, 0, 160, 80))
+		img.ImgSrc = "pic.png"
 	}
+	b.loader = NewLoader()
+	b.loader.noImages = false
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.rebuild()
+	page := b.page
 	seq := b.loadSeq
-	b.cycleGraphics() // native -> blocks
-	if b.loadSeq == seq {
-		t.Fatal("changing to blocks did not refresh the page")
+	hasImage := func() bool {
+		for _, f := range b.layout.Frags {
+			if f.Kind == fragImage {
+				return true
+			}
+		}
+		return false
 	}
-	select {
-	case res := <-b.loadCh:
-		b.finishLoad(res)
-	case <-time.After(2 * time.Second):
-		t.Fatal("graphics refresh did not finish")
+	if !hasImage() {
+		t.Fatal("initial layout has no image fragment")
+	}
+
+	b.cycleGraphics() // native -> blocks
+	if b.page != page || b.loadSeq != seq {
+		t.Fatal("changing to blocks reloaded the page")
+	}
+	if b.gfx != nil || !hasImage() {
+		t.Fatalf("blocks mode gfx=%v image=%v", b.gfx, hasImage())
+	}
+
+	b.cycleGraphics() // blocks -> none
+	if b.page != page || b.loadSeq != seq {
+		t.Fatal("changing to none reloaded the page")
+	}
+	if !b.loader.noImages {
+		t.Fatal("none mode should disable image loading")
+	}
+	if hasImage() {
+		t.Fatal("none mode still laid out an image fragment")
+	}
+
+	b.cycleGraphics() // none -> native
+	if b.page != page || b.loadSeq != seq {
+		t.Fatal("changing back to native graphics reloaded the page")
+	}
+	if !hasImage() {
+		t.Fatal("image fragment did not return after enabling graphics")
 	}
 }
 

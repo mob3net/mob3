@@ -2148,3 +2148,23 @@ func TestDefiniteWidthCountsInMeasure(t *testing.T) {
 		t.Fatalf("float around a 48px child = %d cells, want 6", b.W)
 	}
 }
+
+func TestLayoutImagesOffUsesAltText(t *testing.T) {
+	doc := ParseHTML(`<p>a<img alt="pic" src="x.png">b</p>`)
+	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		img.Img = image.NewRGBA(image.Rect(0, 0, 160, 80))
+	}
+	ly := BuildLayoutBudgetDeadlineImages(doc, nil, 40, 0, false, false, false, true, time.Time{}, DefaultLayoutBudget)
+	found := false
+	for _, f := range ly.Frags {
+		if f.Kind == fragImage {
+			t.Fatal("imagesOff layout produced an image fragment")
+		}
+		if f.Kind == fragText && strings.Contains(f.Text, "pic") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("imagesOff layout did not show the alt label")
+	}
+}

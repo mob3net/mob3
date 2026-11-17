@@ -1082,7 +1082,8 @@ func (b *Browser) rebuild() {
 		layoutWidth--
 	}
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked
-	b.layout = BuildLayoutBudgetDeadlineOptions(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, deadline, b.layoutBudget)
+	imagesOff := b.loader != nil && b.loader.noImages
+	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
 	if b.bigText && layoutTextOverlaps(b.layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
 		// multi-column pages that pushes text from one column over another, so
@@ -1094,7 +1095,7 @@ func (b *Browser) rebuild() {
 		if b.layoutBudget.Time > 0 {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
-		b.layout = BuildLayoutBudgetDeadlineOptions(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, deadline, b.layoutBudget)
+		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
 	}
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
@@ -5042,15 +5043,19 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	}
 	b.graphicsMode = mode
 	b.gfx = NewGFXRenderer(mode, b.cellW, b.cellH)
+	hideImages := mode == GraphicsNone
 	if b.loader != nil {
-		b.loader.noImages = mode == GraphicsNone
+		b.loader.noImages = hideImages
 	}
-	// Every graphics change refreshes the page, including native -> blocks,
-	// so images are fetched and painted in the newly selected mode.
-	if b.url != nil {
-		b.nextScroll = b.scroll
-		b.nextScrollSet = true
-		b.reload()
+	// Rebuild the page in the new mode instead of reloading it. Decoded images
+	// stay on the page; layout hides them when images are off, and a page
+	// loaded with images disabled fetches them here when they are turned on.
+	if b.page != nil && b.page.Root != nil {
+		if !hideImages && b.loader != nil {
+			b.loader.loadInlineSVGs(b.page.Root)
+			b.refreshImages()
+		}
+		b.rebuild()
 	}
 	b.status = b.graphicsStatusText()
 }

@@ -450,7 +450,10 @@ Standard Go layout:
   falls back to half-block art because the multiplexer consumes graphics
   escapes unless passthrough is configured. `i` cycles native graphics →
   blocks → none (or blocks → none when native graphics are unavailable),
-  refreshing the page on every mode change while keeping the scroll row.
+  rebuilding the current page in place while keeping the scroll row. It does
+  not reload the page or re-run its scripts: decoded images stay on the page
+  and layout hides them in `none` mode, and images not yet loaded are fetched
+  on the first switch that enables them.
 - **Graphics encoding:** images are transmitted as PNG (kitty `f=100`, base64;
   iTerm2 `OSC 1337;File`). Text is still painted as ANSI cells; only image
   rectangles are overlaid. Kitty deletes previous placements each frame
