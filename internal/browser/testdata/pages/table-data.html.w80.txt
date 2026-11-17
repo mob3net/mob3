@@ -1,0 +1,12 @@
+
+
+   Name                                     Status          Count
+
+   Alpha                                    Ready                          12
+
+   Beta with a longer label                 Waiting                         3
+
+   Total rows                                                               2
+
+
+ Caption after the table.

@@ -1,0 +1,18 @@
+
+                          Installation
+  Guide
+
+  • Getting started       Make sure the server can read and write to  app/data/
+  • Installation          and  app/private/  folders.
+  • Configuration
+
+                          Then run the packaged archive:
+
+
+
+   run --port 8080
+  visit http://127.0.0.1:8080
+
+
+
+ Change the default password before exposing the service.

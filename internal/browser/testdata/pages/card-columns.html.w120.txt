@@ -1,0 +1,11 @@
+
+
+
+   Long headline that              Short headline                  Another headline with
+   wraps inside a narrow           Sport                           several words
+   card                                                            Culture
+   News
+
+
+
+ Text after the card row.

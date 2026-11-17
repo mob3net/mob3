@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+body { font-size: 16px; margin: 0; padding: 8px; }
+nav { width: 200px; float: left; padding: 8px; border-style: none none solid none; border-width: 16px; border-color: #ccc; background: #eee; }
+nav p { margin: 0 0 8px 0; }
+nav ul { padding-left: 16px; margin: 0; }
+section { overflow: hidden; }
+code { font-size: 85%; padding: 4px; margin: 0 4px; border: 1px solid #999; background: #eee; }
+pre { padding: 8px; background: #eee; }
+h1 { font-size: 24px; margin: 0 0 8px 0; }
+</style>
+</head>
+<body>
+<nav>
+  <p>Guide</p>
+  <ul>
+    <li><a href="/start">Getting started</a></li>
+    <li><a href="/install">Installation</a></li>
+    <li><a href="/config">Configuration</a></li>
+  </ul>
+</nav>
+<section>
+  <h1>Installation</h1>
+  <p>Make sure the server can read and write to <code>app/data/</code> and <code>app/private/</code> folders.</p>
+  <p>Then run the packaged archive:</p>
+  <pre><code>run --port 8080
+visit http://127.0.0.1:8080</code></pre>
+  <p>Change the default password before exposing the service.</p>
+</section>
+</body>
+</html>
