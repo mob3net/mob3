@@ -650,6 +650,10 @@ func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
 				continue
 			}
 			g.Put(c.x, y, c.r, st, fg, bg)
+			if !b.color {
+				// Without colors, reverse video marks the hint letter.
+				g.Cells[y*g.W+c.x].Reverse = true
+			}
 		}
 	}
 }
@@ -683,6 +687,9 @@ func (b *Browser) paintLinkHintFallback(g *Grid, h linkHint, top, bottom int) {
 	fg := RGB(0x1f, 0x23, 0x28)
 	for i, ch := range label {
 		g.Put(x+i, y, ch, st, fg, bg)
+		if !b.color {
+			g.Cells[y*g.W+x+i].Reverse = true
+		}
 	}
 }
 

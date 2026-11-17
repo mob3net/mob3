@@ -4808,7 +4808,12 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	case b.selectMenu != nil:
 		b.paintSelectMenu(g)
 	}
-	lines := g.Lines(b.color)
+	var lines []string
+	if b.color {
+		lines = g.Lines(true)
+	} else {
+		lines = g.LinesMono()
+	}
 	// Scrolling can leave the terminal in a shifted state (for example after a
 	// stray wrap), and cells covered by scaled text are skipped when painting.
 	// Clear the whole screen and repaint on any scroll change so stale content
@@ -4861,6 +4866,11 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		}
 		sb.WriteString(fmt.Sprintf("\x1b[%d;1H", i+1))
 		sb.WriteString(lines[i])
+		if !b.color {
+			// No-color lines are trimmed, so clear any longer previous cell
+			// run left on the row (for example an old URL in the prompt).
+			sb.WriteString("\x1b[K")
+		}
 		b.prev[i] = lines[i]
 	}
 	if b.gfx != nil {

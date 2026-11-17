@@ -7,14 +7,23 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+var testSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// plainLine removes SGR sequences from a rendered row.
+func plainLine(s string) string {
+	return testSGR.ReplaceAllString(s, "")
+}
 
 // drawQuiet runs draw while discarding terminal output.
 func drawQuiet(b *Browser) {
@@ -2043,7 +2052,7 @@ func TestFooterOmitsScrollPercent(t *testing.T) {
 	b.layout = &Layout{Height: 107}
 	b.scroll = 50
 	drawQuiet(b)
-	line := b.prev[len(b.prev)-1]
+	line := plainLine(b.prev[len(b.prev)-1])
 	if strings.Contains(line, "%") {
 		t.Fatalf("footer still shows a scroll percentage: %q", line)
 	}
@@ -2057,7 +2066,7 @@ func TestFooterShowsUsage(t *testing.T) {
 	b.layout = &Layout{Height: 100}
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
-	line := b.prev[len(b.prev)-1]
+	line := plainLine(b.prev[len(b.prev)-1])
 	if !strings.Contains(line, "MEM 18MB") {
 		t.Errorf("footer = %q, want MEM 18MB", line)
 	}
@@ -2076,7 +2085,7 @@ func TestEscapeShowsExitHint(t *testing.T) {
 		t.Fatalf("status = %q, want %q", b.status, exitHint)
 	}
 	drawQuiet(b)
-	line := b.prev[len(b.prev)-1]
+	line := plainLine(b.prev[len(b.prev)-1])
 	for _, want := range []string{"q Quit", "? Help"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("footer = %q, want %q", line, want)
@@ -2121,7 +2130,7 @@ func TestFooterUsageDropsOnNarrow(t *testing.T) {
 	b.layout = &Layout{Height: 100}
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
-	line := b.prev[len(b.prev)-1]
+	line := plainLine(b.prev[len(b.prev)-1])
 	if strings.Contains(line, "MEM") {
 		t.Fatalf("narrow footer still shows usage: %q", line)
 	}
@@ -2654,7 +2663,7 @@ func TestGraphicsLabelUnderlinesShortcut(t *testing.T) {
 func TestFooterGapBeforeRightState(t *testing.T) {
 	b := NewBrowser(100, 10)
 	drawQuiet(b)
-	line := b.prev[len(b.prev)-1]
+	line := plainLine(b.prev[len(b.prev)-1])
 	marker := "Dark:off"
 	i := strings.Index(line, marker)
 	if i < footerGap || line[i-footerGap:i] != strings.Repeat(" ", footerGap) {
@@ -2702,13 +2711,13 @@ func TestFooterRightDoesNotShrinkForLongLeftText(t *testing.T) {
 	if right == "" {
 		t.Fatal("no right footer state")
 	}
-	if !strings.Contains(b.prev[len(b.prev)-1], right) {
-		t.Fatalf("short footer = %q, missing right state %q", b.prev[len(b.prev)-1], right)
+	if !strings.Contains(plainLine(b.prev[len(b.prev)-1]), right) {
+		t.Fatalf("short footer = %q, missing right state %q", plainLine(b.prev[len(b.prev)-1]), right)
 	}
 	b.status = strings.Repeat("long status ", 30)
 	drawQuiet(b)
-	if !strings.Contains(b.prev[len(b.prev)-1], right) {
-		t.Fatalf("long footer collapsed the right state: %q, want %q", b.prev[len(b.prev)-1], right)
+	if !strings.Contains(plainLine(b.prev[len(b.prev)-1]), right) {
+		t.Fatalf("long footer collapsed the right state: %q, want %q", plainLine(b.prev[len(b.prev)-1]), right)
 	}
 }
 
@@ -3218,7 +3227,7 @@ func TestConsoleRequestsHeaderCountsRealRequests(t *testing.T) {
 	b.loader.beginPage()
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	l := newConsoleLayout(20, consoleLogs)
-	line := b.prev[l.tabsY]
+	line := plainLine(b.prev[l.tabsY])
 	if !strings.Contains(line, "Requests (0)") {
 		t.Fatalf("empty request tab = %q, want Requests (0)", line)
 	}
@@ -3259,10 +3268,10 @@ func TestConsoleOnlyOpenSectionHasBody(t *testing.T) {
 		t.Fatal("logs body was rendered while requests was open")
 	}
 	l := newConsoleLayout(20, consoleRequests)
-	if !strings.Contains(b.prev[l.tabsY], "JS logs") {
+	if !strings.Contains(plainLine(b.prev[l.tabsY]), "JS logs") {
 		t.Fatalf("logs tab missing: %q", b.prev[l.tabsY])
 	}
-	if !strings.Contains(b.prev[l.tabsY], "Requests") {
+	if !strings.Contains(plainLine(b.prev[l.tabsY]), "Requests") {
 		t.Fatalf("requests tab missing: %q", b.prev[l.tabsY])
 	}
 }
@@ -3366,7 +3375,7 @@ func TestConsoleFooterIconClosesConsole(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
-	if !strings.HasSuffix(b.prev[19], ">_") {
+	if !strings.HasSuffix(plainLine(b.prev[19]), ">_") {
 		t.Fatalf("console footer missing >_ icon: %q", b.prev[19])
 	}
 	found := false
@@ -5111,4 +5120,63 @@ func TestConsoleEscLeavesInputBeforeClosing(t *testing.T) {
 			t.Fatal("second Esc did not close the console")
 		}
 	})
+}
+
+func TestNoColorLinkHintsUseReverse(t *testing.T) {
+	doc := ParseHTML(`<html><body><p><a href="/one">Documentation</a></p></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(40, 10)
+	b.color = false
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+	withQuietStdout(t, func() {
+		b.openLinkHints(false)
+		b.draw()
+	})
+	found := false
+	for _, line := range b.prev {
+		if strings.Contains(line, "38;2") || strings.Contains(line, "48;2") {
+			t.Fatalf("no-color hint line kept colors: %q", line)
+		}
+		if strings.Contains(line, ";7") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no-color hint did not use reverse video")
+	}
+}
+
+func TestNoColorPromptClearsOldURL(t *testing.T) {
+	doc := ParseHTML(`<html><body><p>hello</p></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 12)
+	b.color = false
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.rebuild()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	b.openURLPrompt()
+	b.promptText = strings.Repeat("u", 50)
+	b.promptCursor = len(b.promptText)
+	b.draw()
+	b.promptText = "x"
+	b.promptCursor = 1
+	b.draw()
+	os.Stdout = old
+	w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "\x1b[K") {
+		t.Fatalf("no-color redraw did not clear the shortened URL row: %q", string(out))
+	}
 }

@@ -27,6 +27,7 @@ type Cell struct {
 	Italic    bool
 	Underline bool
 	Strike    bool
+	Reverse   bool
 	Cont      bool
 	Img       bool
 	// Raw is an escape sequence that renders scaled text occupying RawW
@@ -169,6 +170,7 @@ func (g *Grid) Put(x, y int, r rune, st *Style, fg, bg Color) {
 	if bg.Set {
 		c.BG = bg
 	}
+	c.Reverse = false
 	if st != nil {
 		c.Bold = st.Bold
 		c.Italic = st.Italic
@@ -278,6 +280,7 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 	c.Cont = false
 	c.Img = false
 	c.Skip = false
+	c.Reverse = false
 	if st != nil {
 		c.Bold = st.Bold
 		c.Italic = st.Italic
@@ -660,6 +663,9 @@ func ansiFor(c Cell) string {
 	if c.Strike {
 		b.WriteString(";9")
 	}
+	if c.Reverse {
+		b.WriteString(";7")
+	}
 	b.WriteString(";")
 	b.WriteString(fgCode(c.FG))
 	b.WriteString(";")
@@ -751,8 +757,45 @@ func sq(v int) int {
 	return v * v
 }
 
+// attrCode returns the SGR sequence for a cell's non-color attributes.
+func attrCode(c Cell) string {
+	if !c.Bold && !c.Italic && !c.Underline && !c.Strike && !c.Reverse {
+		return "\x1b[0m"
+	}
+	var b strings.Builder
+	b.WriteString("\x1b[0")
+	if c.Bold {
+		b.WriteString(";1")
+	}
+	if c.Italic {
+		b.WriteString(";3")
+	}
+	if c.Underline {
+		b.WriteString(";4")
+	}
+	if c.Strike {
+		b.WriteString(";9")
+	}
+	if c.Reverse {
+		b.WriteString(";7")
+	}
+	b.WriteString("m")
+	return b.String()
+}
+
 // Lines renders the grid to ANSI strings, one per row.
 func (g *Grid) Lines(color bool) []string {
+	return g.lines(color, false)
+}
+
+// LinesMono renders the grid without colors but keeps bold, italic, underline
+// and strike attributes, so interactive output without color still marks links
+// and link-hint letters. Plain dumps use Lines(false) instead.
+func (g *Grid) LinesMono() []string {
+	return g.lines(false, true)
+}
+
+func (g *Grid) lines(color, attrs bool) []string {
 	out := make([]string, g.H)
 	for y := 0; y < g.H; y++ {
 		var b strings.Builder
@@ -794,6 +837,15 @@ func (g *Grid) Lines(color bool) []string {
 				r = ' '
 			}
 			if !color {
+				if attrs {
+					// Colors are off, but bold/underline/strike still carry
+					// structure such as links and link hints.
+					s := attrCode(c)
+					if s != last {
+						b.WriteString(s)
+						last = s
+					}
+				}
 				if c.Img {
 					b.WriteRune('▒')
 				} else {
@@ -811,10 +863,12 @@ func (g *Grid) Lines(color bool) []string {
 		if color {
 			b.WriteString("\x1b[0m")
 		} else {
-			line := b.String()
-			line = strings.TrimRight(line, " ")
+			line := strings.TrimRight(b.String(), " ")
 			b.Reset()
 			b.WriteString(line)
+			if attrs && line != "" {
+				b.WriteString("\x1b[0m")
+			}
 		}
 		out[y] = b.String()
 	}

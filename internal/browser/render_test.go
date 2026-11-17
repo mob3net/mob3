@@ -527,3 +527,20 @@ func TestDetectColorMode(t *testing.T) {
 		t.Fatalf("truecolor COLORTERM mode = %v, want truecolor", got)
 	}
 }
+
+func TestLinesMonoKeepsAttributes(t *testing.T) {
+	g := NewGrid(4, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	g.Put(0, 0, 'a', &Style{Bold: true, Underline: true}, RGB(255, 0, 0), RGB(0, 0, 255))
+	g.Cells[0].Reverse = true
+	mono := g.LinesMono()[0]
+	if strings.Contains(mono, "38;2") || strings.Contains(mono, "48;2") {
+		t.Fatalf("mono line kept colors: %q", mono)
+	}
+	if !strings.Contains(mono, "0;1;4;7") {
+		t.Fatalf("mono line lost attributes: %q", mono)
+	}
+	plain := g.Lines(false)[0]
+	if strings.Contains(plain, "\x1b[") {
+		t.Fatalf("plain dump kept escapes: %q", plain)
+	}
+}

@@ -62,7 +62,9 @@ Dump mode always uses half-block art for images that were loaded.
 chrome. Color is automatic on a TTY, forced by `-color`, and disabled by
 `-no-color`. Output uses 24-bit color, except on macOS Terminal.app where it
 falls back to the 256-color palette because that terminal does not support
-24-bit SGR sequences.
+24-bit SGR sequences. With `-no-color`, interactive output keeps bold and
+underline attributes (links stay underlined and link hints use reverse video);
+dumps stay plain text.
 
 ```sh
 mob3 -dump -width 120 page.html

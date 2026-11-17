@@ -499,7 +499,10 @@ Standard Go layout:
   sequences and garbles the toolbar and footer, so it gets xterm 256-color
   output (`38;5`/`48;5`), with each RGB mapped to the nearest 6x6x6 cube or
   grayscale ramp entry. A `COLORTERM` value of `truecolor` or `24bit` keeps
-  truecolor output; `-no-color` still disables color entirely.
+  truecolor output. `-no-color` disables color but interactive output keeps
+  bold/italic/underline/strike attributes so links stay marked, and link hint
+  letters use reverse video; dump and automation output remain plain text.
+  A no-color row that shrinks clears the rest of its terminal line.
 - **Dump rendering:** prints the whole document height (capped at 20,000 rows),
   no browser chrome; `-height N` sets an `N`-row layout viewport and limits the
   output to `N` rows. Color is automatic on a TTY, forced by `-color`, disabled
