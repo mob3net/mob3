@@ -1575,10 +1575,24 @@ temporary and remove them before handing work back.
 
 ### Reproduce first
 
-- Save the page and its CSS locally with `curl` into `/tmp`; keep the site URL
-  in the shell command only, never in code or docs.
-- Render at several widths and compare:
-  `./bin/mob3 -dump -width 80|100|120|140 -no-color "$URL"`.
+- **Reproduce at the user's viewport.** The common interactive viewport is
+  **177×42 cells**, sometimes larger. Layout problems that only appear when
+  columns sit side by side can be invisible at 80-120 columns, where the page
+  wraps. Start at 177 columns (or the width the user reports) before reading
+  CSS or probing layout. A PNG is often the quickest way to see the symptom:
+
+  ```sh
+  make && bin/mob3 -width 177 -height 42 -png "$URL" > bin/test.png
+  ```
+
+  A wide comparison is still useful for column layouts:
+  `for w in 100 177 220; do bin/mob3 -width $w -height 42 -png "$URL" > bin/test-$w.png; done`.
+  Use a dump or a layout probe instead when that is faster or when text
+  ordering is the question; the PNG is a tool, not a required first step.
+  Keep the site URL in the shell command only, never in code or docs.
+- Save the page and its CSS locally with `curl` into `/tmp`.
+- Use `-dump -no-color` to read text and confirm ordering once the visual
+  symptom is understood: `./bin/mob3 -dump -width 100 -no-color "$URL"`.
 - Use `-layout-budget none` to distinguish a real empty/overlapping layout from
   a budget-truncated one. Use `-graphics blocks` to see image boxes and
   `-graphics none` to inspect alt-label behavior.
@@ -1664,6 +1678,9 @@ before network/JS. Compare `-layout-budget none` with the default run.
 - `display:contents` and float scoping are approximations: check the computed
   styles and the layout path (`flow`, `flexRow`, `grid`, `table`) before
   changing the cascade.
+- A layout symptom can disappear at narrow widths because flex/grid columns
+  wrap; if a dump at 100 columns looks fine, render a wide PNG before assuming
+  the bug is elsewhere.
 - Do not name specific sites in tests, comments, docs or commit messages.
 
 ### Validate
