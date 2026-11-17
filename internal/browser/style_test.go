@@ -494,3 +494,19 @@ func TestFontShorthandWeights(t *testing.T) {
 		}
 	}
 }
+
+func TestImportURLWithSemicolons(t *testing.T) {
+	src := `@import url("https://fonts.example/css2?family=Open+Sans:ital,wght@0,300;0,400;0,700&display=swap");` +
+		`.after { color: red }`
+	imports := cssImports(src)
+	if len(imports) != 1 {
+		t.Fatalf("imports = %+v, want 1", imports)
+	}
+	if imports[0].href != "https://fonts.example/css2?family=Open+Sans:ital,wght@0,300;0,400;0,700&display=swap" {
+		t.Fatalf("import href = %q", imports[0].href)
+	}
+	rules := ParseStylesheet(src)
+	if len(rules) != 1 {
+		t.Fatalf("rules after @import = %d, want 1", len(rules))
+	}
+}

@@ -1230,7 +1230,8 @@ Standard Go layout:
   `@import` is followed recursively: imported sheets resolve against the
   importing sheet's URL, load before its own rules, combine their media
   condition with `@media` rules, skip cycles, and are capped at depth 8 and 40
-  imported sheets. Parsing is cancellable and capped at 4 MiB of source, 50k
+  imported sheets. Semicolons inside a quoted `url(...)` (common in font URLs)
+  stay part of the import URL and never end the statement. Parsing is cancellable and capped at 4 MiB of source, 50k
   rules, 256 KiB per declaration block, 4 KiB per selector and 1 second of
   parse time; repeated selector text is parsed once per sheet. This bounds
   CPU/GC cost on generated or hostile CSS.

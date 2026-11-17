@@ -2233,6 +2233,44 @@ func ParseDeclarations(s string) []Declaration {
 	return out
 }
 
+// scanCSSStatement returns the index of the first top-level ;, { or } at or
+// after i, ignoring semicolons and braces inside strings and parentheses.
+// Data URLs and font URLs commonly contain semicolons.
+func scanCSSStatement(src string, i int) int {
+	paren := 0
+	var quote byte
+	for i < len(src) {
+		c := src[i]
+		if quote != 0 {
+			if c == '\\' {
+				i += 2
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			i++
+			continue
+		}
+		switch c {
+		case '"', '\'':
+			quote = c
+		case '(':
+			paren++
+		case ')':
+			if paren > 0 {
+				paren--
+			}
+		case ';', '{', '}':
+			if paren == 0 {
+				return i
+			}
+		}
+		i++
+	}
+	return i
+}
+
 // cssImport is one @import rule: a URL and an optional media condition.
 type cssImport struct {
 	href  string
@@ -2284,10 +2322,7 @@ func cssImports(src string) []cssImport {
 			if j < len(src) {
 				n := src[j]
 				if n == ' ' || n == '\t' || n == '\n' || n == '\r' || n == '"' || n == '\'' || n == 'u' || n == 'U' {
-					end := j
-					for end < len(src) && src[end] != ';' && src[end] != '}' {
-						end++
-					}
+					end := scanCSSStatement(src, j)
 					if href, media := parseImportSpec(src[j:end]); href != "" {
 						out = append(out, cssImport{href: href, media: media})
 					}
@@ -2404,9 +2439,7 @@ func parseRules(src string, st *parseState, media string) []Rule {
 			}
 			name := strings.ToLower(src[i+1 : j])
 			preludeStart := j
-			for j < len(src) && src[j] != '{' && src[j] != ';' {
-				j++
-			}
+			j = scanCSSStatement(src, j)
 			if j >= len(src) {
 				break
 			}
