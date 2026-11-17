@@ -2267,19 +2267,23 @@ type inlineItem struct {
 }
 
 type inlineCtx struct {
-	l           *layouter
-	x, y        int
-	baseX       int
-	baseW       int
-	maxW        int
-	imageCapW   int
-	base        *Style
-	items       []inlineItem
-	curW        int
-	hasContent  bool
-	space       bool
-	spaceStyle  *Style
-	spaceNode   *Node
+	l          *layouter
+	x, y       int
+	baseX      int
+	baseW      int
+	maxW       int
+	imageCapW  int
+	base       *Style
+	items      []inlineItem
+	curW       int
+	hasContent bool
+	space      bool
+	spaceStyle *Style
+	spaceNode  *Node
+	// lastSpace records that the most recent emitted item was a collapsed
+	// inter-word space, so whitespace crossing an inline-box boundary does
+	// not add a second space.
+	lastSpace   bool
 	breakBefore bool
 }
 
@@ -2496,8 +2500,12 @@ func (c *inlineCtx) flushPendingSpace(next *Style) {
 		c.flush(false)
 		return
 	}
+	if c.lastSpace {
+		return
+	}
 	c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: c.spaceNode})
 	c.curW += spaceW
+	c.lastSpace = true
 }
 
 func lengthPositive(l Length) bool {
@@ -2605,6 +2613,7 @@ func (c *inlineCtx) appendRune(r rune, st *Style, node *Node) {
 		}
 	}
 	c.items = append(c.items, inlineItem{kind: itemWord, text: string(r), style: st, node: node, w: rw})
+	c.lastSpace = false
 }
 
 func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
@@ -2631,9 +2640,10 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 		if c.hasContent {
 			if !nowrap && c.curW+spaceW+width > c.lineMaxW() {
 				c.flush(false)
-			} else {
+			} else if !c.lastSpace {
 				c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 				c.curW += spaceW
+				c.lastSpace = true
 			}
 		}
 		c.space = false
@@ -2660,6 +2670,7 @@ func (c *inlineCtx) addWord(w string, st *Style, node *Node) {
 	c.items = append(c.items, inlineItem{kind: itemWord, text: w, style: st, node: node, w: width})
 	c.curW += width
 	c.hasContent = true
+	c.lastSpace = false
 }
 
 func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
@@ -3445,9 +3456,10 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 		}
 		if !nowrap && c.curW+spaceW+it.w > c.lineMaxW() {
 			c.flush(false)
-		} else {
+		} else if !c.lastSpace {
 			c.items = append(c.items, inlineItem{kind: itemSpace, w: spaceW, style: spaceStyle, node: spaceNode})
 			c.curW += spaceW
+			c.lastSpace = true
 		}
 	}
 	c.space = false
@@ -3458,6 +3470,7 @@ func (c *inlineCtx) addAtomicBox(it inlineItem) {
 	c.items = append(c.items, it)
 	c.curW += it.w
 	c.hasContent = true
+	c.lastSpace = false
 }
 
 func (c *inlineCtx) flushIfAny() {
@@ -3569,6 +3582,7 @@ func (c *inlineCtx) flush(last bool) {
 	c.hasContent = false
 	c.space = false
 	c.spaceStyle, c.spaceNode = nil, nil
+	c.lastSpace = false
 }
 
 const maxImageRows = 16
@@ -4543,6 +4557,22 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	}
 	if isBlock {
 		floatSum := 0
+		// Normal block and list-item containers lay their inline children on
+		// one line, so their max-content width adds those children up. Grid
+		// and table children stay independent and take the widest one.
+		inlineFlow := st.Display == "block" || st.Display == "list-item"
+		lineW, lineMin := 0, 0
+		space := false
+		flushLine := func() {
+			if lineW > maxW {
+				maxW = lineW
+			}
+			if lineMin > minW {
+				minW = lineMin
+			}
+			lineW, lineMin = 0, 0
+			space = false
+		}
 		for _, c := range n.Children {
 			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 				continue
@@ -4558,13 +4588,34 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 				// max-content contribution is the sum of their widths.
 				ml, mr, _, _, _, _, _, _, _, _, _, _ := l.boxMetrics(c.Style, l.width)
 				floatSum += mw + ml + mr
-			} else if mw > maxW {
-				maxW = mw
+				if mi > minW {
+					minW = mi
+				}
+				continue
 			}
-			if mi > minW {
-				minW = mi
+			block := !inlineFlow || (c.Type == ElementNode && l.isBlock(c))
+			if block {
+				flushLine()
+				if mw > maxW {
+					maxW = mw
+				}
+				if mi > minW {
+					minW = mi
+				}
+				continue
+			}
+			if space && (mw > 0 || mi > 0) {
+				lineW++
+			}
+			lineW += mw
+			if mi > lineMin {
+				lineMin = mi
+			}
+			if c.Type == TextNode || mw > 0 || mi > 0 {
+				space = true
 			}
 		}
+		flushLine()
 		if floatSum > maxW {
 			maxW = floatSum
 		}

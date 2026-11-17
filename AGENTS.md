@@ -378,7 +378,11 @@ Standard Go layout:
   measurement collapses whitespace runs to one space and ignores leading,
   trailing and indentation-only whitespace, matching inline layout, and an
   element's explicit absolute width fixes its measured width so shrink-to-fit
-  containers do not ignore it.
+  containers do not ignore it. Inside a block or list-item container,
+  consecutive inline children are measured as one line (their widths add),
+  while block children stack and only the widest counts, so a flex item or
+  shrink-to-fit box holding an inline menu reserves the whole menu row.
+  Whitespace crossing an inline-box boundary collapses to one space.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
   `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
   are hidden (`display:none`) to avoid rendering them as one-character columns

@@ -2168,3 +2168,41 @@ func TestLayoutImagesOffUsesAltText(t *testing.T) {
 		t.Fatal("imagesOff layout did not show the alt label")
 	}
 }
+
+func TestBlockInlineChildrenMeasureAsOneLine(t *testing.T) {
+	doc := ParseHTML(`<div id="box" style="display:block"><span>aa</span> <span>bb</span></div>`)
+	ly := BuildLayout(doc, nil, 40)
+	l := &layouter{width: 40, styles: ly.Styles}
+	node := doc.FindFirst("div")
+	if node == nil {
+		t.Fatal("box missing")
+	}
+	if mw, _ := l.measure(node); mw != 5 {
+		t.Fatalf("block with inline children measure = %d, want 5 (aa bb)", mw)
+	}
+}
+
+func TestInlineListInFlexHeaderStaysOnOneLine(t *testing.T) {
+	ly := build(`<div style="display:flex;justify-content:space-between;width:400px">`+
+		`<p style="margin:0">Logo</p>`+
+		`<ul style="padding:0;margin:0;list-style:none"><li style="display:inline"><a>Products</a></li> `+
+		`<li style="display:inline"><a>Contact</a></li></ul></div>`, 50)
+	rows := map[string]int{}
+	for _, f := range ly.Frags {
+		if f.Kind != fragText {
+			continue
+		}
+		switch strings.TrimSpace(f.Text) {
+		case "Products":
+			rows["Products"] = f.Y
+		case "Contact":
+			rows["Contact"] = f.Y
+		}
+	}
+	if len(rows) != 2 {
+		t.Fatalf("menu items not rendered: %v", rows)
+	}
+	if rows["Products"] != rows["Contact"] {
+		t.Fatalf("menu wrapped: Products y=%d Contact y=%d", rows["Products"], rows["Contact"])
+	}
+}
