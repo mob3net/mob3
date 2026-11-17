@@ -174,9 +174,9 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		b.quitPending = true
 		b.status = quitConfirmText
 		return false
-	case "tab":
+	case "tab", "l", "right":
 		b.consoleCyclePane(1)
-	case "backtab":
+	case "backtab", "h", "left":
 		b.consoleCyclePane(-1)
 	case ":", "enter":
 		b.focusConsoleInput()
@@ -1116,7 +1116,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if hintW < 1 {
 			hintW = 1
 		}
-		hint := " Click/Tab: switch section · : focus input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hint := " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
 		hintFG := fg
 		if b.quitPending {
 			hint = " " + quitConfirmText

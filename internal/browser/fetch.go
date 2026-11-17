@@ -1599,7 +1599,7 @@ submitted.</p>
 
 <h2>JavaScript console</h2>
 <p><b>!</b> opens logs, requests, storage, the page HTML and Tools. Use
-<b>Tab</b> to switch tabs, <b>:</b>/<b>Enter</b> to focus the input, <b>Enter</b>
+<b>Tab</b> or <b>h</b>/<b>l</b> to switch tabs, <b>:</b>/<b>Enter</b> to focus the input, <b>Enter</b>
 to run JavaScript, <b>j</b>/<b>k</b> to scroll and <b>Esc</b> to close. Use
 <b>Shift</b>-drag to select text while the console is open. Script
 <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open modal dialogs.</p>

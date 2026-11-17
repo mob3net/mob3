@@ -5385,3 +5385,29 @@ func TestFooterShowsImageLoadingCount(t *testing.T) {
 		t.Fatalf("footer after images = %q", got)
 	}
 }
+
+func TestConsoleHTabsAndLTabs(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consolePane = consoleLogs
+	b.handleConsoleKey("l")
+	if b.consolePane != consoleRequests {
+		t.Fatalf("l moved to pane %d, want requests", b.consolePane)
+	}
+	b.handleConsoleKey("h")
+	if b.consolePane != consoleLogs {
+		t.Fatalf("h moved to pane %d, want logs", b.consolePane)
+	}
+	b.handleConsoleKey("backtab")
+	if b.consolePane != consoleTools {
+		t.Fatalf("Shift-Tab moved to pane %d, want tools", b.consolePane)
+	}
+	// Letters stay literal while the input row has focus.
+	b.consoleEdit = true
+	b.consoleText = ""
+	b.consoleCursor = 0
+	b.handleConsoleKey("h")
+	if b.consoleText != "h" || b.consolePane != consoleTools {
+		t.Fatalf("focused input: text=%q pane=%d", b.consoleText, b.consolePane)
+	}
+}

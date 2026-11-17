@@ -1076,7 +1076,8 @@ Standard Go layout:
   HTML and Tools. The active tab is highlighted blue; only its section body is
   shown below the menu, and the logs tab is active by default. The JavaScript
   input row is part of the logs body, pinned to its bottom. Clicking a tab
-  switches sections, and `Tab`/`Shift-Tab` cycle through the same five tabs.
+  switches sections, and `Tab`/`Shift-Tab` or `h`/`l` cycle through the same
+  five tabs.
   Mouse reporting stays enabled so tabs and the input row can be clicked (plain
   terminal drag-selection needs the Shift override).
   `:` or `Enter` (or a click on the input row) focuses the input; typing edits a

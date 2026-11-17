@@ -43,7 +43,7 @@ If only the fragment changes, the page is not reloaded.
 ## Console
 
 `!` or the `>_` footer icon opens the console. Inside it, `:` or `Enter` focuses
-the JavaScript input row, `Tab`/`Shift-Tab` switch sections, `j`/`k` and
+the JavaScript input row, `Tab`/`Shift-Tab` or `h`/`l` switch sections, `j`/`k` and
 `g`/`G` scroll the active section. `Esc` leaves the input row first and closes
 the console on the next press; `!` closes it immediately.
 
