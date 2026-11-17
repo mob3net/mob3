@@ -1246,33 +1246,41 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask, allow
 	}
 	go func() {
 		defer close(out)
-		sem := make(chan struct{}, 6)
-		var wg sync.WaitGroup
-		for i := range tasks {
-			t := tasks[i]
-			if t.url == nil {
+		// Six workers pull tasks in priority order. A worker takes the next
+		// queued image as soon as its current download finishes.
+		jobs := make(chan imageTask)
+		go func() {
+			defer close(jobs)
+			for _, t := range tasks {
 				select {
-				case out <- imageLoadResult{Node: t.node, Src: t.src, Failed: true}:
+				case jobs <- t:
 				case <-ctx.Done():
 					return
 				}
-				continue
 			}
+		}()
+		var wg sync.WaitGroup
+		for w := 0; w < 6; w++ {
 			wg.Add(1)
-			go func(t imageTask) {
+			go func() {
 				defer wg.Done()
-				select {
-				case sem <- struct{}{}:
-				case <-ctx.Done():
-					return
+				for t := range jobs {
+					if t.url == nil {
+						select {
+						case out <- imageLoadResult{Node: t.node, Src: t.src, Failed: true}:
+						case <-ctx.Done():
+							return
+						}
+						continue
+					}
+					img, ok := l.fetchImageResult(ctx, t.url, allowFile, gen)
+					select {
+					case out <- imageLoadResult{Node: t.node, Src: t.src, Img: img, Failed: !ok}:
+					case <-ctx.Done():
+						return
+					}
 				}
-				defer func() { <-sem }()
-				img, ok := l.fetchImageResult(ctx, t.url, allowFile, gen)
-				select {
-				case out <- imageLoadResult{Node: t.node, Src: t.src, Img: img, Failed: !ok}:
-				case <-ctx.Done():
-				}
-			}(t)
+			}()
 		}
 		wg.Wait()
 	}()

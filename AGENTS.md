@@ -903,9 +903,18 @@ Standard Go layout:
   In interactive mode page documents are applied and painted before their
   images: `Loader.deferImages` skips image downloads during the page load, the
   text (with alt labels) is shown immediately, and a background batch fetches
-  and decodes the images without touching the DOM. Decoded results stream back
-  in batches of up to 16; the event loop applies each batch and redraws, so
-  images appear progressively. Navigation cancels the batch and stale results
+  and decodes the images without touching the DOM. Pending images are ordered
+  viewport-first (visible, then within one screen, then by distance with DOM
+  order as the tie-breaker) and six workers pull from that queue, taking the
+  next image as soon as one finishes. Decoded results stream back in batches of
+  up to 16; the event loop applies each batch and redraws, so images appear
+  progressively. Applying a batch that installs images forces a full repaint
+  (the same path as scrolling), so reflowed text and terminal image placements
+  cannot leave stale rows or scaled glyphs behind. Offscreen images are still
+  queued after the visible ones and load eventually. While a batch is pending the URL-row progress bar stays
+  visible at 90% and advances toward completion as images finish, and an idle
+  footer shows `Loading images n/total` until the batch is done (`Esc` completes
+  the bar and stops the batch). Navigation cancels the batch and stale results
   are discarded by page sequence. Timer-driven rebuilds queue
   another background batch instead of loading images synchronously, so scripts
   that dirty the DOM cannot block input. `Esc` cancels a running image batch

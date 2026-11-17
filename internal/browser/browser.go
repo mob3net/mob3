@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,10 @@ type Browser struct {
 	// image load after the user pressed Esc.
 	imagesPaused bool
 	imageCancel  context.CancelFunc
+	// imageTotal and imageDone drive the loading bar and footer count while a
+	// deferred image batch is in flight.
+	imageTotal   int
+	imageDone    int
 	loadSeq      int
 	cancelLoad   context.CancelFunc
 	loading      bool
@@ -557,6 +562,7 @@ func (b *Browser) stopLoading() {
 		if b.deferredImages {
 			b.imagesPaused = true
 			b.cancelDeferredImageLoad()
+			b.finishProgress()
 			b.status = "Stopped loading images"
 		}
 		return
@@ -585,11 +591,11 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.jsErr = false
 	b.cancelLoad = nil
 	b.loading = false
-	b.finishProgress()
 	if res.err != nil {
 		b.autoNavigations = 0
 		b.loopStopped = false
 		b.status = "Error: " + res.err.Error()
+		b.finishProgress()
 		if b.page == nil {
 			doc := "<html><body><h2>Could not load page</h2><p>" + EscapeHTML(res.err.Error()) + "</p></body></html>"
 			root := ParseHTML(doc)
@@ -603,6 +609,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	if page != nil && page.Download && res.method == http.MethodGet && page.URL != nil {
 		b.showDownload(page.URL.String(), page.DownloadName)
 		b.status = "Download link — y copies the curl command"
+		b.finishProgress()
 		b.prev = nil
 		return
 	}
@@ -661,12 +668,8 @@ func (b *Browser) finishLoad(res loadResult) {
 			readerFailed = true
 		}
 	}
-	if !b.reader {
-		if b.loader != nil && b.loader.deferImages {
-			b.startDeferredImageLoad()
-		} else {
-			b.refreshImages()
-		}
+	if !b.reader && (b.loader == nil || !b.loader.deferImages) {
+		b.refreshImages()
 	}
 	b.rebuild()
 	b.scroll = 0
@@ -695,6 +698,12 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	b.autoNavigations = 0
 	b.prev = nil
+	if b.deferredImages {
+		b.progress = 0.9
+		b.progressHold = 0
+	} else {
+		b.finishProgress()
+	}
 }
 
 // pageLoadStatus returns the status line for a freshly applied page, or an
@@ -917,9 +926,6 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 			readerFailed = true
 		}
 	}
-	if b.loader != nil && b.loader.deferImages {
-		b.startDeferredImageLoad()
-	}
 	b.rebuild()
 	b.scroll = entry.Scroll
 	b.clampScroll()
@@ -1073,6 +1079,70 @@ func (b *Browser) cancelDeferredImageLoad() {
 		b.imageCancel = nil
 	}
 	b.deferredImages = false
+	b.imageTotal = 0
+	b.imageDone = 0
+}
+
+// sortImageTasks orders pending images by their position relative to the
+// viewport: visible first, then within one viewport, then the rest by distance.
+// DOM order is preserved for equal ranks.
+func (b *Browser) sortImageTasks(tasks []imageTask) {
+	if len(tasks) < 2 || b.layout == nil || b.layout.Frags == nil {
+		return
+	}
+	viewTop := b.scroll
+	viewH := b.viewportHeight()
+	if viewH < 1 {
+		viewH = 1
+	}
+	viewBottom := viewTop + viewH
+	yOf := make(map[*Node]int, len(tasks))
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Node == nil {
+			continue
+		}
+		if _, ok := yOf[f.Node]; !ok {
+			yOf[f.Node] = f.Y
+		}
+	}
+	type rank struct {
+		bucket int
+		dist   int
+	}
+	ranks := make(map[*Node]rank, len(tasks))
+	for _, t := range tasks {
+		y, ok := yOf[t.node]
+		if !ok {
+			ranks[t.node] = rank{bucket: 2, dist: 1 << 30}
+			continue
+		}
+		switch {
+		case y+1 > viewTop && y < viewBottom:
+			ranks[t.node] = rank{bucket: 0}
+		case y+1 <= viewTop:
+			d := viewTop - (y + 1)
+			if d <= viewH {
+				ranks[t.node] = rank{bucket: 1, dist: d}
+			} else {
+				ranks[t.node] = rank{bucket: 2, dist: d}
+			}
+		default:
+			d := y - viewBottom
+			if d <= viewH {
+				ranks[t.node] = rank{bucket: 1, dist: d}
+			} else {
+				ranks[t.node] = rank{bucket: 2, dist: d}
+			}
+		}
+	}
+	sort.SliceStable(tasks, func(i, j int) bool {
+		a, c := ranks[tasks[i].node], ranks[tasks[j].node]
+		if a.bucket != c.bucket {
+			return a.bucket < c.bucket
+		}
+		return a.dist < c.dist
+	})
 }
 
 // startDeferredImageLoad queues the current page's images on a background
@@ -1086,7 +1156,14 @@ func (b *Browser) startDeferredImageLoad() {
 	if len(tasks) == 0 {
 		return
 	}
+	b.sortImageTasks(tasks)
 	b.cancelDeferredImageLoad()
+	b.imageTotal = len(tasks)
+	b.imageDone = 0
+	// Keep the URL-row progress bar visible while images stream in; the
+	// document itself is already complete.
+	b.progress = 0.9
+	b.progressHold = 0
 	ctx, cancel := context.WithCancel(context.Background())
 	b.imageCancel = cancel
 	b.deferredImages = true
@@ -1123,6 +1200,14 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 	if b.page == nil || batch.seq != b.loadSeq || !b.deferredImages {
 		return false
 	}
+	if b.imageTotal > 0 {
+		b.imageDone += len(batch.results)
+		if b.imageDone > b.imageTotal {
+			b.imageDone = b.imageTotal
+		}
+		frac := float64(b.imageDone) / float64(b.imageTotal)
+		b.progress = 0.9 + 0.09*frac
+	}
 	changed := false
 	for _, r := range batch.results {
 		if r.Node == nil {
@@ -1146,11 +1231,18 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 	if batch.done {
 		b.deferredImages = false
 		b.imageCancel = nil
+		b.finishProgress()
 	}
 	if changed {
 		b.rebuild()
+		// Reflowed text and new terminal image placements can leave stale
+		// cells and scaled glyphs behind. Force the same full repaint that a
+		// scroll triggers instead of trusting the line diff.
+		b.prev = nil
 	}
-	return changed
+	// A batch with only failures or the final done marker still advances the
+	// loading bar and footer count, so the frame needs a repaint.
+	return changed || len(batch.results) > 0 || batch.done
 }
 
 func (b *Browser) refreshImages() bool {
@@ -1167,16 +1259,10 @@ func (b *Browser) rebuild() {
 	}
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
-	if b.js != nil && !b.reader {
-		if b.loader != nil && b.loader.deferImages {
-			// Timer-driven rebuilds must not fall back to a synchronous image
-			// load; queue the work for the background batch instead.
-			if !b.deferredImages {
-				b.startDeferredImageLoad()
-			}
-		} else {
-			b.refreshImages()
-		}
+	if b.js != nil && !b.reader && (b.loader == nil || !b.loader.deferImages) {
+		// Deferred image loading is scheduled after layout, where the image
+		// positions are known.
+		b.refreshImages()
 	}
 	b.hoverRebuildPending = false
 	// Timer-driven DOM changes (for example marquee animations) rebuild the
@@ -1249,6 +1335,11 @@ func (b *Browser) rebuild() {
 		if link := b.findHintLink(confirmNode, confirmHref); link >= 0 {
 			b.beginHintConfirm(link)
 		}
+	}
+	// Layout now knows where each image sits, so a deferred batch can be
+	// ordered viewport-first.
+	if b.loader != nil && b.loader.deferImages && !b.reader && !b.deferredImages {
+		b.startDeferredImageLoad()
 	}
 }
 
@@ -5134,6 +5225,9 @@ func (b *Browser) footerLeft() string {
 	if li := b.focusedLink(); li != nil {
 		return " → " + b.resolveHref(li.Href)
 	}
+	if b.deferredImages && b.imageTotal > 0 {
+		return fmt.Sprintf(" Loading images %d/%d", b.imageDone, b.imageTotal)
+	}
 	return " Ready"
 }
 
@@ -5227,11 +5321,7 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	if b.page != nil && b.page.Root != nil {
 		if !hideImages && b.loader != nil {
 			b.loader.loadInlineSVGs(b.page.Root)
-			if b.loader.deferImages {
-				if !b.deferredImages {
-					b.startDeferredImageLoad()
-				}
-			} else {
+			if !b.loader.deferImages {
 				b.refreshImages()
 			}
 		}
