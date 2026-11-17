@@ -4985,7 +4985,7 @@ func (b *Browser) draw() {
 			if b.hintConfirm {
 				leftColor = RGB(0x9a, 0x5b, 0x00)
 				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-			} else if b.status != "" && b.hoveredLink() == nil {
+			} else if b.status != "" && (b.quitPending || b.hoveredLink() == nil) {
 				switch statusLevelFor(b.status) {
 				case statusWarning:
 					leftColor = RGB(0x9a, 0x5b, 0x00)
@@ -5213,7 +5213,7 @@ func statusLevelFor(s string) statusLevel {
 }
 
 func (b *Browser) footerLeft() string {
-	if b.hintConfirm && b.status != "" {
+	if (b.hintConfirm || b.quitPending) && b.status != "" {
 		return " " + b.status
 	}
 	if li := b.hoveredLink(); li != nil {

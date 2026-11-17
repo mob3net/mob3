@@ -5411,3 +5411,16 @@ func TestConsoleHTabsAndLTabs(t *testing.T) {
 		t.Fatalf("focused input: text=%q pane=%d", b.consoleText, b.consolePane)
 	}
 }
+
+func TestQuitConfirmationBeatsHoveredLink(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.layout = &Layout{Links: []*LinkInfo{{Href: "/target"}}}
+	b.hover = 0
+	b.HandleKey("q")
+	if !b.quitPending || b.status != quitConfirmText {
+		t.Fatalf("q did not ask: pending=%v status=%q", b.quitPending, b.status)
+	}
+	if got := b.footerLeft(); got != " "+quitConfirmText {
+		t.Fatalf("footer with hover = %q, want the quit confirmation", got)
+	}
+}

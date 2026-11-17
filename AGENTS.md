@@ -625,7 +625,8 @@ Standard Go layout:
   the download popup's curl command, and clear the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting, while `:q` plus Enter exits
-  immediately. Do
+  immediately. The quit confirmation takes priority over a hovered link in the
+  footer and keeps its warning color. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
