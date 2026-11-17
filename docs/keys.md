@@ -32,6 +32,7 @@ key, mouse and form reference for the running build.
 | `?` | Help page |
 | `!` | JavaScript console |
 | `q` / `Ctrl-C` | Ask to confirm quitting (`y`/`Enter` quits; any other key cancels) |
+| `:q` | Exit immediately (in the `:` prompt) |
 | `Esc` | Stop loading, leave a field, clear a selection, or show the exit hint |
 
 Back and Forward remember the scroll position you last had on each history
@@ -48,11 +49,16 @@ the console on the next press; `!` closes it immediately.
 
 ## URL prompt
 
-`o` or clicking the URL bar opens the prompt prefilled with the current URL and
-selected. Typing replaces the selection; `Backspace` clears it first.
+`o`, `:` or clicking the URL bar opens the prompt prefilled with the current
+URL and selected. Typing replaces the selection; `Backspace` clears it first.
+`:` is a Vim-style command prompt: `q` or `:q` plus `Enter` exits immediately,
+without the confirmation that `q` asks for. History of earlier URLs and search
+terms is kept in memory for the session.
 
 | Key | Action |
 | --- | --- |
+| `Up` / `Ctrl-P` | Recall the previous URL/search entry |
+| `Down` / `Ctrl-N` | Recall the next entry, or the draft |
 | `Left` / `Right` | Move one character |
 | `Home` / `End` | Start / end |
 | `Ctrl-B` / `Ctrl-F` | Move one character |

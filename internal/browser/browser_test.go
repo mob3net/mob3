@@ -5180,3 +5180,64 @@ func TestNoColorPromptClearsOldURL(t *testing.T) {
 		t.Fatalf("no-color redraw did not clear the shortened URL row: %q", string(out))
 	}
 }
+
+func TestColonPromptQuitsLikeQ(t *testing.T) {
+	b := NewBrowser(60, 12)
+	b.url = mustParse(t, "https://example.com/page")
+	b.HandleKey(":")
+	if !b.prompt || !b.promptVim {
+		t.Fatalf(": did not open a command prompt: prompt=%v vim=%v", b.prompt, b.promptVim)
+	}
+	b.HandleKey("q")
+	if !b.HandleKey("enter") {
+		t.Fatal(":q did not quit immediately")
+	}
+	if b.prompt {
+		t.Fatal(":q left the prompt open")
+	}
+	if b.quitPending {
+		t.Fatal(":q asked for confirmation")
+	}
+
+	// The :o-style prompt keeps q as ordinary input.
+	b = NewBrowser(60, 12)
+	b.url = mustParse(t, "https://example.com/page")
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		return &Page{URL: b.url, Base: b.url, Root: ParseHTML("<html><body>ok</body></html>")}, nil
+	}
+	b.HandleKey("o")
+	b.HandleKey("q")
+	b.HandleKey("enter")
+	if b.quitPending {
+		t.Fatal("o prompt treated q as quit")
+	}
+	entries := b.promptHist.entries
+	if len(entries) != 1 || entries[0] != "q" {
+		t.Fatalf("prompt history = %v, want [q]", entries)
+	}
+}
+
+func TestURLPromptHistoryKeys(t *testing.T) {
+	b := NewBrowser(60, 12)
+	b.url = mustParse(t, "https://example.com/page")
+	b.promptHist.entries = []string{"first query", "second query"}
+	b.promptHist.reset()
+	b.HandleKey("o")
+	if b.promptText != "https://example.com/page" {
+		t.Fatalf("prompt did not start at the current URL: %q", b.promptText)
+	}
+	for _, tc := range []struct {
+		key  string
+		want string
+	}{
+		{"ctrl-p", "second query"},
+		{"up", "first query"},
+		{"down", "second query"},
+		{"ctrl-n", "https://example.com/page"},
+	} {
+		b.HandleKey(tc.key)
+		if b.promptText != tc.want {
+			t.Fatalf("after %s prompt = %q, want %q", tc.key, b.promptText, tc.want)
+		}
+	}
+}

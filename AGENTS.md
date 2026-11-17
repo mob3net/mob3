@@ -591,13 +591,15 @@ Standard Go layout:
   `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
   `i` cycle graphics modes, `X` hide/show
-  fixed elements, `o` URL prompt, `/` find in page,
+  fixed elements, `o` URL prompt (or `:` for a Vim-style command prompt where
+  `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
   `y` copy selected page text, the current URL when nothing is selected, or
   the download popup's curl command, and clear the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
-  `y`/Enter confirmation before quitting. Do
+  `y`/Enter confirmation before quitting, while `:q` plus Enter exits
+  immediately. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.
@@ -885,9 +887,15 @@ Standard Go layout:
   by sequence number. Loading another URL cancels the previous load.
 - **Refused schemes:** `javascript:`, `mailto:` and `tel:` links show a status
   message.
-- **URL input rules:** opening the URL prompt (`o` or clicking the URL field)
-  prefills the current URL and selects it all, so typing replaces it like a
-  normal browser address bar; Backspace clears the selection first. The prompt
+- **URL input rules:** opening the URL prompt (`o`, `:` or clicking the URL
+  field) prefills the current URL and selects it all, so typing replaces it
+  like a normal browser address bar; Backspace clears the selection first. A
+  prompt opened with `:` quits immediately when `q` or `:q` is confirmed with
+  Enter, and the
+  prompt keeps a session-only history of submitted URLs and search terms:
+  Up/Down and Ctrl-P/Ctrl-N recall earlier entries, Down past the newest
+  restores the draft, and consecutive duplicates are dropped. History is never
+  persisted. The prompt
   has a real cursor: Left/Right, Home/End move it, Backspace/Delete remove
   around it, Ctrl-A selects all, Ctrl-K deletes to the end, Ctrl-U clears and
   Ctrl-W deletes the previous word. Emacs/readline chords also work: Ctrl-B/F

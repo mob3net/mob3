@@ -81,6 +81,9 @@ type Browser struct {
 	promptText      string
 	promptCursor    int
 	promptSelectAll bool
+	// promptVim marks a prompt opened with `:`, where `q` quits.
+	promptVim       bool
+	promptHist      consoleHistory
 	skipDraw        bool
 	noDraw          bool
 	clipboardWriter io.Writer
@@ -2442,13 +2445,24 @@ func (b *Browser) updateInputFragments(n *Node) bool {
 // openURLPrompt opens the URL field prefilled with the current URL, selected
 // so typing replaces it like a normal browser address bar.
 func (b *Browser) openURLPrompt() {
+	b.openURLPromptMode(false)
+}
+
+// openVimPrompt opens the URL prompt from `:` so `q` can quit.
+func (b *Browser) openVimPrompt() {
+	b.openURLPromptMode(true)
+}
+
+func (b *Browser) openURLPromptMode(vim bool) {
 	b.prompt = true
+	b.promptVim = vim
 	b.promptText = ""
 	if b.url != nil {
 		b.promptText = b.url.String()
 	}
 	b.promptCursor = len(b.promptText)
 	b.promptSelectAll = true
+	b.promptHist.reset()
 	b.status = ""
 }
 
@@ -2557,11 +2571,18 @@ func (b *Browser) handlePromptKey(k string) bool {
 	switch k {
 	case "enter":
 		text = strings.TrimSpace(text)
+		quit := b.promptVim && (text == "q" || text == ":q")
 		b.prompt = false
+		b.promptVim = false
 		b.promptText = ""
 		b.promptCursor = 0
 		b.promptSelectAll = false
+		if quit {
+			// :q exits immediately, unlike plain q which asks first.
+			return true
+		}
 		if text != "" {
+			b.promptHist.record(text)
 			b.Navigate(text, true)
 		}
 		return false
@@ -2569,6 +2590,18 @@ func (b *Browser) handlePromptKey(k string) bool {
 		b.closeURLPrompt()
 		b.status = exitHint
 		return false
+	case "up", "ctrl-p":
+		if prev, ok := b.promptHist.up(text); ok {
+			text = prev
+			cur = len(text)
+		}
+		b.promptSelectAll = false
+	case "down", "ctrl-n":
+		if next, ok := b.promptHist.down(text); ok {
+			text = next
+			cur = len(text)
+		}
+		b.promptSelectAll = false
 	case "left":
 		if b.promptSelectAll {
 			cur = 0
@@ -2706,6 +2739,7 @@ func (b *Browser) handlePromptKey(k string) bool {
 // closeURLPrompt dismisses the URL prompt and clears its editing state.
 func (b *Browser) closeURLPrompt() {
 	b.prompt = false
+	b.promptVim = false
 	b.promptText = ""
 	b.promptCursor = 0
 	b.promptSelectAll = false
@@ -3794,6 +3828,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.toggleJavaScript()
 	case "o":
 		b.openURLPrompt()
+	case ":":
+		b.openVimPrompt()
 	case "f":
 		if li := b.currentFindLink(); li != nil {
 			b.focus = li.Index

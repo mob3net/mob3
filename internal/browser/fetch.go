@@ -1286,7 +1286,9 @@ Nothing is written to disk.</p>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>
-<p class="muted">The start page's search box works like the <b>o</b> prompt.</p>
+<p class="muted">The start page's search box works like the <b>o</b> prompt.
+The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
+<b>Ctrl-P</b>/<b>Ctrl-N</b>.</p>
 
 <h2>Keyboard</h2>
 <table>
@@ -1305,7 +1307,7 @@ Nothing is written to disk.</p>
 <tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
 <tr><td><b>X</b></td><td>hide or show fixed-position elements</td></tr>
-<tr><td><b>o</b></td><td>open a URL prompt</td></tr>
+<tr><td><b>o</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>F</b></td><td>same as <b>f</b>, but show the destination and wait for <b>Enter</b>/<b>y</b></td></tr>
