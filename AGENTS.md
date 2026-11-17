@@ -187,7 +187,11 @@ Standard Go layout:
 - **Floats:** `float:left`/`right` (and the `inline-start`/`inline-end`
   aliases) take the box out of normal flow. Floats are placed at the current
   flow row, shrink to fit their content or declared width, and successive
-  inline lines wrap around their vertical range. Lines resume the full width
+  inline lines wrap around their vertical range. Percentage widths and margins
+  resolve against the containing block, not the remaining float band, and a
+  declared width is not re-resolved against the float's own used width; a
+  declared width also caps the content's min-content width, so a long word
+  cannot widen the float. Lines resume the full width
   once they pass the float's bottom, and the containing flow reserves the
   float's height when the text ends early. `clear:left|right|both` moves
   following blocks below matching floats. Floats are scoped to the block flow
@@ -328,7 +332,12 @@ Standard Go layout:
   constrained-width block with auto left/right margins centers itself
   (`margin:0 auto`).
 - **Borders/grid lines** are solid colored cell rectangles, not box-drawing
-  characters. Table borders use a collapsed 1-cell grid.
+  characters. Table borders use a collapsed 1-cell grid. Per-side
+  `border-style` is tracked; a side whose style is `none`/`hidden` reserves no
+  border width even when `border-width` is declared, and a `border` shorthand
+  without a style keyword leaves the side borderless. Absolute boxes resolve
+  their used width once against the containing block instead of re-applying
+  `width` to the already-constrained box.
 - **Inline boxes with block content:** an inline element whose subtree contains
   a block-level descendant is laid out as a block, so grids, flex rows and
   tables nested inside an inline wrapper (common in card anchors and section

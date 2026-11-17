@@ -140,6 +140,7 @@ type Style struct {
 	Margin         [4]Length
 	Padding        [4]Length
 	Border         [4]Length
+	BorderStyle    [4]bool
 	BorderColor    Color
 	Width          Length
 	Height         Length
@@ -1282,11 +1283,15 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "border-left-color":
 		applyBorderColor(st, []string{val}, []int{3})
 	case "border-style":
-		if lower == "none" || lower == "hidden" {
-			for i := range st.Border {
-				st.Border[i] = Length{}
-			}
-		}
+		applyBorderStyleFields(st, splitFields(lower), []int{0, 1, 2, 3})
+	case "border-top-style":
+		applyBorderStyleFields(st, []string{lower}, []int{0})
+	case "border-right-style":
+		applyBorderStyleFields(st, []string{lower}, []int{1})
+	case "border-bottom-style":
+		applyBorderStyleFields(st, []string{lower}, []int{2})
+	case "border-left-style":
+		applyBorderStyleFields(st, []string{lower}, []int{3})
 	case "width":
 		if lower == "auto" || lower == "fit-content" || lower == "max-content" || lower == "min-content" {
 			st.Width = Length{}
@@ -1530,9 +1535,11 @@ func applyBorderShorthand(st *Style, val string, sides []int) {
 	w := Length{}
 	color := Color{}
 	none := false
+	styled := false
 	for _, f := range splitFields(val) {
 		fl := strings.ToLower(f)
 		if isBorderStyle(fl) {
+			styled = true
 			if fl == "none" || fl == "hidden" {
 				none = true
 			}
@@ -1558,8 +1565,10 @@ func applyBorderShorthand(st *Style, val string, sides []int) {
 	for _, i := range sides {
 		if none {
 			st.Border[i] = Length{}
+			st.BorderStyle[i] = false
 		} else {
 			st.Border[i] = w
+			st.BorderStyle[i] = styled
 		}
 	}
 	if color.Set {
@@ -1575,6 +1584,33 @@ func applyBorderWidth(st *Style, fields []string, sides []int) {
 		if len(fields) == 1 {
 			st.Border[i] = widths[0]
 		}
+	}
+}
+
+// applyBorderStyleFields maps the 1-4 values of a border-style declaration
+// onto the selected sides. Used border widths are zero when a side is
+// none/hidden, even if border-width is set later.
+func applyBorderStyleFields(st *Style, fields []string, sides []int) {
+	var vis [4]bool
+	for i, f := range fields {
+		if i >= 4 {
+			break
+		}
+		s := strings.ToLower(f)
+		vis[i] = isBorderStyle(s) && s != "none" && s != "hidden"
+	}
+	switch len(fields) {
+	case 0:
+		return
+	case 1:
+		vis[1], vis[2], vis[3] = vis[0], vis[0], vis[0]
+	case 2:
+		vis[2], vis[3] = vis[0], vis[1]
+	case 3:
+		vis[3] = vis[1]
+	}
+	for _, i := range sides {
+		st.BorderStyle[i] = vis[i]
 	}
 }
 

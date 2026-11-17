@@ -422,18 +422,34 @@ func nonNeg(v int) int {
 	return v
 }
 
+// usedBorderH is the horizontal border width in cells. A border whose style
+// is none or hidden takes no space, even when border-width is declared.
+func usedBorderH(st *Style, i, basis int) int {
+	if !st.BorderStyle[i] {
+		return 0
+	}
+	return resolveBorderH(st.Border[i], basis, st.FontSize)
+}
+
+func usedBorderV(st *Style, i, basis int) int {
+	if !st.BorderStyle[i] {
+		return 0
+	}
+	return resolveBorderV(st.Border[i], basis, st.FontSize)
+}
+
 // boxWidth returns the horizontal border and padding of a box in cells.
 func (l *layouter) boxWidth(st *Style, basis int) int {
-	return resolveBorderH(st.Border[3], basis, st.FontSize) +
-		resolveBorderH(st.Border[1], basis, st.FontSize) +
+	return usedBorderH(st, 3, basis) +
+		usedBorderH(st, 1, basis) +
 		nonNeg(st.Padding[3].resolveH(basis, st.FontSize)) +
 		nonNeg(st.Padding[1].resolveH(basis, st.FontSize))
 }
 
 // boxHeight returns the vertical border and padding of a box in rows.
 func (l *layouter) boxHeight(st *Style, basis int) int {
-	return resolveBorderV(st.Border[0], basis, st.FontSize) +
-		resolveBorderV(st.Border[2], basis, st.FontSize) +
+	return usedBorderV(st, 0, basis) +
+		usedBorderV(st, 2, basis) +
 		nonNeg(st.Padding[0].resolveV(basis, st.FontSize)) +
 		nonNeg(st.Padding[2].resolveV(basis, st.FontSize))
 }
@@ -474,10 +490,10 @@ func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt
 	mr = st.Margin[1].resolveH(availW, f)
 	mt = st.Margin[0].resolveV(vBasis, f)
 	mb = st.Margin[2].resolveV(vBasis, f)
-	bl = resolveBorderH(st.Border[3], availW, f)
-	br = resolveBorderH(st.Border[1], availW, f)
-	bt = resolveBorderV(st.Border[0], availW, f)
-	bb = resolveBorderV(st.Border[2], availW, f)
+	bl = usedBorderH(st, 3, availW)
+	br = usedBorderH(st, 1, availW)
+	bt = usedBorderV(st, 0, availW)
+	bb = usedBorderV(st, 2, availW)
 	pl = nonNeg(st.Padding[3].resolveH(availW, f))
 	pr = nonNeg(st.Padding[1].resolveH(availW, f))
 	pt = nonNeg(st.Padding[0].resolveV(vBasis, f))
@@ -617,14 +633,14 @@ func (l *layouter) inlineWrapperIsBlock(n *Node) bool {
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
-	h, _ := l.blockLayout(n, x, y, availW, 0)
+	h, _ := l.blockLayout(n, x, y, availW, 0, false)
 	return h
 }
 
 // blockLayout is block with the border-box rectangle reported. forceContentH,
 // when positive, stretches the content box to at least that height (used by
 // absolutely positioned boxes with both top and bottom offsets).
-func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, Rect) {
+func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthResolved bool) (int, Rect) {
 	if l.outOfTime() {
 		return 0, Rect{}
 	}
@@ -644,19 +660,21 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int) (int, R
 	absStart := len(l.abs)
 	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, availW)
 	contentW := availW - ml - mr - bl - br - pl - pr
-	if st.Width.Set && !st.Width.IsAuto() {
-		if w := l.widthValue(st, st.Width, availW); w < contentW {
-			contentW = w
+	if !widthResolved {
+		if st.Width.Set && !st.Width.IsAuto() {
+			if w := l.widthValue(st, st.Width, availW); w < contentW {
+				contentW = w
+			}
 		}
-	}
-	if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
-		if w := l.widthValue(st, st.MaxWidth, availW); w < contentW {
-			contentW = w
+		if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+			if w := l.widthValue(st, st.MaxWidth, availW); w < contentW {
+				contentW = w
+			}
 		}
-	}
-	if st.MinWidth.Set && !st.MinWidth.IsAuto() {
-		if w := l.widthValue(st, st.MinWidth, availW); w > contentW {
-			contentW = w
+		if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+			if w := l.widthValue(st, st.MinWidth, availW); w > contentW {
+				contentW = w
+			}
 		}
 	}
 	if contentW < 0 {
@@ -964,6 +982,16 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 			contentW = maxW
 		}
 	}
+	if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+		if w := l.widthValue(st, st.MaxWidth, cbW); w < contentW {
+			contentW = w
+		}
+	}
+	if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+		if w := l.widthValue(st, st.MinWidth, cbW); w > contentW {
+			contentW = w
+		}
+	}
 	if contentW < 0 {
 		contentW = 0
 	}
@@ -999,7 +1027,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 		l.forcedImageH = st.Height.resolveV(cbH, st.FontSize)
 	}
 	start := len(l.frags)
-	_, rect := l.blockLayout(n, x, y, availW, forceH)
+	_, rect := l.blockLayout(n, x, y, availW, forceH, true)
 	l.forcedImageH = prevImageH
 	frags := make([]Frag, len(l.frags)-start)
 	copy(frags, l.frags[start:])
@@ -1977,7 +2005,7 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 	if avail < 1 {
 		avail = 1
 	}
-	fw := l.shrinkFitWidth(n, avail)
+	fw := l.shrinkFitWidth(n, width, avail)
 	fx := left
 	side := "left"
 	if st.Float == "right" || st.Float == "inline-end" {
@@ -1989,7 +2017,7 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 	}
 	fragStart := len(l.frags)
 	absStart := len(l.abs)
-	h, rect := l.blockLayout(n, fx, y, fw, 0)
+	h, rect := l.blockLayout(n, fx, y, fw, 0, true)
 	boxLeft, boxRight := rect.X, rect.X+rect.W
 	if side == "right" && boxRight < right && rect.W > 0 {
 		// A right float with a narrower declared width is aligned to the
@@ -2015,15 +2043,15 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 
 // shrinkFitWidth returns the shrink-to-fit border-box width of a floated box
 // within avail cells.
-func (l *layouter) shrinkFitWidth(n *Node, avail int) int {
+func (l *layouter) shrinkFitWidth(n *Node, cbW, avail int) int {
 	maxW, minW := l.measure(n)
-	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(n.Style, avail)
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(n.Style, cbW)
 	extra := ml + mr + bl + br + pl + pr
 	st := n.Style
 	if st != nil && st.Width.Set && !st.Width.IsAuto() {
 		// A specified width replaces the max-content shrink-to-fit width; the
 		// content wraps inside it. Min-content still wins when it is larger.
-		if w := l.widthValue(st, st.Width, avail); w > 0 {
+		if w := l.widthValue(st, st.Width, cbW); w > 0 {
 			maxW = w
 		}
 	}
@@ -2041,6 +2069,26 @@ func (l *layouter) shrinkFitWidth(n *Node, avail int) int {
 	}
 	if w < minW {
 		w = minW
+	}
+	if w > maxW {
+		// The preferred width caps the result even when nested content has a
+		// larger min-content width, so a specified float width is not widened.
+		w = maxW
+	}
+	if st := n.Style; st != nil {
+		if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+			if m := l.widthValue(st, st.MaxWidth, cbW) + extra; m < w {
+				w = m
+			}
+		}
+		if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+			if m := l.widthValue(st, st.MinWidth, cbW) + extra; m > w {
+				w = m
+			}
+		}
+	}
+	if w < 1 {
+		w = 1
 	}
 	return w
 }
@@ -2380,10 +2428,10 @@ func (c *inlineCtx) inlineEdges(st *Style) (int, int) {
 	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := c.l.boxMetrics(st, avail)
 	left := ml + bl + pl
 	right := mr + br + pr
-	if left == 0 && (lengthPositive(st.Margin[3]) || lengthPositive(st.Border[3]) || lengthPositive(st.Padding[3])) {
+	if left == 0 && (lengthPositive(st.Margin[3]) || (st.BorderStyle[3] && lengthPositive(st.Border[3])) || lengthPositive(st.Padding[3])) {
 		left = 1
 	}
-	if right == 0 && (lengthPositive(st.Margin[1]) || lengthPositive(st.Border[1]) || lengthPositive(st.Padding[1])) {
+	if right == 0 && (lengthPositive(st.Margin[1]) || (st.BorderStyle[1] && lengthPositive(st.Border[1])) || lengthPositive(st.Padding[1])) {
 		right = 1
 	}
 	return left, right
@@ -4280,8 +4328,8 @@ func (l *layouter) paddingH(n *Node) (int, int) {
 	st := n.Style
 	pl := nonNeg(st.Padding[3].resolveH(l.width, st.FontSize))
 	pr := nonNeg(st.Padding[1].resolveH(l.width, st.FontSize))
-	bl := resolveBorderH(st.Border[3], l.width, st.FontSize)
-	br := resolveBorderH(st.Border[1], l.width, st.FontSize)
+	bl := usedBorderH(st, 3, l.width)
+	br := usedBorderH(st, 1, l.width)
 	return pl + pr + bl + br, 0
 }
 

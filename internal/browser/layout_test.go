@@ -1981,3 +1981,51 @@ func TestBlockAspectRatio(t *testing.T) {
 	}
 	t.Fatal("text after box missing")
 }
+
+func TestAbsoluteWidthResolvedOnce(t *testing.T) {
+	doc := ParseHTML(`<div id="abs" style="position:absolute;width:25%;height:20px;padding:0 8px;box-sizing:border-box"></div>`)
+	ly := BuildLayout(doc, nil, 100)
+	n := doc.FindFirst("div")
+	if n == nil {
+		t.Fatal("absolute box missing")
+	}
+	if box := ly.Boxes[n]; box.W != 25 {
+		t.Fatalf("absolute width = %d, want 25 (25%% of 100, resolved once)", box.W)
+	}
+}
+
+func TestFloatWidthResolvedOnce(t *testing.T) {
+	doc := ParseHTML(`<div style="width:400px"><div id="f" style="float:left;width:50%;height:16px"></div></div>`)
+	ly := BuildLayout(doc, nil, 100)
+	var f *Node
+	doc.FindAll(func(n *Node) bool {
+		if n.Attr("id") == "f" {
+			f = n
+		}
+		return false
+	})
+	if f == nil {
+		t.Fatal("float missing")
+	}
+	if box := ly.Boxes[f]; box.W != 25 {
+		t.Fatalf("float width = %d, want 25 (50%% of 50, resolved once)", box.W)
+	}
+}
+
+func TestFloatDeclaredWidthCapsMinContent(t *testing.T) {
+	doc := ParseHTML(`<div style="width:160px"><div id="f" style="float:left;width:16px">abcdefghijklmnopqrstuvwxyz</div></div>`)
+	ly := BuildLayout(doc, nil, 100)
+	var f *Node
+	doc.FindAll(func(n *Node) bool {
+		if n.Attr("id") == "f" {
+			f = n
+		}
+		return false
+	})
+	if f == nil {
+		t.Fatal("float missing")
+	}
+	if box := ly.Boxes[f]; box.W != 2 {
+		t.Fatalf("float width = %d, want 2 despite a longer word", box.W)
+	}
+}

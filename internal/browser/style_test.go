@@ -405,3 +405,35 @@ func TestCSSVariables(t *testing.T) {
 		t.Fatalf("unresolved var should drop the declaration: %+v", d.Style.Margin[3])
 	}
 }
+
+func TestBorderStyleNoneSuppressesWidth(t *testing.T) {
+	st := defaultStyle()
+	applyDecl(st, "border-style", "none none solid none", nil)
+	applyDecl(st, "border-width", "15px", nil)
+	l := &layouter{width: 100}
+	_, _, _, _, bl, br, bt, bb, _, _, _, _ := l.boxMetrics(st, 100)
+	if bl != 0 || br != 0 || bt != 0 {
+		t.Fatalf("none sides took border width: left=%d right=%d top=%d", bl, br, bt)
+	}
+	if bb == 0 {
+		t.Fatal("solid bottom border lost its width")
+	}
+
+	// The same applies when border-style comes after border-width.
+	rev := defaultStyle()
+	applyDecl(rev, "border-width", "15px", nil)
+	applyDecl(rev, "border-style", "solid", nil)
+	_, _, _, _, bl, br, bt, bb, _, _, _, _ = l.boxMetrics(rev, 100)
+	if bl == 0 || br == 0 || bt == 0 || bb == 0 {
+		t.Fatalf("solid borders lost their width: l=%d r=%d t=%d b=%d", bl, br, bt, bb)
+	}
+
+	// Per-side style works too.
+	side := defaultStyle()
+	applyDecl(side, "border-left-width", "15px", nil)
+	applyDecl(side, "border-left-style", "none", nil)
+	_, _, _, _, bl, _, _, _, _, _, _, _ = l.boxMetrics(side, 100)
+	if bl != 0 {
+		t.Fatalf("border-left-style:none width = %d, want 0", bl)
+	}
+}
