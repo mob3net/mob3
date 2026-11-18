@@ -1323,16 +1323,15 @@ func TestBackForwardUseVimJumplistKeys(t *testing.T) {
 		t.Fatalf("] status = %q", b.status)
 	}
 
-	// The arrow keys stay as browser-style alternatives.
+	// Arrow keys no longer navigate.
 	b.status = ""
 	b.HandleKey("left")
-	if b.status != "No previous page" {
-		t.Fatalf("left status = %q", b.status)
+	if b.status != "" {
+		t.Fatalf("left arrow still navigates: %q", b.status)
 	}
-	b.status = ""
 	b.HandleKey("right")
-	if b.status != "No next page" {
-		t.Fatalf("right status = %q", b.status)
+	if b.status != "" {
+		t.Fatalf("right arrow still navigates: %q", b.status)
 	}
 }
 

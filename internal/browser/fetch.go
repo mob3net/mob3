@@ -1581,8 +1581,8 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
 <tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link or form control</td></tr>
 <tr><td><b>Enter</b></td><td>follow a link, submit a field, or insert a textarea newline</td></tr>
-<tr><td><b>Ctrl-O</b> / <b>Left</b> / <b>[</b></td><td>back</td></tr>
-<tr><td><b>Ctrl-I</b> / <b>Right</b> / <b>]</b></td><td>forward; Ctrl-I needs kitty key reporting, legacy terminals send Tab</td></tr>
+<tr><td><b>Ctrl-O</b> / <b>[</b></td><td>back</td></tr>
+<tr><td><b>Ctrl-I</b> / <b>]</b></td><td>forward; Ctrl-I needs kitty key reporting, legacy terminals send Tab</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>

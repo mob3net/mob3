@@ -1049,9 +1049,9 @@ func (b *Browser) HandleKey(k string) bool {
 		b.tabStep(-1)
 	case "enter":
 		b.followFocused()
-	case "ctrl-o", "left", "[":
+	case "ctrl-o", "[":
 		b.back()
-	case "ctrl-i", "right", "]":
+	case "ctrl-i", "]":
 		b.forward()
 	case "r":
 		b.reload()
