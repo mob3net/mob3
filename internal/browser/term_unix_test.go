@@ -18,6 +18,7 @@ func TestReadKeyPlain(t *testing.T) {
 		{"\x7f", "backspace"},
 		{"\x08", "backspace"},
 		{"\x01", "ctrl-a"},
+		{"\x0f", "ctrl-o"},
 		{"\x00", "ctrl-space"},
 		{"é", "é"},
 		{"世", "世"},
@@ -37,6 +38,8 @@ func TestReadKeyPlain(t *testing.T) {
 func TestReadKeyEscapeSequences(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"\x1b", "esc"},
+		{"\x1b[105;5u", "ctrl-i"},
+		{"\x1b[9u", "tab"},
 		{"\x1b[A", "up"},
 		{"\x1b[B", "down"},
 		{"\x1b[C", "right"},

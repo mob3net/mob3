@@ -1216,3 +1216,51 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 		t.Fatalf("scrolling did not clear the status: %q", b.status)
 	}
 }
+
+func TestBackForwardUseVimJumplistKeys(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("ctrl-o")
+	if b.status != "No previous page" {
+		t.Fatalf("ctrl-o status = %q", b.status)
+	}
+	b.status = ""
+	b.HandleKey("ctrl-i")
+	if b.status != "No next page" {
+		t.Fatalf("ctrl-i status = %q", b.status)
+	}
+
+	// h/l no longer navigate; they are free for other uses.
+	b.status = ""
+	b.HandleKey("h")
+	if b.status != "" {
+		t.Fatalf("h still navigates: %q", b.status)
+	}
+	b.HandleKey("l")
+	if b.status != "" {
+		t.Fatalf("l still navigates: %q", b.status)
+	}
+
+	// Brackets are the portable fallback where Ctrl-I arrives as Tab.
+	b.status = ""
+	b.HandleKey("[")
+	if b.status != "No previous page" {
+		t.Fatalf("[ status = %q", b.status)
+	}
+	b.status = ""
+	b.HandleKey("]")
+	if b.status != "No next page" {
+		t.Fatalf("] status = %q", b.status)
+	}
+
+	// The arrow keys stay as browser-style alternatives.
+	b.status = ""
+	b.HandleKey("left")
+	if b.status != "No previous page" {
+		t.Fatalf("left status = %q", b.status)
+	}
+	b.status = ""
+	b.HandleKey("right")
+	if b.status != "No next page" {
+		t.Fatalf("right status = %q", b.status)
+	}
+}

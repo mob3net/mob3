@@ -1581,8 +1581,8 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
 <tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link or form control</td></tr>
 <tr><td><b>Enter</b></td><td>follow a link, submit a field, or insert a textarea newline</td></tr>
-<tr><td><b>h</b> / <b>Left</b></td><td>back</td></tr>
-<tr><td><b>l</b> / <b>Right</b></td><td>forward</td></tr>
+<tr><td><b>Ctrl-O</b> / <b>Left</b> / <b>[</b></td><td>back</td></tr>
+<tr><td><b>Ctrl-I</b> / <b>Right</b> / <b>]</b></td><td>forward; Ctrl-I needs kitty key reporting, legacy terminals send Tab</td></tr>
 <tr><td><b>r</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
@@ -1814,7 +1814,7 @@ const startPageHTML = `<!DOCTYPE html>
 <li>Press <b>o</b> and type a URL, then Enter.</li>
 <li>Press <b>f</b> to follow a link.</li>
 <li>Scroll with <b>j</b>/<b>k</b>, <b>Space</b>/<b>b</b>, or the arrow keys.</li>
-<li><b>h</b> goes back, <b>l</b> goes forward, <b>r</b> reloads, <b>q</b> asks before quitting.</li>
+<li><b>Ctrl-O</b> or <b>[</b> goes back, <b>Ctrl-I</b> or <b>]</b> goes forward, <b>r</b> reloads, <b>q</b> asks before quitting.</li>
 <li>Press <b>?</b> for the full help page.</li>
 <li>History, cookies, storage and caches are memory-only.</li>
 </ul>

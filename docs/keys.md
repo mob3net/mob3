@@ -13,8 +13,8 @@ key, mouse and form reference for the running build.
 | `g` / `G` | Top / bottom of the page |
 | `Tab` / `Shift-Tab` | Next / previous link or form control |
 | `Enter` | Follow the focused link, submit the focused field, or insert a newline in a textarea |
-| `h` / `Left` | Back |
-| `l` / `Right` | Forward |
+| `Ctrl-O` / `Left` / `[` | Back |
+| `Ctrl-I` / `Right` / `]` | Forward (Ctrl-I needs kitty key reporting; legacy terminals send Tab, so `]` is the portable key) |
 | `r` | Reload |
 | `R` | Toggle reader mode |
 | `D` | Toggle dark mode |

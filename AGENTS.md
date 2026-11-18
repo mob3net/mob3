@@ -702,7 +702,9 @@ Standard Go layout:
   `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),
-  `Enter` follow, `h/Left` back, `l/Right` forward, `r` reload, `R` toggle
+  `Enter` follow, `Ctrl-O/Left/[` back, `Ctrl-I/Right/]` forward (`Ctrl-I`
+  arrives only with kitty key disambiguation; legacy terminals send it as Tab,
+  so `[`/`]` are the portable pair), `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
   `i` cycle graphics modes, `X` hide/show
   fixed elements, `o` URL prompt (or `:` for a Vim-style command prompt where

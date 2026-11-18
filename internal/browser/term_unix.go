@@ -215,6 +215,11 @@ func decodeKittyKey(body string) string {
 	case 13, 57414:
 		return "enter"
 	case 9:
+		// Legacy terminals send Ctrl-I as the Tab byte; the kitty protocol
+		// can tell them apart and reports Ctrl-I with its control modifier.
+		if bits&4 != 0 {
+			return "ctrl-i"
+		}
 		if bits&1 != 0 {
 			return "backtab"
 		}
