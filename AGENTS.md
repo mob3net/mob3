@@ -776,6 +776,8 @@ Standard Go layout:
   the viewport are
   labelled; a target with no text
   letters (such as an image link or an empty field) gets free label letters drawn inside its box.
+  Controls and links inside fixed bars are labelled too, at their
+  viewport-anchored position.
   While hints are shown, images are drawn as half-block art
   instead of native inline graphics, so the terminal image protocol cannot
   cover the hint letters.

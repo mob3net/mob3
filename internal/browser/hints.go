@@ -44,6 +44,9 @@ func (b *Browser) openLinkHints(ask bool) {
 		b.status = "No links or fields on this page"
 		return
 	}
+	// Fixed bars keep viewport coordinates in FixedY; re-anchor them for the
+	// current scroll so their controls pass the visibility test below.
+	b.layout.SetFixedScroll(b.scroll)
 	top, bottom := b.viewport()
 	var targets []hintTarget
 	for i, li := range b.layout.Links {
@@ -103,7 +106,7 @@ func (b *Browser) visibleInputRect(n *Node, top, bottom int) (Rect, bool) {
 	viewBottom := b.scroll + (bottom - top)
 	for i := range b.layout.Frags {
 		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Node != n || f.Fixed {
+		if f.Kind != fragText || f.Node != n {
 			continue
 		}
 		if f.Y >= viewBottom || f.Y+f.H <= viewTop {

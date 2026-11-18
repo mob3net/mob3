@@ -3,6 +3,7 @@ package browser
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func hintTestBrowser(t *testing.T, html string, width, height int) *Browser {
@@ -528,5 +529,36 @@ func TestLinkHintsSurviveRebuild(t *testing.T) {
 	b.scrollBy(1)
 	if b.linkHints {
 		t.Fatal("scrolling did not dismiss the hints")
+	}
+}
+
+func TestHintsIncludeFixedBarControls(t *testing.T) {
+	doc := ParseHTML(`<div style="height:400px">tall content</div>
+		<div style="position:fixed;bottom:0;right:0"><button id="ok">Got it</button>
+		<a href="/docs">Docs</a></div>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.layout = BuildLayoutViewportDeadline(doc, nil, 60, 12, false, time.Time{})
+
+	find := func() (button, link bool) {
+		b.openLinkHints(false)
+		for _, tgt := range b.hintTargets {
+			if tgt.node != nil && tgt.node.Attr("id") == "ok" {
+				button = true
+			}
+			if tgt.node == nil && tgt.link >= 0 {
+				link = true
+			}
+		}
+		return button, link
+	}
+	if button, link := find(); !button || !link {
+		t.Fatalf("fixed bar hints: button=%v link=%v", button, link)
+	}
+	// The same must hold once the page is scrolled.
+	b.scroll = 40
+	if button, link := find(); !button || !link {
+		t.Fatalf("scrolled fixed bar hints: button=%v link=%v", button, link)
 	}
 }
