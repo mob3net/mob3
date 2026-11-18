@@ -139,6 +139,9 @@ type Browser struct {
 	lastMethod      string
 	lastBody        []byte
 	lastContentType string
+	// pendingDownloadName carries a download attribute from the clicked link
+	// into the next load, so a non-renderable response keeps that filename.
+	pendingDownloadName string
 
 	lastRebuild time.Time
 	lastBuild   time.Duration
@@ -231,6 +234,9 @@ type loadResult struct {
 	// last had on that entry.
 	restoreScroll    int
 	hasRestoreScroll bool
+	// downloadName is the anchor's download attribute, so a non-renderable
+	// response still offers the filename the page asked for.
+	downloadName string
 }
 
 // NewBrowser creates a browser with a viewport size.
@@ -359,6 +365,10 @@ func (b *Browser) navigateRequest(method, input string, body []byte, contentType
 // navigateRequestForce is navigateRequest with an optional one-shot block
 // bypass. It backs the "Try anyway" link (about:retry) on the blocked page.
 func (b *Browser) navigateRequestForce(method, input string, body []byte, contentType string, push bool, forceBlocks bool) {
+	// A download-attribute name belongs to this load only, so consume it even
+	// when the navigation is rejected before a request is made.
+	downloadName := b.pendingDownloadName
+	b.pendingDownloadName = ""
 	if strings.EqualFold(strings.TrimSpace(input), "about:retry") {
 		if b.url == nil {
 			b.status = "Nothing to retry"
@@ -447,6 +457,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 			seq: seq, page: page, err: loadErr, u: u, push: push,
 			method: method, body: body, contentType: contentType,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
+			downloadName: downloadName,
 		}:
 		case <-ctx.Done():
 		}
@@ -560,7 +571,11 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	page := res.page
 	if page != nil && page.Download && res.method == http.MethodGet && page.URL != nil {
-		b.showDownload(page.URL.String(), page.DownloadName)
+		name := page.DownloadName
+		if res.downloadName != "" {
+			name = res.downloadName
+		}
+		b.showDownload(page.URL.String(), name)
 		b.status = "Download link — y copies the curl command"
 		b.finishProgress()
 		b.prev = nil
@@ -1065,6 +1080,17 @@ func linkFallbackOK(href string) bool {
 	return true
 }
 
+// isPDFDownloadLink reports whether a download link points at a PDF, either by
+// its path suffix or by the filename in the download attribute. Only these are
+// fetched: the response opens in the PDF viewer instead of the curl popup.
+func isPDFDownloadLink(target, attr string) bool {
+	if u, err := url.Parse(target); err == nil && strings.HasSuffix(strings.ToLower(u.Path), ".pdf") {
+		return true
+	}
+	name := strings.TrimSpace(attr)
+	return strings.HasSuffix(strings.ToLower(name), ".pdf")
+}
+
 func (b *Browser) followLink(li *LinkInfo) {
 	href := li.Href
 	low := strings.ToLower(strings.TrimSpace(href))
@@ -1083,6 +1109,16 @@ func (b *Browser) followLink(li *LinkInfo) {
 				target = u.String()
 			}
 		}
+		if isPDFDownloadLink(target, li.Node.Attr("download")) {
+			// A PDF is worth fetching because the viewer can show it; the
+			// attribute also names the file if the response is not a PDF after
+			// all.
+			b.pendingDownloadName = li.Node.Attr("download")
+			b.Navigate(target, true)
+			return
+		}
+		// Everything else keeps browser semantics: "download" means save, so
+		// show the curl popup without spending a request on a large binary.
 		b.showDownload(target, li.Node.Attr("download"))
 		return
 	}

@@ -187,9 +187,10 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   preserving their aspect ratio. Images with a definite CSS box (both width and
   height) use `object-fit`/`object-position` and fill or crop into that box
   instead of hitting those caps.
-- No tabs or automatic downloads; download links and non-HTML responses open a
-  popup with a copyable `curl` command instead (PDFs open in the text viewer
-  unless `-no-pdf` is set), and multipart/file uploads are
+- No tabs or automatic downloads; a download link opens a popup with a
+  copyable `curl` command without fetching it, except a `.pdf` download, which
+  opens in the text viewer (`-no-pdf` restores the popup for PDFs), and
+  multipart/file uploads are
   not implemented (clicking a file input shows an unsupported notice). Selected
   page text copies with
   `y` through OSC 52 (terminal support required), and the URL can be selected

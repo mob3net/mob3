@@ -156,7 +156,7 @@ uploads are unsupported.
   hover state, and wheel scrolling never blocks on a hover rebuild.
 - Drag to select page text; `y` copies it through OSC 52. With no
   selection, `y` copies the current URL.
-- Click a link to follow it; a download link opens the `curl` popup instead.
+- Click a link to follow it; a download link opens the `curl` popup without fetching, except a `.pdf` download, which opens in the viewer.
 - Click the URL bar to open the prompt; click outside to close it.
 - Click in the prompt to move the caret.
 - Click `←`, `→`, `⟳`, `⌂`, History, Bookmarks, Help or `⚙` in the toolbar.

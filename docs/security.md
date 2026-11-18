@@ -59,9 +59,10 @@ Remote pages cannot navigate the viewport to `file:` URLs or load local file
 resources. Local documents can load local stylesheets, scripts and images.
 Only regular files are read; devices and FIFOs are rejected.
 
-MOB³ never saves downloads. A download link or non-HTML response opens a popup
-with a ready-to-copy `curl` command. Running that command is your choice and
-outside MOB³.
+MOB³ never saves downloads. A download link opens a popup with a
+ready-to-copy `curl` command without fetching the file, except for a `.pdf`
+download, which is fetched and shown in the text viewer. Running the `curl`
+command is your choice and outside MOB³.
 
 ## Automation
 

@@ -869,7 +869,8 @@ Standard Go layout:
   fragments, not empty margins or unrelated columns on the same row. A press
   and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
-  clears focus; a download link opens the curl popup instead. While the URL
+  clears focus; a download link opens the curl popup, except a PDF download,
+  which is fetched and opens in the viewer. While the URL
   prompt is open, a click on its field keeps it
   open and a click anywhere else closes it; clicking inside it positions the
   caret. Shift+mouse reports are ignored and suppress the next redraw so the
@@ -1110,17 +1111,19 @@ Standard Go layout:
   in a text document stay blank. `-no-pdf` (also in
   `about:config`) turns the viewer off for the session and restores the old
   “Cannot display” page and popup. Nothing is written to disk.
-- **Downloads:** MOB³ never saves files. Activating a link with a `download`
-  attribute, or navigating (GET) to a response whose media type is not HTML,
-  opens a modal download popup instead of navigating or showing the page. The
-  popup presents a ready-to-copy `curl -L -o 'name' 'url'` command shown as
-  plain text, using the
-  link's `download` attribute value when non-empty and otherwise the URL's last
-  path segment as the filename; `y` copies the command with OSC 52 and closes
-  the popup, while `Esc`/`Enter`/`q` close it without copying. Nothing is
-  written to disk; the user runs the
-  command in their own terminal. `Content-Disposition` is not inspected, so
-  attachment HTML pages still render normally.
+- **Downloads:** MOB³ never saves files. A link with a `download` attribute
+  opens the modal download popup without making a request, because the
+  attribute means "save" in a browser. The exception is a PDF: when the URL
+  path or the attribute filename ends in `.pdf`, the link is fetched so the
+  text viewer can show it, and the attribute value is kept as the fallback
+  filename if the response turns out not to be a PDF. The popup presents a
+  ready-to-copy `curl -L -o 'name' 'url'` command shown as plain text, using
+  the link's `download` attribute value when non-empty and otherwise the URL's
+  last path segment as the filename; `y` copies the command with OSC 52 and
+  closes the popup, while `Esc`/`Enter`/`q` close it without copying. Nothing is
+  written to disk; the user runs the command in their own terminal.
+  `Content-Disposition` is not inspected, so attachment HTML pages still render
+  normally.
 - **JavaScript scope:** classic inline and external scripts run in document
   order after load and before layout. Dynamic `import()` and `import.meta` are
   rewritten to a host stub before execution: the import resolves to an empty

@@ -1662,7 +1662,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><th>Input</th><th>Action</th></tr>
 <tr><td>hover a link</td><td>show its target in the footer</td></tr>
 <tr><td>drag over page text</td><td>select it; <b>y</b> copies and clears it</td></tr>
-<tr><td>click a link</td><td>follow it; a download link opens the curl popup instead</td></tr>
+<tr><td>click a link</td><td>follow it; a download link shows the curl popup, except a .pdf download, which opens in the viewer</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>

@@ -803,9 +803,9 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 	}
 }
 
-func TestDownloadLinkOpensCurlPopup(t *testing.T) {
-	u := mustParse(t, "https://filesamples.com/formats/html")
-	doc := ParseHTML(`<a href="/samples/code/html/sample1.html" download="">Download</a>`)
+func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
+	u := mustParse(t, "https://filesamples.com/formats/zip")
+	doc := ParseHTML(`<a href="/files/sample.zip" download>Download</a>`)
 	b := NewBrowser(60, 15)
 	b.page = &Page{URL: u, Base: u, Root: doc}
 	b.url = u
@@ -816,15 +816,86 @@ func TestDownloadLinkOpensCurlPopup(t *testing.T) {
 	b.focus = 0
 	b.followFocused()
 	if b.download == nil {
-		t.Fatal("download link did not open the curl popup")
+		t.Fatal("non-PDF download did not open the curl popup")
 	}
-	want := "curl -L -o 'sample1.html' 'https://filesamples.com/samples/code/html/sample1.html'"
+	want := "curl -L -o 'sample.zip' 'https://filesamples.com/files/sample.zip'"
 	if b.download.command != want {
 		t.Fatalf("command = %q, want %q", b.download.command, want)
 	}
-	// The download link must not navigate.
-	if b.url.String() != "https://filesamples.com/formats/html" {
-		t.Fatalf("download link navigated to %s", b.url)
+	// No request is made for a non-PDF download link.
+	if b.loading {
+		t.Fatal("non-PDF download link started a load")
+	}
+	if b.url.String() != "https://filesamples.com/formats/zip" {
+		t.Fatalf("non-PDF download link navigated to %s", b.url)
+	}
+}
+
+func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
+	u := mustParse(t, "https://samplepdf.org/")
+	doc := ParseHTML(`<a href="/files/sample.pdf" download="chosen.pdf">Download</a>`)
+	b := NewBrowser(60, 15)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.url = u
+	b.layout = BuildLayout(doc, nil, 60)
+	b.loadFn = func(_ context.Context, _, target string, _ []byte, _ string) (*Page, error) {
+		tu := mustParse(t, target)
+		return &Page{URL: tu, Base: tu, Root: ParseHTML("<html><body>pdf</body></html>")}, nil
+	}
+	b.focus = 0
+	b.followFocused()
+	// A PDF download is fetched so the viewer can show it.
+	if b.download != nil {
+		t.Fatal("PDF download opened the curl popup without fetching")
+	}
+	if !b.loading {
+		t.Fatal("PDF download did not start a load")
+	}
+	var res loadResult
+	select {
+	case res = <-b.loadCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("PDF download did not finish")
+	}
+	if res.downloadName != "chosen.pdf" {
+		t.Fatalf("download name carried = %q", res.downloadName)
+	}
+	b.finishLoad(res)
+	if b.download != nil {
+		t.Fatal("PDF download fell back to the curl popup")
+	}
+	if b.url.String() != "https://samplepdf.org/files/sample.pdf" {
+		t.Fatalf("PDF download navigated to %s", b.url)
+	}
+}
+
+func TestDownloadPDFDetection(t *testing.T) {
+	cases := []struct {
+		href string
+		attr string
+		pdf  bool
+	}{
+		{"/files/sample.pdf", "", true},
+		{"/files/SAMPLE.PDF", "", true},
+		{"/files/sample.pdf?dl=1", "", true},
+		{"/download?id=7", "scan.pdf", true},
+		{"/files/sample.zip", "", false},
+		{"/download?id=7", "archive.zip", false},
+		{"/download?id=7", "", false},
+	}
+	for _, c := range cases {
+		doc := ParseHTML(`<a href="` + c.href + `" download="` + c.attr + `">Download</a>`)
+		u := mustParse(t, "https://example.com/page")
+		b := NewBrowser(60, 15)
+		b.page = &Page{URL: u, Base: u, Root: doc}
+		b.url = u
+		b.layout = BuildLayout(doc, nil, 60)
+		b.focus = 0
+		b.followFocused()
+		got := b.download == nil
+		if got != c.pdf {
+			t.Fatalf("href=%q attr=%q: fetched=%v, want %v", c.href, c.attr, got, c.pdf)
+		}
 	}
 }
 
