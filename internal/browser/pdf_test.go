@@ -813,3 +813,63 @@ func TestPDFTableKeepsRowOrder(t *testing.T) {
 		}
 	}
 }
+
+// pdfTwoPageFixture builds a two-page document whose pages have different
+// text lengths, so page-box and selection behaviour can be checked.
+func pdfTwoPageFixture() []byte {
+	return pdfBuild("",
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Short page) Tj ET")),
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
+		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Line one) Tj 0 -15 Td (Line two) Tj 0 -15 Td (Line three) Tj ET")),
+	)
+}
+
+func TestPDFPageSelection(t *testing.T) {
+	target := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(pdfTwoPageFixture())
+	load := func(page int) *Page {
+		loader := NewLoader()
+		loader.noImages = true
+		loader.pdfPage = page
+		p, err := loader.Load(target, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	full := load(0)
+	if full.PDF == nil || full.PDF.TotalPages != 2 || len(full.PDF.Pages) != 2 {
+		t.Fatalf("full document: total=%v pages=%d", full.PDF.TotalPages, len(full.PDF.Pages))
+	}
+	if full.PDF.PageRows != 3 {
+		t.Fatalf("page rows = %d, want 3", full.PDF.PageRows)
+	}
+
+	second := load(2)
+	if second.PDF.TotalPages != 2 || len(second.PDF.Pages) != 1 || second.PDF.Pages[0].Number != 2 {
+		t.Fatalf("page 2 selection: total=%d pages=%d", second.PDF.TotalPages, len(second.PDF.Pages))
+	}
+	if second.PDF.PageRows != full.PDF.PageRows {
+		t.Fatalf("selected page changed geometry: %d vs %d", second.PDF.PageRows, full.PDF.PageRows)
+	}
+	if text := second.PDF.Text(); !strings.Contains(text, "Line three") || strings.Contains(text, "Short page") {
+		t.Fatalf("page 2 text = %q", text)
+	}
+	if len(second.PDF.PageNodes) != 1 {
+		t.Fatalf("page nodes = %d", len(second.PDF.PageNodes))
+	}
+
+	first := load(1)
+	if text := first.PDF.Text(); !strings.Contains(text, "Short page") || strings.Contains(text, "Line three") {
+		t.Fatalf("page 1 text = %q", text)
+	}
+
+	missing := load(9)
+	if missing.PDF == nil || len(missing.PDF.Pages) != 0 || !strings.Contains(missing.PDF.Note, "does not exist") {
+		t.Fatalf("out-of-range note = %q pages=%d", missing.PDF.Note, len(missing.PDF.Pages))
+	}
+}

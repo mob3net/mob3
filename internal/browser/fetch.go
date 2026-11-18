@@ -98,6 +98,9 @@ type Loader struct {
 	// opening the download prompt instead of being rendered as text.
 	// -no-pdf sets it.
 	noPDF bool
+	// pdfPage restricts PDF rendering to one page (1-based); zero keeps every
+	// page. It backs -pdf-page for dump and PNG output.
+	pdfPage int
 	// noImages skips external image downloads and inline SVG rasterization.
 	// It is the default so the browser stays fast; -graphics=none keeps it,
 	// and any other graphics mode turns it off.
@@ -1543,6 +1546,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-png</b></td><td>write a PNG screenshot of the dump to stdout (implies -dump)</td></tr>
 <tr><td><b>-width</b> int</td><td>layout width in columns (default: terminal width or 100)</td></tr>
 <tr><td><b>-height</b> int</td><td>layout viewport height in rows and output limit; 0 uses the full page (dump/PNG/MCP)</td></tr>
+<tr><td><b>-pdf-page</b> string</td><td>PDF page for dump/PNG: auto, all, or a page number; -png defaults to page 1 (default "auto")</td></tr>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-g</b> string</td><td>alias for -graphics</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>

@@ -35,6 +35,8 @@ type PDFDocument struct {
 	// collection is a scan or uses unmapped fonts, so each page keeps a
 	// placeholder; a text document renders figure-only pages as blank pages.
 	HasText bool
+	// TotalPages is the document's page count before -pdf-page filtering.
+	TotalPages int
 	// Note explains why a document is empty or partial; empty when all pages
 	// were read.
 	Note string
@@ -84,6 +86,17 @@ func looksLikePDF(mediaType string, data []byte) bool {
 // loadPDFPage builds a readable page from a PDF response.
 func (l *Loader) loadPDFPage(ctx context.Context, data []byte, finalURL *url.URL, status int) *Page {
 	doc := buildPDFDocument(data)
+	doc.TotalPages = len(doc.Pages)
+	if l.pdfPage > 0 && len(doc.Pages) > 0 {
+		if l.pdfPage > len(doc.Pages) {
+			doc.Pages = nil
+			doc.Note = fmt.Sprintf("Page %d does not exist; this document has %d pages.", l.pdfPage, doc.TotalPages)
+		} else {
+			// Keep PageRows/PageCells from the whole document so an exported
+			// page has the same size and column it has in the book.
+			doc.Pages = doc.Pages[l.pdfPage-1 : l.pdfPage]
+		}
+	}
 	html := pdfPageHTML(doc, finalURL)
 	root := ParseHTML(html)
 	doc.PageNodes = root.FindAll(func(n *Node) bool { return n.Attr("class") == "pdf-page" })

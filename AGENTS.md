@@ -583,7 +583,10 @@ Standard Go layout:
   cell size (default 8×16 px) before encoding. Dump mode always uses half-block
   art for the images that were loaded.
 - **PNG screenshots:** `-png` implies dump mode and writes a PNG stream to
-  stdout; the file is capped at 2,000 rows. The MCP `screenshot` tool renders
+  stdout; the file is capped at 2,000 rows and truncation is reported on stderr.
+  For a PDF it renders one page (page 1 by default) so the image is a page, not
+  a thumbnail strip; `-pdf-page=N` picks another page and `-pdf-page=all`
+  restores the whole document. The MCP `screenshot` tool renders
   the current page viewport and returns an `image/png` content block plus a
   short text line. Both use 8×16 pixel cells and bundled Go Mono faces, include
   text colors/backgrounds, bold/italic/underline/strike and half-block image
@@ -1084,7 +1087,10 @@ Standard Go layout:
   the user scrolls; the `(d -> Download name)` part is a clickable label and
   `d` does the same, both opening the curl download popup. On narrow terminals
   the file name inside the hint is shortened first, then the hint becomes
-  `(d)`, and finally only `Page n/N` remains.
+  `(d)`, and finally only `Page n/N` remains. `-pdf-page auto|all|N` selects the
+  page for `-dump`/`-png`: a dump keeps every page, `-png` renders page 1 by
+  default, and `-pdf-page=all` restores the whole-document image. Both caps
+  report truncation on stderr (2,000 PNG rows, 20,000 dump rows).
   Find, selection, `-dump`, `-png` and the automation snapshot treat the result
   as an ordinary page; reader mode keeps the full extracted document and
   reports `Reader mode unavailable` while the preference stays on. Notes

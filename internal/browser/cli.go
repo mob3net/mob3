@@ -18,6 +18,7 @@ func Run(args []string) int {
 	pngOut := fs.Bool("png", false, "write a PNG screenshot of the page to stdout (implies -dump)")
 	widthFlag := fs.Int("width", 0, "layout width in columns (default: terminal width or 100)")
 	heightFlag := fs.Int("height", 0, "layout viewport height in rows and output limit (0 = full page)")
+	pdfPage := fs.String("pdf-page", "auto", "PDF page for dump/PNG: auto, all, or a page number")
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
@@ -58,6 +59,20 @@ func Run(args []string) int {
 	if *heightFlag < 0 {
 		fmt.Fprintln(os.Stderr, "mob3: -height must be 0 or positive")
 		return 2
+	}
+	// 0 keeps every page for a dump and page 1 for a PNG; -1 means all pages.
+	pdfPageSel := 0
+	switch strings.ToLower(strings.TrimSpace(*pdfPage)) {
+	case "", "auto":
+	case "all":
+		pdfPageSel = -1
+	default:
+		n, err := strconv.Atoi(strings.TrimSpace(*pdfPage))
+		if err != nil || n < 1 {
+			fmt.Fprintln(os.Stderr, "mob3: -pdf-page must be auto, all, or a page number")
+			return 2
+		}
+		pdfPageSel = n
 	}
 
 	start := *home
@@ -131,7 +146,7 @@ func Run(args []string) int {
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget)
 	}
 
 	// Interactive pages show text first and fetch images in the background so
@@ -141,7 +156,7 @@ func Run(args []string) int {
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -167,6 +182,7 @@ func Run(args []string) int {
 		"-png":           onOff(*pngOut),
 		"-width":         strconv.Itoa(w),
 		"-height":        strconv.Itoa(*heightFlag),
+		"-pdf-page":      strings.TrimSpace(*pdfPage),
 		"-graphics":      *graphics,
 		"-bookmarks":     bookmarksValue,
 		"-cache":         strconv.Itoa(*cache),
@@ -327,7 +343,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, jsMemLimit int64, budget LayoutBudget) int {
+func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMemLimit int64, budget LayoutBudget) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -336,9 +352,22 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		}
 	}
 	loader.imageViewportPx = width * 8
+	// A PNG has no browsing context, so it shows one page: page 1 unless the
+	// caller selected another. Dumps keep every page.
+	if pdfPage == 0 && pngOut {
+		pdfPage = 1
+	}
+	if pdfPage < 0 {
+		pdfPage = 0
+	}
+	loader.pdfPage = pdfPage
 	page, err := loader.Load(target, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: %s\n", stripTerminalControls(err.Error()))
+		return 1
+	}
+	if page.PDF != nil && pdfPage > 0 && page.PDF.TotalPages > 0 && len(page.PDF.Pages) == 0 {
+		fmt.Fprintf(os.Stderr, "mob3: -pdf-page %d is out of range (document has %d pages)\n", pdfPage, page.PDF.TotalPages)
 		return 1
 	}
 	if !noJS {
@@ -362,18 +391,29 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		deadline = time.Now().Add(budget.Time)
 	}
 	layout := BuildLayoutBudgetDeadline(root, author, width, viewportH, false, dark, deadline, budget)
-	height := layout.Height
+	full := layout.Height
+	height := full
 	if viewportH > 0 && height > viewportH {
 		height = viewportH
 	}
 	if height < 1 {
 		height = 1
 	}
-	if height > 20000 {
-		height = 20000
+	rowCap := 20000
+	if pngOut {
+		rowCap = 2000
 	}
-	if pngOut && height > 2000 {
-		height = 2000
+	if (viewportH == 0 || viewportH >= rowCap) && full > rowCap {
+		if pngOut && page.PDF != nil {
+			fmt.Fprintf(os.Stderr, "mob3: PNG truncated to %d rows; use -pdf-page=N to export one page\n", rowCap)
+		} else if pngOut {
+			fmt.Fprintf(os.Stderr, "mob3: PNG truncated to %d rows\n", rowCap)
+		} else {
+			fmt.Fprintf(os.Stderr, "mob3: output truncated to %d rows\n", rowCap)
+		}
+	}
+	if height > rowCap {
+		height = rowCap
 	}
 	pageFG := RGB(0x1f, 0x23, 0x28)
 	if layout.Body != nil && layout.Body.Style != nil && layout.Body.Style.Color.Set {

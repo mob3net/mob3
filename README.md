@@ -123,8 +123,9 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   headline path (two rows, scaled glyphs in kitty) as HTML headings. Find, selection, `-dump` and `-png` work as on any
   page. The footer
   shows `Page n/N` with a clickable `(d -> Download name)` hint, and `d` opens
-  the same curl popup. Figures, images and annotations are not rendered;
-  `-no-pdf` restores the download prompt.
+  the same curl popup. `-png` exports one page (`-pdf-page=N` or `all` for the
+  whole document). Figures, images and annotations are not rendered; `-no-pdf`
+  restores the download prompt.
 - Dark mode (`D`, the footer `Dark:on`/`Dark:off` label, or `-dark` at launch):
   asks sites for their dark styles with `prefers-color-scheme: dark`. Pages that
   already render a dark background keep their own palette; otherwise
