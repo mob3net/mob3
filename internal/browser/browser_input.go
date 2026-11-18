@@ -817,6 +817,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				case headerDownload:
 					b.downloadCurrentPDF()
 					return false
+				case headerStatus:
+					b.showStatusDetails()
+					return false
 				}
 			}
 		}
@@ -1052,6 +1055,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.forward()
 	case "r":
 		b.reload()
+	case "E":
+		b.showStatusDetails()
 	case "R":
 		b.toggleReader()
 	case "D":

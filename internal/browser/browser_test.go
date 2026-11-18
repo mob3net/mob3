@@ -1264,3 +1264,51 @@ func TestBackForwardUseVimJumplistKeys(t *testing.T) {
 		t.Fatalf("right status = %q", b.status)
 	}
 }
+
+func TestStatusDetailsShortcut(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.status = `Error: Invalid URL: parse "x": invalid port`
+	b.HandleKey("E")
+	if b.notice == nil {
+		t.Fatal("E did not open the message window")
+	}
+	if b.notice.title != "Error" || b.notice.message != b.status {
+		t.Fatalf("notice = %q / %q", b.notice.title, b.notice.message)
+	}
+
+	b.notice = nil
+	b.status = "Site blocked (CAPTCHA challenge)"
+	b.HandleKey("E")
+	if b.notice == nil || b.notice.title != "Warning" {
+		t.Fatalf("warning notice = %+v", b.notice)
+	}
+
+	b.notice = nil
+	b.status = "Ready"
+	b.HandleKey("E")
+	if b.notice != nil {
+		t.Fatal("E opened a window for a normal status")
+	}
+}
+
+func TestStatusDetailsClick(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.status = "Error: something long that did not fit in the footer"
+	drawQuiet(b)
+	found := false
+	for _, hit := range b.footerHits {
+		if hit.kind == headerStatus {
+			found = true
+			if hit.w <= 0 || hit.w > b.width {
+				t.Fatalf("status hit width = %d", hit.w)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("footer status was not clickable")
+	}
+	b.HandleMouse(MouseEvent{X: 2, Y: b.height, Press: true})
+	if b.notice == nil || b.notice.title != "Error" {
+		t.Fatalf("click did not open the message: %+v", b.notice)
+	}
+}

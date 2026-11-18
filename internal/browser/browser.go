@@ -1126,6 +1126,21 @@ func sameDocument(a, b *url.URL) bool {
 }
 
 // showNotice opens a small informational modal.
+// showStatusDetails opens the full warning or error text in a modal, because
+// the footer has to truncate long messages.
+func (b *Browser) showStatusDetails() {
+	msg := strings.TrimSpace(b.status)
+	if msg == "" {
+		return
+	}
+	switch statusLevelFor(b.status) {
+	case statusError:
+		b.showNotice("Error", msg)
+	case statusWarning:
+		b.showNotice("Warning", msg)
+	}
+}
+
 func (b *Browser) showNotice(title, message string) {
 	b.download = nil
 	b.notice = &noticeDialog{title: title, message: message}

@@ -1599,6 +1599,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>d</b></td><td>open the curl download popup for the current PDF</td></tr>
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, or the download curl command</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
+<tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading or leave the current mode</td></tr>
@@ -1670,6 +1671,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
 <tr><td>right click a link</td><td>copy its URL</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
+<tr><td>click the footer status message</td><td>open the full warning or error text, like <b>E</b></td></tr>
 <tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>i</b></td></tr>
 <tr><td>click the footer <b>JavaScript:on</b>/<b>JavaScript:off</b> label</td><td>toggle JavaScript and reload the page, like <b>J</b></td></tr>
 <tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>

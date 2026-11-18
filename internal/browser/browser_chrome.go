@@ -34,6 +34,7 @@ const (
 	headerDark
 	headerGraphics
 	headerDownload
+	headerStatus
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -538,6 +539,20 @@ func (b *Browser) draw() {
 				}
 			}
 			g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
+			if b.status != "" && !b.hintConfirm && !b.quitPending && b.hoveredLink() == nil {
+				if lvl := statusLevelFor(b.status); lvl == statusWarning || lvl == statusError {
+					sw := stringWidth(leftText)
+					if sw > avail {
+						sw = avail
+					}
+					if sw > 0 {
+						b.footerHits = append(b.footerHits, headerHit{kind: headerStatus, x: 0, y: fy, w: sw, h: 1})
+					}
+					if lvl == statusError {
+						drawStatusShortcut(g, 0, fy, avail, leftText, leftStyle, leftColor)
+					}
+				}
+			}
 			if pdfHint != "" && pdfHintX >= 0 {
 				hintStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
 				g.Text(pdfHintX, fy, pdfHint, hintStyle, hintStyle.Color)
@@ -754,6 +769,17 @@ func statusLevelFor(s string) statusLevel {
 		return statusWarning
 	}
 	return statusNormal
+}
+
+// drawStatusShortcut underlines the E in an "Error:" footer status, so the
+// status advertises the E shortcut like the mode labels advertise J/D/R.
+func drawStatusShortcut(g *Grid, x, y, avail int, text string, st *Style, fg Color) {
+	if avail < 2 || st == nil || !strings.HasPrefix(text, " Error:") {
+		return
+	}
+	under := *st
+	under.Underline = true
+	g.Text(x+1, y, "E", &under, fg)
 }
 
 func (b *Browser) footerLeft() string {

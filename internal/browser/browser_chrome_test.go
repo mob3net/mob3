@@ -860,3 +860,23 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 		t.Fatal("image fragment did not return after enabling graphics")
 	}
 }
+
+func TestStatusShortcutUnderlinesErrorE(t *testing.T) {
+	st := &Style{Color: RGB(0xb3, 0x1d, 0x1d), FontSize: 16, LineHeight: 1}
+	g := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	drawStatusShortcut(g, 0, 0, 40, " Error: Invalid URL", st, st.Color)
+	if !g.Cells[1].Underline {
+		t.Fatal("E in Error: is not underlined")
+	}
+	if g.Cells[0].Underline || g.Cells[2].Underline {
+		t.Fatal("only the E should be underlined")
+	}
+
+	g2 := NewGrid(40, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	drawStatusShortcut(g2, 0, 0, 40, " Site blocked (CAPTCHA)", st, st.Color)
+	for i := range g2.Cells {
+		if g2.Cells[i].Underline {
+			t.Fatal("warning status advertised an underline")
+		}
+	}
+}

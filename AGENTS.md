@@ -710,7 +710,9 @@ Standard Go layout:
   fixed elements, `o` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
-  destination confirmation, `u` show URL,
+  destination confirmation, `u` show URL, `E` open the full warning or error
+  text when the footer had to truncate it (the footer status line is also
+  clickable, and the `E` in `Error:` is underlined to advertise the key),
   `d` open the curl download popup for the current PDF page,
   `y` copy selected page text, the current URL when nothing is selected, or
   the download popup's curl command, and clear the highlight,
@@ -881,7 +883,8 @@ Standard Go layout:
   `Dark:on`/`Dark:off` or `Reader:on`/`Reader:off` labels toggles those modes,
   clicking the footer
   `JavaScript:on`/`JavaScript:off` label toggles scripting for the session and
-  reloads the page, clicking the footer
+  reloads the page, clicking the footer status line opens the full warning or
+  error text (also `E`), clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
   scrolls three lines. Long pages show a scrollbar
   on the right edge: click or drag it to jump through the document. Any button
@@ -977,7 +980,8 @@ Standard Go layout:
   separate the left status/link text from the right-side state. The first letter
   of the JavaScript, Dark
   and Reader labels is underlined to suggest the `J`/`D`/`R` shortcuts, even
-  when the JavaScript label is in its red error state. Each
+  when the JavaScript label is in its red error state. The `E` in an `Error:`
+  status is underlined to suggest the `E` details shortcut. Each
   label is blue and bold
   while its mode is on (JavaScript counts as on while scripts are enabled); the
   console icon toggles the JS console and stays
