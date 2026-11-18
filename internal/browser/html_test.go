@@ -104,3 +104,31 @@ func TestClassListCacheInvalidates(t *testing.T) {
 		t.Fatalf("class list = %q after attribute replacement", got)
 	}
 }
+
+func TestRawTextEndTagAfterCaseFolding(t *testing.T) {
+	// U+0130 lowercases to two code points, which changes byte length. The
+	// old raw-text scan lowercased the whole document first and then used the
+	// resulting offset against the original string, truncating the script.
+	body := "var label = \"İİİ\";\n// keep this trailing comment\n"
+	src := "<script>" + body + "</script><p>after</p>"
+	doc := ParseHTML(src)
+	script := doc.FindFirst("script")
+	if script == nil {
+		t.Fatal("script element missing")
+	}
+	if got := script.TextContent(); got != body {
+		t.Fatalf("script text truncated: got %q, want %q", got, body)
+	}
+	if p := doc.FindFirst("p"); p == nil || p.TextContent() != "after" {
+		t.Fatal("content after the script was lost")
+	}
+
+	// The end tag is still found case-insensitively.
+	doc = ParseHTML("<script>x</SCRIPT><b>y</b>")
+	if got := doc.FindFirst("script").TextContent(); got != "x" {
+		t.Fatalf("upper-case end tag: script text = %q", got)
+	}
+	if doc.FindFirst("b") == nil {
+		t.Fatal("content after an upper-case end tag was lost")
+	}
+}

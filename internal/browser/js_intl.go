@@ -44,6 +44,48 @@ func (j *jsRuntime) installIntl() {
 	function PluralRules(locales, options) { return wrap(PluralRules, PR, locales, options); }
 	function RelativeTimeFormat(locales, options) { return wrap(RelativeTimeFormat, RTF, locales, options); }
 	function ListFormat(locales, options) { return wrap(ListFormat, LF, locales, options); }
+	function Segmenter(locales, options) {
+		var gran = (options && options.granularity) || 'grapheme';
+		if (gran !== 'grapheme' && gran !== 'word' && gran !== 'sentence') gran = 'grapheme';
+		var obj = Object.create(Segmenter.prototype);
+		obj.resolvedOptions = function () { return { locale: 'en', granularity: gran }; };
+		obj.segment = function (input) {
+			var text = String(input);
+			var out = [];
+			if (gran === 'grapheme') {
+				for (var i = 0; i < text.length;) {
+					var cp = text.codePointAt(i);
+					var len = cp > 0xffff ? 2 : 1;
+					out.push({ segment: text.substr(i, len), index: i, input: text, isWordLike: false });
+					i += len;
+				}
+			} else if (gran === 'word') {
+				var re = /[A-Za-z0-9_\u00c0-\uffff]+|[^A-Za-z0-9_\u00c0-\uffff]+/g, m;
+				while ((m = re.exec(text))) {
+					out.push({ segment: m[0], index: m.index, input: text, isWordLike: /^[A-Za-z0-9_\u00c0-\uffff]/.test(m[0]) });
+				}
+			} else {
+				var start = 0;
+				for (var j = 0; j < text.length; j++) {
+					var c = text.charAt(j);
+					if ((c === '.' || c === '!' || c === '?') && (j + 1 >= text.length || /\s/.test(text.charAt(j + 1)))) {
+						out.push({ segment: text.slice(start, j + 1), index: start, input: text });
+						start = j + 1;
+					}
+				}
+				if (start < text.length) out.push({ segment: text.slice(start), index: start, input: text });
+			}
+			out.containing = function (index) {
+				for (var k = 0; k < out.length; k++) {
+					if (index >= out[k].index && index < out[k].index + out[k].segment.length) return out[k];
+				}
+				return undefined;
+			};
+			return out;
+		};
+		return obj;
+	}
+	Segmenter.prototype = { segment: function () { return []; }, resolvedOptions: function () { return {}; } };
 	globalThis.Intl = {
 		NumberFormat: NumberFormat,
 		DateTimeFormat: DateTimeFormat,
@@ -51,6 +93,7 @@ func (j *jsRuntime) installIntl() {
 		PluralRules: PluralRules,
 		RelativeTimeFormat: RelativeTimeFormat,
 		ListFormat: ListFormat,
+		Segmenter: Segmenter,
 		getCanonicalLocales: function (locales) { return CL(locales); },
 		supportedValuesOf: function (key) { return SV(key); }
 	};

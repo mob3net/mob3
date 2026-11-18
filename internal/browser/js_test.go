@@ -296,6 +296,34 @@ func TestJSIntl(t *testing.T) {
 	}
 }
 
+func TestJSIntlSegmenter(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`, `
+		var sentences = new Intl.Segmenter("en", {granularity: "sentence"});
+		var words = new Intl.Segmenter("en", {granularity: "word"});
+		var chars = new Intl.Segmenter("en");
+		var s = sentences.segment("One. Two! Three");
+		var sent = [];
+		for (var part of s) sent.push(part.segment);
+		var w = words.segment("hi there!");
+		var wl = [];
+		for (var part of w) wl.push(part.segment + ":" + part.isWordLike);
+		var g = chars.segment("a\ud83d\ude00b");
+		var gl = [];
+		for (var part of g) gl.push(part.segment);
+		var hit = s.containing(6);
+		document.title = [
+			sent.join("/"), wl.join(","), gl.length, hit ? hit.segment : "none",
+			sentences.resolvedOptions().granularity
+		].join("|");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "One./ Two!/ Three|hi:true, :false,there:true,!:false|3| Two!|sentence"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q (logs %v)", page.Title, want, b.jsLog)
+	}
+}
+
 func TestJSXMLHTTPRequest(t *testing.T) {
 	loader := NewLoader()
 	var gotMethod, gotPath, gotBody string

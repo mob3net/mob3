@@ -1127,10 +1127,13 @@ Standard Go layout:
   and has no streaming or upload progress; a basic `AbortController` only
   rejects a fetch that has not started. `Intl` provides
   an English-only practical subset: `NumberFormat`, `DateTimeFormat`,
-  `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`,
+  `Collator`, `PluralRules`, `RelativeTimeFormat`, `ListFormat`, `Segmenter`,
   `getCanonicalLocales` and `supportedValuesOf`, without full CLDR locale
-  data. `<noscript>` is removed before styles and scripts are collected when
-  JS is enabled, so no-JS styles/scripts cannot affect the JS page.
+  data. `Segmenter` supports grapheme (code points), word (letter/digit/
+  underscore runs) and sentence (punctuation plus whitespace) granularities,
+  with `segment()` and `containing()`. `<noscript>` is removed before styles
+  and scripts are collected when JS is enabled, so no-JS styles/scripts cannot
+  affect the JS page.
   `console.*` and uncaught errors append to a bounded JS log. Module scripts
   remain unsupported, so globals defined only by modules (for example a
   third-party `google` object) stay undefined.

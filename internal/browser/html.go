@@ -431,9 +431,8 @@ func (p *htmlParser) parseStartTag() {
 
 	// Raw-text elements swallow everything up to their end tag.
 	if rawTextElements[tag] {
-		lower := strings.ToLower(p.s)
 		needle := "</" + tag
-		idx := strings.Index(lower[p.i:], needle)
+		idx := indexFoldASCII(p.s[p.i:], needle)
 		var content string
 		if idx >= 0 {
 			content = p.s[p.i : p.i+idx]
@@ -482,6 +481,43 @@ func (p *htmlParser) parseStartTag() {
 	if !voidElements[tag] && !selfClose {
 		p.stack = append(p.stack, n)
 	}
+}
+
+// indexFoldASCII reports the first byte index of needle in s, comparing ASCII
+// letters case-insensitively. It scans the original string instead of a
+// strings.ToLower copy because folding can change byte length for some
+// characters (U+0130 and friends), which used to shift the raw-text end-tag
+// position and truncate long scripts.
+func indexFoldASCII(s, needle string) int {
+	if needle == "" {
+		return 0
+	}
+	for i := 0; i+len(needle) <= len(s); {
+		j := strings.IndexByte(s[i:], needle[0])
+		if j < 0 {
+			return -1
+		}
+		i += j
+		if len(s)-i < len(needle) {
+			return -1
+		}
+		match := true
+		for k := 0; k < len(needle); k++ {
+			c := s[i+k]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != needle[k] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+		i++
+	}
+	return -1
 }
 
 func (p *htmlParser) addElementRaw(tag string, attrs []Attr, content string, unescape bool) {
