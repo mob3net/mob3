@@ -154,11 +154,14 @@ Standard Go layout:
   below), and moving code between those files is a pure declaration move with
   no behavior change: keep whole declaration blocks with their doc comments,
   give each new file only the imports it actually uses, and let the compiler
-  and tests confirm nothing changed. Naming follows ownership: sub-passes of
-  one family carry that family's prefix (`layout_grid.go`, `layout_flex.go`,
-  `layout_table.go`), while a peer subsystem that owns a whole concern keeps
-  its own name (`chrome.go`, `history.go`, `selection.go`). Do not prefix a
-  file with the package name.
+  and tests confirm nothing changed. Naming follows ownership: files carved
+  out of a base file share that file's prefix, so `layout.go` produces
+  `layout_grid.go`, `layout_flex.go` and `layout_table.go`, and `browser.go`
+  produces `browser_chrome.go`, `browser_forms.go` and `browser_history.go`.
+  Prefixing matters once a bare name would be ambiguous: `forms` and `images`
+  exist in both families, so the prefix says which one a file belongs to.
+  Standalone subsystems that are their own base file keep their own name
+  (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
 
 | File | Decision / responsibility |
 | --- | --- |
@@ -184,12 +187,12 @@ Standard Go layout:
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
-| `chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
-| `forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
-| `input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
-| `history.go` | Session history and the in-memory back/forward page cache (suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
-| `images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
-| `selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
+| `browser_chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
+| `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
+| `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
+| `browser_history.go` | Session history and the in-memory back/forward page cache (suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
+| `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
+| `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
 | `automation.go` | Headless `Automation` session for scripted clients: serialized navigation, text snapshot, click by link/selector/coordinates, typing, key presses, scrolling, history, JS evaluation and session close. `RunCommand` is the shared named-command dispatcher used by protocol front ends. Uses a virtual text viewport and sets `Browser.noDraw` so nothing is written to the terminal. |
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tool calls delegate to `Automation.RunCommand`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
@@ -211,7 +214,7 @@ Standard Go layout:
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
 | `cli.go` | `Run`: flags, dump mode, interactive event loop, and the build-time `Version` string reported by `-version`; default `dev`. |
-| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`chrome_test.go`, `forms_test.go`, `input_test.go`, `history_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `bookmarks_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |
+| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `bookmarks_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |
 
 ## 4. Rendering and layout
 
