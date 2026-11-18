@@ -194,7 +194,7 @@ Standard Go layout:
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. |
-| `style_sheet.go` | Declaration and stylesheet parsing: tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
+| `style_sheet.go` | Declaration and stylesheet parsing: tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
 | `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, empty `::before`/`::after` computation, and the style deadline. |
 | `style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
@@ -1610,6 +1610,8 @@ Standard Go layout:
   known). Empty block-level `::before`/`::after` boxes (including the
   `padding-top` aspect-ratio pattern) are generated; other generated content is
   not. `-webkit-line-clamp` is approximated by clipping after N lines.
+  CSS nesting resolves nested style rules against their parent selector
+  (`&`, descendant and combinator children); nested at-rules are skipped.
   CSS custom properties support simple `var()` substitution, including
   fallbacks; registered properties and Houdini APIs are not supported. The
   inherited property map is shared down the tree and copied only when an

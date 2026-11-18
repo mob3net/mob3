@@ -226,6 +226,186 @@ func ParseStylesheetContext(ctx context.Context, src string) []Rule {
 	return parseRules(src, st, "")
 }
 
+// maxNestedDepth bounds CSS nesting so a malformed sheet cannot expand
+// recursively without limit.
+const maxNestedDepth = 8
+
+// addStyleRules appends the rules for one style rule, expanding CSS nesting: a
+// declaration block may contain nested style rules whose selectors resolve
+// against the parent. Nested at-rules are skipped.
+func addStyleRules(st *parseState, rules *[]Rule, selText, body, media string, depth int) {
+	if depth > maxNestedDepth {
+		return
+	}
+	declText, nested := splitNestedRule(body)
+	if strings.TrimSpace(declText) != "" {
+		if decls := ParseDeclarations(declText); len(decls) > 0 {
+			addDeclRules(st, rules, selText, decls, media)
+		}
+	}
+	for _, nr := range nested {
+		child := strings.TrimSpace(nr[0])
+		if child == "" || strings.HasPrefix(child, "@") {
+			continue
+		}
+		composed := composeNestedSelector(selText, child)
+		if composed == "" {
+			continue
+		}
+		addStyleRules(st, rules, composed, nr[1], media, depth+1)
+	}
+}
+
+func addDeclRules(st *parseState, rules *[]Rule, selText string, decls []Declaration, media string) {
+	for _, part := range splitTopLevel(selText, ',') {
+		if maxCSSRules > 0 && st.rules >= maxCSSRules {
+			return
+		}
+		part = strings.TrimSpace(part)
+		if part == "" || len(part) > 4096 {
+			continue
+		}
+		sel := st.cache[part]
+		if sel == nil {
+			parsed, err := ParseSelector(part)
+			if err != nil {
+				continue
+			}
+			sel = parsed
+			st.cache[part] = sel
+		}
+		st.order++
+		st.rules++
+		*rules = append(*rules, Rule{Selector: *sel, Decls: decls, Order: st.order, Media: media})
+	}
+}
+
+// composeNestedSelector resolves a nested selector list against its parent
+// list: "&" is replaced by the parent, a leading combinator is appended, and
+// any other selector becomes a descendant.
+func composeNestedSelector(parents, children string) string {
+	plist := splitTopLevel(parents, ',')
+	clist := splitTopLevel(children, ',')
+	if len(plist)*len(clist) > 256 {
+		return ""
+	}
+	var out []string
+	for _, p := range plist {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		for _, c := range clist {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			if strings.Contains(c, "&") {
+				out = append(out, strings.ReplaceAll(c, "&", p))
+				continue
+			}
+			out = append(out, p+" "+c)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// splitNestedRule separates a declaration block's own declarations from nested
+// style rules, which modern CSS nesting writes as a selector followed by
+// another block. Without this, inner declarations leaked onto the outer
+// selector; a theme's "a::after { width:0 }" underline effect used to give
+// every heading a zero width.
+func splitNestedRule(body string) (string, [][2]string) {
+	var decls []string
+	var nested [][2]string
+	i, seg := 0, 0
+	for i < len(body) {
+		switch c := body[i]; {
+		case c == '"' || c == '\'':
+			i = skipString(body, i)
+		case c == '/' && i+1 < len(body) && body[i+1] == '*':
+			i = skipComment(body, i)
+		case c == '(' || c == '[':
+			i = skipGroup(body, i)
+		case c == '{':
+			selStart := i
+			for selStart > seg && body[selStart-1] != ';' {
+				selStart--
+			}
+			if selStart > seg {
+				decls = append(decls, body[seg:selStart])
+			}
+			end, ok := matchingBrace(body, i)
+			if !ok {
+				return strings.Join(decls, ";"), nested
+			}
+			if child := strings.TrimSpace(body[selStart:i]); child != "" {
+				nested = append(nested, [2]string{child, body[i+1 : end]})
+			}
+			i = end + 1
+			seg = i
+		default:
+			i++
+		}
+	}
+	if seg < len(body) {
+		decls = append(decls, body[seg:])
+	}
+	return strings.Join(decls, ";"), nested
+}
+
+func matchingBrace(s string, open int) (int, bool) {
+	depth := 0
+	for i := open; i < len(s); {
+		switch s[i] {
+		case '"', '\'':
+			i = skipString(s, i)
+			continue
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i, true
+			}
+		}
+		i++
+	}
+	return 0, false
+}
+
+func skipComment(s string, i int) int {
+	if end := strings.Index(s[i+2:], "*/"); end >= 0 {
+		return i + 2 + end + 2
+	}
+	return len(s)
+}
+
+func skipGroup(s string, i int) int {
+	open := s[i]
+	closeCh := byte(')')
+	if open == '[' {
+		closeCh = ']'
+	}
+	depth := 0
+	for i < len(s) {
+		switch c := s[i]; {
+		case c == '"' || c == '\'':
+			i = skipString(s, i)
+			continue
+		case c == open:
+			depth++
+		case c == closeCh:
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+		i++
+	}
+	return len(s)
+}
+
 func parseRules(src string, st *parseState, media string) []Rule {
 	capHint := len(src) / 64
 	if capHint < 8 {
@@ -323,28 +503,7 @@ func parseRules(src string, st *parseState, media string) []Rule {
 			skipWSComments(src, &i)
 			continue
 		}
-		decls := ParseDeclarations(body)
-		for _, part := range splitTopLevel(selText, ',') {
-			if maxCSSRules > 0 && st.rules >= maxCSSRules {
-				break
-			}
-			part = strings.TrimSpace(part)
-			if part == "" || len(part) > 4096 {
-				continue
-			}
-			sel := st.cache[part]
-			if sel == nil {
-				parsed, err := ParseSelector(part)
-				if err != nil {
-					continue
-				}
-				sel = parsed
-				st.cache[part] = sel
-			}
-			st.order++
-			st.rules++
-			rules = append(rules, Rule{Selector: *sel, Decls: decls, Order: st.order, Media: media})
-		}
+		addStyleRules(st, &rules, selText, body, media, 0)
 		skipWSComments(src, &i)
 	}
 	return rules

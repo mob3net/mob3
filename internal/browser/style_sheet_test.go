@@ -79,3 +79,55 @@ func TestImportURLWithSemicolons(t *testing.T) {
 		t.Fatalf("rules after @import = %d, want 1", len(rules))
 	}
 }
+
+func TestNestedRulesExpandAgainstParent(t *testing.T) {
+	doc := ParseHTML(`<div class="card"><a id="a">link</a><span id="s">text</span></div>`)
+	rules := ParseStylesheet(`
+		.card {
+			color: #111111;
+			a { color: #0000ff; }
+			> span { color: #ff0000; }
+			&[data-kind='x'] a { color: #00ff00; }
+		}
+	`)
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	card := doc.FindFirst("div")
+	link := findElementByID(doc, "a")
+	span := findElementByID(doc, "s")
+	if got := styles[card].Color; got != RGB(0x11, 0x11, 0x11) {
+		t.Fatalf("card color = %+v", got)
+	}
+	if got := styles[link].Color; got != RGB(0x00, 0x00, 0xff) {
+		t.Fatalf("descendant rule color = %+v", got)
+	}
+	if got := styles[span].Color; got != RGB(0xff, 0x00, 0x00) {
+		t.Fatalf("child combinator rule color = %+v", got)
+	}
+}
+
+func TestNestedRulesDoNotLeakIntoParent(t *testing.T) {
+	// A theme underlines links with an absolutely positioned zero-width
+	// ::after. Flattening the nested block used to give the heading itself
+	// width:0 and display:inline-block, so its text wrapped one character per
+	// line.
+	doc := ParseHTML(`<h3 class="h"><a href="#">Heading</a></h3>`)
+	rules := ParseStylesheet(`
+		.h {
+			color: #111111;
+			a { display: inline-block; position: relative; }
+			a::after { content: ''; position: absolute; width: 0; height: 1px; }
+		}
+	`)
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	h := doc.FindFirst("h3")
+	if styles[h].Width.Set {
+		t.Fatalf("nested rule leaked width onto the heading: %+v", styles[h].Width)
+	}
+	if styles[h].Display != "block" && styles[h].Display != "" {
+		t.Fatalf("heading display = %q, want block", styles[h].Display)
+	}
+	link := h.FindFirst("a")
+	if link == nil || styles[link].Display != "inline-block" {
+		t.Fatalf("nested link rule did not apply")
+	}
+}

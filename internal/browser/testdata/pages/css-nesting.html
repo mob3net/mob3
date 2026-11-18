@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 8px; font-size: 16px; }
+h2 { margin: 0 0 8px 0; font-size: 24px; }
+h2 {
+  color: #112233;
+  a { color: #003366; text-decoration: none; display: inline-block; }
+  a::after { content: ''; position: absolute; width: 0; height: 1px; }
+  &[data-kind='note'] a { color: #663300; }
+}
+.card {
+  padding: 8px;
+  border: 1px solid #cccccc;
+  a { display: inline-block; margin-right: 12px; color: #003366; }
+}
+p { margin: 8px 0 0 0; }
+</style>
+</head>
+<body>
+<h2><a href="#">A heading with nested link rules</a></h2>
+<div class="card">
+  <a href="#">First link</a><a href="#">Second link</a>
+</div>
+<p>Body text after the card stays in the normal flow.</p>
+</body>
+</html>

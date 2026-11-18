@@ -1,0 +1,10 @@
+
+ A heading with nested link rules
+
+
+
+   First link  Second link
+
+
+
+ Body text after the card stays in the normal flow.
