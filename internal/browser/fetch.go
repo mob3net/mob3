@@ -1592,6 +1592,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
+<tr><td><b>d</b></td><td>open the curl download popup for the current PDF</td></tr>
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, or the download curl command</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
@@ -1684,11 +1685,16 @@ closes it.</p>
 
 <h2>PDF documents</h2>
 <p>A PDF opens in a built-in, text-only viewer: every page is extracted into
-one continuous document with page rules and a <b>Page n of N</b> label, and
-columns keep their alignment. Find, selection, <b>-dump</b> and <b>-png</b>
-work as on any other page. Figures, images and annotations are not rendered,
-scanned PDFs have no text to show, and encrypted PDFs are refused. <b>-no-pdf</b>
-disables the viewer and shows the download popup instead.</p>
+one continuous document where each page ends with its <b>Page n</b> caption above
+an underscore rule. The reading column is centered, every page is padded to the
+same height so it scrolls like a book, vertical gaps become blank lines, and
+runs larger than the body text become 32px headlines (two rows, scaled glyphs in
+kitty). Columns keep their alignment. The footer shows <b>Page n/N</b> with a clickable
+<b>(d -&gt; Download name)</b> hint; <b>d</b> opens the same curl popup. Find,
+selection, <b>-dump</b> and <b>-png</b> work as on any other page. Figures,
+images and annotations are not rendered, scanned PDFs have no text to show,
+and encrypted PDFs are refused. <b>-no-pdf</b> disables the viewer and shows
+the download popup instead.</p>
 
 <h2>Forms</h2>
 <p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through

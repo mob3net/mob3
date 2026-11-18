@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -314,11 +315,14 @@ func TestPDFLoadEndToEnd(t *testing.T) {
 		}
 	}
 	rendered := strings.Join(strings.Fields(text.String()), " ")
-	if !strings.Contains(rendered, "Page 1 of 1") {
-		t.Fatalf("rendered layout lacks the page label: %q", rendered)
+	if strings.Contains(rendered, "PDF ·") || strings.Contains(rendered, "Page 1 of 1") {
+		t.Fatalf("page chrome leaked into the viewport: %q", rendered)
 	}
 	if !strings.Contains(rendered, "Loaded from a data URL") {
 		t.Fatalf("rendered layout lacks the page text: %q", rendered)
+	}
+	if len(page.PDF.PageNodes) != 1 {
+		t.Fatalf("page nodes = %d, want 1", len(page.PDF.PageNodes))
 	}
 }
 
@@ -367,15 +371,15 @@ func TestPDFLineSpacingDoesNotSplitGlyphs(t *testing.T) {
 		{Text: "h", X: 5, Y: 100, W: 5, Size: 10},
 		{Text: "e", X: 10, Y: 100, W: 5, Size: 10},
 	}
-	if got := pdfSpansText(pdfPageLines(runs)); got != "The\n" {
+	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The\n" {
 		t.Fatalf("touching runs = %q", got)
 	}
 	runs = append(runs, pdfRun{Text: "word", X: 20, Y: 100, W: 20, Size: 10})
-	if got := pdfSpansText(pdfPageLines(runs)); got != "The word\n" {
+	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The word\n" {
 		t.Fatalf("gap run = %q", got)
 	}
 	runs = append(runs, pdfRun{Text: "cell", X: 120, Y: 100, W: 20, Size: 10})
-	if got := pdfSpansText(pdfPageLines(runs)); got != "The word            cell\n" {
+	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The word            cell\n" {
 		t.Fatalf("column run = %q", got)
 	}
 }
@@ -434,12 +438,123 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 
 func TestPDFEscapesMarkup(t *testing.T) {
 	doc := buildPDFDocument(pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (a < b & c) Tj ET", ""))
-	html := pdfPageHTML(doc, nil, 200)
+	html := pdfPageHTML(doc, nil)
 	if strings.Contains(html, "a < b & c") {
 		t.Fatal("page text was not escaped")
 	}
 	if !strings.Contains(html, "a &lt; b &amp; c") {
 		t.Fatalf("escaped text missing: %.200q", html)
+	}
+}
+
+func TestPDFFooterLineAndPageTracking(t *testing.T) {
+	u, _ := url.Parse("https://example.com/files/file-example_PDF_500_kB.pdf")
+	doc := &PDFDocument{Pages: make([]PDFPageText, 5)}
+	for i := range doc.Pages {
+		doc.Pages[i].Number = i + 1
+	}
+	root := ParseHTML(`<html><body></body></html>`)
+	b := NewBrowser(100, 20)
+	b.page = &Page{URL: u, Base: u, Root: root, PDF: doc}
+	b.pdfStarts = []int{0, 40, 80, 120, 160}
+
+	text, hint, cell, ok := b.pdfFooterLine(120)
+	if !ok {
+		t.Fatal("no footer line for a PDF page")
+	}
+	want := " Page 1/5 (d -> Download file-example_PDF_500_kB.pdf)"
+	if text != want {
+		t.Fatalf("footer = %q, want %q", text, want)
+	}
+	if hint != "(d -> Download file-example_PDF_500_kB.pdf)" {
+		t.Fatalf("hint = %q", hint)
+	}
+	if cell != stringWidth(" Page 1/5")+1 {
+		t.Fatalf("hint cell = %d", cell)
+	}
+
+	// Scrolling into the third page moves the counter.
+	b.scroll = 90
+	if got := b.pdfPageNumber(); got != 3 {
+		t.Fatalf("page at scroll 90 = %d, want 3", got)
+	}
+	b.scroll = 1000
+	if got := b.pdfPageNumber(); got != 5 {
+		t.Fatalf("page at bottom = %d, want 5", got)
+	}
+
+	// Narrow footers shorten the name, then fall back to a compact hint.
+	b.scroll = 0
+	text, _, _, _ = b.pdfFooterLine(45)
+	if text != " Page 1/5 (d -> Download file-example_PDF_5…)" {
+		t.Fatalf("narrow footer = %q", text)
+	}
+	text, hint, _, _ = b.pdfFooterLine(20)
+	if hint != "(d)" || text != " Page 1/5 (d)" {
+		t.Fatalf("compact footer = %q (hint %q)", text, hint)
+	}
+	text, hint, _, _ = b.pdfFooterLine(10)
+	if hint != "" || text != " Page 1/5" {
+		t.Fatalf("very narrow footer = %q (hint %q)", text, hint)
+	}
+}
+
+func TestPDFDownloadKey(t *testing.T) {
+	u, _ := url.Parse("https://example.com/files/report.pdf")
+	b := NewBrowser(100, 20)
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body></body></html>`), PDF: &PDFDocument{}}
+	b.HandleKey("d")
+	if b.download == nil {
+		t.Fatal("d did not open the download dialog")
+	}
+	if !strings.Contains(b.download.command, "curl -L -o") ||
+		!strings.Contains(b.download.command, "https://example.com/files/report.pdf") {
+		t.Fatalf("command = %q", b.download.command)
+	}
+}
+
+func TestPDFFooterDownloadHit(t *testing.T) {
+	u, _ := url.Parse("https://example.com/files/report.pdf")
+	root := ParseHTML(`<html><body><div class="pdf-page"><pre>line</pre></div></body></html>`)
+	b := NewBrowser(100, 12)
+	b.page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
+	b.layout = &Layout{Height: 20}
+	b.pdfStarts = []int{0}
+
+	// Draw into a pipe so both the painted line and its hit region are real.
+	old := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	b.draw()
+	pw.Close()
+	os.Stdout = old
+	painted, _ := io.ReadAll(pr)
+	pr.Close()
+	// The hint is painted as its own bold run, so check both halves. The
+	// leading space keeps the status off the terminal edge.
+	if !strings.Contains(string(painted), " Page 1/1 ") ||
+		!strings.Contains(string(painted), "(d -> Download report.pdf)") {
+		t.Fatalf("PDF footer line was not painted: %.400q", painted)
+	}
+
+	var hit *headerHit
+	for i := range b.footerHits {
+		if b.footerHits[i].kind == headerDownload {
+			hit = &b.footerHits[i]
+			break
+		}
+	}
+	if hit == nil {
+		t.Fatalf("PDF footer has no download region: %+v", b.footerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: 0, X: hit.x + 1, Y: hit.y + 1, Press: true})
+	})
+	if b.download == nil {
+		t.Fatal("clicking the PDF download hint did not open the dialog")
 	}
 }
 
@@ -479,20 +594,173 @@ func TestPDFFixtures(t *testing.T) {
 				b.WriteString("\n")
 			}
 			got := b.String()
-			golden := strings.TrimSuffix(file, ".pdf") + ".txt"
+			textGolden := strings.TrimSuffix(file, ".pdf") + ".txt"
+
+			// The rendered page must hold the text and separators only: no
+			// in-page header or per-page labels.
+			root := ParseHTML(pdfPageHTML(doc, nil))
+			rendered := renderFixture(root, fixtureAuthorRules(root), 70)
+			if strings.Contains(rendered, "Page 1 of") || strings.Contains(rendered, "PDF ·") {
+				t.Errorf("%s: page chrome leaked into the viewport:\n%s", name, rendered)
+			}
+			layoutGolden := strings.TrimSuffix(file, ".pdf") + ".w70.txt"
+
 			if *updateFixtures {
-				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
-					t.Fatal(err)
+				for golden, content := range map[string]string{
+					textGolden:   got,
+					layoutGolden: rendered,
+				} {
+					if err := os.WriteFile(golden, []byte(content), 0o644); err != nil {
+						t.Fatal(err)
+					}
 				}
 				return
 			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatalf("%s: %v (run go test -run TestPDFFixtures -update)", golden, err)
-			}
-			if got != string(want) {
-				t.Errorf("%s mismatch\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			for golden, content := range map[string]string{
+				textGolden:   got,
+				layoutGolden: rendered,
+			} {
+				want, err := os.ReadFile(golden)
+				if err != nil {
+					t.Fatalf("%s: %v (run go test -run TestPDFFixtures -update)", golden, err)
+				}
+				if content != string(want) {
+					t.Errorf("%s mismatch\n--- want ---\n%s\n--- got ---\n%s", golden, want, content)
+				}
 			}
 		})
+	}
+}
+
+func TestPDFPagesShareHeight(t *testing.T) {
+	data := pdfBuild("",
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Short page) Tj ET")),
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
+		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Line one) Tj 0 -15 Td (Line two) Tj 0 -15 Td (Line three) Tj ET")),
+	)
+	doc := buildPDFDocument(data)
+	if len(doc.Pages) != 2 {
+		t.Fatalf("pages = %d", len(doc.Pages))
+	}
+	if doc.PageRows != 3 {
+		t.Fatalf("uniform page rows = %d, want 3", doc.PageRows)
+	}
+	html := pdfPageHTML(doc, nil)
+	parts := strings.Split(html, `<pre class="pdf-text">`)
+	if len(parts) != 3 {
+		t.Fatalf("page blocks = %d", len(parts)-1)
+	}
+	for i, part := range parts[1:] {
+		body := part[:strings.Index(part, "</pre>")]
+		if got := strings.Count(body, "\n"); got != doc.PageRows {
+			t.Fatalf("page %d has %d rows, want %d", i+1, got, doc.PageRows)
+		}
+	}
+	// The page column is centered, not pinned to the left edge.
+	if !strings.Contains(html, "margin: 0 auto") || !strings.Contains(html, "max-width: ") {
+		t.Fatal("page column is not centered")
+	}
+	// Each separator carries its page number and an underscore rule.
+	for i := 1; i <= 2; i++ {
+		label := fmt.Sprintf(`<p class="pdf-page-no">Page %d</p>`, i)
+		if !strings.Contains(html, label) {
+			t.Fatalf("missing separator label %q", label)
+		}
+	}
+	if got := strings.Count(html, `<pre class="pdf-rule">`); got != 2 {
+		t.Fatalf("underscore rules = %d, want 2", got)
+	}
+	if !strings.Contains(html, strings.Repeat("_", 40)) {
+		t.Fatal("separator rule is too short")
+	}
+	if strings.Contains(html, "border-bottom") {
+		t.Fatal("page separator still uses a border")
+	}
+}
+
+func TestPDFPageBox(t *testing.T) {
+	page := func(lines ...string) PDFPageText {
+		var spans []pdfSpan
+		for _, l := range lines {
+			spans = append(spans, pdfSpan{Text: l}, pdfSpan{Text: "\n"})
+		}
+		return PDFPageText{Spans: spans}
+	}
+	rows, cells := pdfPageBox([]PDFPageText{
+		page("short"),
+		page("a longer line here", "two", "three"),
+	})
+	if rows != 3 {
+		t.Fatalf("rows = %d, want 3", rows)
+	}
+	if cells != len("a longer line here") {
+		t.Fatalf("cells = %d", cells)
+	}
+}
+
+func TestPDFBlankFigurePagesStayBlank(t *testing.T) {
+	// A text document with a figure-only page renders that page blank instead
+	// of stamping a placeholder on every illustration.
+	data := pdfBuild("",
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Text page) Tj ET")),
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 7 0 R >>",
+		pdfStreamBody("", []byte("0 0 m 100 100 l S")),
+	)
+	doc := buildPDFDocument(data)
+	if !doc.HasText {
+		t.Fatal("document with text was marked as scan")
+	}
+	html := pdfPageHTML(doc, nil)
+	if strings.Count(html, "[no extractable text on this page]") != 0 {
+		t.Fatalf("figure page got a placeholder:\n%s", html)
+	}
+}
+
+func TestPDFHeadlinesGetHeadlineSize(t *testing.T) {
+	data := pdfBuild("",
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		pdfStreamBody("", []byte(
+			"BT /F2 17 Tf 20 280 Td (Big title) Tj ET "+
+				"BT /F1 11 Tf 20 230 Td (Body text) Tj 0 -13 Td (More body) Tj 0 -13 Td (Last body) Tj ET")),
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+	)
+	doc := buildPDFDocument(data)
+	var spans []pdfSpan
+	for _, page := range doc.Pages {
+		spans = append(spans, page.Spans...)
+	}
+	headline := false
+	for _, s := range spans {
+		if strings.Contains(s.Text, "Big title") {
+			headline = s.Size == pdfHeadlinePx
+		}
+	}
+	if !headline {
+		t.Fatal("large PDF heading was not given the headline size")
+	}
+	// The heading is followed by the blank lines its layout gap implies.
+	text := pdfSpansText(spans)
+	if !strings.Contains(text, "Big title\n\n") {
+		t.Fatalf("no spacing after heading: %q", text)
+	}
+	if strings.Contains(text, "Body text\n\n") {
+		t.Fatal("body lines gained spurious blank lines")
+	}
+	// A headline line counts as two rows.
+	rows := pdfPageRows(spans)
+	lines := strings.Count(text, "\n")
+	if rows <= lines {
+		t.Fatalf("headline rows = %d, plain lines = %d", rows, lines)
 	}
 }

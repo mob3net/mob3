@@ -29,10 +29,13 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 ## PDF documents
 
 A PDF response opens in a built-in, text-only viewer: every page is extracted
-and shown as one continuous document with page rules and `Page n of N`
-separators. Text keeps its column alignment, so tables and multi-column pages
-stay readable, and the result supports find, selection, `-dump` and `-png`
-like any other page.
+and shown as one continuous document where each page ends with its `Page n`
+caption above an underscore rule. The reading column is centered and every page is padded to the same
+height, so the document scrolls like a printed book. Text keeps its column alignment, so
+tables and multi-column pages stay readable, and the result supports find,
+selection, `-dump` and `-png` like any other page.
+The footer shows `Page n/N` and a clickable `(d -> Download name)` hint; `d`
+opens the same curl popup.
 
 The viewer never rasterizes a page. Figures, images, charts, annotations and
 links are not shown, scanned PDFs have no text to show, and encrypted

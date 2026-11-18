@@ -115,10 +115,15 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   stays enabled across navigation, and restores the normal page and scroll
   position when toggled off.
 - Built-in text-only PDF viewer: a PDF response is extracted page by page into
-  one continuous document with page rules, column alignment and a `Page n of N`
-  label, so find, selection, `-dump` and `-png` work as on any page. Figures,
-  images and annotations are not rendered; `-no-pdf` restores the download
-  prompt.
+  one continuous document with column alignment, a centered reading column and
+  a `Page n` caption above an underscore rule after each page; every page is
+  padded to the same height so it scrolls like a book. PDF headings keep their
+  spacing, and runs clearly larger than the body text use the same 32px
+  headline path (two rows, scaled glyphs in kitty) as HTML headings. Find, selection, `-dump` and `-png` work as on any
+  page. The footer
+  shows `Page n/N` with a clickable `(d -> Download name)` hint, and `d` opens
+  the same curl popup. Figures, images and annotations are not rendered;
+  `-no-pdf` restores the download prompt.
 - Dark mode (`D`, the footer `Dark:on`/`Dark:off` label, or `-dark` at launch):
   asks sites for their dark styles with `prefers-color-scheme: dark`. Pages that
   already render a dark background keep their own palette; otherwise

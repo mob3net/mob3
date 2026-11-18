@@ -36,10 +36,13 @@ type Browser struct {
 	cellW, cellH  int
 	layout        *Layout
 	scroll        int
-	focus         int
-	hover         int
-	hoverNode     *Node
-	pageHasHover  bool
+	// pdfStarts holds the layout row where each PDF page begins, so the footer
+	// can name the page under the viewport.
+	pdfStarts    []int
+	focus        int
+	hover        int
+	hoverNode    *Node
+	pageHasHover bool
 	// hoverRebuildPending coalesces the style pass for pointer hover changes so
 	// moving across a large page cannot rebuild the whole document per cell.
 	hoverRebuildPending bool
@@ -760,6 +763,7 @@ func (b *Browser) rebuild() {
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked
 	imagesOff := b.loader != nil && b.loader.noImages
 	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+	b.updatePDFPageStarts()
 	if b.bigText && layoutTextOverlaps(b.layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
 		// multi-column pages that pushes text from one column over another, so
@@ -772,6 +776,7 @@ func (b *Browser) rebuild() {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
 		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+		b.updatePDFPageStarts()
 	}
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)

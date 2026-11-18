@@ -809,6 +809,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				case headerGraphics:
 					b.cycleGraphics()
 					return false
+				case headerDownload:
+					b.downloadCurrentPDF()
+					return false
 				}
 			}
 		}
@@ -1060,6 +1063,8 @@ func (b *Browser) HandleKey(k string) bool {
 		if b.findText != "" && b.findScope == findScopePage {
 			b.findNext(-1)
 		}
+	case "d":
+		b.downloadCurrentPDF()
 	case "y":
 		b.copySelection()
 	case "esc":

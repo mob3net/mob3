@@ -97,11 +97,14 @@ type pdfRun struct {
 	Italic bool
 }
 
-// pdfSpan is a run of text with one style inside a reconstructed line.
+// pdfSpan is a run of text with one style inside a reconstructed line. Size is
+// an explicit CSS font size in pixels (0 keeps the page's 14px default); large
+// PDF headings use it to trigger the same scaled-text path as HTML headings.
 type pdfSpan struct {
 	Text   string
 	Bold   bool
 	Italic bool
+	Size   int
 }
 
 // pages walks the page tree in document order.
@@ -559,8 +562,15 @@ func (ex *pdfExtractor) glyph(f *pdfFont, code int) {
 }
 
 // adjust moves the pen by a TJ offset expressed in thousandths of an em.
+// A positive offset wide enough to be a word gap ends the current run, so line
+// reconstruction can insert the space from the resulting gap; small kerning
+// offsets keep the run together.
 func (ex *pdfExtractor) adjust(v float64) {
-	ex.st.tm.translate(v*ex.st.size*ex.st.tz, 0)
+	adv := v * ex.st.size * ex.st.tz
+	if adv > math.Max(1.0, ex.st.size*0.15) {
+		ex.flush()
+	}
+	ex.st.tm.translate(adv, 0)
 	if ex.haveRun {
 		x, y := ex.st.tm.apply(0, ex.st.rise)
 		ex.nextX, ex.nextY = ex.st.ctm.apply(x, y)
@@ -603,8 +613,12 @@ func sanitizePDFText(s string) string {
 }
 
 // pdfPageLines groups runs into lines and turns them into styled spans with
-// column padding, so tables stay aligned in the terminal.
-func pdfPageLines(runs []pdfRun) []pdfSpan {
+// column padding, so tables stay aligned in the terminal. bodySize is the
+// document's typical font size; runs clearly larger than it become headline
+// spans and get the same treatment as large HTML headings. Vertical gaps wider
+// than the page's own leading become blank lines, which restores the spacing
+// after titles and between blocks that the PDF layout implies.
+func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
 	if len(runs) == 0 {
 		return nil
 	}
@@ -624,27 +638,81 @@ func pdfPageLines(runs []pdfRun) []pdfSpan {
 		}
 		lines = append(lines, []pdfRun{r})
 	}
+	leading := pdfLeading(lines)
 	var out []pdfSpan
-	for _, line := range lines {
+	prevY := 0.0
+	prevHeadline := false
+	for i, line := range lines {
+		if i > 0 && leading > 0 {
+			extra := int(math.Round((prevY-line[0].Y)/leading)) - 1
+			if prevHeadline {
+				// A headline line already occupies two rows, so it supplies one
+				// row of the gap by itself.
+				extra--
+			}
+			if extra > 6 {
+				extra = 6
+			}
+			for j := 0; j < extra; j++ {
+				out = append(out, pdfSpan{Text: "\n"})
+			}
+		}
 		sort.SliceStable(line, func(i, j int) bool { return line[i].X < line[j].X })
-		out = append(out, pdfLineSpans(line)...)
+		out = append(out, pdfLineSpans(line, bodySize)...)
 		out = append(out, pdfSpan{Text: "\n"})
+		prevY = line[0].Y
+		prevHeadline = pdfLineHeadline(line, bodySize)
 	}
 	return out
 }
 
-func pdfLineSpans(runs []pdfRun) []pdfSpan {
+// pdfLineHeadline reports whether any run on the line is large enough to be a
+// headline span.
+func pdfLineHeadline(runs []pdfRun, bodySize float64) bool {
+	if bodySize <= 0 {
+		return false
+	}
+	for _, r := range runs {
+		if r.Size >= bodySize*pdfHeadlineRatio {
+			return true
+		}
+	}
+	return false
+}
+
+// pdfLeading estimates the page's normal baseline advance. Body lines are the
+// large majority, so the lower quartile ignores gaps around headings,
+// headers and page numbers.
+func pdfLeading(lines [][]pdfRun) float64 {
+	if len(lines) < 2 {
+		return 0
+	}
+	deltas := make([]float64, 0, len(lines)-1)
+	for i := 0; i+1 < len(lines); i++ {
+		d := lines[i][0].Y - lines[i+1][0].Y
+		if d > 0.5 && d < 500 {
+			deltas = append(deltas, d)
+		}
+	}
+	if len(deltas) == 0 {
+		return 0
+	}
+	sort.Float64s(deltas)
+	return deltas[len(deltas)/4]
+}
+
+func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 	left := runs[0].X
 	var out []pdfSpan
-	add := func(text string, bold, italic bool) {
+	add := func(text string, bold, italic bool, size int) {
 		if text == "" {
 			return
 		}
-		if n := len(out); n > 0 && out[n-1].Bold == bold && out[n-1].Italic == italic {
+		if n := len(out); n > 0 && out[n-1].Bold == bold && out[n-1].Italic == italic && out[n-1].Size == size {
 			out[n-1].Text += text
 			return
 		}
-		out = append(out, pdfSpan{Text: text, Bold: bold, Italic: italic})
+		out = append(out, pdfSpan{Text: text, Bold: bold, Italic: italic, Size: size})
 	}
 	col := 0
 	endX := runs[0].X
@@ -666,16 +734,18 @@ func pdfLineSpans(runs []pdfRun) []pdfSpan {
 					if pad > 160 {
 						pad = 160
 					}
-					add(strings.Repeat(" ", pad), false, false)
+					add(strings.Repeat(" ", pad), false, false, 0)
 					col = target
-				case gap > math.Max(1.5, 0.25*r.Size):
-					// An inter-word gap that does not span a whole cell.
-					add(" ", false, false)
+				case gap > math.Max(1.0, 0.15*r.Size):
+					// An inter-word gap that does not span a whole cell. The
+					// threshold stays below a quarter em so justified text with
+					// modest word spacing still reads as separate words.
+					add(" ", false, false, 0)
 					col++
 				}
 			}
 		}
-		add(r.Text, r.Bold, r.Italic)
+		add(r.Text, r.Bold, r.Italic, pdfSpanSize(r.Size, bodySize))
 		col += stringWidth(r.Text)
 		width := r.W
 		if width <= 0 {
@@ -1025,4 +1095,26 @@ func pdfUnicodeValue(v any) string {
 		units = append(units, uint16(s[i])<<8|uint16(s[i+1]))
 	}
 	return string(utf16.Decode(units))
+}
+
+const (
+	// pdfBodyPx is the CSS font size used for ordinary PDF text.
+	pdfBodyPx = 14
+	// pdfHeadlinePx is the size given to clearly larger PDF runs, matching the
+	// HTML heading size where layout switches to two rows and kitty can scale
+	// the glyphs.
+	pdfHeadlinePx = 32
+	// pdfHeadlineRatio is how much larger than the body text a run must be to
+	// count as a heading.
+	pdfHeadlineRatio = 1.25
+)
+
+// pdfSpanSize maps a PDF font size to an explicit span size. Runs within a
+// quarter of the body size keep the default; clearly larger runs use the
+// headline size so they take two rows and scale in kitty.
+func pdfSpanSize(size, bodySize float64) int {
+	if bodySize > 0 && size >= bodySize*pdfHeadlineRatio {
+		return pdfHeadlinePx
+	}
+	return 0
 }

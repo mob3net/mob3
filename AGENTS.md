@@ -224,6 +224,7 @@ Standard Go layout:
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
 | `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
 | `browser_history.go` | Session history and the in-memory back/forward page cache (suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
+| `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
 | `automation.go` | Headless `Automation` session for scripted clients: serialized navigation, text snapshot, click by link/selector/coordinates, typing, key presses, scrolling, history, JS evaluation and session close. `RunCommand` is the shared named-command dispatcher used by protocol front ends. Uses a virtual text viewport and sets `Browser.noDraw` so nothing is written to the terminal. |
@@ -705,6 +706,7 @@ Standard Go layout:
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL,
+  `d` open the curl download popup for the current PDF page,
   `y` copy selected page text, the current URL when nothing is selected, or
   the download popup's curl command, and clear the highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
@@ -941,7 +943,8 @@ Standard Go layout:
   focused. A fixed-width or flex-stretched control keeps its box while typing,
   so value changes patch only that control's fragments; an auto-width control
   relayouts when its box grows or shrinks.
-- **Footer:** shows the hovered link target or status on the left and, on the
+- **Footer:** shows the hovered link target, status or the PDF page line on
+  the left and, on the
   right, current resident memory (`MEM 18MB`),
   resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
   becomes red bold `JavaScript:Error` when a script fails), clickable
@@ -1057,17 +1060,34 @@ Standard Go layout:
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
   a `<pre>`); binaries are never rendered as HTML.
 - **PDF pages:** a PDF response opens in the built-in text viewer instead of the
-  download popup. Every page is extracted into one continuous document with a
-  top bar (`PDF · N pages · text only · name`), a rule and `Page n of N` label
-  per page, and text that keeps its column alignment inside `pre-wrap` blocks
-  so tables and multi-column pages stay readable. Bold and italic are detected
-  from the font name/flags. Find, selection, `-dump`, `-png` and the
-  automation snapshot treat the result as an ordinary page; reader mode keeps
-  the full extracted document and reports `Reader mode unavailable` while the
-  preference stays on. Notes replace
-  empty output when the document is encrypted, has no readable pages, or has no
-  extractable text (scans and fonts without a text mapping); unreadable
-  http(s) documents also offer the usual curl download link. `-no-pdf` (also in
+  download popup. Every page is extracted into one continuous document. The
+  viewport holds only the page text and a separator after each page: a
+  right-aligned, muted `Page n` caption above a thin rule of underscores. The
+  page's CSS border is not used, so the separator reads as a drawn line rather
+  than a filled cell row, and there is no in-page header or header-style page
+  label. The reading column is centered at the width of the widest line, and
+  every page is padded to the same number of text rows (`pdfPageBox`), so the
+  document scrolls like a printed book instead of jumping between differently
+  sized pages. Vertical gaps wider than the page's own leading become blank
+  lines, which restores the spacing after headings and between blocks that the
+  PDF layout implies. Runs at least 1.25× the document's body font size are
+  emitted as 32px headline spans, so the existing large-type path applies: two
+  rows, and kitty-scaled glyphs when graphics and text scaling are enabled.
+  Text keeps its column alignment inside `pre-wrap` blocks so tables and
+  multi-column pages stay readable; bold and italic come from the font name and
+  flags. The footer's left status becomes
+  `Page n/N (d -> Download name)`, where `n` is the page under the viewport as
+  the user scrolls; the `(d -> Download name)` part is a clickable label and
+  `d` does the same, both opening the curl download popup. On narrow terminals
+  the file name inside the hint is shortened first, then the hint becomes
+  `(d)`, and finally only `Page n/N` remains.
+  Find, selection, `-dump`, `-png` and the automation snapshot treat the result
+  as an ordinary page; reader mode keeps the full extracted document and
+  reports `Reader mode unavailable` while the preference stays on. Notes
+  replace empty output when the document is encrypted or has no readable
+  pages, a truncation note is kept above the pages, and a document with no
+  extractable text at all shows a per-page placeholder, while figure-only pages
+  in a text document stay blank. `-no-pdf` (also in
   `about:config`) turns the viewer off for the session and restores the old
   “Cannot display” page and popup. Nothing is written to disk.
 - **Downloads:** MOB³ never saves files. Activating a link with a `download`
@@ -1790,6 +1810,24 @@ pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
   `pdfLineSpans`, not the interpreter: check the raw runs before touching the
   content-stream code. Column padding assumes one cell is 6 PDF points
   (`pdfCellPoints`), and only gaps wider than about one cell become padding.
+- Word spaces come from two places: a TJ offset wider than about 0.15 em ends
+  the run (`pdfExtractor.adjust`), and a gap between runs wider than
+  `max(1.0, 0.15*size)` points becomes one space. If words run together, check
+  those thresholds before the font decoder; if letters split apart, check the
+  per-run advance (`pdfRun.W`).
+- Uniform page geometry is `pdfPageBox`: the tallest page sets `PageRows`, the
+  widest line sets `PageCells`, `pdfPageHTML` pads every `<pre>` to `PageRows`,
+  and `pdfPageWidth` turns `PageCells` into the centered `max-width`.
+- Headline classification uses `pdfBodySize` (text-weighted median font size).
+  A run at least 1.25× the body size becomes a 32px span (`pdfSpanSize`) and
+  counts as two rows in `pdfPageRows`; smaller runs stay at the page's 14px.
+  Gap blank lines come from `pdfLeading` (lower quartile of baseline deltas) in
+  `pdfPageLines`, and a headline's second row cancels one inserted blank.
+- The footer page number comes from `browser_pdf.go`: `updatePDFPageStarts`
+  maps each `.pdf-page` node to its first fragment row after layout, and
+  `pdfPageNumber` compares those rows with `b.scroll`. If the number is wrong,
+  check that `PDFDocument.PageNodes` was filled by `loadPDFPage` and that the
+  starts are monotonic.
 
 ### Instrument only when needed
 

@@ -33,6 +33,7 @@ const (
 	headerReader
 	headerDark
 	headerGraphics
+	headerDownload
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -491,7 +492,6 @@ func (b *Browser) draw() {
 			b.drawFindBar(g, fy, w)
 		} else {
 			fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
-			leftText := b.footerLeft()
 			consoleIcon := ">_"
 			consoleW := stringWidth(consoleIcon)
 			showConsole := w >= 6
@@ -512,6 +512,13 @@ func (b *Browser) draw() {
 			if avail < 0 {
 				avail = 0
 			}
+			leftText := b.footerLeft()
+			pdfHint, pdfHintX := "", -1
+			if leftText == " Ready" && b.page != nil && b.page.PDF != nil {
+				if text, hint, cell, ok := b.pdfFooterLine(avail); ok {
+					leftText, pdfHint, pdfHintX = text, hint, cell
+				}
+			}
 			leftStyle := fs
 			leftColor := footerFG
 			if b.hintConfirm {
@@ -531,6 +538,11 @@ func (b *Browser) draw() {
 				}
 			}
 			g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
+			if pdfHint != "" && pdfHintX >= 0 {
+				hintStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
+				g.Text(pdfHintX, fy, pdfHint, hintStyle, hintStyle.Color)
+				b.footerHits = append(b.footerHits, headerHit{kind: headerDownload, x: pdfHintX, y: fy, w: stringWidth(pdfHint), h: 1})
+			}
 			if rightText != "" {
 				rightX := w - reserve - stringWidth(rightText)
 				g.Text(rightX, fy, rightText, fs, footerFG)
