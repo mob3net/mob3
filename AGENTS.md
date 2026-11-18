@@ -154,14 +154,29 @@ Standard Go layout:
   below), and moving code between those files is a pure declaration move with
   no behavior change: keep whole declaration blocks with their doc comments,
   give each new file only the imports it actually uses, and let the compiler
-  and tests confirm nothing changed.
+  and tests confirm nothing changed. Naming follows ownership: sub-passes of
+  one family carry that family's prefix (`layout_grid.go`, `layout_flex.go`,
+  `layout_table.go`), while a peer subsystem that owns a whole concern keeps
+  its own name (`chrome.go`, `history.go`, `selection.go`). Do not prefix a
+  file with the package name.
 
 | File | Decision / responsibility |
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
 | `style.go` | Hand-written CSS rule/selector/declaration parser, computed styles, cascade and inheritance, unit parsing (including `lh`, resolved to px after the cascade, `vw`/`vh`/`vmin`/`vmax`, simple `calc()` arithmetic and inherited CSS custom properties with `var()` substitution), empty block-level `::before`/`::after` boxes, approximate `-webkit-line-clamp`, logical `margin`/`padding` aliases for horizontal-tb, `box-sizing`, min/max sizing, named/hex/rgb/hsl colors, UA stylesheet written in the same CSS subset, presentation attributes. Parser supports type/universal/class/id/attribute/descendant/child/sibling selectors, `:not`, `:hover`, structural pseudos, grouped selectors, and `@media` rules carrying viewport conditions evaluated during styling; `@supports` contents are included. Author rules are indexed by their rightmost compound so large stylesheets do not scan every rule for every element. The `font` shorthand keeps numeric weights (`400`) separate from the size (`12px/18px`). |
-| `layout.go` | Block/inline flow, line wrapping, tables (collapsed 1-cell grid), lists, images, link rectangles (including empty overlay anchors), display list (`Frag`s) in document coordinates, plus text width/truncation helpers, wide-character measurement, `display:contents` expansion and measure that ignores out-of-flow children. |
+| `layout.go` | Layout entry points, the `-layout-budget` deadline/fragment/row limits, `Frag`/`LinkInfo`/`Layout` types, the fragment builders, the box model, block flow and relative offsets. |
+| `layout_absolute.go` | Out-of-flow absolute/fixed boxes: deferral, containing-block resolution and placement. |
+| `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated empty `::before`/`::after` boxes. |
+| `layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
+| `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
+| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement and alt labels. |
+| `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
+| `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. |
+| `layout_flex.go` | Flex rows: basis, growing/shrinking, wrapping and line placement. |
+| `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. |
+| `layout_links.go` | Link rectangles, overlay anchors and fixed-scroll re-anchoring. |
+| `layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
@@ -196,7 +211,7 @@ Standard Go layout:
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
 | `cli.go` | `Run`: flags, dump mode, interactive event loop, and the build-time `Version` string reported by `-version`; default `dev`. |
-| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the subsystem files (`chrome_test.go`, `forms_test.go`, `input_test.go`, `history_test.go`, `images_test.go`, `selection_test.go`, `config_test.go`, `bookmarks_test.go`, `ui_test.go`), with shared helpers and cross-cutting navigation/hover/download/reader tests in `browser_test.go`. |
+| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`chrome_test.go`, `forms_test.go`, `input_test.go`, `history_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `bookmarks_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |
 
 ## 4. Rendering and layout
 
@@ -1738,7 +1753,7 @@ engine work only; do not add site-specific exceptions.
 - **Two-dimensional CSS grid.** Parse `grid-template-rows`, resolve named and
   numeric `grid-row` lines, honour row spans and `grid-area` rows. Grids that
   currently fall back to block flow lose or displace lead stories and hero
-  sections. `layout.go` (`grid`, `parseGridTemplate`, `gridPlacementNamed`,
+  sections. `layout_grid.go` (`grid`, `parseGridTemplate`, `gridPlacementNamed`,
   `hasNamedGridRows`) is the entry point.
 - **Length functions.** Add `min()`, `max()` and `clamp()` for lengths,
   including percentages, and allow viewport units inside `calc()`. `env()` and

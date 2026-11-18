@@ -1,0 +1,262 @@
+package browser
+
+import (
+	"image"
+	"math"
+	"strings"
+)
+
+func (c *inlineCtx) addImage(n *Node, st *Style) {
+	maxW := c.lineMaxW()
+	if n.Img == nil || c.l.imagesOff {
+		alt := n.Attr("alt")
+		w, h := imageSize(n, st, maxW, c.imageCapW)
+		if alt == "" {
+			// An explicitly sized broken image gets a small placeholder;
+			// 1-cell decorative images (tracking pixels) stay invisible.
+			if w >= 2 || h >= 2 {
+				c.addLabel("░", st, n)
+			}
+			return
+		}
+		c.addLabelBox(imageAltLabel(alt, w), st, n, w, h)
+		return
+	}
+	w, h := imageSize(n, st, maxW, c.imageCapW)
+	w2, h2 := w, h
+	c.addAtomicBox(inlineItem{
+		kind: itemAtomic, w: w, h: h, style: st, node: n,
+		paint: func(x, y int) {
+			c.l.frags = append(c.l.frags, Frag{Kind: fragImage, X: x, Y: y, W: w2, H: h2, Img: n.Img, Node: n})
+		},
+	})
+}
+
+const maxImageRows = 16
+
+func (l *layouter) imageCapWidth() int {
+	w := l.width * 2 / 5
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// imageSize returns the terminal cell size for an image, preserving its aspect
+// ratio and applying the terminal-friendly display cap.
+// blockImage lays out an image that is itself a block or absolutely / fixed
+// positioned box. Normal inline images go through inlineCtx.addImage instead.
+func (l *layouter) blockImage(n *Node, x, y, w int) int {
+	st := n.Style
+	boxH := l.forcedImageH
+	if boxH <= 0 && st.Height.Set && st.Height.U != UnitPercent {
+		boxH = st.Height.resolveV(w, st.FontSize)
+	}
+	if boxH > 0 && st.ObjectFit != "" && n.Img != nil && !l.imagesOff {
+		return l.addFittedImage(n, st, x, y, w, boxH)
+	}
+	if n.Img == nil || l.imagesOff {
+		alt := strings.TrimSpace(n.Attr("alt"))
+		iw, ih := imageSize(n, st, w, l.imageCapWidth())
+		if alt == "" {
+			if iw >= 2 || ih >= 2 {
+				l.addText(x, y, "░", st, n)
+				return 1
+			}
+			return 0
+		}
+		l.addText(x, y, imageAltLabel(alt, iw), st, n)
+		altH := ih
+		if boxH > altH {
+			altH = boxH
+		}
+		if altH < 1 {
+			altH = 1
+		}
+		return altH
+	}
+	iw, ih := imageSize(n, st, w, l.imageCapWidth())
+	l.frags = append(l.frags, Frag{Kind: fragImage, X: x, Y: y, W: iw, H: ih, Img: n.Img, Node: n})
+	return ih
+}
+
+// addFittedImage draws an image into a definite CSS box using object-fit.
+func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int {
+	b := n.Img.Bounds()
+	iw, ih := b.Dx(), b.Dy()
+	if iw <= 0 || ih <= 0 || boxW <= 0 || boxH <= 0 {
+		return 0
+	}
+	posX, posY := st.ObjectPosX, st.ObjectPosY
+	if posX < 0 {
+		posX = 0
+	}
+	if posX > 1 {
+		posX = 1
+	}
+	if posY < 0 {
+		posY = 0
+	}
+	if posY > 1 {
+		posY = 1
+	}
+	bw, bh := boxW*cellW, boxH*cellH
+	fit := st.ObjectFit
+	if fit == "" {
+		fit = "fill"
+	}
+	add := func(fx, fy, fw, fh int, crop image.Rectangle) {
+		if fw < 1 {
+			fw = 1
+		}
+		if fh < 1 {
+			fh = 1
+		}
+		l.frags = append(l.frags, Frag{Kind: fragImage, X: fx, Y: fy, W: fw, H: fh, Img: n.Img, Crop: crop, Node: n})
+	}
+	switch fit {
+	case "contain", "scale-down":
+		scale := math.Min(float64(bw)/float64(iw), float64(bh)/float64(ih))
+		if fit == "scale-down" && scale > 1 {
+			scale = 1
+		}
+		fw := int(math.Round(float64(iw) * scale / cellW))
+		fh := int(math.Round(float64(ih) * scale / cellH))
+		if fw > boxW {
+			fw = boxW
+		}
+		if fh > boxH {
+			fh = boxH
+		}
+		fx := x + int(math.Round(float64(boxW-fw)*posX))
+		fy := y + int(math.Round(float64(boxH-fh)*posY))
+		add(fx, fy, fw, fh, image.Rectangle{})
+		return fh
+	case "cover":
+		scale := math.Max(float64(bw)/float64(iw), float64(bh)/float64(ih))
+		cw := int(math.Round(float64(bw) / scale))
+		ch := int(math.Round(float64(bh) / scale))
+		if cw > iw {
+			cw = iw
+		}
+		if ch > ih {
+			ch = ih
+		}
+		if cw < 1 {
+			cw = 1
+		}
+		if ch < 1 {
+			ch = 1
+		}
+		sx := b.Min.X + int(math.Round(float64(iw-cw)*posX))
+		sy := b.Min.Y + int(math.Round(float64(ih-ch)*posY))
+		add(x, y, boxW, boxH, image.Rect(sx, sy, sx+cw, sy+ch))
+		return boxH
+	case "none":
+		// No scaling: intrinsic pixels map to CSS px one to one, and an image
+		// larger than the box is cropped from its object-position anchor.
+		fw := int(math.Round(float64(iw) / cellW))
+		fh := int(math.Round(float64(ih) / cellH))
+		if fw <= boxW && fh <= boxH {
+			fx := x + int(math.Round(float64(boxW-fw)*posX))
+			fy := y + int(math.Round(float64(boxH-fh)*posY))
+			add(fx, fy, fw, fh, image.Rectangle{})
+			return fh
+		}
+		cw := boxW * cellW
+		ch := boxH * cellH
+		if cw > iw {
+			cw = iw
+		}
+		if ch > ih {
+			ch = ih
+		}
+		if cw < 1 {
+			cw = 1
+		}
+		if ch < 1 {
+			ch = 1
+		}
+		sx := b.Min.X + int(math.Round(float64(iw-cw)*posX))
+		sy := b.Min.Y + int(math.Round(float64(ih-ch)*posY))
+		add(x, y, boxW, boxH, image.Rect(sx, sy, sx+cw, sy+ch))
+		return boxH
+	default: // fill
+		add(x, y, boxW, boxH, image.Rectangle{})
+		return boxH
+	}
+}
+
+// imageAltLabel is the text shown for an image that is not rasterized. It is
+// clipped to the image box so a long alt cannot spill into neighbouring
+// columns; very narrow boxes get a compact marker instead.
+func imageAltLabel(alt string, max int) string {
+	if max < 8 {
+		return "▣"
+	}
+	return truncateWidth("[image: "+alt+"]", max)
+}
+
+// imageSize returns the terminal-cell size of an image, from its intrinsic
+// pixels and CSS/HTML dimensions, preserving aspect ratio and applying the
+// viewport caps.
+func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
+	iw, ih := 0, 0
+	if n.Img != nil {
+		b := n.Img.Bounds()
+		iw, ih = b.Dx(), b.Dy()
+	}
+	cw, ch := 0, 0
+	if st.Width.Set && !st.Width.IsAuto() {
+		cw = st.Width.resolveH(maxW, st.FontSize)
+	}
+	if st.Height.Set && st.Height.U != UnitPercent {
+		ch = st.Height.resolveV(maxW, st.FontSize)
+	}
+	if iw > 0 && ih > 0 {
+		switch {
+		case cw <= 0 && ch <= 0:
+			cw = int(math.Round(float64(iw) / cellW))
+			ch = int(math.Round(float64(ih) / cellH))
+		case cw <= 0:
+			cw = int(math.Round(float64(ch) * cellH * float64(iw) / float64(ih) / cellW))
+		case ch <= 0:
+			ch = int(math.Round(float64(cw) * cellW * float64(ih) / float64(iw) / cellH))
+		}
+	} else {
+		if cw <= 0 {
+			cw = 16
+		}
+		if ch <= 0 {
+			ch = 1
+		}
+	}
+	if cw < 1 {
+		cw = 1
+	}
+	if ch < 1 {
+		ch = 1
+	}
+	if maxW > 0 && cw > maxW {
+		ch = int(math.Round(float64(ch) * float64(maxW) / float64(cw)))
+		cw = maxW
+		if ch < 1 {
+			ch = 1
+		}
+	}
+	if capW > 0 && cw > capW {
+		ch = int(math.Round(float64(ch) * float64(capW) / float64(cw)))
+		cw = capW
+		if ch < 1 {
+			ch = 1
+		}
+	}
+	if ch > maxImageRows {
+		cw = int(math.Round(float64(cw) * float64(maxImageRows) / float64(ch)))
+		ch = maxImageRows
+		if cw < 1 {
+			cw = 1
+		}
+	}
+	return cw, ch
+}
