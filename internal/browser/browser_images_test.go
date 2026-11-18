@@ -2,6 +2,7 @@ package browser
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"image"
 	"image/png"
@@ -178,5 +179,66 @@ func TestRefreshImagesAfterScript(t *testing.T) {
 	}
 	if b.refreshImages() {
 		t.Fatal("second refresh reloaded an unchanged image")
+	}
+}
+
+func TestFitImageCapsDimensions(t *testing.T) {
+	l := NewLoader()
+	l.maxImageW, l.maxImageH = 200, 150
+	if b := l.fitImage(image.NewNRGBA(image.Rect(0, 0, 400, 300))).Bounds(); b.Dx() != 200 || b.Dy() != 150 {
+		t.Fatalf("square cap = %dx%d, want 200x150", b.Dx(), b.Dy())
+	}
+
+	// The narrower side follows the aspect ratio instead of being clamped
+	// independently.
+	l.maxImageW, l.maxImageH = 100, 100
+	if b := l.fitImage(image.NewNRGBA(image.Rect(0, 0, 400, 100))).Bounds(); b.Dx() != 100 || b.Dy() != 25 {
+		t.Fatalf("wide cap = %dx%d, want 100x25", b.Dx(), b.Dy())
+	}
+
+	small := image.NewNRGBA(image.Rect(0, 0, 50, 40))
+	if got := l.fitImage(small); got != small {
+		t.Fatalf("image inside the cap was resampled: %v", got.Bounds())
+	}
+
+	l.maxImageW, l.maxImageH = 0, 0
+	big := image.NewNRGBA(image.Rect(0, 0, 400, 300))
+	if got := l.fitImage(big); got != big {
+		t.Fatal("a disabled cap should not resample")
+	}
+}
+
+func TestImageDownscaledOnLoad(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 400, 300))); err != nil {
+		t.Fatal(err)
+	}
+	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	u := mustParse(t, "https://example.com/")
+	root := ParseHTML(`<html><body><img src="` + dataURL + `" alt="pic"></body></html>`)
+	loader := NewLoader()
+	loader.noImages = false
+	loader.maxImageW, loader.maxImageH = 100, 100
+	if !loader.loadImages(context.Background(), root, u, false) {
+		t.Fatal("image was not loaded")
+	}
+	img := root.FindFirst("img")
+	if img == nil || img.Img == nil {
+		t.Fatal("decoded image missing")
+	}
+	if b := img.Img.Bounds(); b.Dx() != 100 || b.Dy() != 75 {
+		t.Fatalf("decoded size = %dx%d, want 100x75", b.Dx(), b.Dy())
+	}
+}
+
+func TestBrowserSetsImageCapFromViewport(t *testing.T) {
+	b := NewBrowser(177, 42)
+	if b.loader.maxImageW != 177*8 || b.loader.maxImageH != 42*16 {
+		t.Fatalf("cap = %dx%d, want %dx%d", b.loader.maxImageW, b.loader.maxImageH, 177*8, 42*16)
+	}
+	b.width, b.height = 80, 24
+	b.applyImageCap()
+	if b.loader.maxImageW != 1024 || b.loader.maxImageH != 512 {
+		t.Fatalf("small viewport cap = %dx%d, want the 1024x512 floor", b.loader.maxImageW, b.loader.maxImageH)
 	}
 }

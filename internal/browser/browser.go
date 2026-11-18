@@ -257,7 +257,37 @@ func (b *Browser) setLoader(l *Loader) {
 		if b.width > 0 {
 			l.imageViewportPx = b.width * 8
 		}
+		b.applyImageCap()
 	}
+}
+
+// imageCapPx returns the largest image box the terminal can paint, in CSS
+// pixels. The floors keep a small terminal from hardening every image it
+// loads; larger terminals get proportionally more pixels.
+func (b *Browser) imageCapPx() (int, int) {
+	cw, ch := b.cellW, b.cellH
+	if cw <= 0 {
+		cw = 8
+	}
+	if ch <= 0 {
+		ch = 16
+	}
+	w, h := b.width*cw, b.height*ch
+	if w < 1024 {
+		w = 1024
+	}
+	if h < 512 {
+		h = 512
+	}
+	return w, h
+}
+
+// applyImageCap keeps the loader's decode cap in step with the viewport.
+func (b *Browser) applyImageCap() {
+	if b.loader == nil {
+		return
+	}
+	b.loader.maxImageW, b.loader.maxImageH = b.imageCapPx()
 }
 
 func (b *Browser) historySnapshot() ([]string, int) {
@@ -380,6 +410,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	b.cancelLoadNow()
 	b.cancelDeferredImageLoad()
 	b.imagesPaused = false
+	b.applyImageCap()
 	if b.loader != nil {
 		b.loader.beginPage()
 	}
@@ -845,6 +876,7 @@ func (b *Browser) resize(w, h int) {
 		return
 	}
 	b.width, b.height = w, h
+	b.applyImageCap()
 	b.prev = nil
 	b.clearSelection()
 	b.rebuild()

@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"net/http/cookiejar"
@@ -100,6 +101,11 @@ type Loader struct {
 	// imageViewportPx is the CSS-pixel viewport width used to choose srcset and
 	// picture candidates. It is 800 when no browser width is available.
 	imageViewportPx int
+	// maxImageW and maxImageH cap a decoded image's pixel dimensions. The
+	// browser sets them from the terminal viewport so a full-resolution photo
+	// is downscaled once at load instead of staying in memory until paint.
+	// Zero disables the cap.
+	maxImageW, maxImageH int
 	// cache holds raw subresources and decoded images for this session.
 	cache *resourceCache
 
@@ -1259,6 +1265,41 @@ func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
 	return tasks
 }
 
+// fitImage downscales a decoded image so neither side exceeds the loader's
+// pixel cap, preserving aspect ratio. Images already inside the cap are
+// returned unchanged, so only oversized photos pay for a resample.
+func (l *Loader) fitImage(img image.Image) image.Image {
+	if img == nil || (l.maxImageW <= 0 && l.maxImageH <= 0) {
+		return img
+	}
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w < 1 || h < 1 {
+		return img
+	}
+	nw, nh := w, h
+	if l.maxImageW > 0 && nw > l.maxImageW {
+		f := float64(l.maxImageW) / float64(nw)
+		nw = l.maxImageW
+		nh = int(math.Round(float64(nh) * f))
+	}
+	if l.maxImageH > 0 && nh > l.maxImageH {
+		f := float64(l.maxImageH) / float64(nh)
+		nh = l.maxImageH
+		nw = int(math.Round(float64(nw) * f))
+	}
+	if nw < 1 {
+		nw = 1
+	}
+	if nh < 1 {
+		nh = 1
+	}
+	if nw == w && nh == h {
+		return img
+	}
+	return scaleImage(img, nw, nh)
+}
+
 // fetchImageResult downloads and decodes one image, using the session cache.
 func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
 	key := u.String()
@@ -1288,6 +1329,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile boo
 	if err != nil {
 		return nil, false
 	}
+	img = l.fitImage(img)
 	l.cache.putImage(key, img, len(data))
 	return img, true
 }
@@ -1440,6 +1482,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				node.ImgFailed = true
 				return
 			}
+			img = l.fitImage(img)
 			node.Img = img
 			l.cache.putImage(key, img, len(data))
 		}(n, u)

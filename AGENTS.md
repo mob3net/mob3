@@ -482,8 +482,13 @@ Standard Go layout:
   width/height honored;
   aspect ratio preserved; display is capped at 40% of the viewport width and
   16 rows, preserving the ratio; transparency composited over the underlying
-  cell. A definite CSS box (both width and height, including an absolutely
-  positioned percentage height) is filled according to `object-fit` (`fill`,
+  cell. A decoded image is downscaled once at load to the largest box the
+  terminal can paint — the viewport in CSS pixels, floored at 1024×512 — with
+  aspect ratio preserved, and only that copy is stored on the node and in the
+  image cache, so a many-megapixel photo never keeps its full bitmap alive.
+  Images already inside the cap are stored untouched. A definite CSS box (both
+  width and height, including an absolutely positioned percentage height) is
+  filled according to `object-fit` (`fill`,
   `cover`, `contain`, `none`, `scale-down`) with `object-position`, bypassing
   those display caps; `aspect-ratio` supplies an auto block height from the
   box width;
