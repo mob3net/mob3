@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root {
+  --brand: #112233;
+  --accent: #cc3300;
+  --gap: 8px;
+  --note: var(--brand);
+}
+body { font-size: 16px; margin: 0; padding: var(--gap); color: var(--brand); }
+.section { padding: var(--gap); border: 1px solid var(--brand); margin-bottom: var(--gap); }
+.alt { --brand: #ff8800; --accent: #0055aa; --gap: 16px; }
+.swatch { background: var(--accent); padding: 2px var(--gap); }
+.alt .swatch { background: var(--accent); padding-left: var(--gap); }
+p { margin: 0 0 var(--gap) 0; }
+.inline { color: var(--note); }
+</style>
+</head>
+<body>
+<div class="section">
+  <h2>Inherited tokens</h2>
+  <p class="inline">Brand color from the root token set.</p>
+  <div class="swatch">Accent block</div>
+</div>
+<div class="section alt">
+  <h2>Overridden subtree</h2>
+  <p class="inline">Brand color overridden in this section.</p>
+  <div class="swatch">Overridden accent block</div>
+</div>
+<div class="section">
+  <p class="inline">Back to the root tokens after the override.</p>
+  <div class="swatch">Accent block again</div>
+</div>
+</body>
+</html>

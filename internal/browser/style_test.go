@@ -2,6 +2,7 @@ package browser
 
 import (
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -193,5 +194,73 @@ func TestFontShorthandWeights(t *testing.T) {
 		if math.Abs(n.Style.LineHeight-tc.lineH) > 0.01 {
 			t.Fatalf("%s: line-height = %v, want %v", tc.css, n.Style.LineHeight, tc.lineH)
 		}
+	}
+}
+
+// sameVarsMap reports whether two styles share one custom-property map. Map
+// headers are compared because sharing is the memory optimization itself.
+func sameVarsMap(a, b map[string]string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
+}
+
+func TestCustomPropertiesCopyOnWrite(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+		<div id="plain"><span id="plain-child" class="use">a</span></div>
+		<div id="alt" class="alt"><span id="alt-child" class="use">b</span></div>
+	</body></html>`)
+	rules := ParseStylesheet(`
+		:root { --brand: #112233; --accent: #cc3300; }
+		body { color: var(--brand); }
+		.alt { --brand: #ff8800; }
+		.alt .use { color: var(--brand); }
+	`)
+	styles := newStyleEngine(rules, 0).computeAll(doc)
+
+	root := styles[doc.FindFirst("html")]
+	plain := styles[findElementByID(doc, "plain")]
+	plainChild := styles[findElementByID(doc, "plain-child")]
+	alt := styles[findElementByID(doc, "alt")]
+	altChild := styles[findElementByID(doc, "alt-child")]
+	for name, st := range map[string]*Style{"root": root, "plain": plain, "plainChild": plainChild, "alt": alt, "altChild": altChild} {
+		if st == nil {
+			t.Fatalf("%s has no computed style", name)
+		}
+	}
+
+	// Elements that declare nothing share the inherited map instead of
+	// copying it; the subtree that overrides --brand owns a private map.
+	if !sameVarsMap(root.Vars, plainChild.Vars) {
+		t.Fatal("inherited custom properties were copied per element")
+	}
+	if sameVarsMap(plain.Vars, alt.Vars) {
+		t.Fatal("overriding a custom property must not reuse the ancestor map")
+	}
+	if !sameVarsMap(alt.Vars, altChild.Vars) {
+		t.Fatal("a descendant of an override should share the override map")
+	}
+
+	// The override is visible down its own subtree and nowhere else.
+	if got := plainChild.Vars["--brand"]; got != "#112233" {
+		t.Fatalf("plain subtree --brand = %q", got)
+	}
+	if got := altChild.Vars["--brand"]; got != "#ff8800" {
+		t.Fatalf("override subtree --brand = %q", got)
+	}
+	if got := root.Vars["--brand"]; got != "#112233" {
+		t.Fatalf("root --brand was mutated by a descendant: %q", got)
+	}
+	if got := plain.Vars["--accent"]; got != "#cc3300" {
+		t.Fatalf("sibling --accent = %q", got)
+	}
+
+	// var() resolution follows the same maps.
+	if want := RGB(0x11, 0x22, 0x33); plainChild.Color != want {
+		t.Fatalf("plain child color = %+v, want %+v", plainChild.Color, want)
+	}
+	if want := RGB(0xff, 0x88, 0x00); altChild.Color != want {
+		t.Fatalf("override child color = %+v, want %+v", altChild.Color, want)
 	}
 }

@@ -1,0 +1,30 @@
+
+
+
+
+   Inherited tokens
+
+   Brand color from the root token set.
+
+    Accent block
+
+
+
+
+
+
+   Overridden subtree
+
+   Brand color overridden in this section.
+
+     Overridden accent block
+
+
+
+
+
+   Back to the root tokens after the override.
+
+    Accent block again
+
+

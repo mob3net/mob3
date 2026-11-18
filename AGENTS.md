@@ -1506,7 +1506,11 @@ Standard Go layout:
   `padding-top` aspect-ratio pattern) are generated; other generated content is
   not. `-webkit-line-clamp` is approximated by clipping after N lines.
   CSS custom properties support simple `var()` substitution, including
-  fallbacks; registered properties and Houdini APIs are not supported. No
+  fallbacks; registered properties and Houdini APIs are not supported. The
+  inherited property map is shared down the tree and copied only when an
+  element declares a custom property itself, so a large `:root` token set
+  costs one map per declaring element instead of one full copy per node
+  (measured: 349 MB → 44 MB live heap on a token-heavy page). No
   animations, transitions, or background images. `<dialog>` open
   state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or

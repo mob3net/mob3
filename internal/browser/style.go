@@ -29,8 +29,12 @@ const (
 // Style is a computed style. Lengths remain unresolved so percentages can be
 // resolved against the containing block during layout.
 type Style struct {
-	// Vars carries inherited CSS custom properties used by var().
+	// Vars carries inherited CSS custom properties used by var(). The map is
+	// shared with the parent style and replaced with a private copy on the
+	// first custom property an element declares itself, so a page that defines
+	// thousands of properties on :root does not copy them into every element.
 	Vars           map[string]string
+	varsOwned      bool
 	Display        string
 	Hidden         bool
 	HiddenExplicit bool
@@ -224,12 +228,10 @@ func inheritStyle(parent *Style) *Style {
 		st.ListStyle = parent.ListStyle
 		st.Hidden = parent.Hidden
 		st.BorderColor = parent.BorderColor
-		if len(parent.Vars) > 0 {
-			st.Vars = make(map[string]string, len(parent.Vars))
-			for k, v := range parent.Vars {
-				st.Vars[k] = v
-			}
-		}
+		// Custom properties are inherited by sharing the parent's map; a
+		// declaration on this element replaces it with a private copy (see
+		// applyDecl), which keeps large :root token sets cheap.
+		st.Vars = parent.Vars
 	}
 	return st
 }
@@ -301,8 +303,15 @@ func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, f
 func applyDecl(st *Style, prop, val string, parent *Style) {
 	prop = strings.TrimSpace(prop)
 	if strings.HasPrefix(prop, "--") {
-		if st.Vars == nil {
-			st.Vars = map[string]string{}
+		// Inherited maps are shared, so copy before the first write. The flag
+		// keeps a run of declarations on one element from copying repeatedly.
+		if !st.varsOwned {
+			own := make(map[string]string, len(st.Vars)+1)
+			for k, v := range st.Vars {
+				own[k] = v
+			}
+			st.Vars = own
+			st.varsOwned = true
 		}
 		st.Vars[prop] = strings.TrimSpace(val)
 		return
