@@ -1,7 +1,11 @@
 package browser
 
 import (
+	"bytes"
+	"encoding/base64"
 	"image"
+	"image/png"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +150,33 @@ func TestFooterShowsImageLoadingCount(t *testing.T) {
 	b.deferredImages = false
 	if got := b.footerLeft(); got != " Ready" {
 		t.Fatalf("footer after images = %q", got)
+	}
+}
+
+func TestRefreshImagesAfterScript(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	page := newJSPage(`<html><body><img id="x" alt="lazy"></body></html>`,
+		`document.getElementById("x").src = "`+dataURL+`";`)
+	b := NewBrowser(60, 20)
+	b.loader.noImages = false
+	b.page = page
+	b.url = page.URL
+	b.startJS(page)
+	if !b.refreshImages() {
+		t.Fatal("post-script images were not discovered")
+	}
+	img := page.Root.FindFirst("img")
+	if img == nil || img.Img == nil {
+		t.Fatal("image set by script was not loaded")
+	}
+	if !strings.HasPrefix(img.ImgSrc, "data:image/png;base64,") {
+		t.Fatalf("image source = %q", img.ImgSrc)
+	}
+	if b.refreshImages() {
+		t.Fatal("second refresh reloaded an unchanged image")
 	}
 }
