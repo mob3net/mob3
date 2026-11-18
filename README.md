@@ -117,7 +117,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
 - Built-in text-only PDF viewer: a PDF response is extracted page by page into
   one continuous document with column alignment, a centered reading column and
   a `Page n` caption above an underscore rule after each page; every page is
-  padded to the same height so it scrolls like a book. PDF headings keep their
+  padded to the same height so it scrolls like a book, and two-column pages are
+  read column by column. PDF headings keep their
   spacing, and runs clearly larger than the body text use the same 32px
   headline path (two rows, scaled glyphs in kitty) as HTML headings. Find, selection, `-dump` and `-png` work as on any
   page. The footer

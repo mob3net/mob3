@@ -232,7 +232,7 @@ body { margin: 12px 16px; }
 .pdf-page { width: 100%%; max-width: %dpx; margin: 0 auto 12px; padding: 0; }
 pre.pdf-text { white-space: pre-wrap; font-size: 14px; line-height: 1.3; margin: 0; padding: 0; background: transparent; }
 .pdf-page-no { color: #9a9a9a; font-size: 12px; text-align: right; margin: 4px 0 0; }
-pre.pdf-rule { color: #b3b3b3; font-size: 14px; line-height: 1.3; margin: 0; padding: 0; background: transparent; white-space: pre; overflow: hidden; }
+pre.pdf-rule { color: #b3b3b3; font-size: 14px; line-height: 1.3; margin: 0; padding: 0; background: transparent; white-space: nowrap; overflow: hidden; }
 `
 
 // pdfPageHTML renders the extracted document as a normal HTML page.

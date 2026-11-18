@@ -1687,9 +1687,10 @@ closes it.</p>
 <p>A PDF opens in a built-in, text-only viewer: every page is extracted into
 one continuous document where each page ends with its <b>Page n</b> caption above
 an underscore rule. The reading column is centered, every page is padded to the
-same height so it scrolls like a book, vertical gaps become blank lines, and
-runs larger than the body text become 32px headlines (two rows, scaled glyphs in
-kitty). Columns keep their alignment. The footer shows <b>Page n/N</b> with a clickable
+same height so it scrolls like a book, two-column prose is read column by
+column, vertical gaps become blank lines, and runs larger than the body text
+become 32px headlines (two rows, scaled glyphs in kitty). Columns keep their
+alignment. The footer shows <b>Page n/N</b> with a clickable
 <b>(d -&gt; Download name)</b> hint; <b>d</b> opens the same curl popup. Find,
 selection, <b>-dump</b> and <b>-png</b> work as on any other page. Figures,
 images and annotations are not rendered, scanned PDFs have no text to show,

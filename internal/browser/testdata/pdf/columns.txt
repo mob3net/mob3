@@ -1,0 +1,31 @@
+=== page 1
+Two column fixture
+Left column line one
+Left column line two
+Left column line three
+Left column line four
+Left column line five
+Left column line six
+
+Right column line one
+Right column line two
+Right column line three
+Right column line four
+Right column line five
+Right column line six
+
+=== page 2
+Left column line one
+Left column line two
+Left column line three
+Left column line four
+Left column line five
+Left column line six
+
+Right column line one
+Right column line two
+Right column line three
+Right column line four
+Right column line five
+Right column line six
+

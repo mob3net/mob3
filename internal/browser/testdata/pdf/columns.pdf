@@ -1,0 +1,71 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 560 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 7 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 560 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 8 0 R >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Length 693 >>
+stream
+BT /F2 16 Tf 36 740 Td (Two column fixture) Tj ET
+BT /F1 11 Tf 36 700 Td (Left column line one) Tj ET
+BT /F1 11 Tf 300 700 Td (Right column line one) Tj ET
+BT /F1 11 Tf 36 687 Td (Left column line two) Tj ET
+BT /F1 11 Tf 300 687 Td (Right column line two) Tj ET
+BT /F1 11 Tf 36 674 Td (Left column line three) Tj ET
+BT /F1 11 Tf 300 674 Td (Right column line three) Tj ET
+BT /F1 11 Tf 36 661 Td (Left column line four) Tj ET
+BT /F1 11 Tf 300 661 Td (Right column line four) Tj ET
+BT /F1 11 Tf 36 648 Td (Left column line five) Tj ET
+BT /F1 11 Tf 300 648 Td (Right column line five) Tj ET
+BT /F1 11 Tf 36 635 Td (Left column line six) Tj ET
+BT /F1 11 Tf 300 635 Td (Right column line six) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Length 643 >>
+stream
+BT /F1 11 Tf 36 700 Td (Left column line one) Tj ET
+BT /F1 11 Tf 300 693 Td (Right column line one) Tj ET
+BT /F1 11 Tf 36 687 Td (Left column line two) Tj ET
+BT /F1 11 Tf 300 680 Td (Right column line two) Tj ET
+BT /F1 11 Tf 36 674 Td (Left column line three) Tj ET
+BT /F1 11 Tf 300 667 Td (Right column line three) Tj ET
+BT /F1 11 Tf 36 661 Td (Left column line four) Tj ET
+BT /F1 11 Tf 300 654 Td (Right column line four) Tj ET
+BT /F1 11 Tf 36 648 Td (Left column line five) Tj ET
+BT /F1 11 Tf 300 641 Td (Right column line five) Tj ET
+BT /F1 11 Tf 36 635 Td (Left column line six) Tj ET
+BT /F1 11 Tf 300 628 Td (Right column line six) Tj ET
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000263 00000 n 
+0000000399 00000 n 
+0000000496 00000 n 
+0000000598 00000 n 
+0000001342 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+2036
+%%EOF

@@ -1070,7 +1070,11 @@ Standard Go layout:
   document scrolls like a printed book instead of jumping between differently
   sized pages. Vertical gaps wider than the page's own leading become blank
   lines, which restores the spacing after headings and between blocks that the
-  PDF layout implies. Runs at least 1.25× the document's body font size are
+  PDF layout implies. Two-column prose is read column by column: a vertical
+  gutter that most lines respect (wide, dense text on both sides, no internal
+  table gaps) splits the page into left and right sequences, while full-width
+  lines such as titles stay in flow and multi-column tables keep their printed
+  row order. Runs at least 1.25× the document's body font size are
   emitted as 32px headline spans, so the existing large-type path applies: two
   rows, and kitty-scaled glyphs when graphics and text scaling are enabled.
   Text keeps its column alignment inside `pre-wrap` blocks so tables and
@@ -1823,6 +1827,15 @@ pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
   counts as two rows in `pdfPageRows`; smaller runs stay at the page's 14px.
   Gap blank lines come from `pdfLeading` (lower quartile of baseline deltas) in
   `pdfPageLines`, and a headline's second row cancels one inserted blank.
+- Column detection is `pdfDetectGutter`/`pdfSegments`: run coverage finds a
+  low-coverage x-band, and `pdfSplitBand` requires dense text (median line width
+  at least 60% of the column span) and no internal table gaps. If a two-column
+  page is not reordered, check the coverage threshold and the density gate; a
+  figure that crosses the gutter, or mixed sidenotes, keeps the page in flow.
+- Duplicate text drawn twice at a sub-point offset (fake bold, shadows) is
+  dropped when a run starts more than 3 pt before the previous run's end.
+  Right-aligned values can legitimately overlap by about 2.5 pt, so do not
+  lower that tolerance without checking the sample corpus.
 - The footer page number comes from `browser_pdf.go`: `updatePDFPageStarts`
   maps each `.pdf-page` node to its first fragment row after layout, and
   `pdfPageNumber` compares those rows with `b.scroll`. If the number is wrong,

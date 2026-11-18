@@ -764,3 +764,52 @@ func TestPDFHeadlinesGetHeadlineSize(t *testing.T) {
 		t.Fatalf("headline rows = %d, plain lines = %d", rows, lines)
 	}
 }
+
+func TestPDFDedupesDoubleDrawnText(t *testing.T) {
+	// A shadowed/fake-bold heading is drawn twice at a sub-point offset; only
+	// one copy belongs in the text.
+	content := "BT /F1 33 Tf 57.35 700 Td (Invoice) Tj ET " +
+		"BT /F1 33 Tf 56.69 700 Td (Invoice) Tj ET"
+	doc := buildPDFDocument(pdfSimpleDoc(content, ""))
+	if got := strings.TrimSpace(doc.Text()); got != "Invoice" {
+		t.Fatalf("text = %q", got)
+	}
+}
+
+func TestPDFSpaceGlyphAndGapDoNotDouble(t *testing.T) {
+	// Justified text often carries a space glyph plus a TJ gap; the gap must
+	// not add a second space.
+	doc := buildPDFDocument(pdfSimpleDoc("BT /F1 11 Tf 20 700 Td [(Hello ) -500 (world)] TJ ET", ""))
+	if got := strings.TrimSpace(doc.Text()); got != "Hello world" {
+		t.Fatalf("text = %q", got)
+	}
+}
+
+func TestPDFTableKeepsRowOrder(t *testing.T) {
+	var content strings.Builder
+	for row := 0; row < 6; row++ {
+		y := 700 - row*14
+		for col, x := range []int{40, 110, 260} {
+			fmt.Fprintf(&content, "BT /F1 11 Tf %d %d Td (R%dC%d) Tj ET ", x, y, row, col)
+		}
+	}
+	doc := buildPDFDocument(pdfSimpleDoc(content.String(), ""))
+	text := doc.Text()
+	for row := 0; row < 6; row++ {
+		line := fmt.Sprintf("R%dC0", row)
+		if !strings.Contains(text, line) {
+			t.Fatalf("row %d missing: %q", row, text)
+		}
+	}
+	// Cells stay in row order: C0 before C1 before C2 on the same line.
+	lines := strings.Split(text, "\n")
+	for _, l := range lines {
+		if !strings.Contains(l, "R0C0") {
+			continue
+		}
+		if strings.Index(l, "R0C0") > strings.Index(l, "R0C1") ||
+			strings.Index(l, "R0C1") > strings.Index(l, "R0C2") {
+			t.Fatalf("table row was reordered: %q", l)
+		}
+	}
+}

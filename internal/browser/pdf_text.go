@@ -618,10 +618,27 @@ func sanitizePDFText(s string) string {
 // spans and get the same treatment as large HTML headings. Vertical gaps wider
 // than the page's own leading become blank lines, which restores the spacing
 // after titles and between blocks that the PDF layout implies.
+//
+// Two-column prose is emitted column by column instead of row by row: a
+// gutter that most lines respect splits the page into left and right sequences,
+// so reading order follows the text rather than the printed page.
 func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
 	if len(runs) == 0 {
 		return nil
 	}
+	lines := pdfGroupLines(runs)
+	var out []pdfSpan
+	for _, seg := range pdfSegments(lines, bodySize) {
+		if len(out) > 0 && seg.breakBefore {
+			out = append(out, pdfSpan{Text: "\n"})
+		}
+		out = append(out, pdfFlowSpans(seg.lines, bodySize)...)
+	}
+	return out
+}
+
+// pdfGroupLines groups runs into visual lines, top to bottom.
+func pdfGroupLines(runs []pdfRun) [][]pdfRun {
 	sorted := make([]pdfRun, len(runs))
 	copy(sorted, runs)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -638,7 +655,281 @@ func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
 		}
 		lines = append(lines, []pdfRun{r})
 	}
-	leading := pdfLeading(lines)
+	for _, line := range lines {
+		sort.SliceStable(line, func(i, j int) bool { return line[i].X < line[j].X })
+	}
+	return lines
+}
+
+// pdfSegment is one run of lines emitted together: either a flow of full-width
+// lines, or one half of a two-column band.
+type pdfSegment struct {
+	lines       [][]pdfRun
+	breakBefore bool
+}
+
+// pdfSegments splits the page into flow and column segments. Full-width lines
+// (headings, titles, rules) stay in flow and break a column band.
+func pdfSegments(lines [][]pdfRun, bodySize float64) []pdfSegment {
+	gutter, ok := pdfDetectGutter(lines)
+	if !ok {
+		return []pdfSegment{{lines: lines}}
+	}
+	var segs []pdfSegment
+	var flow, band [][]pdfRun
+	flushFlow := func() {
+		if len(flow) > 0 {
+			segs = append(segs, pdfSegment{lines: flow})
+			flow = nil
+		}
+	}
+	flushBand := func() {
+		if len(band) == 0 {
+			return
+		}
+		left, right, ok := pdfSplitBand(band, gutter)
+		if !ok {
+			flow = append(flow, band...)
+			band = nil
+			return
+		}
+		segs = append(segs, pdfSegment{lines: left})
+		segs = append(segs, pdfSegment{lines: right, breakBefore: true})
+		band = nil
+	}
+	maxGap := bodySize * 2.5
+	if maxGap <= 0 {
+		maxGap = 27.5
+	}
+	for _, line := range lines {
+		if pdfCrossesGutter(line, gutter) {
+			flushBand()
+			flow = append(flow, line)
+			continue
+		}
+		// A large vertical gap separates a header or colophon from the
+		// columns below; keep it in flow rather than dragging it into a
+		// column.
+		if n := len(band); n > 0 && band[n-1][0].Y-line[0].Y > maxGap {
+			flushBand()
+		}
+		flushFlow()
+		band = append(band, line)
+	}
+	flushBand()
+	flushFlow()
+	return segs
+}
+
+// pdfGutterMin is the narrowest gutter between columns, in PDF points.
+const pdfGutterMin = 9.0 // 1.5 terminal cells
+
+// pdfDetectGutter finds a vertical gutter that most lines respect. Candidates
+// come from the vertical coverage histogram of the page: a gutter is a narrow
+// x-band crossed by few lines, with real text on both sides. Requiring dense
+// text on each side rejects table columns and figure labels.
+func pdfDetectGutter(lines [][]pdfRun) (float64, bool) {
+	if len(lines) < 6 {
+		return 0, false
+	}
+	minX, maxX := math.Inf(1), math.Inf(-1)
+	for _, line := range lines {
+		for _, r := range line {
+			minX = math.Min(minX, r.X)
+			maxX = math.Max(maxX, r.X+r.W)
+		}
+	}
+	if !(maxX-minX >= 40) {
+		return 0, false
+	}
+	bins := int(math.Ceil(maxX-minX)) + 1
+	cover := make([]int, bins)
+	for _, line := range lines {
+		for _, r := range line {
+			lo := int(r.X - minX)
+			hi := int(r.X + r.W - minX)
+			if lo < 0 {
+				lo = 0
+			}
+			if hi >= bins {
+				hi = bins - 1
+			}
+			for b := lo; b <= hi; b++ {
+				cover[b]++
+			}
+		}
+	}
+	// A gutter may be crossed by a few full-width lines (titles, rules,
+	// table rows), but its coverage stays far below the columns. The
+	// threshold follows the page's median coverage so sparse pages work too.
+	var covered []int
+	for _, c := range cover {
+		if c > 0 {
+			covered = append(covered, c)
+		}
+	}
+	sort.Ints(covered)
+	limit := 2
+	if len(covered) > 0 {
+		if l := covered[len(covered)/2] / 2; l > limit {
+			limit = l
+		}
+	}
+	bestX, bestScore := 0.0, 0
+	for b := 0; b < bins; b++ {
+		if cover[b] > limit {
+			continue
+		}
+		startBin := b
+		for b < bins && cover[b] <= limit {
+			b++
+		}
+		if b-startBin < int(pdfGutterMin) {
+			continue
+		}
+		leftOK, rightOK := false, false
+		for i := 0; i < startBin; i++ {
+			if cover[i] > limit {
+				leftOK = true
+				break
+			}
+		}
+		for i := b; i < bins; i++ {
+			if cover[i] > limit {
+				rightOK = true
+				break
+			}
+		}
+		if !leftOK || !rightOK {
+			continue
+		}
+		x := minX + float64(startBin+b)/2
+		left, right, ok := pdfSplitBand(lines, x)
+		if !ok {
+			continue
+		}
+		score := minInt(len(left), len(right))
+		if score > bestScore {
+			bestScore, bestX = score, x
+		}
+	}
+	if bestScore < 5 {
+		return 0, false
+	}
+	return bestX, true
+}
+
+// pdfSplitLine divides a line's runs at x.
+func pdfSplitLine(line []pdfRun, x float64) (left, right []pdfRun) {
+	for _, run := range line {
+		switch {
+		case run.X+run.W <= x+0.5:
+			left = append(left, run)
+		case run.X >= x-0.5:
+			right = append(right, run)
+		default:
+			left = append(left, run)
+		}
+	}
+	return left, right
+}
+
+// pdfContiguous reports that runs sit next to each other without a wide gap, so
+// a side is one text column rather than several table columns.
+func pdfContiguous(runs []pdfRun) bool {
+	for i := 1; i < len(runs); i++ {
+		if runs[i].X-(runs[i-1].X+runs[i-1].W) >= pdfGutterMin {
+			return false
+		}
+	}
+	return true
+}
+
+func pdfCrossesGutter(line []pdfRun, x float64) bool {
+	for _, r := range line {
+		if r.X < x && r.X+r.W > x {
+			return true
+		}
+	}
+	return false
+}
+
+// pdfSplitBand turns a band of lines into left and right column sequences when
+// it really is two columns of prose.
+func pdfSplitBand(band [][]pdfRun, x float64) (left, right [][]pdfRun, ok bool) {
+	leftN, rightN := 0, 0
+	var leftAll, rightAll [][]pdfRun
+	for _, line := range band {
+		if pdfCrossesGutter(line, x) {
+			// Full-width lines belong to flow, not to either column.
+			continue
+		}
+		l, r := pdfSplitLine(line, x)
+		if len(l) > 0 {
+			leftN++
+			leftAll = append(leftAll, l)
+		}
+		if len(r) > 0 {
+			rightN++
+			rightAll = append(rightAll, r)
+		}
+	}
+	if leftN < 5 || rightN < 5 {
+		return nil, nil, false
+	}
+	// Prose columns fill their width and have no internal column gaps; table
+	// columns and figure labels fail one of the two checks.
+	if !pdfColumnDense(leftAll) || !pdfColumnDense(rightAll) {
+		return nil, nil, false
+	}
+	if pdfColumnGappy(leftAll) || pdfColumnGappy(rightAll) {
+		return nil, nil, false
+	}
+	return leftAll, rightAll, true
+}
+
+// pdfColumnGappy reports that many lines contain a wide internal gap, which
+// means the side holds more than one table column.
+func pdfColumnGappy(groups [][]pdfRun) bool {
+	gappy := 0
+	for _, g := range groups {
+		if !pdfContiguous(g) {
+			gappy++
+		}
+	}
+	return gappy*5 > len(groups)
+}
+
+// pdfColumnDense reports that the lines fill most of their column's width, as
+// wrapped prose does. Sparse groups are more likely to be table cells or
+// figure labels.
+func pdfColumnDense(groups [][]pdfRun) bool {
+	if len(groups) < 5 {
+		return false
+	}
+	minStart, maxEnd := math.Inf(1), math.Inf(-1)
+	widths := make([]float64, 0, len(groups))
+	for _, g := range groups {
+		lo := g[0].X
+		hi := g[len(g)-1].X + g[len(g)-1].W
+		minStart = math.Min(minStart, lo)
+		maxEnd = math.Max(maxEnd, hi)
+		widths = append(widths, hi-lo)
+	}
+	span := maxEnd - minStart
+	if span < 72 { // 12 terminal cells
+		return false
+	}
+	// The median ignores short lines (headings, list items, figure labels) that
+	// a column of prose also contains, while table cells and key labels stay
+	// well below the threshold.
+	sort.Float64s(widths)
+	return widths[len(widths)/2] >= 0.6*span
+}
+
+// pdfFlowSpans emits one contiguous sequence of lines with gap blank lines.
+func pdfFlowSpans(lines [][]pdfRun, bodySize float64) []pdfSpan {
+	leading := pdfLeading(lines, bodySize)
 	var out []pdfSpan
 	prevY := 0.0
 	prevHeadline := false
@@ -657,7 +948,6 @@ func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
 				out = append(out, pdfSpan{Text: "\n"})
 			}
 		}
-		sort.SliceStable(line, func(i, j int) bool { return line[i].X < line[j].X })
 		out = append(out, pdfLineSpans(line, bodySize)...)
 		out = append(out, pdfSpan{Text: "\n"})
 		prevY = line[0].Y
@@ -682,23 +972,28 @@ func pdfLineHeadline(runs []pdfRun, bodySize float64) bool {
 
 // pdfLeading estimates the page's normal baseline advance. Body lines are the
 // large majority, so the lower quartile ignores gaps around headings,
-// headers and page numbers.
-func pdfLeading(lines [][]pdfRun) float64 {
-	if len(lines) < 2 {
-		return 0
-	}
-	deltas := make([]float64, 0, len(lines)-1)
-	for i := 0; i+1 < len(lines); i++ {
-		d := lines[i][0].Y - lines[i+1][0].Y
-		if d > 0.5 && d < 500 {
-			deltas = append(deltas, d)
+// headers and page numbers. Two columns whose baselines are offset by half a
+// line would drag the quartile below the real leading, so the body font size
+// provides a floor.
+func pdfLeading(lines [][]pdfRun, bodySize float64) float64 {
+	leading := 0.0
+	if len(lines) >= 2 {
+		deltas := make([]float64, 0, len(lines)-1)
+		for i := 0; i+1 < len(lines); i++ {
+			d := lines[i][0].Y - lines[i+1][0].Y
+			if d > 0.5 && d < 500 {
+				deltas = append(deltas, d)
+			}
+		}
+		if len(deltas) > 0 {
+			sort.Float64s(deltas)
+			leading = deltas[len(deltas)/4]
 		}
 	}
-	if len(deltas) == 0 {
-		return 0
+	if floor := bodySize * 1.1; floor > leading {
+		leading = floor
 	}
-	sort.Float64s(deltas)
-	return deltas[len(deltas)/4]
+	return leading
 }
 
 func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
@@ -716,8 +1011,16 @@ func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 	}
 	col := 0
 	endX := runs[0].X
+	prevSpace := false
 	for i, r := range runs {
 		if i > 0 {
+			// Text drawn twice at a sub-point offset (fake bold, shadows) is
+			// invisible on screen; keep the first copy and drop the overlap.
+			// The tolerance allows the small advance overshoot that separate
+			// runs for right-aligned values commonly have.
+			if r.X < endX-3.0 {
+				continue
+			}
 			// Only a real gap in user space becomes padding. Comparing run
 			// widths in points avoids inventing a space per glyph when the
 			// text is wider in cells than in points.
@@ -736,16 +1039,17 @@ func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 					}
 					add(strings.Repeat(" ", pad), false, false, 0)
 					col = target
-				case gap > math.Max(1.0, 0.15*r.Size):
-					// An inter-word gap that does not span a whole cell. The
-					// threshold stays below a quarter em so justified text with
-					// modest word spacing still reads as separate words.
+				case !prevSpace && gap > math.Max(1.0, 0.15*r.Size):
+					// An inter-word gap that does not span a whole cell. A
+					// trailing space glyph already supplies the separator, so
+					// this only fires when the PDF omitted it.
 					add(" ", false, false, 0)
 					col++
 				}
 			}
 		}
 		add(r.Text, r.Bold, r.Italic, pdfSpanSize(r.Size, bodySize))
+		prevSpace = strings.HasSuffix(r.Text, " ")
 		col += stringWidth(r.Text)
 		width := r.W
 		if width <= 0 {
