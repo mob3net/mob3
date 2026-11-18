@@ -1,0 +1,510 @@
+package browser
+
+import (
+	"context"
+	"strings"
+	"time"
+)
+
+// Declaration is one CSS property assignment.
+type Declaration struct {
+	Prop      string
+	Value     string
+	Important bool
+}
+
+// ParseDeclarations parses the body of a style attribute or rule block.
+func ParseDeclarations(s string) []Declaration {
+	var out []Declaration
+	for _, chunk := range splitTopLevel(s, ';') {
+		chunk = strings.TrimSpace(chunk)
+		if chunk == "" {
+			continue
+		}
+		idx := indexTopLevel(chunk, ':')
+		if idx < 0 {
+			continue
+		}
+		rawProp := strings.TrimSpace(chunk[:idx])
+		prop := strings.ToLower(rawProp)
+		if strings.HasPrefix(rawProp, "--") {
+			prop = rawProp
+		}
+		val := strings.TrimSpace(chunk[idx+1:])
+		if prop == "" || val == "" {
+			continue
+		}
+		imp := false
+		lv := strings.ToLower(val)
+		if j := strings.LastIndex(lv, "!important"); j >= 0 {
+			after := strings.TrimSpace(lv[j+len("!important"):])
+			if after == "" {
+				imp = true
+				val = strings.TrimSpace(val[:j])
+			}
+		}
+		out = append(out, Declaration{Prop: prop, Value: val, Important: imp})
+	}
+	return out
+}
+
+// scanCSSStatement returns the index of the first top-level ;, { or } at or
+// after i, ignoring semicolons and braces inside strings and parentheses.
+// Data URLs and font URLs commonly contain semicolons.
+func scanCSSStatement(src string, i int) int {
+	paren := 0
+	var quote byte
+	for i < len(src) {
+		c := src[i]
+		if quote != 0 {
+			if c == '\\' {
+				i += 2
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			i++
+			continue
+		}
+		switch c {
+		case '"', '\'':
+			quote = c
+		case '(':
+			paren++
+		case ')':
+			if paren > 0 {
+				paren--
+			}
+		case ';', '{', '}':
+			if paren == 0 {
+				return i
+			}
+		}
+		i++
+	}
+	return i
+}
+
+// cssImport is one @import rule: a URL and an optional media condition.
+type cssImport struct {
+	href  string
+	media string
+}
+
+// cssImports extracts top-level @import rules without parsing the rest of the
+// sheet. Comments, strings and nested blocks are skipped so @import text in
+// values or media queries is not mistaken for a rule.
+func cssImports(src string) []cssImport {
+	var out []cssImport
+	i, depth := 0, 0
+	for i < len(src) {
+		if strings.HasPrefix(src[i:], "/*") {
+			j := strings.Index(src[i+2:], "*/")
+			if j < 0 {
+				break
+			}
+			i += 2 + j + 2
+			continue
+		}
+		c := src[i]
+		if c == '"' || c == '\'' {
+			q := c
+			i++
+			for i < len(src) && src[i] != q {
+				if src[i] == '\\' {
+					i++
+				}
+				i++
+			}
+			i++
+			continue
+		}
+		if c == '{' {
+			depth++
+			i++
+			continue
+		}
+		if c == '}' {
+			if depth > 0 {
+				depth--
+			}
+			i++
+			continue
+		}
+		if depth == 0 && (c == '@' || c == 'A') && strings.HasPrefix(strings.ToLower(src[i:]), "@import") {
+			j := i + len("@import")
+			if j < len(src) {
+				n := src[j]
+				if n == ' ' || n == '\t' || n == '\n' || n == '\r' || n == '"' || n == '\'' || n == 'u' || n == 'U' {
+					end := scanCSSStatement(src, j)
+					if href, media := parseImportSpec(src[j:end]); href != "" {
+						out = append(out, cssImport{href: href, media: media})
+					}
+					i = end
+					if i < len(src) && src[i] == ';' {
+						i++
+					}
+					continue
+				}
+			}
+		}
+		i++
+	}
+	return out
+}
+
+func parseImportSpec(spec string) (href, media string) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(strings.ToLower(spec), "url(") {
+		inner := spec[4:]
+		if j := strings.IndexByte(inner, ')'); j >= 0 {
+			href = strings.Trim(strings.TrimSpace(inner[:j]), "\"'")
+			spec = strings.TrimSpace(inner[j+1:])
+		}
+	} else if spec[0] == '"' || spec[0] == '\'' {
+		q := spec[0]
+		if j := strings.IndexByte(spec[1:], q); j >= 0 {
+			href = spec[1 : 1+j]
+			spec = strings.TrimSpace(spec[2+j:])
+		}
+	} else {
+		fields := strings.Fields(spec)
+		if len(fields) > 0 {
+			href = fields[0]
+			spec = strings.TrimSpace(strings.TrimPrefix(spec, fields[0]))
+		}
+	}
+	if href == "" {
+		return "", ""
+	}
+	// Ignore unsupported @import modifiers, keeping any real media condition.
+	for {
+		low := strings.ToLower(spec)
+		if strings.HasPrefix(low, "layer(") || strings.HasPrefix(low, "supports(") {
+			if j := strings.IndexByte(spec, ')'); j >= 0 {
+				spec = strings.TrimSpace(spec[j+1:])
+				continue
+			}
+		}
+		break
+	}
+	return href, strings.TrimSpace(spec)
+}
+
+// Stylesheet parsing budgets. These keep hostile or generated multi-megabyte
+// CSS from burning CPU and GC time during a page load.
+var (
+	maxCSSBytes     = 4 << 20
+	maxCSSRules     = 50000
+	maxCSSRuleBody  = 256 << 10
+	maxCSSParseTime = time.Second
+)
+
+type parseState struct {
+	order int
+	rules int
+	cache map[string]*Selector
+	ctx   context.Context
+	start time.Time
+}
+
+// ParseStylesheet parses a stylesheet into rules, preserving source order.
+func ParseStylesheet(src string) []Rule {
+	return ParseStylesheetContext(context.Background(), src)
+}
+
+// ParseStylesheetContext is ParseStylesheet with cancellation support.
+func ParseStylesheetContext(ctx context.Context, src string) []Rule {
+	if maxCSSBytes > 0 && len(src) > maxCSSBytes {
+		src = src[:maxCSSBytes]
+	}
+	st := &parseState{cache: make(map[string]*Selector), ctx: ctx, start: time.Now()}
+	return parseRules(src, st, "")
+}
+
+func parseRules(src string, st *parseState, media string) []Rule {
+	capHint := len(src) / 64
+	if capHint < 8 {
+		capHint = 8
+	}
+	if capHint > 8192 {
+		capHint = 8192
+	}
+	rules := make([]Rule, 0, capHint)
+	i := 0
+	skipWSComments(src, &i)
+	for i < len(src) {
+		if maxCSSRules > 0 && st.rules >= maxCSSRules {
+			break
+		}
+		if st.ctx != nil && st.ctx.Err() != nil {
+			break
+		}
+		if maxCSSParseTime > 0 && time.Since(st.start) > maxCSSParseTime {
+			break
+		}
+		if src[i] == '@' {
+			j := i + 1
+			for j < len(src) && isCSSIdentChar(src[j]) {
+				j++
+			}
+			name := strings.ToLower(src[i+1 : j])
+			preludeStart := j
+			j = scanCSSStatement(src, j)
+			if j >= len(src) {
+				break
+			}
+			if src[j] == ';' {
+				i = j + 1
+			} else {
+				body, next, ok := scanBlock(src, j)
+				if !ok {
+					break
+				}
+				inner := media
+				switch name {
+				case "media":
+					q := strings.TrimSpace(src[preludeStart:j])
+					if inner != "" && q != "" {
+						inner = inner + " and " + q
+					} else if q != "" {
+						inner = q
+					}
+					rules = append(rules, parseRules(body, st, inner)...)
+				case "supports":
+					rules = append(rules, parseRules(body, st, inner)...)
+				}
+				i = next
+			}
+			skipWSComments(src, &i)
+			continue
+		}
+		// selector { declarations }
+		start := i
+		depth := 0
+		for i < len(src) {
+			c := src[i]
+			if c == '"' || c == '\'' {
+				i = skipString(src, i)
+				continue
+			}
+			if c == '(' || c == '[' {
+				depth++
+			} else if c == ')' || c == ']' {
+				if depth > 0 {
+					depth--
+				}
+			} else if c == '{' && depth == 0 {
+				break
+			} else if c == '}' && depth == 0 {
+				i++
+				break
+			}
+			i++
+		}
+		if i >= len(src) {
+			break
+		}
+		if src[i] != '{' {
+			skipWSComments(src, &i)
+			continue
+		}
+		selText := strings.TrimSpace(src[start:i])
+		body, next, ok := scanBlock(src, i)
+		if !ok {
+			break
+		}
+		i = next
+		if maxCSSRuleBody > 0 && len(body) > maxCSSRuleBody {
+			skipWSComments(src, &i)
+			continue
+		}
+		decls := ParseDeclarations(body)
+		for _, part := range splitTopLevel(selText, ',') {
+			if maxCSSRules > 0 && st.rules >= maxCSSRules {
+				break
+			}
+			part = strings.TrimSpace(part)
+			if part == "" || len(part) > 4096 {
+				continue
+			}
+			sel := st.cache[part]
+			if sel == nil {
+				parsed, err := ParseSelector(part)
+				if err != nil {
+					continue
+				}
+				sel = parsed
+				st.cache[part] = sel
+			}
+			st.order++
+			st.rules++
+			rules = append(rules, Rule{Selector: *sel, Decls: decls, Order: st.order, Media: media})
+		}
+		skipWSComments(src, &i)
+	}
+	return rules
+}
+
+func scanBlock(s string, open int) (body string, next int, ok bool) {
+	if open >= len(s) || s[open] != '{' {
+		return "", open, false
+	}
+	depth := 1
+	i := open + 1
+	start := i
+	for i < len(s) {
+		switch s[i] {
+		case '"', '\'':
+			i = skipString(s, i)
+			continue
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start:i], i + 1, true
+			}
+		}
+		i++
+	}
+	return "", len(s), false
+}
+
+func skipString(s string, i int) int {
+	q := s[i]
+	i++
+	for i < len(s) {
+		if s[i] == '\\' {
+			i += 2
+			continue
+		}
+		if s[i] == q {
+			return i + 1
+		}
+		i++
+	}
+	return len(s)
+}
+
+func skipWSComments(s string, i *int) {
+	for *i < len(s) {
+		c := s[*i]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' {
+			*i++
+			continue
+		}
+		if c == '/' && *i+1 < len(s) && s[*i+1] == '*' {
+			if j := strings.Index(s[*i+2:], "*/"); j >= 0 {
+				*i += j + 4
+			} else {
+				*i = len(s)
+			}
+			continue
+		}
+		break
+	}
+}
+
+func isCSSIdentChar(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '\\'
+}
+
+// splitTopLevel splits on sep, ignoring separators inside quotes, brackets and
+// parentheses.
+func splitTopLevel(s string, sep byte) []string {
+	var out []string
+	start := 0
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '\'':
+			i = skipString(s, i) - 1
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case '[':
+			depth++
+		case ']':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if s[i] == sep && depth == 0 {
+				out = append(out, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	out = append(out, s[start:])
+	return out
+}
+
+func indexTopLevel(s string, sep byte) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '\'':
+			i = skipString(s, i) - 1
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case '[':
+			depth++
+		case ']':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if s[i] == sep && depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// splitFields splits a CSS value on whitespace at the top level.
+func splitFields(s string) []string {
+	var out []string
+	var b strings.Builder
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '"', '\'':
+			j := skipString(s, i)
+			b.WriteString(s[i:j])
+			i = j - 1
+			continue
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') && depth == 0 {
+			if b.Len() > 0 {
+				out = append(out, b.String())
+				b.Reset()
+			}
+			continue
+		}
+		b.WriteByte(c)
+	}
+	if b.Len() > 0 {
+		out = append(out, b.String())
+	}
+	return out
+}
