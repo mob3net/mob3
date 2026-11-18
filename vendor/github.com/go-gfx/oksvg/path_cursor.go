@@ -106,6 +106,86 @@ func (c *PathCursor) GetPoints(dataPoints string) error {
 	return nil
 }
 
+// scanNumber reads one SVG number (sign? digits with an optional fraction, or a
+// fraction alone, then an optional exponent) from s at i, and returns it and the
+// index after it. SVG 1.1 §8.3.9 (BNF): the parser takes as much as the number
+// can hold, so "0.6.5" is 0.6 and .5.
+func scanNumber(s string, i int) (v float64, next int, ok bool) {
+	j := i
+	if j < len(s) && (s[j] == '+' || s[j] == '-') {
+		j++
+	}
+	digits := 0
+	for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+		j++
+		digits++
+	}
+	if j < len(s) && s[j] == '.' {
+		j++
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+			digits++
+		}
+	}
+	if digits == 0 {
+		return 0, i, false
+	}
+	if j < len(s) && (s[j] == 'e' || s[j] == 'E') {
+		k := j + 1
+		if k < len(s) && (s[k] == '+' || s[k] == '-') {
+			k++
+		}
+		if k < len(s) && s[k] >= '0' && s[k] <= '9' {
+			for k < len(s) && s[k] >= '0' && s[k] <= '9' {
+				k++
+			}
+			j = k
+		}
+	}
+	f, err := parseFloat(s[i:j], 64)
+	if err != nil {
+		return 0, i, false
+	}
+	return f, j, true
+}
+
+// getArcPoints reads the arguments of an arc command, rx ry rotation flag flag x
+// y, repeated. The flags are single characters, 0 or 1, and need no separator
+// after them (SVG 1.1 §8.3.9: "a1 1 0 00.5.5" is valid, and minifiers write
+// arcs that way: "A9.564 9.564 0 0110 4.844" has the flags 0 and 1 and x = 10).
+// GetPoints, which reads numbers without knowing the command, takes "0110" as one.
+func (c *PathCursor) getArcPoints(s string) error {
+	c.points = c.points[0:0]
+	skip := func(i int) int {
+		for i < len(s) && (s[i] == ' ' || s[i] == ',' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+			i++
+		}
+		return i
+	}
+	i := skip(0)
+	for i < len(s) {
+		for n := 0; n < 7; n++ {
+			i = skip(i)
+			if n == 3 || n == 4 {
+				if i >= len(s) || (s[i] != '0' && s[i] != '1') {
+					return errParamMismatch
+				}
+				c.points = append(c.points, float64(s[i]-'0'))
+				i++
+				continue
+			}
+			v, next, ok := scanNumber(s, i)
+			if !ok {
+				return errParamMismatch
+			}
+			c.points = append(c.points, v)
+			i = next
+		}
+		i = skip(i)
+	}
+	return nil
+}
+
 // EllipseAt adds a path of an elipse centered at cx, cy of radius rx and ry
 // to the PathCursor
 func (c *PathCursor) EllipseAt(cx, cy, rx, ry float64) {
@@ -123,7 +203,9 @@ func (c *PathCursor) EllipseAt(cx, cy, rx, ry float64) {
 func (c *PathCursor) AddArcFromA(points []float64) {
 	cx, cy := rasterx.FindEllipseCenter(&points[0], &points[1], points[2]*math.Pi/180, c.placeX,
 		c.placeY, points[5], points[6], points[4] == 0, points[3] == 0)
-	c.placeX, c.placeY = rasterx.AddArc(c.points, cx, cy, c.placeX, c.placeY, &c.Path)
+	// points, not c.points: an arc command may carry several sets, and the
+	// second one starts at points[0] here, not at c.points[0].
+	c.placeX, c.placeY = rasterx.AddArc(points, cx, cy, c.placeX, c.placeY, &c.Path)
 }
 
 // CompilePath translates the svgPath description string into a rasterx path.
@@ -206,7 +288,13 @@ func (c *PathCursor) reflectControlCube() {
 // in the cursor's Path
 func (c *PathCursor) addSeg(segString string) error {
 	// Parse the string describing the numeric points in SVG format
-	if err := c.GetPoints(segString[1:]); err != nil {
+	var err error
+	if k := segString[0]; k == 'a' || k == 'A' {
+		err = c.getArcPoints(segString[1:])
+	} else {
+		err = c.GetPoints(segString[1:])
+	}
+	if err != nil {
 		return err
 	}
 	l := len(c.points)

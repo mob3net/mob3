@@ -25,6 +25,34 @@ type IconCursor struct {
 	grad                                                 *rasterx.Gradient
 	inTitleText, inDescText, inGrad, inDefs, inDefsStyle bool
 	currentDef                                           []definition
+	clip                                                 *clipBuild // the <clipPath> being read, if any
+	keys                                                 []int      // element keys from the root to the element being read
+	nextKey                                              int
+	keysCopy                                             []int // keys, as the paths read since the last change hold it
+}
+
+// pushKey gives the element being opened its key: its position among the
+// document's elements, in document order, from 0.
+func (c *IconCursor) pushKey() {
+	c.keys = append(c.keys, c.nextKey)
+	c.nextKey++
+	c.keysCopy = nil
+}
+
+func (c *IconCursor) popKey() {
+	if len(c.keys) > 0 {
+		c.keys = c.keys[:len(c.keys)-1]
+	}
+	c.keysCopy = nil
+}
+
+// pathKeys is the chain of element keys the path being added belongs to: the
+// element it was read from and its ancestors.
+func (c *IconCursor) pathKeys() []int {
+	if c.keysCopy == nil {
+		c.keysCopy = append([]int{}, c.keys...)
+	}
+	return c.keysCopy
 }
 
 // ReadGradURL reads an SVG format gradient url
@@ -88,12 +116,19 @@ func (c *IconCursor) PushStyle(attrs []xml.Attr) error {
 	}
 	// Make a copy of the top style
 	curStyle := c.StyleStack[len(c.StyleStack)-1]
+	clipVal := ""
 	for _, pair := range pairs {
 		kv := strings.Split(pair, ":")
 		if len(kv) >= 2 {
 			k := strings.ToLower(kv[0])
 			k = strings.TrimSpace(k)
 			v := strings.TrimSpace(kv[1])
+			if k == "clip-path" {
+				// Read once every attribute is in: the clip's user space
+				// includes this element's transform, wherever it was written.
+				clipVal = v
+				continue
+			}
 			err := c.readStyleAttr(&curStyle, k, v)
 			if err != nil {
 				return err
@@ -101,6 +136,9 @@ func (c *IconCursor) PushStyle(attrs []xml.Attr) error {
 		}
 	}
 	c.adaptClasses(&curStyle, className)
+	if clipVal != "" {
+		c.addClip(&curStyle, clipVal)
+	}
 	c.StyleStack = append(c.StyleStack, curStyle) // Push style onto stack
 	return nil
 }
@@ -140,7 +178,9 @@ func (c *IconCursor) readTransformAttr(m1 rasterx.Matrix2D, k string) (rasterx.M
 		}
 	case "scale":
 		if ln == 1 {
-			m1 = m1.Scale(c.points[0], 0)
+			// SVG 1.1 §7.6: scale(sx) is scale(sx sx); it was scale(sx 0),
+			// which flattened the drawing onto a line
+			m1 = m1.Scale(c.points[0], c.points[0])
 		} else if ln == 2 {
 			m1 = m1.Scale(c.points[0], c.points[1])
 		} else {
@@ -190,6 +230,14 @@ func (c *IconCursor) parseTransform(v string) (rasterx.Matrix2D, error) {
 
 func (c *IconCursor) readStyleAttr(curStyle *PathStyle, k, v string) error {
 	switch k {
+	case "fill-rule":
+		// SVG 1.1 11.3: nonzero (the initial value) or evenodd, inherited.
+		switch v {
+		case "evenodd":
+			curStyle.UseNonZeroWinding = false
+		case "nonzero":
+			curStyle.UseNonZeroWinding = true
+		}
 	case "fill":
 		gradient, ok := c.ReadGradURL(v, curStyle.fillerColor)
 		if ok {
@@ -320,6 +368,9 @@ func (c *IconCursor) readStyleAttr(curStyle *PathStyle, k, v string) error {
 }
 
 func (c *IconCursor) readStartElement(se xml.StartElement) (err error) {
+	if c.clipElement(se) {
+		return nil
+	}
 	var skipDef bool
 	if se.Name.Local == "radialGradient" || se.Name.Local == "linearGradient" || c.inGrad {
 		skipDef = true
@@ -363,8 +414,9 @@ func (c *IconCursor) readStartElement(se xml.StartElement) (err error) {
 		//The cursor parsed a path from the xml element
 		pathCopy := make(rasterx.Path, len(c.Path))
 		copy(pathCopy, c.Path)
-		c.icon.SVGPaths = append(c.icon.SVGPaths,
-			SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy})
+		sp := SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy, c.pathKeys()}
+		noteBounds(sp.clips, sp.Path, sp.mAdder.M)
+		c.icon.SVGPaths = append(c.icon.SVGPaths, sp)
 		c.Path = c.Path[:0]
 	}
 	return

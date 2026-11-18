@@ -101,8 +101,11 @@ written in Go
   automatic disk caching or restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
-  `github.com/srwiley/oksvg` + `github.com/srwiley/rasterx` (user-requested SVG
-  support), and their pure-Go transitive modules (`regexp2`, `sourcemap`,
+  `github.com/go-gfx/oksvg` — a maintained fork of `srwiley/oksvg` at the same
+  upstream commit, adding `clipPath`, `fill-rule`, compact arc flags,
+  transform-scaled strokes and bounded dash strokes — plus
+  `github.com/srwiley/rasterx` (user-requested SVG support), and their pure-Go
+  transitive modules (`regexp2`, `sourcemap`,
   `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`,
   `golang.org/x/sys` for `x/image`'s SIMD rasterizer). No other third-party
   modules without a new explicit user decision. goja is pure Go
@@ -121,9 +124,10 @@ written in Go
   guard.
 - **SVG is not in core Go.** The standard library and `golang.org/x/image`
   provide no SVG parser or renderer, and there is no known plan to add one.
-  MOB³ therefore uses the vendored, pure-Go `oksvg` + `rasterx` renderer for
-  SVG (partial SVG2); inline SVG decodes through the same path, with a
-  label/`alt` fallback when rasterization fails.
+  MOB³ therefore uses the vendored, pure-Go `github.com/go-gfx/oksvg` (a
+  maintained fork of `srwiley/oksvg`) plus `srwiley/rasterx` for SVG (partial
+  SVG2); inline SVG decodes through the same path, with a label/`alt` fallback
+  when rasterization fails.
 - **JavaScript via goja.** Page scripts run through goja in a per-page runtime.
   Classic inline and external scripts execute in document order; `async`,
   `defer` and modules are ignored. External scripts must arrive with a
@@ -1509,10 +1513,13 @@ Standard Go layout:
   or grid. Absolute, relative and
   fixed positioning work, but `z-index` stacking is ignored and
   relative offsets are not applied to inline boxes.
-- SVG support is partial: paths, shapes, gradients and common transforms work,
-  but SVG text, `<use>/<symbol>`, filters, masks, CSS-in-SVG and animation may be
-  missing. Inline SVG falls back to an accessible label if rasterization fails.
-  Static WebP is supported; animated WebP is not.
+- SVG support is partial: paths (including compact arc flags and arcs with
+  several parameter sets), shapes, gradients, transforms, `clipPath`,
+  `fill-rule` and `<use>` of paths/groups work; SVG text, `<use>` resolving to
+  `<symbol>` (the common sprite pattern), filters, masks, CSS-in-SVG and
+  animation are not rendered. Transform-scaled strokes and bounded dash strokes
+  are handled. Inline SVG falls back to an accessible label if rasterization
+  fails. Static WebP is supported; animated WebP is not.
 - Reader mode is heuristic: unusual layouts can lose content or retain
   clutter, it renders a snapshot rather than live JS updates, and images,
   forms and other interactive controls are removed.

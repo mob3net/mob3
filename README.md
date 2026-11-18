@@ -167,8 +167,10 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   `position:sticky`, `z-index`, CSS variables, animations, transitions,
   generated content and background images are unsupported or
   approximated as block flow.
-- SVG support is partial: text inside SVG, `<use>/<symbol>`, filters, masks and
-  CSS-in-SVG may be missing. Animated WebP is not supported.
+- SVG support is partial: paths, shapes, gradients, transforms, `clipPath`,
+  `fill-rule` and `<use>` of paths/groups work, but text inside SVG,
+  `<use>` resolving to `<symbol>` sprites, filters, masks, CSS-in-SVG and
+  animation are not rendered. Animated WebP is not supported.
 - Oversized images are capped at 40% of the viewport width and 16 rows,
   preserving their aspect ratio. Images with a definite CSS box (both width and
   height) use `object-fit`/`object-position` and fill or crop into that box

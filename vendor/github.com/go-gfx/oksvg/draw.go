@@ -373,7 +373,9 @@ var (
 				//The cursor parsed a path from the xml element
 				pathCopy := make(rasterx.Path, len(c.Path))
 				copy(pathCopy, c.Path)
-				c.icon.SVGPaths = append(c.icon.SVGPaths, SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy})
+				sp := SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy, c.pathKeys()}
+				noteBounds(sp.clips, sp.Path, sp.mAdder.M)
+				c.icon.SVGPaths = append(c.icon.SVGPaths, sp)
 				c.Path = c.Path[:0]
 			}
 			if def.Tag != "g" {

@@ -642,3 +642,78 @@ func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
 		t.Fatalf("fixed image produced %d placements, want 1", len(placements))
 	}
 }
+
+// svgAlpha decodes an SVG document and returns the alpha of one pixel.
+func svgAlpha(t *testing.T, doc string, x, y int) uint32 {
+	t.Helper()
+	img, err := decodeSVG([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, a := img.At(x, y).RGBA()
+	return a
+}
+
+func TestDecodeSVGFillRule(t *testing.T) {
+	// Nested squares: evenodd leaves the centre hollow, nonzero fills it.
+	nested := `<path fill-rule="%s" fill="#00ff00" d="M2 2h16v16H2z M6 6h8v8H6z"/>`
+	doc := func(rule string) string {
+		return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">` +
+			fmt.Sprintf(nested, rule) + `</svg>`
+	}
+	if a := svgAlpha(t, doc("evenodd"), 10, 10); a != 0 {
+		t.Fatalf("evenodd centre alpha = %d, want a hole", a)
+	}
+	if a := svgAlpha(t, doc("evenodd"), 3, 10); a == 0 {
+		t.Fatal("evenodd ring was not painted")
+	}
+	if a := svgAlpha(t, doc("nonzero"), 10, 10); a == 0 {
+		t.Fatal("nonzero centre should be filled")
+	}
+}
+
+func TestDecodeSVGClipPath(t *testing.T) {
+	doc := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+		<defs><clipPath id="c"><rect width="10" height="20"/></clipPath></defs>
+		<rect width="20" height="20" fill="#0000ff" clip-path="url(#c)"/>
+	</svg>`
+	if a := svgAlpha(t, doc, 2, 10); a == 0 {
+		t.Fatal("pixel inside the clip was not painted")
+	}
+	if a := svgAlpha(t, doc, 17, 10); a != 0 {
+		t.Fatal("clip-path did not trim the box")
+	}
+}
+
+func TestDecodeSVGCompactArcFlags(t *testing.T) {
+	// "0110" packs both arc flags and the x coordinate; reading it as one
+	// number drops the rest of the path.
+	doc := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+		<path d="M2 12a9.564 9.564 0 0110 4.844" fill="none" stroke="#000000" stroke-width="2"/>
+	</svg>`
+	if a := svgAlpha(t, doc, 8, 14); a == 0 {
+		t.Fatal("arc with separator-less flags was not drawn")
+	}
+}
+
+func TestDecodeSVGBoundsDashStroke(t *testing.T) {
+	// A tiny dash array over a long path must not make the stroker take one
+	// step per dash; the renderer draws it solid instead.
+	long := strings.Repeat("L100 1", 500)
+	doc := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 2">
+		<path d="M0 1` + long + `" stroke="#000000" stroke-width="1" stroke-dasharray="0.001 0.001"/>
+	</svg>`
+	done := make(chan error, 1)
+	go func() {
+		_, err := decodeSVG([]byte(doc))
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("hostile dash array failed to render: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("hostile dash array stalled the renderer")
+	}
+}

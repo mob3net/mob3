@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/srwiley/oksvg"
+	"github.com/go-gfx/oksvg"
 	"github.com/srwiley/rasterx"
 )
 

@@ -76,9 +76,11 @@ Images and inline SVG are treated as untrusted input. Responses are capped at
 12 MB, raster images above 25 megapixels are rejected before decoding, and SVG
 rasterization is capped at 1024 px. Decoder dependencies are kept at patched
 releases and scanned with `govulncheck`; a panic inside a raster or SVG decoder
-is contained and shown as a broken image instead of crashing the browser. These
-limits bound resource use and crashes, not the general risk of rendering
-attacker-controlled content.
+is contained and shown as a broken image instead of crashing the browser. SVG
+strokes with a pathological dash pattern fall back to a solid stroke, and a
+stroke outline beyond a fixed point budget is dropped. These limits bound
+resource use and crashes, not the general risk of rendering attacker-controlled
+content.
 
 ## JavaScript safety limits
 

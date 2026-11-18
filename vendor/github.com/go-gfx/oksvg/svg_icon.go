@@ -19,6 +19,7 @@ type SvgIcon struct {
 	SVGPaths     []SvgPath
 	Transform    rasterx.Matrix2D
 	classes      map[string]styleAttribute
+	clips        map[string]*clipDef // <clipPath>s by id
 }
 
 // Draw the compiled SVG icon into the GraphicContext.

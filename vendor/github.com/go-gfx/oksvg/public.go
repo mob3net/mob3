@@ -50,6 +50,7 @@ func ReadIconStream(stream io.Reader, errMode ...ErrorMode) (*SvgIcon, error) {
 		case xml.StartElement:
 			// Reads all recognized style attributes from the start element
 			// and places it on top of the styleStack
+			cursor.pushKey()
 			err = cursor.PushStyle(se.Attr)
 			if err != nil {
 				return icon, err
@@ -64,6 +65,10 @@ func ReadIconStream(stream io.Reader, errMode ...ErrorMode) (*SvgIcon, error) {
 		case xml.EndElement:
 			// pop style
 			cursor.StyleStack = cursor.StyleStack[:len(cursor.StyleStack)-1]
+			cursor.popKey()
+			if cursor.clipEnd(se.Name.Local) {
+				continue
+			}
 			switch se.Name.Local {
 			case "g":
 				if cursor.inDefs {

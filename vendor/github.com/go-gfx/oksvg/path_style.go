@@ -23,6 +23,7 @@ type PathStyle struct {
 	LineCap                           rasterx.CapFunc
 	LineJoin                          rasterx.JoinMode
 	mAdder                            rasterx.MatrixAdder // current transform
+	clips                             []*clipUse          // clip-path in force: the element's own and its ancestors'
 }
 
 // styleAttribute describes draw options, such as {"fill":"black"; "stroke":"white"}.
@@ -32,4 +33,4 @@ type styleAttribute = map[string]string
 // full opacity, no stroke, ButtCap line end and Bevel line connect.
 var DefaultStyle = PathStyle{1.0, 1.0, 2.0, 0.0, 4.0, nil, true,
 	color.NRGBA{0x00, 0x00, 0x00, 0xff}, nil,
-	nil, nil, rasterx.ButtCap, rasterx.Bevel, rasterx.MatrixAdder{M: rasterx.Identity}}
+	nil, nil, rasterx.ButtCap, rasterx.Bevel, rasterx.MatrixAdder{M: rasterx.Identity}, nil}
