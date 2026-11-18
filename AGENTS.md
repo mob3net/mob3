@@ -1008,10 +1008,16 @@ Standard Go layout:
   while cached and resume where they left off, and the oldest cached page is
   dropped beyond the cap. `about:` pages and downloads are never cached.
   `location.replace` and `location.reload` update the active history entry
-  instead of pushing a new one, and a page that redirects before it settles is
-  recorded first so the entry it replaces exists. Consecutive scripted and
-  meta-refresh redirects stop after 20 hops with `Redirect loop stopped`
-  instead of loading and growing the session forever.
+  instead of pushing a new one. HTTP 3xx redirects are followed inside one
+  load, so only the final URL is recorded. Client redirects that happen while
+  the page is still being applied are coalesced the way browsers do it: the
+  redirecting document is recorded first so an entry exists, then a meta
+  refresh or a load-time scripted `location.href`/`assign` replaces it, so
+  Back skips the redirect page instead of landing on it and being forwarded
+  again. A navigation queued after the page settled (a click or timer handler)
+  still pushes a new entry. Consecutive scripted and meta-refresh redirects
+  stop after 20 hops with `Redirect loop stopped` instead of loading and
+  growing the session forever.
   Nothing is persisted.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and

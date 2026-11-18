@@ -605,12 +605,13 @@ func (b *Browser) finishLoad(res loadResult) {
 		if b.autoNavigations >= maxAutoNavigations {
 			loopStopped = true
 		} else {
-			// Record this document first: a page that immediately redirects
-			// would otherwise never become a history entry, and a
-			// location.replace redirect would have no entry to update.
+			// Record this document first, then let the target replace it. A
+			// meta refresh is a client redirect, so browsers coalesce it into
+			// one history entry; Back should skip the redirecting page rather
+			// than land on it and be forwarded again.
 			b.prepareHistory(res.push)
 			b.autoNavigations++
-			b.Navigate(target, true)
+			b.Navigate(target, false)
 			return
 		}
 	}
@@ -619,7 +620,9 @@ func (b *Browser) finishLoad(res loadResult) {
 	if b.js != nil && (b.js.pendingNav != "" || b.js.pendingForm != nil) {
 		b.prepareHistory(res.push)
 	}
-	if b.consumePendingJS() {
+	// A navigation queued by the page's own load-time scripts is also a
+	// client redirect: replace the entry recorded above instead of adding one.
+	if b.applyPendingJS(true) {
 		return
 	}
 	if b.loopStopped {
@@ -698,7 +701,13 @@ func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
 
 // consumePendingJS applies a queued location.href/assign navigation or
 // programmatic form.submit() after the current script or callback has finished.
-func (b *Browser) consumePendingJS() bool {
+func (b *Browser) consumePendingJS() bool { return b.applyPendingJS(false) }
+
+// applyPendingJS applies a navigation queued by page JavaScript. duringLoad
+// marks the queue drain that happens while the page is still being applied:
+// such a redirect replaces the redirecting entry, matching browser behaviour,
+// while a click or timer navigation after the page settled still pushes.
+func (b *Browser) applyPendingJS(duringLoad bool) bool {
 	if b.js == nil {
 		return false
 	}
@@ -723,7 +732,7 @@ func (b *Browser) consumePendingJS() bool {
 		return false
 	}
 	b.autoNavigations++
-	if replace {
+	if replace || duringLoad {
 		b.Navigate(target, false)
 	} else {
 		b.Navigate(target, true)

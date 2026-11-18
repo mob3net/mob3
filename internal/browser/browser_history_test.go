@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -321,7 +322,9 @@ func TestAboutPagesAreNotCached(t *testing.T) {
 	}
 }
 
-func TestJSLocationReplaceKeepsHistoryEntry(t *testing.T) {
+func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
+	// A client redirect that runs while the page is being applied replaces the
+	// redirecting entry, the way browsers coalesce it; Back must skip it.
 	cases := []struct {
 		name     string
 		script   string
@@ -335,7 +338,7 @@ func TestJSLocationReplaceKeepsHistoryEntry(t *testing.T) {
 		{
 			name:     "assign",
 			script:   `location.assign("/next")`,
-			wantURLs: []string{"https://example.com/start", "https://example.com/next"},
+			wantURLs: []string{"https://example.com/next"},
 		},
 	}
 	for _, tc := range cases {
@@ -439,5 +442,56 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 	}
 	if b.loading {
 		t.Fatal("a load is still running after the loop was stopped")
+	}
+}
+
+func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
+	b := NewBrowser(60, 12)
+	uRedir := mustParse(t, "https://example.com/redir")
+	uTarget := mustParse(t, "https://example.com/target")
+	redir := &Page{URL: uRedir, Base: uRedir, Root: ParseHTML(
+		`<html><head><meta http-equiv="refresh" content="0;url=/target"></head><body>redirecting</body></html>`)}
+	target := &Page{URL: uTarget, Base: uTarget, Root: ParseHTML(`<html><body>target</body></html>`)}
+	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) { return target, nil }
+
+	b.finishLoad(loadResult{seq: b.loadSeq, page: redir, u: uRedir, push: true, method: http.MethodGet})
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("meta refresh navigation did not finish")
+	}
+	urls, idx := b.historySnapshot()
+	if len(urls) != 1 || urls[0] != "https://example.com/target" || idx != 0 {
+		t.Fatalf("history = %v at %d, want only the target", urls, idx)
+	}
+}
+
+func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
+	// A navigation queued after the page settled (a click or timer handler)
+	// still adds an entry, so Back returns to the page the user was on.
+	b := NewBrowser(60, 12)
+	u := mustParse(t, "https://example.com/start")
+	next := mustParse(t, "https://example.com/next")
+	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) {
+		return &Page{URL: next, Base: next, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
+	}
+	b.finishLoad(loadResult{seq: b.loadSeq, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, push: true, method: http.MethodGet})
+	if b.js == nil {
+		t.Fatal("no JS runtime")
+	}
+	b.js.pendingNav = "/next"
+	if !b.consumePendingJS() {
+		t.Fatal("queued navigation was not applied")
+	}
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("navigation did not finish")
+	}
+	urls, _ := b.historySnapshot()
+	if len(urls) != 2 || urls[0] != "https://example.com/start" || urls[1] != "https://example.com/next" {
+		t.Fatalf("history = %v, want start then next", urls)
 	}
 }
