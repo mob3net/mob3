@@ -114,6 +114,11 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   launch): extracts the main article into a narrow, chrome-free text column,
   stays enabled across navigation, and restores the normal page and scroll
   position when toggled off.
+- Built-in text-only PDF viewer: a PDF response is extracted page by page into
+  one continuous document with page rules, column alignment and a `Page n of N`
+  label, so find, selection, `-dump` and `-png` work as on any page. Figures,
+  images and annotations are not rendered; `-no-pdf` restores the download
+  prompt.
 - Dark mode (`D`, the footer `Dark:on`/`Dark:off` label, or `-dark` at launch):
   asks sites for their dark styles with `prefers-color-scheme: dark`. Pages that
   already render a dark background keep their own palette; otherwise
@@ -176,7 +181,8 @@ text-focused pages and gets rough on modern JavaScript-heavy apps.
   height) use `object-fit`/`object-position` and fill or crop into that box
   instead of hitting those caps.
 - No tabs or automatic downloads; download links and non-HTML responses open a
-  popup with a copyable `curl` command instead, and multipart/file uploads are
+  popup with a copyable `curl` command instead (PDFs open in the text viewer
+  unless `-no-pdf` is set), and multipart/file uploads are
   not implemented (clicking a file input shows an unsupported notice). Selected
   page text copies with
   `y` through OSC 52 (terminal support required), and the URL can be selected

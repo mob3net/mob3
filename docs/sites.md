@@ -26,6 +26,20 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   or changed by scripts are loaded after the page runs.
 - Reader mode (`R` or `-reader`) for long articles.
 
+## PDF documents
+
+A PDF response opens in a built-in, text-only viewer: every page is extracted
+and shown as one continuous document with page rules and `Page n of N`
+separators. Text keeps its column alignment, so tables and multi-column pages
+stay readable, and the result supports find, selection, `-dump` and `-png`
+like any other page.
+
+The viewer never rasterizes a page. Figures, images, charts, annotations and
+links are not shown, scanned PDFs have no text to show, and encrypted
+(password-protected) documents are refused. `-no-pdf` turns the viewer off and
+restores the download prompt; an unreadable document always offers the same
+curl command.
+
 ## Often rough
 
 - Single-page applications, module-only sites, heavy shadow DOM, custom

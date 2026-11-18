@@ -44,6 +44,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-height", Value: get("-height", "0"), Note: "startup; dump/PNG/MCP only"},
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
+		{Flag: "-no-pdf", Value: onOff(b.noPDF), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
 		{Flag: "-dark", Value: onOff(b.dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
@@ -102,6 +103,19 @@ func (b *Browser) applyConfig(q url.Values) {
 			b.noJS = on
 			if b.loader != nil {
 				b.loader.noScripts = on
+			}
+		}
+	}
+	if v, ok := q["no-pdf"]; (ok && len(v) > 0) || form {
+		if form {
+			b.noPDF = q.Has("no-pdf")
+			if b.loader != nil {
+				b.loader.noPDF = b.noPDF
+			}
+		} else if on, ok := parseOnOff(v[0]); ok {
+			b.noPDF = on
+			if b.loader != nil {
+				b.loader.noPDF = on
 			}
 		}
 	}

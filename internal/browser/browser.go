@@ -103,6 +103,9 @@ type Browser struct {
 	lastNativeImages bool
 
 	noJS bool
+	// noPDF disables the built-in PDF text viewer, restoring the download
+	// prompt for PDF responses.
+	noPDF bool
 	// pendingStatus replaces the computed load status once, so a JavaScript
 	// toggle can report its new state instead of clearing the footer.
 	pendingStatus string
@@ -609,7 +612,11 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.readerSavedScroll = 0
 	readerFailed := false
 	if b.reader {
-		if root, ok := extractReaderPage(page.Root, page.Title); ok {
+		// PDF pages are already a clean text view; reader mode stays enabled
+		// for the next page but keeps the full document.
+		if page.PDF != nil {
+			readerFailed = true
+		} else if root, ok := extractReaderPage(page.Root, page.Title); ok {
 			b.readerRoot = root
 		} else {
 			readerFailed = true
@@ -815,6 +822,10 @@ func (b *Browser) toggleReader() {
 		b.readerSavedScroll = 0
 		b.clampScroll()
 		b.status = "Reader mode off"
+		return
+	}
+	if b.page.PDF != nil {
+		b.status = "Reader mode unavailable"
 		return
 	}
 	root, ok := extractReaderPage(b.page.Root, b.page.Title)

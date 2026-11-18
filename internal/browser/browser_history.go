@@ -202,6 +202,8 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 		if c.readerRoot != nil {
 			b.readerRoot = c.readerRoot
 			b.readerSavedScroll = c.readerSavedScroll
+		} else if c.page.PDF != nil {
+			readerFailed = true
 		} else if root, ok := extractReaderPage(c.page.Root, c.page.Title); ok {
 			b.readerRoot = root
 		} else {

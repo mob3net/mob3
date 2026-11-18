@@ -32,7 +32,10 @@ written in Go
   `go test ./internal/browser -run TestLayoutFixtures -update` and review the
   diff. Fixtures use inline `<style>` only, no external assets, and generic
   names and content. Imported-stylesheet goldens live under
-  `internal/browser/testdata/import/` and use the real loader.
+  `internal/browser/testdata/import/` and use the real loader. PDF extraction
+  goldens live under `internal/browser/testdata/pdf/` — one small `.pdf` plus
+  its `.txt` text golden — and are checked by `TestPDFFixtures`, which shares
+  the same `-update` flag.
 - **Report site quirks; do not chase them.** When a site relies on
   non-standard HTML, invalid markup, or undocumented browser behaviour, report
   what the site does instead of extending the engine to imitate it. Never add
@@ -142,6 +145,12 @@ written in Go
 - **Terminal-only presentation.** There is no GUI toolkit and no native
   window. All output is ANSI/Unicode in the terminal, and a terminal cell is
   the layout unit.
+- **PDF viewer.** PDF responses are read by an in-repo, standard-library-only
+  parser (`pdf_object.go`, `pdf_text.go`, `pdf.go`) and shown as extracted text
+  pages; there is no rasterizer, no cgo and no new third-party module. Scanned
+  pages, figures, images, annotations and links are therefore not rendered, and
+  encrypted documents are refused. `-no-pdf` restores the download prompt.
+  Do not add a PDF rendering library without a new explicit user decision.
 - **Images.** Images are disabled by default for speed (`-graphics=none`):
   external image downloads and inline SVG rasterization are skipped, leaving
   `alt` text or labels. When enabled, native terminal graphics come first —
@@ -206,6 +215,9 @@ Standard Go layout:
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
+| `pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
+| `pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
+| `pdf.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
 | `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
 | `browser_chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
@@ -791,6 +803,8 @@ Standard Go layout:
   across navigation and reload until `R` or the icon is used again: each new
   page is extracted automatically, and a page with no usable article is shown
   normally with `Reader mode unavailable` while the preference remains on.
+  PDF pages behave the same way: they keep their full extracted document
+  instead of being reduced to an article.
   Toggling off restores the normal page and its previous scroll position.
   `-reader` starts with the preference on, including `-dump` mode, which prints
   the extracted view when one is available. `about:config` is unavailable while
@@ -1042,6 +1056,20 @@ Standard Go layout:
   form actions.
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in
   a `<pre>`); binaries are never rendered as HTML.
+- **PDF pages:** a PDF response opens in the built-in text viewer instead of the
+  download popup. Every page is extracted into one continuous document with a
+  top bar (`PDF · N pages · text only · name`), a rule and `Page n of N` label
+  per page, and text that keeps its column alignment inside `pre-wrap` blocks
+  so tables and multi-column pages stay readable. Bold and italic are detected
+  from the font name/flags. Find, selection, `-dump`, `-png` and the
+  automation snapshot treat the result as an ordinary page; reader mode keeps
+  the full extracted document and reports `Reader mode unavailable` while the
+  preference stays on. Notes replace
+  empty output when the document is encrypted, has no readable pages, or has no
+  extractable text (scans and fonts without a text mapping); unreadable
+  http(s) documents also offer the usual curl download link. `-no-pdf` (also in
+  `about:config`) turns the viewer off for the session and restores the old
+  “Cannot display” page and popup. Nothing is written to disk.
 - **Downloads:** MOB³ never saves files. Activating a link with a `download`
   attribute, or navigating (GET) to a response whose media type is not HTML,
   opens a modal download popup instead of navigating or showing the page. The
@@ -1290,6 +1318,13 @@ Standard Go layout:
   only when the document itself was loaded from `file:`. Remote (http/https/
   data) documents cannot load file resources, navigate the viewport to `file:`
   URLs, or XHR local files. Local documents retain access to local resources.
+- **PDF responses:** `application/pdf` (and the rare `application/x-pdf` /
+  `application/acrobat`) opens in the text viewer. When the media type is
+  missing or a generic binary type, the first 1 KB is sniffed for the `%PDF-`
+  header, so a PDF served as `application/octet-stream` or a local `.pdf` still
+  opens. Every other binary type keeps the download popup. The parser is
+  bounded by the 12 MB page cap plus its own object, stream, page, text and
+  time limits (500 pages, 4 s, 4 MiB of extracted text).
 - Charset from Content-Type, falling back to `<meta charset>` sniffing.
   UTF-8 is the default. Legacy single-byte labels decode through the vendored
   `x/text/encoding/charmap` tables: Latin-1/Windows-1252, ISO-8859-2/3/4/5/7/9/
@@ -1495,7 +1530,8 @@ Standard Go layout:
   challenge pages may run arbitrary script once explicitly retried.
 - No tabs or automatic downloads. A link with a `download` attribute or a
   non-HTML response opens a popup with a copyable `curl` command instead of
-  saving the file. Forms support editable text fields, checkbox/radio
+  saving the file (PDFs open in the text viewer unless `-no-pdf`). Forms
+  support editable text fields, checkbox/radio
   toggling, single-select popups, multi-select list boxes and urlencoded
   GET/POST submission;
   multipart/file uploads are not implemented (clicking a file input shows an
@@ -1507,6 +1543,14 @@ Standard Go layout:
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
+- PDF support is text only. Pages are extracted, never rasterized: figures,
+  images, chart art, shadings, annotations and link targets do not appear,
+  scanned documents show no text, and encrypted (password-protected) files are
+  refused with a note. Text keeps column alignment but loses font sizes and
+  colours; bold/italic come from the font name and flags. Symbol and ligature
+  glyphs are only recovered when the font carries a `/ToUnicode` map, so some
+  PDFs show `fi`/`fl` ligatures and math symbols as spaces. Rotated pages are
+  read in their unrotated text order.
 - Flexbox supports basic rows, `flex-wrap`, `order`, `justify-content` and
   basic `align-items`; grid supports
   basic row-major tracks plus named-area column placement, but not full row
@@ -1725,6 +1769,27 @@ Log selectively:
 
 Run with `go test -mod=vendor ./internal/browser -run TestZZ -v -count=1` and
 pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
+
+### PDF extraction
+
+- Reproduce with `bin/mob3 -dump -width 100 -no-color file.pdf`. The top bar
+  shows the page count and the per-page `Page n of N` labels make missing or
+  extra pages obvious. `-no-pdf` confirms which loader branch ran.
+- Goldens are the fastest comparison: drop a small `.pdf` in
+  `internal/browser/testdata/pdf/`, run
+  `go test ./internal/browser -run TestPDFFixtures -update`, then review the
+  `.txt` diff. Do not commit large or real-world PDFs; keep fixtures small and
+  generic.
+- Read the note first: “could not be parsed” is a structure problem (xref,
+  trailer, filter), “no extractable text” is a font/scan problem, and
+  “encrypted” is refused before any page is read.
+- A temporary `zz_*` test can call `parsePDF(data)` and log `len(doc.xref)`,
+  `doc.trailer`, `pdf.pages()`, and `pdf.extract(page)` — each run carries its
+  text, X, Y, W, size and bold/italic flags.
+- Text order and spacing problems are usually in `pdfPageLines` /
+  `pdfLineSpans`, not the interpreter: check the raw runs before touching the
+  content-stream code. Column padding assumes one cell is 6 PDF points
+  (`pdfCellPoints`), and only gaps wider than about one cell become padding.
 
 ### Instrument only when needed
 

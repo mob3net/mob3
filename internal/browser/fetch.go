@@ -64,6 +64,8 @@ type Page struct {
 	// non-HTML resource). The browser shows a curl hint instead of applying it.
 	Download     bool
 	DownloadName string
+	// PDF holds the extracted text when this page came from a PDF response.
+	PDF *PDFDocument
 }
 
 // Script is one page script in document order. Src is a label for errors.
@@ -92,6 +94,10 @@ type Loader struct {
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
+	// noPDF disables the built-in PDF text viewer, so a PDF response keeps
+	// opening the download prompt instead of being rendered as text.
+	// -no-pdf sets it.
+	noPDF bool
 	// noImages skips external image downloads and inline SVG rasterization.
 	// It is the default so the browser stays fast; -graphics=none keeps it,
 	// and any other graphics mode turns it off.
@@ -383,6 +389,15 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	if err != nil {
 		return nil, err
 	}
+	mediaType := ""
+	if mt, _, err := mime.ParseMediaType(ctype); err == nil {
+		mediaType = strings.ToLower(mt)
+	}
+	// PDFs are decoded by their own reader, so they skip charset decoding and
+	// the anti-bot heuristics that only make sense for HTML.
+	if !l.noPDF && looksLikePDF(mediaType, data) {
+		return l.loadPDFPage(ctx, data, finalURL, status), nil
+	}
 	text := decodeBody(data, ctype)
 	rawHTML := text
 	if !ignoreBlocks {
@@ -393,10 +408,6 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 				Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
 			}, nil
 		}
-	}
-	mediaType := ""
-	if mt, _, err := mime.ParseMediaType(ctype); err == nil {
-		mediaType = strings.ToLower(mt)
 	}
 	download := false
 	downloadName := ""
@@ -1535,6 +1546,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-graphics</b> string</td><td>image mode: none, auto, kitty, iterm or blocks (default "none")</td></tr>
 <tr><td><b>-g</b> string</td><td>alias for -graphics</td></tr>
 <tr><td><b>-no-js</b></td><td>disable page JavaScript</td></tr>
+<tr><td><b>-no-pdf</b></td><td>disable the built-in PDF text viewer and show the download prompt instead</td></tr>
 <tr><td><b>-reader</b></td><td>start in reader mode</td></tr>
 <tr><td><b>-dark</b></td><td>start in dark mode</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
@@ -1669,6 +1681,14 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <p>MOB³ never saves files. Download links and non-HTML responses open a popup
 with a <b>curl</b> command; <b>y</b> copies it, and <b>Esc</b>/<b>Enter</b>/<b>q</b>
 closes it.</p>
+
+<h2>PDF documents</h2>
+<p>A PDF opens in a built-in, text-only viewer: every page is extracted into
+one continuous document with page rules and a <b>Page n of N</b> label, and
+columns keep their alignment. Find, selection, <b>-dump</b> and <b>-png</b>
+work as on any other page. Figures, images and annotations are not rendered,
+scanned PDFs have no text to show, and encrypted PDFs are refused. <b>-no-pdf</b>
+disables the viewer and shows the download popup instead.</p>
 
 <h2>Forms</h2>
 <p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through

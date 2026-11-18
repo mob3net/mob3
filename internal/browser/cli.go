@@ -26,6 +26,7 @@ func Run(args []string) int {
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
 	fs.StringVar(graphics, "g", "none", "alias for -graphics")
 	noJS := fs.Bool("no-js", false, "disable page JavaScript")
+	noPDF := fs.Bool("no-pdf", false, "disable the built-in PDF text viewer")
 	reader := fs.Bool("reader", false, "start in reader mode")
 	dark := fs.Bool("dark", false, "start in dark mode")
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
@@ -75,6 +76,7 @@ func Run(args []string) int {
 	loader := NewLoader()
 	loader.setCacheLimitMB(*cache)
 	loader.noScripts = *noJS
+	loader.noPDF = *noPDF
 	loader.noImages = graphicsMode == GraphicsNone
 	loader.searchURL = *search
 	loader.ignoreBlocks = *ignoreBlocks
@@ -115,6 +117,7 @@ func Run(args []string) int {
 		a.b.setLoader(loader)
 		loader.noImages = true
 		a.b.noJS = *noJS
+		a.b.noPDF = *noPDF
 		a.b.jsMemLimit = jsMemLimit
 		a.b.layoutBudget = budget
 		a.b.home = *home
@@ -175,6 +178,7 @@ func Run(args []string) int {
 	}
 	b.color = !*noColor
 	b.noJS = *noJS
+	b.noPDF = *noPDF
 	b.jsMemLimit = jsMemLimit
 	b.layoutBudget = budget
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
@@ -348,7 +352,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		}
 	}
 	root, author := page.Root, page.Author
-	if reader {
+	if reader && page.PDF == nil {
 		if extracted, ok := extractReaderPage(page.Root, page.Title); ok {
 			root, author = extracted, readerRules
 		}

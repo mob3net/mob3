@@ -22,6 +22,7 @@ falls back to dump mode and prints the rendered page.
 | `-graphics string` | `none` | Image mode: `none`, `auto`, `kitty`, `iterm`, `blocks` |
 | `-g string` | `none` | Alias for `-graphics` |
 | `-no-js` | off | Disable page script fetching and execution |
+| `-no-pdf` | off | Disable the built-in PDF text viewer and show the download prompt instead |
 | `-reader` | off | Start in reader mode |
 | `-dark` | off | Start in dark mode |
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
