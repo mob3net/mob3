@@ -103,12 +103,22 @@ written in Go
   `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
   `github.com/srwiley/oksvg` + `github.com/srwiley/rasterx` (user-requested SVG
   support), and their pure-Go transitive modules (`regexp2`, `sourcemap`,
-  `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`). No
-  other third-party modules without a new explicit user decision. goja is pure Go
+  `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`,
+  `golang.org/x/sys` for `x/image`'s SIMD rasterizer). No other third-party
+  modules without a new explicit user decision. goja is pure Go
   and must not change the single-binary or no-cgo constraints. All dependencies
   are **vendored in `vendor/` and committed**; builds use `-mod=vendor` and need
   no network. Run `go mod vendor` after any `go.mod`/`go.sum` change and keep
   `vendor/modules.txt` in sync.
+- **Patched dependencies.** `golang.org/x/image` and `golang.org/x/net` were
+  pinned to 2021 pseudo-versions until the 2026 security audit, which found five
+  reachable decoder advisories (WebP, VP8L, BMP, SFNT) plus twenty-two latent
+  ones in `x/net`. They now track current releases (`x/image` v0.48.0, `x/net`
+  v0.63.0) and `go.mod` pins `toolchain go1.27.4`. Re-run
+  `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` after any dependency or
+  toolchain change; the scan must report no reachable vulnerabilities. Media
+  decoders treat their input as hostile: see the Images bullet for the panic
+  guard.
 - **SVG is not in core Go.** The standard library and `golang.org/x/image`
   provide no SVG parser or renderer, and there is no known plan to add one.
   MOB³ therefore uses the vendored, pure-Go `oksvg` + `rasterx` renderer for
@@ -486,6 +496,9 @@ Standard Go layout:
   terminal can paint — the viewport in CSS pixels, floored at 1024×512 — with
   aspect ratio preserved, and only that copy is stored on the node and in the
   image cache, so a many-megapixel photo never keeps its full bitmap alive.
+  A panic raised by a raster or SVG decoder is recovered and shown as a broken
+  image, so malformed media cannot crash the browser; that is containment, not
+  a substitute for patched decoders.
   Images already inside the cap are stored untouched. A definite CSS box (both
   width and height, including an absolutely positioned percentage height) is
   filled according to `object-fit` (`fill`,

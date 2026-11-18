@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/png"
+	"io"
 	"strings"
 	"testing"
 )
@@ -240,5 +242,27 @@ func TestBrowserSetsImageCapFromViewport(t *testing.T) {
 	b.applyImageCap()
 	if b.loader.maxImageW != 1024 || b.loader.maxImageH != 512 {
 		t.Fatalf("small viewport cap = %dx%d, want the 1024x512 floor", b.loader.maxImageW, b.loader.maxImageH)
+	}
+}
+
+func TestRecoverImageConvertsPanic(t *testing.T) {
+	if _, err := recoverImage(func() (image.Image, error) { panic("boom") }); err == nil {
+		t.Fatal("decoder panic was not converted to an error")
+	}
+	want := errors.New("bad image")
+	if _, err := recoverImage(func() (image.Image, error) { return nil, want }); !errors.Is(err, want) {
+		t.Fatalf("error = %v, want %v", err, want)
+	}
+}
+
+func TestSafeDecodeRecoversDecoderPanic(t *testing.T) {
+	image.RegisterFormat("panic-test", "panicimg",
+		func(io.Reader) (image.Image, error) { panic("decode boom") },
+		func(io.Reader) (image.Config, error) { panic("config boom") })
+	if _, err := safeDecodeConfig([]byte("panicimg data")); err == nil {
+		t.Fatal("config decoder panic was not converted")
+	}
+	if _, err := safeDecodeImage([]byte("panicimg data")); err == nil {
+		t.Fatal("image decoder panic was not converted")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -1300,6 +1301,52 @@ func (l *Loader) fitImage(img image.Image) image.Image {
 	return scaleImage(img, nw, nh)
 }
 
+// recoverImage runs a decoder and converts a panic into an error. Raster and
+// SVG decoders parse untrusted bytes, and a panic in one of them would take
+// down the whole process; the browser shows a broken image instead.
+func recoverImage(fn func() (image.Image, error)) (img image.Image, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			img, err = nil, fmt.Errorf("image decode failed: %v", r)
+		}
+	}()
+	return fn()
+}
+
+func safeDecodeConfig(data []byte) (cfg image.Config, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("image config decode failed: %v", r)
+		}
+	}()
+	cfg, _, err = image.DecodeConfig(bytes.NewReader(data))
+	return cfg, err
+}
+
+func safeDecodeImage(data []byte) (image.Image, error) {
+	return recoverImage(func() (image.Image, error) {
+		img, _, err := image.Decode(bytes.NewReader(data))
+		return img, err
+	})
+}
+
+// decodeMedia decodes one image response: SVG through the vector rasterizer,
+// everything else through the raster decoders with the megapixel limit applied.
+// Both paths contain panics.
+func decodeMedia(ctx context.Context, ctype string, data []byte) (image.Image, error) {
+	if isSVG(ctype, data) {
+		return decodeSVG(data)
+	}
+	cfg, err := safeDecodeConfig(data)
+	if err != nil || !imageConfigOK(cfg) {
+		return nil, fmt.Errorf("unsupported image")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return safeDecodeImage(data)
+}
+
 // fetchImageResult downloads and decodes one image, using the session cache.
 func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
 	key := u.String()
@@ -1311,21 +1358,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile boo
 	if err != nil || status < 200 || status >= 400 {
 		return nil, false
 	}
-	var img image.Image
-	if isSVG(ctype, data) {
-		img, err = decodeSVG(data)
-	} else {
-		cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(data))
-		if cfgErr != nil || !imageConfigOK(cfg) {
-			return nil, false
-		}
-		if ctx.Err() != nil {
-			return nil, false
-		}
-		var decodeErr error
-		img, _, decodeErr = image.Decode(bytes.NewReader(data))
-		err = decodeErr
-	}
+	img, err := decodeMedia(ctx, ctype, data)
 	if err != nil {
 		return nil, false
 	}
@@ -1461,23 +1494,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				node.ImgFailed = true
 				return
 			}
-			var img image.Image
-			if isSVG(ctype, data) {
-				img, err = decodeSVG(data)
-			} else {
-				cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(data))
-				if cfgErr != nil || !imageConfigOK(cfg) {
-					node.ImgFailed = true
-					return
-				}
-				if ctx.Err() != nil {
-					node.ImgFailed = true
-					return
-				}
-				var decodeErr error
-				img, _, decodeErr = image.Decode(bytes.NewReader(data))
-				err = decodeErr
-			}
+			img, err := decodeMedia(ctx, ctype, data)
 			if err != nil {
 				node.ImgFailed = true
 				return

@@ -93,7 +93,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 
-golang.org/x/image, golang.org/x/net, golang.org/x/text
+golang.org/x/image, golang.org/x/net, golang.org/x/sys, golang.org/x/text
 
 Copyright 2009 The Go Authors. All rights reserved.
 Use of this source code is governed by a BSD-style license:

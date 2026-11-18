@@ -1449,6 +1449,10 @@ func isSVG(ctype string, data []byte) bool {
 
 // decodeSVG rasterizes an SVG into an RGBA image, bounded in size.
 func decodeSVG(data []byte) (image.Image, error) {
+	return recoverImage(func() (image.Image, error) { return renderSVG(data) })
+}
+
+func renderSVG(data []byte) (image.Image, error) {
 	if len(data) == 0 {
 		return nil, errBadSVG
 	}

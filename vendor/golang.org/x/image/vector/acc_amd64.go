@@ -3,13 +3,12 @@
 // license that can be found in the LICENSE file.
 
 //go:build !appengine && gc && !noasm
-// +build !appengine,gc,!noasm
 
 package vector
 
-func haveSSE4_1() bool
+import "golang.org/x/sys/cpu"
 
-var haveAccumulateSIMD = haveSSE4_1()
+var haveAccumulateSIMD = cpu.X86.HasSSE41
 
 //go:noescape
 func fixedAccumulateOpOverSIMD(dst []uint8, src []uint32)

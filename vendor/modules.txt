@@ -26,8 +26,8 @@ github.com/srwiley/oksvg
 # github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 ## explicit; go 1.17
 github.com/srwiley/rasterx
-# golang.org/x/image v0.0.0-20211028202545-6944b10bf410
-## explicit; go 1.12
+# golang.org/x/image v0.48.0
+## explicit; go 1.26.0
 golang.org/x/image/bmp
 golang.org/x/image/colornames
 golang.org/x/image/font
@@ -37,19 +37,23 @@ golang.org/x/image/font/gofont/gomonobolditalic
 golang.org/x/image/font/gofont/gomonoitalic
 golang.org/x/image/font/opentype
 golang.org/x/image/font/sfnt
+golang.org/x/image/internal/safemath
 golang.org/x/image/math/fixed
 golang.org/x/image/riff
 golang.org/x/image/vector
 golang.org/x/image/vp8
 golang.org/x/image/vp8l
 golang.org/x/image/webp
-# golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4
-## explicit; go 1.17
+# golang.org/x/net v0.63.0
+## explicit; go 1.26.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
 golang.org/x/net/html/charset
 golang.org/x/net/publicsuffix
-# golang.org/x/text v0.43.0
+# golang.org/x/sys v0.50.0
+## explicit; go 1.26.0
+golang.org/x/sys/cpu
+# golang.org/x/text v0.44.0
 ## explicit; go 1.26.0
 golang.org/x/text/cases
 golang.org/x/text/collate
