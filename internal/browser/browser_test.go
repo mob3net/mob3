@@ -1102,3 +1102,117 @@ func TestNoColorLinkHintsUseReverse(t *testing.T) {
 		t.Fatal("no-color hint did not use reverse video")
 	}
 }
+
+func TestRightClickCopiesLinkURL(t *testing.T) {
+	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
+	u := mustParse(t, "https://example.com/news")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.layout = BuildLayout(doc, nil, b.width)
+
+	var frag *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && strings.Contains(b.layout.Frags[i].Text, "Story") {
+			frag = &b.layout.Frags[i]
+			break
+		}
+	}
+	if frag == nil {
+		t.Fatal("link text fragment not found")
+	}
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	top, _ := b.viewport()
+	// Hover the link first: the footer would otherwise keep showing its URL
+	// instead of the copy confirmation.
+	b.HandleMouse(MouseEvent{X: frag.X + 1, Y: top + frag.Y + 1, Motion: true})
+	if b.hoveredLink() == nil {
+		t.Fatal("hover did not select the link")
+	}
+	b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1, Press: true})
+
+	if got := b.footerLeft(); !strings.Contains(got, "Copied URL") {
+		t.Fatalf("footer = %q, want the copy confirmation", got)
+	}
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || string(decoded) != "https://example.com/story" {
+		t.Fatalf("clipboard text = %q, %v", decoded, err)
+	}
+	if b.status != "Copied URL" {
+		t.Fatalf("status = %q", b.status)
+	}
+}
+
+func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
+	doc := ParseHTML(`<p>Plain text without a link</p>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.layout = BuildLayout(doc, nil, b.width)
+
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: 2, Y: top + 1, Press: true})
+
+	if buf.Len() != 0 {
+		t.Fatalf("right-click away from a link copied %q", buf.String())
+	}
+	if b.status != "" {
+		t.Fatalf("status = %q, want empty", b.status)
+	}
+	if len(b.history) != 0 {
+		t.Fatalf("right-click navigated: %d history entries", len(b.history))
+	}
+}
+
+func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
+	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
+	u := mustParse(t, "https://example.com/news")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.layout = BuildLayout(doc, nil, b.width)
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+
+	var frag *Frag
+	for i := range b.layout.Frags {
+		if b.layout.Frags[i].Kind == fragText && strings.Contains(b.layout.Frags[i].Text, "Story") {
+			frag = &b.layout.Frags[i]
+			break
+		}
+	}
+	if frag == nil {
+		t.Fatal("link text fragment not found")
+	}
+	top, _ := b.viewport()
+	copyAt := func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1, Press: true})
+		// Releasing the button must not hide the confirmation.
+		b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1})
+		if b.status != "Copied URL" {
+			t.Fatalf("status after right-click = %q", b.status)
+		}
+		// A redraw between events must not drop the message.
+		if got := b.footerLeft(); !strings.Contains(got, "Copied URL") {
+			t.Fatalf("footer dropped the confirmation: %q", got)
+		}
+	}
+
+	copyAt()
+	b.HandleMouse(MouseEvent{X: 2, Y: top + 1, Motion: true})
+	if b.status != "" {
+		t.Fatalf("pointer motion did not clear the status: %q", b.status)
+	}
+
+	copyAt()
+	b.scrollBy(1)
+	if b.status != "" {
+		t.Fatalf("scrolling did not clear the status: %q", b.status)
+	}
+}

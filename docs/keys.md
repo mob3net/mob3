@@ -159,7 +159,8 @@ uploads are unsupported.
 - Click the URL bar to open the prompt; click outside to close it.
 - Click in the prompt to move the caret.
 - Click `←`, `→`, `⟳`, `⌂`, History, Bookmarks, Help or `⚙` in the toolbar.
-- Right click goes back; the mouse back/forward buttons navigate.
+- Right click a link to copy its URL (OSC 52); elsewhere it does nothing.
+- The mouse back/forward buttons navigate.
 - Click `Dark:on`/`Dark:off`, `Reader:on`/`Reader:off`,
   `JavaScript:on`/`JavaScript:off` or the `>_` icon in the footer.
 - The wheel scrolls three lines; drag the right-edge scrollbar to jump.

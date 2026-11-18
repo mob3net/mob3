@@ -1668,7 +1668,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click in the URL prompt</td><td>place the caret</td></tr>
 <tr><td>Shift+drag over the URL</td><td>select it with the terminal</td></tr>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
-<tr><td>right click</td><td>go back</td></tr>
+<tr><td>right click a link</td><td>copy its URL</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>i</b></td></tr>
 <tr><td>click the footer <b>JavaScript:on</b>/<b>JavaScript:off</b> label</td><td>toggle JavaScript and reload the page, like <b>J</b></td></tr>

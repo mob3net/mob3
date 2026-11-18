@@ -657,6 +657,11 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.skipDraw = true
 		return false
 	}
+	// The copy confirmation holds the footer line until the pointer moves or
+	// the page scrolls, then normal hover/status reporting resumes.
+	if (ev.Motion || ev.Wheel != 0) && b.status == "Copied URL" {
+		b.status = ""
+	}
 	// A release always ends a scrollbar drag, even when the report also
 	// carries the motion bit or lands on the toolbar, footer or outside the
 	// page. Otherwise the next pointer move would keep scrolling.
@@ -858,8 +863,28 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			b.forward()
 			return false
 		case MouseButtonRight:
-			b.clearInputFocus()
-			b.back()
+			// Copy the link under the pointer instead of navigating; a
+			// right-click away from a link leaves the page alone. Back stays
+			// on the mouse back button and h.
+			if y >= top && y < bottom {
+				docY := b.scroll + (y - top)
+				if n := b.nodeAt(x, docY); n != nil {
+					if a := nearestAnchor(n); a != nil {
+						if href := strings.TrimSpace(a.Attr("href")); href != "" {
+							b.clearInputFocus()
+							target := b.resolveHref(href)
+							if b.copyText(target) {
+								b.status = "Copied URL"
+								// Drop the hovered-link line so the copy
+								// confirmation replaces it in the footer.
+								b.hover = -1
+								b.setPageHover(nil)
+							}
+						}
+					}
+				}
+			}
+			return false
 		case MouseButtonLeft:
 			if y >= top && y < bottom {
 				docY := b.scroll + (y - top)
@@ -915,7 +940,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			b.clickContent(x, b.scroll+(y-top))
 		}
 	}
-	b.updateHover(x, y, top, bottom)
+	// Do not restore the hovered-link line while the copy confirmation is
+	// showing: releasing the right button would otherwise hide it at once.
+	// Pointer motion has already cleared the message, so hover resumes then.
+	if b.status != "Copied URL" {
+		b.updateHover(x, y, top, bottom)
+	}
 	return false
 }
 

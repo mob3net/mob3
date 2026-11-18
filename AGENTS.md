@@ -871,9 +871,13 @@ Standard Go layout:
   caret. Shift+mouse reports are ignored and suppress the next redraw so the
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
-  buttons act on click, right click and the mouse back button go back, the
-  mouse forward button goes forward, clicking the footer `Dark:on`/`Dark:off`
-  or `Reader:on`/`Reader:off` labels toggles those modes, clicking the footer
+  buttons act on click, right-clicking a link copies its resolved URL (OSC 52,
+  status `Copied URL`, like `y`, which replaces the hovered-link line and holds
+  until the pointer moves or the page scrolls) and does nothing elsewhere, the
+  mouse back button goes back, the mouse forward button goes forward, clicking
+  the footer
+  `Dark:on`/`Dark:off` or `Reader:on`/`Reader:off` labels toggles those modes,
+  clicking the footer
   `JavaScript:on`/`JavaScript:off` label toggles scripting for the session and
   reloads the page, clicking the footer
   `>_` icon toggles the JS console (and closes it while open), and the wheel
@@ -1566,9 +1570,9 @@ Standard Go layout:
   GET/POST submission;
   multipart/file uploads are not implemented (clicking a file input shows an
   unsupported notice). Mouse support covers
-  click-to-follow, page drag selection, the URL prompt, right-click back and
-  wheel scrolling. `y` copies selected page text through OSC 52; terminal-native
-  Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API
+  click-to-follow, page drag selection, the URL prompt, right-click link-URL
+  copy and wheel scrolling. `y` copies selected page text through OSC 52;
+  terminal-native Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API
   remains unsupported.
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
