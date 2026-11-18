@@ -307,3 +307,22 @@ func TestFlexAutoMarginPushesItemRight(t *testing.T) {
 	}
 	t.Fatal("auto-margin item text missing")
 }
+
+func TestDisplayContentsChildrenSumInFlexItemWidth(t *testing.T) {
+	doc := ParseHTML(`<div style="display:flex;justify-content:space-between;width:600px">
+		<div id="left" style="display:flex;flex:none"><div style="display:contents">
+			<span>US</span><span>World</span><span>Politics</span></div></div>
+		<div id="right">Sign</div></div>`)
+	ly := BuildLayout(doc, nil, 75)
+	left := ly.Boxes[findElementByID(doc, "left")]
+	right := ly.Boxes[findElementByID(doc, "right")]
+	// The contents wrapper's children join the flex row, so their widths add
+	// up (US + World + Politics = 15 cells plus spacing) instead of the item
+	// collapsing to the widest child.
+	if left.W < 15 {
+		t.Fatalf("contents flex item width = %d, want at least the 15 cells of its links", left.W)
+	}
+	if right.X < left.X+left.W {
+		t.Fatalf("right item at x=%d overlaps the %d-wide contents item at x=%d", right.X, left.W, left.X)
+	}
+}

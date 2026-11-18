@@ -459,7 +459,10 @@ Standard Go layout:
   consecutive inline children are measured as one line (their widths add),
   while block children stack and only the widest counts, so a flex item or
   shrink-to-fit box holding an inline menu reserves the whole menu row.
-  Whitespace crossing an inline-box boundary collapses to one space.
+  `display:contents` wrappers are flattened before measurement, so their
+  children add like direct children instead of collapsing the container to the
+  widest child and letting neighbours overlap. Whitespace crossing an
+  inline-box boundary collapses to one space.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
   `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
   are hidden (`display:none`) to avoid rendering them as one-character columns

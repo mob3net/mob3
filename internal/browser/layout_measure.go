@@ -68,6 +68,21 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 	return lineMax, wordMax
 }
 
+// flowChildren returns n's children with display:contents wrappers expanded in
+// place, so their children are measured in the same formatting context as the
+// rest of the container instead of behaving like one nested block.
+func flowChildren(n *Node) []*Node {
+	var out []*Node
+	for _, c := range n.Children {
+		if c.Type == ElementNode && c.Style != nil && c.Style.Display == "contents" {
+			out = append(out, flowChildren(c)...)
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 func (l *layouter) measure(n *Node) (maxW, minW int) {
 	if n == nil {
 		return 0, 0
@@ -87,20 +102,29 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	}
 	st := n.Style
 	if st.Display == "contents" {
-		maxW, minW := 0, 0
-		for _, c := range n.Children {
+		// A contents box has no box of its own: its children join the
+		// parent's inline or flex run, so their widths add up instead of the
+		// widest one winning. Treating it as a block used to collapse nav
+		// rows to the widest link and make the neighbours overlap.
+		total := 0
+		space := false
+		for _, c := range flowChildren(n) {
 			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 				continue
 			}
 			mw, mi := l.measure(c)
-			if mw > maxW {
-				maxW = mw
+			if space && (mw > 0 || mi > 0) {
+				total++
 			}
+			total += mw
 			if mi > minW {
 				minW = mi
 			}
+			if c.Type == TextNode || mw > 0 || mi > 0 {
+				space = true
+			}
 		}
-		return maxW, minW
+		return total, minW
 	}
 	if n.Tag == "img" {
 		cw, _ := imageSize(n, st, 1000, l.imageCapWidth())
@@ -167,7 +191,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			lineW, lineMin = 0, 0
 			space = false
 		}
-		for _, c := range n.Children {
+		for _, c := range flowChildren(n) {
 			if c.Type == ElementNode && (c.Style == nil || c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 				continue
 			}
@@ -222,7 +246,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 	// the minimum width is the widest unbreakable piece.
 	total := 0
 	space := false
-	for _, c := range n.Children {
+	for _, c := range flowChildren(n) {
 		if c.Type == ElementNode && c.Style != nil && (c.Style.Display == "none" || isOutOfFlow(c.Style)) {
 			continue
 		}
