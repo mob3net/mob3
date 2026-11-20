@@ -361,3 +361,26 @@ func TestFlexItemRespectsMaxWidth(t *testing.T) {
 		t.Fatalf("sidebar at x=%d overlaps the main column ending at %d", side.X, main.X+main.W)
 	}
 }
+
+func TestFlexGrowFillsSpaceLeftByMaxWidth(t *testing.T) {
+	// A `flex:0 0 100%` column capped by max-width must not consume the row's
+	// free space: the flex:1 sibling grows into it. Site headers rely on this
+	// (a fixed 312px rail beside a flex:1 content column); leaving the space
+	// unclaimed narrowed the content column and made every card taller.
+	doc := ParseHTML(`<div style="display:flex;width:160px">` +
+		`<div id="main" style="flex:1">content</div>` +
+		`<div id="side" style="flex:0 0 100%;max-width:40px">side</div>` +
+		`</div>`)
+	ly := BuildLayout(doc, nil, 177)
+	main := ly.Boxes[findElementByID(doc, "main")]
+	side := ly.Boxes[findElementByID(doc, "side")]
+	if side.W != 5 {
+		t.Fatalf("side width = %d, want the 40px max-width", side.W)
+	}
+	if main.W != 15 {
+		t.Fatalf("main width = %d, want it to fill the remaining 15 cells", main.W)
+	}
+	if side.X != main.X+main.W {
+		t.Fatalf("side at x=%d, want it right after the main column ending at %d", side.X, main.X+main.W)
+	}
+}

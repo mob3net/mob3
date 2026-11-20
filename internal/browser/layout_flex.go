@@ -94,19 +94,21 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	}
 	widths := make([]int, len(items))
 	grow := make([]float64, len(items))
+	maxTotals := make([]int, len(items))
 	fixed := 0
 	growTotal := 0.0
 	for i, it := range items {
 		st := it.Style
 		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
 		extra := ml + mr + bl + br + pl + pr
+		maxTotals[i] = l.flexMaxTotal(st, extra, availW)
 		switch {
 		case st.FlexBasisSet:
 			basis := l.widthValue(st, st.FlexBasis, availW)
 			if basis < 0 {
 				basis = 0
 			}
-			widths[i] = basis + extra
+			widths[i] = l.clampFlexWidth(st, basis+extra, extra, availW)
 			if widths[i] < 1 {
 				widths[i] = 1
 			}
@@ -116,7 +118,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 				growTotal += st.FlexGrow
 			}
 		case st.Width.Set && !st.Width.IsAuto():
-			w := l.widthValue(st, st.Width, availW) + extra
+			w := l.clampFlexWidth(st, l.widthValue(st, st.Width, availW)+extra, extra, availW)
 			if w < 1 {
 				w = 1
 			}
@@ -131,7 +133,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			growTotal += st.FlexGrow
 		default:
 			mw, _ := l.measure(it)
-			w := mw + extra
+			w := l.clampFlexWidth(st, mw+extra, extra, availW)
 			if w < 1 {
 				w = 1
 			}
@@ -139,12 +141,8 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			fixed += w
 		}
 	}
-	if remaining := totalAvail - fixed; remaining > 0 && growTotal > 0 {
-		for i := range items {
-			if grow[i] > 0 {
-				widths[i] += int(float64(remaining) * grow[i] / growTotal)
-			}
-		}
+	if growTotal > 0 {
+		distributeGrow(widths, grow, maxTotals, totalAvail-fixed)
 	}
 	mins := make([]int, len(items))
 	for i, it := range items {
@@ -367,4 +365,102 @@ func flexShrinkOf(n *Node) float64 {
 		return 1
 	}
 	return n.Style.FlexShrink
+}
+
+// clampFlexWidth applies an item's min-width/max-width to a border-box width.
+// This must happen before free space is distributed: a `flex-basis:100%` item
+// capped by `max-width` otherwise consumes the whole row and leaves the
+// growing sibling nothing to fill.
+func (l *layouter) clampFlexWidth(st *Style, w, extra, availW int) int {
+	if st == nil {
+		return w
+	}
+	minTotal, maxTotal := 0, 0
+	if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+		if v := l.widthValue(st, st.MinWidth, availW); v >= 0 {
+			minTotal = v + extra
+		}
+	}
+	if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+		if v := l.widthValue(st, st.MaxWidth, availW); v >= 0 {
+			maxTotal = v + extra
+		}
+	}
+	if maxTotal > 0 {
+		if minTotal > maxTotal {
+			maxTotal = minTotal
+		}
+		if w > maxTotal {
+			w = maxTotal
+		}
+	}
+	if minTotal > 0 && w < minTotal {
+		w = minTotal
+	}
+	return w
+}
+
+// flexMaxTotal returns an item's max-width as a border-box total, or 0 when it
+// is not set.
+func (l *layouter) flexMaxTotal(st *Style, extra, availW int) int {
+	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() {
+		return 0
+	}
+	w := l.widthValue(st, st.MaxWidth, availW)
+	if w < 0 {
+		return 0
+	}
+	return w + extra
+}
+
+// distributeGrow hands free space to growing items without pushing any of them
+// past its max-width. Space an item cannot take is redistributed to the others,
+// so a `max-width` column does not silently swallow the row's leftover space.
+func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int) {
+	for pass := 0; pass < 8 && remaining > 0; pass++ {
+		totalGrow := 0.0
+		for i := range widths {
+			if grow[i] <= 0 {
+				continue
+			}
+			if maxTotals[i] > 0 && widths[i] >= maxTotals[i] {
+				continue
+			}
+			totalGrow += grow[i]
+		}
+		if totalGrow == 0 {
+			return
+		}
+		added := 0
+		for i := range widths {
+			if remaining <= 0 {
+				break
+			}
+			if grow[i] <= 0 {
+				continue
+			}
+			if maxTotals[i] > 0 && widths[i] >= maxTotals[i] {
+				continue
+			}
+			add := int(float64(remaining) * grow[i] / totalGrow)
+			if add < 1 {
+				add = 1
+			}
+			if add > remaining {
+				add = remaining
+			}
+			if maxTotals[i] > 0 && widths[i]+add > maxTotals[i] {
+				add = maxTotals[i] - widths[i]
+			}
+			if add <= 0 {
+				continue
+			}
+			widths[i] += add
+			remaining -= add
+			added += add
+		}
+		if added == 0 {
+			return
+		}
+	}
 }
