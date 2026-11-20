@@ -5,6 +5,57 @@ import (
 	"testing"
 )
 
+func TestGridAutoTrackSizedToContent(t *testing.T) {
+	// `auto 1fr` is the common thumbnail + text pattern. The auto track must
+	// take the thumbnail's content width instead of collapsing to one cell for
+	// the fr track to fill; otherwise images are squeezed into a vertical strip.
+	ly := build(`<div style="display:grid;grid-template-columns:auto 1fr;gap:8px">`+
+		`<span style="display:inline-block;width:100%">ABC</span>`+
+		`<div>Story starts here</div></div>`, 40)
+	find := func(text string) *Frag {
+		for i := range ly.Frags {
+			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+				return &ly.Frags[i]
+			}
+		}
+		return nil
+	}
+	thumb, story := find("ABC"), find("Story")
+	if thumb == nil || story == nil {
+		t.Fatalf("missing fragments: thumb=%v story=%v", thumb, story)
+	}
+	if thumb.W != 3 {
+		t.Fatalf("thumbnail width = %d, want 3", thumb.W)
+	}
+	// Auto track (3) + gap (1) puts the text column at 4.
+	if story.X != thumb.X+thumb.W+1 {
+		t.Fatalf("story text x = %d, want %d (auto track must be content-sized)", story.X, thumb.X+thumb.W+1)
+	}
+}
+
+func TestResolveGridTracksAutoContent(t *testing.T) {
+	tracks := parseGridTracks("auto 1fr", 40, 16)
+	widths := resolveGridTracks(tracks, 40, 1, []int{12, 0}, []int{4, 0})
+	if widths[0] != 12 || widths[1] != 27 {
+		t.Fatalf("widths = %v, want auto=12 fr=27", widths)
+	}
+
+	// A very wide auto item yields space instead of starving the fr track, and
+	// the final scale keeps the row inside the container.
+	widths = resolveGridTracks(tracks, 10, 1, []int{30, 0}, []int{30, 0})
+	if widths[0]+widths[1] > 10 || widths[1] < 1 {
+		t.Fatalf("narrow widths = %v, want the row to fit with a non-empty fr track", widths)
+	}
+
+	// Without a fr track, leftover space is still shared between auto tracks so
+	// plain `auto auto` grids keep filling the row.
+	tracks = parseGridTracks("auto auto", 20, 16)
+	widths = resolveGridTracks(tracks, 20, 0, []int{2, 2}, []int{2, 2})
+	if widths[0] != 10 || widths[1] != 10 {
+		t.Fatalf("auto auto widths = %v, want an even split", widths)
+	}
+}
+
 func TestGridNamedAreasAndAutoTrack(t *testing.T) {
 	ly := build(`<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'heading cta' 'promos promos'">`+
 		`<div style="grid-area:heading">head</div>`+

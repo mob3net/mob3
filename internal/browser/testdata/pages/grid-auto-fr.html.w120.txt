@@ -1,0 +1,4 @@
+ABC First story title wraps inside the remaining column.
+
+
+ABCDE Second story text

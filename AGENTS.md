@@ -207,7 +207,7 @@ Standard Go layout:
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
 | `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement and alt labels. |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
-| `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. |
+| `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing/shrinking, wrapping and line placement. |
 | `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. |
 | `layout_links.go` | Link rectangles, overlay anchors and fixed-scroll re-anchoring. |
@@ -369,7 +369,14 @@ Standard Go layout:
 - **CSS grid:** `display:grid` lays children in row-major order over tracks
   parsed from `grid-template-columns` (lengths, percentages, `fr`, `auto`,
   `repeat()`, `minmax()`, named lines), honours `gap`/`column-gap`/`row-gap`,
-  `grid-column`/`span`, and sizes row heights from the tallest item. Dense grids
+  `grid-column`/`span`, and sizes row heights from the tallest item. An `auto`
+  track takes the max-content width of the items placed in it (spanned items
+  spread their deficit over the columns they cover), shrinks toward its
+  min-content width when the row is too narrow, and the `fr` tracks then split
+  what remains. That keeps the common `auto 1fr` thumbnail-beside-text row from
+  collapsing the thumbnail column to one cell and stretching the image
+  vertically. With no `fr` track, leftover space is shared between the `auto`
+  tracks so plain `auto auto` rows still fill the width. Dense grids
   whose average track would be under 6 cells fall back to block flow so text
   stays readable. Named `grid-template-areas` place children by their
   `grid-area` name; a name spanning several columns starts a new row when it

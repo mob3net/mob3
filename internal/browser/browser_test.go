@@ -36,7 +36,7 @@ func TestGridTracksAndPlacement(t *testing.T) {
 	if len(tracks) != 2 || tracks[0].flex != 1 || tracks[1].flex != 2 {
 		t.Fatalf("tracks = %+v", tracks)
 	}
-	widths := resolveGridTracks(tracks, 90, 0)
+	widths := resolveGridTracks(tracks, 90, 0, nil, nil)
 	if widths[0] != 30 || widths[1] != 60 {
 		t.Fatalf("widths = %v", widths)
 	}

@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+<title>Grid auto and fr tracks</title>
+<style>
+body { margin: 0; }
+.story { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-bottom: 8px; }
+.thumb { display: inline-block; width: 100%; background: #dddddd; }
+.title { background: #eeeeee; }
+</style>
+</head>
+<body>
+<div class="story"><span class="thumb">ABC</span><div class="title">First story title wraps inside the remaining column.</div></div>
+<div class="story"><span class="thumb">ABCDE</span><div class="title">Second story text</div></div>
+</body>
+</html>

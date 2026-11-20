@@ -140,7 +140,12 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 	return out, lines
 }
 
-func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
+// resolveGridTracks distributes the container width over the parsed tracks.
+// Fixed tracks keep their declared width, auto tracks take their content width
+// (capped by the space left after fixed tracks), and fr tracks split what
+// remains. When no fr track exists, leftover space is shared between auto
+// tracks so plain `auto auto` grids still fill the row.
+func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent []int) []int {
 	if len(tracks) == 0 {
 		return nil
 	}
@@ -153,6 +158,11 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
 			flexTotal += t.flex
 		} else if t.auto {
 			autoCount++
+			w := 1
+			if i < len(content) && content[i] > w {
+				w = content[i]
+			}
+			widths[i] = w
 		} else {
 			widths[i] = t.fixed
 			fixedTotal += t.fixed
@@ -162,19 +172,39 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
 	if remaining < 0 {
 		remaining = 0
 	}
+	autoTotal := 0
+	for i, t := range tracks {
+		if t.auto {
+			autoTotal += widths[i]
+		}
+	}
+	if autoTotal > remaining {
+		// Shrink auto tracks toward their min-content width so the flex tracks
+		// still get room, then leave any remaining overflow to the safety scale
+		// below.
+		shrinkAutoTracks(tracks, widths, minContent, autoTotal-remaining)
+		autoTotal = 0
+		for i, t := range tracks {
+			if t.auto {
+				autoTotal += widths[i]
+			}
+		}
+	}
+	remaining -= autoTotal
+	if remaining < 0 {
+		remaining = 0
+	}
 	if flexTotal > 0 {
 		for i, t := range tracks {
 			if t.flex > 0 {
 				widths[i] = int(float64(remaining) * t.flex / flexTotal)
 			}
 		}
-		remaining = 0
-	}
-	if autoCount > 0 {
+	} else if autoCount > 0 && remaining > 0 {
 		each := remaining / autoCount
 		for i, t := range tracks {
 			if t.auto {
-				widths[i] = each
+				widths[i] += each
 			}
 		}
 	}
@@ -204,6 +234,106 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int) []int {
 		}
 	}
 	return widths
+}
+
+// shrinkAutoTracks removes cells from auto tracks in proportion to their slack
+// above the min-content width, never below one cell.
+func shrinkAutoTracks(tracks []gridTrack, widths, mins []int, deficit int) {
+	for deficit > 0 {
+		slack := 0
+		for i, t := range tracks {
+			if !t.auto {
+				continue
+			}
+			floor := 1
+			if i < len(mins) && mins[i] > floor {
+				floor = mins[i]
+			}
+			if widths[i] > floor {
+				slack += widths[i] - floor
+			}
+		}
+		if slack <= 0 {
+			return
+		}
+		take := maxInt(1, minInt(deficit, slack))
+		removed := 0
+		for i, t := range tracks {
+			if !t.auto {
+				continue
+			}
+			floor := 1
+			if i < len(mins) && mins[i] > floor {
+				floor = mins[i]
+			}
+			if widths[i] <= floor {
+				continue
+			}
+			d := (widths[i] - floor) * take / slack
+			if d > widths[i]-floor {
+				d = widths[i] - floor
+			}
+			if d < 1 {
+				d = 1
+			}
+			widths[i] -= d
+			removed += d
+		}
+		if removed == 0 {
+			return
+		}
+		deficit -= removed
+	}
+}
+
+// gridTrackContent measures the max-content and min-content width each column
+// needs from the items placed in it. Spanned items spread their deficit over
+// the columns they cover, like table column sizing.
+func (l *layouter) gridTrackContent(cells []gridCell, cols int) (content, minContent []int) {
+	content = make([]int, cols)
+	minContent = make([]int, cols)
+	for _, c := range cells {
+		if c.out {
+			continue
+		}
+		span := c.span
+		if span < 1 {
+			span = 1
+		}
+		if c.start < 0 || c.start >= cols {
+			continue
+		}
+		if span > cols-c.start {
+			span = cols - c.start
+		}
+		mw, mi := l.measure(c.node)
+		growTrackSpan(content, c.start, span, mw)
+		growTrackSpan(minContent, c.start, span, mi)
+	}
+	return content, minContent
+}
+
+func growTrackSpan(widths []int, start, span, need int) {
+	if need <= 0 || span < 1 {
+		return
+	}
+	used := 0
+	for i := 0; i < span && start+i < len(widths); i++ {
+		used += widths[start+i]
+	}
+	if need <= used {
+		return
+	}
+	deficit := need - used
+	for i := 0; i < span && start+i < len(widths); i++ {
+		add := deficit / span
+		if i == span-1 {
+			add = deficit - add*i
+		}
+		if widths[start+i]+add > widths[start+i] {
+			widths[start+i] += add
+		}
+	}
 }
 
 func gridPlacement(raw string, cols int) (start, span int, explicit bool) {
@@ -359,8 +489,10 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 	if st.RowGap.Set {
 		rowGap = st.RowGap.resolveH(availW, st.FontSize)
 	}
-	widths := resolveGridTracks(tracks, availW, gap)
 	areas := parseGridAreas(st.GridAreas)
+	cells := gridCells(n, len(tracks), gridLines, areas)
+	content, minContent := l.gridTrackContent(cells, len(tracks))
+	widths := resolveGridTracks(tracks, availW, gap, content, minContent)
 	// An auto track placed by a named area is at least as wide as that area's
 	// content; take the space from fr tracks so a CTA or label does not end up
 	// one character wide.
@@ -419,40 +551,18 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 	col := 0
 	rowH := 0
 	startY := y
-	for _, child := range layoutChildren(n) {
-		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
-			continue
-		}
-		if isOutOfFlow(child.Style) {
+	for _, c := range cells {
+		child := c.node
+		if c.out {
 			l.deferAbsolute(child, x, y)
 			continue
 		}
-		start, span, explicit := gridPlacementNamed(child.Style.GridColumn, len(widths), gridLines)
-		if name := child.Style.GridArea; name != "" {
-			if a, ok := areas[name]; ok {
-				start, span, explicit = a.start, a.span, true
-			}
-		}
-		if explicit && start >= 0 && start < len(widths) {
-			// An explicit placement that would move backwards on the current
-			// row starts a new row (named areas commonly span a full row).
-			if start < col && col > 0 {
-				y += rowH + rowGap
-				rowH = 0
-			}
-			col = start
-		}
-		if span < 1 {
-			span = 1
-		}
-		if span > len(widths) {
-			span = len(widths)
-		}
-		if col+span > len(widths) {
+		if c.wrap {
 			y += rowH + rowGap
 			rowH = 0
-			col = 0
 		}
+		col = c.start
+		span := c.span
 		cellX := colX[col]
 		cellW := 0
 		for i := 0; i < span && col+i < len(widths); i++ {
@@ -478,4 +588,66 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		y += rowH
 	}
 	return y - startY
+}
+
+// gridCell is one grid item's resolved column placement.
+type gridCell struct {
+	node     *Node
+	start    int
+	span     int
+	explicit bool
+	out      bool // out-of-flow item, deferred to the absolute pass
+	wrap     bool // starts a new row before being laid out
+}
+
+// gridCells resolves every item's column start and span in row-major order.
+// Sizing the tracks and laying the items out share this placement, so an item
+// cannot be measured for one column and painted in another.
+func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridAreaSpan) []gridCell {
+	if cols < 1 {
+		return nil
+	}
+	var cells []gridCell
+	col := 0
+	for _, child := range layoutChildren(n) {
+		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
+			continue
+		}
+		if isOutOfFlow(child.Style) {
+			cells = append(cells, gridCell{node: child, out: true})
+			continue
+		}
+		start, span, explicit := gridPlacementNamed(child.Style.GridColumn, cols, lines)
+		if name := child.Style.GridArea; name != "" {
+			if a, ok := areas[name]; ok {
+				start, span, explicit = a.start, a.span, true
+			}
+		}
+		wrap := false
+		if explicit && start >= 0 && start < cols {
+			// An explicit placement that would move backwards on the current
+			// row starts a new row (named areas commonly span a full row).
+			if start < col && col > 0 {
+				wrap = true
+				col = 0
+			}
+			col = start
+		}
+		if span < 1 {
+			span = 1
+		}
+		if span > cols {
+			span = cols
+		}
+		if col+span > cols {
+			wrap = true
+			col = 0
+		}
+		cells = append(cells, gridCell{node: child, start: col, span: span, explicit: explicit, wrap: wrap})
+		col += span
+		if col >= cols {
+			col = 0
+		}
+	}
+	return cells
 }
