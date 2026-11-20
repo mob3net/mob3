@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/grafana/sobek"
 )
@@ -29,6 +31,10 @@ type jsModuleLoader struct {
 	j         *jsRuntime
 	base      *url.URL
 	allowFile bool
+	// mu guards the maps below. Interactive dynamic imports fetch and parse
+	// their graph on a background goroutine while the main thread links and
+	// evaluates other modules.
+	mu sync.Mutex
 
 	// imports is the document's import map. Bare specifiers that it does not
 	// cover fail with a console error.
@@ -71,7 +77,7 @@ func (m *jsModuleLoader) install() {
 	vm := m.j.vm
 	vm.SetGetImportMetaProperties(func(rec sobek.ModuleRecord) []sobek.MetaProperty {
 		u := m.baseString()
-		if v, ok := m.urls[rec]; ok {
+		if v, ok := m.urlFor(rec); ok {
 			u = v
 		}
 		return []sobek.MetaProperty{{Key: "url", Value: vm.ToValue(u)}}
@@ -94,10 +100,27 @@ func (m *jsModuleLoader) baseString() string {
 	return m.base.String()
 }
 
+// jsImportTask is one dynamic import() loaded off the main goroutine. The
+// event loop completes it on the runtime's own goroutine.
+type jsImportTask struct {
+	j    *jsRuntime
+	ref  interface{}
+	spec string
+	pcap interface{}
+	rec  sobek.ModuleRecord
+	err  error
+}
+
 // importModule resolves and loads a dynamic import() target, then hands the
-// record back to the engine. The source is fetched here during the enclosing
-// script run, so the watchdog ignores the network time it spends blocked.
+// record back to the engine. Interactive browsing loads the graph in the
+// background: a module chunk on a slow connection must not freeze the event
+// loop (and with it image loading, drawing and input). Headless runs and the
+// page's own load-time imports stay synchronous, so a dump sees the same DOM.
 func (m *jsModuleLoader) importModule(ref interface{}, spec string, pcap interface{}) {
+	if m.canImportAsync() {
+		go m.loadImportAsync(ref, spec, pcap)
+		return
+	}
 	m.j.ioActive.Store(true)
 	rec, err := m.hostResolve(ref, spec)
 	m.j.ioActive.Store(false)
@@ -108,13 +131,63 @@ func (m *jsModuleLoader) importModule(ref interface{}, spec string, pcap interfa
 	m.j.vm.FinishLoadingImportModule(ref, m.j.vm.ToValue(spec), pcap, mod, err)
 }
 
+// canImportAsync reports whether a dynamic import can wait for the event loop.
+func (m *jsModuleLoader) canImportAsync() bool {
+	b := m.j.b
+	return m.j.loadDone && !m.j.stopped && b != nil && b.interactive && b.importCh != nil
+}
+
+// loadImportAsync fetches and parses a dynamic import's module graph off the
+// main goroutine, then queues the record for the event loop to finish.
+func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap interface{}) {
+	j := m.j
+	task := jsImportTask{j: j, ref: ref, spec: spec, pcap: pcap}
+	from := m.base
+	if rec, ok := ref.(sobek.ModuleRecord); ok {
+		if u, ok := m.urlFor(rec); ok {
+			if parsed, err := url.Parse(u); err == nil {
+				from = parsed
+			}
+		}
+	}
+	if target, err := m.resolveSpecifier(from, spec); err != nil {
+		task.err = err
+	} else if rec, err := m.loadURL(target, target.String(), 0); err != nil {
+		task.err = err
+	} else {
+		task.rec = rec
+	}
+	select {
+	case j.b.importCh <- task:
+	case <-time.After(jsTimeout * 15):
+	}
+}
+
+// finishJSImport completes a background dynamic import on the event loop. The
+// module graph was parsed off-thread, but linking and evaluation run here so
+// the runtime is only ever touched from its own goroutine.
+func (b *Browser) finishJSImport(task jsImportTask) {
+	j := b.js
+	if j == nil || j.stopped || task.j != j {
+		return
+	}
+	if err := j.guard(func() error {
+		j.vm.FinishLoadingImportModule(task.ref, j.vm.ToValue(task.spec), task.pcap, task.rec, task.err)
+		// The continuation jobs were queued outside a script run; drain them.
+		_, err := j.vm.RunString("")
+		return err
+	}); err != nil {
+		j.reportError(err)
+	}
+}
+
 // hostResolve is the host hook the engine calls while linking a module graph.
 // specifiers resolve against the importing module's own URL, falling back to
 // the document URL for classic scripts and inline modules.
 func (m *jsModuleLoader) hostResolve(ref interface{}, spec string) (sobek.ModuleRecord, error) {
 	from := m.base
 	if rec, ok := ref.(sobek.ModuleRecord); ok {
-		if u, ok := m.urls[rec]; ok {
+		if u, ok := m.urlFor(rec); ok {
 			if parsed, err := url.Parse(u); err == nil {
 				from = parsed
 			}
@@ -125,13 +198,43 @@ func (m *jsModuleLoader) hostResolve(ref interface{}, spec string) (sobek.Module
 		return nil, err
 	}
 	key := target.String()
-	if rec, ok := m.byURL[key]; ok {
+	if rec, ok := m.cachedRecord(key); ok {
 		return rec, nil
 	}
-	if err, ok := m.failed[key]; ok {
+	if err := m.cachedFailure(key); err != nil {
 		return nil, err
 	}
 	return m.loadURL(target, key, 0)
+}
+
+// urlFor returns the URL a module record was loaded from.
+func (m *jsModuleLoader) urlFor(rec sobek.ModuleRecord) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.urls[rec]
+	return u, ok
+}
+
+// cachedRecord returns a module already parsed for this URL.
+func (m *jsModuleLoader) cachedRecord(key string) (*sobek.SourceTextModuleRecord, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.byURL[key]
+	return rec, ok
+}
+
+// cachedFailure returns the load error recorded for a URL, if any.
+func (m *jsModuleLoader) cachedFailure(key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.failed[key]
+}
+
+// storeFailure remembers a failed module load so later imports do not retry it.
+func (m *jsModuleLoader) storeFailure(key string, err error) {
+	m.mu.Lock()
+	m.failed[key] = err
+	m.mu.Unlock()
 }
 
 // resolveSpecifier resolves one import specifier. The document's import map is
@@ -224,7 +327,7 @@ func (j *jsRuntime) runModule(sc Script) error {
 		if perr != nil {
 			return fmt.Errorf("invalid module URL %q", sc.Src)
 		}
-		if cached, ok := m.byURL[u.String()]; ok {
+		if cached, ok := m.cachedRecord(u.String()); ok {
 			rec = cached
 		} else {
 			// The loader already fetched this module while collecting the
@@ -251,7 +354,9 @@ func (m *jsModuleLoader) loadInline(code string) (*sobek.SourceTextModuleRecord,
 	if err != nil {
 		return nil, err
 	}
+	m.mu.Lock()
 	m.urls[rec] = m.baseString()
+	m.mu.Unlock()
 	if err := m.prefetch(rec, m.base, 0); err != nil {
 		return nil, err
 	}
@@ -264,9 +369,15 @@ func (m *jsModuleLoader) loadURL(u *url.URL, key string, depth int) (*sobek.Sour
 	if depth > maxModuleDepth {
 		return nil, fmt.Errorf("module import depth limit reached at %s", key)
 	}
+	if rec, ok := m.cachedRecord(key); ok {
+		return rec, nil
+	}
+	if err := m.cachedFailure(key); err != nil {
+		return nil, err
+	}
 	code, err := m.fetchModule(u)
 	if err != nil {
-		m.failed[key] = err
+		m.storeFailure(key, err)
 		return nil, err
 	}
 	return m.parseModule(u, key, code, depth)
@@ -275,20 +386,37 @@ func (m *jsModuleLoader) loadURL(u *url.URL, key string, depth int) (*sobek.Sour
 // parseModule parses and caches one module body, then loads its static
 // dependencies.
 func (m *jsModuleLoader) parseModule(u *url.URL, key, code string, depth int) (*sobek.SourceTextModuleRecord, error) {
+	if rec, ok := m.cachedRecord(key); ok {
+		return rec, nil
+	}
 	if err := m.reserve(len(code)); err != nil {
 		return nil, err
 	}
 	rec, err := sobek.ParseModule(key, code, m.hostResolve)
 	if err != nil {
-		m.failed[key] = err
+		m.storeFailure(key, err)
 		return nil, err
 	}
-	m.byURL[key] = rec
-	m.urls[rec] = key
+	if existing, ok := m.storeRecord(key, rec); ok {
+		return existing, nil
+	}
 	if err := m.prefetch(rec, u, depth); err != nil {
 		return nil, err
 	}
 	return rec, nil
+}
+
+// storeRecord caches a parsed module. If another goroutine parsed the same URL
+// first, the existing record wins and is returned.
+func (m *jsModuleLoader) storeRecord(key string, rec *sobek.SourceTextModuleRecord) (*sobek.SourceTextModuleRecord, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if existing, ok := m.byURL[key]; ok {
+		return existing, true
+	}
+	m.byURL[key] = rec
+	m.urls[rec] = key
+	return rec, false
 }
 
 // prefetch loads every static dependency of a parsed module before linking
@@ -300,10 +428,10 @@ func (m *jsModuleLoader) prefetch(rec *sobek.SourceTextModuleRecord, base *url.U
 			return err
 		}
 		key := target.String()
-		if _, ok := m.byURL[key]; ok {
+		if _, ok := m.cachedRecord(key); ok {
 			continue
 		}
-		if err, ok := m.failed[key]; ok {
+		if err := m.cachedFailure(key); err != nil {
 			return err
 		}
 		if _, err := m.loadURL(target, key, depth+1); err != nil {
@@ -315,6 +443,8 @@ func (m *jsModuleLoader) prefetch(rec *sobek.SourceTextModuleRecord, base *url.U
 
 // reserve applies the graph-wide module and byte caps.
 func (m *jsModuleLoader) reserve(size int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.count >= maxModuleGraph {
 		return fmt.Errorf("module limit reached (%d modules)", maxModuleGraph)
 	}

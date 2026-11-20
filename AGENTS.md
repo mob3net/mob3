@@ -255,7 +255,7 @@ Standard Go layout:
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `DOMParser`/`XMLSerializer`, `DataTransfer`, extra event subclasses, interface constructors (`DOMTokenList`, `CSSStyleDeclaration`, `Storage`, `MediaQueryList`, `TreeWalker`, …), `Element.prototype.matches`/`closest` /vendor-alias delegates, and isolated inert iframe `contentDocument`/`contentWindow`. `localStorage`/`sessionStorage` use the `Storage` prototype so `instanceof` and prototype patches work. Constructable `CSSStyleSheet` accepts `insertRule`/`deleteRule`/`replaceSync`, and `PerformanceObserver.supportedEntryTypes` is an empty list so feature detection that reads it does not throw. |
-| `js_modules.go` | ES modules: the module graph cache, specifier resolution against the importing module's URL, size/depth caps, `import.meta.url`, dynamic import finishing, and linking/evaluation under the script guard. |
+| `js_modules.go` | ES modules: the module graph cache, specifier resolution against the importing module's URL, size/depth caps, `import.meta.url`, dynamic import finishing, and linking/evaluation under the script guard. After the page's own scripts finish, an interactive dynamic import fetches and parses its graph on a background goroutine and the event loop links and evaluates it, so a slow chunk cannot freeze drawing, input or image loading; the graph shares the page's record cache, so a dependency imported by several chunks is fetched and evaluated once. Page-load and headless imports stay synchronous. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
@@ -1226,7 +1226,11 @@ Standard Go layout:
   console instead of becoming a same-origin 404 request. Module fetches use the
   same loader, MIME rule, request log and session cache as classic scripts and
   share the module graph cache, so a dependency imported by several entry
-  modules is evaluated once. `nomodule` scripts are skipped. Custom elements
+  modules is evaluated once. In interactive mode a dynamic `import()` issued
+  after the page settled loads its graph in the background and the event loop
+  completes it, so a slow chunk does not block input, drawing or the image
+  batch; during page load and in dump/automation runs imports stay synchronous.
+  `nomodule` scripts are skipped. Custom elements
   are upgraded: `customElements.define` registers the class, and
   `document.createElement` or the first access to a parsed element of that tag
   runs the class constructor with the element node bound, so field initializers
@@ -1657,7 +1661,9 @@ Standard Go layout:
   `import.meta.resolve` or `import.meta.env`, and module sources are fetched
   while the page is applied, so a slow graph briefly holds up the UI before the
   first paint. A module that fails to load, link or
-  evaluate shows `Module script failed — see ! console` in the footer. Async
+  evaluate shows `Module script failed — see ! console` in the footer. A page
+  that lazily imports many chunks still evaluates each one on the main loop, so
+  a large client-side app can keep a core busy after the first paint. Async
   generator syntax (`async function*`) and `for await` are still a parse error,
   so a script containing them is skipped. Custom elements are constructed
   (field initializers run, `attachShadow` in the constructor works) but

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func moduleTestPage(html, code string) *Page {
@@ -82,6 +83,56 @@ func TestModuleGraphRunsOnceForSharedDependency(t *testing.T) {
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "a1:1:1" {
 		t.Fatalf("shared dependency = %q, want a1:1:1 (log: %s)", got, strings.Join(b.jsLog, "; "))
+	}
+}
+
+func TestAsyncImportsShareModuleRecords(t *testing.T) {
+	// Two dynamic imports of the same URL must evaluate the module once; the
+	// background loader shares the page's module cache instead of parsing a
+	// fresh graph per import.
+	dep := "data:text/javascript,globalThis.hits = (globalThis.hits || 0) + 1;export const n = 1;"
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
+	b := NewBrowser(40, 10)
+	b.interactive = true
+	b.startJS(page)
+	for i := 0; i < 2; i++ {
+		if _, err := b.js.runCode("test",
+			`import("`+dep+`").then(function (m) {`+
+				`document.getElementById("out").textContent = String(globalThis.hits) + ":" + String(m.n);});`); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case task := <-b.importCh:
+			b.finishJSImport(task)
+		case <-time.After(5 * time.Second):
+			t.Fatal("background import did not complete")
+		}
+	}
+	if got := page.Root.FindFirst("p").TextContent(); got != "1:1" {
+		t.Fatalf("shared module evaluated %q, want 1:1", got)
+	}
+}
+
+func TestAsyncDynamicImportCompletes(t *testing.T) {
+	// A dynamic import after the page settled loads in the background; the
+	// event loop completes it and the promise continuation runs.
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
+	b := NewBrowser(40, 10)
+	b.interactive = true
+	b.startJS(page)
+	if _, err := b.js.runCode("test",
+		`import("data:text/javascript,export const v = 9;").then(function (m) {`+
+			`document.getElementById("out").textContent = String(m.v);});`); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case task := <-b.importCh:
+		b.finishJSImport(task)
+	case <-time.After(5 * time.Second):
+		t.Fatal("background import did not complete")
+	}
+	if got := page.Root.FindFirst("p").TextContent(); got != "9" {
+		t.Fatalf("async import = %q, want 9 (log: %s)", got, strings.Join(b.jsLog, "; "))
 	}
 }
 

@@ -166,6 +166,7 @@ func Run(args []string) int {
 		w = *widthFlag
 	}
 	b := NewBrowser(w, h)
+	b.interactive = true
 	b.setLoader(loader)
 	b.reader = *reader
 	b.dark = *dark
@@ -317,6 +318,12 @@ func Run(args []string) int {
 			if !b.applyDeferredImageBatch(batch) {
 				b.skipDraw = true
 			}
+		case task := <-b.importCh:
+			b.finishJSImport(task)
+			if b.js != nil && b.js.consumeDirty() {
+				b.rebuild()
+			}
+			b.consumePendingJS()
 		case <-timerC:
 			// The loop body repaints once per event. Skip that repaint unless a
 			// JS timer rebuilt the page: an idle page must not repaint at every

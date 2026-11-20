@@ -124,6 +124,11 @@ type Browser struct {
 	js            *jsRuntime
 
 	loadCh chan loadResult
+	// interactive marks the terminal UI, where a background dynamic import can
+	// wait for the event loop instead of blocking it.
+	interactive bool
+	// importCh delivers completed background dynamic imports to the event loop.
+	importCh chan jsImportTask
 	// imageCh delivers background image loads for the current page.
 	imageCh        chan imageBatch
 	deferredImages bool
@@ -262,6 +267,7 @@ func NewBrowser(w, h int) *Browser {
 		jsMemLimit:   defaultJSMemoryLimit,
 		layoutBudget: DefaultLayoutBudget,
 		loadCh:       make(chan loadResult, 1),
+		importCh:     make(chan jsImportTask, 16),
 		imageCh:      make(chan imageBatch, 1),
 		home:         "about:home",
 	}

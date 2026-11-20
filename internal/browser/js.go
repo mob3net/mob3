@@ -91,6 +91,9 @@ type jsRuntime struct {
 	blobURLs  map[string]*sobek.Object
 	blobSeq   int64
 
+	// loadDone marks that the page's own scripts have finished, so a dynamic
+	// import() may be loaded in the background instead of blocking the loop.
+	loadDone bool
 	timers   map[int]*jsTimer
 	nextID   int
 	dirty    bool
@@ -338,6 +341,7 @@ func (b *Browser) startJS(page *Page) {
 	j.currentScript = nil
 	j.fireDocumentEvent("DOMContentLoaded")
 	j.fireWindowEvent("load")
+	j.loadDone = true
 }
 
 func removeNoscript(root *Node) {
