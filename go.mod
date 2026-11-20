@@ -5,7 +5,7 @@ go 1.27
 toolchain go1.27.4
 
 require (
-	github.com/dop251/goja v0.0.0-20261107161106-d6eaa50db8bc
+	github.com/dop251/goja v0.0.0-20261118204651-8dfece3d1e1d
 	github.com/go-gfx/oksvg v0.4.0
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	golang.org/x/image v0.48.0

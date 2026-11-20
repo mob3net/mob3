@@ -4,6 +4,8 @@ github.com/dlclark/regexp2/v2 v2.11.0 h1:z5uRPHav+eTVpoffDSuUP2KPS4f1ONZaPDK73S8
 github.com/dlclark/regexp2/v2 v2.11.0/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
 github.com/dop251/goja v0.0.0-20261107161106-d6eaa50db8bc h1:4Sczgv7bAN62viekFz9wTF9PuXitaeyYKCSAICJwD6o=
 github.com/dop251/goja v0.0.0-20261107161106-d6eaa50db8bc/go.mod h1:L1yoLBco9M3b2Gdh1UZHg+BIePeAdV1bwknaLLxAgoc=
+github.com/dop251/goja v0.0.0-20261118204651-8dfece3d1e1d h1:MG+QmJk8N7lfsvBndLoPAIYhjYtJCEHMID11PskskTY=
+github.com/dop251/goja v0.0.0-20261118204651-8dfece3d1e1d/go.mod h1:L1yoLBco9M3b2Gdh1UZHg+BIePeAdV1bwknaLLxAgoc=
 github.com/go-gfx/oksvg v0.4.0 h1:FqZldnC3TlHEZ8TwglqWyVO6y+C4eeWfAhL1SDoD628=
 github.com/go-gfx/oksvg v0.4.0/go.mod h1:b6zcMuvekE/5oApVUsTUW3IDSDWX6bKV/r42N79gbJQ=
 github.com/go-sourcemap/sourcemap v2.1.3+incompatible h1:W1iEw64niKVGogNgBN3ePyLFfuisuzeidWPMPWmECqU=
