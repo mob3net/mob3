@@ -69,7 +69,9 @@ written in Go
 - **Documentation split.** Keep `README.md` short and user-facing: the basics,
   how to run (including Docker) and what sites/features to expect. Detailed
   flags live in `mob3 -h`, and keys/mouse/forms live in the in-app `about:help`
-  page; do not duplicate those lists in the README. Keep this file
+  page; do not duplicate those lists in the README. Do not hard-wrap README
+  prose: one line per paragraph or list item, letting the viewer reflow it;
+  only code blocks, tables and HTML stay structured. Keep this file
   decision-facing;
 
 ## 2. Non-negotiable constraints
