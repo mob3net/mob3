@@ -26,6 +26,91 @@ func (j *jsRuntime) method(o *goja.Object, name string, fn func(goja.FunctionCal
 	_ = o.Set(name, j.vm.ToValue(fn))
 }
 
+// protoAccessor defines one shared accessor on a prototype. The node is
+// resolved from the receiver, so a single getter/setter pair serves every
+// element instead of allocating a closure per wrapper (the per-element cost
+// dominated JS-heavy pages' memory).
+func (j *jsRuntime) protoAccessor(p *goja.Object, name string, get func(n *Node) goja.Value, set func(n *Node, v goja.Value)) {
+	if p == nil {
+		return
+	}
+	var g, s goja.Value
+	if get != nil {
+		g = j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+			n := j.thisNode(call)
+			if n == nil {
+				return goja.Undefined()
+			}
+			return get(n)
+		})
+	}
+	if set != nil {
+		s = j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+			n := j.thisNode(call)
+			if n == nil {
+				return goja.Undefined()
+			}
+			set(n, call.Argument(0))
+			return goja.Undefined()
+		})
+	}
+	_ = p.DefineAccessorProperty(name, g, s, goja.FLAG_TRUE, goja.FLAG_FALSE)
+}
+
+// protoMethod defines one shared method on a prototype.
+func (j *jsRuntime) protoMethod(p *goja.Object, name string, fn func(n *Node, call goja.FunctionCall) goja.Value) {
+	if p == nil {
+		return
+	}
+	_ = p.Set(name, j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		n := j.thisNode(call)
+		if n == nil {
+			return goja.Undefined()
+		}
+		return fn(n, call)
+	}))
+}
+
+// thisNode resolves the wrapper that received a prototype accessor or method.
+func (j *jsRuntime) thisNode(call goja.FunctionCall) *Node {
+	if o, ok := call.This.(*goja.Object); ok {
+		return j.rev[o]
+	}
+	return nil
+}
+
+// initTextInstance sets the per-object fields of a text wrapper. Everything
+// else is shared through the prototype.
+func (j *jsRuntime) initTextInstance(o *goja.Object) {
+	_ = o.Set("nodeType", 3)
+	_ = o.Set("nodeName", "#text")
+	_ = o.Set("tagName", "")
+}
+
+// initElementInstance sets the per-object fields of an element wrapper and
+// installs the tag-specific extras (canvas context, dialog/form methods).
+func (j *jsRuntime) initElementInstance(o *goja.Object, n *Node) {
+	nodeType := 1
+	nodeName := strings.ToUpper(n.Tag)
+	if n.Tag == "#fragment" {
+		// document.createDocumentFragment returns a lightweight node stored as
+		// an element; scripts (jQuery especially) branch on nodeType 11.
+		nodeType = 11
+		nodeName = "#document-fragment"
+	}
+	_ = o.Set("nodeType", nodeType)
+	_ = o.Set("tagName", strings.ToUpper(n.Tag))
+	_ = o.Set("nodeName", nodeName)
+	switch n.Tag {
+	case "canvas":
+		j.initCanvasObject(o, n)
+	case "dialog":
+		j.initDialogObject(o, n)
+	case "form":
+		j.initFormObject(o, n)
+	}
+}
+
 func (j *jsRuntime) unwrap(v goja.Value) *Node {
 	if o, ok := v.(*goja.Object); ok {
 		return j.rev[o]
@@ -215,93 +300,79 @@ func (j *jsRuntime) wrap(n *Node) goja.Value {
 	j.rev[o] = n
 	if n.Type == TextNode {
 		j.setElementPrototype(o, n)
-		j.initTextObject(o, n)
+		j.initTextInstance(o)
 	} else {
 		j.setElementPrototype(o, n)
-		j.initElementObject(o, n)
+		j.initElementInstance(o, n)
 	}
 	return o
 }
 
-func (j *jsRuntime) initTextObject(o *goja.Object, n *Node) {
-	_ = o.Set("nodeType", 3)
-	_ = o.Set("nodeName", "#text")
-	_ = o.Set("tagName", "")
+func (j *jsRuntime) initTextProto(p *goja.Object) {
 	// Text nodes are Nodes too. jQuery (and plugins such as custom-scrollbar)
 	// call `node.ownerDocument`, `childNodes` and `contains` on every node in a
 	// collection, including text nodes; a missing `ownerDocument` made
 	// `wrapAll` throw and left the plugin's DOM surgery half-applied.
-	j.accessor(o, "ownerDocument", func() goja.Value { return j.docObj }, nil)
-	j.accessor(o, "parentElement", func() goja.Value {
+	j.protoAccessor(p, "ownerDocument", func(n *Node) goja.Value { return j.docObj }, nil)
+	j.protoAccessor(p, "parentElement", func(n *Node) goja.Value {
 		if n.Parent != nil && n.Parent.Type == ElementNode {
 			return j.wrap(n.Parent)
 		}
 		return goja.Null()
 	}, nil)
-	j.accessor(o, "isConnected", func() goja.Value { return j.vm.ToValue(isConnected(n)) }, nil)
-	j.accessor(o, "childNodes", func() goja.Value { return j.vm.NewArray() }, nil)
-	j.accessor(o, "children", func() goja.Value { return j.vm.NewArray() }, nil)
-	j.accessor(o, "childElementCount", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "firstChild", func() goja.Value { return goja.Null() }, nil)
-	j.accessor(o, "lastChild", func() goja.Value { return goja.Null() }, nil)
-	j.accessor(o, "firstElementChild", func() goja.Value { return goja.Null() }, nil)
-	j.accessor(o, "lastElementChild", func() goja.Value { return goja.Null() }, nil)
-	j.method(o, "hasChildNodes", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
-	j.method(o, "contains", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
-	j.method(o, "getRootNode", func(goja.FunctionCall) goja.Value { return j.docObj })
-	j.accessor(o, "textContent", func() goja.Value {
+	j.protoAccessor(p, "isConnected", func(n *Node) goja.Value { return j.vm.ToValue(isConnected(n)) }, nil)
+	j.protoAccessor(p, "childNodes", func(n *Node) goja.Value { return j.vm.NewArray() }, nil)
+	j.protoAccessor(p, "children", func(n *Node) goja.Value { return j.vm.NewArray() }, nil)
+	j.protoAccessor(p, "childElementCount", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "firstChild", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoAccessor(p, "lastChild", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoAccessor(p, "firstElementChild", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoAccessor(p, "lastElementChild", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoMethod(p, "hasChildNodes", func(n *Node, _ goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.protoMethod(p, "contains", func(n *Node, _ goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.protoMethod(p, "getRootNode", func(n *Node, _ goja.FunctionCall) goja.Value { return j.docObj })
+	j.protoAccessor(p, "textContent", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.Text)
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		n.Text = v.String()
 		j.markDirty()
 	})
-	j.accessor(o, "nodeValue", func() goja.Value {
+	j.protoAccessor(p, "nodeValue", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.Text)
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		n.Text = v.String()
 		j.markDirty()
 	})
-	j.accessor(o, "parentNode", func() goja.Value { return j.wrap(n.Parent) }, nil)
-	j.accessor(o, "nextSibling", func() goja.Value { return j.wrap(nextSiblingNode(n)) }, nil)
-	j.accessor(o, "previousSibling", func() goja.Value { return j.wrap(prevSiblingNode(n)) }, nil)
-	j.method(o, "remove", func(goja.FunctionCall) goja.Value {
+	j.protoAccessor(p, "parentNode", func(n *Node) goja.Value { return j.wrap(n.Parent) }, nil)
+	j.protoAccessor(p, "nextSibling", func(n *Node) goja.Value { return j.wrap(nextSiblingNode(n)) }, nil)
+	j.protoAccessor(p, "previousSibling", func(n *Node) goja.Value { return j.wrap(prevSiblingNode(n)) }, nil)
+	j.protoMethod(p, "remove", func(n *Node, _ goja.FunctionCall) goja.Value {
 		detach(n)
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "cloneNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "cloneNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.wrap(cloneNode(n, call.Argument(0).ToBoolean()))
 	})
 }
 
-func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
-	nodeType := 1
-	nodeName := strings.ToUpper(n.Tag)
-	if n.Tag == "#fragment" {
-		// document.createDocumentFragment returns a lightweight node stored as
-		// an element; scripts (jQuery especially) branch on nodeType 11.
-		nodeType = 11
-		nodeName = "#document-fragment"
-	}
-	_ = o.Set("nodeType", nodeType)
-	_ = o.Set("tagName", strings.ToUpper(n.Tag))
-	_ = o.Set("nodeName", nodeName)
-	j.accessor(o, "id", func() goja.Value { return j.vm.ToValue(attrValue(n, "id")) }, func(v goja.Value) {
+func (j *jsRuntime) initElementProto(p *goja.Object) {
+	j.protoAccessor(p, "id", func(n *Node) goja.Value { return j.vm.ToValue(attrValue(n, "id")) }, func(n *Node, v goja.Value) {
 		setAttr(n, "id", v.String())
 		j.markDirty()
 	})
-	j.accessor(o, "className", func() goja.Value { return j.vm.ToValue(attrValue(n, "class")) }, func(v goja.Value) {
+	j.protoAccessor(p, "className", func(n *Node) goja.Value { return j.vm.ToValue(attrValue(n, "class")) }, func(n *Node, v goja.Value) {
 		setAttr(n, "class", v.String())
 		j.markDirty()
 	})
 	reflectString := func(jsName, attr string) {
-		j.accessor(o, jsName, func() goja.Value { return j.vm.ToValue(attrValue(n, attr)) }, func(v goja.Value) {
+		j.protoAccessor(p, jsName, func(n *Node) goja.Value { return j.vm.ToValue(attrValue(n, attr)) }, func(n *Node, v goja.Value) {
 			setAttr(n, attr, v.String())
 			j.markDirty()
 		})
 	}
 	reflectBool := func(jsName, attr string) {
-		j.accessor(o, jsName, func() goja.Value { return j.vm.ToValue(n.HasAttr(attr)) }, func(v goja.Value) {
+		j.protoAccessor(p, jsName, func(n *Node) goja.Value { return j.vm.ToValue(n.HasAttr(attr)) }, func(n *Node, v goja.Value) {
 			if v.ToBoolean() {
 				setAttr(n, attr, "")
 			} else {
@@ -317,9 +388,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 	reflectString("slot", "slot")
 	reflectBool("hidden", "hidden")
 	reflectBool("inert", "inert")
-	j.accessor(o, "draggable", func() goja.Value {
+	j.protoAccessor(p, "draggable", func(n *Node) goja.Value {
 		return j.vm.ToValue(attrValue(n, "draggable") == "true")
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		if v.ToBoolean() {
 			setAttr(n, "draggable", "true")
 		} else {
@@ -327,12 +398,12 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "spellcheck", func() goja.Value {
+	j.protoAccessor(p, "spellcheck", func(n *Node) goja.Value {
 		if attrValue(n, "spellcheck") == "false" {
 			return j.vm.ToValue(false)
 		}
 		return j.vm.ToValue(true)
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		if v.ToBoolean() {
 			setAttr(n, "spellcheck", "true")
 		} else {
@@ -340,9 +411,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "translate", func() goja.Value {
+	j.protoAccessor(p, "translate", func(n *Node) goja.Value {
 		return j.vm.ToValue(attrValue(n, "translate") != "no")
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		if v.ToBoolean() {
 			setAttr(n, "translate", "yes")
 		} else {
@@ -350,44 +421,44 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "contentEditable", func() goja.Value {
+	j.protoAccessor(p, "contentEditable", func(n *Node) goja.Value {
 		if v := attrValue(n, "contenteditable"); v != "" {
 			return j.vm.ToValue(v)
 		}
 		return j.vm.ToValue("inherit")
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		setAttr(n, "contenteditable", v.String())
 		j.markDirty()
 	})
-	j.accessor(o, "isContentEditable", func() goja.Value {
+	j.protoAccessor(p, "isContentEditable", func(n *Node) goja.Value {
 		return j.vm.ToValue(isEditableNode(n))
 	}, nil)
-	j.accessor(o, "tabIndex", func() goja.Value {
+	j.protoAccessor(p, "tabIndex", func(n *Node) goja.Value {
 		return j.vm.ToValue(nodeTabIndex(n))
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		setAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
 		j.markDirty()
 	})
-	j.accessor(o, "outerText", func() goja.Value {
+	j.protoAccessor(p, "outerText", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.TextContent())
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		replaceNodeWithText(n, v.String())
 		j.markDirty()
 	})
-	j.accessor(o, "href", func() goja.Value { return j.vm.ToValue(attrValue(n, "href")) }, func(v goja.Value) {
+	j.protoAccessor(p, "href", func(n *Node) goja.Value { return j.vm.ToValue(attrValue(n, "href")) }, func(n *Node, v goja.Value) {
 		setAttr(n, "href", v.String())
 		j.markDirty()
 	})
-	j.accessor(o, "value", func() goja.Value {
+	j.protoAccessor(p, "value", func(n *Node) goja.Value {
 		return j.vm.ToValue(inputValue(n))
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		n.Value = v.String()
 		n.ValueSet = true
 		j.markDirty()
 	})
-	j.accessor(o, "checked", func() goja.Value {
+	j.protoAccessor(p, "checked", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.HasAttr("checked"))
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		if v.ToBoolean() {
 			setAttr(n, "checked", "")
 		} else {
@@ -395,53 +466,45 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "form", func() goja.Value {
+	j.protoAccessor(p, "form", func(n *Node) goja.Value {
 		return j.wrap(nearestForm(n))
 	}, nil)
 	for jsName, attrName := range map[string]string{
 		"src": "src", "alt": "alt", "width": "width", "height": "height",
 	} {
 		jsName, attrName := jsName, attrName
-		j.accessor(o, jsName, func() goja.Value {
+		j.protoAccessor(p, jsName, func(n *Node) goja.Value {
 			return j.vm.ToValue(attrValue(n, attrName))
-		}, func(v goja.Value) {
+		}, func(n *Node, v goja.Value) {
 			setAttr(n, attrName, v.String())
 			j.markDirty()
 		})
 	}
-	j.accessor(o, "complete", func() goja.Value { return j.vm.ToValue(true) }, nil)
-	j.accessor(o, "naturalWidth", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "naturalHeight", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	if n.Tag == "canvas" {
-		j.initCanvasObject(o, n)
-	}
-	if n.Tag == "dialog" {
-		j.initDialogObject(o, n)
-	}
-	if n.Tag == "form" {
-		j.initFormObject(o, n)
-	}
-	vw, vh := j.b.width*8, j.b.height*16
-	metric := func(width bool) func() goja.Value {
-		return func() goja.Value {
+	j.protoAccessor(p, "complete", func(n *Node) goja.Value { return j.vm.ToValue(true) }, nil)
+	j.protoAccessor(p, "naturalWidth", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "naturalHeight", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	metric := func(width bool) func(n *Node) goja.Value {
+		return func(n *Node) goja.Value {
+			vw, vh := j.b.width*8, j.b.height*16
 			if width {
 				return j.vm.ToValue(j.elementWidthPx(n, vw))
 			}
 			return j.vm.ToValue(j.elementHeightPx(n, vh))
 		}
 	}
-	j.accessor(o, "clientWidth", metric(true), nil)
-	j.accessor(o, "clientHeight", metric(false), nil)
-	j.accessor(o, "offsetWidth", metric(true), nil)
-	j.accessor(o, "offsetHeight", metric(false), nil)
-	j.accessor(o, "scrollWidth", metric(true), nil)
-	j.accessor(o, "scrollHeight", metric(false), nil)
-	j.accessor(o, "offsetTop", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "offsetLeft", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "offsetParent", func() goja.Value { return goja.Null() }, nil)
-	j.accessor(o, "scrollTop", func() goja.Value { return j.vm.ToValue(0) }, func(goja.Value) {})
-	j.accessor(o, "scrollLeft", func() goja.Value { return j.vm.ToValue(0) }, func(goja.Value) {})
-	j.method(o, "getBoundingClientRect", func(call goja.FunctionCall) goja.Value {
+	j.protoAccessor(p, "clientWidth", metric(true), nil)
+	j.protoAccessor(p, "clientHeight", metric(false), nil)
+	j.protoAccessor(p, "offsetWidth", metric(true), nil)
+	j.protoAccessor(p, "offsetHeight", metric(false), nil)
+	j.protoAccessor(p, "scrollWidth", metric(true), nil)
+	j.protoAccessor(p, "scrollHeight", metric(false), nil)
+	j.protoAccessor(p, "offsetTop", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "offsetLeft", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "offsetParent", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoAccessor(p, "scrollTop", func(n *Node) goja.Value { return j.vm.ToValue(0) }, func(n *Node, _ goja.Value) {})
+	j.protoAccessor(p, "scrollLeft", func(n *Node) goja.Value { return j.vm.ToValue(0) }, func(n *Node, _ goja.Value) {})
+	j.protoMethod(p, "getBoundingClientRect", func(n *Node, call goja.FunctionCall) goja.Value {
+		vw, vh := j.b.width*8, j.b.height*16
 		w := j.elementWidthPx(n, vw)
 		h := j.elementHeightPx(n, vh)
 		x, y := 0, 0
@@ -461,9 +524,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		_ = r.Set("height", h)
 		return r
 	})
-	j.accessor(o, "textContent", func() goja.Value {
+	j.protoAccessor(p, "textContent", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.TextContent())
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		for _, c := range n.Children {
 			c.Parent = nil
 		}
@@ -473,9 +536,9 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "innerText", func() goja.Value {
+	j.protoAccessor(p, "innerText", func(n *Node) goja.Value {
 		return j.vm.ToValue(n.TextContent())
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		for _, c := range n.Children {
 			c.Parent = nil
 		}
@@ -485,28 +548,28 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		j.markDirty()
 	})
-	j.accessor(o, "innerHTML", func() goja.Value {
+	j.protoAccessor(p, "innerHTML", func(n *Node) goja.Value {
 		return j.vm.ToValue(serializeChildren(n))
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		j.setInnerHTML(n, v.String())
 	})
-	j.accessor(o, "style", func() goja.Value {
+	j.protoAccessor(p, "style", func(n *Node) goja.Value {
 		return j.styleObject(n)
 	}, nil)
-	j.accessor(o, "classList", func() goja.Value {
+	j.protoAccessor(p, "classList", func(n *Node) goja.Value {
 		return j.classListObject(n)
 	}, nil)
-	j.accessor(o, "attributes", func() goja.Value {
+	j.protoAccessor(p, "attributes", func(n *Node) goja.Value {
 		return j.attributesObject(n)
 	}, nil)
-	j.accessor(o, "onclick", func() goja.Value {
+	j.protoAccessor(p, "onclick", func(n *Node) goja.Value {
 		if m := j.propListeners[n]; m != nil {
 			if l, ok := m["click"]; ok {
 				return l.value
 			}
 		}
 		return goja.Null()
-	}, func(v goja.Value) {
+	}, func(n *Node, v goja.Value) {
 		fn, ok := goja.AssertFunction(v)
 		if !ok {
 			if m := j.propListeners[n]; m != nil {
@@ -521,7 +584,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		m["click"] = jsListener{value: v, call: fn}
 	})
-	j.accessor(o, "children", func() goja.Value {
+	j.protoAccessor(p, "children", func(n *Node) goja.Value {
 		kids := elementChildren(n)
 		vals := make([]interface{}, 0, len(kids))
 		for _, k := range kids {
@@ -529,54 +592,54 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return j.vm.NewArray(vals...)
 	}, nil)
-	j.accessor(o, "childNodes", func() goja.Value {
+	j.protoAccessor(p, "childNodes", func(n *Node) goja.Value {
 		vals := make([]interface{}, 0, len(n.Children))
 		for _, k := range n.Children {
 			vals = append(vals, j.wrap(k))
 		}
 		return j.vm.NewArray(vals...)
 	}, nil)
-	j.accessor(o, "parentNode", func() goja.Value { return j.wrap(n.Parent) }, nil)
-	j.accessor(o, "nextSibling", func() goja.Value { return j.wrap(nextSiblingNode(n)) }, nil)
-	j.accessor(o, "previousSibling", func() goja.Value { return j.wrap(prevSiblingNode(n)) }, nil)
-	j.accessor(o, "firstChild", func() goja.Value {
+	j.protoAccessor(p, "parentNode", func(n *Node) goja.Value { return j.wrap(n.Parent) }, nil)
+	j.protoAccessor(p, "nextSibling", func(n *Node) goja.Value { return j.wrap(nextSiblingNode(n)) }, nil)
+	j.protoAccessor(p, "previousSibling", func(n *Node) goja.Value { return j.wrap(prevSiblingNode(n)) }, nil)
+	j.protoAccessor(p, "firstChild", func(n *Node) goja.Value {
 		if len(n.Children) == 0 {
 			return goja.Null()
 		}
 		return j.wrap(n.Children[0])
 	}, nil)
-	j.accessor(o, "lastChild", func() goja.Value {
+	j.protoAccessor(p, "lastChild", func(n *Node) goja.Value {
 		if len(n.Children) == 0 {
 			return goja.Null()
 		}
 		return j.wrap(n.Children[len(n.Children)-1])
 	}, nil)
-	j.accessor(o, "childElementCount", func() goja.Value {
+	j.protoAccessor(p, "childElementCount", func(n *Node) goja.Value {
 		return j.vm.ToValue(len(elementChildren(n)))
 	}, nil)
-	j.accessor(o, "ownerDocument", func() goja.Value { return j.docObj }, nil)
-	j.accessor(o, "isConnected", func() goja.Value { return j.vm.ToValue(isConnected(n)) }, nil)
-	j.accessor(o, "parentElement", func() goja.Value {
+	j.protoAccessor(p, "ownerDocument", func(n *Node) goja.Value { return j.docObj }, nil)
+	j.protoAccessor(p, "isConnected", func(n *Node) goja.Value { return j.vm.ToValue(isConnected(n)) }, nil)
+	j.protoAccessor(p, "parentElement", func(n *Node) goja.Value {
 		if n.Parent != nil && n.Parent.Type == ElementNode {
 			return j.wrap(n.Parent)
 		}
 		return goja.Null()
 	}, nil)
-	j.accessor(o, "firstElementChild", func() goja.Value {
+	j.protoAccessor(p, "firstElementChild", func(n *Node) goja.Value {
 		kids := elementChildren(n)
 		if len(kids) == 0 {
 			return goja.Null()
 		}
 		return j.wrap(kids[0])
 	}, nil)
-	j.accessor(o, "lastElementChild", func() goja.Value {
+	j.protoAccessor(p, "lastElementChild", func(n *Node) goja.Value {
 		kids := elementChildren(n)
 		if len(kids) == 0 {
 			return goja.Null()
 		}
 		return j.wrap(kids[len(kids)-1])
 	}, nil)
-	j.accessor(o, "nextElementSibling", func() goja.Value {
+	j.protoAccessor(p, "nextElementSibling", func(n *Node) goja.Value {
 		for s := nextSiblingNode(n); s != nil; s = nextSiblingNode(s) {
 			if s.Type == ElementNode {
 				return j.wrap(s)
@@ -584,7 +647,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return goja.Null()
 	}, nil)
-	j.accessor(o, "previousElementSibling", func() goja.Value {
+	j.protoAccessor(p, "previousElementSibling", func(n *Node) goja.Value {
 		for s := prevSiblingNode(n); s != nil; s = prevSiblingNode(s) {
 			if s.Type == ElementNode {
 				return j.wrap(s)
@@ -593,23 +656,23 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		return goja.Null()
 	}, nil)
 
-	j.method(o, "getAttribute", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "getAttribute", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(attrValue(n, call.Argument(0).String()))
 	})
-	j.method(o, "setAttribute", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "setAttribute", func(n *Node, call goja.FunctionCall) goja.Value {
 		setAttr(n, call.Argument(0).String(), call.Argument(1).String())
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "removeAttribute", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "removeAttribute", func(n *Node, call goja.FunctionCall) goja.Value {
 		removeAttr(n, call.Argument(0).String())
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "hasAttribute", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "hasAttribute", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(n.HasAttr(call.Argument(0).String()))
 	})
-	j.method(o, "appendChild", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "appendChild", func(n *Node, call goja.FunctionCall) goja.Value {
 		child := j.unwrap(call.Argument(0))
 		if child == nil {
 			return goja.Null()
@@ -618,7 +681,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return call.Argument(0)
 	})
-	j.method(o, "insertBefore", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "insertBefore", func(n *Node, call goja.FunctionCall) goja.Value {
 		child := j.unwrap(call.Argument(0))
 		if child == nil {
 			return goja.Null()
@@ -627,7 +690,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return call.Argument(0)
 	})
-	j.method(o, "replaceChild", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "replaceChild", func(n *Node, call goja.FunctionCall) goja.Value {
 		child := j.unwrap(call.Argument(0))
 		old := j.unwrap(call.Argument(1))
 		if child == nil || old == nil || old.Parent != n {
@@ -638,7 +701,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return call.Argument(1)
 	})
-	j.method(o, "removeChild", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "removeChild", func(n *Node, call goja.FunctionCall) goja.Value {
 		child := j.unwrap(call.Argument(0))
 		if child == nil || child.Parent != n {
 			return goja.Null()
@@ -647,12 +710,12 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return call.Argument(0)
 	})
-	j.method(o, "remove", func(goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "remove", func(n *Node, _ goja.FunctionCall) goja.Value {
 		detach(n)
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "contains", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "contains", func(n *Node, call goja.FunctionCall) goja.Value {
 		other := j.unwrap(call.Argument(0))
 		for p := other; p != nil; p = p.Parent {
 			if p == n {
@@ -661,18 +724,18 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return j.vm.ToValue(false)
 	})
-	j.method(o, "hasChildNodes", func(goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "hasChildNodes", func(n *Node, _ goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(len(n.Children) > 0)
 	})
-	j.method(o, "cloneNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "cloneNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		deep := call.Argument(0).ToBoolean()
 		return j.wrap(cloneNode(n, deep))
 	})
-	j.method(o, "matches", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "matches", func(n *Node, call goja.FunctionCall) goja.Value {
 		sels := j.parsedSelectors(call.Argument(0).String())
 		return j.vm.ToValue(matchSelectors(n, sels))
 	})
-	j.method(o, "closest", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "closest", func(n *Node, call goja.FunctionCall) goja.Value {
 		sels := j.parsedSelectors(call.Argument(0).String())
 		for p := n; p != nil; p = p.Parent {
 			if p.Type == ElementNode && matchSelectors(p, sels) {
@@ -681,7 +744,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return goja.Null()
 	})
-	j.method(o, "append", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "append", func(n *Node, call goja.FunctionCall) goja.Value {
 		for _, arg := range call.Arguments {
 			child := j.unwrap(arg)
 			if child == nil {
@@ -696,7 +759,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "prepend", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "prepend", func(n *Node, call goja.FunctionCall) goja.Value {
 		var ref *Node
 		if len(n.Children) > 0 {
 			ref = n.Children[0]
@@ -715,7 +778,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "before", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "before", func(n *Node, call goja.FunctionCall) goja.Value {
 		if n.Parent == nil {
 			return goja.Undefined()
 		}
@@ -727,7 +790,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "after", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "after", func(n *Node, call goja.FunctionCall) goja.Value {
 		if n.Parent == nil {
 			return goja.Undefined()
 		}
@@ -740,7 +803,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "replaceWith", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "replaceWith", func(n *Node, call goja.FunctionCall) goja.Value {
 		if n.Parent == nil {
 			return goja.Undefined()
 		}
@@ -754,7 +817,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "insertAdjacentHTML", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "insertAdjacentHTML", func(n *Node, call goja.FunctionCall) goja.Value {
 		pos := strings.ToLower(call.Argument(0).String())
 		html := call.Argument(1).String()
 		frag := j.parseFragment(html)
@@ -788,14 +851,14 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "getRootNode", func(goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "getRootNode", func(n *Node, _ goja.FunctionCall) goja.Value {
 		root := n
 		for root.Parent != nil {
 			root = root.Parent
 		}
 		return j.wrap(root)
 	})
-	j.method(o, "replaceChildren", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "replaceChildren", func(n *Node, call goja.FunctionCall) goja.Value {
 		for _, c := range n.Children {
 			c.Parent = nil
 		}
@@ -812,29 +875,29 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.method(o, "addEventListener", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "addEventListener", func(n *Node, call goja.FunctionCall) goja.Value {
 		j.addNodeListener(n, call.Argument(0).String(), call.Argument(1), call.Argument(2))
 		return goja.Undefined()
 	})
-	j.method(o, "removeEventListener", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "removeEventListener", func(n *Node, call goja.FunctionCall) goja.Value {
 		j.removeNodeListener(n, call.Argument(0).String(), call.Argument(1))
 		return goja.Undefined()
 	})
-	j.method(o, "dispatchEvent", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "dispatchEvent", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(j.dispatchNodeEvent(n, call.Argument(0)))
 	})
-	j.method(o, "querySelector", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "querySelector", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.wrap(j.querySelector(n, call.Argument(0).String(), false))
 	})
-	j.method(o, "querySelectorAll", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "querySelectorAll", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.nodeArray(j.querySelectorAll(n, call.Argument(0).String(), false))
 	})
-	j.method(o, "getElementsByTagName", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "getElementsByTagName", func(n *Node, call goja.FunctionCall) goja.Value {
 		tag := strings.ToLower(call.Argument(0).String())
 		nodes := n.FindAll(func(x *Node) bool { return tag == "*" || x.Tag == tag })
 		return j.nodeArray(nodes)
 	})
-	j.method(o, "getElementsByClassName", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "getElementsByClassName", func(n *Node, call goja.FunctionCall) goja.Value {
 		want := strings.Fields(call.Argument(0).String())
 		if len(want) == 0 {
 			return j.nodeArray(nil)
@@ -857,25 +920,25 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		})
 		return j.nodeArray(nodes)
 	})
-	j.method(o, "click", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "click", func(n *Node, call goja.FunctionCall) goja.Value {
 		j.fireNodeEvent(n, "click")
 		j.markDirty()
 		return goja.Undefined()
 	})
-	j.accessor(o, "baseURI", func() goja.Value {
+	j.protoAccessor(p, "baseURI", func(n *Node) goja.Value {
 		if j.page != nil && j.page.Base != nil {
 			return j.vm.ToValue(j.page.Base.String())
 		}
 		return j.vm.ToValue("")
 	}, nil)
-	j.accessor(o, "nodeValue", func() goja.Value { return goja.Null() }, func(goja.Value) {})
-	j.accessor(o, "clientTop", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "clientLeft", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "shadowRoot", func() goja.Value { return goja.Null() }, nil)
-	j.method(o, "hasAttributes", func(goja.FunctionCall) goja.Value {
+	j.protoAccessor(p, "nodeValue", func(n *Node) goja.Value { return goja.Null() }, func(n *Node, _ goja.Value) {})
+	j.protoAccessor(p, "clientTop", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "clientLeft", func(n *Node) goja.Value { return j.vm.ToValue(0) }, nil)
+	j.protoAccessor(p, "shadowRoot", func(n *Node) goja.Value { return goja.Null() }, nil)
+	j.protoMethod(p, "hasAttributes", func(n *Node, _ goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(len(n.Attrs) > 0)
 	})
-	j.method(o, "getAttributeNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "getAttributeNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		name := call.Argument(0).String()
 		for i := range n.Attrs {
 			if strings.EqualFold(n.Attrs[i].Key, name) {
@@ -884,7 +947,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return goja.Null()
 	})
-	j.method(o, "setAttributeNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "setAttributeNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		attr := jsObject(call.Argument(0))
 		if attr == nil {
 			return goja.Null()
@@ -897,7 +960,7 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		j.markDirty()
 		return goja.Null()
 	})
-	j.method(o, "removeAttributeNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "removeAttributeNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		attr := jsObject(call.Argument(0))
 		if attr == nil {
 			return goja.Null()
@@ -915,30 +978,29 @@ func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
 		}
 		return goja.Null()
 	})
-	j.method(o, "isSameNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "isSameNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(j.unwrap(call.Argument(0)) == n)
 	})
-	j.method(o, "isEqualNode", func(call goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "isEqualNode", func(n *Node, call goja.FunctionCall) goja.Value {
 		return j.vm.ToValue(nodesEqual(n, j.unwrap(call.Argument(0))))
 	})
-	j.method(o, "lookupNamespaceURI", func(goja.FunctionCall) goja.Value { return goja.Null() })
-	j.method(o, "checkVisibility", func(goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "lookupNamespaceURI", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Null() })
+	j.protoMethod(p, "checkVisibility", func(n *Node, _ goja.FunctionCall) goja.Value {
 		visible := !n.HasAttr("hidden")
 		if st := n.Style; st != nil && (st.Display == "none" || st.Hidden) {
 			visible = false
 		}
 		return j.vm.ToValue(visible)
 	})
-	j.method(o, "scroll", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "scrollTo", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "scrollBy", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "setPointerCapture", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "releasePointerCapture", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "hasPointerCapture", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
-	j.method(o, "requestFullscreen", func(goja.FunctionCall) goja.Value {
+	j.protoMethod(p, "scroll", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "scrollTo", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "scrollBy", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "setPointerCapture", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "releasePointerCapture", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "hasPointerCapture", func(n *Node, _ goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.protoMethod(p, "requestFullscreen", func(n *Node, _ goja.FunctionCall) goja.Value {
 		return j.resolvedPromise(nil)
 	})
-	j.installElementCompat(o, n)
 }
 
 func (j *jsRuntime) nodeArray(nodes []*Node) goja.Value {

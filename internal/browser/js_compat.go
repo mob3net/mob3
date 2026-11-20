@@ -880,7 +880,120 @@ func (j *jsRuntime) iteratorObject(items []goja.Value) goja.Value {
 
 // installElementCompat adds the cheap DOM surface that libraries commonly
 // feature-detect.
-func (j *jsRuntime) installElementCompat(o *goja.Object, n *Node) {
+func (j *jsRuntime) installElementCompatProto(p *goja.Object) {
+	j.protoAccessor(p, "dataset", func(n *Node) goja.Value {
+		return j.datasetObject(n)
+	}, nil)
+
+	j.protoAccessor(p, "outerHTML", func(n *Node) goja.Value {
+		var b strings.Builder
+		serializeNode(&b, n)
+		return j.vm.ToValue(b.String())
+	}, func(n *Node, v goja.Value) {
+		if n.Parent == nil || n.Tag == "html" || n.Tag == "body" {
+			return
+		}
+		ref := nextSiblingNode(n)
+		parent := n.Parent
+		for _, c := range j.parseFragment(v.String()) {
+			insertNode(parent, c, ref)
+		}
+		detach(n)
+		j.markDirty()
+	})
+
+	insertAdjacent := func(n *Node, where string, child *Node) {
+		if child == nil {
+			return
+		}
+		switch strings.ToLower(where) {
+		case "beforebegin":
+			if n.Parent != nil {
+				insertNode(n.Parent, child, n)
+			}
+		case "afterbegin":
+			var first *Node
+			if len(n.Children) > 0 {
+				first = n.Children[0]
+			}
+			insertNode(n, child, first)
+		case "beforeend":
+			insertNode(n, child, nil)
+		case "afterend":
+			if n.Parent != nil {
+				insertNode(n.Parent, child, nextSiblingNode(n))
+			}
+		}
+		j.markDirty()
+	}
+	j.protoMethod(p, "insertAdjacentElement", func(n *Node, call goja.FunctionCall) goja.Value {
+		child := j.unwrap(call.Argument(1))
+		insertAdjacent(n, call.Argument(0).String(), child)
+		return call.Argument(1)
+	})
+	j.protoMethod(p, "insertAdjacentText", func(n *Node, call goja.FunctionCall) goja.Value {
+		insertAdjacent(n, call.Argument(0).String(), &Node{Type: TextNode, Text: call.Argument(1).String()})
+		return goja.Undefined()
+	})
+	j.protoMethod(p, "getAttributeNames", func(n *Node, _ goja.FunctionCall) goja.Value {
+		names := make([]interface{}, 0, len(n.Attrs))
+		for _, a := range n.Attrs {
+			names = append(names, a.Key)
+		}
+		return j.vm.NewArray(names...)
+	})
+	j.protoMethod(p, "toggleAttribute", func(n *Node, call goja.FunctionCall) goja.Value {
+		name := call.Argument(0).String()
+		force := call.Argument(1)
+		apply := !n.HasAttr(name)
+		if force != nil && !goja.IsUndefined(force) {
+			apply = force.ToBoolean()
+		}
+		if apply {
+			setAttr(n, name, "")
+		} else {
+			removeAttr(n, name)
+		}
+		j.markDirty()
+		return j.vm.ToValue(n.HasAttr(name))
+	})
+	j.protoMethod(p, "compareDocumentPosition", func(n *Node, call goja.FunctionCall) goja.Value {
+		return j.vm.ToValue(int(compareDocumentPosition(n, j.unwrap(call.Argument(0)))))
+	})
+	j.protoMethod(p, "normalize", func(n *Node, _ goja.FunctionCall) goja.Value {
+		normalizeNode(n)
+		j.markDirty()
+		return goja.Undefined()
+	})
+	j.protoMethod(p, "focus", func(n *Node, _ goja.FunctionCall) goja.Value {
+		if n.Tag == "input" || n.Tag == "textarea" {
+			j.b.inputFocus = n
+		}
+		j.markDirty()
+		j.fireNodeEvent(n, "focus")
+		return goja.Undefined()
+	})
+	j.protoMethod(p, "blur", func(n *Node, _ goja.FunctionCall) goja.Value {
+		if j.b.inputFocus == n {
+			j.b.inputFocus = nil
+		}
+		j.markDirty()
+		j.fireNodeEvent(n, "blur")
+		return goja.Undefined()
+	})
+	j.protoMethod(p, "scrollIntoView", func(n *Node, _ goja.FunctionCall) goja.Value { return goja.Undefined() })
+	j.protoMethod(p, "getClientRects", func(n *Node, _ goja.FunctionCall) goja.Value {
+		return j.vm.NewArray(j.vm.ToValue(j.clientRectObject(n)))
+	})
+}
+
+// datasetObject lazily builds (and caches) the dataset proxy for one element.
+// Building a proxy with its traps for every element at wrap time was a large
+// part of the per-element cost; most elements never touch dataset.
+func (j *jsRuntime) datasetObject(n *Node) goja.Value {
+	if v, ok := j.datasetObjs[n]; ok {
+		return v
+	}
 	target := j.vm.NewObject()
 	if j.domStringMapProto != nil {
 		_ = target.SetPrototype(j.domStringMapProto)
@@ -917,108 +1030,9 @@ func (j *jsRuntime) installElementCompat(o *goja.Object, n *Node) {
 			return j.vm.NewArray(keys...)
 		},
 	})
-	_ = o.Set("dataset", j.vm.ToValue(proxy))
-
-	j.accessor(o, "outerHTML", func() goja.Value {
-		var b strings.Builder
-		serializeNode(&b, n)
-		return j.vm.ToValue(b.String())
-	}, func(v goja.Value) {
-		if n.Parent == nil || n.Tag == "html" || n.Tag == "body" {
-			return
-		}
-		ref := nextSiblingNode(n)
-		parent := n.Parent
-		for _, c := range j.parseFragment(v.String()) {
-			insertNode(parent, c, ref)
-		}
-		detach(n)
-		j.markDirty()
-	})
-
-	insertAdjacent := func(where string, child *Node) {
-		if child == nil {
-			return
-		}
-		switch strings.ToLower(where) {
-		case "beforebegin":
-			if n.Parent != nil {
-				insertNode(n.Parent, child, n)
-			}
-		case "afterbegin":
-			var first *Node
-			if len(n.Children) > 0 {
-				first = n.Children[0]
-			}
-			insertNode(n, child, first)
-		case "beforeend":
-			insertNode(n, child, nil)
-		case "afterend":
-			if n.Parent != nil {
-				insertNode(n.Parent, child, nextSiblingNode(n))
-			}
-		}
-		j.markDirty()
-	}
-	j.method(o, "insertAdjacentElement", func(call goja.FunctionCall) goja.Value {
-		child := j.unwrap(call.Argument(1))
-		insertAdjacent(call.Argument(0).String(), child)
-		return call.Argument(1)
-	})
-	j.method(o, "insertAdjacentText", func(call goja.FunctionCall) goja.Value {
-		insertAdjacent(call.Argument(0).String(), &Node{Type: TextNode, Text: call.Argument(1).String()})
-		return goja.Undefined()
-	})
-	j.method(o, "getAttributeNames", func(goja.FunctionCall) goja.Value {
-		names := make([]interface{}, 0, len(n.Attrs))
-		for _, a := range n.Attrs {
-			names = append(names, a.Key)
-		}
-		return j.vm.NewArray(names...)
-	})
-	j.method(o, "toggleAttribute", func(call goja.FunctionCall) goja.Value {
-		name := call.Argument(0).String()
-		force := call.Argument(1)
-		apply := !n.HasAttr(name)
-		if force != nil && !goja.IsUndefined(force) {
-			apply = force.ToBoolean()
-		}
-		if apply {
-			setAttr(n, name, "")
-		} else {
-			removeAttr(n, name)
-		}
-		j.markDirty()
-		return j.vm.ToValue(n.HasAttr(name))
-	})
-	j.method(o, "compareDocumentPosition", func(call goja.FunctionCall) goja.Value {
-		return j.vm.ToValue(int(compareDocumentPosition(n, j.unwrap(call.Argument(0)))))
-	})
-	j.method(o, "normalize", func(goja.FunctionCall) goja.Value {
-		normalizeNode(n)
-		j.markDirty()
-		return goja.Undefined()
-	})
-	j.method(o, "focus", func(goja.FunctionCall) goja.Value {
-		if n.Tag == "input" || n.Tag == "textarea" {
-			j.b.inputFocus = n
-		}
-		j.markDirty()
-		j.fireNodeEvent(n, "focus")
-		return goja.Undefined()
-	})
-	j.method(o, "blur", func(goja.FunctionCall) goja.Value {
-		if j.b.inputFocus == n {
-			j.b.inputFocus = nil
-		}
-		j.markDirty()
-		j.fireNodeEvent(n, "blur")
-		return goja.Undefined()
-	})
-	j.method(o, "scrollIntoView", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "getClientRects", func(goja.FunctionCall) goja.Value {
-		return j.vm.NewArray(j.vm.ToValue(j.clientRectObject(n)))
-	})
+	v := j.vm.ToValue(proxy)
+	j.datasetObjs[n] = v
+	return v
 }
 
 func (j *jsRuntime) clientRectObject(n *Node) *goja.Object {

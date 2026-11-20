@@ -45,6 +45,7 @@ type jsRuntime struct {
 	treeWalkerProto   *goja.Object
 	nodeIteratorProto *goja.Object
 	headerObjs        map[*goja.Object]map[string][]string
+	datasetObjs       map[*Node]goja.Value
 	start             time.Time
 	pendingNav        string
 	pendingReplace    bool
@@ -125,6 +126,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		timers:         make(map[int]*jsTimer),
 		nextID:         1,
 		headerObjs:     make(map[*goja.Object]map[string][]string),
+		datasetObjs:    make(map[*Node]goja.Value),
 		canvasContexts: make(map[*Node]goja.Value),
 		ranges:         make(map[*goja.Object]*jsRange),
 		blobs:          make(map[*goja.Object]*blobData),
@@ -132,6 +134,9 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	}
 	j.start = time.Now()
 	j.installElementConstructors()
+	j.initTextProto(j.textProto)
+	j.initElementProto(j.elementProto)
+	j.installElementCompatProto(j.elementProto)
 	j.installEventConstructors()
 	j.installIntl()
 	j.installFetch()

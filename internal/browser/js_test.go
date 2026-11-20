@@ -89,6 +89,41 @@ func TestJSWindowIsGlobal(t *testing.T) {
 	}
 }
 
+func TestJSElementPropertiesShared(t *testing.T) {
+	// DOM properties live on the prototypes, not on every wrapper. Accessors
+	// must still resolve the receiver's node, tag prototypes must keep working
+	// for instanceof, and a getter called with a foreign receiver must not
+	// panic.
+	page := newJSPage(`<html><body><div id="a" class="x" data-role="news">A</div><div id="b">B</div><img id="c" src="x.png"></body></html>`, `
+		var a = document.getElementById("a");
+		var b = document.getElementById("b");
+		var img = document.getElementById("c");
+		a.className = "y";
+		a.dataset.role = "story";
+		a.hidden = true;
+		var getter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "id").get;
+		var detached = getter.call({});
+		document.title = [
+			Object.getOwnPropertyNames(a).length <= 5,
+			a.id === "a",
+			b.id === "b",
+			a.className,
+			a.getAttribute("data-role"),
+			a.dataset === a.dataset,
+			a.hidden,
+			a instanceof HTMLElement,
+			img instanceof HTMLImageElement,
+			typeof detached
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "true:true:true:y:story:true:true:true:true:undefined"
+	if page.Title != want {
+		t.Fatalf("shared element properties = %q, want %q", page.Title, want)
+	}
+}
+
 func TestJSTextNodeIsANode(t *testing.T) {
 	// jQuery's wrapAll/wrapInner reads `this[0].ownerDocument` even when the
 	// collection holds text nodes. A missing ownerDocument (and the other Node
