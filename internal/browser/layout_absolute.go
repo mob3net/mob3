@@ -139,9 +139,17 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	prevCB := l.cb
 	prevFixed := l.curFixed
 	prevImageH := l.forcedImageH
+	prevParentH := l.parentH
 	l.cb = cb
 	l.curFixed = a.fixed
 	l.forcedImageH = 0
+	if cbH > 0 {
+		// The padding box of the containing block is the basis percentage
+		// heights inside an absolutely positioned subtree resolve against.
+		l.parentH = cbH
+	} else {
+		l.parentH = 0
+	}
 	if n.Tag == "img" && st.Height.Set && st.Height.U == UnitPercent && cbH > 0 {
 		l.forcedImageH = st.Height.resolveV(cbH, st.FontSize)
 	}
@@ -149,6 +157,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	absStart := len(l.abs)
 	_, rect := l.blockLayout(n, x, y, availW, forceH, true)
 	l.forcedImageH = prevImageH
+	l.parentH = prevParentH
 	frags := make([]Frag, len(l.frags)-start)
 	copy(frags, l.frags[start:])
 	l.frags = l.frags[:start]

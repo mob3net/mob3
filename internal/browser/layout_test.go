@@ -310,3 +310,46 @@ func TestExplicitHeightDoesNotGrow(t *testing.T) {
 	}
 	t.Fatal("trailing text missing")
 }
+
+func TestPercentageHeightAgainstDefiniteParent(t *testing.T) {
+	doc := ParseHTML(`<div style="height:64px">` +
+		`<div id="full" style="height:100%">full</div>` +
+		`<div id="half" style="height:calc(50% - 8px)">half</div>` +
+		`</div>` +
+		`<div id="autoParent"><div id="auto" style="height:100%">auto</div></div>`)
+	ly := BuildLayout(doc, nil, 40)
+	box := func(id string) Rect { return ly.Boxes[findElementByID(doc, id)] }
+	if got := box("full").H; got != 4 {
+		t.Fatalf("height:100%% in a 64px parent = %d rows, want 4", got)
+	}
+	if got := box("half").H; got != 2 {
+		t.Fatalf("height:calc(50%% - 8px) = %d rows, want 2", got)
+	}
+	if got := box("auto").H; got != 1 {
+		t.Fatalf("height:100%% in an auto-height parent = %d rows, want the 1-row content", got)
+	}
+}
+
+func TestFloatDropsBelowShorterFloat(t *testing.T) {
+	doc := ParseHTML(`<div style="width:160px">` +
+		`<div id="a" style="float:left;width:50%;height:48px">A</div>` +
+		`<div id="b" style="float:left;width:50%;height:32px">B</div>` +
+		`<div id="c" style="float:left;width:25%;height:32px">C</div>` +
+		`<div id="d" style="float:left;width:25%;height:32px">D</div>` +
+		`</div>`)
+	ly := BuildLayout(doc, nil, 40)
+	r := func(id string) Rect { return ly.Boxes[findElementByID(doc, id)] }
+	a, b, c, d := r("a"), r("b"), r("c"), r("d")
+	if b.Y != a.Y || b.X != a.X+a.W {
+		t.Fatalf("second float = %+v, want it beside the first at %d,%d", b, a.X+a.W, a.Y)
+	}
+	if c.Y != b.Y+b.H {
+		t.Fatalf("third float y = %d, want it under the shorter float at %d", c.Y, b.Y+b.H)
+	}
+	if c.X != b.X {
+		t.Fatalf("third float x = %d, want the right column at %d", c.X, b.X)
+	}
+	if d.X != c.X+c.W {
+		t.Fatalf("fourth float x = %d, want it beside the third at %d", d.X, c.X+c.W)
+	}
+}

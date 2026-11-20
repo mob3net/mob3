@@ -1,0 +1,14 @@
+full height
+
+
+
+
+after fixed
+
+half height
+
+
+after half
+auto parent
+
+after auto

@@ -89,6 +89,21 @@ func TestJSWindowIsGlobal(t *testing.T) {
 	}
 }
 
+func TestJSClientWidthBeforeLayout(t *testing.T) {
+	// Carousels read clientWidth while scripts run, before the first layout.
+	// A block box with auto width fills its containing block, so it must report
+	// that width (bounded by ancestor max-widths) instead of 0.
+	page := newJSPage(`<html><body><div style="max-width:200px"><div id="b">x</div></div></body></html>`, `
+		var b = document.getElementById("b");
+		document.title = String(b.clientWidth) + ":" + String(document.body.clientWidth);
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if want := "200:320"; page.Title != want {
+		t.Fatalf("pre-layout clientWidth = %q, want %q", page.Title, want)
+	}
+}
+
 func TestJSElementPropertiesShared(t *testing.T) {
 	// DOM properties live on the prototypes, not on every wrapper. Accessors
 	// must still resolve the receiver's node, tag prototypes must keep working

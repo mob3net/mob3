@@ -1961,7 +1961,75 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 			return r.W * 8
 		}
 	}
+	// Before the first layout pass (scripts run ahead of it) a block-level box
+	// with auto width still fills its containing block. Carousels read
+	// clientWidth to size their slides; reporting 0 made them write
+	// `width:0px` into the DOM and collapse the whole slider.
+	if blockLevelNode(n) {
+		return j.containingWidthPx(n, viewport)
+	}
 	return 0
+}
+
+var blockLevelTags = map[string]bool{
+	"html": true, "body": true, "div": true, "p": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"ul": true, "ol": true, "li": true, "dl": true, "dt": true, "dd": true,
+	"blockquote": true, "pre": true, "table": true, "thead": true,
+	"tbody": true, "tfoot": true, "tr": true, "td": true, "th": true,
+	"form": true, "fieldset": true, "legend": true, "figure": true,
+	"figcaption": true, "header": true, "footer": true, "nav": true,
+	"main": true, "section": true, "article": true, "aside": true,
+	"address": true, "hr": true, "center": true, "details": true,
+	"summary": true, "hgroup": true, "search": true, "dialog": true,
+}
+
+// blockLevelNode reports whether a box fills its containing block's width.
+func blockLevelNode(n *Node) bool {
+	if n == nil || n.Type != ElementNode {
+		return false
+	}
+	if n.Style != nil {
+		if n.Style.Float != "" || n.Style.Position == "absolute" || n.Style.Position == "fixed" {
+			return false
+		}
+		switch n.Style.Display {
+		case "block", "list-item", "flex", "grid", "table":
+			return true
+		}
+		return false
+	}
+	return blockLevelTags[strings.ToLower(n.Tag)]
+}
+
+// containingWidthPx estimates the width of a block-level box's containing
+// block from ancestor widths and max-widths, defaulting to the viewport.
+func (j *jsRuntime) containingWidthPx(n *Node, viewport int) int {
+	w := viewport
+	for p := n.Parent; p != nil && p.Type == ElementNode; p = p.Parent {
+		if p.Tag == "html" || p.Tag == "body" {
+			break
+		}
+		font := 16.0
+		if p.Style != nil && p.Style.FontSize > 0 {
+			font = p.Style.FontSize
+		}
+		if px, ok := cssLengthPx(styleGet(p, "width"), font, float64(viewport)); ok && px > 0 && px < w {
+			w = px
+		}
+		if px, ok := cssLengthPx(styleGet(p, "max-width"), font, float64(viewport)); ok && px > 0 && px < w {
+			w = px
+		}
+		if p.Style != nil {
+			if px, ok := lengthPx(p.Style.Width, font, float64(viewport)); ok && px > 0 && px < w {
+				w = px
+			}
+			if px, ok := lengthPx(p.Style.MaxWidth, font, float64(viewport)); ok && px > 0 && px < w {
+				w = px
+			}
+		}
+	}
+	return w
 }
 
 func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {

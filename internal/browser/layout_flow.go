@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -205,6 +206,22 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 	if st.Clear != "" {
 		y = l.clearY(st.Clear, y)
 	}
+	// A float with a declared width drops to the next band when it does not fit
+	// at the current row, the way CSS places floats as high as possible. A
+	// shrink-to-fit float keeps taking whatever band space is left.
+	if need := l.declaredFloatWidth(n, width); need > 0 {
+		for attempt := 0; attempt < 8; attempt++ {
+			left, right := l.floatBand(x, y, width)
+			if right-left >= need {
+				break
+			}
+			next := l.floatDropY(x, y, width, need)
+			if next <= y {
+				break
+			}
+			y = next
+		}
+	}
 	left, right := l.floatBand(x, y, width)
 	avail := right - left
 	if avail < 1 {
@@ -394,4 +411,41 @@ func pseudoElement(parent *Node, st *Style) *Node {
 		return nil
 	}
 	return &Node{Type: ElementNode, Tag: "#pseudo", Style: st, Parent: parent}
+}
+
+// declaredFloatWidth returns a float's declared border-box width, or 0 when it
+// is auto (shrink-to-fit).
+func (l *layouter) declaredFloatWidth(n *Node, cbW int) int {
+	st := n.Style
+	if st == nil || !st.Width.Set || st.Width.IsAuto() {
+		return 0
+	}
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, cbW)
+	w := l.widthValue(st, st.Width, cbW) + ml + mr + bl + br + pl + pr
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// floatDropY finds the nearest lower row where a float of the given width fits
+// between the active floats, or 0 when none does.
+func (l *layouter) floatDropY(x, y, width, need int) int {
+	var cands []int
+	for _, f := range l.floats {
+		if f.bottom > y {
+			cands = append(cands, f.bottom)
+		}
+	}
+	if len(cands) == 0 {
+		return 0
+	}
+	sort.Ints(cands)
+	for _, c := range cands {
+		left, right := l.floatBand(x, c, width)
+		if right-left >= need {
+			return c
+		}
+	}
+	return 0
 }

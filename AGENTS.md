@@ -262,7 +262,10 @@ Standard Go layout:
   `position:sticky` falls back to block flow.
 - **Floats:** `float:left`/`right` (and the `inline-start`/`inline-end`
   aliases) take the box out of normal flow. Floats are placed at the current
-  flow row, shrink to fit their content or declared width, and successive
+  flow row, shrink to fit their content or declared width, and a float with a
+  declared width that does not fit the band drops to the next row where it
+  does (it sits under the shorter float, as in CSS, instead of collapsing to
+  the remaining sliver). Successive
   inline lines wrap around their vertical range. Percentage widths and margins
   resolve against the containing block, not the remaining float band, and a
   declared width is not re-resolved against the float's own used width; a
@@ -394,8 +397,10 @@ Standard Go layout:
   layout and in flex item widths/basis. An explicit `height` is the used
   height, not a minimum: overflowing children keep their fragments and may
   paint outside the box unless `overflow` clips them. `min-width`, `max-width`,
-  `min-height` and `max-height` apply to block boxes; percentage heights stay
-  ignored, and `min` wins over `max` when they conflict.
+  `min-height` and `max-height` apply to block boxes; a percentage height
+  resolves only when the containing block height is definite (a declared
+  height, a percentage with a definite ancestor, or a stretched absolute box)
+  and stays auto otherwise, and `min` wins over `max` when they conflict.
 - **Inline alignment:** `vertical-align: top|bottom|text-top|text-bottom`
   places inline runs and atomic boxes at the line-box edge; `middle` centers
   them. `baseline`, `super` and `sub` are approximated as middle because
@@ -505,10 +510,14 @@ Standard Go layout:
   `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
   are hidden (`display:none`) to avoid rendering them as one-character columns
   or visible “skip to content” links.
-- **Percentage heights are ignored** because parent heights are indefinite;
-  this avoids `height:100%` on logos becoming 100 terminal rows. The exception
-  is an absolutely positioned image whose containing block height is known:
-  `height:100%` is resolved so `object-fit` can fill or crop into that box.
+- **Percentage heights** resolve against the containing block's definite
+  content height: a parent with a declared height (including one resolved from
+  a percentage), a `min-height`, a stretched absolute box, or a flex/grid
+  cell with a known height. `height:100%` and `calc(…% …)` therefore work in
+  fixed-height sliders and cards. An indefinite (auto-height) parent leaves
+  them auto, so `height:100%` on a logo cannot become 100 terminal rows. An
+  absolutely positioned image whose containing block height is known also
+  resolves `height:100%` for `object-fit` fill/crop.
 - **Tables:** shrink-to-fit column widths from max-content measurements, scaled
   down to available width while keeping each column at its min-content width
   and shrinking only columns that have slack. A table `width` declaration

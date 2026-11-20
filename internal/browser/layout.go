@@ -131,6 +131,11 @@ type layouter struct {
 	// forcedImageH is a resolved percentage height for an absolutely
 	// positioned image whose containing block height is known.
 	forcedImageH int
+	// parentH is the containing block's definite content height in cells, or 0
+	// when it is indefinite. Percentage heights resolve against it; they stay
+	// ignored (treated as auto) when it is 0, so `height:100%` on a logo in an
+	// auto-height page cannot become the whole viewport.
+	parentH int
 
 	// cb is the padding box of the nearest positioned ancestor, used to
 	// resolve absolute offsets. nil at the root, where rootCB stands in.
@@ -643,6 +648,26 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	}
 	clipStart := len(l.frags)
 
+	// A definite height (declared, percentage against a known parent, min-height
+	// or a forced box) is the containing block height children resolve their own
+	// percentage heights against. Auto-height boxes stay indefinite.
+	defContentH := -1
+	if st.Height.Set && !st.Height.IsAuto() {
+		if !lengthHasPercent(st.Height) {
+			defContentH = l.heightValue(st, st.Height, availW)
+		} else if l.parentH > 0 {
+			defContentH = l.heightValue(st, st.Height, l.parentH)
+		}
+	}
+	if defContentH < 0 && st.MinHeight.Set && !st.MinHeight.IsAuto() && !lengthHasPercent(st.MinHeight) {
+		defContentH = l.heightValue(st, st.MinHeight, availW)
+	}
+	if forceContentH > defContentH {
+		defContentH = forceContentH
+	}
+	prevParentH := l.parentH
+	l.parentH = defContentH
+
 	var contentH int
 	switch {
 	case n.Tag == "img":
@@ -656,6 +681,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	default:
 		contentH = l.flow(n, contentX, contentY, contentW)
 	}
+	l.parentH = prevParentH
 	if st.LineClamp > 0 && st.Overflow == "hidden" {
 		// Approximate -webkit-line-clamp: keep at most N text lines inside the
 		// block and let following content move up accordingly.
@@ -674,19 +700,37 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 			contentH = h
 		}
 	}
-	if st.Height.Set && !st.Height.IsAuto() && st.Height.U != UnitPercent {
+	if st.Height.Set && !st.Height.IsAuto() {
 		// An explicit height is the used height, not a minimum: overflowing
 		// children may paint outside the box unless overflow clips them.
-		contentH = l.heightValue(st, st.Height, availW)
-	}
-	if st.MaxHeight.Set && !st.MaxHeight.IsAuto() && st.MaxHeight.U != UnitPercent {
-		if h := l.heightValue(st, st.MaxHeight, availW); h < contentH {
-			contentH = h
+		// A percentage resolves against the containing block's content height
+		// when that is definite; otherwise it stays auto.
+		if !lengthHasPercent(st.Height) {
+			contentH = l.heightValue(st, st.Height, availW)
+		} else if l.parentH > 0 {
+			contentH = l.heightValue(st, st.Height, l.parentH)
 		}
 	}
-	if st.MinHeight.Set && !st.MinHeight.IsAuto() && st.MinHeight.U != UnitPercent {
-		if h := l.heightValue(st, st.MinHeight, availW); h > contentH {
-			contentH = h
+	if st.MaxHeight.Set && !st.MaxHeight.IsAuto() {
+		if !lengthHasPercent(st.MaxHeight) {
+			if h := l.heightValue(st, st.MaxHeight, availW); h < contentH {
+				contentH = h
+			}
+		} else if l.parentH > 0 {
+			if h := l.heightValue(st, st.MaxHeight, l.parentH); h < contentH {
+				contentH = h
+			}
+		}
+	}
+	if st.MinHeight.Set && !st.MinHeight.IsAuto() {
+		if !lengthHasPercent(st.MinHeight) {
+			if h := l.heightValue(st, st.MinHeight, availW); h > contentH {
+				contentH = h
+			}
+		} else if l.parentH > 0 {
+			if h := l.heightValue(st, st.MinHeight, l.parentH); h > contentH {
+				contentH = h
+			}
 		}
 	}
 	if forceContentH > contentH {
@@ -811,3 +855,9 @@ const (
 	itemSpace
 	itemAtomic
 )
+
+// lengthHasPercent reports whether a length depends on a percentage basis, so
+// it must only resolve against a definite containing block height.
+func lengthHasPercent(v Length) bool {
+	return v.U == UnitPercent || (v.Calc && v.CalcPct != 0)
+}
