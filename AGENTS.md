@@ -747,8 +747,11 @@ Standard Go layout:
   with kitty key disambiguation; legacy terminals send it as Tab, so `[`/`]`
   are the portable pair; arrow keys do not navigate), `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
-  `i` cycle graphics modes, `X` hide/show
-  fixed elements, `o` URL prompt (or `:` for a Vim-style command prompt where
+  `i` cycle graphics modes, `X` open the page view options window (a switch
+  list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
+  on Esc, `q`, `Ctrl-C` or `X`; fixed elements is its first switch, and the
+  list is built from one `viewOption` registry so later view toggles can be
+  added), `o` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL, `E` open the full warning or error

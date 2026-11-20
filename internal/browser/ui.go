@@ -1322,6 +1322,193 @@ func (b *Browser) paintSelectMenu(g *Grid) {
 	modalDim(g, x, y, boxW, boxH)
 }
 
+// viewOption is one toggleable row in the page view window.
+type viewOption struct {
+	label string
+	on    func(*Browser) bool
+	set   func(*Browser, bool)
+}
+
+// viewOptions returns the switches offered by the page view window. The fixed
+// element switch is the first entry; future view toggles register here.
+func viewOptions() []viewOption {
+	return []viewOption{{
+		label: "Fixed elements",
+		on:    func(b *Browser) bool { return !b.hideFixed },
+		set: func(b *Browser, on bool) {
+			b.hideFixed = !on
+			b.rebuild()
+			if on {
+				b.status = "Fixed elements shown"
+			} else {
+				b.status = "Fixed elements hidden"
+			}
+		},
+	}}
+}
+
+// viewMenuHit is one clickable row in the open view window.
+type viewMenuHit struct {
+	rect Rect
+	idx  int
+}
+
+// viewMenuDialog is the window listing the page view switches.
+type viewMenuDialog struct {
+	idx int
+}
+
+// openViewMenu shows the page view switches with the first row selected.
+func (b *Browser) openViewMenu() {
+	b.viewMenu = &viewMenuDialog{}
+	b.viewMenuHits = nil
+	b.status = ""
+}
+
+// handleViewMenuKey drives the page view window from the keyboard.
+func (b *Browser) handleViewMenuKey(k string) bool {
+	m := b.viewMenu
+	if m == nil {
+		return false
+	}
+	opts := viewOptions()
+	switch k {
+	case "esc", "q", "ctrl-c", "X":
+		b.viewMenu = nil
+		b.viewMenuHits = nil
+		b.status = ""
+	case "up", "k", "ctrl-p":
+		if m.idx > 0 {
+			m.idx--
+		}
+	case "down", "j", "ctrl-n":
+		if m.idx < len(opts)-1 {
+			m.idx++
+		}
+	case "home", "g":
+		m.idx = 0
+	case "end", "G":
+		m.idx = len(opts) - 1
+	case " ", "enter":
+		if m.idx >= 0 && m.idx < len(opts) {
+			opt := opts[m.idx]
+			opt.set(b, !opt.on(b))
+		}
+	}
+	return false
+}
+
+// handleViewMenuMouse toggles a clicked row or closes the window when the
+// dimmed backdrop or the close button is clicked.
+func (b *Browser) handleViewMenuMouse(ev MouseEvent) {
+	if !ev.Press || ev.Motion || ev.Wheel != 0 || ev.Button != MouseButtonLeft {
+		return
+	}
+	x, y := ev.X-1, ev.Y-1
+	for _, hit := range b.viewMenuHits {
+		r := hit.rect
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			opts := viewOptions()
+			if hit.idx >= 0 && hit.idx < len(opts) {
+				if b.viewMenu != nil {
+					b.viewMenu.idx = hit.idx
+				}
+				opt := opts[hit.idx]
+				opt.set(b, !opt.on(b))
+			}
+			return
+		}
+	}
+	switch b.modalMouseAction(ev) {
+	case "close", "outside":
+		b.viewMenu = nil
+		b.viewMenuHits = nil
+		b.status = ""
+	}
+}
+
+// paintViewMenu overlays the open page view window.
+func (b *Browser) paintViewMenu(g *Grid) {
+	m := b.viewMenu
+	if m == nil || g.W < 8 || g.H < 4 {
+		return
+	}
+	opts := viewOptions()
+	if len(opts) == 0 {
+		return
+	}
+	maxLabel := 0
+	for _, opt := range opts {
+		if w := stringWidth("☑ " + opt.label); w > maxLabel {
+			maxLabel = w
+		}
+	}
+	hint := " ↑↓ choose · Space toggle · Esc close "
+	boxW := maxLabel + 6
+	if w := stringWidth(hint) + 4; w > boxW {
+		boxW = w
+	}
+	if boxW < 40 {
+		boxW = 40
+	}
+	if boxW > g.W {
+		boxW = g.W
+	}
+	if boxW < 8 {
+		return
+	}
+	inner := boxW - 4
+	maxRows := g.H - 4
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	visible := len(opts)
+	if visible > maxRows {
+		visible = maxRows
+	}
+	// The list is short for now, but keep the selected row inside the box as
+	// more switches are added.
+	scroll := 0
+	if m.idx >= visible {
+		scroll = m.idx - visible + 1
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	boxH := visible + 4
+	if boxH > g.H {
+		boxH = g.H
+	}
+	x, y := b.modalFrame(g, boxW, boxH, "View options")
+	fg := RGB(0x1f, 0x23, 0x28)
+	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
+	activeBG := RGB(0x2f, 0x6f, 0xbf)
+	activeFG := RGB(0xff, 0xff, 0xff)
+	b.viewMenuHits = b.viewMenuHits[:0]
+	for i := 0; i < visible; i++ {
+		idx := scroll + i
+		opt := opts[idx]
+		marker := "☐ "
+		if opt.on(b) {
+			marker = "☑ "
+		}
+		rowBG, rowFG := modalBG, fg
+		rowStyle := style
+		if idx == m.idx {
+			rowBG, rowFG = activeBG, activeFG
+		}
+		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
+		text := padWidth(truncateWidth(marker+opt.label, inner), inner)
+		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
+		b.viewMenuHits = append(b.viewMenuHits, viewMenuHit{
+			rect: Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
+			idx:  idx,
+		})
+	}
+	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
+	modalDim(g, x, y, boxW, boxH)
+}
+
 // downloadDialog is the modal curl hint offered for download links and
 // non-renderable responses.
 type downloadDialog struct {

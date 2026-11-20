@@ -620,6 +620,8 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.paintNotice(g)
 	case b.selectMenu != nil:
 		b.paintSelectMenu(g)
+	case b.viewMenu != nil:
+		b.paintViewMenu(g)
 	}
 	var lines []string
 	if b.color {

@@ -689,6 +689,10 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.handleSelectMenuMouse(ev)
 		return false
 	}
+	if b.viewMenu != nil {
+		b.handleViewMenuMouse(ev)
+		return false
+	}
 	if b.prompt {
 		if ev.Motion || ev.Wheel != 0 || !ev.Press {
 			return false
@@ -991,6 +995,9 @@ func (b *Browser) HandleKey(k string) bool {
 	if b.selectMenu != nil {
 		return b.handleSelectMenuKey(k)
 	}
+	if b.viewMenu != nil {
+		return b.handleViewMenuKey(k)
+	}
 	if b.consoleOpen {
 		return b.handleConsoleKey(k)
 	}
@@ -1079,13 +1086,7 @@ func (b *Browser) HandleKey(k string) bool {
 	case "i":
 		b.cycleGraphics()
 	case "X":
-		b.hideFixed = !b.hideFixed
-		b.rebuild()
-		if b.hideFixed {
-			b.status = "Fixed elements hidden"
-		} else {
-			b.status = "Fixed elements shown"
-		}
+		b.openViewMenu()
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()

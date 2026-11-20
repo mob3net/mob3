@@ -1136,15 +1136,84 @@ func TestModulePageShowsStatusWarning(t *testing.T) {
 	}
 }
 
-func TestFixedElementsToggleKey(t *testing.T) {
+func TestViewMenuTogglesFixedElements(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.HandleKey("X")
-	if !b.hideFixed || b.status != "Fixed elements hidden" {
-		t.Fatalf("after X: hideFixed=%v status=%q", b.hideFixed, b.status)
+	if b.viewMenu == nil {
+		t.Fatal("X did not open the view menu")
 	}
-	b.HandleKey("X")
+	if b.hideFixed {
+		t.Fatal("fixed elements should start shown, and opening the menu must not toggle")
+	}
+	b.HandleKey(" ")
+	if !b.hideFixed || b.status != "Fixed elements hidden" {
+		t.Fatalf("after Space: hideFixed=%v status=%q", b.hideFixed, b.status)
+	}
+	if b.viewMenu == nil {
+		t.Fatal("toggling should keep the view menu open")
+	}
+	b.HandleKey("enter")
 	if b.hideFixed || b.status != "Fixed elements shown" {
-		t.Fatalf("after second X: hideFixed=%v status=%q", b.hideFixed, b.status)
+		t.Fatalf("after Enter: hideFixed=%v status=%q", b.hideFixed, b.status)
+	}
+	b.HandleKey("esc")
+	if b.viewMenu != nil {
+		t.Fatalf("esc left the view menu open: %+v", b.viewMenu)
+	}
+	if b.status != "" {
+		t.Fatalf("status after closing = %q, want empty", b.status)
+	}
+}
+
+func TestViewMenuIsNotCtrlX(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("ctrl-x")
+	if b.viewMenu != nil {
+		t.Fatal("ctrl-x should not open the view menu")
+	}
+}
+
+func TestViewMenuIgnoredWhileEditingField(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.inputFocus = &Node{}
+	b.HandleKey("X")
+	if b.viewMenu != nil {
+		t.Fatal("X should stay literal text while a field has focus")
+	}
+}
+
+func TestViewMenuClosesWithShiftX(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("X")
+	b.HandleKey("X")
+	if b.viewMenu != nil {
+		t.Fatal("second X did not close the view menu")
+	}
+}
+
+func TestViewMenuMouseTogglesRow(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("X")
+	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.paintViewMenu(g)
+	if len(b.viewMenuHits) != 1 {
+		t.Fatalf("view menu hits = %d, want 1", len(b.viewMenuHits))
+	}
+	r := b.viewMenuHits[0].rect
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
+	if !b.hideFixed {
+		t.Fatal("clicking the fixed-elements row did not hide them")
+	}
+	if b.viewMenu == nil {
+		t.Fatal("clicking a row closed the view menu")
+	}
+	// A click on the dimmed backdrop closes the menu without toggling again.
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 1, Y: 9, Press: true})
+	if b.viewMenu != nil {
+		t.Fatal("clicking the backdrop did not close the view menu")
+	}
+	if !b.hideFixed {
+		t.Fatal("backdrop click should not toggle the option")
 	}
 }
 

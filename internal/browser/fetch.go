@@ -1602,7 +1602,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
-<tr><td><b>X</b></td><td>hide or show fixed-position elements</td></tr>
+<tr><td><b>X</b></td><td>open the view options window and toggle what the page shows</td></tr>
 <tr><td><b>o</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>

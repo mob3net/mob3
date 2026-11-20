@@ -200,6 +200,10 @@ type Browser struct {
 	selectMenu *selectMenuDialog
 	// selectHits are the clickable option rows of the open select popup.
 	selectHits []selectHit
+	// viewMenu is the open window listing page view switches.
+	viewMenu *viewMenuDialog
+	// viewMenuHits are the clickable rows of the open view menu.
+	viewMenuHits []viewMenuHit
 	// modalClose is the close-button hit region of the modal drawn last.
 	modalClose Rect
 	// modalBox is the full modal rectangle, used to close on backdrop clicks.
@@ -551,6 +555,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.clearHintConfirm()
 	b.selectMenu = nil
 	b.selectHits = nil
+	b.viewMenu = nil
+	b.viewMenuHits = nil
 	b.quitPending = false
 	b.jsErr = false
 	b.cancelLoad = nil
