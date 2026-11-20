@@ -5,7 +5,8 @@ MOB³ embeds the following pure-Go modules.
 
 ---
 
-github.com/dop251/goja
+github.com/grafana/sobek
+(a fork of github.com/dop251/goja, maintained by Grafana Labs)
 
 Copyright (c) 2016 Dmitry Panov
 

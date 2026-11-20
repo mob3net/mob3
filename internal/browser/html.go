@@ -55,6 +55,10 @@ type Node struct {
 	// HTMLDialogElement state.
 	DialogReturnValue string
 
+	// Namespace is the XML namespace a createElementNS element was made in.
+	// Parsed HTML elements leave it empty and are resolved from their tag.
+	Namespace string
+
 	// Cached class attribute split, reused by selector matching. The raw value
 	// is kept so mutations invalidate the cache without explicit bookkeeping.
 	classRaw    string

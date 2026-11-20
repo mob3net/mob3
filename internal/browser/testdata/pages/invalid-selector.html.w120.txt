@@ -1,0 +1,9 @@
+
+
+ Invalid selectors
+
+ An empty :is() must not make every box absolute.
+
+   This card stays in normal flow.
+
+ This paragraph must remain visible.

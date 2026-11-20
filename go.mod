@@ -5,8 +5,8 @@ go 1.27
 toolchain go1.27.4
 
 require (
-	github.com/dop251/goja v0.0.0-20261118204651-8dfece3d1e1d
 	github.com/go-gfx/oksvg v0.4.0
+	github.com/grafana/sobek v0.0.0-20261119094010-6eceb967bb5b
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.63.0
@@ -14,8 +14,8 @@ require (
 )
 
 require (
-	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
-	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/dlclark/regexp2/v2 v2.13.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 )

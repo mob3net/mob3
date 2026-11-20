@@ -409,7 +409,7 @@ first. A newline presses Enter; a tab presses Tab.
 
 ### `evaluate`
 
-Runs JavaScript in the page realm through goja:
+Runs JavaScript in the page realm through sobek:
 
 ```json
 {"expression":"document.title"}

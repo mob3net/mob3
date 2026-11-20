@@ -20,6 +20,139 @@ func newJSPage(html, code string) *Page {
 	}
 }
 
+func TestJSCustomElementUpgrade(t *testing.T) {
+	page := newJSPage(`<html><body><my-widget id="parsed"></my-widget><p id="out"></p></body></html>`, `
+		class MyWidget extends HTMLElement {
+			constructor() {
+				super();
+				this.ready = "yes";
+				this.setAttribute("data-built", "1");
+			}
+		}
+		customElements.define("my-widget", MyWidget);
+		var made = document.createElement("my-widget");
+		var parsed = document.getElementById("parsed");
+		document.getElementById("out").textContent = [
+			made.ready,
+			made.getAttribute("data-built"),
+			made instanceof MyWidget,
+			made instanceof HTMLElement,
+			parsed.ready,
+			customElements.get("my-widget") === MyWidget
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "yes:1:true:true:yes:true"
+	if got := page.Root.FindFirst("p").TextContent(); got != want {
+		t.Fatalf("custom element upgrade = %q, want %q (log: %s)", got, want, strings.Join(b.jsLog, "; "))
+	}
+}
+
+func TestJSTemplateContent(t *testing.T) {
+	page := newJSPage(`<html><body><div id="box"></div><p id="out"></p></body></html>`, `
+		var t = document.createElement("template");
+		t.innerHTML = "<b>built</b>";
+		var span = document.createElement("span");
+		span.textContent = "!";
+		t.content.appendChild(span);
+		var before = document.getElementById("box").childNodes.length;
+		var frag = t.content.cloneNode(true);
+		document.getElementById("box").appendChild(frag);
+		var copy = document.importNode(t, true);
+		document.getElementById("out").textContent = [
+			before,
+			t.content.children.length,
+			document.getElementById("box").textContent,
+			copy.content.children.length,
+			copy.content.querySelector("b") ? "b" : "none",
+			t.innerHTML
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "0:2:built!:2:b:<b>built</b><span>!</span>"
+	if got := page.Root.FindFirst("p").TextContent(); got != want {
+		t.Fatalf("template content = %q, want %q", got, want)
+	}
+}
+
+func TestJSAwaitThenableAndPromise(t *testing.T) {
+	// asyncRunner.step attaches directly to native promises; a thenable must
+	// still be adopted through promiseResolve.
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`, `
+		(async function () {
+			var a = await { then: function (resolve) { resolve(42); } };
+			var b = await Promise.resolve(8);
+			document.getElementById("out").textContent = a + ":" + b;
+		})();
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "42:8" {
+		t.Fatalf("await = %q, want 42:8", got)
+	}
+}
+
+func TestDocumentNodeMethods(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`,
+		`var d = document.createElement("div"); d.id = "x"; document.appendChild(d);`+
+			`document.getElementById("out").textContent =`+
+			` document.contains(d) + ":" + (document.lastChild === d) + ":" +`+
+			` document.hasChildNodes() + ":" + (d.parentNode === document);`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "true:true:true:true" {
+		t.Fatalf("document node methods = %q, want true:true:true:true", got)
+	}
+}
+
+func TestJSNamespaceURI(t *testing.T) {
+	page := newJSPage(`<html><body><div id="plain"></div><svg id="root"><path id="p"></path></svg><p id="out"></p></body></html>`, `
+		var plain = document.getElementById("plain");
+		var path = document.getElementById("p");
+		var made = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+		document.getElementById("out").textContent = [
+			plain.namespaceURI === "http://www.w3.org/1999/xhtml",
+			path.namespaceURI === made.namespaceURI,
+			document.documentElement.namespaceURI === plain.namespaceURI
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "true:true:true" {
+		t.Fatalf("namespaceURI = %q, want true:true:true", got)
+	}
+}
+
+func TestDocumentElementChildren(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`,
+		`var d = document.createElement("div"); document.appendChild(d);`+
+			`document.getElementById("out").textContent = [`+
+			`document.firstElementChild.tagName,`+
+			`document.lastElementChild === d,`+
+			`document.children.length,`+
+			`document.childElementCount`+
+			`].join(":");`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "HTML:true:2:2" {
+		t.Fatalf("document element children = %q", got)
+	}
+}
+
+func TestJSStorageConstructor(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`,
+		`localStorage.setItem("k", "v");`+
+			`document.getElementById("out").textContent =`+
+			` typeof Storage + ":" + (localStorage instanceof Storage) + ":" + localStorage.getItem("k");`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "function:true:v" {
+		t.Fatalf("Storage global = %q, want function:true:v", got)
+	}
+}
+
 func TestJSRuntimeFreezeShiftsTimers(t *testing.T) {
 	base := time.Now()
 	j := &jsRuntime{timers: map[int]*jsTimer{
@@ -116,7 +249,7 @@ func TestJSElementPropertiesShared(t *testing.T) {
 		a.className = "y";
 		a.dataset.role = "story";
 		a.hidden = true;
-		var getter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "id").get;
+		var getter = Object.getOwnPropertyDescriptor(Element.prototype, "id").get;
 		var detached = getter.call({});
 		document.title = [
 			Object.getOwnPropertyNames(a).length <= 5,
@@ -136,6 +269,31 @@ func TestJSElementPropertiesShared(t *testing.T) {
 	want := "true:true:true:y:story:true:true:true:true:undefined"
 	if page.Title != want {
 		t.Fatalf("shared element properties = %q, want %q", page.Title, want)
+	}
+}
+
+func TestJSSVGElementHasDOMMethods(t *testing.T) {
+	// SVG elements extend Element, not HTMLElement, so the DOM API must be
+	// installed on Element.prototype for React-style SVG nodes to be usable.
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`, `
+		var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+		svg.appendChild(path);
+		svg.setAttribute("viewBox", "0 0 10 10");
+		path.setAttribute("d", "M0 0");
+		document.getElementById("out").textContent = [
+			typeof svg.appendChild,
+			svg.contains(path),
+			svg.getAttribute("viewBox"),
+			svg instanceof SVGElement,
+			svg instanceof HTMLElement,
+			path.parentNode === svg
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if got := page.Root.FindFirst("p").TextContent(); got != "function:true:0 0 10 10:true:false:true" {
+		t.Fatalf("SVG DOM methods = %q", got)
 	}
 }
 

@@ -286,7 +286,9 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 			}
 			if name == "not" {
 				inner, ispec, n, ok := parseCompound(arg)
-				if !ok || n != len(arg) || inner.Comb != 0 {
+				// ":not()" is invalid: an empty selector list makes the whole
+				// rule invalid, as in browsers.
+				if !ok || n != len(arg) || n == 0 || inner.Comb != 0 {
 					return p, spec, 0, false
 				}
 				inner.Comb = 0
@@ -301,7 +303,10 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 				for _, alt := range splitTopLevel(arg, ',') {
 					alt = strings.TrimSpace(alt)
 					inner, ispec, n, ok := parseCompound(alt)
-					if !ok || n != len(alt) {
+					// ":is()" with no argument list is an invalid selector;
+					// treating it as an empty compound would match every
+					// element and apply unrelated declarations everywhere.
+					if !ok || n != len(alt) || n == 0 {
 						continue
 					}
 					inner.Comb = 0

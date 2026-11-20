@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // installIntl adds a practical subset of the ECMAScript Intl API. It is
@@ -112,47 +112,47 @@ func (j *jsRuntime) installIntl() {
 	}
 }
 
-func jsObject(v goja.Value) *goja.Object {
-	if o, ok := v.(*goja.Object); ok {
+func jsObject(v sobek.Value) *sobek.Object {
+	if o, ok := v.(*sobek.Object); ok {
 		return o
 	}
 	return nil
 }
 
-func jsOptionString(o *goja.Object, key, def string) string {
+func jsOptionString(o *sobek.Object, key, def string) string {
 	if o == nil {
 		return def
 	}
 	v := o.Get(key)
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return def
 	}
 	return v.String()
 }
 
-func jsOptionInt(o *goja.Object, key string, def int) int {
+func jsOptionInt(o *sobek.Object, key string, def int) int {
 	if o == nil {
 		return def
 	}
 	v := o.Get(key)
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return def
 	}
 	return int(v.ToInteger())
 }
 
-func jsOptionBool(o *goja.Object, key string, def bool) bool {
+func jsOptionBool(o *sobek.Object, key string, def bool) bool {
 	if o == nil {
 		return def
 	}
 	v := o.Get(key)
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return def
 	}
 	return v.ToBoolean()
 }
 
-func (j *jsRuntime) newIntlNumberFormat(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlNumberFormat(call sobek.FunctionCall) sobek.Value {
 	options := jsObject(call.Argument(1))
 	style := jsOptionString(options, "style", "decimal")
 	currency := jsOptionString(options, "currency", "")
@@ -188,10 +188,10 @@ func (j *jsRuntime) newIntlNumberFormat(call goja.FunctionCall) goja.Value {
 	useGrouping := jsOptionBool(options, "useGrouping", true)
 
 	o := j.vm.NewObject()
-	j.method(o, "format", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "format", func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(formatIntlNumber(call.Argument(0).ToFloat(), style, currency, minFrac, maxFrac, useGrouping))
 	})
-	j.method(o, "formatToParts", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatToParts", func(call sobek.FunctionCall) sobek.Value {
 		parts := intlNumberParts(call.Argument(0).ToFloat(), style, currency, minFrac, maxFrac, useGrouping)
 		arr := j.vm.NewArray()
 		for i, p := range parts {
@@ -202,12 +202,12 @@ func (j *jsRuntime) newIntlNumberFormat(call goja.FunctionCall) goja.Value {
 		}
 		return arr
 	})
-	j.method(o, "formatRange", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatRange", func(call sobek.FunctionCall) sobek.Value {
 		a := formatIntlNumber(call.Argument(0).ToFloat(), style, currency, minFrac, maxFrac, useGrouping)
 		b := formatIntlNumber(call.Argument(1).ToFloat(), style, currency, minFrac, maxFrac, useGrouping)
 		return j.vm.ToValue(a + " – " + b)
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("numberingSystem", "latn")
@@ -354,7 +354,7 @@ type intlDateOptions struct {
 	dateStyle, timeStyle               string
 }
 
-func (j *jsRuntime) newIntlDateTimeFormat(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlDateTimeFormat(call sobek.FunctionCall) sobek.Value {
 	options := jsObject(call.Argument(1))
 	opts := intlDateOptions{
 		weekday:      jsOptionString(options, "weekday", ""),
@@ -385,10 +385,10 @@ func (j *jsRuntime) newIntlDateTimeFormat(call goja.FunctionCall) goja.Value {
 		}
 	}
 	o := j.vm.NewObject()
-	j.method(o, "format", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "format", func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(formatIntlDate(intlTimeValue(call.Argument(0)), opts, loc))
 	})
-	j.method(o, "formatToParts", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatToParts", func(call sobek.FunctionCall) sobek.Value {
 		text := formatIntlDate(intlTimeValue(call.Argument(0)), opts, loc)
 		arr := j.vm.NewArray()
 		po := j.vm.NewObject()
@@ -397,12 +397,12 @@ func (j *jsRuntime) newIntlDateTimeFormat(call goja.FunctionCall) goja.Value {
 		_ = arr.Set("0", po)
 		return arr
 	})
-	j.method(o, "formatRange", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatRange", func(call sobek.FunctionCall) sobek.Value {
 		a := formatIntlDate(intlTimeValue(call.Argument(0)), opts, loc)
 		b := formatIntlDate(intlTimeValue(call.Argument(1)), opts, loc)
 		return j.vm.ToValue(a + " – " + b)
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("calendar", "gregory")
@@ -414,7 +414,7 @@ func (j *jsRuntime) newIntlDateTimeFormat(call goja.FunctionCall) goja.Value {
 	return o
 }
 
-func intlTimeValue(v goja.Value) time.Time {
+func intlTimeValue(v sobek.Value) time.Time {
 	switch x := v.Export().(type) {
 	case time.Time:
 		return x
@@ -566,9 +566,9 @@ func intlTime(t time.Time, o intlDateOptions) string {
 	return t.Format(layout)
 }
 
-func (j *jsRuntime) newIntlCollator(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlCollator(call sobek.FunctionCall) sobek.Value {
 	o := j.vm.NewObject()
-	j.method(o, "compare", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "compare", func(call sobek.FunctionCall) sobek.Value {
 		a := strings.ToLower(call.Argument(0).String())
 		b := strings.ToLower(call.Argument(1).String())
 		switch {
@@ -580,7 +580,7 @@ func (j *jsRuntime) newIntlCollator(call goja.FunctionCall) goja.Value {
 			return j.vm.ToValue(0)
 		}
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("usage", "sort")
@@ -591,7 +591,7 @@ func (j *jsRuntime) newIntlCollator(call goja.FunctionCall) goja.Value {
 	return o
 }
 
-func (j *jsRuntime) newIntlPluralRules(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlPluralRules(call sobek.FunctionCall) sobek.Value {
 	o := j.vm.NewObject()
 	selectOne := func(n float64) string {
 		if math.Abs(n) == 1 {
@@ -599,13 +599,13 @@ func (j *jsRuntime) newIntlPluralRules(call goja.FunctionCall) goja.Value {
 		}
 		return "other"
 	}
-	j.method(o, "select", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "select", func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(selectOne(call.Argument(0).ToFloat()))
 	})
-	j.method(o, "selectRange", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "selectRange", func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(selectOne(call.Argument(1).ToFloat()))
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("type", "cardinal")
@@ -615,14 +615,14 @@ func (j *jsRuntime) newIntlPluralRules(call goja.FunctionCall) goja.Value {
 	return o
 }
 
-func (j *jsRuntime) newIntlRelativeTimeFormat(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlRelativeTimeFormat(call sobek.FunctionCall) sobek.Value {
 	options := jsObject(call.Argument(1))
 	numeric := jsOptionString(options, "numeric", "always")
 	o := j.vm.NewObject()
-	j.method(o, "format", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "format", func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(intlRelative(call.Argument(0).ToFloat(), call.Argument(1).String(), numeric))
 	})
-	j.method(o, "formatToParts", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatToParts", func(call sobek.FunctionCall) sobek.Value {
 		text := intlRelative(call.Argument(0).ToFloat(), call.Argument(1).String(), numeric)
 		arr := j.vm.NewArray()
 		po := j.vm.NewObject()
@@ -631,7 +631,7 @@ func (j *jsRuntime) newIntlRelativeTimeFormat(call goja.FunctionCall) goja.Value
 		_ = arr.Set("0", po)
 		return arr
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("numeric", numeric)
@@ -666,12 +666,12 @@ func intlRelative(n float64, unit, numeric string) string {
 	return "in " + v + " " + word
 }
 
-func (j *jsRuntime) newIntlListFormat(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newIntlListFormat(call sobek.FunctionCall) sobek.Value {
 	options := jsObject(call.Argument(1))
 	typ := jsOptionString(options, "type", "conjunction")
 	style := jsOptionString(options, "style", "long")
 	o := j.vm.NewObject()
-	j.method(o, "format", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "format", func(call sobek.FunctionCall) sobek.Value {
 		arr := jsObject(call.Argument(0))
 		var vals []string
 		if arr != nil {
@@ -682,7 +682,7 @@ func (j *jsRuntime) newIntlListFormat(call goja.FunctionCall) goja.Value {
 		}
 		return j.vm.ToValue(intlList(vals, typ, style))
 	})
-	j.method(o, "formatToParts", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "formatToParts", func(call sobek.FunctionCall) sobek.Value {
 		arr := jsObject(call.Argument(0))
 		var vals []string
 		if arr != nil {
@@ -698,7 +698,7 @@ func (j *jsRuntime) newIntlListFormat(call goja.FunctionCall) goja.Value {
 		_ = out.Set("0", po)
 		return out
 	})
-	j.method(o, "resolvedOptions", func(goja.FunctionCall) goja.Value {
+	j.method(o, "resolvedOptions", func(sobek.FunctionCall) sobek.Value {
 		ro := j.vm.NewObject()
 		_ = ro.Set("locale", "en-US")
 		_ = ro.Set("type", typ)
@@ -732,7 +732,7 @@ func intlList(vals []string, typ, style string) string {
 	return strings.Join(vals[:len(vals)-1], sep) + sep + last + " " + vals[len(vals)-1]
 }
 
-func (j *jsRuntime) intlCanonicalLocales(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) intlCanonicalLocales(call sobek.FunctionCall) sobek.Value {
 	v := call.Argument(0)
 	var out []string
 	if o := jsObject(v); o != nil {
@@ -740,13 +740,13 @@ func (j *jsRuntime) intlCanonicalLocales(call goja.FunctionCall) goja.Value {
 		for i := 0; i < n; i++ {
 			out = append(out, o.Get(strconv.Itoa(i)).String())
 		}
-	} else if !goja.IsUndefined(v) && !goja.IsNull(v) {
+	} else if !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 		out = append(out, v.String())
 	}
 	return j.vm.ToValue(out)
 }
 
-func (j *jsRuntime) intlSupportedValuesOf(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) intlSupportedValuesOf(call sobek.FunctionCall) sobek.Value {
 	key := call.Argument(0).String()
 	var vals []string
 	switch key {

@@ -1,7 +1,7 @@
 package browser
 
 import (
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // installPlatformStubs registers the browser-platform interfaces that pages
@@ -117,7 +117,13 @@ func (j *jsRuntime) installPlatformStubs() {
 	// work, but elements are not upgraded.
 	var customRegistry = {};
 	define("customElements", {
-		define: function (name, ctor) { customRegistry[name] = ctor; },
+		define: function (name, ctor) {
+			name = String(name).toLowerCase();
+			customRegistry[name] = ctor;
+			if (typeof __mob3DefineCustomElement === "function") {
+				__mob3DefineCustomElement(name, ctor);
+			}
+		},
 		get: function (name) { return customRegistry[name]; },
 		whenDefined: function (name) { return Promise.resolve(customRegistry[name]); },
 		upgrade: function () {}
@@ -195,6 +201,9 @@ func (j *jsRuntime) installPlatformStubs() {
 	PerformanceObserver.prototype.observe = function () {};
 	PerformanceObserver.prototype.disconnect = function () {};
 	PerformanceObserver.prototype.takeRecords = function () { return []; };
+	// Feature detection reads the static list before observing anything;
+	// without it the optional-chain guard passes and .includes throws.
+	PerformanceObserver.supportedEntryTypes = [];
 	define("PerformanceObserver", PerformanceObserver);
 
 	// Canvas path objects are accepted as no-ops because the canvas itself has
@@ -309,10 +318,53 @@ func (j *jsRuntime) installPlatformStubs() {
 	}
 
 
+	// Storage is a real constructor in browsers: libraries feature-detect it
+	// and patch Storage.prototype, so expose it even though the two storage
+	// objects are Go-backed.
+	var StorageC = ctor("Storage");
+	StorageC.prototype.getItem = function (k) {
+		var v = this[String(k)];
+		return v === undefined ? null : String(v);
+	};
+	StorageC.prototype.setItem = function (k, v) { this[String(k)] = String(v); };
+	StorageC.prototype.removeItem = function (k) { delete this[String(k)]; };
+	StorageC.prototype.clear = function () {
+		for (var k in this) { try { delete this[k]; } catch (e) {} }
+	};
+	StorageC.prototype.key = function (i) {
+		var n = 0;
+		for (var k in this) { if (n++ === i) { return k; } }
+		return null;
+	};
+
+	// Constructable stylesheets are a common selector feature-detection path:
+	// code calls insertRule/deleteRule inside a try/catch. They are inert here,
+	// but must not throw.
+	var CSSStyleSheetC = ctor("CSSStyleSheet");
+	CSSStyleSheetC.prototype.insertRule = function (rule, index) {
+		if (!this.cssRules) { this.cssRules = []; this.rules = this.cssRules; }
+		var at = (index === undefined || index < 0 || index > this.cssRules.length) ? this.cssRules.length : index;
+		this.cssRules.splice(at, 0, { cssText: String(rule) });
+		return at;
+	};
+	CSSStyleSheetC.prototype.deleteRule = function (index) {
+		if (this.cssRules && index >= 0 && index < this.cssRules.length) { this.cssRules.splice(index, 1); }
+	};
+	CSSStyleSheetC.prototype.addRule = function (selector, style, index) {
+		return this.insertRule(String(selector || "") + "{" + String(style || "") + "}", index);
+	};
+	CSSStyleSheetC.prototype.removeRule = function (index) { this.deleteRule(index); };
+	CSSStyleSheetC.prototype.replaceSync = function () {
+		this.cssRules = []; this.rules = this.cssRules;
+	};
+	CSSStyleSheetC.prototype.replace = function () {
+		this.replaceSync();
+		return Promise.resolve(this);
+	};
+
 	// Constructors commonly checked with instanceof or used to create values.
 	ctor("DOMTokenList");
 	ctor("CSSStyleDeclaration");
-	ctor("CSSStyleSheet");
 	ctor("StyleSheet");
 	ctor("MediaQueryList");
 	ctor("NodeIterator");
@@ -460,17 +512,23 @@ func (j *jsRuntime) installPlatformStubs() {
 		j.reportError(err)
 		return
 	}
-	protoOf := func(name string) *goja.Object {
+	protoOf := func(name string) *sobek.Object {
 		v := j.vm.Get(name)
-		o, ok := v.(*goja.Object)
+		o, ok := v.(*sobek.Object)
 		if !ok {
 			return nil
 		}
-		proto, _ := o.Get("prototype").(*goja.Object)
+		proto, _ := o.Get("prototype").(*sobek.Object)
 		return proto
 	}
 	j.domStringMapProto = protoOf("DOMStringMap")
 	j.domTokenListProto = protoOf("DOMTokenList")
+	if storageCtor, ok := j.vm.Get("Storage").(*sobek.Object); ok {
+		if proto, ok := storageCtor.Get("prototype").(*sobek.Object); ok {
+			_ = j.storageLocal.SetPrototype(proto)
+			_ = j.storageSession.SetPrototype(proto)
+		}
+	}
 	j.cssStyleProto = protoOf("CSSStyleDeclaration")
 	j.mediaQueryProto = protoOf("MediaQueryList")
 	j.treeWalkerProto = protoOf("TreeWalker")

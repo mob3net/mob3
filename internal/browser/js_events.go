@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // eventConstructorScript defines the event constructor globals. The objects are
@@ -320,20 +320,20 @@ func (j *jsRuntime) installEventConstructors() {
 		j.reportError(err)
 		return
 	}
-	j.eventCtors = make(map[string]*goja.Object)
+	j.eventCtors = make(map[string]*sobek.Object)
 	for _, name := range []string{
 		"Event", "CustomEvent", "UIEvent", "MouseEvent", "KeyboardEvent",
 		"FocusEvent", "InputEvent", "PointerEvent", "ErrorEvent", "MessageEvent",
 		"ProgressEvent",
 	} {
-		if o, ok := j.vm.Get(name).(*goja.Object); ok {
+		if o, ok := j.vm.Get(name).(*sobek.Object); ok {
 			j.eventCtors[name] = o
 		}
 	}
 }
 
 // eventConstructor maps a document.createEvent interface name to a constructor.
-func (j *jsRuntime) eventConstructor(name string) *goja.Object {
+func (j *jsRuntime) eventConstructor(name string) *sobek.Object {
 	name = strings.ToLower(strings.TrimSpace(name))
 	switch name {
 	case "customevent":
@@ -362,7 +362,7 @@ func (j *jsRuntime) eventConstructor(name string) *goja.Object {
 }
 
 // createEvent implements document.createEvent.
-func (j *jsRuntime) createEvent(name string) goja.Value {
+func (j *jsRuntime) createEvent(name string) sobek.Value {
 	ctor := j.eventConstructor(name)
 	if ctor == nil {
 		return j.vm.NewObject()
@@ -374,39 +374,39 @@ func (j *jsRuntime) createEvent(name string) goja.Value {
 	return o
 }
 
-func (j *jsRuntime) eventType(ev *goja.Object) string {
+func (j *jsRuntime) eventType(ev *sobek.Object) string {
 	if ev == nil {
 		return ""
 	}
-	if v := ev.Get("type"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+	if v := ev.Get("type"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 		return strings.TrimSpace(v.String())
 	}
 	return ""
 }
 
-func (j *jsRuntime) eventFlag(ev *goja.Object, name string) bool {
+func (j *jsRuntime) eventFlag(ev *sobek.Object, name string) bool {
 	if ev == nil {
 		return false
 	}
-	if v := ev.Get(name); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+	if v := ev.Get(name); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 		return v.ToBoolean()
 	}
 	return false
 }
 
-func (j *jsRuntime) setEventCurrent(ev *goja.Object, this goja.Value) {
+func (j *jsRuntime) setEventCurrent(ev *sobek.Object, this sobek.Value) {
 	if ev == nil {
 		return
 	}
 	_ = ev.Set("currentTarget", this)
 }
 
-func (j *jsRuntime) eventStopped(ev *goja.Object) bool {
+func (j *jsRuntime) eventStopped(ev *sobek.Object) bool {
 	return j.eventFlag(ev, "cancelBubble")
 }
 
 // callEventListeners runs one listener list for a script-created event.
-func (j *jsRuntime) callEventListeners(m map[string][]jsListener, typ string, this goja.Value, ev *goja.Object) {
+func (j *jsRuntime) callEventListeners(m map[string][]jsListener, typ string, this sobek.Value, ev *sobek.Object) {
 	list := m[typ]
 	for i := 0; i < len(list); i++ {
 		l := list[i]
@@ -424,8 +424,8 @@ func (j *jsRuntime) callEventListeners(m map[string][]jsListener, typ string, th
 
 // dispatchNodeEvent implements element.dispatchEvent. Events bubble only when
 // their bubbles flag is set, then reach document and window.
-func (j *jsRuntime) dispatchNodeEvent(n *Node, ev goja.Value) bool {
-	obj, _ := ev.(*goja.Object)
+func (j *jsRuntime) dispatchNodeEvent(n *Node, ev sobek.Value) bool {
+	obj, _ := ev.(*sobek.Object)
 	if obj == nil || n == nil {
 		return true
 	}
@@ -467,8 +467,8 @@ func (j *jsRuntime) dispatchNodeEvent(n *Node, ev goja.Value) bool {
 }
 
 // dispatchDocumentEvent implements document.dispatchEvent.
-func (j *jsRuntime) dispatchDocumentEvent(ev goja.Value) bool {
-	obj, _ := ev.(*goja.Object)
+func (j *jsRuntime) dispatchDocumentEvent(ev sobek.Value) bool {
+	obj, _ := ev.(*sobek.Object)
 	typ := j.eventType(obj)
 	if typ == "" {
 		return true
@@ -484,8 +484,8 @@ func (j *jsRuntime) dispatchDocumentEvent(ev goja.Value) bool {
 }
 
 // dispatchWindowEvent implements window.dispatchEvent.
-func (j *jsRuntime) dispatchWindowEvent(ev goja.Value) bool {
-	obj, _ := ev.(*goja.Object)
+func (j *jsRuntime) dispatchWindowEvent(ev sobek.Value) bool {
+	obj, _ := ev.(*sobek.Object)
 	typ := j.eventType(obj)
 	if typ == "" {
 		return true
@@ -560,7 +560,9 @@ func (j *jsRuntime) installElementConstructors() {
 		protos[tag] = globalThis[name].prototype;
 	}
 	globalThis.__mob3ElementProtos = protos;
-	globalThis.__mob3ElementProto = HTMLElementC.prototype;
+	// DOM methods live on Element.prototype so HTML and SVG wrappers both
+	// inherit them; SVGElement deliberately does not extend HTMLElement.
+	globalThis.__mob3ElementProto = ElementC.prototype;
 	globalThis.__mob3TextProto = TextC.prototype;
 	globalThis.__mob3DocumentProto = HTMLDocumentC.prototype;
 	var names = ["Node", "Element", "HTMLElement", "SVGElement", "Document", "HTMLDocument", "CharacterData", "Text", "Comment", "DocumentFragment", "DocumentType"];
@@ -576,10 +578,10 @@ func (j *jsRuntime) installElementConstructors() {
 		j.reportError(err)
 		return
 	}
-	j.elementProtos = make(map[string]*goja.Object)
-	if o, ok := j.vm.Get("__mob3ElementProtos").(*goja.Object); ok {
+	j.elementProtos = make(map[string]*sobek.Object)
+	if o, ok := j.vm.Get("__mob3ElementProtos").(*sobek.Object); ok {
 		for _, tag := range o.Keys() {
-			if p, ok := o.Get(tag).(*goja.Object); ok {
+			if p, ok := o.Get(tag).(*sobek.Object); ok {
 				j.elementProtos[strings.ToLower(tag)] = p
 			}
 		}
@@ -587,7 +589,7 @@ func (j *jsRuntime) installElementConstructors() {
 	j.elementProto = j.globalProto("__mob3ElementProto")
 	j.textProto = j.globalProto("__mob3TextProto")
 	j.docProto = j.globalProto("__mob3DocumentProto")
-	if names, ok := j.vm.Get("__mob3ElementCtors").(*goja.Object); ok {
+	if names, ok := j.vm.Get("__mob3ElementCtors").(*sobek.Object); ok {
 		n := int(names.Get("length").ToInteger())
 		for i := 0; i < n; i++ {
 			j.elementCtors = append(j.elementCtors, names.Get(strconv.Itoa(i)).String())
@@ -601,14 +603,14 @@ func (j *jsRuntime) installElementConstructors() {
 	}
 }
 
-func (j *jsRuntime) globalProto(name string) *goja.Object {
-	if p, ok := j.vm.Get(name).(*goja.Object); ok {
+func (j *jsRuntime) globalProto(name string) *sobek.Object {
+	if p, ok := j.vm.Get(name).(*sobek.Object); ok {
 		return p
 	}
 	return nil
 }
 
-func (j *jsRuntime) setElementPrototype(o *goja.Object, n *Node) {
+func (j *jsRuntime) setElementPrototype(o *sobek.Object, n *Node) {
 	if n.Type == TextNode {
 		if j.textProto != nil {
 			_ = o.SetPrototype(j.textProto)

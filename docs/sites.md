@@ -21,8 +21,9 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 - Classic bundles that only need platform APIs to exist: `IntersectionObserver`
   and `ResizeObserver` (one synthetic entry per target), `NodeList`,
   `EventTarget`, `CSS.escape`, `customElements`, `ReadableStream`, `Path2D`,
-  Web Animations stubs and inert `Worker`s. Dynamic `import()` resolves to an
-  empty module namespace instead of failing the whole script.
+  Web Animations stubs and inert `Worker`s. ES module scripts run with their
+  relative imports, dynamic `import()` returns a real namespace, and
+  `import.meta.url` reports the page URL.
 - Responsive and lazy images: `srcset` candidates, `<picture>` sources and
   common `data-src`/`data-srcset` placeholders are selected, and images added
   or changed by scripts are loaded after the page runs.
@@ -47,8 +48,7 @@ curl command.
 
 ## Often rough
 
-- Single-page applications, module-only sites, heavy shadow DOM, custom
-  elements and CSS-in-JS.
+- Single-page applications, heavy shadow DOM, custom elements and CSS-in-JS.
 - Sites that require a browser check, CAPTCHA, unusual TLS or a specific
   certificate.
 - Complex grid/flex layouts, sticky positioning, z-index stacking, full float
@@ -58,8 +58,10 @@ curl command.
 
 ## Not supported
 
-- ES modules, workers, service workers, WebSocket, IndexedDB, WebRTC,
+- Import map scopes, workers, service workers, WebSocket, IndexedDB, WebRTC,
   geolocation, clipboard APIs, notifications and browser payment APIs.
+- Async generator syntax (`async function*`) and `for await`: the script
+  containing them does not parse, so it is skipped.
 - CSP enforcement, certificate UI and proxy configuration UI.
 - Pixel screenshots for automation. MOB³ has no font rasterizer.
 

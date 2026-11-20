@@ -3,12 +3,13 @@ package browser
 import (
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 const (
@@ -21,60 +22,78 @@ const (
 // browser goroutine; timers are pumped from the interactive loop.
 type jsRuntime struct {
 	b    *Browser
-	vm   *goja.Runtime
+	vm   *sobek.Runtime
 	page *Page
 
-	nodes map[*Node]*goja.Object
-	rev   map[*goja.Object]*Node
+	nodes map[*Node]*sobek.Object
+	rev   map[*sobek.Object]*Node
+	// templates maps a <template> element to the inert fragment that holds its
+	// content, created on first access to template.content.
+	templates map[*Node]*Node
+	// customCtors holds the registered custom element classes, and building is
+	// the stack of nodes whose constructor is currently running so DOM calls
+	// made during construction resolve to them.
+	customCtors map[string]*sobek.Object
+	building    []*Node
 
-	docObj            *goja.Object
-	winObj            *goja.Object
-	navObj            *goja.Object
-	perfObj           *goja.Object
-	locObj            *goja.Object
-	histObj           *goja.Object
-	elementProtos     map[string]*goja.Object
+	docObj            *sobek.Object
+	winObj            *sobek.Object
+	navObj            *sobek.Object
+	perfObj           *sobek.Object
+	locObj            *sobek.Object
+	histObj           *sobek.Object
+	elementProtos     map[string]*sobek.Object
 	elementCtors      []string
-	elementProto      *goja.Object
-	textProto         *goja.Object
-	docProto          *goja.Object
-	domStringMapProto *goja.Object
-	domTokenListProto *goja.Object
-	cssStyleProto     *goja.Object
-	mediaQueryProto   *goja.Object
-	treeWalkerProto   *goja.Object
-	nodeIteratorProto *goja.Object
-	headerObjs        map[*goja.Object]map[string][]string
-	datasetObjs       map[*Node]goja.Value
+	elementProto      *sobek.Object
+	textProto         *sobek.Object
+	docProto          *sobek.Object
+	domStringMapProto *sobek.Object
+	domTokenListProto *sobek.Object
+	cssStyleProto     *sobek.Object
+	mediaQueryProto   *sobek.Object
+	treeWalkerProto   *sobek.Object
+	nodeIteratorProto *sobek.Object
+	headerObjs        map[*sobek.Object]map[string][]string
+	datasetObjs       map[*Node]sobek.Value
 	start             time.Time
 	pendingNav        string
 	pendingReplace    bool
 	pendingForm       *jsFormSubmission
 	dialogActive      atomic.Bool
+	// ioActive marks a host-side fetch (a dynamic module import) running inside
+	// a script. The 2-second watchdog must not count network time against the
+	// script, the same way it ignores time spent in a modal dialog.
+	ioActive atomic.Bool
+	// modules loads ES modules for this page. It is nil until the first module
+	// script is evaluated.
+	modules *jsModuleLoader
 
-	storageLocal       *goja.Object
-	storageSession     *goja.Object
+	storageLocal       *sobek.Object
+	storageSession     *sobek.Object
 	storageLocalData   map[string]string
 	storageSessionData map[string]string
-	currentScript      *goja.Object
+	currentScript      *sobek.Object
 
 	nodeListeners map[*Node]map[string][]jsListener
 	propListeners map[*Node]map[string]jsListener
 	docListeners  map[string][]jsListener
 	winListeners  map[string][]jsListener
-	winOnLoad     goja.Value
+	winOnLoad     sobek.Value
 
 	selectors map[string][]*Selector
 
-	eventCtors     map[string]*goja.Object
-	canvasContexts map[*Node]goja.Value
+	eventCtors     map[string]*sobek.Object
+	canvasContexts map[*Node]sobek.Value
 
-	selection *goja.Object
-	ranges    map[*goja.Object]*jsRange
-	blobs     map[*goja.Object]*blobData
-	blobURLs  map[string]*goja.Object
+	selection *sobek.Object
+	ranges    map[*sobek.Object]*jsRange
+	blobs     map[*sobek.Object]*blobData
+	blobURLs  map[string]*sobek.Object
 	blobSeq   int64
 
+	// loadDone marks that the page's own scripts have finished, so a dynamic
+	// import() may be loaded in the background instead of blocking the loop.
+	loadDone bool
 	timers   map[int]*jsTimer
 	nextID   int
 	dirty    bool
@@ -88,8 +107,8 @@ type jsRuntime struct {
 }
 
 type jsListener struct {
-	value goja.Value
-	call  goja.Callable
+	value sobek.Value
+	call  sobek.Callable
 	once  bool
 }
 
@@ -98,8 +117,8 @@ type jsTimer struct {
 	due    time.Time
 	every  time.Duration
 	repeat bool
-	fn     goja.Callable
-	args   []goja.Value
+	fn     sobek.Callable
+	args   []sobek.Value
 }
 
 // jsFormSubmission is a programmatic form.submit() queued until the current
@@ -114,10 +133,12 @@ type jsFormSubmission struct {
 func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j := &jsRuntime{
 		b:              b,
-		vm:             goja.New(),
+		vm:             sobek.New(),
 		page:           page,
-		nodes:          make(map[*Node]*goja.Object),
-		rev:            make(map[*goja.Object]*Node),
+		nodes:          make(map[*Node]*sobek.Object),
+		rev:            make(map[*sobek.Object]*Node),
+		templates:      make(map[*Node]*Node),
+		customCtors:    make(map[string]*sobek.Object),
 		nodeListeners:  make(map[*Node]map[string][]jsListener),
 		propListeners:  make(map[*Node]map[string]jsListener),
 		docListeners:   make(map[string][]jsListener),
@@ -125,12 +146,12 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		selectors:      make(map[string][]*Selector),
 		timers:         make(map[int]*jsTimer),
 		nextID:         1,
-		headerObjs:     make(map[*goja.Object]map[string][]string),
-		datasetObjs:    make(map[*Node]goja.Value),
-		canvasContexts: make(map[*Node]goja.Value),
-		ranges:         make(map[*goja.Object]*jsRange),
-		blobs:          make(map[*goja.Object]*blobData),
-		blobURLs:       make(map[string]*goja.Object),
+		headerObjs:     make(map[*sobek.Object]map[string][]string),
+		datasetObjs:    make(map[*Node]sobek.Value),
+		canvasContexts: make(map[*Node]sobek.Value),
+		ranges:         make(map[*sobek.Object]*jsRange),
+		blobs:          make(map[*sobek.Object]*blobData),
+		blobURLs:       make(map[string]*sobek.Object),
 	}
 	j.start = time.Now()
 	j.installElementConstructors()
@@ -160,22 +181,33 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	_ = j.vm.Set("history", j.histObj)
 	_ = j.vm.Set("window", j.winObj)
 	_ = j.vm.Set("console", j.consoleObject())
-	_ = j.vm.Set("requestAnimationFrame", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		return j.setTimer(goja.FunctionCall{Arguments: []goja.Value{call.Argument(0), j.vm.ToValue(16)}}, false)
+	_ = j.vm.Set("requestAnimationFrame", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		return j.setTimer(sobek.FunctionCall{Arguments: []sobek.Value{call.Argument(0), j.vm.ToValue(16)}}, false)
 	}))
 	_ = j.vm.Set("cancelAnimationFrame", j.vm.ToValue(j.clearTimer))
 	_ = j.vm.Set("matchMedia", j.vm.ToValue(j.matchMediaFunc()))
-	_ = j.vm.Set("requestIdleCallback", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		return j.setTimer(goja.FunctionCall{Arguments: []goja.Value{call.Argument(0), j.vm.ToValue(1)}}, false)
+	_ = j.vm.Set("requestIdleCallback", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		return j.setTimer(sobek.FunctionCall{Arguments: []sobek.Value{call.Argument(0), j.vm.ToValue(1)}}, false)
 	}))
 	_ = j.vm.Set("cancelIdleCallback", j.vm.ToValue(j.clearTimer))
-	_ = j.vm.Set("__mob3NewURL", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	// reportError() reports an exception to the console without throwing, as
+	// the HTML error-reporting API does.
+	reportError := j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		v := call.Argument(0)
+		if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
+			return sobek.Undefined()
+		}
+		j.b.logJS("error", j.errorText(v))
+		return sobek.Undefined()
+	})
+	_ = j.vm.Set("reportError", reportError)
+	_ = j.vm.Set("__mob3NewURL", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.newURL(call.Argument(0).String(), call.Argument(1))
 	}))
-	_ = j.vm.Set("__mob3NewUSP", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("__mob3NewUSP", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.newURLSearchParams(call.Argument(0))
 	}))
-	_ = j.vm.Set("__mob3NewXHR", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("__mob3NewXHR", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		return j.xmlHTTPRequestObject()
 	}))
 	if _, err := j.vm.RunScript("bootstrap", `
@@ -199,15 +231,15 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	`); err != nil {
 		j.reportError(err)
 	}
-	_ = j.vm.Set("setTimeout", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("setTimeout", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.setTimer(call, false)
 	}))
-	_ = j.vm.Set("setInterval", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("setInterval", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.setTimer(call, true)
 	}))
 	_ = j.vm.Set("clearTimeout", j.vm.ToValue(j.clearTimer))
 	_ = j.vm.Set("clearInterval", j.vm.ToValue(j.clearTimer))
-	_ = j.vm.Set("alert", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("alert", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
 		j.b.logJS("alert", msg)
 		j.b.status = "JS alert: " + truncateWidth(msg, 120) + "  (! console)"
@@ -215,9 +247,9 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		j.b.showAlert(msg)
 		j.dialogActive.Store(false)
 		j.vm.ClearInterrupt()
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = j.vm.Set("confirm", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("confirm", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
 		j.b.logJS("confirm", msg)
 		j.dialogActive.Store(true)
@@ -226,7 +258,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		j.vm.ClearInterrupt()
 		return j.vm.ToValue(ok)
 	}))
-	_ = j.vm.Set("prompt", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = j.vm.Set("prompt", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
 		def := ""
 		if len(call.Arguments) > 1 {
@@ -238,7 +270,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		j.dialogActive.Store(false)
 		j.vm.ClearInterrupt()
 		if !ok {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.vm.ToValue(text)
 	}))
@@ -252,8 +284,18 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 			_ = j.winObj.Set(name, v)
 		}
 	}
+	_ = j.vm.Set("__mob3DefineCustomElement", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		name := strings.ToLower(strings.TrimSpace(call.Argument(0).String()))
+		ctor, ok := call.Argument(1).(*sobek.Object)
+		if ok && name != "" {
+			j.customCtors[name] = ctor
+		}
+		return sobek.Undefined()
+	}))
 	j.installCompat()
-	j.installDynamicImport()
+	// Every runtime gets the module hooks, so a classic script can use
+	// dynamic import() even when the page has no module script of its own.
+	j.modules = newJSModuleLoader(j)
 	return j
 }
 
@@ -272,23 +314,34 @@ func (b *Browser) startJS(page *Page) {
 	}
 	b.js = j
 	for _, sc := range page.Scripts {
+		if sc.Module {
+			// A module script has no document.currentScript and is evaluated as
+			// part of a linked module graph.
+			j.currentScript = nil
+			if err := j.runModule(sc); err != nil {
+				j.reportError(err)
+				b.moduleErr = true
+			}
+			continue
+		}
 		name := sc.Src
 		if name == "" {
 			name = "script"
 		}
 		j.currentScript = nil
 		if sc.Node != nil {
-			if v, ok := j.wrap(sc.Node).(*goja.Object); ok {
+			if v, ok := j.wrap(sc.Node).(*sobek.Object); ok {
 				j.currentScript = v
 			}
 		}
-		if _, err := j.runCode(name, rewriteDynamicImport(sc.Code)); err != nil {
+		if _, err := j.runCode(name, sc.Code); err != nil {
 			j.reportError(err)
 		}
 	}
 	j.currentScript = nil
 	j.fireDocumentEvent("DOMContentLoaded")
 	j.fireWindowEvent("load")
+	j.loadDone = true
 }
 
 func removeNoscript(root *Node) {
@@ -418,6 +471,22 @@ func (j *jsRuntime) consumeDirty() bool {
 	return d
 }
 
+// errorText renders a thrown value for the console, preferring the script
+// stack an Error object carries so the failing line is visible.
+func (j *jsRuntime) errorText(v sobek.Value) string {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
+		return "undefined"
+	}
+	if obj, ok := v.(*sobek.Object); ok {
+		if st := obj.Get("stack"); st != nil && !sobek.IsUndefined(st) && !sobek.IsNull(st) {
+			if s := strings.TrimSpace(st.String()); s != "" {
+				return s
+			}
+		}
+	}
+	return jsValueString(v)
+}
+
 func (j *jsRuntime) reportError(err error) {
 	if err == nil {
 		return
@@ -429,8 +498,8 @@ func (j *jsRuntime) reportError(err error) {
 	j.b.logJS("error", msg)
 }
 
-func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
-	return func(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) matchMediaFunc() func(sobek.FunctionCall) sobek.Value {
+	return func(call sobek.FunctionCall) sobek.Value {
 		q := call.Argument(0).String()
 		o := j.vm.NewObject()
 		if j.mediaQueryProto != nil {
@@ -438,8 +507,8 @@ func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
 		}
 		_ = o.Set("media", q)
 		_ = o.Set("matches", mediaMatches(q, j.b.width*cellW, j.b.dark))
-		_ = o.Set("onchange", goja.Null())
-		noop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+		_ = o.Set("onchange", sobek.Null())
+		noop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 		_ = o.Set("addListener", noop)
 		_ = o.Set("removeListener", noop)
 		_ = o.Set("addEventListener", noop)
@@ -448,16 +517,16 @@ func (j *jsRuntime) matchMediaFunc() func(goja.FunctionCall) goja.Value {
 	}
 }
 
-func (j *jsRuntime) performanceObject() *goja.Object {
+func (j *jsRuntime) performanceObject() *sobek.Object {
 	o := j.vm.NewObject()
-	nowFn := func(goja.FunctionCall) goja.Value {
+	nowFn := func(sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(float64(time.Since(j.start).Microseconds()) / 1000)
 	}
 	_ = o.Set("now", j.vm.ToValue(nowFn))
 	_ = o.Set("timeOrigin", float64(j.start.UnixMilli()))
-	_ = o.Set("mark", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() }))
-	_ = o.Set("measure", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() }))
-	empty := func(goja.FunctionCall) goja.Value { return j.vm.NewArray() }
+	_ = o.Set("mark", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() }))
+	_ = o.Set("measure", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() }))
+	empty := func(sobek.FunctionCall) sobek.Value { return j.vm.NewArray() }
 	_ = o.Set("getEntries", j.vm.ToValue(empty))
 	_ = o.Set("getEntriesByType", j.vm.ToValue(empty))
 	_ = o.Set("getEntriesByName", j.vm.ToValue(empty))
@@ -479,7 +548,7 @@ func (j *jsRuntime) performanceObject() *goja.Object {
 	return o
 }
 
-func (j *jsRuntime) locationObject() *goja.Object {
+func (j *jsRuntime) locationObject() *sobek.Object {
 	o := j.vm.NewObject()
 	href := ""
 	if j.page != nil && j.page.URL != nil {
@@ -498,25 +567,25 @@ func (j *jsRuntime) locationObject() *goja.Object {
 		}
 		_ = o.Set("origin", origin)
 	}
-	j.accessor(o, "href", func() goja.Value {
+	j.accessor(o, "href", func() sobek.Value {
 		return j.vm.ToValue(href)
-	}, func(v goja.Value) {
+	}, func(v sobek.Value) {
 		j.requestNavigation(v.String())
 	})
-	assign := func(call goja.FunctionCall) goja.Value {
+	assign := func(call sobek.FunctionCall) sobek.Value {
 		j.requestNavigation(call.Argument(0).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}
 	_ = o.Set("assign", j.vm.ToValue(assign))
-	_ = o.Set("replace", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("replace", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		j.requestNavigationReplace(call.Argument(0).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("reload", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("reload", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		j.requestNavigationReplace(href)
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	stringify := j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	stringify := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(href)
 	})
 	_ = o.Set("toString", stringify)
@@ -557,16 +626,16 @@ func (j *jsRuntime) requestNavigationReplace(raw string) {
 	}
 }
 
-func (j *jsRuntime) historyObject() *goja.Object {
+func (j *jsRuntime) historyObject() *sobek.Object {
 	o := j.vm.NewObject()
 	_ = o.Set("length", 0)
-	_ = o.Set("state", goja.Null())
-	noop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	_ = o.Set("state", sobek.Null())
+	noop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 	_ = o.Set("pushState", noop)
 	_ = o.Set("replaceState", noop)
-	stub := j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	stub := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		j.b.status = "JavaScript history navigation is not supported"
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
 	_ = o.Set("back", stub)
 	_ = o.Set("forward", stub)
@@ -588,7 +657,7 @@ func prefixHash(h string) string {
 	return "#" + h
 }
 
-func (j *jsRuntime) navigatorObject() *goja.Object {
+func (j *jsRuntime) navigatorObject() *sobek.Object {
 	o := j.vm.NewObject()
 	ua := defaultUserAgent
 	if j.b.loader != nil && j.b.loader.userAgent != "" {
@@ -602,7 +671,7 @@ func (j *jsRuntime) navigatorObject() *goja.Object {
 	_ = o.Set("languages", j.vm.NewArray("en-US", "en"))
 	_ = o.Set("cookieEnabled", true)
 	_ = o.Set("onLine", true)
-	_ = o.Set("sendBeacon", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("sendBeacon", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		// Beacon delivery is not implemented; accepting the call keeps
 		// analytics and unload handlers from throwing.
 		return j.vm.ToValue(true)
@@ -619,15 +688,24 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		return nil
 	}
 	done := make(chan struct{})
-	timer := time.AfterFunc(jsTimeout, func() {
+	// The watchdog re-arms itself while the host is blocked in a modal dialog
+	// or a synchronous fetch. Network and user time are not script CPU time,
+	// and interrupting a module mid-evaluation would leave its promise pending.
+	var timer atomic.Pointer[time.Timer]
+	var check func()
+	check = func() {
 		select {
 		case <-done:
+			return
 		default:
-			if !j.dialogActive.Load() {
-				j.vm.Interrupt("JavaScript timed out")
-			}
 		}
-	})
+		if j.dialogActive.Load() || j.ioActive.Load() {
+			timer.Store(time.AfterFunc(jsTimeout, check))
+			return
+		}
+		j.vm.Interrupt("JavaScript timed out")
+	}
+	timer.Store(time.AfterFunc(jsTimeout, check))
 	var base runtime.MemStats
 	var memDone chan struct{}
 	if limit := j.b.jsMemLimit; limit > 0 {
@@ -659,16 +737,19 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		if memDone != nil {
 			close(memDone)
 		}
-		timer.Stop()
+		if t := timer.Load(); t != nil {
+			t.Stop()
+		}
 		j.vm.ClearInterrupt()
 		if r := recover(); r != nil {
+			j.b.logJS("debug", "panic: "+fmt.Sprintf("%v", r)+"\n"+string(debug.Stack()))
 			err = fmt.Errorf("%v", r)
 		}
 	}()
 	return fn()
 }
 
-func (j *jsRuntime) runCode(name, src string) (v goja.Value, err error) {
+func (j *jsRuntime) runCode(name, src string) (v sobek.Value, err error) {
 	err = j.guard(func() error {
 		var e error
 		v, e = j.vm.RunScript(name, src)
@@ -677,7 +758,7 @@ func (j *jsRuntime) runCode(name, src string) (v goja.Value, err error) {
 	return v, err
 }
 
-func (j *jsRuntime) call(fn goja.Callable, this goja.Value, args ...goja.Value) (v goja.Value, ok bool) {
+func (j *jsRuntime) call(fn sobek.Callable, this sobek.Value, args ...sobek.Value) (v sobek.Value, ok bool) {
 	if fn == nil || j.stopped {
 		return nil, false
 	}
@@ -694,17 +775,17 @@ func (j *jsRuntime) call(fn goja.Callable, this goja.Value, args ...goja.Value) 
 	return v, true
 }
 
-func (j *jsRuntime) consoleObject() *goja.Object {
+func (j *jsRuntime) consoleObject() *sobek.Object {
 	o := j.vm.NewObject()
-	logf := func(level string) func(goja.FunctionCall) goja.Value {
-		return func(call goja.FunctionCall) goja.Value {
+	logf := func(level string) func(sobek.FunctionCall) sobek.Value {
+		return func(call sobek.FunctionCall) sobek.Value {
 			parts := make([]string, 0, len(call.Arguments))
 			for _, a := range call.Arguments {
 				parts = append(parts, a.String())
 			}
 			msg := strings.Join(parts, " ")
 			j.b.logJS(level, msg)
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 	}
 	_ = o.Set("log", j.vm.ToValue(logf("log")))
@@ -714,7 +795,7 @@ func (j *jsRuntime) consoleObject() *goja.Object {
 	return o
 }
 
-func (j *jsRuntime) windowObject() *goja.Object {
+func (j *jsRuntime) windowObject() *sobek.Object {
 	// window is the global object: `window.foo = 1` must create a global
 	// `foo`, and global `var` declarations must appear on window.
 	o := j.vm.GlobalObject()
@@ -735,10 +816,10 @@ func (j *jsRuntime) windowObject() *goja.Object {
 		cellH = 16
 	}
 	scrollPx := func() int { return j.b.scroll * cellH }
-	j.accessor(o, "scrollX", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "scrollY", func() goja.Value { return j.vm.ToValue(scrollPx()) }, nil)
-	j.accessor(o, "pageXOffset", func() goja.Value { return j.vm.ToValue(0) }, nil)
-	j.accessor(o, "pageYOffset", func() goja.Value { return j.vm.ToValue(scrollPx()) }, nil)
+	j.accessor(o, "scrollX", func() sobek.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "scrollY", func() sobek.Value { return j.vm.ToValue(scrollPx()) }, nil)
+	j.accessor(o, "pageXOffset", func() sobek.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "pageYOffset", func() sobek.Value { return j.vm.ToValue(scrollPx()) }, nil)
 	origin, secure := "", false
 	if j.page != nil && j.page.URL != nil {
 		u := j.page.URL
@@ -753,13 +834,13 @@ func (j *jsRuntime) windowObject() *goja.Object {
 	_ = o.Set("name", "")
 	_ = o.Set("frames", o)
 	_ = o.Set("length", 0)
-	_ = o.Set("opener", goja.Null())
+	_ = o.Set("opener", sobek.Null())
 	_ = o.Set("closed", false)
-	_ = o.Set("frameElement", goja.Null())
-	scrollWindowTo := func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("frameElement", sobek.Null())
+	scrollWindowTo := func(call sobek.FunctionCall) sobek.Value {
 		top := 0.0
 		if obj := jsObject(call.Argument(0)); obj != nil {
-			if v := obj.Get("top"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+			if v := obj.Get("top"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 				top = v.ToFloat()
 			}
 		} else {
@@ -767,14 +848,14 @@ func (j *jsRuntime) windowObject() *goja.Object {
 		}
 		j.b.scroll = int(top) / cellH
 		j.b.clampScroll()
-		return goja.Undefined()
+		return sobek.Undefined()
 	}
 	_ = o.Set("scroll", j.vm.ToValue(scrollWindowTo))
 	_ = o.Set("scrollTo", j.vm.ToValue(scrollWindowTo))
-	_ = o.Set("scrollBy", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("scrollBy", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		delta := 0.0
 		if obj := jsObject(call.Argument(0)); obj != nil {
-			if v := obj.Get("top"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+			if v := obj.Get("top"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 				delta = v.ToFloat()
 			}
 		} else {
@@ -782,14 +863,14 @@ func (j *jsRuntime) windowObject() *goja.Object {
 		}
 		j.b.scroll += int(delta) / cellH
 		j.b.clampScroll()
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	windowNoop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	windowNoop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 	for _, name := range []string{"focus", "blur", "stop", "close", "postMessage"} {
 		_ = o.Set(name, windowNoop)
 	}
-	_ = o.Set("open", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Null() }))
-	_ = o.Set("getComputedStyle", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("open", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Null() }))
+	_ = o.Set("getComputedStyle", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.computedStyleObject(j.unwrap(call.Argument(0)))
 	}))
 	screen := j.vm.NewObject()
@@ -808,44 +889,44 @@ func (j *jsRuntime) windowObject() *goja.Object {
 	_ = vv.Set("offsetTop", 0)
 	_ = vv.Set("pageLeft", 0)
 	_ = vv.Set("pageTop", 0)
-	vvNoop := j.vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Undefined() })
+	vvNoop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 	_ = vv.Set("addEventListener", vvNoop)
 	_ = vv.Set("removeEventListener", vvNoop)
 	_ = o.Set("visualViewport", vv)
 	_ = o.Set("console", j.consoleObject())
-	_ = o.Set("setTimeout", j.vm.ToValue(func(call goja.FunctionCall) goja.Value { return j.setTimer(call, false) }))
-	_ = o.Set("setInterval", j.vm.ToValue(func(call goja.FunctionCall) goja.Value { return j.setTimer(call, true) }))
+	_ = o.Set("setTimeout", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value { return j.setTimer(call, false) }))
+	_ = o.Set("setInterval", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value { return j.setTimer(call, true) }))
 	_ = o.Set("clearTimeout", j.vm.ToValue(j.clearTimer))
 	_ = o.Set("clearInterval", j.vm.ToValue(j.clearTimer))
-	_ = o.Set("requestAnimationFrame", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		return j.setTimer(goja.FunctionCall{Arguments: []goja.Value{call.Argument(0), j.vm.ToValue(16)}}, false)
+	_ = o.Set("requestAnimationFrame", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		return j.setTimer(sobek.FunctionCall{Arguments: []sobek.Value{call.Argument(0), j.vm.ToValue(16)}}, false)
 	}))
 	_ = o.Set("cancelAnimationFrame", j.vm.ToValue(j.clearTimer))
 	_ = o.Set("matchMedia", j.vm.ToValue(j.matchMediaFunc()))
-	_ = o.Set("requestIdleCallback", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		return j.setTimer(goja.FunctionCall{Arguments: []goja.Value{call.Argument(0), j.vm.ToValue(1)}}, false)
+	_ = o.Set("requestIdleCallback", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		return j.setTimer(sobek.FunctionCall{Arguments: []sobek.Value{call.Argument(0), j.vm.ToValue(1)}}, false)
 	}))
 	_ = o.Set("cancelIdleCallback", j.vm.ToValue(j.clearTimer))
-	_ = o.Set("addEventListener", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("addEventListener", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		j.addListener(&j.winListeners, call.Argument(0).String(), call.Argument(1), call.Argument(2))
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("removeEventListener", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("removeEventListener", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		j.removeListener(j.winListeners, call.Argument(0).String(), call.Argument(1))
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("dispatchEvent", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("dispatchEvent", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(j.dispatchWindowEvent(call.Argument(0)))
 	}))
-	_ = o.DefineAccessorProperty("onload", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.DefineAccessorProperty("onload", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		if j.winOnLoad == nil {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.winOnLoad
-	}), j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	}), j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		j.winOnLoad = call.Argument(0)
-		return goja.Undefined()
-	}), goja.FLAG_TRUE, goja.FLAG_FALSE)
+		return sobek.Undefined()
+	}), sobek.FLAG_TRUE, sobek.FLAG_FALSE)
 	_ = o.Set("window", o)
 	_ = o.Set("self", o)
 	_ = o.Set("top", o)
@@ -853,7 +934,7 @@ func (j *jsRuntime) windowObject() *goja.Object {
 	return o
 }
 
-func (j *jsRuntime) setTimer(call goja.FunctionCall, repeat bool) goja.Value {
+func (j *jsRuntime) setTimer(call sobek.FunctionCall, repeat bool) sobek.Value {
 	if len(j.timers) >= jsMaxTimers {
 		return j.vm.ToValue(-1)
 	}
@@ -879,8 +960,8 @@ func (j *jsRuntime) setTimer(call goja.FunctionCall, repeat bool) goja.Value {
 	return j.vm.ToValue(id)
 }
 
-func (j *jsRuntime) timerFunc(v goja.Value) (goja.Callable, bool) {
-	if fn, ok := goja.AssertFunction(v); ok {
+func (j *jsRuntime) timerFunc(v sobek.Value) (sobek.Callable, bool) {
+	if fn, ok := sobek.AssertFunction(v); ok {
 		return fn, true
 	}
 	if s, ok := v.Export().(string); ok && strings.TrimSpace(s) != "" {
@@ -889,15 +970,15 @@ func (j *jsRuntime) timerFunc(v goja.Value) (goja.Callable, bool) {
 			j.reportError(err)
 			return nil, false
 		}
-		return goja.AssertFunction(fv)
+		return sobek.AssertFunction(fv)
 	}
 	return nil, false
 }
 
-func (j *jsRuntime) clearTimer(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) clearTimer(call sobek.FunctionCall) sobek.Value {
 	id := int(call.Argument(0).ToInteger())
 	delete(j.timers, id)
-	return goja.Undefined()
+	return sobek.Undefined()
 }
 
 // tick runs due timers and returns whether any callback ran.
@@ -928,21 +1009,21 @@ func (j *jsRuntime) tick(now time.Time) bool {
 		} else {
 			delete(j.timers, t.id)
 		}
-		j.call(t.fn, goja.Undefined(), t.args...)
+		j.call(t.fn, sobek.Undefined(), t.args...)
 		ran = true
 	}
 	return ran
 }
 
-func (j *jsRuntime) addListener(m *map[string][]jsListener, typ string, fnVal, opts goja.Value) {
-	fn, ok := goja.AssertFunction(fnVal)
+func (j *jsRuntime) addListener(m *map[string][]jsListener, typ string, fnVal, opts sobek.Value) {
+	fn, ok := sobek.AssertFunction(fnVal)
 	if !ok {
 		return
 	}
 	once := false
-	if opts != nil && !goja.IsUndefined(opts) && !goja.IsNull(opts) {
-		if o, ok := opts.(*goja.Object); ok {
-			if v := o.Get("once"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+	if opts != nil && !sobek.IsUndefined(opts) && !sobek.IsNull(opts) {
+		if o, ok := opts.(*sobek.Object); ok {
+			if v := o.Get("once"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 				once = v.ToBoolean()
 			}
 		}
@@ -950,7 +1031,7 @@ func (j *jsRuntime) addListener(m *map[string][]jsListener, typ string, fnVal, o
 	(*m)[typ] = append((*m)[typ], jsListener{value: fnVal, call: fn, once: once})
 }
 
-func (j *jsRuntime) addNodeListener(n *Node, typ string, fnVal, opts goja.Value) {
+func (j *jsRuntime) addNodeListener(n *Node, typ string, fnVal, opts sobek.Value) {
 	if n == nil {
 		return
 	}
@@ -962,7 +1043,7 @@ func (j *jsRuntime) addNodeListener(n *Node, typ string, fnVal, opts goja.Value)
 	j.addListener(&m, typ, fnVal, opts)
 }
 
-func (j *jsRuntime) removeListener(m map[string][]jsListener, typ string, fnVal goja.Value) {
+func (j *jsRuntime) removeListener(m map[string][]jsListener, typ string, fnVal sobek.Value) {
 	list := m[typ]
 	out := list[:0]
 	for _, l := range list {
@@ -977,7 +1058,7 @@ func (j *jsRuntime) removeListener(m map[string][]jsListener, typ string, fnVal 
 	}
 }
 
-func (j *jsRuntime) removeNodeListener(n *Node, typ string, fnVal goja.Value) {
+func (j *jsRuntime) removeNodeListener(n *Node, typ string, fnVal sobek.Value) {
 	m := j.nodeListeners[n]
 	if m == nil {
 		return
@@ -990,36 +1071,36 @@ func (j *jsRuntime) removeNodeListener(n *Node, typ string, fnVal goja.Value) {
 
 type jsEvent struct {
 	typ       string
-	target    goja.Value
+	target    sobek.Value
 	prevented bool
 	stopped   bool
 }
 
-func (j *jsRuntime) eventObject(ev *jsEvent) *goja.Object {
+func (j *jsRuntime) eventObject(ev *jsEvent) *sobek.Object {
 	o := j.vm.NewObject()
 	_ = o.Set("type", ev.typ)
 	_ = o.Set("target", ev.target)
 	_ = o.Set("bubbles", ev.typ == "click")
 	_ = o.Set("cancelable", true)
-	_ = o.DefineAccessorProperty("defaultPrevented", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.DefineAccessorProperty("defaultPrevented", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(ev.prevented)
-	}), nil, goja.FLAG_TRUE, goja.FLAG_FALSE)
-	_ = o.Set("preventDefault", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	}), nil, sobek.FLAG_TRUE, sobek.FLAG_FALSE)
+	_ = o.Set("preventDefault", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		ev.prevented = true
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("stopPropagation", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("stopPropagation", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		ev.stopped = true
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("stopImmediatePropagation", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("stopImmediatePropagation", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		ev.stopped = true
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
 	return o
 }
 
-func (j *jsRuntime) callList(m map[string][]jsListener, typ string, this, evObj goja.Value, ev *jsEvent) {
+func (j *jsRuntime) callList(m map[string][]jsListener, typ string, this, evObj sobek.Value, ev *jsEvent) {
 	list := m[typ]
 	for i := 0; i < len(list); i++ {
 		l := list[i]
@@ -1089,13 +1170,13 @@ func (j *jsRuntime) fireWindowEvent(typ string) {
 	evObj := j.eventObject(ev)
 	j.callList(j.winListeners, typ, j.winObj, evObj, ev)
 	if typ == "load" && j.winOnLoad != nil {
-		if fn, ok := goja.AssertFunction(j.winOnLoad); ok {
+		if fn, ok := sobek.AssertFunction(j.winOnLoad); ok {
 			j.call(fn, j.winObj, evObj)
 		}
 	}
 }
 
-func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj goja.Value, ev *jsEvent) {
+func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj sobek.Value, ev *jsEvent) {
 	code := strings.TrimSpace(n.Attr(attr))
 	if code == "" {
 		return
@@ -1106,15 +1187,15 @@ func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj goja.Value, ev *js
 		j.reportError(err)
 		return
 	}
-	fn, ok := goja.AssertFunction(fv)
+	fn, ok := sobek.AssertFunction(fv)
 	if !ok {
 		return
 	}
 	res, ok := j.call(fn, j.wrap(n), evObj)
-	if ok && res != nil && !goja.IsUndefined(res) && !res.ToBoolean() {
+	if ok && res != nil && !sobek.IsUndefined(res) && !res.ToBoolean() {
 		if ev != nil {
 			ev.prevented = true
-		} else if o, ok := evObj.(*goja.Object); ok {
+		} else if o, ok := evObj.(*sobek.Object); ok {
 			_ = o.Set("defaultPrevented", true)
 		}
 	}

@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // newURL implements a subset of the WHATWG URL object.
-func (j *jsRuntime) newURL(input string, base goja.Value) *goja.Object {
+func (j *jsRuntime) newURL(input string, base sobek.Value) *sobek.Object {
 	var u *url.URL
 	var err error
-	if base == nil || goja.IsNull(base) || goja.IsUndefined(base) {
+	if base == nil || sobek.IsNull(base) || sobek.IsUndefined(base) {
 		u, err = url.Parse(input)
 		if err == nil && u.Scheme == "" {
 			err = errBadSVG
@@ -33,7 +33,13 @@ func (j *jsRuntime) newURL(input string, base goja.Value) *goja.Object {
 		}
 	}
 	if err != nil || u == nil {
-		panic(j.vm.NewTypeError("Invalid URL"))
+		// Include the offending value so a page that builds URLs from missing
+		// config reports something actionable in the console.
+		bad := input
+		if len(bad) > 120 {
+			bad = bad[:120] + "…"
+		}
+		panic(j.vm.NewTypeError("Invalid URL: " + bad))
 	}
 	o := j.vm.NewObject()
 	_ = o.Set("href", u.String())
@@ -57,27 +63,27 @@ func (j *jsRuntime) newURL(input string, base goja.Value) *goja.Object {
 	pw, _ := u.User.Password()
 	_ = o.Set("password", pw)
 	_ = o.Set("searchParams", j.urlSearchParamsValue(u.RawQuery))
-	_ = o.Set("toString", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return j.vm.ToValue(u.String()) }))
-	_ = o.Set("toJSON", j.vm.ToValue(func(goja.FunctionCall) goja.Value { return j.vm.ToValue(u.String()) }))
+	_ = o.Set("toString", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return j.vm.ToValue(u.String()) }))
+	_ = o.Set("toJSON", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return j.vm.ToValue(u.String()) }))
 	return o
 }
 
-func (j *jsRuntime) urlSearchParamsValue(query string) *goja.Object {
+func (j *jsRuntime) urlSearchParamsValue(query string) *sobek.Object {
 	return j.newURLSearchParams(j.vm.ToValue(strings.TrimPrefix(query, "?")))
 }
 
-func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
+func (j *jsRuntime) newURLSearchParams(init sobek.Value) *sobek.Object {
 	vals := url.Values{}
-	if init != nil && !goja.IsNull(init) && !goja.IsUndefined(init) {
+	if init != nil && !sobek.IsNull(init) && !sobek.IsUndefined(init) {
 		if s, ok := init.Export().(string); ok {
 			s = strings.TrimPrefix(s, "?")
 			if parsed, err := url.ParseQuery(s); err == nil {
 				vals = parsed
 			}
-		} else if obj, ok := init.(*goja.Object); ok {
+		} else if obj, ok := init.(*sobek.Object); ok {
 			for _, key := range obj.Keys() {
 				v := obj.Get(key)
-				if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+				if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 					continue
 				}
 				vals.Add(key, v.String())
@@ -85,30 +91,30 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 		}
 	}
 	o := j.vm.NewObject()
-	_ = o.Set("append", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("append", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		vals.Add(call.Argument(0).String(), call.Argument(1).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("set", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("set", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		vals.Set(call.Argument(0).String(), call.Argument(1).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("delete", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("delete", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		vals.Del(call.Argument(0).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("has", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("has", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		_, ok := vals[call.Argument(0).String()]
 		return j.vm.ToValue(ok)
 	}))
-	_ = o.Set("get", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("get", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		v, ok := vals[call.Argument(0).String()]
 		if !ok || len(v) == 0 {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.vm.ToValue(v[0])
 	}))
-	_ = o.Set("getAll", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("getAll", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		v := vals[call.Argument(0).String()]
 		arr := make([]interface{}, 0, len(v))
 		for _, s := range v {
@@ -116,14 +122,14 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 		}
 		return j.vm.NewArray(arr...)
 	}))
-	_ = o.Set("keys", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("keys", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		arr := make([]interface{}, 0, len(vals))
 		for k := range vals {
 			arr = append(arr, k)
 		}
 		return j.vm.NewArray(arr...)
 	}))
-	_ = o.Set("values", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("values", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		var arr []interface{}
 		for _, vs := range vals {
 			for _, v := range vs {
@@ -132,19 +138,19 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 		}
 		return j.vm.NewArray(arr...)
 	}))
-	_ = o.Set("forEach", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		fn, ok := goja.AssertFunction(call.Argument(0))
+	_ = o.Set("forEach", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		fn, ok := sobek.AssertFunction(call.Argument(0))
 		if !ok {
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 		for k, vs := range vals {
 			for _, v := range vs {
-				fn(goja.Undefined(), j.vm.ToValue(v), j.vm.ToValue(k), o)
+				fn(sobek.Undefined(), j.vm.ToValue(v), j.vm.ToValue(k), o)
 			}
 		}
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	entriesArray := func() *goja.Object {
+	entriesArray := func() *sobek.Object {
 		keys := make([]string, 0, len(vals))
 		for k := range vals {
 			keys = append(keys, k)
@@ -158,19 +164,19 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 		}
 		return j.vm.NewArray(arr...)
 	}
-	_ = o.Set("entries", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("entries", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		return entriesArray()
 	}))
-	_ = o.SetSymbol(goja.SymIterator, j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.SetSymbol(sobek.SymIterator, j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		arr := entriesArray()
-		fn, ok := goja.AssertFunction(arr.Get("values"))
+		fn, ok := sobek.AssertFunction(arr.Get("values"))
 		if !ok {
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 		it, _ := fn(arr)
 		return it
 	}))
-	_ = o.Set("sort", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("sort", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		keys := make([]string, 0, len(vals))
 		for k := range vals {
 			keys = append(keys, k)
@@ -181,85 +187,85 @@ func (j *jsRuntime) newURLSearchParams(init goja.Value) *goja.Object {
 			sorted[k] = vals[k]
 		}
 		vals = sorted
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("toString", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("toString", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(vals.Encode())
 	}))
-	j.accessor(o, "size", func() goja.Value {
+	j.accessor(o, "size", func() sobek.Value {
 		return j.vm.ToValue(len(vals))
 	}, nil)
 	return o
 }
 
-func (j *jsRuntime) storageObject(data map[string]string) *goja.Object {
+func (j *jsRuntime) storageObject(data map[string]string) *sobek.Object {
 	o := j.vm.NewObject()
-	_ = o.Set("getItem", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("getItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		if v, ok := data[call.Argument(0).String()]; ok {
 			return j.vm.ToValue(v)
 		}
-		return goja.Null()
+		return sobek.Null()
 	}))
-	_ = o.Set("setItem", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("setItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		data[call.Argument(0).String()] = call.Argument(1).String()
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("removeItem", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("removeItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		delete(data, call.Argument(0).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("clear", j.vm.ToValue(func(goja.FunctionCall) goja.Value {
+	_ = o.Set("clear", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		for k := range data {
 			delete(data, k)
 		}
-		return goja.Undefined()
+		return sobek.Undefined()
 	}))
-	_ = o.Set("key", j.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+	_ = o.Set("key", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		i := int(call.Argument(0).ToInteger())
 		keys := make([]string, 0, len(data))
 		for k := range data {
 			keys = append(keys, k)
 		}
 		if i < 0 || i >= len(keys) {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.vm.ToValue(keys[i])
 	}))
-	j.accessor(o, "length", func() goja.Value { return j.vm.ToValue(len(data)) }, nil)
+	j.accessor(o, "length", func() sobek.Value { return j.vm.ToValue(len(data)) }, nil)
 
 	// Web Storage also exposes each key as a named property. Use a proxy so
 	// `storage.key = value`, `storage.key` and `delete storage.key` share the
 	// same map as getItem/setItem/removeItem.
-	proxy := j.vm.NewProxy(o, &goja.ProxyTrapConfig{
-		Get: func(target *goja.Object, property string, _ goja.Value) goja.Value {
-			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+	proxy := j.vm.NewProxy(o, &sobek.ProxyTrapConfig{
+		Get: func(target *sobek.Object, property string, _ sobek.Value) sobek.Value {
+			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return v
 			}
 			if v, ok := data[property]; ok {
 				return j.vm.ToValue(v)
 			}
-			return goja.Undefined()
+			return sobek.Undefined()
 		},
-		Set: func(target *goja.Object, property string, value goja.Value, _ goja.Value) bool {
-			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+		Set: func(target *sobek.Object, property string, value sobek.Value, _ sobek.Value) bool {
+			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return true // built-in method/accessor names keep precedence
 			}
 			data[property] = value.String()
 			return true
 		},
-		Has: func(target *goja.Object, property string) bool {
-			if v := target.Get(property); v != nil && !goja.IsUndefined(v) {
+		Has: func(target *sobek.Object, property string) bool {
+			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return true
 			}
 			_, ok := data[property]
 			return ok
 		},
-		DeleteProperty: func(_ *goja.Object, property string) bool {
+		DeleteProperty: func(_ *sobek.Object, property string) bool {
 			delete(data, property)
 			return true
 		},
 	})
-	return j.vm.ToValue(proxy).(*goja.Object)
+	return j.vm.ToValue(proxy).(*sobek.Object)
 }
 
 // documentWrite appends a parsed HTML fragment to the body.
@@ -315,13 +321,13 @@ func (j *jsRuntime) installFetch() {
 	_ = j.vm.Set("fetch", j.vm.ToValue(j.fetchFunc))
 }
 
-func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 	p, resolve, reject := j.vm.NewPromise()
-	fail := func(msg string) goja.Value {
+	fail := func(msg string) sobek.Value {
 		_ = reject(j.vm.NewTypeError(msg))
 		return j.vm.ToValue(p)
 	}
-	failAbort := func() goja.Value {
+	failAbort := func() sobek.Value {
 		_ = reject(j.abortError())
 		return j.vm.ToValue(p)
 	}
@@ -333,30 +339,30 @@ func (j *jsRuntime) fetchFunc(call goja.FunctionCall) goja.Value {
 	headers := map[string][]string{}
 	if ro := jsObject(input); ro != nil {
 		u := ro.Get("url")
-		if u == nil || goja.IsUndefined(u) || goja.IsNull(u) || u.String() == "" {
+		if u == nil || sobek.IsUndefined(u) || sobek.IsNull(u) || u.String() == "" {
 			return fail("Failed to parse URL")
 		}
 		target = u.String()
-		if m := ro.Get("method"); m != nil && !goja.IsUndefined(m) && m.String() != "" {
+		if m := ro.Get("method"); m != nil && !sobek.IsUndefined(m) && m.String() != "" {
 			method = m.String()
 		}
-		if h := ro.Get("headers"); h != nil && !goja.IsUndefined(h) && !goja.IsNull(h) {
+		if h := ro.Get("headers"); h != nil && !sobek.IsUndefined(h) && !sobek.IsNull(h) {
 			headers = j.parseHeaders(h)
 		}
-		if b := ro.Get("body"); b != nil && !goja.IsUndefined(b) && !goja.IsNull(b) {
+		if b := ro.Get("body"); b != nil && !sobek.IsUndefined(b) && !sobek.IsNull(b) {
 			body = b.String()
 		}
 	} else {
 		target = input.String()
 	}
 	if init != nil {
-		if m := init.Get("method"); m != nil && !goja.IsUndefined(m) && m.String() != "" {
+		if m := init.Get("method"); m != nil && !sobek.IsUndefined(m) && m.String() != "" {
 			method = m.String()
 		}
-		if h := init.Get("headers"); h != nil && !goja.IsUndefined(h) && !goja.IsNull(h) {
+		if h := init.Get("headers"); h != nil && !sobek.IsUndefined(h) && !sobek.IsNull(h) {
 			headers = j.parseHeaders(h)
 		}
-		if b := init.Get("body"); b != nil && !goja.IsUndefined(b) && !goja.IsNull(b) {
+		if b := init.Get("body"); b != nil && !sobek.IsUndefined(b) && !sobek.IsNull(b) {
 			body = b.String()
 		}
 		if sig := jsObject(init.Get("signal")); sig != nil && j.eventFlag(sig, "aborted") {
@@ -417,7 +423,7 @@ type fetchResponse struct {
 	redirected bool
 }
 
-func (j *jsRuntime) responseValue(st *fetchResponse) *goja.Object {
+func (j *jsRuntime) responseValue(st *fetchResponse) *sobek.Object {
 	o := j.vm.NewObject()
 	used := false
 	_ = o.Set("status", st.status)
@@ -427,7 +433,7 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *goja.Object {
 	_ = o.Set("redirected", st.redirected)
 	_ = o.Set("type", "basic")
 	_ = o.Set("headers", j.headersValue(st.headers))
-	j.accessor(o, "bodyUsed", func() goja.Value { return j.vm.ToValue(used) }, nil)
+	j.accessor(o, "bodyUsed", func() sobek.Value { return j.vm.ToValue(used) }, nil)
 	bodyText := decodeBody(st.data, st.ctype)
 	consume := func() bool {
 		if used {
@@ -436,13 +442,13 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *goja.Object {
 		used = true
 		return true
 	}
-	j.method(o, "text", func(goja.FunctionCall) goja.Value {
+	j.method(o, "text", func(sobek.FunctionCall) sobek.Value {
 		if !consume() {
 			return j.rejectedPromise(j.vm.NewTypeError("Body has already been consumed"))
 		}
 		return j.resolvedPromise(bodyText)
 	})
-	j.method(o, "json", func(goja.FunctionCall) goja.Value {
+	j.method(o, "json", func(sobek.FunctionCall) sobek.Value {
 		if !consume() {
 			return j.rejectedPromise(j.vm.NewTypeError("Body has already been consumed"))
 		}
@@ -452,28 +458,28 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *goja.Object {
 		}
 		return j.resolvedPromise(j.vm.ToValue(v))
 	})
-	j.method(o, "arrayBuffer", func(goja.FunctionCall) goja.Value {
+	j.method(o, "arrayBuffer", func(sobek.FunctionCall) sobek.Value {
 		if !consume() {
 			return j.rejectedPromise(j.vm.NewTypeError("Body has already been consumed"))
 		}
 		return j.resolvedPromise(j.vm.NewArrayBuffer(append([]byte(nil), st.data...)))
 	})
-	j.method(o, "blob", func(goja.FunctionCall) goja.Value {
+	j.method(o, "blob", func(sobek.FunctionCall) sobek.Value {
 		if !consume() {
 			return j.rejectedPromise(j.vm.NewTypeError("Body has already been consumed"))
 		}
 		blob := j.vm.NewObject()
 		_ = blob.Set("type", st.ctype)
 		_ = blob.Set("size", len(st.data))
-		j.method(blob, "text", func(goja.FunctionCall) goja.Value {
+		j.method(blob, "text", func(sobek.FunctionCall) sobek.Value {
 			return j.resolvedPromise(bodyText)
 		})
-		j.method(blob, "arrayBuffer", func(goja.FunctionCall) goja.Value {
+		j.method(blob, "arrayBuffer", func(sobek.FunctionCall) sobek.Value {
 			return j.resolvedPromise(j.vm.NewArrayBuffer(append([]byte(nil), st.data...)))
 		})
 		return j.resolvedPromise(blob)
 	})
-	j.method(o, "clone", func(goja.FunctionCall) goja.Value {
+	j.method(o, "clone", func(sobek.FunctionCall) sobek.Value {
 		cp := *st
 		cp.data = append([]byte(nil), st.data...)
 		return j.responseValue(&cp)
@@ -481,19 +487,19 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *goja.Object {
 	return o
 }
 
-func (j *jsRuntime) resolvedPromise(v interface{}) goja.Value {
+func (j *jsRuntime) resolvedPromise(v interface{}) sobek.Value {
 	p, resolve, _ := j.vm.NewPromise()
 	_ = resolve(v)
 	return j.vm.ToValue(p)
 }
 
-func (j *jsRuntime) rejectedPromise(v interface{}) goja.Value {
+func (j *jsRuntime) rejectedPromise(v interface{}) sobek.Value {
 	p, _, reject := j.vm.NewPromise()
 	_ = reject(v)
 	return j.vm.ToValue(p)
 }
 
-func (j *jsRuntime) headersValue(h http.Header) *goja.Object {
+func (j *jsRuntime) headersValue(h http.Header) *sobek.Object {
 	m := make(map[string][]string, len(h))
 	for k, vs := range h {
 		m[strings.ToLower(k)] = append([]string(nil), vs...)
@@ -501,59 +507,59 @@ func (j *jsRuntime) headersValue(h http.Header) *goja.Object {
 	return j.headersObject(m)
 }
 
-func (j *jsRuntime) headersObject(m map[string][]string) *goja.Object {
+func (j *jsRuntime) headersObject(m map[string][]string) *sobek.Object {
 	o := j.vm.NewObject()
 	j.headerObjs[o] = m
-	lower := func(v goja.Value) string { return strings.ToLower(strings.TrimSpace(v.String())) }
-	j.method(o, "get", func(call goja.FunctionCall) goja.Value {
+	lower := func(v sobek.Value) string { return strings.ToLower(strings.TrimSpace(v.String())) }
+	j.method(o, "get", func(call sobek.FunctionCall) sobek.Value {
 		vs := m[lower(call.Argument(0))]
 		if len(vs) == 0 {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.vm.ToValue(strings.Join(vs, ", "))
 	})
-	j.method(o, "has", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "has", func(call sobek.FunctionCall) sobek.Value {
 		_, ok := m[lower(call.Argument(0))]
 		return j.vm.ToValue(ok)
 	})
-	j.method(o, "set", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "set", func(call sobek.FunctionCall) sobek.Value {
 		m[lower(call.Argument(0))] = []string{call.Argument(1).String()}
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "append", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "append", func(call sobek.FunctionCall) sobek.Value {
 		k := lower(call.Argument(0))
 		m[k] = append(m[k], call.Argument(1).String())
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "delete", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "delete", func(call sobek.FunctionCall) sobek.Value {
 		delete(m, lower(call.Argument(0)))
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "getSetCookie", func(goja.FunctionCall) goja.Value {
+	j.method(o, "getSetCookie", func(sobek.FunctionCall) sobek.Value {
 		return j.vm.ToValue(m["set-cookie"])
 	})
-	j.method(o, "forEach", func(call goja.FunctionCall) goja.Value {
-		fn, ok := goja.AssertFunction(call.Argument(0))
+	j.method(o, "forEach", func(call sobek.FunctionCall) sobek.Value {
+		fn, ok := sobek.AssertFunction(call.Argument(0))
 		if !ok {
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 		for _, k := range sortedHeaderKeys(m) {
 			j.call(fn, o, j.vm.ToValue(strings.Join(m[k], ", ")), j.vm.ToValue(k), o)
 		}
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "keys", func(goja.FunctionCall) goja.Value {
+	j.method(o, "keys", func(sobek.FunctionCall) sobek.Value {
 		keys := sortedHeaderKeys(m)
 		return j.vm.ToValue(keys)
 	})
-	j.method(o, "values", func(goja.FunctionCall) goja.Value {
+	j.method(o, "values", func(sobek.FunctionCall) sobek.Value {
 		var vals []string
 		for _, k := range sortedHeaderKeys(m) {
 			vals = append(vals, strings.Join(m[k], ", "))
 		}
 		return j.vm.ToValue(vals)
 	})
-	j.method(o, "entries", func(goja.FunctionCall) goja.Value {
+	j.method(o, "entries", func(sobek.FunctionCall) sobek.Value {
 		out := j.vm.NewArray()
 		for i, k := range sortedHeaderKeys(m) {
 			_ = out.Set(strconv.Itoa(i), j.vm.NewArray(k, strings.Join(m[k], ", ")))
@@ -563,12 +569,12 @@ func (j *jsRuntime) headersObject(m map[string][]string) *goja.Object {
 	return o
 }
 
-func jsArrayLength(o *goja.Object) int {
+func jsArrayLength(o *sobek.Object) int {
 	if o == nil {
 		return 0
 	}
 	v := o.Get("length")
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return 0
 	}
 	return int(v.ToInteger())
@@ -583,16 +589,16 @@ func sortedHeaderKeys(m map[string][]string) []string {
 	return keys
 }
 
-func (j *jsRuntime) newHeadersObject(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newHeadersObject(call sobek.FunctionCall) sobek.Value {
 	return j.headersObject(j.parseHeaders(call.Argument(0)))
 }
 
-func (j *jsRuntime) parseHeaders(v goja.Value) map[string][]string {
+func (j *jsRuntime) parseHeaders(v sobek.Value) map[string][]string {
 	out := make(map[string][]string)
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return out
 	}
-	if o, ok := v.(*goja.Object); ok {
+	if o, ok := v.(*sobek.Object); ok {
 		if m, ok := j.headerObjs[o]; ok {
 			for k, vs := range m {
 				out[k] = append([]string(nil), vs...)
@@ -624,7 +630,7 @@ func (j *jsRuntime) parseHeaders(v goja.Value) map[string][]string {
 	return out
 }
 
-func (j *jsRuntime) newRequestObject(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 	input := call.Argument(0)
 	init := jsObject(call.Argument(1))
 	target := input.String()
@@ -632,27 +638,27 @@ func (j *jsRuntime) newRequestObject(call goja.FunctionCall) goja.Value {
 	body := ""
 	headers := map[string][]string{}
 	if ro := jsObject(input); ro != nil {
-		if v := ro.Get("url"); v != nil && !goja.IsUndefined(v) {
+		if v := ro.Get("url"); v != nil && !sobek.IsUndefined(v) {
 			target = v.String()
 		}
-		if v := ro.Get("method"); v != nil && !goja.IsUndefined(v) && v.String() != "" {
+		if v := ro.Get("method"); v != nil && !sobek.IsUndefined(v) && v.String() != "" {
 			method = v.String()
 		}
-		if v := ro.Get("headers"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+		if v := ro.Get("headers"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			headers = j.parseHeaders(v)
 		}
-		if v := ro.Get("body"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+		if v := ro.Get("body"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			body = v.String()
 		}
 	}
 	if init != nil {
-		if v := init.Get("method"); v != nil && !goja.IsUndefined(v) && v.String() != "" {
+		if v := init.Get("method"); v != nil && !sobek.IsUndefined(v) && v.String() != "" {
 			method = v.String()
 		}
-		if v := init.Get("headers"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+		if v := init.Get("headers"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			headers = j.parseHeaders(v)
 		}
-		if v := init.Get("body"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+		if v := init.Get("body"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			body = v.String()
 		}
 	}
@@ -671,7 +677,7 @@ func (j *jsRuntime) newRequestObject(call goja.FunctionCall) goja.Value {
 	_ = o.Set("headers", j.headersObject(headers))
 	_ = o.Set("body", body)
 	_ = o.Set("bodyUsed", false)
-	j.method(o, "clone", func(goja.FunctionCall) goja.Value {
+	j.method(o, "clone", func(sobek.FunctionCall) sobek.Value {
 		cp := j.vm.NewObject()
 		_ = cp.Set("url", target)
 		_ = cp.Set("method", strings.ToUpper(method))
@@ -683,22 +689,22 @@ func (j *jsRuntime) newRequestObject(call goja.FunctionCall) goja.Value {
 	return o
 }
 
-func (j *jsRuntime) newResponseObject(call goja.FunctionCall) goja.Value {
+func (j *jsRuntime) newResponseObject(call sobek.FunctionCall) sobek.Value {
 	init := jsObject(call.Argument(1))
 	status := 200
 	statusText := ""
 	headers := map[string][]string{}
 	if init != nil {
-		if v := init.Get("status"); v != nil && !goja.IsUndefined(v) && v.ToInteger() != 0 {
+		if v := init.Get("status"); v != nil && !sobek.IsUndefined(v) && v.ToInteger() != 0 {
 			status = int(v.ToInteger())
 		}
 		statusText = jsOptionString(init, "statusText", "")
-		if v := init.Get("headers"); v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) {
+		if v := init.Get("headers"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			headers = j.parseHeaders(v)
 		}
 	}
 	data := []byte(call.Argument(0).String())
-	if goja.IsUndefined(call.Argument(0)) || goja.IsNull(call.Argument(0)) {
+	if sobek.IsUndefined(call.Argument(0)) || sobek.IsNull(call.Argument(0)) {
 		data = nil
 	}
 	h := make(http.Header)
@@ -716,7 +722,7 @@ func (j *jsRuntime) newResponseObject(call goja.FunctionCall) goja.Value {
 }
 
 type xhrState struct {
-	obj          *goja.Object
+	obj          *sobek.Object
 	method       string
 	url          *url.URL
 	reqHeaders   map[string]string
@@ -725,19 +731,19 @@ type xhrState struct {
 	statusText   string
 	readyState   int
 	text         string
-	response     goja.Value
+	response     sobek.Value
 	ctype        string
 	responseURL  string
 	err          error
 	responseType string
-	listeners    map[string][]goja.Value
+	listeners    map[string][]sobek.Value
 	blocked      bool
 }
 
-func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
+func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 	o := j.vm.NewObject()
-	st := &xhrState{obj: o, reqHeaders: make(map[string]string), listeners: make(map[string][]goja.Value), responseType: ""}
-	get := func() goja.Value {
+	st := &xhrState{obj: o, reqHeaders: make(map[string]string), listeners: make(map[string][]sobek.Value), responseType: ""}
+	get := func() sobek.Value {
 		if st.responseType == "json" {
 			if st.response != nil {
 				return st.response
@@ -746,7 +752,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 			if err := json.Unmarshal([]byte(st.text), &v); err == nil {
 				st.response = j.vm.ToValue(v)
 			} else {
-				st.response = goja.Null()
+				st.response = sobek.Null()
 			}
 			return st.response
 		}
@@ -760,21 +766,21 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		}
 		return j.vm.ToValue(st.text)
 	}
-	j.accessor(o, "readyState", func() goja.Value { return j.vm.ToValue(st.readyState) }, nil)
-	j.accessor(o, "status", func() goja.Value { return j.vm.ToValue(st.status) }, nil)
-	j.accessor(o, "statusText", func() goja.Value { return j.vm.ToValue(st.statusText) }, nil)
-	j.accessor(o, "responseText", func() goja.Value { return j.vm.ToValue(st.text) }, nil)
-	j.accessor(o, "response", func() goja.Value { return get() }, nil)
-	j.accessor(o, "responseURL", func() goja.Value { return j.vm.ToValue(st.responseURL) }, nil)
-	j.accessor(o, "responseType", func() goja.Value { return j.vm.ToValue(st.responseType) }, func(v goja.Value) {
+	j.accessor(o, "readyState", func() sobek.Value { return j.vm.ToValue(st.readyState) }, nil)
+	j.accessor(o, "status", func() sobek.Value { return j.vm.ToValue(st.status) }, nil)
+	j.accessor(o, "statusText", func() sobek.Value { return j.vm.ToValue(st.statusText) }, nil)
+	j.accessor(o, "responseText", func() sobek.Value { return j.vm.ToValue(st.text) }, nil)
+	j.accessor(o, "response", func() sobek.Value { return get() }, nil)
+	j.accessor(o, "responseURL", func() sobek.Value { return j.vm.ToValue(st.responseURL) }, nil)
+	j.accessor(o, "responseType", func() sobek.Value { return j.vm.ToValue(st.responseType) }, func(v sobek.Value) {
 		st.responseType = v.String()
 		st.response = nil
 	})
-	j.accessor(o, "timeout", func() goja.Value { return j.vm.ToValue(0) }, func(goja.Value) {})
-	j.accessor(o, "withCredentials", func() goja.Value { return j.vm.ToValue(false) }, func(goja.Value) {})
-	j.accessor(o, "upload", func() goja.Value { return j.vm.NewObject() }, nil)
+	j.accessor(o, "timeout", func() sobek.Value { return j.vm.ToValue(0) }, func(sobek.Value) {})
+	j.accessor(o, "withCredentials", func() sobek.Value { return j.vm.ToValue(false) }, func(sobek.Value) {})
+	j.accessor(o, "upload", func() sobek.Value { return j.vm.NewObject() }, nil)
 
-	j.method(o, "open", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "open", func(call sobek.FunctionCall) sobek.Value {
 		st.method = strings.ToUpper(call.Argument(0).String())
 		if st.method == "" {
 			st.method = http.MethodGet
@@ -799,23 +805,23 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		st.blocked = st.url == nil || j.page == nil || j.page.URL == nil
 		st.readyState = 1
 		j.fireXHR(st, "readystatechange")
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "setRequestHeader", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "setRequestHeader", func(call sobek.FunctionCall) sobek.Value {
 		st.reqHeaders[call.Argument(0).String()] = call.Argument(1).String()
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "getResponseHeader", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "getResponseHeader", func(call sobek.FunctionCall) sobek.Value {
 		if st.resHeaders == nil {
-			return goja.Null()
+			return sobek.Null()
 		}
 		v := st.resHeaders.Get(call.Argument(0).String())
 		if v == "" {
-			return goja.Null()
+			return sobek.Null()
 		}
 		return j.vm.ToValue(v)
 	})
-	j.method(o, "getAllResponseHeaders", func(goja.FunctionCall) goja.Value {
+	j.method(o, "getAllResponseHeaders", func(sobek.FunctionCall) sobek.Value {
 		if st.resHeaders == nil {
 			return j.vm.ToValue("")
 		}
@@ -830,18 +836,18 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		}
 		return j.vm.ToValue(b.String())
 	})
-	j.method(o, "overrideMimeType", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	j.method(o, "abort", func(goja.FunctionCall) goja.Value {
+	j.method(o, "overrideMimeType", func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
+	j.method(o, "abort", func(sobek.FunctionCall) sobek.Value {
 		st.readyState = 0
 		j.fireXHR(st, "abort")
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "addEventListener", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "addEventListener", func(call sobek.FunctionCall) sobek.Value {
 		typ := call.Argument(0).String()
 		st.listeners[typ] = append(st.listeners[typ], call.Argument(1))
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "removeEventListener", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "removeEventListener", func(call sobek.FunctionCall) sobek.Value {
 		typ := call.Argument(0).String()
 		fn := call.Argument(1)
 		list := st.listeners[typ]
@@ -852,9 +858,9 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 			}
 		}
 		st.listeners[typ] = out
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
-	j.method(o, "send", func(call goja.FunctionCall) goja.Value {
+	j.method(o, "send", func(call sobek.FunctionCall) sobek.Value {
 		if st.url == nil || st.blocked {
 			j.b.logJS("error", "XMLHttpRequest blocked: invalid URL")
 			st.readyState = 4
@@ -863,10 +869,10 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 			j.fireXHR(st, "readystatechange")
 			j.fireXHR(st, "error")
 			j.fireXHR(st, "loadend")
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 		var body []byte
-		if len(call.Arguments) > 0 && !goja.IsNull(call.Argument(0)) && !goja.IsUndefined(call.Argument(0)) {
+		if len(call.Arguments) > 0 && !sobek.IsNull(call.Argument(0)) && !sobek.IsUndefined(call.Argument(0)) {
 			body = []byte(call.Argument(0).String())
 		}
 		st.readyState = 2
@@ -883,7 +889,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 			j.fireXHR(st, "readystatechange")
 			j.fireXHR(st, "error")
 			j.fireXHR(st, "loadend")
-			return goja.Undefined()
+			return sobek.Undefined()
 		}
 		st.status = status
 		st.statusText = http.StatusText(status)
@@ -899,7 +905,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *goja.Object {
 		j.fireXHR(st, "readystatechange")
 		j.fireXHR(st, "load")
 		j.fireXHR(st, "loadend")
-		return goja.Undefined()
+		return sobek.Undefined()
 	})
 	return o
 }
@@ -932,13 +938,13 @@ func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	_ = ev.Set("target", st.obj)
 	_ = ev.Set("currentTarget", st.obj)
 	handler := st.obj.Get("on" + typ)
-	if handler != nil && !goja.IsNull(handler) && !goja.IsUndefined(handler) {
-		if fn, ok := goja.AssertFunction(handler); ok {
+	if handler != nil && !sobek.IsNull(handler) && !sobek.IsUndefined(handler) {
+		if fn, ok := sobek.AssertFunction(handler); ok {
 			j.call(fn, st.obj, ev)
 		}
 	}
 	for _, l := range st.listeners[typ] {
-		if fn, ok := goja.AssertFunction(l); ok {
+		if fn, ok := sobek.AssertFunction(l); ok {
 			j.call(fn, st.obj, ev)
 		}
 	}
@@ -995,13 +1001,15 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		}
 		return nil
 	}
-	j.dialogActive.Store(true)
+	// A synchronous fetch blocks the runtime: keep the script watchdog from
+	// charging network time to the page and aborting a module mid-evaluation.
+	j.ioActive.Store(true)
 	resp, err := client.Do(req)
-	j.dialogActive.Store(false)
-	j.vm.ClearInterrupt()
 	if err != nil {
+		j.ioActive.Store(false)
 		return 0, nil, "", nil, nil, err
 	}
+	defer j.ioActive.Store(false)
 	defer resp.Body.Close()
 	if crossOrigin && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
 		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("cross-origin response blocked by CORS")

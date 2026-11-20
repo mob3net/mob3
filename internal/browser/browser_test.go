@@ -1110,32 +1110,6 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	}
 }
 
-func TestHasModuleScripts(t *testing.T) {
-	doc := ParseHTML(`<html><head><script type="module" src="app.js"></script><script>1</script></head></html>`)
-	if !hasModuleScripts(doc) {
-		t.Fatal("module script was not detected")
-	}
-	if hasModuleScripts(ParseHTML(`<html><head><script type="text/javascript">1</script></head></html>`)) {
-		t.Fatal("classic script was reported as a module")
-	}
-}
-
-func TestModulePageShowsStatusWarning(t *testing.T) {
-	u := mustParse(t, "https://example.com/")
-	page := &Page{
-		Root:       ParseHTML(`<html><body><p>Loading...</p></body></html>`),
-		HasModules: true,
-	}
-	b := NewBrowser(40, 10)
-	withQuietStdout(t, func() { b.finishLoad(loadResult{page: page, u: u}) })
-	if b.status != moduleUnsupportedStatus {
-		t.Fatalf("status = %q, want %q", b.status, moduleUnsupportedStatus)
-	}
-	if !strings.Contains(b.status, "reader mode") {
-		t.Fatalf("status has no reader-mode hint: %q", b.status)
-	}
-}
-
 func TestViewMenuTogglesFixedElements(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.HandleKey("X")

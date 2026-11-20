@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -49,14 +50,16 @@ func imageConfigOK(cfg image.Config) bool {
 
 // Page is a loaded document plus the assets needed to display it.
 type Page struct {
-	URL         *url.URL
-	Base        *url.URL
-	Root        *Node
-	Title       string
-	Author      []Rule
-	Scripts     []Script
+	URL     *url.URL
+	Base    *url.URL
+	Root    *Node
+	Title   string
+	Author  []Rule
+	Scripts []Script
+	// ImportMap holds the document's <script type="importmap"> imports, so
+	// module scripts can resolve bare specifiers like "react".
+	ImportMap   map[string]string
 	RawHTML     string
-	HasModules  bool
 	Status      int
 	Blocked     bool
 	BlockReason string
@@ -73,6 +76,9 @@ type Script struct {
 	Code string
 	Src  string
 	Node *Node
+	// Module marks an ES module script. Module scripts are parsed and linked
+	// through the module loader instead of running as a classic script.
+	Module bool
 }
 
 // Loader fetches documents and their resources.
@@ -460,7 +466,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	page.Author = l.collectStylesheets(ctx, root, page.Base, allowFile)
 	if !l.noScripts {
 		page.Scripts = l.collectScripts(ctx, root, page.Base, allowFile)
-		page.HasModules = hasModuleScripts(root)
+		page.ImportMap = collectImportMap(root)
 	}
 	l.loadInlineSVGs(root)
 	if !l.deferImages {
@@ -532,31 +538,52 @@ direct or alternative URL, or open it in a full browser.</p>
 </body></html>`
 }
 
-// hasModuleScripts reports whether the document contains an ES module script.
-// MOB³ does not execute modules, so the status bar warns instead of leaving a
-// boot/loading screen looking like a hang.
-func hasModuleScripts(root *Node) bool {
+// importMapJSON is the subset of the import map format the engine reads.
+// Scoped maps are accepted but ignored: they only change which copy of a
+// package a nested dependency gets, which a terminal browser does not need.
+type importMapJSON struct {
+	Imports map[string]string            `json:"imports"`
+	Scopes  map[string]map[string]string `json:"scopes"`
+}
+
+// collectImportMap returns the imports of the document's first valid
+// <script type="importmap">. Later maps are ignored, as in browsers, and a
+// malformed map leaves bare specifiers unresolved instead of failing the page.
+func collectImportMap(root *Node) map[string]string {
 	if root == nil {
-		return false
+		return nil
 	}
 	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "script" }) {
-		if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "module") {
-			return true
+		if !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "importmap") {
+			continue
+		}
+		var m importMapJSON
+		if err := json.Unmarshal([]byte(n.TextContent()), &m); err != nil {
+			continue
+		}
+		if len(m.Imports) > 0 {
+			return m.Imports
 		}
 	}
-	return false
+	return nil
 }
 
 // collectScripts gathers inline and external JavaScript in document order.
-// Modules and non-JavaScript script types are skipped.
+// ES module scripts are collected too and marked as modules; every other
+// script type is skipped.
 func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Script {
 	ctx = withRequestKind(ctx, "js")
 	nodes := root.FindAll(func(n *Node) bool {
 		if n.Tag != "script" {
 			return false
 		}
+		// A nomodule script is the no-module fallback. The engine now executes
+		// modules, so running both bundles would double-execute the page.
+		if n.HasAttr("nomodule") {
+			return false
+		}
 		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
-		case "", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript":
+		case "", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module":
 			return true
 		}
 		return false
@@ -564,6 +591,7 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 	var out []Script
 	total := 0
 	for _, n := range nodes {
+		module := strings.EqualFold(strings.TrimSpace(n.Attr("type")), "module")
 		src := strings.TrimSpace(n.Attr("src"))
 		if src == "" {
 			code := n.TextContent()
@@ -571,7 +599,13 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 				continue
 			}
 			total += len(code)
-			out = append(out, Script{Code: code, Src: "inline script", Node: n})
+			name := "inline script"
+			if module {
+				// An inline module is resolved against the document URL and has
+				// no source URL of its own.
+				name = ""
+			}
+			out = append(out, Script{Code: code, Src: name, Node: n, Module: module})
 			if total > maxResourceSize {
 				break
 			}
@@ -593,7 +627,7 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 		}
 		code := decodeBody(data, ctype)
 		total += len(code)
-		out = append(out, Script{Code: code, Src: u.String(), Node: n})
+		out = append(out, Script{Code: code, Src: u.String(), Node: n, Module: module})
 		if total > maxResourceSize {
 			break
 		}
@@ -1218,6 +1252,15 @@ func pickSrcset(s string, preferred int) string {
 		}
 	}
 	return bestX
+}
+
+// isJSSpace reports the ASCII whitespace bytes a srcset candidate splits on.
+func isJSSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\r', '\v', '\f':
+		return true
+	}
+	return false
 }
 
 func parseSrcset(s string) []srcsetCandidate {

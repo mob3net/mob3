@@ -753,7 +753,7 @@ func statusLevelFor(s string) statusLevel {
 		return statusError
 	case strings.HasPrefix(s, "Copied "):
 		return statusSuccess
-	case s == moduleUnsupportedStatus,
+	case s == moduleFailedStatus,
 		s == layoutTruncatedStatus,
 		s == quitConfirmText,
 		strings.HasPrefix(s, "Form: "),
