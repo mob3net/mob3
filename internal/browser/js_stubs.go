@@ -1,7 +1,7 @@
 package browser
 
 import (
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // installPlatformStubs registers the browser-platform interfaces that pages
@@ -309,6 +309,25 @@ func (j *jsRuntime) installPlatformStubs() {
 	}
 
 
+	// Storage is a real constructor in browsers: libraries feature-detect it
+	// and patch Storage.prototype, so expose it even though the two storage
+	// objects are Go-backed.
+	var StorageC = ctor("Storage");
+	StorageC.prototype.getItem = function (k) {
+		var v = this[String(k)];
+		return v === undefined ? null : String(v);
+	};
+	StorageC.prototype.setItem = function (k, v) { this[String(k)] = String(v); };
+	StorageC.prototype.removeItem = function (k) { delete this[String(k)]; };
+	StorageC.prototype.clear = function () {
+		for (var k in this) { try { delete this[k]; } catch (e) {} }
+	};
+	StorageC.prototype.key = function (i) {
+		var n = 0;
+		for (var k in this) { if (n++ === i) { return k; } }
+		return null;
+	};
+
 	// Constructors commonly checked with instanceof or used to create values.
 	ctor("DOMTokenList");
 	ctor("CSSStyleDeclaration");
@@ -460,17 +479,23 @@ func (j *jsRuntime) installPlatformStubs() {
 		j.reportError(err)
 		return
 	}
-	protoOf := func(name string) *goja.Object {
+	protoOf := func(name string) *sobek.Object {
 		v := j.vm.Get(name)
-		o, ok := v.(*goja.Object)
+		o, ok := v.(*sobek.Object)
 		if !ok {
 			return nil
 		}
-		proto, _ := o.Get("prototype").(*goja.Object)
+		proto, _ := o.Get("prototype").(*sobek.Object)
 		return proto
 	}
 	j.domStringMapProto = protoOf("DOMStringMap")
 	j.domTokenListProto = protoOf("DOMTokenList")
+	if storageCtor, ok := j.vm.Get("Storage").(*sobek.Object); ok {
+		if proto, ok := storageCtor.Get("prototype").(*sobek.Object); ok {
+			_ = j.storageLocal.SetPrototype(proto)
+			_ = j.storageSession.SetPrototype(proto)
+		}
+	}
 	j.cssStyleProto = protoOf("CSSStyleDeclaration")
 	j.mediaQueryProto = protoOf("MediaQueryList")
 	j.treeWalkerProto = protoOf("TreeWalker")

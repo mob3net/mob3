@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 )
 
 // Console sections, ordered as they are stacked in the console view.
@@ -401,7 +401,7 @@ func (b *Browser) runConsoleInput() {
 	v, err := b.js.runCode("console", src)
 	if err != nil {
 		b.logJS("error", err.Error())
-	} else if v != nil && !goja.IsUndefined(v) {
+	} else if v != nil && !sobek.IsUndefined(v) {
 		s := v.String()
 		if r := []rune(s); len(r) > 2000 {
 			s = string(r[:2000]) + "…"

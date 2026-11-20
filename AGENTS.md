@@ -105,15 +105,16 @@ written in Go
   Go's TLS, DNS and timezone libraries are not application storage. Do not add
   automatic disk caching or restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
-  `github.com/dop251/goja` JavaScript engine, the pure-Go SVG renderer
+  `github.com/grafana/sobek` JavaScript engine — a maintained fork of
+  `dop251/goja` that adds ES module records and dynamic imports — the pure-Go SVG renderer
   `github.com/go-gfx/oksvg` — a maintained fork of `srwiley/oksvg` at the same
   upstream commit, adding `clipPath`, `fill-rule`, compact arc flags,
   transform-scaled strokes and bounded dash strokes — plus
   `github.com/srwiley/rasterx` (user-requested SVG support), and their pure-Go
-  transitive modules (`regexp2`, `sourcemap`,
+  transitive modules (`regexp2/v2`, `sourcemap`,
   `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`,
   `golang.org/x/sys` for `x/image`'s SIMD rasterizer). No other third-party
-  modules without a new explicit user decision. goja is pure Go
+  modules without a new explicit user decision. sobek is pure Go
   and must not change the single-binary or no-cgo constraints. All dependencies
   are **vendored in `vendor/` and committed**; builds use `-mod=vendor` and need
   no network. Run `go mod vendor` after any `go.mod`/`go.sum` change and keep
@@ -126,19 +127,31 @@ written in Go
   `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` after any dependency or
   toolchain change; the scan must report no reachable vulnerabilities. Media
   decoders treat their input as hostile: see the Images bullet for the panic
-  guard.
+  guard. `github.com/grafana/sobek` carries one local patch in `func.go`:
+  `await` attaches its reactions to a native promise directly instead of
+  routing through `promiseResolve()`, which wraps a promise whose `constructor`
+  identity check fails (a page that replaces `Promise.prototype` or
+  `Promise.prototype.constructor`) and leaves the wrapper pending. That broke
+  module evaluation with sobek's internal "sync module was not executed
+  synchronously" panic. Re-apply the patched block after running
+  `go mod vendor`.
 - **SVG is not in core Go.** The standard library and `golang.org/x/image`
   provide no SVG parser or renderer, and there is no known plan to add one.
   MOB³ therefore uses the vendored, pure-Go `github.com/go-gfx/oksvg` (a
   maintained fork of `srwiley/oksvg`) plus `srwiley/rasterx` for SVG (partial
   SVG2); inline SVG decodes through the same path, with a label/`alt` fallback
   when rasterization fails.
-- **JavaScript via goja.** Page scripts run through goja in a per-page runtime.
-  Classic inline and external scripts execute in document order; `async`,
-  `defer` and modules are ignored. External scripts must arrive with a
-  JavaScript MIME type (a missing `Content-Type` is allowed), so HTML error
-  pages, JSON, `text/plain`, images, audio, video and CSV are never executed as
-  script. `-no-js` disables both script fetching and
+- **JavaScript via sobek.** Page scripts run through sobek in a per-page
+  runtime. Classic inline and external scripts execute in document order;
+  `async` and `defer` are ignored. ES module scripts are collected too and
+  evaluated in document order through a linked module graph: static
+  `import`/`export`, relative and absolute specifiers, dynamic `import()` with a
+  real namespace, and `import.meta.url`. Bare package specifiers fail with a
+  console error because import maps are unsupported. `nomodule` scripts are
+  skipped now that modules run, so both bundles of a split build never execute
+  together. External scripts and modules must arrive with a JavaScript MIME
+  type (a missing `Content-Type` is allowed), so HTML error pages, JSON,
+  `text/plain`, images, audio, video and CSV are never executed as script. `-no-js` disables both script fetching and
   execution. `<noscript>` is hidden when JS is enabled and shown with
   `-no-js`. Text inputs and textareas are editable; GET and urlencoded POST
   forms submit with Enter from a text input (Enter inserts a newline in a
@@ -236,12 +249,12 @@ Standard Go layout:
 | `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, following the chosen link, and the F destination-confirmation step. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
-| `js.go` | goja runtime, script execution, internal event dispatch, timers and DOM mutation hooks. |
-| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. |
-| `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. |
+| `js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
+| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`), because frameworks that hydrate with `document` as the root container call them on the document itself. |
+| `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
-| `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `DOMParser`/`XMLSerializer`, `DataTransfer`, extra event subclasses, interface constructors (`DOMTokenList`, `CSSStyleDeclaration`, `MediaQueryList`, `TreeWalker`, …), `Element.prototype.matches`/`closest` /vendor-alias delegates, and isolated inert iframe `contentDocument`/`contentWindow`. |
-| `js_import.go` | Dynamic `import()` and `import.meta` source rewrite (string/comment/template/regex aware) plus the empty-namespace import stub, because goja cannot parse dynamic imports and modules remain unsupported. |
+| `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `DOMParser`/`XMLSerializer`, `DataTransfer`, extra event subclasses, interface constructors (`DOMTokenList`, `CSSStyleDeclaration`, `Storage`, `MediaQueryList`, `TreeWalker`, …), `Element.prototype.matches`/`closest` /vendor-alias delegates, and isolated inert iframe `contentDocument`/`contentWindow`. `localStorage`/`sessionStorage` use the `Storage` prototype so `instanceof` and prototype patches work. |
+| `js_modules.go` | ES modules: the module graph cache, specifier resolution against the importing module's URL, size/depth caps, `import.meta.url`, dynamic import finishing, and linking/evaluation under the script guard. |
 | `js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `js_intl.go` | English-only `Intl` formatter subset. |
 | `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
@@ -1053,7 +1066,7 @@ Standard Go layout:
   label is blue and bold
   while its mode is on (JavaScript counts as on while scripts are enabled); the
   console icon toggles the JS console and stays
-  visible and clickable inside the console view. Status text is amber and bold for warnings (unsupported ES modules, layout truncation, blocked pages/HTTP
+  visible and clickable inside the console view. Status text is amber and bold for warnings (module script failures, layout truncation, blocked pages/HTTP
   errors, blocked local navigation, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
   for successful copy messages. The JavaScript error state clears when the JS
@@ -1198,10 +1211,15 @@ Standard Go layout:
   `Content-Disposition` is not inspected, so attachment HTML pages still render
   normally.
 - **JavaScript scope:** classic inline and external scripts run in document
-  order after load and before layout. Dynamic `import()` and `import.meta` are
-  rewritten to a host stub before execution: the import resolves to an empty
-  namespace and logs a warning (once per URL) instead of failing to parse the
-  whole bundle. Static module imports/exports are still unsupported. DOM subset: `getElementById`,
+  order after load and before layout. `<script type="module">` scripts are
+  linked and evaluated in document order through sobek's module records:
+  static `import`/`export`, relative and absolute specifiers, dynamic `import()`
+  with a real namespace, and `import.meta.url`. Bare package specifiers fail
+  with `bare module specifier ... (import maps are unsupported)` in the console
+  instead of becoming same-origin 404 requests. Module fetches use the same
+  loader, MIME rule, request log and session cache as classic scripts and share
+  the module graph cache, so a dependency imported by several entry modules is
+  evaluated once. `nomodule` scripts are skipped. DOM subset: `getElementById`,
   `querySelector(All)`, `getElementsByTagName`, `createElement`,
   `createTextNode`, attributes, `textContent`/`innerText`/`innerHTML`,
   `classList`, `style` (common properties plus `setProperty`/`cssText`),
@@ -1281,9 +1299,10 @@ Standard Go layout:
   with `segment()` and `containing()`. `<noscript>` is removed before styles
   and scripts are collected when JS is enabled, so no-JS styles/scripts cannot
   affect the JS page.
-  `console.*` and uncaught errors append to a bounded JS log. Module scripts
-  remain unsupported, so globals defined only by modules (for example a
-  third-party `google` object) stay undefined.
+  `console.*`, uncaught errors and unhandled promise rejections append to a
+  bounded JS log. Module scripts execute, so globals created by an entry module
+  appear; an app whose entry module is only reachable through an import map or
+  a bare specifier still leaves them undefined.
 - **Modals:** alert/confirm/prompt, download and upload-notice modals share a
   centered box over a dimmed page backdrop. The body is fully opaque white
   (never blended with the page), with page glyphs and text attributes cleared
@@ -1391,8 +1410,8 @@ Standard Go layout:
   finishes, then starts a normal load. `<meta http-equiv="refresh">` redirects
   are followed immediately. Storage and the cookie jar are in-memory only and
   nothing is persisted. `XMLHttpRequest` and `fetch` use the shared cookie jar
-  and User-Agent but are synchronous under the hood. There is no CSP or module
-  loading; `history.back`/`forward` are stubs.
+  and User-Agent but are synchronous under the hood. There is no CSP; ES modules
+  are loaded by the page loader, and `history.back`/`forward` are stubs.
 - **Dump mode with JS:** `-dump` runs scripts and `DOMContentLoaded`/`load`
   synchronously so output reflects DOM changes; timers do not run in dump mode.
 
@@ -1441,6 +1460,16 @@ Standard Go layout:
   opens. Every other binary type keeps the download popup. The parser is
   bounded by the 12 MB page cap plus its own object, stream, page, text and
   time limits (500 pages, 4 s, 4 MiB of extracted text).
+- **ES modules:** module scripts and their static dependencies are fetched with
+  the same 12 MB per-resource cap, JavaScript MIME rule, request log and
+  session cache as classic scripts, and resolve against the importing module's
+  URL. The graph is capped at 256 modules, 12 MB of source and 32 levels of
+  import depth; records are cached per URL so a shared dependency is evaluated
+  once. Bare specifiers, import maps, `import.meta.resolve` and CORS checks on
+  module requests are not implemented; dynamic imports resolve through the
+  same graph and the page loader, so they are not blocked by the same-origin
+  rule that XHR and `fetch` follow. Module sources are fetched while the page is
+  applied, so a page whose graph is slow briefly delays its first paint.
 - Charset from Content-Type, falling back to `<meta charset>` sniffing.
   UTF-8 is the default. Legacy single-byte labels decode through the vendored
   `x/text/encoding/charmap` tables: Latin-1/Windows-1252, ISO-8859-2/3/4/5/7/9/
@@ -1606,11 +1635,14 @@ Standard Go layout:
 
 ## 8. Known limitations (accepted)
 
-- JavaScript is a practical subset: modules and CSP are unsupported. A page
-  containing `<script type="module">` is shown with the status
-  `Page requires ES modules (unsupported) — try reader mode (R)` so an SPA
-  boot/loading screen does
-  not look like a hang; the module scripts are still skipped. Storage
+- JavaScript is a practical subset: CSP is unsupported. ES modules run, but
+  bare package specifiers need import maps (unsupported), module requests are
+  not CORS-checked, there is no `import.meta.resolve` or `import.meta.env`, and
+  module sources are fetched while the page is applied, so a slow graph briefly
+  holds up the UI before the first paint. A module that fails to load, link or
+  evaluate shows `Module script failed — see ! console` in the footer. Async
+  generator syntax (`async function*`) and `for await` are still a parse error,
+  so a script containing them is skipped. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests
@@ -1626,9 +1658,8 @@ Standard Go layout:
   elements registry are absent, and `MessageChannel` delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
-- Dynamic `import()` resolves to an empty module namespace; the rest of a
-  classic bundle keeps running, but imports depending on real exports still
-  fail. Iframes have no browsing context and expose an inert stub document.
+- Dynamic `import()` loads a real module namespace and rejects on failure.
+  Iframes have no browsing context and expose an inert stub document.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
@@ -1781,8 +1812,9 @@ Works well:
   registry, `IntersectionObserver`/`ResizeObserver` (one synthetic entry),
   `PerformanceObserver` (inert), `Path2D`, an in-memory `ReadableStream`,
   inert `Worker`, Web Animations, and isolated iframe content documents.
-- Dynamic imports (`js_import.go`): `import()` and `import.meta` are rewritten
-  before execution; imports resolve to an empty namespace.
+- Modules (`js_modules.go`): `<script type="module">` and dynamic `import()`
+  load a linked graph with real namespaces and `import.meta.url`. Relative and
+  absolute specifiers work; bare package specifiers and import maps do not.
 
 Intentional limits of the shims:
 - `structuredClone` covers primitives, plain objects, arrays, Date, Map, Set
@@ -1798,13 +1830,12 @@ Intentional limits of the shims:
   `getComputedStyle` and rectangles may reflect defaults until after load.
 - Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not follow scrolling or resizing. `ReadableStream` is an in-memory
-  reader, `Worker` never runs, and iframe documents are inert stubs. Dynamic
-  imports resolve to an empty namespace, so real module exports are missing.
+  reader, `Worker` never runs, and iframe documents are inert stubs.
 - Inline `style` exposes `transition`/`transform`, animation properties and
   their vendor-prefixed aliases so libraries' CSS feature detection succeeds,
   but transitions and animations are not rendered.
-- Dynamically inserted `<script>` elements do not execute; modules, `defer`
-  and `async` are ignored.
+- Dynamically inserted `<script>` elements do not execute, and `defer`/`async`
+  ordering is ignored: every script runs after load in document order.
 
 Known unsupported families (do not present these as available):
 - Platform: WebAssembly, real Workers/SharedWorker/ServiceWorker threads

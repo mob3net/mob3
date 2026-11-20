@@ -92,7 +92,7 @@ not audited and is not a security boundary.
 
 ## JavaScript safety limits
 
-Each script and callback runs under a 2-second goja interrupt watchdog and a
+Each script and callback runs under a 2-second sobek interrupt watchdog and a
 configurable heap budget (`-js-memory`, default 256 MB). Timer counts and
 per-tick callbacks are capped. These limits protect against runaway scripts,
 not against malicious pages in general.

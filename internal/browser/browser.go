@@ -21,9 +21,9 @@ const (
 	progressTickInterval = 80 * time.Millisecond
 	progressLingerTicks  = 4
 
-	layoutTruncatedStatus   = "Page truncated (layout limit)"
-	moduleUnsupportedStatus = "Page requires ES modules (unsupported) — try reader mode (R)"
-	maxClipboardBytes       = 100 * 1024
+	layoutTruncatedStatus = "Page truncated (layout limit)"
+	moduleFailedStatus    = "Module script failed — see ! console"
+	maxClipboardBytes     = 100 * 1024
 )
 
 // Browser holds navigation and view state.
@@ -48,7 +48,10 @@ type Browser struct {
 	hoverRebuildPending bool
 	hoverRebuildAt      time.Time
 	jsErr               bool
-	status              string
+	// moduleErr records that an ES module script failed to load, link or
+	// evaluate, so the footer can point at the console.
+	moduleErr bool
+	status    string
 
 	// Reader mode renders an extracted article document instead of the page.
 	reader            bool
@@ -562,6 +565,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.viewMenuHits = nil
 	b.quitPending = false
 	b.jsErr = false
+	b.moduleErr = false
 	b.cancelLoad = nil
 	b.loading = false
 	if res.err != nil {
@@ -698,8 +702,8 @@ func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
 		return "Site blocked — browser check not supported"
 	case page.Status >= 400:
 		return fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
-	case page.HasModules:
-		return moduleUnsupportedStatus
+	case b.moduleErr:
+		return moduleFailedStatus
 	case b.layout != nil && b.layout.Truncated:
 		return layoutTruncatedStatus
 	case readerFailed:

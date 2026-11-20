@@ -1,28 +1,28 @@
-# github.com/dlclark/regexp2/v2 v2.11.0
+# github.com/dlclark/regexp2/v2 v2.13.0
 ## explicit; go 1.25
 github.com/dlclark/regexp2/v2
 github.com/dlclark/regexp2/v2/helpers
 github.com/dlclark/regexp2/v2/syntax
-# github.com/dop251/goja v0.0.0-20261118204651-8dfece3d1e1d
-## explicit; go 1.26.0
-github.com/dop251/goja
-github.com/dop251/goja/ast
-github.com/dop251/goja/file
-github.com/dop251/goja/ftoa
-github.com/dop251/goja/ftoa/internal/fast
-github.com/dop251/goja/parser
-github.com/dop251/goja/token
-github.com/dop251/goja/unistring
 # github.com/go-gfx/oksvg v0.4.0
 ## explicit; go 1.26.0
 github.com/go-gfx/oksvg
-# github.com/go-sourcemap/sourcemap v2.1.3+incompatible
+# github.com/go-sourcemap/sourcemap v2.1.4+incompatible
 ## explicit
 github.com/go-sourcemap/sourcemap
 github.com/go-sourcemap/sourcemap/internal/base64vlq
 # github.com/google/pprof v0.0.0-20230207041349-798e818bf904
 ## explicit; go 1.19
 github.com/google/pprof/profile
+# github.com/grafana/sobek v0.0.0-20261119094010-6eceb967bb5b
+## explicit; go 1.26.0
+github.com/grafana/sobek
+github.com/grafana/sobek/ast
+github.com/grafana/sobek/file
+github.com/grafana/sobek/ftoa
+github.com/grafana/sobek/ftoa/internal/fast
+github.com/grafana/sobek/parser
+github.com/grafana/sobek/token
+github.com/grafana/sobek/unistring
 # github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 ## explicit; go 1.17
 github.com/srwiley/rasterx

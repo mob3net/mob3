@@ -751,7 +751,7 @@ func TestFooterStatusColors(t *testing.T) {
 		status string
 		code   string
 	}{
-		{moduleUnsupportedStatus, "38;2;154;91;0"},
+		{moduleFailedStatus, "38;2;154;91;0"},
 		{layoutTruncatedStatus, "38;2;154;91;0"},
 		{"HTTP 404 Not Found", "38;2;154;91;0"},
 		{"Error: boom", "38;2;179;29;29"},
