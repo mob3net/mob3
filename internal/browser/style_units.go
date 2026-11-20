@@ -190,16 +190,60 @@ func parseLength(v string, fontPx float64) Length {
 		if strings.HasSuffix(v, u.suffix) {
 			num := strings.TrimSpace(strings.TrimSuffix(v, u.suffix))
 			f, err := strconv.ParseFloat(num, 64)
-			if err != nil {
+			if err != nil || !finiteNumber(f) {
 				return Length{}
 			}
 			return Length{V: f * u.mul, U: u.unit, Set: true}
 		}
 	}
-	if f, err := strconv.ParseFloat(v, 64); err == nil {
+	if f, err := strconv.ParseFloat(v, 64); err == nil && finiteNumber(f) {
 		return Length{V: f, U: UnitPX, Set: true}
 	}
 	return Length{}
+}
+
+// finiteNumber reports whether f is a usable CSS number. Scripts sometimes
+// write NaN or Infinity into inline styles; browsers ignore such declarations,
+// so the same values must not become layout geometry here.
+func finiteNumber(f float64) bool {
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
+}
+
+// nonFiniteLength reports whether a declaration value is a NaN or Infinity
+// length. Those declarations are dropped so an earlier rule keeps its value.
+func nonFiniteLength(val string) bool {
+	v := strings.ToLower(strings.TrimSpace(val))
+	if v == "" {
+		return false
+	}
+	if strings.HasPrefix(v, "calc(") {
+		for _, bad := range []string{"nan", "infinity", "inf"} {
+			if strings.Contains(v, bad) {
+				return true
+			}
+		}
+		return false
+	}
+	num := v
+	for _, u := range []string{"vmin", "vmax", "rem", "em", "px", "pt", "ch", "lh", "vw", "vh", "%"} {
+		if strings.HasSuffix(num, u) {
+			num = strings.TrimSpace(strings.TrimSuffix(num, u))
+			break
+		}
+	}
+	f, err := strconv.ParseFloat(num, 64)
+	return err == nil && !finiteNumber(f)
+}
+
+// lengthProperty reports whether prop takes a length, so an invalid numeric
+// value can be dropped instead of clearing a previously declared length.
+func lengthProperty(prop string) bool {
+	for _, part := range []string{"width", "height", "margin", "padding", "gap", "top", "right", "bottom", "left", "size", "spacing", "indent", "basis", "radius", "inset"} {
+		if strings.Contains(prop, part) {
+			return true
+		}
+	}
+	return prop == "line-height"
 }
 
 // calcValue is a simple calc() value: a percentage of the basis plus a CSS
@@ -216,7 +260,7 @@ func parseCalcLength(expr string, fontPx float64) Length {
 	pos := 0
 	v, ok := parseCalcSum(expr, &pos, fontPx)
 	skipCalcSpace(expr, &pos)
-	if !ok || pos != len(expr) || v.scalar {
+	if !ok || pos != len(expr) || v.scalar || !finiteNumber(v.pct) || !finiteNumber(v.px) {
 		return Length{}
 	}
 	return Length{Set: true, Calc: true, CalcPct: v.pct, CalcPx: v.px}

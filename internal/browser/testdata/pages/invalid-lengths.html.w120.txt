@@ -1,0 +1,22 @@
+An
+invali
+d
+width
+falls
+back
+to the
+styles
+heet
+value.
+Infini
+ty is
+ignore
+d as
+well.
+A
+non-fi
+nite
+margin
+is
+ignore
+d.

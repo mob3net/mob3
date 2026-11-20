@@ -206,6 +206,7 @@ func defaultStyle() *Style {
 		WhiteSpace:  "normal",
 		BoxSizing:   "content-box",
 		ListStyle:   "disc",
+		FlexShrink:  1,
 		BorderColor: RGB(0xd0, 0xd7, 0xde),
 		ObjectPosX:  0.5,
 		ObjectPosY:  0.5,
@@ -302,6 +303,11 @@ func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, f
 
 func applyDecl(st *Style, prop, val string, parent *Style) {
 	prop = strings.TrimSpace(prop)
+	if lengthProperty(prop) && nonFiniteLength(val) {
+		// An invalid scripted length (NaN/Infinity) is dropped like a browser
+		// would, leaving any earlier declaration in place.
+		return
+	}
 	if strings.HasPrefix(prop, "--") {
 		// Inherited maps are shared, so copy before the first write. The flag
 		// keeps a run of declarations on one element from copying repeatedly.
@@ -435,7 +441,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			if sz, ok := parseFontSize(sizePart, parentSize(parent)); ok {
 				st.FontSize = sz
 				if lh != "" {
-					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil {
+					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil && finiteNumber(f) {
 						st.LineHeight = math.Max(0.5, f)
 					} else if l := parseLength(lh, st.FontSize); l.Set {
 						st.LineHeight = math.Max(0.5, l.cssPx(st.FontSize)/st.FontSize)
@@ -710,18 +716,18 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			}
 		}
 	case "flex-grow":
-		if f, err := strconv.ParseFloat(lower, 64); err == nil && f > 0 {
+		if f, err := strconv.ParseFloat(lower, 64); err == nil && finiteNumber(f) && f > 0 {
 			st.FlexGrow = f
 		}
 	case "flex":
 		fields := splitFields(lower)
 		if len(fields) > 0 {
-			if f, err := strconv.ParseFloat(fields[0], 64); err == nil {
+			if f, err := strconv.ParseFloat(fields[0], 64); err == nil && finiteNumber(f) {
 				if f > 0 {
 					st.FlexGrow = f
 				}
 				if len(fields) >= 3 {
-					if s, err := strconv.ParseFloat(fields[1], 64); err == nil {
+					if s, err := strconv.ParseFloat(fields[1], 64); err == nil && finiteNumber(s) {
 						st.FlexShrink = s
 					}
 					if l := parseLength(fields[2], st.FontSize); l.Set {
@@ -740,7 +746,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.FlexBasisSet = true
 		}
 	case "flex-shrink":
-		if f, err := strconv.ParseFloat(lower, 64); err == nil && f >= 0 {
+		if f, err := strconv.ParseFloat(lower, 64); err == nil && finiteNumber(f) && f >= 0 {
 			st.FlexShrink = f
 		}
 	case "gap", "column-gap":

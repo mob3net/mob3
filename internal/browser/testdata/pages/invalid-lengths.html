@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+<title>Invalid scripted lengths</title>
+<style>
+body { margin: 0; }
+.slide { width: 48px; background: #eeeeee; }
+.slide p { margin: 0; }
+</style>
+</head>
+<body>
+<div class="slide" style="width: NaNpx"><p>An invalid width falls back to the stylesheet value.</p></div>
+<div class="slide" style="width: Infinity%"><p>Infinity is ignored as well.</p></div>
+<div class="slide" style="margin-left: NaNpx"><p>A non-finite margin is ignored.</p></div>
+</body>
+</html>

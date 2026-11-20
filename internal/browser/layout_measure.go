@@ -127,7 +127,26 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return total, minW
 	}
 	if n.Tag == "img" {
-		cw, _ := imageSize(n, st, 1000, l.imageCapWidth())
+		// Percentage widths depend on the container, not on the content, so
+		// they must not feed intrinsic sizing. Resolving `width:100%` against a
+		// large basis inflated the min-content width (a 100x100 thumbnail
+		// measured 32 cells), which then forced flex and grid items wider than
+		// their slot and painted the image over the neighbouring text.
+		if st.Width.Set && !st.Width.IsAuto() && (st.Width.U == UnitPercent || (st.Width.Calc && st.Width.CalcPct > 0)) {
+			copied := *st
+			copied.Width = Length{}
+			cw, _ := imageSize(n, &copied, l.width, l.imageCapWidth())
+			if cw < 1 {
+				cw = 1
+			}
+			// It fills its container, so it may shrink with it instead of
+			// imposing its intrinsic width as a minimum.
+			return cw, 1
+		}
+		cw, _ := imageSize(n, st, l.width, l.imageCapWidth())
+		if cw < 1 {
+			cw = 1
+		}
 		return cw, cw
 	}
 	if n.Tag == "select" && n.HasAttr("multiple") {

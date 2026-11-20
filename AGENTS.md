@@ -193,7 +193,7 @@ Standard Go layout:
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
 | `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `object-position`/`aspect-ratio`, `box-sizing`, min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
-| `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. |
+| `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. |
 | `style_sheet.go` | Declaration and stylesheet parsing: tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
@@ -208,8 +208,8 @@ Standard Go layout:
 | `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement and alt labels. |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
 | `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
-| `layout_flex.go` | Flex rows: basis, growing/shrinking, wrapping and line placement. |
-| `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. |
+| `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. |
+| `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. A percentage-width image is measured at its intrinsic width (the percentage is container-relative) with a one-cell minimum, so it cannot force a flex or grid item wider than its slot. |
 | `layout_links.go` | Link rectangles, overlay anchors and fixed-scroll re-anchoring. |
 | `layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
@@ -341,7 +341,10 @@ Standard Go layout:
   individual check.
 - **Flexbox row:** `display:flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
-  shrink-to-fit items and `gap`/`column-gap`. `inline-flex` and `inline-grid`
+  `flex-shrink` (items shrink in proportion to their factor and their slack
+  above min-content; `flex-shrink:0` items keep their size and overflow, so
+  carousel slides and fixed toolbars do not collapse), shrink-to-fit items and
+  `gap`/`column-gap`. `inline-flex` and `inline-grid`
   are treated as atomic inline-block boxes so buttons and badges stay inside
   the surrounding line instead of becoming full-width rows. Items keep at least their
   min-content width instead of shrinking into one-character columns.
@@ -531,7 +534,11 @@ Standard Go layout:
   width/height honored;
   aspect ratio preserved; display is capped at 40% of the viewport width and
   16 rows, preserving the ratio; transparency composited over the underlying
-  cell. A decoded image is downscaled once at load to the largest box the
+  cell. A percentage width is container-relative: intrinsic measurement ignores
+  it (returning the intrinsic width with a one-cell minimum), so a
+  `width:100%` thumbnail can never force its flex or grid slot wider than the
+  slot itself and paint over neighbouring text; the image then fills the slot
+  and shrinks with it. A decoded image is downscaled once at load to the largest box the
   terminal can paint — the viewport in CSS pixels, floored at 1024×512 — with
   aspect ratio preserved, and only that copy is stored on the node and in the
   image cache, so a many-megapixel photo never keeps its full bitmap alive.
@@ -1990,8 +1997,9 @@ engine work only; do not add site-specific exceptions.
 
 - **Shrinking and min-content.** Audit flex/grid items that collapse to one
   character per line. Respect `min-width:0`, automatic minimum sizes,
-  `flex-shrink`, `overflow` and wrapping so text never becomes a vertical
-  column.
+  `overflow` and wrapping so text never becomes a vertical
+  column (`flex-shrink` is honoured, and `flex-shrink:0` items keep their
+  size).
 - **Float edge cases.** Floats crossing nested block flows and
   block background/border interplay are approximated; floats inside inline
   wrappers are laid out inline. Add coverage before changing the float pass.

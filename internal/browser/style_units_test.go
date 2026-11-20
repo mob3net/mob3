@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestNonFiniteLengthsAreIgnored(t *testing.T) {
+	// Scripts can write NaN or Infinity into inline styles (for example a
+	// carousel computing a slide width while the layout reports zero). Invalid
+	// values must behave like an unset declaration, not become geometry.
+	for _, in := range []string{"NaN", "NaNpx", "NaNeM", "Infinitypx", "-Infinity%", "Inf", "calc(1px / 0)"} {
+		if l := parseLength(in, 16); l.Set {
+			t.Errorf("parseLength(%q) = %+v, want an unset length", in, l)
+		}
+	}
+
+	doc := ParseHTML(`<div class="slide" style="width:NaNpx;margin-left:Infinitypx">x</div>`)
+	st := newStyleEngine(ParseStylesheet(`.slide{width:48px;margin-left:4px}`), 100).computeAll(doc)[doc.FindFirst("div")]
+	if !st.Width.Set || st.Width.V != 48 {
+		t.Fatalf("width = %+v, want the 48px stylesheet value", st.Width)
+	}
+	if !st.Margin[3].Set || st.Margin[3].V != 4 {
+		t.Fatalf("margin-left = %+v, want the 4px stylesheet value", st.Margin[3])
+	}
+}
+
 func TestLengthUnitsParse(t *testing.T) {
 	doc := ParseHTML(`<p style="font-size:20px; margin:2rem 3em 4px 5ch; padding:1lh">x</p>`)
 	st := newStyleEngine(nil, 0).computeAll(doc)[doc.FindFirst("p")]

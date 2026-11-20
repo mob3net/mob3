@@ -163,8 +163,49 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		total += widths[i]
 	}
 	if total > totalAvail && total > 0 {
-		for i := range widths {
-			widths[i] = maxInt(mins[i], widths[i]*totalAvail/total)
+		// Shrink in proportion to each item's flex-shrink factor and its slack
+		// above the min-content width. A `flex-shrink:0` item (carousel slides,
+		// fixed toolbars) keeps its size and overflows instead of collapsing.
+		deficit := total - totalAvail
+		for pass := 0; pass < 8 && deficit > 0; pass++ {
+			weight := 0.0
+			for i, it := range items {
+				if shrink := flexShrinkOf(it); shrink > 0 {
+					if slack := widths[i] - mins[i]; slack > 0 {
+						weight += float64(slack) * shrink
+					}
+				}
+			}
+			if weight == 0 {
+				break
+			}
+			removed := 0
+			for i, it := range items {
+				if deficit <= 0 {
+					break
+				}
+				shrink := flexShrinkOf(it)
+				slack := widths[i] - mins[i]
+				if shrink <= 0 || slack <= 0 {
+					continue
+				}
+				take := int(float64(deficit) * float64(slack) * shrink / weight)
+				if take < 1 {
+					take = 1
+				}
+				if take > slack {
+					take = slack
+				}
+				if take > deficit {
+					take = deficit
+				}
+				widths[i] -= take
+				deficit -= take
+				removed += take
+			}
+			if removed == 0 {
+				break
+			}
 		}
 	}
 	used := gap * (len(items) - 1)
@@ -282,4 +323,14 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		}
 	}
 	return maxH
+}
+
+// flexShrinkOf returns an item's flex-shrink factor. The computed style
+// defaults to 1, so only an explicit `flex-shrink:0` (or `flex: … 0 …`)
+// prevents an item from shrinking.
+func flexShrinkOf(n *Node) float64 {
+	if n == nil || n.Style == nil {
+		return 1
+	}
+	return n.Style.FlexShrink
 }
