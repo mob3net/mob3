@@ -1196,8 +1196,8 @@ func TestViewMenuMouseTogglesRow(t *testing.T) {
 	b.HandleKey("X")
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintViewMenu(g)
-	if len(b.viewMenuHits) != 1 {
-		t.Fatalf("view menu hits = %d, want 1", len(b.viewMenuHits))
+	if len(b.viewMenuHits) != 2 {
+		t.Fatalf("view menu hits = %d, want 2", len(b.viewMenuHits))
 	}
 	r := b.viewMenuHits[0].rect
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
@@ -1449,5 +1449,23 @@ func TestStatusDetailsClick(t *testing.T) {
 	b.HandleMouse(MouseEvent{X: 2, Y: b.height, Press: true})
 	if b.notice == nil || b.notice.title != "Error" {
 		t.Fatalf("click did not open the message: %+v", b.notice)
+	}
+}
+
+func TestViewMenuTogglesBackgrounds(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("X")
+	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.paintViewMenu(g)
+	if len(b.viewMenuHits) != 2 {
+		t.Fatalf("view menu hits = %d, want 2", len(b.viewMenuHits))
+	}
+	r := b.viewMenuHits[1].rect
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
+	if !b.hideBackgrounds {
+		t.Fatal("clicking Background images did not hide them")
+	}
+	if b.status != "Background images hidden" {
+		t.Fatalf("status = %q", b.status)
 	}
 }

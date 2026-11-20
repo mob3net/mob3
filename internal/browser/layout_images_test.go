@@ -286,3 +286,66 @@ func TestImageLabelReservesCSSHeight(t *testing.T) {
 		t.Fatalf("image label reserved %d rows, want 4", afterY-labelY)
 	}
 }
+
+func TestBackgroundImageFragment(t *testing.T) {
+	doc := ParseHTML(`<div id="hero" style="height:64px;background-image:url(hero.jpg);background-size:cover">text</div>`)
+	ly := BuildLayout(doc, nil, 80)
+	hero := findElementByID(doc, "hero")
+	hero.Img = testImage(40, 20)
+	// Rebuild with an image attached so a background fragment is produced.
+	ly = BuildLayout(doc, nil, 80)
+	var bg *Frag
+	for i := range ly.Frags {
+		if ly.Frags[i].Background && ly.Frags[i].Node == hero {
+			bg = &ly.Frags[i]
+			break
+		}
+	}
+	if bg == nil {
+		t.Fatal("no background fragment")
+	}
+	if bg.W != ly.Boxes[hero].W || bg.H != ly.Boxes[hero].H {
+		t.Fatalf("background %dx%d, want the box %dx%d", bg.W, bg.H, ly.Boxes[hero].W, ly.Boxes[hero].H)
+	}
+	if bg.Crop.Empty() {
+		t.Fatal("cover background has no crop")
+	}
+	// Backgrounds never become native placements: they must stay half-block
+	// art so text painted on top remains visible.
+	g := NewGrid(80, 20, RGB(0, 0, 0), RGB(255, 255, 255))
+	var placements []ImagePlacement
+	PaintLayoutGraphics(g, ly, 0, 0, 20, nil, RGB(0, 0, 0), &placements)
+	for _, p := range placements {
+		if p.Src == "hero.jpg" {
+			t.Fatal("background image was queued as a native placement")
+		}
+	}
+	if got := g.Cells[ly.Boxes[hero].Y*80+ly.Boxes[hero].X]; got.Img {
+		t.Fatal("background should be painted as cells, not an image placement")
+	}
+}
+
+func testImage(w, h int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 6), G: uint8(y * 12), B: 128, A: 255})
+		}
+	}
+	return img
+}
+
+func TestBackgroundImagesOff(t *testing.T) {
+	doc := ParseHTML(`<div id="hero" style="height:64px;background-image:url(hero.jpg)">text</div>`)
+	BuildLayout(doc, nil, 80)
+	hero := findElementByID(doc, "hero")
+	hero.Img = testImage(40, 20)
+	ly := BuildLayout(doc, nil, 80)
+	ly.BackgroundsOff = true
+	g := NewGrid(80, 20, RGB(0, 0, 0), RGB(255, 255, 255))
+	PaintLayout(g, ly, 0, 0, 20, nil, RGB(0, 0, 0))
+	cell := g.Cells[ly.Boxes[hero].Y*80+ly.Boxes[hero].X]
+	if cell.R == '▀' || cell.R == '▄' || cell.Img {
+		t.Fatalf("suppressed background painted a cell: %+v", cell)
+	}
+}

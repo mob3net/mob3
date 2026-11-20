@@ -461,6 +461,16 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				return
 			}
 			imgTop := y0 - y
+			if f.Background {
+				// CSS backgrounds are always half-block art: native terminal
+				// placements composite above the cell grid and would cover the
+				// text and links drawn on top of the image.
+				if ly.BackgroundsOff {
+					return
+				}
+				paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
+				return
+			}
 			if placements != nil && (f.Fixed || !paintBlocks(f, y0, y1)) {
 				src := ""
 				if f.Node != nil {

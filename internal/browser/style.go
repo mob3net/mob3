@@ -33,70 +33,74 @@ type Style struct {
 	// shared with the parent style and replaced with a private copy on the
 	// first custom property an element declares itself, so a page that defines
 	// thousands of properties on :root does not copy them into every element.
-	Vars           map[string]string
-	varsOwned      bool
-	Display        string
-	Hidden         bool
-	HiddenExplicit bool
-	Color          Color
-	Background     Color
-	FontSize       float64
-	Bold           bool
-	Italic         bool
-	Underline      bool
-	Strike         bool
-	TextTransform  string
-	TextAlign      string
-	VerticalAlign  string
-	TextIndent     Length
-	WhiteSpace     string
-	Content        string
-	ContentSet     bool
-	LineClamp      int
-	LineHeight     float64 // multiplier
-	Margin         [4]Length
-	Padding        [4]Length
-	Border         [4]Length
-	BorderStyle    [4]bool
-	BorderColor    Color
-	Width          Length
-	Height         Length
-	MinWidth       Length
-	MaxWidth       Length
-	MinHeight      Length
-	MaxHeight      Length
-	BoxSizing      string
-	ListStyle      string
-	Overflow       string
-	Position       string
-	Float          string
-	Clear          string
-	Top            Length
-	Right          Length
-	Bottom         Length
-	Left           Length
-	Clip           string
-	FlexDir        string
-	FlexWrap       string
-	JustifyContent string
-	AlignItems     string
-	Order          int
-	FlexGrow       float64
-	FlexShrink     float64
-	FlexBasis      Length
-	FlexBasisSet   bool
-	Gap            Length
-	RowGap         Length
-	GridCols       string
-	GridAreas      string
-	GridArea       string
-	GridColumn     string
-	GridRow        string
-	GridAutoFlow   string
-	ObjectFit      string
-	ObjectPosX     float64
-	ObjectPosY     float64
-	AspectRatio    float64
+	Vars            map[string]string
+	varsOwned       bool
+	Display         string
+	Hidden          bool
+	HiddenExplicit  bool
+	Color           Color
+	Background      Color
+	BackgroundImage string
+	BackgroundSize  string // "cover", "contain", "stretch", or "" (auto)
+	BackgroundPosX  float64
+	BackgroundPosY  float64
+	FontSize        float64
+	Bold            bool
+	Italic          bool
+	Underline       bool
+	Strike          bool
+	TextTransform   string
+	TextAlign       string
+	VerticalAlign   string
+	TextIndent      Length
+	WhiteSpace      string
+	Content         string
+	ContentSet      bool
+	LineClamp       int
+	LineHeight      float64 // multiplier
+	Margin          [4]Length
+	Padding         [4]Length
+	Border          [4]Length
+	BorderStyle     [4]bool
+	BorderColor     Color
+	Width           Length
+	Height          Length
+	MinWidth        Length
+	MaxWidth        Length
+	MinHeight       Length
+	MaxHeight       Length
+	BoxSizing       string
+	ListStyle       string
+	Overflow        string
+	Position        string
+	Float           string
+	Clear           string
+	Top             Length
+	Right           Length
+	Bottom          Length
+	Left            Length
+	Clip            string
+	FlexDir         string
+	FlexWrap        string
+	JustifyContent  string
+	AlignItems      string
+	Order           int
+	FlexGrow        float64
+	FlexShrink      float64
+	FlexBasis       Length
+	FlexBasisSet    bool
+	Gap             Length
+	RowGap          Length
+	GridCols        string
+	GridAreas       string
+	GridArea        string
+	GridColumn      string
+	GridRow         string
+	GridAutoFlow    string
+	ObjectFit       string
+	ObjectPosX      float64
+	ObjectPosY      float64
+	AspectRatio     float64
 }
 
 func parseObjectPosition(v string, st *Style) {
@@ -198,18 +202,20 @@ func (s *Style) LineHeightCells() int {
 
 func defaultStyle() *Style {
 	return &Style{
-		Display:     "inline",
-		Color:       RGB(0x1f, 0x23, 0x28),
-		FontSize:    16,
-		TextAlign:   "left",
-		LineHeight:  1,
-		WhiteSpace:  "normal",
-		BoxSizing:   "content-box",
-		ListStyle:   "disc",
-		FlexShrink:  1,
-		BorderColor: RGB(0xd0, 0xd7, 0xde),
-		ObjectPosX:  0.5,
-		ObjectPosY:  0.5,
+		Display:        "inline",
+		Color:          RGB(0x1f, 0x23, 0x28),
+		FontSize:       16,
+		TextAlign:      "left",
+		LineHeight:     1,
+		WhiteSpace:     "normal",
+		BoxSizing:      "content-box",
+		ListStyle:      "disc",
+		FlexShrink:     1,
+		BorderColor:    RGB(0xd0, 0xd7, 0xde),
+		ObjectPosX:     0.5,
+		ObjectPosY:     0.5,
+		BackgroundPosX: 0.5,
+		BackgroundPosY: 0.5,
 	}
 }
 
@@ -381,14 +387,44 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		if c, ok := parseColor(val, st.Background); ok {
 			st.Background = c
 		}
+	case "background-image":
+		st.BackgroundImage = backgroundURL(val)
+	case "background-size":
+		switch lower {
+		case "cover", "contain":
+			st.BackgroundSize = lower
+		default:
+			// A percentage pair such as `100% 100%` stretches the bitmap over
+			// the box; other sizes are approximated as cover.
+			f := splitFields(lower)
+			if len(f) >= 1 && (strings.HasPrefix(f[0], "100%") || f[0] == "auto") && (len(f) < 2 || strings.HasPrefix(f[1], "100%") || f[1] == "auto") {
+				if strings.HasPrefix(f[0], "100%") {
+					st.BackgroundSize = "stretch"
+				}
+			}
+		}
+	case "background-position":
+		if x, y, ok := parseBackgroundPosition(lower); ok {
+			st.BackgroundPosX, st.BackgroundPosY = x, y
+		}
 	case "background":
 		if f := splitFields(val); len(f) > 0 {
 			if lower == "none" {
 				st.Background = Color{}
+				st.BackgroundImage = ""
 				return
 			}
+			if u := backgroundURL(val); u != "" {
+				st.BackgroundImage = u
+			}
+			switch {
+			case strings.Contains(lower, "cover"):
+				st.BackgroundSize = "cover"
+			case strings.Contains(lower, "contain"):
+				st.BackgroundSize = "contain"
+			}
 			for i := len(f) - 1; i >= 0; i-- {
-				if c, ok := parseColor(f[i], st.Color); ok && !strings.HasPrefix(f[i], "url(") {
+				if c, ok := parseColor(f[i], st.Color); ok && !strings.Contains(strings.ToLower(f[i]), "url(") {
 					st.Background = c
 					break
 				}
@@ -1102,4 +1138,76 @@ func clipHidesContent(clip string) bool {
 		}
 	}
 	return true
+}
+
+// backgroundURL extracts the first url(...) from a background value. Gradients
+// and other functions are ignored (they are not rendered).
+func backgroundURL(val string) string {
+	lower := strings.ToLower(val)
+	i := strings.Index(lower, "url(")
+	if i < 0 {
+		return ""
+	}
+	j := i + len("url(")
+	depth := 1
+	for j < len(val) && depth > 0 {
+		switch val[j] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		}
+		if depth == 0 {
+			break
+		}
+		j++
+	}
+	raw := strings.TrimSpace(val[i+len("url(") : j])
+	raw = strings.TrimSpace(strings.Trim(raw, `"'`))
+	return raw
+}
+
+// parseBackgroundPosition resolves background-position keywords/percentages to
+// fractions of the box. One value sets x and centers y, as in CSS.
+func parseBackgroundPosition(v string) (float64, float64, bool) {
+	fields := splitFields(v)
+	if len(fields) == 0 {
+		return 0, 0, false
+	}
+	axis := func(tok string) (float64, bool) {
+		tok = strings.TrimSpace(tok)
+		switch tok {
+		case "left":
+			return 0, true
+		case "right":
+			return 1, true
+		case "top":
+			return 0, true
+		case "bottom":
+			return 1, true
+		case "center":
+			return 0.5, true
+		}
+		if strings.HasSuffix(tok, "%") {
+			if f, err := strconv.ParseFloat(strings.TrimSuffix(tok, "%"), 64); err == nil {
+				return f / 100, true
+			}
+		}
+		return 0, false
+	}
+	if len(fields) == 1 {
+		if x, ok := axis(fields[0]); ok {
+			return x, 0.5, true
+		}
+		return 0, 0, false
+	}
+	x, okX := axis(fields[0])
+	y, okY := axis(fields[1])
+	if !okX {
+		x = 0.5
+	}
+	if !okY {
+		y = 0.5
+	}
+	return x, y, okX || okY
 }

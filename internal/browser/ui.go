@@ -1332,19 +1332,40 @@ type viewOption struct {
 // viewOptions returns the switches offered by the page view window. The fixed
 // element switch is the first entry; future view toggles register here.
 func viewOptions() []viewOption {
-	return []viewOption{{
-		label: "Fixed elements",
-		on:    func(b *Browser) bool { return !b.hideFixed },
-		set: func(b *Browser, on bool) {
-			b.hideFixed = !on
-			b.rebuild()
-			if on {
-				b.status = "Fixed elements shown"
-			} else {
-				b.status = "Fixed elements hidden"
-			}
+	return []viewOption{
+		{
+			label: "Fixed elements",
+			on:    func(b *Browser) bool { return !b.hideFixed },
+			set: func(b *Browser, on bool) {
+				b.hideFixed = !on
+				b.rebuild()
+				if on {
+					b.status = "Fixed elements shown"
+				} else {
+					b.status = "Fixed elements hidden"
+				}
+			},
 		},
-	}}
+		{
+			label: "Background images",
+			on:    func(b *Browser) bool { return !b.hideBackgrounds },
+			set: func(b *Browser, on bool) {
+				b.hideBackgrounds = !on
+				if b.loader != nil {
+					b.loader.hideBackgrounds = b.hideBackgrounds
+				}
+				if on && b.loader != nil && !b.loader.noImages && !b.loader.deferImages {
+					b.refreshImages()
+				}
+				b.rebuild()
+				if on {
+					b.status = "Background images shown"
+				} else {
+					b.status = "Background images hidden"
+				}
+			},
+		},
+	}
 }
 
 // viewMenuHit is one clickable row in the open view window.

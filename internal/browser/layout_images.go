@@ -260,3 +260,73 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 	}
 	return cw, ch
 }
+
+// pixelsBackground reports whether a box should paint a CSS background image.
+// Only block-level boxes are painted: backgrounds are paint-only, and the
+// common text-over-photo pattern uses a block container. Inline boxes would
+// need per-line-fragment painting.
+func pixelsBackground(n *Node, st *Style) bool {
+	if n == nil || st == nil || st.BackgroundImage == "" || st.Hidden {
+		return false
+	}
+	if n.Tag == "html" || n.Tag == "body" {
+		// Document backgrounds propagate to the canvas in CSS; painting one
+		// across the whole document box would stretch it over every page.
+		return false
+	}
+	switch st.Display {
+	case "block", "list-item", "flex", "grid", "table", "inline-block":
+		return true
+	}
+	return st.Position == "absolute" || st.Position == "fixed"
+}
+
+// backgroundCrop computes the source rectangle that fills a box with a
+// background image (cover, or the whole bitmap for an explicit stretch).
+func backgroundCrop(img image.Image, w, h int, st *Style) image.Rectangle {
+	if img == nil {
+		return image.Rectangle{}
+	}
+	b := img.Bounds()
+	iw, ih := b.Dx(), b.Dy()
+	if iw < 1 || ih < 1 || w < 1 || h < 1 {
+		return b
+	}
+	if st != nil && st.BackgroundSize == "stretch" {
+		return b
+	}
+	bw, bh := float64(w)*cellW, float64(h)*cellH
+	scale := math.Max(bw/float64(iw), bh/float64(ih))
+	cw := int(math.Round(bw / scale))
+	ch := int(math.Round(bh / scale))
+	if cw > iw {
+		cw = iw
+	}
+	if ch > ih {
+		ch = ih
+	}
+	if cw < 1 {
+		cw = 1
+	}
+	if ch < 1 {
+		ch = 1
+	}
+	px, py := 0.5, 0.5
+	if st != nil {
+		px = clampUnit(st.BackgroundPosX)
+		py = clampUnit(st.BackgroundPosY)
+	}
+	sx := b.Min.X + int(math.Round(float64(iw-cw)*px))
+	sy := b.Min.Y + int(math.Round(float64(ih-ch)*py))
+	return image.Rect(sx, sy, sx+cw, sy+ch)
+}
+
+func clampUnit(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}

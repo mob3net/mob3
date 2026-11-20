@@ -192,7 +192,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `object-position`/`aspect-ratio`, `box-sizing`, min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
+| `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing`, min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. |
@@ -205,7 +205,7 @@ Standard Go layout:
 | `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated empty `::before`/`::after` boxes. |
 | `layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
-| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement and alt labels. |
+| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
 | `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. |
@@ -214,7 +214,7 @@ Standard Go layout:
 | `layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
 | `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
-| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, concurrent image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
+| `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, concurrent foreground and CSS-background image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
@@ -231,7 +231,7 @@ Standard Go layout:
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
 | `automation.go` | Headless `Automation` session for scripted clients: serialized navigation, text snapshot, click by link/selector/coordinates, typing, key presses, scrolling, history, JS evaluation and session close. `RunCommand` is the shared named-command dispatcher used by protocol front ends. Uses a virtual text viewport and sets `Browser.noDraw` so nothing is written to the terminal. |
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tool calls delegate to `Automation.RunCommand`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
-| `ui.go` | JS console view, alert/confirm/prompt dialogs and their rendering. |
+| `ui.go` | JS console view, alert/confirm/prompt dialogs, the `X` page view options window (fixed elements and background images) and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
 | `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, following the chosen link, and the F destination-confirmation step. |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
@@ -515,8 +515,10 @@ Standard Go layout:
   or visible “skip to content” links.
 - **Percentage heights** resolve against the containing block's definite
   content height: a parent with a declared height (including one resolved from
-  a percentage), a `min-height`, a stretched absolute box, or a flex/grid
-  cell with a known height. `height:100%` and `calc(…% …)` therefore work in
+  a percentage), a stretched absolute box, or a flex/grid cell with a known
+  height. A `min-height` is only a floor and does not make the height definite;
+  resolving percentages against it used to cap a `height:100%` wrapper chain at
+  the floor and clip the rest of the page. `height:100%` and `calc(…% …)` therefore work in
   fixed-height sliders and cards. An indefinite (auto-height) parent leaves
   them auto, so `height:100%` on a logo cannot become 100 terminal rows. An
   absolutely positioned image whose containing block height is known also
@@ -595,6 +597,21 @@ Standard Go layout:
   fill falls back to half-block art for that frame, because terminal image
   placements are composited above the text grid and cannot be erased by the
   fixed fill; fixed images (such as a logo inside a fixed header) stay native.
+- **Background images:** `background-image:url(...)` is fetched through the
+  same image cache and painted behind the box's content, so text, links and
+  form controls stay above it. Only block-level boxes are painted (`block`,
+  `list-item`, `flex`, `grid`, `table`, `inline-block`, and absolute/fixed
+  boxes); inline boxes are skipped because they would need per-line-fragment
+  painting. The image fills the box with `background-size:cover` semantics
+  (an explicit `100% 100%` stretches it), cropped per `background-position`
+  (default centre). `html`/`body` backgrounds are skipped because CSS
+  propagates them to the canvas and painting one across the document box would
+  stretch it over the whole page. Gradients, repeat patterns and
+  `background-attachment` are not rendered. Backgrounds are always drawn as
+  half-block art, never as kitty/iTerm2 placements: terminal placements
+  composite above the cell grid and would hide the text sitting on the image.
+  They are skipped with `-graphics=none` (no image requests) and can be
+  toggled at runtime with `X` → Background images.
 - **Graphics protocol preference:** default is `none` (no image loading or
   drawing, for speed). When enabled with `-graphics=auto|kitty|iterm|blocks`,
   kitty comes first, then iTerm2, then half-block art. Auto is selected from
@@ -749,9 +766,9 @@ Standard Go layout:
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
   `i` cycle graphics modes, `X` open the page view options window (a switch
   list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
-  on Esc, `q`, `Ctrl-C` or `X`; fixed elements is its first switch, and the
-  list is built from one `viewOption` registry so later view toggles can be
-  added), `o` URL prompt (or `:` for a Vim-style command prompt where
+  on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements and
+  Background images, and the list is built from one `viewOption` registry so
+  later view toggles can be added), `o` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL, `E` open the full warning or error
@@ -1686,7 +1703,7 @@ Standard Go layout:
   element declares a custom property itself, so a large `:root` token set
   costs one map per declaring element instead of one full copy per node
   (measured: 349 MB → 44 MB live heap on a token-heavy page). No
-  animations, transitions, or background images. `<dialog>` open
+  animations, transitions, gradients or repeating background tiles. `<dialog>` open
   state controls rendering, but modal
   dialogs are laid out in normal block flow without a backdrop, focus trap or
   top-layer stacking.
@@ -1802,7 +1819,7 @@ Known unsupported families (do not present these as available):
   floats inside inline wrappers and across nested blocks, float edge cases
   that cross nested formatting contexts, `position:sticky`, `z-index`
   stacking, animations,
-  transitions, non-empty generated content, background images, full
+  transitions, non-empty generated content, background gradients/repeat, full
   flexbox.
 
 Do not add a stub just to silence an error when a library would then depend on
@@ -2032,8 +2049,9 @@ engine work only; do not add site-specific exceptions.
   candidates.
 - **Generated content.** Empty block `::before`/`::after` boxes work; support
   non-empty text/icons and inline pseudo boxes where practical.
-- **Background images and gradients.** Not rendered. Ensure text contrast
-  fallbacks still work and consider loading simple `background-image` assets.
+- **Background gradients and repeat.** `background-image:url(...)` is
+  rendered (see the images section), but gradients and tiled repeat patterns
+  are not; such values leave the box's background colour only.
 
 ### P4 — JavaScript-rendered pages
 

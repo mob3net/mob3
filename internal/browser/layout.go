@@ -43,7 +43,10 @@ type Frag struct {
 	Node  *Node
 	Img   image.Image
 	Crop  image.Rectangle
-	Link  *LinkInfo
+	// Background marks a CSS background image painted behind the box content.
+	// It is always drawn as half-block art so text stays visible above it.
+	Background bool
+	Link       *LinkInfo
 	// Fixed marks a viewport-anchored fragment. Y is recalculated on scroll
 	// from FixedY (the viewport row) plus the browser scroll offset.
 	Fixed  bool
@@ -52,14 +55,17 @@ type Frag struct {
 
 // Layout is the result of styling and layout.
 type Layout struct {
-	Width  int
-	Height int
-	Frags  []Frag
-	Links  []*LinkInfo
-	Styles map[*Node]*Style
-	PageBG Color
-	Body   *Node
-	HTML   *Node
+	Width int
+	// BackgroundsOff suppresses CSS background images at paint time without
+	// rebuilding the layout.
+	BackgroundsOff bool
+	Height         int
+	Frags          []Frag
+	Links          []*LinkInfo
+	Styles         map[*Node]*Style
+	PageBG         Color
+	Body           *Node
+	HTML           *Node
 	// Boxes holds border-box rectangles for laid-out block elements. Hover and
 	// click hit testing falls back to them when the pointer is over padding or
 	// background rather than a text fragment.
@@ -646,6 +652,14 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 		l.addFill(boxX, top, boxW, 1, st.Background)
 		bgIndex = len(l.frags) - 1
 	}
+	// A CSS background image paints behind the box's content, so the fragment
+	// is added before any child fragments. Its height is filled in once the
+	// block's total height is known.
+	bgImgIndex := -1
+	if !l.imagesOff && n.Tag != "img" && pixelsBackground(n, st) && n.Img != nil {
+		l.frags = append(l.frags, Frag{Kind: fragImage, X: boxX, Y: top, W: boxW, H: 1, Img: n.Img, Node: n, Background: true})
+		bgImgIndex = len(l.frags) - 1
+	}
 	clipStart := len(l.frags)
 
 	// A definite height (declared, percentage against a known parent, min-height
@@ -659,9 +673,9 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 			defContentH = l.heightValue(st, st.Height, l.parentH)
 		}
 	}
-	if defContentH < 0 && st.MinHeight.Set && !st.MinHeight.IsAuto() && !lengthHasPercent(st.MinHeight) {
-		defContentH = l.heightValue(st, st.MinHeight, availW)
-	}
+	// min-height is a floor, not a definite height: percentage heights in
+	// children must not resolve against it (that would cap a 100%-height
+	// wrapper chain at the min-height and clip the page).
 	if forceContentH > defContentH {
 		defContentH = forceContentH
 	}
@@ -767,6 +781,11 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	totalH := bt + pt + contentH + pb + bb
 	if bgIndex >= 0 {
 		l.frags[bgIndex].H = totalH
+	}
+	if bgImgIndex >= 0 {
+		f := &l.frags[bgImgIndex]
+		f.H = totalH
+		f.Crop = backgroundCrop(f.Img, boxW, totalH, st)
 	}
 	if bl+br+bt+bb > 0 {
 		bc := st.BorderColor

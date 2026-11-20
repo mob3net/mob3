@@ -244,3 +244,24 @@ func TestCSSImportsScalesWithLargeSheets(t *testing.T) {
 		t.Fatalf("cssImports took %v for %d bytes; the scan is not linear", elapsed, len(src))
 	}
 }
+
+func TestBackgroundImageParsing(t *testing.T) {
+	doc := ParseHTML(`<div id="a"></div>`)
+	rules := ParseStylesheet(`
+		#a {
+			background-image: url('https://example.test/hero.jpg');
+			background-size: cover;
+			background-position: right bottom;
+		}`)
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	st := styles[doc.FindFirst("div")]
+	if st.BackgroundImage != "https://example.test/hero.jpg" {
+		t.Fatalf("background image = %q", st.BackgroundImage)
+	}
+	if st.BackgroundSize != "cover" {
+		t.Fatalf("background size = %q", st.BackgroundSize)
+	}
+	if st.BackgroundPosX != 1 || st.BackgroundPosY != 1 {
+		t.Fatalf("background position = %v,%v", st.BackgroundPosX, st.BackgroundPosY)
+	}
+}

@@ -99,6 +99,8 @@ type Browser struct {
 
 	// hideFixed suppresses position:fixed boxes for the current page.
 	hideFixed bool
+	// hideBackgrounds suppresses CSS background images for the current page.
+	hideBackgrounds bool
 
 	// lastNativeImages tracks graphics-mode transitions (hints or a modal
 	// opening/closing) so the next frame is fully repainted and no stale
@@ -750,6 +752,9 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	if b.loader != nil {
+		b.loader.hideBackgrounds = b.hideBackgrounds
+	}
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
 	if b.js != nil && !b.reader && (b.loader == nil || !b.loader.deferImages) {
@@ -793,6 +798,7 @@ func (b *Browser) rebuild() {
 	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked
 	imagesOff := b.loader != nil && b.loader.noImages
 	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+	b.layout.BackgroundsOff = b.hideBackgrounds
 	b.updatePDFPageStarts()
 	if b.bigText && layoutTextOverlaps(b.layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
@@ -806,6 +812,7 @@ func (b *Browser) rebuild() {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
 		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+		b.layout.BackgroundsOff = b.hideBackgrounds
 		b.updatePDFPageStarts()
 	}
 	b.pageHasHover = rulesUseHover(author)

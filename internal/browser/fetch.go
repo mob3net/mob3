@@ -108,6 +108,8 @@ type Loader struct {
 	// deferImages makes Load skip image downloads so the caller can show the
 	// page first and fetch them in the background.
 	deferImages bool
+	// hideBackgrounds skips CSS background images (the page view switch).
+	hideBackgrounds bool
 	// imageViewportPx is the CSS-pixel viewport width used to choose srcset and
 	// picture candidates. It is 800 when no browser width is available.
 	imageViewportPx int
@@ -1106,8 +1108,17 @@ type srcsetCandidate struct {
 // picture's matching source elements, srcset width/density candidates, and
 // common data-src lazy-loading fallbacks when no standard source is present.
 func imageSource(n *Node, viewportPx int) string {
-	if n == nil || n.Tag != "img" {
+	if n == nil {
 		return ""
+	}
+	if n.Tag != "img" {
+		// A non-image element can carry a CSS background image. The style is
+		// only available after the first layout pass, so these are picked up by
+		// the deferred image batch.
+		if n.Style == nil || n.Style.BackgroundImage == "" {
+			return ""
+		}
+		return n.Style.BackgroundImage
 	}
 	preferred := viewportPx * 2 / 5
 	if preferred < 160 {
@@ -1277,7 +1288,12 @@ func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
 		return nil
 	}
 	var tasks []imageTask
-	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+	for _, n := range root.FindAll(func(n *Node) bool {
+		if n.Tag == "img" {
+			return true
+		}
+		return !l.hideBackgrounds && n.Style != nil && n.Style.BackgroundImage != ""
+	}) {
 		src := imageSource(n, l.imageViewportPx)
 		if src == "" {
 			continue
@@ -1467,7 +1483,10 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 	}
 	ctx = withRequestKind(ctx, "img")
 	imgs := root.FindAll(func(n *Node) bool {
-		return n.Tag == "img"
+		if n.Tag == "img" {
+			return true
+		}
+		return !l.hideBackgrounds && n.Style != nil && n.Style.BackgroundImage != ""
 	})
 	if len(imgs) == 0 {
 		return false
@@ -1602,7 +1621,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
-<tr><td><b>X</b></td><td>open the view options window and toggle what the page shows</td></tr>
+<tr><td><b>X</b></td><td>open the view options window (Fixed elements, Background images) and toggle the selected switch</td></tr>
 <tr><td><b>o</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
