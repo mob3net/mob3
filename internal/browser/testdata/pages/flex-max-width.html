@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<title>Flex max-width clamp</title>
+<style>
+body { margin: 0; }
+.row { display: flex; flex-wrap: wrap; }
+.main { flex: 0 0 75%; max-width: 75%; }
+.side { flex: 0 0 25%; max-width: 25%; }
+.stage-outer { overflow: hidden; }
+.stage { width: 640px; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="main">
+    <div class="stage-outer"><div class="stage">A wide carousel stage must not widen the column past its max-width.</div></div>
+    <p>Body text stays inside the main column.</p>
+  </div>
+  <div class="side"><p>Sidebar</p></div>
+</div>
+</body>
+</html>

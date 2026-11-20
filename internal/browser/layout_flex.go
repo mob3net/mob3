@@ -148,9 +148,43 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	}
 	mins := make([]int, len(items))
 	for i, it := range items {
-		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(it.Style, availW)
+		st := it.Style
+		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
+		extra := ml + mr + bl + br + pl + pr
 		_, mi := l.measure(it)
-		mins[i] = maxInt(1, mi+ml+mr+bl+br+pl+pr)
+		mins[i] = maxInt(1, mi+extra)
+		// A flex item is still bounded by its min/max widths. Bootstrap-style
+		// columns use max-width:75%, and a wide descendant (a carousel stage
+		// with an inline pixel width) would otherwise inflate the item's
+		// min-content and force the whole column far past the row.
+		maxTotal, minTotal := 0, 0
+		if st != nil {
+			if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
+				if w := l.widthValue(st, st.MaxWidth, availW); w >= 0 {
+					maxTotal = w + extra
+				}
+			}
+			if st.MinWidth.Set && !st.MinWidth.IsAuto() {
+				if w := l.widthValue(st, st.MinWidth, availW); w >= 0 {
+					minTotal = w + extra
+				}
+			}
+		}
+		if minTotal > 0 && widths[i] < minTotal {
+			widths[i] = minTotal
+		}
+		if maxTotal > 0 {
+			// min-width wins when the two conflict, as in CSS.
+			if minTotal > maxTotal {
+				maxTotal = minTotal
+			}
+			if widths[i] > maxTotal {
+				widths[i] = maxTotal
+			}
+			if mins[i] > maxTotal {
+				mins[i] = maxTotal
+			}
+		}
 		if widths[i] < mins[i] {
 			widths[i] = mins[i]
 		}

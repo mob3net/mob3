@@ -344,7 +344,10 @@ Standard Go layout:
   `flex-shrink` (items shrink in proportion to their factor and their slack
   above min-content; `flex-shrink:0` items keep their size and overflow, so
   carousel slides and fixed toolbars do not collapse), shrink-to-fit items and
-  `gap`/`column-gap`. `inline-flex` and `inline-grid`
+  `gap`/`column-gap`. A flex item is also bounded by its `min-width` and
+  `max-width`, so a wide descendant with a fixed pixel width (a carousel stage,
+  a wide table) cannot inflate the item past a `max-width:75%` column and push
+  the next column off the row. `inline-flex` and `inline-grid`
   are treated as atomic inline-block boxes so buttons and badges stay inside
   the surrounding line instead of becoming full-width rows. Items keep at least their
   min-content width instead of shrinking into one-character columns.

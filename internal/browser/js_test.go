@@ -89,6 +89,47 @@ func TestJSWindowIsGlobal(t *testing.T) {
 	}
 }
 
+func TestJSTextNodeIsANode(t *testing.T) {
+	// jQuery's wrapAll/wrapInner reads `this[0].ownerDocument` even when the
+	// collection holds text nodes. A missing ownerDocument (and the other Node
+	// members) made custom-scrollbar's wrapInner throw after it had already
+	// moved part of the DOM, leaving the page's markup half-wrapped.
+	page := newJSPage(`<html><body><div id="box">lead text<span>x</span></div></body></html>`, `
+		var box = document.getElementById("box");
+		var first = box.firstChild;
+		var doc = first.ownerDocument;
+		var frag = doc.createDocumentFragment();
+		var wrapper = doc.createElement("div");
+		wrapper.appendChild(frag);
+		wrapper.appendChild(first);
+		document.title = [
+			first.nodeType,
+			first.ownerDocument === document,
+			first.childNodes.length,
+			first.hasChildNodes(),
+			first.getRootNode() === document,
+			first.parentElement === null ? "rooted" : "parent",
+			wrapper.childNodes.length,
+			frag.nodeType
+		].join(":");
+	`)
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	b.startJS(page)
+	want := "3:true:0:false:true:parent:1:11"
+	if page.Title != want {
+		t.Fatalf("text node shape = %q, want %q", page.Title, want)
+	}
+	box := page.Root.FindFirst("div")
+	if box == nil || len(box.Children) == 0 || box.Children[0].Type != ElementNode {
+		t.Fatalf("wrapper was not inserted: %+v", box)
+	}
+	wrapper := box.Children[0]
+	if len(wrapper.Children) == 0 || wrapper.Children[0].Type != TextNode {
+		t.Fatalf("text node was not moved into the wrapper: %+v", wrapper)
+	}
+}
+
 func TestJSDOMInsertBefore(t *testing.T) {
 	page := newJSPage(`<html><body><div id="a"><span id="b">b</span><span id="c">c</span></div></body></html>`, `
 		var a = document.getElementById("a");

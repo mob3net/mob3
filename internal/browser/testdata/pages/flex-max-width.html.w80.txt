@@ -1,0 +1,4 @@
+A wide carousel stage must not widen the column past its
+max-width.                                                  Sidebar
+
+Body text stays inside the main column.

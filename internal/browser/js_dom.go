@@ -227,6 +227,28 @@ func (j *jsRuntime) initTextObject(o *goja.Object, n *Node) {
 	_ = o.Set("nodeType", 3)
 	_ = o.Set("nodeName", "#text")
 	_ = o.Set("tagName", "")
+	// Text nodes are Nodes too. jQuery (and plugins such as custom-scrollbar)
+	// call `node.ownerDocument`, `childNodes` and `contains` on every node in a
+	// collection, including text nodes; a missing `ownerDocument` made
+	// `wrapAll` throw and left the plugin's DOM surgery half-applied.
+	j.accessor(o, "ownerDocument", func() goja.Value { return j.docObj }, nil)
+	j.accessor(o, "parentElement", func() goja.Value {
+		if n.Parent != nil && n.Parent.Type == ElementNode {
+			return j.wrap(n.Parent)
+		}
+		return goja.Null()
+	}, nil)
+	j.accessor(o, "isConnected", func() goja.Value { return j.vm.ToValue(isConnected(n)) }, nil)
+	j.accessor(o, "childNodes", func() goja.Value { return j.vm.NewArray() }, nil)
+	j.accessor(o, "children", func() goja.Value { return j.vm.NewArray() }, nil)
+	j.accessor(o, "childElementCount", func() goja.Value { return j.vm.ToValue(0) }, nil)
+	j.accessor(o, "firstChild", func() goja.Value { return goja.Null() }, nil)
+	j.accessor(o, "lastChild", func() goja.Value { return goja.Null() }, nil)
+	j.accessor(o, "firstElementChild", func() goja.Value { return goja.Null() }, nil)
+	j.accessor(o, "lastElementChild", func() goja.Value { return goja.Null() }, nil)
+	j.method(o, "hasChildNodes", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.method(o, "contains", func(goja.FunctionCall) goja.Value { return j.vm.ToValue(false) })
+	j.method(o, "getRootNode", func(goja.FunctionCall) goja.Value { return j.docObj })
 	j.accessor(o, "textContent", func() goja.Value {
 		return j.vm.ToValue(n.Text)
 	}, func(v goja.Value) {
@@ -253,9 +275,17 @@ func (j *jsRuntime) initTextObject(o *goja.Object, n *Node) {
 }
 
 func (j *jsRuntime) initElementObject(o *goja.Object, n *Node) {
-	_ = o.Set("nodeType", 1)
+	nodeType := 1
+	nodeName := strings.ToUpper(n.Tag)
+	if n.Tag == "#fragment" {
+		// document.createDocumentFragment returns a lightweight node stored as
+		// an element; scripts (jQuery especially) branch on nodeType 11.
+		nodeType = 11
+		nodeName = "#document-fragment"
+	}
+	_ = o.Set("nodeType", nodeType)
 	_ = o.Set("tagName", strings.ToUpper(n.Tag))
-	_ = o.Set("nodeName", strings.ToUpper(n.Tag))
+	_ = o.Set("nodeName", nodeName)
 	j.accessor(o, "id", func() goja.Value { return j.vm.ToValue(attrValue(n, "id")) }, func(v goja.Value) {
 		setAttr(n, "id", v.String())
 		j.markDirty()

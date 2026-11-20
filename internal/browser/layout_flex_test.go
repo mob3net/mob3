@@ -342,3 +342,22 @@ func TestFlexBlockifiesInlineItems(t *testing.T) {
 		t.Fatalf("block child width = %d, want it to fill the item", inner.W)
 	}
 }
+
+func TestFlexItemRespectsMaxWidth(t *testing.T) {
+	// A descendant with a fixed pixel width (a carousel stage, a wide table)
+	// must not inflate a flex item past its max-width. Bootstrap columns rely
+	// on `flex:0 0 75%;max-width:75%`; without the clamp one wide stage
+	// stretched the content column to 710 cells and pushed the sidebar off.
+	doc := ParseHTML(`<div style="display:flex;flex-wrap:wrap">` +
+		`<div id="main" style="flex:0 0 75%;max-width:75%"><div style="width:640px">wide stage</div></div>` +
+		`<div id="side">sidebar</div></div>`)
+	ly := BuildLayout(doc, nil, 80)
+	main := ly.Boxes[findElementByID(doc, "main")]
+	side := ly.Boxes[findElementByID(doc, "side")]
+	if main.W > 60 {
+		t.Fatalf("main column width = %d, want it clamped near 75%% of the row", main.W)
+	}
+	if side.X < main.X+main.W-1 {
+		t.Fatalf("sidebar at x=%d overlaps the main column ending at %d", side.X, main.X+main.W)
+	}
+}
