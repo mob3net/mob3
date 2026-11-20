@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<style>
+  :is() { position: absolute; top: 50%; height: 100%; }
+  :where() { display: none; }
+  :not() { display: none; }
+  body { margin: 8px; }
+  h1 { font-size: 24px; color: #333333; }
+  p { margin: 4px 0; }
+  .card { padding: 6px; border: 1px solid #888888; }
+</style>
+</head>
+<body>
+<h1>Invalid selectors</h1>
+<p>An empty :is() must not make every box absolute.</p>
+<div class="card">This card stays in normal flow.</div>
+<p>This paragraph must remain visible.</p>
+</body>
+</html>

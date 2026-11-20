@@ -27,6 +27,14 @@ type jsRuntime struct {
 
 	nodes map[*Node]*sobek.Object
 	rev   map[*sobek.Object]*Node
+	// templates maps a <template> element to the inert fragment that holds its
+	// content, created on first access to template.content.
+	templates map[*Node]*Node
+	// customCtors holds the registered custom element classes, and building is
+	// the stack of nodes whose constructor is currently running so DOM calls
+	// made during construction resolve to them.
+	customCtors map[string]*sobek.Object
+	building    []*Node
 
 	docObj            *sobek.Object
 	winObj            *sobek.Object
@@ -126,6 +134,8 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		page:           page,
 		nodes:          make(map[*Node]*sobek.Object),
 		rev:            make(map[*sobek.Object]*Node),
+		templates:      make(map[*Node]*Node),
+		customCtors:    make(map[string]*sobek.Object),
 		nodeListeners:  make(map[*Node]map[string][]jsListener),
 		propListeners:  make(map[*Node]map[string]jsListener),
 		docListeners:   make(map[string][]jsListener),
@@ -177,6 +187,17 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		return j.setTimer(sobek.FunctionCall{Arguments: []sobek.Value{call.Argument(0), j.vm.ToValue(1)}}, false)
 	}))
 	_ = j.vm.Set("cancelIdleCallback", j.vm.ToValue(j.clearTimer))
+	// reportError() reports an exception to the console without throwing, as
+	// the HTML error-reporting API does.
+	reportError := j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		v := call.Argument(0)
+		if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
+			return sobek.Undefined()
+		}
+		j.b.logJS("error", j.errorText(v))
+		return sobek.Undefined()
+	})
+	_ = j.vm.Set("reportError", reportError)
 	_ = j.vm.Set("__mob3NewURL", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.newURL(call.Argument(0).String(), call.Argument(1))
 	}))
@@ -260,6 +281,14 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 			_ = j.winObj.Set(name, v)
 		}
 	}
+	_ = j.vm.Set("__mob3DefineCustomElement", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
+		name := strings.ToLower(strings.TrimSpace(call.Argument(0).String()))
+		ctor, ok := call.Argument(1).(*sobek.Object)
+		if ok && name != "" {
+			j.customCtors[name] = ctor
+		}
+		return sobek.Undefined()
+	}))
 	j.installCompat()
 	// Every runtime gets the module hooks, so a classic script can use
 	// dynamic import() even when the page has no module script of its own.
@@ -436,6 +465,22 @@ func (j *jsRuntime) consumeDirty() bool {
 	d := j.dirty
 	j.dirty = false
 	return d
+}
+
+// errorText renders a thrown value for the console, preferring the script
+// stack an Error object carries so the failing line is visible.
+func (j *jsRuntime) errorText(v sobek.Value) string {
+	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
+		return "undefined"
+	}
+	if obj, ok := v.(*sobek.Object); ok {
+		if st := obj.Get("stack"); st != nil && !sobek.IsUndefined(st) && !sobek.IsNull(st) {
+			if s := strings.TrimSpace(st.String()); s != "" {
+				return s
+			}
+		}
+	}
+	return jsValueString(v)
 }
 
 func (j *jsRuntime) reportError(err error) {

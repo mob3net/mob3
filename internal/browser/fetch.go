@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -49,12 +50,15 @@ func imageConfigOK(cfg image.Config) bool {
 
 // Page is a loaded document plus the assets needed to display it.
 type Page struct {
-	URL         *url.URL
-	Base        *url.URL
-	Root        *Node
-	Title       string
-	Author      []Rule
-	Scripts     []Script
+	URL     *url.URL
+	Base    *url.URL
+	Root    *Node
+	Title   string
+	Author  []Rule
+	Scripts []Script
+	// ImportMap holds the document's <script type="importmap"> imports, so
+	// module scripts can resolve bare specifiers like "react".
+	ImportMap   map[string]string
 	RawHTML     string
 	Status      int
 	Blocked     bool
@@ -462,6 +466,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	page.Author = l.collectStylesheets(ctx, root, page.Base, allowFile)
 	if !l.noScripts {
 		page.Scripts = l.collectScripts(ctx, root, page.Base, allowFile)
+		page.ImportMap = collectImportMap(root)
 	}
 	l.loadInlineSVGs(root)
 	if !l.deferImages {
@@ -531,6 +536,36 @@ MOB³ is not a secure browser, so only do this if you trust the site.</p>
 direct or alternative URL, or open it in a full browser.</p>
 <p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>
 </body></html>`
+}
+
+// importMapJSON is the subset of the import map format the engine reads.
+// Scoped maps are accepted but ignored: they only change which copy of a
+// package a nested dependency gets, which a terminal browser does not need.
+type importMapJSON struct {
+	Imports map[string]string            `json:"imports"`
+	Scopes  map[string]map[string]string `json:"scopes"`
+}
+
+// collectImportMap returns the imports of the document's first valid
+// <script type="importmap">. Later maps are ignored, as in browsers, and a
+// malformed map leaves bare specifiers unresolved instead of failing the page.
+func collectImportMap(root *Node) map[string]string {
+	if root == nil {
+		return nil
+	}
+	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "script" }) {
+		if !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "importmap") {
+			continue
+		}
+		var m importMapJSON
+		if err := json.Unmarshal([]byte(n.TextContent()), &m); err != nil {
+			continue
+		}
+		if len(m.Imports) > 0 {
+			return m.Imports
+		}
+	}
+	return nil
 }
 
 // collectScripts gathers inline and external JavaScript in document order.

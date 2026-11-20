@@ -83,7 +83,7 @@ MOB³ is a content browser, not a full browser engine. It is happiest with text-
 
 **Rough edges**
 
-- Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show a partial page, a blank page or their no-JavaScript fallback. ES module scripts run, including relative imports, dynamic `import()` and `import.meta.url`, but bare package specifiers (import maps) are unsupported and the rest of the JavaScript API surface is still a small subset.
+- Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show a partial page, a blank page or their no-JavaScript fallback. ES module scripts run, including relative imports, dynamic `import()`, `import.meta.url` and bare specifiers resolved by the page's import map, and custom elements are constructed, but the rest of the JavaScript API surface is still a small subset.
 - Reader mode is heuristic: it can pick too little or too much content on unusual layouts, shows a snapshot rather than live updates, and removes images, forms and other interactive controls. Dark mode keeps images in their original colors and approximates some author color schemes.
 - Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX, Imperva/Sucuri, access-denied pages) are generally not usable. A “Site blocked” page is shown instead.
 - No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes, Shadow DOM, custom elements, real observers or full History API.

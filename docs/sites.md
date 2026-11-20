@@ -58,9 +58,8 @@ curl command.
 
 ## Not supported
 
-- Import maps and bare package specifiers, workers, service workers,
-  WebSocket, IndexedDB, WebRTC, geolocation, clipboard APIs, notifications and
-  browser payment APIs.
+- Import map scopes, workers, service workers, WebSocket, IndexedDB, WebRTC,
+  geolocation, clipboard APIs, notifications and browser payment APIs.
 - Async generator syntax (`async function*`) and `for await`: the script
   containing them does not parse, so it is skipped.
 - CSP enforcement, certificate UI and proxy configuration UI.

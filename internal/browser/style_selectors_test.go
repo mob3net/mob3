@@ -69,3 +69,22 @@ func TestEscapedSelectorIdentifiers(t *testing.T) {
 		t.Fatalf("digit class color = %+v", got)
 	}
 }
+
+func TestEmptyFunctionalPseudosAreInvalid(t *testing.T) {
+	// ":is()" and friends take a selector list; an empty list is invalid and
+	// the whole rule must be dropped instead of matching every element.
+	for _, sel := range []string{":is()", ":where()", ":not()", "div:is()", ".a:not()"} {
+		if _, err := ParseSelector(sel); err == nil {
+			t.Fatalf("%q parsed as a valid selector", sel)
+		}
+	}
+	rules := ParseStylesheet(`:is(){position:absolute}p{color:#00ff00}`)
+	doc := ParseHTML(`<html><body><p>x</p></body></html>`)
+	styles := newStyleEngine(rules, 80).computeAll(doc)
+	if st := styles[doc.FindFirst("body")]; st != nil && st.Position == "absolute" {
+		t.Fatal("empty :is() rule was applied to body")
+	}
+	if st := styles[doc.FindFirst("p")]; st == nil || st.Color.R != 0 || st.Color.G != 255 {
+		t.Fatalf("valid rule after the invalid one did not apply: %#v", st)
+	}
+}

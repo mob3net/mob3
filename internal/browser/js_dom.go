@@ -72,9 +72,17 @@ func (j *jsRuntime) protoMethod(p *sobek.Object, name string, fn func(n *Node, c
 }
 
 // thisNode resolves the wrapper that received a prototype accessor or method.
+// A custom element constructor may call DOM methods before its object has been
+// bound to a node, so construction registers the node on a stack the lookup
+// falls back to.
 func (j *jsRuntime) thisNode(call sobek.FunctionCall) *Node {
 	if o, ok := call.This.(*sobek.Object); ok {
-		return j.rev[o]
+		if n, ok := j.rev[o]; ok {
+			return n
+		}
+	}
+	if n := len(j.building); n > 0 {
+		return j.building[n-1]
 	}
 	return nil
 }
@@ -281,6 +289,41 @@ func elementChildren(n *Node) []*Node {
 	return out
 }
 
+// constructCustomElement creates the JS object for an element whose tag has a
+// registered custom element class. Reflect.construct runs the class, field
+// initializers included, and the new object is bound to the node.
+func (j *jsRuntime) constructCustomElement(n *Node) (sobek.Value, bool) {
+	if n == nil || n.Type != ElementNode {
+		return nil, false
+	}
+	ctor := j.customCtors[strings.ToLower(n.Tag)]
+	if ctor == nil {
+		return nil, false
+	}
+	reflectObj, ok := j.vm.Get("Reflect").(*sobek.Object)
+	if !ok {
+		return nil, false
+	}
+	construct, ok := sobek.AssertFunction(reflectObj.Get("construct"))
+	if !ok {
+		return nil, false
+	}
+	j.building = append(j.building, n)
+	v, err := construct(reflectObj, ctor, j.vm.NewArray())
+	j.building = j.building[:len(j.building)-1]
+	if err != nil {
+		j.reportError(err)
+		return nil, false
+	}
+	o, ok := v.(*sobek.Object)
+	if !ok {
+		return nil, false
+	}
+	j.nodes[n] = o
+	j.rev[o] = n
+	return o, true
+}
+
 // wrap returns the JS wrapper object for a DOM node.
 func (j *jsRuntime) wrap(n *Node) sobek.Value {
 	if n == nil {
@@ -294,6 +337,11 @@ func (j *jsRuntime) wrap(n *Node) sobek.Value {
 	}
 	if o, ok := j.nodes[n]; ok {
 		return o
+	}
+	if n.Type == ElementNode {
+		if o, ok := j.constructCustomElement(n); ok {
+			return o
+		}
 	}
 	o := j.vm.NewObject()
 	j.nodes[n] = o
@@ -357,6 +405,19 @@ func (j *jsRuntime) initTextProto(p *sobek.Object) {
 }
 
 func (j *jsRuntime) initElementProto(p *sobek.Object) {
+	// template.content holds an inert fragment, so markup built there is not
+	// rendered until it is cloned into the document.
+	if tmpl := j.elementProtos["template"]; tmpl != nil {
+		j.protoAccessor(tmpl, "content", func(n *Node) sobek.Value {
+			if frag := j.templateContent(n); frag != nil {
+				return j.wrap(frag)
+			}
+			return sobek.Null()
+		}, nil)
+	}
+	j.protoAccessor(p, "namespaceURI", func(n *Node) sobek.Value {
+		return j.vm.ToValue(elementNamespaceURI(n))
+	}, nil)
 	j.protoAccessor(p, "id", func(n *Node) sobek.Value { return j.vm.ToValue(attrValue(n, "id")) }, func(n *Node, v sobek.Value) {
 		setAttr(n, "id", v.String())
 		j.markDirty()
@@ -549,9 +610,9 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		j.markDirty()
 	})
 	j.protoAccessor(p, "innerHTML", func(n *Node) sobek.Value {
-		return j.vm.ToValue(serializeChildren(n))
+		return j.vm.ToValue(serializeChildren(j.contentTarget(n)))
 	}, func(n *Node, v sobek.Value) {
-		j.setInnerHTML(n, v.String())
+		j.setInnerHTML(j.contentTarget(n), v.String())
 	})
 	j.protoAccessor(p, "style", func(n *Node) sobek.Value {
 		return j.styleObject(n)
@@ -728,8 +789,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(len(n.Children) > 0)
 	})
 	j.protoMethod(p, "cloneNode", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		deep := call.Argument(0).ToBoolean()
-		return j.wrap(cloneNode(n, deep))
+		return j.wrap(j.cloneNodeValue(n, call.Argument(0).ToBoolean()))
 	})
 	j.protoMethod(p, "matches", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		sels := j.parsedSelectors(call.Argument(0).String())
@@ -1026,6 +1086,83 @@ func (j *jsRuntime) setInnerHTML(n *Node, html string) {
 	j.markDirty()
 }
 
+// Element namespace URIs. Parsed HTML does not carry namespaces, so they are
+// derived from the nearest svg/math ancestor.
+const (
+	xhtmlNamespace  = "http://www.w3.org/1999/xhtml"
+	svgNamespace    = "http://www.w3.org/2000/svg"
+	mathMLNamespace = "http://www.w3.org/1998/Math/MathML"
+)
+
+func elementNamespaceURI(n *Node) string {
+	if n == nil {
+		return ""
+	}
+	if n.Namespace != "" {
+		return n.Namespace
+	}
+	for p := n; p != nil; p = p.Parent {
+		switch strings.ToLower(p.Tag) {
+		case "svg":
+			return svgNamespace
+		case "math":
+			return mathMLNamespace
+		}
+	}
+	return xhtmlNamespace
+}
+
+// templateContent returns the inert DocumentFragment that holds a
+// <template>'s children. Accessing it moves the parsed children out of the
+// template, matching the browser rule that template content is not rendered.
+func (j *jsRuntime) templateContent(n *Node) *Node {
+	if n == nil || !strings.EqualFold(n.Tag, "template") {
+		return nil
+	}
+	if frag, ok := j.templates[n]; ok && frag != nil {
+		return frag
+	}
+	frag := &Node{Type: ElementNode, Tag: "#fragment"}
+	frag.Children = append(frag.Children, n.Children...)
+	for _, c := range frag.Children {
+		if c.Parent == n {
+			c.Parent = frag
+		}
+	}
+	n.Children = nil
+	if j.templates == nil {
+		j.templates = make(map[*Node]*Node)
+	}
+	j.templates[n] = frag
+	return frag
+}
+
+// contentTarget returns the node whose children hold an element's markup:
+// template content lives in its fragment instead of the element itself.
+func (j *jsRuntime) contentTarget(n *Node) *Node {
+	if frag, ok := j.templates[n]; ok && frag != nil {
+		return frag
+	}
+	return n
+}
+
+// cloneNodeValue clones a node and carries a template's content fragment over
+// to the clone.
+func (j *jsRuntime) cloneNodeValue(n *Node, deep bool) *Node {
+	c := cloneNode(n, deep)
+	if frag, ok := j.templates[n]; ok && frag != nil {
+		cf := &Node{Type: ElementNode, Tag: "#fragment"}
+		if deep {
+			cf = cloneNode(frag, true)
+		}
+		if j.templates == nil {
+			j.templates = make(map[*Node]*Node)
+		}
+		j.templates[c] = cf
+	}
+	return c
+}
+
 // initCanvasObject adds the minimal canvas surface. There is no real pixel
 // buffer: getContext("2d") returns a no-op context so libraries that feature
 // test or color-parse canvas do not throw. WebGL contexts are unsupported.
@@ -1233,7 +1370,11 @@ func (j *jsRuntime) newDetachedDocument(title string) *sobek.Object {
 		return j.wrap(&Node{Type: ElementNode, Tag: tag})
 	})
 	j.method(doc, "createElementNS", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: ElementNode, Tag: strings.ToLower(call.Argument(1).String())})
+		return j.wrap(&Node{
+			Type:      ElementNode,
+			Tag:       strings.ToLower(call.Argument(1).String()),
+			Namespace: call.Argument(0).String(),
+		})
 	})
 	j.method(doc, "createTextNode", func(call sobek.FunctionCall) sobek.Value {
 		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
@@ -1568,6 +1709,28 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		}
 		return j.wrap(root.Children[len(root.Children)-1])
 	}, nil)
+	j.accessor(o, "firstElementChild", func() sobek.Value {
+		for _, c := range root.Children {
+			if c.Type == ElementNode {
+				return j.wrap(c)
+			}
+		}
+		return sobek.Null()
+	}, nil)
+	j.accessor(o, "lastElementChild", func() sobek.Value {
+		for i := len(root.Children) - 1; i >= 0; i-- {
+			if root.Children[i].Type == ElementNode {
+				return j.wrap(root.Children[i])
+			}
+		}
+		return sobek.Null()
+	}, nil)
+	j.accessor(o, "children", func() sobek.Value {
+		return j.nodeArray(elementChildren(root))
+	}, nil)
+	j.accessor(o, "childElementCount", func() sobek.Value {
+		return j.vm.ToValue(len(elementChildren(root)))
+	}, nil)
 	j.accessor(o, "documentElement", func() sobek.Value { return j.wrap(html) }, nil)
 	j.accessor(o, "doctype", func() sobek.Value { return sobek.Null() }, nil)
 	j.accessor(o, "domain", func() sobek.Value {
@@ -1618,6 +1781,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		j.accessor(o, "baseURI", func() sobek.Value { return j.vm.ToValue(base) }, nil)
 	}
 	_ = o.Set("styleSheets", j.vm.NewArray())
+	_ = o.Set("adoptedStyleSheets", j.vm.NewArray())
 	fonts := j.vm.NewObject()
 	fontsNoop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 	_ = fonts.Set("addEventListener", fontsNoop)
@@ -1788,7 +1952,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		if node == nil {
 			return sobek.Null()
 		}
-		return j.wrap(cloneNode(node, call.Argument(1).ToBoolean()))
+		return j.wrap(j.cloneNodeValue(node, call.Argument(1).ToBoolean()))
 	})
 	j.method(o, "adoptNode", func(call sobek.FunctionCall) sobek.Value {
 		node := j.unwrap(call.Argument(0))
@@ -1799,7 +1963,11 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		return call.Argument(0)
 	})
 	j.method(o, "createElementNS", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: ElementNode, Tag: strings.ToLower(call.Argument(1).String())})
+		return j.wrap(&Node{
+			Type:      ElementNode,
+			Tag:       strings.ToLower(call.Argument(1).String()),
+			Namespace: call.Argument(0).String(),
+		})
 	})
 	j.method(o, "getElementsByClassName", func(call sobek.FunctionCall) sobek.Value {
 		want := strings.Fields(call.Argument(0).String())

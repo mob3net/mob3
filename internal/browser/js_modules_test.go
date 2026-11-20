@@ -113,6 +113,57 @@ func TestDuplicateModuleTagsEvaluateOnce(t *testing.T) {
 	}
 }
 
+func TestCollectImportMap(t *testing.T) {
+	root := ParseHTML(`<html><head>` +
+		`<script type="importmap">{"imports":{"react":"https://cdn.example/react.js","pkg/":"https://cdn.example/pkg/"}}</script>` +
+		`</head></html>`)
+	m := collectImportMap(root)
+	if m["react"] != "https://cdn.example/react.js" {
+		t.Fatalf("react mapping = %q", m["react"])
+	}
+	if m["pkg/"] != "https://cdn.example/pkg/" {
+		t.Fatalf("prefix mapping = %q", m["pkg/"])
+	}
+	if collectImportMap(ParseHTML(`<html><head><script type="importmap">{bad json</script></head></html>`)) != nil {
+		t.Fatal("malformed import map was accepted")
+	}
+	if collectImportMap(ParseHTML(`<html><head><script type="module">1</script></head></html>`)) != nil {
+		t.Fatal("module script was read as an import map")
+	}
+}
+
+func TestBareSpecifierUsesImportMap(t *testing.T) {
+	page := moduleTestPage(`<html><body><p id="out"></p></body></html>`,
+		`import { v } from "react";`+
+			`document.getElementById("out").textContent = v;`)
+	page.ImportMap = map[string]string{
+		"react": "data:text/javascript,export const v = 'mapped';",
+	}
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if b.moduleErr {
+		t.Fatalf("import map module failed: %s", strings.Join(b.jsLog, "; "))
+	}
+	if got := page.Root.FindFirst("p").TextContent(); got != "mapped" {
+		t.Fatalf("import map result = %q, want mapped", got)
+	}
+}
+
+func TestImportMapPrefixMapping(t *testing.T) {
+	base := mustParse(t, "https://example.com/app/")
+	j := &jsRuntime{page: &Page{URL: base, Base: base}}
+	m := &jsModuleLoader{j: j, base: base, imports: map[string]string{
+		"lib/": "https://cdn.example/lib/",
+	}}
+	got, err := m.resolveSpecifier(base, "lib/util.js")
+	if err != nil || got.String() != "https://cdn.example/lib/util.js" {
+		t.Fatalf("prefix mapping = %v, %v", got, err)
+	}
+	if _, err := m.resolveSpecifier(base, "lib"); err == nil {
+		t.Fatal("bare specifier without map entry was resolved")
+	}
+}
+
 func TestModuleFailureShowsStatus(t *testing.T) {
 	page := moduleTestPage(`<html><body><p>Loading...</p></body></html>`, `import "react";`)
 	b := NewBrowser(40, 10)

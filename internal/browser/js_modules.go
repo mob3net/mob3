@@ -30,6 +30,10 @@ type jsModuleLoader struct {
 	base      *url.URL
 	allowFile bool
 
+	// imports is the document's import map. Bare specifiers that it does not
+	// cover fail with a console error.
+	imports map[string]string
+
 	byURL  map[string]*sobek.SourceTextModuleRecord
 	urls   map[sobek.ModuleRecord]string
 	failed map[string]error
@@ -54,6 +58,7 @@ func newJSModuleLoader(j *jsRuntime) *jsModuleLoader {
 		if m.base == nil {
 			m.base = j.page.URL
 		}
+		m.imports = j.page.ImportMap
 	}
 	m.allowFile = m.base != nil && strings.EqualFold(m.base.Scheme, "file")
 	m.install()
@@ -78,7 +83,7 @@ func (m *jsModuleLoader) install() {
 		if op != sobek.PromiseRejectionReject {
 			return
 		}
-		m.j.b.logJS("warn", "Unhandled promise rejection: "+jsValueString(p.Result()))
+		m.j.b.logJS("warn", "Unhandled promise rejection: "+m.j.errorText(p.Result()))
 	})
 }
 
@@ -129,18 +134,52 @@ func (m *jsModuleLoader) hostResolve(ref interface{}, spec string) (sobek.Module
 	return m.loadURL(target, key, 0)
 }
 
-// resolveSpecifier resolves one import specifier. Bare package names need an
-// import map, which is not supported, so they fail with a clear message
-// instead of being turned into a same-origin URL and fetched as a 404.
+// resolveSpecifier resolves one import specifier. The document's import map is
+// consulted first, so a bare package name such as "react" maps to the URL the
+// site shipped; a bare specifier the map does not cover fails with a clear
+// message instead of being turned into a same-origin URL and fetched as a 404.
 func (m *jsModuleLoader) resolveSpecifier(from *url.URL, spec string) (*url.URL, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "" {
 		return nil, errors.New("empty module specifier")
 	}
-	if isBareModuleSpecifier(spec) {
-		return nil, fmt.Errorf("bare module specifier %q (import maps are unsupported)", spec)
+	if mapped, ok := m.resolveImportMap(spec); ok {
+		// Import map addresses are parsed against the document base URL.
+		return m.resolveURL(m.base, mapped)
 	}
-	base := from
+	if isBareModuleSpecifier(spec) {
+		return nil, fmt.Errorf("bare module specifier %q (no import map entry)", spec)
+	}
+	return m.resolveURL(from, spec)
+}
+
+// resolveImportMap applies the import map: an exact entry wins, otherwise the
+// longest trailing-slash prefix mapping is used, as the specification says.
+func (m *jsModuleLoader) resolveImportMap(spec string) (string, bool) {
+	if len(m.imports) == 0 {
+		return "", false
+	}
+	if target, ok := m.imports[spec]; ok && target != "" {
+		return target, true
+	}
+	best, bestLen := "", 0
+	for key, target := range m.imports {
+		if !strings.HasSuffix(key, "/") || target == "" || len(key) > len(spec) {
+			continue
+		}
+		if strings.HasPrefix(spec, key) && len(key) > bestLen {
+			best, bestLen = target+spec[len(key):], len(key)
+		}
+	}
+	if bestLen > 0 {
+		return best, true
+	}
+	return "", false
+}
+
+// resolveURL resolves a URL reference against a base and rejects schemes the
+// loader cannot fetch.
+func (m *jsModuleLoader) resolveURL(base *url.URL, spec string) (*url.URL, error) {
 	if base == nil {
 		base = &url.URL{}
 	}

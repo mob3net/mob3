@@ -117,7 +117,13 @@ func (j *jsRuntime) installPlatformStubs() {
 	// work, but elements are not upgraded.
 	var customRegistry = {};
 	define("customElements", {
-		define: function (name, ctor) { customRegistry[name] = ctor; },
+		define: function (name, ctor) {
+			name = String(name).toLowerCase();
+			customRegistry[name] = ctor;
+			if (typeof __mob3DefineCustomElement === "function") {
+				__mob3DefineCustomElement(name, ctor);
+			}
+		},
 		get: function (name) { return customRegistry[name]; },
 		whenDefined: function (name) { return Promise.resolve(customRegistry[name]); },
 		upgrade: function () {}
@@ -195,6 +201,9 @@ func (j *jsRuntime) installPlatformStubs() {
 	PerformanceObserver.prototype.observe = function () {};
 	PerformanceObserver.prototype.disconnect = function () {};
 	PerformanceObserver.prototype.takeRecords = function () { return []; };
+	// Feature detection reads the static list before observing anything;
+	// without it the optional-chain guard passes and .includes throws.
+	PerformanceObserver.supportedEntryTypes = [];
 	define("PerformanceObserver", PerformanceObserver);
 
 	// Canvas path objects are accepted as no-ops because the canvas itself has
@@ -328,10 +337,34 @@ func (j *jsRuntime) installPlatformStubs() {
 		return null;
 	};
 
+	// Constructable stylesheets are a common selector feature-detection path:
+	// code calls insertRule/deleteRule inside a try/catch. They are inert here,
+	// but must not throw.
+	var CSSStyleSheetC = ctor("CSSStyleSheet");
+	CSSStyleSheetC.prototype.insertRule = function (rule, index) {
+		if (!this.cssRules) { this.cssRules = []; this.rules = this.cssRules; }
+		var at = (index === undefined || index < 0 || index > this.cssRules.length) ? this.cssRules.length : index;
+		this.cssRules.splice(at, 0, { cssText: String(rule) });
+		return at;
+	};
+	CSSStyleSheetC.prototype.deleteRule = function (index) {
+		if (this.cssRules && index >= 0 && index < this.cssRules.length) { this.cssRules.splice(index, 1); }
+	};
+	CSSStyleSheetC.prototype.addRule = function (selector, style, index) {
+		return this.insertRule(String(selector || "") + "{" + String(style || "") + "}", index);
+	};
+	CSSStyleSheetC.prototype.removeRule = function (index) { this.deleteRule(index); };
+	CSSStyleSheetC.prototype.replaceSync = function () {
+		this.cssRules = []; this.rules = this.cssRules;
+	};
+	CSSStyleSheetC.prototype.replace = function () {
+		this.replaceSync();
+		return Promise.resolve(this);
+	};
+
 	// Constructors commonly checked with instanceof or used to create values.
 	ctor("DOMTokenList");
 	ctor("CSSStyleDeclaration");
-	ctor("CSSStyleSheet");
 	ctor("StyleSheet");
 	ctor("MediaQueryList");
 	ctor("NodeIterator");
