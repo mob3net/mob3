@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="400" alt="MOB³ showing its start page in a terminal" src="docs/screenshots/start.png" />
+  <img width="720" alt="Animated demo: searching DuckDuckGo for Vim, following the Vim (text editor) Wikipedia article with link hints, scrolling, jumping to a find match, then switching to dark mode" src="docs/screenshots/mob3-animation.gif" />
 </p>
 
 # MOB³ is a small indie web browser for the terminal
