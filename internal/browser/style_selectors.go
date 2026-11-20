@@ -40,6 +40,7 @@ type Rule struct {
 	Decls    []Declaration
 	Order    int
 	Media    string // @media condition that must match, or empty
+	Layer    int    // cascade layer rank; 0 means unlayered
 }
 
 // rulesUseHover reports whether any selector depends on the :hover state, so

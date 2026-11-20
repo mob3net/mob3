@@ -1,0 +1,4 @@
+
+       Panel text uses the later theme layer's padding.
+
+ Unlayered margin wins over the layered margin.

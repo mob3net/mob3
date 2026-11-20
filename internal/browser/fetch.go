@@ -979,6 +979,14 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 	ctx = withRequestKind(ctx, "css")
 	var out []Rule
 	order := 0
+	layers := newLayerRegistry()
+	// Sheets are gathered first so every @layer name can be ranked in document
+	// order before any rule is assigned to a layer.
+	type sheetEntry struct {
+		src   string
+		media string
+	}
+	var sheets []sheetEntry
 	add := func(rules []Rule, media string) {
 		for i := range rules {
 			if media != "" {
@@ -1024,7 +1032,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 				addSheet(string(data), final, depth+1, combineMedia(media, imp.media))
 			}
 		}
-		add(ParseStylesheetContext(ctx, src), media)
+		sheets = append(sheets, sheetEntry{src: src, media: media})
 	}
 	nodes := root.FindAll(func(n *Node) bool {
 		if n.Tag == "style" {
@@ -1063,6 +1071,12 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 			final = u
 		}
 		addSheet(string(data), final, 0, media)
+	}
+	for _, sh := range sheets {
+		declareCSSLayers(sh.src, layers)
+	}
+	for _, sh := range sheets {
+		add(parseStylesheetWithLayers(ctx, sh.src, layers), sh.media)
 	}
 	return out
 }

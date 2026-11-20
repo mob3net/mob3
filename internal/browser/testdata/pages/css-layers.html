@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<title>CSS cascade layers</title>
+<style>
+@layer base, theme;
+
+@layer base {
+  .panel { padding-left: 8px; }
+  .tag { display: block; }
+}
+@layer theme {
+  .panel { padding-left: 40px; }
+  .tag { display: none; }
+}
+
+/* Unlayered rules beat every cascade layer. */
+.panel { border-left: 8px solid #333333; }
+@layer theme { .note { margin-left: 48px; } }
+.note { margin-left: 0; }
+</style>
+</head>
+<body>
+<div class="panel">Panel text uses the later theme layer's padding.</div>
+<span class="tag">Hidden by the later theme layer</span>
+<p class="note">Unlayered margin wins over the layered margin.</p>
+</body>
+</html>

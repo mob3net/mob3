@@ -9,7 +9,8 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   server-rendered HTML.
 - Headings, paragraphs, lists, links, tables, `<pre>` blocks, images and common
   presentational markup.
-- Responsive pages that use `@media` width queries, basic flex rows, basic grid
+- Responsive pages that use `@media` width queries, CSS cascade layers
+  (`@layer`), basic flex rows, basic grid
   tracks, simple `calc()` and viewport-unit sizing, aspect-ratio
   `::before`/`::after` boxes, images sized with `object-fit`, forms
   and simple JavaScript DOM effects.

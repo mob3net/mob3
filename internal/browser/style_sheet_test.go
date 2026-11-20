@@ -14,6 +14,95 @@ func TestKeyframesSkipped(t *testing.T) {
 	}
 }
 
+func TestLayerRulesParsed(t *testing.T) {
+	rules := ParseStylesheet(`
+		@layer base { .a { color: #111111 } }
+		.b { color: #222222 }
+		@layer layout { .c { color: #333333 } }
+		@layer { .d { color: #444444 } }
+	`)
+	if len(rules) != 4 {
+		t.Fatalf("rules = %d, want 4: %+v", len(rules), rules)
+	}
+	if rules[0].Layer == 0 {
+		t.Fatalf("rule inside @layer base has no layer rank")
+	}
+	if rules[1].Layer != 0 {
+		t.Fatalf("unlayered rule got layer rank %d", rules[1].Layer)
+	}
+	if rules[2].Layer <= rules[0].Layer {
+		t.Fatalf("later layer rank %d does not beat earlier %d", rules[2].Layer, rules[0].Layer)
+	}
+	if rules[3].Layer == 0 || rules[3].Layer == rules[2].Layer {
+		t.Fatalf("anonymous layer rank = %d", rules[3].Layer)
+	}
+}
+
+func TestLayerStatementDeclaresOrder(t *testing.T) {
+	doc := ParseHTML(`<div class="x">text</div>`)
+	rules := ParseStylesheet(`
+		@layer theme, base;
+		@layer base { .x { color: #111111 } }
+		@layer theme { .x { color: #222222 } }
+	`)
+	if len(rules) != 2 {
+		t.Fatalf("layer statement produced rules: %+v", rules)
+	}
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	if got := styles[doc.FindFirst("div")].Color; got != RGB(0x11, 0x11, 0x11) {
+		t.Fatalf("color = %+v, want the later-declared base layer to win", got)
+	}
+}
+
+func TestUnlayeredBeatsLayers(t *testing.T) {
+	doc := ParseHTML(`<div class="x">text</div>`)
+	rules := ParseStylesheet(`
+		@layer layout { .x { color: #111111 } }
+		.x { color: #222222 }
+	`)
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	st := styles[doc.FindFirst("div")]
+	if st.Color != RGB(0x22, 0x22, 0x22) {
+		t.Fatalf("color = %+v, want unlayered rule to win", st.Color)
+	}
+}
+
+func TestImportantReversesLayerOrder(t *testing.T) {
+	doc := ParseHTML(`<div class="x">text</div>`)
+	rules := ParseStylesheet(`
+		@layer a { .x { color: #111111 !important } }
+		@layer b { .x { color: #222222 !important } }
+	`)
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	if got := styles[doc.FindFirst("div")].Color; got != RGB(0x11, 0x11, 0x11) {
+		t.Fatalf("color = %+v, want the earlier layer to win for !important", got)
+	}
+
+	// An unlayered !important declaration is weaker than any layer's.
+	rules = ParseStylesheet(`
+		@layer a { .x { color: #111111 !important } }
+		.x { color: #222222 !important }
+	`)
+	styles = newStyleEngine(rules, 100).computeAll(doc)
+	if got := styles[doc.FindFirst("div")].Color; got != RGB(0x11, 0x11, 0x11) {
+		t.Fatalf("color = %+v, want layered !important to beat unlayered", got)
+	}
+}
+
+func TestNestedLayerRulesParsed(t *testing.T) {
+	doc := ParseHTML(`<div class="x">text</div>`)
+	rules := ParseStylesheet(`
+		@layer outer { @layer inner { .x { color: #111111 } } }
+	`)
+	if len(rules) != 1 || rules[0].Layer == 0 {
+		t.Fatalf("nested layer rules = %+v", rules)
+	}
+	styles := newStyleEngine(rules, 100).computeAll(doc)
+	if got := styles[doc.FindFirst("div")].Color; got != RGB(0x11, 0x11, 0x11) {
+		t.Fatalf("nested layer rule did not apply: %+v", got)
+	}
+}
+
 func TestStylesheetContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

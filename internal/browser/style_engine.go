@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -301,20 +302,44 @@ func (e *styleEngine) applyMatched(matched []Rule, st, parent *Style) {
 	if len(matched) == 0 {
 		return
 	}
-	sort.SliceStable(matched, func(i, j int) bool {
-		a, b := matched[i], matched[j]
-		for k := 0; k < 3; k++ {
-			if a.Selector.Spec[k] != b.Selector.Spec[k] {
-				return a.Selector.Spec[k] < b.Selector.Spec[k]
+	sortMatched := func(important bool) {
+		sort.SliceStable(matched, func(i, j int) bool {
+			a, b := matched[i], matched[j]
+			if la, lb := layerPriority(a.Layer, important), layerPriority(b.Layer, important); la != lb {
+				return la < lb
 			}
-		}
-		return a.Order < b.Order
-	})
+			for k := 0; k < 3; k++ {
+				if a.Selector.Spec[k] != b.Selector.Spec[k] {
+					return a.Selector.Spec[k] < b.Selector.Spec[k]
+				}
+			}
+			return a.Order < b.Order
+		})
+	}
 	base := parentSize(parent)
+	sortMatched(false)
 	for _, r := range matched {
 		applyDecls(st, r.Decls, parent, false, base)
 	}
+	// Important declarations reverse the layer order: an earlier layer beats a
+	// later one, and every layer beats unlayered important declarations.
+	sortMatched(true)
 	for _, r := range matched {
 		applyDecls(st, r.Decls, parent, true, base)
 	}
+}
+
+// layerPriority orders rules for the cascade. Higher values win; the slice is
+// sorted ascending and applied in order, so the highest priority is last.
+func layerPriority(layer int, important bool) int {
+	if important {
+		if layer == 0 {
+			return math.MinInt
+		}
+		return -layer
+	}
+	if layer == 0 {
+		return math.MaxInt
+	}
+	return layer
 }

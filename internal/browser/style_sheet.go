@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -209,11 +210,86 @@ var (
 )
 
 type parseState struct {
-	order int
-	rules int
-	cache map[string]*Selector
-	ctx   context.Context
-	start time.Time
+	order  int
+	rules  int
+	cache  map[string]*Selector
+	ctx    context.Context
+	start  time.Time
+	layers *layerRegistry
+	layer  int    // current @layer rank, 0 when unlayered
+	name   string // current layer name for nested @layer blocks
+}
+
+// layerRegistry assigns cascade layers a stable rank in declaration order.
+// Later-declared layers take precedence over earlier ones, while unlayered
+// rules (rank 0) beat every layer, as the cascade specifies.
+type layerRegistry struct {
+	ranks map[string]int
+	next  int
+	anon  int
+}
+
+func newLayerRegistry() *layerRegistry {
+	return &layerRegistry{ranks: make(map[string]int)}
+}
+
+// declare registers a layer name and returns its rank. Ranks start at 1 so a
+// zero Layer field can mean "unlayered".
+func (r *layerRegistry) declare(name string) int {
+	if rank, ok := r.ranks[name]; ok {
+		return rank
+	}
+	r.next++
+	r.ranks[name] = r.next
+	return r.next
+}
+
+func (r *layerRegistry) anonymous() int {
+	r.anon++
+	return r.declare("\x00anon" + strconv.Itoa(r.anon))
+}
+
+// layerFullName joins a nested layer name onto its parent layer.
+func layerFullName(parent, name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	if parent == "" {
+		return name
+	}
+	return parent + "." + name
+}
+
+// declareCSSLayers pre-registers every layer a sheet mentions so a document's
+// layer order follows source order across stylesheets, not the order in which
+// rules happen to be parsed.
+func declareCSSLayers(src string, reg *layerRegistry) {
+	i := 0
+	for i < len(src) {
+		switch {
+		case src[i] == '/' && i+1 < len(src) && src[i+1] == '*':
+			i = skipComment(src, i)
+		case src[i] == '"' || src[i] == '\'':
+			i = skipString(src, i)
+		case src[i] == '@' && len(src)-i >= len("@layer") && strings.EqualFold(src[i:i+len("@layer")], "@layer"):
+			j := i + len("@layer")
+			k := scanCSSStatement(src, j)
+			prelude := strings.TrimSpace(src[j:k])
+			if k < len(src) && src[k] == ';' {
+				for _, part := range splitTopLevel(prelude, ',') {
+					if name := strings.TrimSpace(part); name != "" {
+						reg.declare(name)
+					}
+				}
+			} else if name := strings.Fields(prelude); len(name) > 0 {
+				reg.declare(name[0])
+			}
+			i = k
+		default:
+			i++
+		}
+	}
 }
 
 // ParseStylesheet parses a stylesheet into rules, preserving source order.
@@ -223,10 +299,20 @@ func ParseStylesheet(src string) []Rule {
 
 // ParseStylesheetContext is ParseStylesheet with cancellation support.
 func ParseStylesheetContext(ctx context.Context, src string) []Rule {
+	return parseStylesheetWithLayers(ctx, src, nil)
+}
+
+// parseStylesheetWithLayers parses a sheet, sharing a layer registry with the
+// caller when one is supplied so every sheet in a document agrees on the layer
+// order. A nil registry starts a fresh one.
+func parseStylesheetWithLayers(ctx context.Context, src string, layers *layerRegistry) []Rule {
 	if maxCSSBytes > 0 && len(src) > maxCSSBytes {
 		src = src[:maxCSSBytes]
 	}
-	st := &parseState{cache: make(map[string]*Selector), ctx: ctx, start: time.Now()}
+	if layers == nil {
+		layers = newLayerRegistry()
+	}
+	st := &parseState{cache: make(map[string]*Selector), ctx: ctx, start: time.Now(), layers: layers}
 	return parseRules(src, st, "")
 }
 
@@ -280,7 +366,7 @@ func addDeclRules(st *parseState, rules *[]Rule, selText string, decls []Declara
 		}
 		st.order++
 		st.rules++
-		*rules = append(*rules, Rule{Selector: *sel, Decls: decls, Order: st.order, Media: media})
+		*rules = append(*rules, Rule{Selector: *sel, Decls: decls, Order: st.order, Media: media, Layer: st.layer})
 	}
 }
 
@@ -443,6 +529,14 @@ func parseRules(src string, st *parseState, media string) []Rule {
 				break
 			}
 			if src[j] == ';' {
+				if name == "layer" {
+					// @layer a, b; declares names without adding rules.
+					for _, part := range splitTopLevel(strings.TrimSpace(src[preludeStart:j]), ',') {
+						if n := layerFullName(st.name, strings.TrimSpace(part)); n != "" {
+							st.layers.declare(n)
+						}
+					}
+				}
 				i = j + 1
 			} else {
 				body, next, ok := scanBlock(src, j)
@@ -451,6 +545,19 @@ func parseRules(src string, st *parseState, media string) []Rule {
 				}
 				inner := media
 				switch name {
+				case "layer":
+					prelude := strings.TrimSpace(src[preludeStart:j])
+					prevRank, prevName := st.layer, st.name
+					if prelude == "" {
+						st.layer = st.layers.anonymous()
+					} else {
+						if full := layerFullName(st.name, prelude); full != "" {
+							st.name = full
+						}
+						st.layer = st.layers.declare(st.name)
+					}
+					rules = append(rules, parseRules(body, st, inner)...)
+					st.layer, st.name = prevRank, prevName
 				case "media":
 					q := strings.TrimSpace(src[preludeStart:j])
 					if inner != "" && q != "" {
