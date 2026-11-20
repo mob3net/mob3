@@ -343,7 +343,10 @@ Standard Go layout:
   without an extra gap. `flex-wrap:nowrap` (including `!important` overrides)
   keeps items on one line. A flex item's assigned width is used as its box
   width without re-resolving percentage widths inside block layout, so padded
-  percentage columns keep their slots and do not overlap the next column. `order` reorders items stably; `justify-content`
+  percentage columns keep their slots and do not overlap the next column.
+  Items are blockified, so an inline element becomes a block container and its
+  width and block children apply. `order` reorders items stably;
+  `justify-content`
   supports start/end/center/space-between/around/evenly, `margin:auto` on a
   flex item absorbs the free space before justify-content (so
   `margin-left:auto` pushes an item to the right), and `align-items` supports
@@ -1635,6 +1638,9 @@ Standard Go layout:
   not. `-webkit-line-clamp` is approximated by clipping after N lines.
   CSS nesting resolves nested style rules against their parent selector
   (`&`, descendant and combinator children); nested at-rules are skipped.
+  Selector identifiers support backslash escapes, so utility classes such as
+  `.desktop\:grid-col-3` and `.\32 col` match their `desktop:grid-col-3` and
+  `2col` class names.
   CSS custom properties support simple `var()` substitution, including
   fallbacks; registered properties and Houdini APIs are not supported. The
   inherited property map is shared down the tree and copied only when an

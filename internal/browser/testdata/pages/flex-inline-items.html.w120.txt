@@ -1,0 +1,7 @@
+
+  Artemis                                  Perseverance
+  Moon base                                Mars rover
+  Hubble                                   Webb
+  Space telescope                          Infrared observatory
+
+ Text after the cards stays below them.

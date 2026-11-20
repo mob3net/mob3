@@ -1,7 +1,6 @@
 
 
-    A long label that shrinks inside the remaining space                                First          Second
-                                                                                       visually       visually
+   A long label that shrinks inside the remaining space                                First visually Second visually
 
 
  Stacked one

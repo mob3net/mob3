@@ -240,7 +240,11 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		basis := maxInt(1, widths[i])
 		starts[i] = len(l.frags)
 		var h int
-		if l.isBlock(it) {
+		if l.isBlock(it) || (it.Style != nil && it.Style.Display == "inline") {
+			// Flex items are blockified: an inline element becomes a block
+			// container, so its width and block descendants apply. Keeping it
+			// inline collapsed cards whose markup is an inline anchor around
+			// block content.
 			// The flex line already resolved this item's width, including
 			// percentages and grow/shrink; do not apply Width again inside
 			// block layout or the box drifts from its assigned slot.

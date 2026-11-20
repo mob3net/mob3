@@ -326,3 +326,19 @@ func TestDisplayContentsChildrenSumInFlexItemWidth(t *testing.T) {
 		t.Fatalf("right item at x=%d overlaps the %d-wide contents item at x=%d", right.X, left.W, left.X)
 	}
 }
+
+func TestFlexBlockifiesInlineItems(t *testing.T) {
+	// Flex items are blockified: an inline anchor becomes a block container,
+	// so its width and block children apply. Without this a card whose markup
+	// is an inline anchor collapsed to zero width.
+	doc := ParseHTML(`<div style="display:flex"><a id="c" style="display:inline;width:25%"><div id="in">Card text</div></a></div>`)
+	ly := BuildLayout(doc, nil, 80)
+	card := ly.Boxes[findElementByID(doc, "c")]
+	inner := ly.Boxes[findElementByID(doc, "in")]
+	if card.W < 15 {
+		t.Fatalf("inline flex item width = %d, want the 20-cell 25%% slot", card.W)
+	}
+	if inner.W < 15 {
+		t.Fatalf("block child width = %d, want it to fill the item", inner.W)
+	}
+}

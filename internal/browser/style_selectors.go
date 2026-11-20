@@ -142,6 +142,62 @@ func isCSSSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'
 }
 
+// readCSSIdent reads a CSS identifier starting at i, resolving backslash
+// escapes. Utility frameworks escape the separators in class names, so
+// ".desktop\:grid-col-3" must yield the class "desktop:grid-col-3" instead of
+// a class plus a bogus pseudo-class.
+func readCSSIdent(s string, i int) (string, int) {
+	var b strings.Builder
+	for i < len(s) {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) {
+			j := i + 1
+			if isHexDigit(s[j]) {
+				val, digits := 0, 0
+				for j < len(s) && digits < 6 && isHexDigit(s[j]) {
+					val = val*16 + hexDigit(s[j])
+					j++
+					digits++
+				}
+				if j < len(s) && isSpaceByte(s[j]) {
+					j++
+				}
+				if val > 0 && val <= 0x10FFFF {
+					b.WriteRune(rune(val))
+				} else {
+					b.WriteRune('\uFFFD')
+				}
+				i = j
+				continue
+			}
+			b.WriteByte(s[j])
+			i += 2
+			continue
+		}
+		if !isCSSIdentChar(c) {
+			break
+		}
+		b.WriteByte(c)
+		i++
+	}
+	return b.String(), i
+}
+
+func isHexDigit(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+}
+
+func hexDigit(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	default:
+		return int(c-'A') + 10
+	}
+}
+
 func parseCompound(s string) (SelPart, [3]int, int, bool) {
 	var p SelPart
 	var spec [3]int
@@ -150,36 +206,27 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 		p.Tag = "*"
 		i++
 	} else if i < len(s) && isCSSIdentStart(s[i]) {
-		j := i
-		for j < len(s) && isCSSIdentChar(s[j]) {
-			j++
-		}
-		p.Tag = strings.ToLower(s[i:j])
+		name, j := readCSSIdent(s, i)
+		p.Tag = strings.ToLower(name)
 		spec[2]++
 		i = j
 	}
 	for i < len(s) {
 		switch s[i] {
 		case '#':
-			j := i + 1
-			for j < len(s) && isCSSIdentChar(s[j]) {
-				j++
-			}
-			if j == i+1 {
+			name, j := readCSSIdent(s, i+1)
+			if name == "" {
 				return p, spec, 0, false
 			}
-			p.ID = s[i+1 : j]
+			p.ID = name
 			spec[0]++
 			i = j
 		case '.':
-			j := i + 1
-			for j < len(s) && isCSSIdentChar(s[j]) {
-				j++
-			}
-			if j == i+1 {
+			name, j := readCSSIdent(s, i+1)
+			if name == "" {
 				return p, spec, 0, false
 			}
-			p.Classes = append(p.Classes, s[i+1:j])
+			p.Classes = append(p.Classes, name)
 			spec[1]++
 			i = j
 		case '[':
