@@ -99,7 +99,8 @@ type Browser struct {
 
 	// hideFixed suppresses position:fixed boxes for the current page.
 	hideFixed bool
-	// hideBackgrounds suppresses CSS background images for the current page.
+	// hideBackgrounds paints CSS background images as a neutral placeholder
+	// instead of their pixels; the images stay loaded and laid out.
 	hideBackgrounds bool
 
 	// lastNativeImages tracks graphics-mode transitions (hints or a modal
@@ -751,9 +752,6 @@ func (b *Browser) applyPendingJS(duringLoad bool) bool {
 func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
-	}
-	if b.loader != nil {
-		b.loader.hideBackgrounds = b.hideBackgrounds
 	}
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.

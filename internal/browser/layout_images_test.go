@@ -345,7 +345,10 @@ func TestBackgroundImagesOff(t *testing.T) {
 	g := NewGrid(80, 20, RGB(0, 0, 0), RGB(255, 255, 255))
 	PaintLayout(g, ly, 0, 0, 20, nil, RGB(0, 0, 0))
 	cell := g.Cells[ly.Boxes[hero].Y*80+ly.Boxes[hero].X]
+	if cell.BG != backgroundPlaceholderBG {
+		t.Fatalf("suppressed background fill = %+v, want the neutral placeholder", cell.BG)
+	}
 	if cell.R == '▀' || cell.R == '▄' || cell.Img {
-		t.Fatalf("suppressed background painted a cell: %+v", cell)
+		t.Fatalf("suppressed background painted image cells: %+v", cell)
 	}
 }

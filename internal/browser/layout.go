@@ -56,8 +56,8 @@ type Frag struct {
 // Layout is the result of styling and layout.
 type Layout struct {
 	Width int
-	// BackgroundsOff suppresses CSS background images at paint time without
-	// rebuilding the layout.
+	// BackgroundsOff paints CSS background images as a neutral placeholder
+	// instead of their pixels, without rebuilding the layout.
 	BackgroundsOff bool
 	Height         int
 	Frags          []Frag

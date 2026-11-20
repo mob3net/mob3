@@ -466,6 +466,11 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				// placements composite above the cell grid and would cover the
 				// text and links drawn on top of the image.
 				if ly.BackgroundsOff {
+					// Keep the box as a neutral placeholder rather than blanking
+					// it. Site text is often white (designed for a dark photo) or
+					// black; mid grey keeps either readable through the contrast
+					// fallback while making the hidden image obvious.
+					g.Fill(f.X, y0, f.W, y1-y0, backgroundPlaceholderBG)
 					return
 				}
 				paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
@@ -684,6 +689,12 @@ func stripTerminalControls(s string) string {
 // readableFG keeps text legible when author CSS leaves a near-invisible
 // foreground/background pair (for example white text whose background came
 // from an unsupported gradient or CSS variable).
+// backgroundPlaceholderBG is the mid-grey fill used when CSS background images
+// are switched off. #767676 is the tone where both black and white text keep
+// roughly 4.6:1 contrast, so the page's own text colour stays legible without
+// forcing the contrast fallback to flip it.
+var backgroundPlaceholderBG = RGB(0x76, 0x76, 0x76)
+
 func readableFG(fg, bg Color) Color {
 	if !fg.Set || !bg.Set {
 		return fg

@@ -611,7 +611,10 @@ Standard Go layout:
   half-block art, never as kitty/iTerm2 placements: terminal placements
   composite above the cell grid and would hide the text sitting on the image.
   They are skipped with `-graphics=none` (no image requests) and can be
-  toggled at runtime with `X` → Background images.
+  toggled at runtime with `X` → Background images. Switching them off keeps
+  the images loaded and laid out and paints each background box with a
+  neutral mid-grey placeholder, so the site's black or white text (and the
+  contrast fallback) stays readable while the hidden bitmap is obvious.
 - **Graphics protocol preference:** default is `none` (no image loading or
   drawing, for speed). When enabled with `-graphics=auto|kitty|iterm|blocks`,
   kitty comes first, then iTerm2, then half-block art. Auto is selected from
@@ -767,8 +770,9 @@ Standard Go layout:
   `i` cycle graphics modes, `X` open the page view options window (a switch
   list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
   on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements and
-  Background images, and the list is built from one `viewOption` registry so
-  later view toggles can be added), `o` URL prompt (or `:` for a Vim-style command prompt where
+  Background images (hiding the bitmaps but keeping neutral placeholders), and
+  the list is built from one `viewOption` registry so later view toggles can
+  be added), `o` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL, `E` open the full warning or error

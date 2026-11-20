@@ -393,7 +393,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 	layout := BuildLayoutBudgetDeadline(root, author, width, viewportH, false, dark, deadline, budget)
 	// CSS background images are only known after the style pass, so a dump
 	// loads them in a second image pass and rebuilds the layout once.
-	if !loader.noImages && !loader.hideBackgrounds {
+	if !loader.noImages {
 		allowFile := page.URL != nil && page.URL.Scheme == "file"
 		if loader.loadImages(context.Background(), root, page.Base, allowFile) {
 			if budget.Time > 0 {

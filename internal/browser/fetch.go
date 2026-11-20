@@ -108,8 +108,6 @@ type Loader struct {
 	// deferImages makes Load skip image downloads so the caller can show the
 	// page first and fetch them in the background.
 	deferImages bool
-	// hideBackgrounds skips CSS background images (the page view switch).
-	hideBackgrounds bool
 	// imageViewportPx is the CSS-pixel viewport width used to choose srcset and
 	// picture candidates. It is 800 when no browser width is available.
 	imageViewportPx int
@@ -1292,7 +1290,7 @@ func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
 		if n.Tag == "img" {
 			return true
 		}
-		return !l.hideBackgrounds && n.Style != nil && n.Style.BackgroundImage != ""
+		return n.Style != nil && n.Style.BackgroundImage != ""
 	}) {
 		src := imageSource(n, l.imageViewportPx)
 		if src == "" {
@@ -1486,7 +1484,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 		if n.Tag == "img" {
 			return true
 		}
-		return !l.hideBackgrounds && n.Style != nil && n.Style.BackgroundImage != ""
+		return n.Style != nil && n.Style.BackgroundImage != ""
 	})
 	if len(imgs) == 0 {
 		return false

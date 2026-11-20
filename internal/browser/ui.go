@@ -1350,13 +1350,9 @@ func viewOptions() []viewOption {
 			label: "Background images",
 			on:    func(b *Browser) bool { return !b.hideBackgrounds },
 			set: func(b *Browser, on bool) {
+				// The images stay loaded and laid out; the switch only replaces
+				// their pixels with a neutral placeholder.
 				b.hideBackgrounds = !on
-				if b.loader != nil {
-					b.loader.hideBackgrounds = b.hideBackgrounds
-				}
-				if on && b.loader != nil && !b.loader.noImages && !b.loader.deferImages {
-					b.refreshImages()
-				}
 				b.rebuild()
 				if on {
 					b.status = "Background images shown"
