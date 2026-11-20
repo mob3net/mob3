@@ -132,7 +132,11 @@ func cssImports(src string) []cssImport {
 			i++
 			continue
 		}
-		if depth == 0 && (c == '@' || c == 'A') && strings.HasPrefix(strings.ToLower(src[i:]), "@import") {
+		// Compare a fixed-length ASCII prefix. Lowercasing the whole remaining
+		// stylesheet here was quadratic and made a multi-megabyte sheet take
+		// tens of seconds to scan.
+		if depth == 0 && (c == '@' || c == 'A') && len(src)-i >= len("@import") &&
+			strings.EqualFold(src[i:i+len("@import")], "@import") {
 			j := i + len("@import")
 			if j < len(src) {
 				n := src[j]

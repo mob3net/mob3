@@ -2,7 +2,9 @@ package browser
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestKeyframesSkipped(t *testing.T) {
@@ -129,5 +131,27 @@ func TestNestedRulesDoNotLeakIntoParent(t *testing.T) {
 	link := h.FindFirst("a")
 	if link == nil || styles[link].Display != "inline-block" {
 		t.Fatalf("nested link rule did not apply")
+	}
+}
+
+func TestCSSImportsScalesWithLargeSheets(t *testing.T) {
+	// A multi-megabyte sheet with many top-level at-rules used to be scanned
+	// quadratically: every "@" lowercased the whole remaining source. Guard
+	// both correctness and a generous linear-time bound.
+	var b strings.Builder
+	for i := 0; i < 20000; i++ {
+		b.WriteString("@media screen{.a{color:#111}}\n")
+	}
+	b.WriteString(`@import url("extra.css") screen;`)
+	src := b.String()
+
+	start := time.Now()
+	imports := cssImports(src)
+	elapsed := time.Since(start)
+	if len(imports) != 1 || imports[0].href != "extra.css" || imports[0].media != "screen" {
+		t.Fatalf("imports = %+v", imports)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("cssImports took %v for %d bytes; the scan is not linear", elapsed, len(src))
 	}
 }
