@@ -416,6 +416,8 @@ func (l *layouter) flexMaxTotal(st *Style, extra, availW int) int {
 // distributeGrow hands free space to growing items without pushing any of them
 // past its max-width. Space an item cannot take is redistributed to the others,
 // so a `max-width` column does not silently swallow the row's leftover space.
+// Every item's share is computed from the same free-space total; decrementing
+// it per item made the first items absorb more and left later ones narrow.
 func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int) {
 	for pass := 0; pass < 8 && remaining > 0; pass++ {
 		totalGrow := 0.0
@@ -431,9 +433,10 @@ func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int
 		if totalGrow == 0 {
 			return
 		}
+		budget := remaining
 		added := 0
 		for i := range widths {
-			if remaining <= 0 {
+			if budget <= 0 {
 				break
 			}
 			if grow[i] <= 0 {
@@ -442,25 +445,50 @@ func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int
 			if maxTotals[i] > 0 && widths[i] >= maxTotals[i] {
 				continue
 			}
-			add := int(float64(remaining) * grow[i] / totalGrow)
-			if add < 1 {
-				add = 1
+			share := int(float64(remaining) * grow[i] / totalGrow)
+			if share > budget {
+				share = budget
 			}
-			if add > remaining {
-				add = remaining
+			if maxTotals[i] > 0 && widths[i]+share > maxTotals[i] {
+				share = maxTotals[i] - widths[i]
 			}
-			if maxTotals[i] > 0 && widths[i]+add > maxTotals[i] {
-				add = maxTotals[i] - widths[i]
-			}
-			if add <= 0 {
+			if share <= 0 {
 				continue
 			}
-			widths[i] += add
-			remaining -= add
-			added += add
+			widths[i] += share
+			budget -= share
+			added += share
 		}
 		if added == 0 {
-			return
+			// Rounding can leave fewer free cells than there are growing items,
+			// so every proportional share truncates to zero. Hand the remainder
+			// out one cell per item in turn instead of letting the first item
+			// absorb it, then stop when no item can take another cell.
+			for budget > 0 {
+				progressed := false
+				for i := range widths {
+					if budget <= 0 {
+						break
+					}
+					if grow[i] <= 0 {
+						continue
+					}
+					if maxTotals[i] > 0 && widths[i] >= maxTotals[i] {
+						continue
+					}
+					widths[i]++
+					budget--
+					added++
+					progressed = true
+				}
+				if !progressed {
+					break
+				}
+			}
+			if added == 0 {
+				return
+			}
 		}
+		remaining = budget
 	}
 }

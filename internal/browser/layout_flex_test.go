@@ -384,3 +384,66 @@ func TestFlexGrowFillsSpaceLeftByMaxWidth(t *testing.T) {
 		t.Fatalf("side at x=%d, want it right after the main column ending at %d", side.X, main.X+main.W)
 	}
 }
+
+func TestFlexGrowSharesFreeSpaceEvenly(t *testing.T) {
+	// Four `flex:1 1 auto` items must each get the same share. Subtracting
+	// every item's share from the free-space total inside the loop gave the
+	// first item the most and the last the least (e.g. 53/40/29/22 cells).
+	widths := []int{0, 0, 0, 0}
+	distributeGrow(widths, []float64{1, 1, 1, 1}, []int{0, 0, 0, 0}, 144)
+	for i, w := range widths {
+		if w != 36 {
+			t.Fatalf("item %d width = %d, want 36 (all shares: %v)", i, w, widths)
+		}
+	}
+}
+
+func TestFlexGrowRedistributesPastMaxWidth(t *testing.T) {
+	widths := []int{0, 0}
+	// The first item may only take 10 cells; the rest goes to its sibling.
+	distributeGrow(widths, []float64{1, 1}, []int{10, 0}, 40)
+	if widths[0] != 10 || widths[1] != 30 {
+		t.Fatalf("widths = %v, want [10 30]", widths)
+	}
+}
+
+func TestFlexEqualGrowColumnsSameWidth(t *testing.T) {
+	doc := ParseHTML(`<div style="display:flex;flex-flow:row wrap;justify-content:space-between;width:640px">` +
+		`<div id="a" style="flex:1 1 auto;margin:4px">Alpha</div>` +
+		`<div id="b" style="flex:1 1 auto;margin:4px">Bravo</div>` +
+		`<div id="c" style="flex:1 1 auto;margin:4px">Chair</div>` +
+		`<div id="d" style="flex:1 1 auto;margin:4px">Delta</div>` +
+		`</div>`)
+	ly := BuildLayout(doc, nil, 100)
+	a := ly.Boxes[findElementByID(doc, "a")]
+	b := ly.Boxes[findElementByID(doc, "b")]
+	c := ly.Boxes[findElementByID(doc, "c")]
+	d := ly.Boxes[findElementByID(doc, "d")]
+	if a.W != b.W || b.W != c.W || c.W != d.W {
+		t.Fatalf("plan widths = %d/%d/%d/%d, want equal columns", a.W, b.W, c.W, d.W)
+	}
+	if !(a.X < b.X && b.X < c.X && c.X < d.X) {
+		t.Fatalf("columns not placed left to right: %d %d %d %d", a.X, b.X, c.X, d.X)
+	}
+}
+
+func TestFlexGrowRemainderSpreadAcrossItems(t *testing.T) {
+	// Fewer free cells than growing items used to give the whole remainder to
+	// the first item. Spread it one cell per item instead.
+	widths := make([]int, 20)
+	grow := make([]float64, 20)
+	maxTotals := make([]int, 20)
+	for i := range grow {
+		grow[i] = 1
+	}
+	distributeGrow(widths, grow, maxTotals, 19)
+	for i, w := range widths {
+		want := 1
+		if i == len(widths)-1 {
+			want = 0
+		}
+		if w != want {
+			t.Fatalf("widths = %v, want 19 items with one cell each", widths)
+		}
+	}
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.plans { display: flex; flex-flow: row wrap; justify-content: space-between; }
+.plan {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  margin: 0.5em;
+  padding: 4px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+}
+.plan h3 { margin: 0 0 4px; font-size: 16px; }
+.price { font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="plans">
+  <div class="plan"><h3>Free</h3><p class="price">$0 / month</p><p>Personal use only</p></div>
+  <div class="plan"><h3>Basic</h3><p class="price">$8 / month</p><p>Personal use only</p></div>
+  <div class="plan"><h3>Pro</h3><p class="price">$25 / month</p><p>Commercial use</p></div>
+  <div class="plan"><h3>Enterprise</h3><p class="price">$119 / month</p><p>Priority support</p></div>
+</div>
+</body>
+</html>
