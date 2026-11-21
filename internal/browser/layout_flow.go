@@ -124,8 +124,14 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 			inline = nil
 		}
 	}
-	if p := pseudoElement(parent, parent.Before); p != nil && l.isBlock(p) {
-		cur += l.block(p, x, cur, width)
+	if p := pseudoElement(parent, parent.Before); p != nil {
+		if l.isBlock(p) {
+			cur += l.block(p, x, cur, width)
+		} else {
+			// An inline ::before joins the first line box; block children
+			// later flush it as its own line.
+			inline = append(inline, p)
+		}
 	}
 	for _, c := range layoutChildren(parent) {
 		if l.truncated || l.overRowLimit(cur) {
@@ -172,9 +178,14 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 		}
 		inline = append(inline, c)
 	}
+	after := pseudoElement(parent, parent.After)
+	if after != nil && !l.isBlock(after) {
+		// The generated suffix goes on the line with the last inline content.
+		inline = append(inline, after)
+	}
 	flush()
-	if p := pseudoElement(parent, parent.After); p != nil && l.isBlock(p) {
-		cur += l.block(p, x, cur, width)
+	if after != nil && l.isBlock(after) {
+		cur += l.block(after, x, cur, width)
 	}
 	// The flow contains its floats: their height extends it and they stop
 	// affecting content after the flow. This keeps unrelated sections from
@@ -447,13 +458,18 @@ func (l *layouter) clipFragments(start int, r Rect) {
 	l.frags = out
 }
 
-// pseudoElement wraps a generated pseudo style in a childless synthetic node
-// so the normal block layout can size it.
+// pseudoElement wraps a generated pseudo style in a synthetic node. Literal
+// content becomes a text child, so the normal inline and block paths render it
+// with the pseudo element's own style.
 func pseudoElement(parent *Node, st *Style) *Node {
 	if st == nil {
 		return nil
 	}
-	return &Node{Type: ElementNode, Tag: "#pseudo", Style: st, Parent: parent}
+	n := &Node{Type: ElementNode, Tag: "#pseudo", Style: st, Parent: parent}
+	if st.Content != "" {
+		n.Children = []*Node{{Type: TextNode, Text: st.Content, Style: st, Parent: n}}
+	}
+	return n
 }
 
 // declaredFloatWidth returns a float's declared border-box width, or 0 when it

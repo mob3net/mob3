@@ -214,8 +214,14 @@ func (c *inlineCtx) collect(n *Node) {
 		}
 		savedBreak := c.breakBefore
 		c.breakBefore = true
+		if n.Before != nil && n.Before.Content != "" {
+			c.collect(pseudoElement(n, n.Before))
+		}
 		for _, ch := range n.Children {
 			c.collect(ch)
+		}
+		if n.After != nil && n.After.Content != "" {
+			c.collect(pseudoElement(n, n.After))
 		}
 		c.breakBefore = savedBreak
 		if right > 0 {

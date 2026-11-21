@@ -70,15 +70,23 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 
 // flowChildren returns n's children with display:contents wrappers expanded in
 // place, so their children are measured in the same formatting context as the
-// rest of the container instead of behaving like one nested block.
+// rest of the container instead of behaving like one nested block. Pseudo
+// elements with literal content are measured with the children; empty pseudo
+// boxes stay out, as before, so the aspect-ratio padding pattern is unaffected.
 func flowChildren(n *Node) []*Node {
 	var out []*Node
+	if n.Before != nil && n.Before.Content != "" {
+		out = append(out, pseudoElement(n, n.Before))
+	}
 	for _, c := range n.Children {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display == "contents" {
 			out = append(out, flowChildren(c)...)
 			continue
 		}
 		out = append(out, c)
+	}
+	if n.After != nil && n.After.Content != "" {
+		out = append(out, pseudoElement(n, n.After))
 	}
 	return out
 }

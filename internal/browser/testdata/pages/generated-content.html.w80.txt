@@ -1,0 +1,24 @@
+
+ [labels]
+
+ next →
+
+ icon
+
+ attr
+
+ ★star
+
+ a <t> b
+
+ Note:
+ body text
+
+ a tail and this
+ generated suffix
+ has to wrap with
+ the text
+
+
+   ★ saved         ★twice saved
+

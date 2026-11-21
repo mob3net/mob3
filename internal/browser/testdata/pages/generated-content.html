@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 8px; }
+p { margin: 0 0 8px; }
+.labels::before { content: "["; }
+.labels::after { content: "]"; }
+.arrow::after { content: " \2192"; }
+.icon::before { content: "\f101"; }
+.attr::before { content: attr(data-label); }
+.star::before { content: "\2605 "; }
+.inline .tag::before { content: "<"; }
+.inline .tag::after { content: ">"; }
+.block::before { content: "Note: "; display: block; font-weight: bold; }
+.tail { max-width: 128px; }
+.tail .more::before { content: " and this generated suffix has to wrap with the text"; }
+.badges { display: flex; gap: 8px; }
+.badge { border: 1px solid #999999; padding: 0 4px; }
+.badge::before { content: "\2605 "; }
+.badge::after { content: " saved"; }
+</style></head><body>
+<p class="labels">labels</p>
+<p class="arrow">next</p>
+<p class="icon">icon</p>
+<p class="attr" data-label="SECRET">attr</p>
+<p class="star">star</p>
+<p class="inline">a <span class="tag">t</span> b</p>
+<p class="block">body text</p>
+<p class="tail">a tail<span class="more"></span></p>
+<div class="badges"><span class="badge"></span><span class="badge">twice</span></div>
+</body></html>

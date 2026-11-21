@@ -35,8 +35,9 @@ type Node struct {
 	Style *Style
 	Img   image.Image
 
-	// Before and After hold generated ::before/::after box styles. Only empty
-	// block-level pseudo-elements participate in layout for now.
+	// Before and After hold generated ::before/::after styles. Empty boxes
+	// (the aspect-ratio pattern) and literal text content both participate in
+	// layout.
 	Before *Style
 	After  *Style
 

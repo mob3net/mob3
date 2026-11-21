@@ -4,6 +4,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -612,17 +613,9 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.TextTransform = lower
 		}
 	case "content":
-		switch lower {
-		case "none", "normal":
-			st.Content = ""
-			st.ContentSet = false
-		default:
-			st.Content = val
-			if len(val) >= 2 && (val[0] == '"' || val[0] == '\'') && val[len(val)-1] == val[0] {
-				st.Content = val[1 : len(val)-1]
-			}
-			st.ContentSet = true
-		}
+		text, ok := parseContentValue(val)
+		st.Content = text
+		st.ContentSet = ok
 	case "text-decoration", "text-decoration-line":
 		f := splitFields(lower)
 		none := false
@@ -1331,4 +1324,111 @@ func parseBackgroundPosition(v string) (float64, float64, bool) {
 		y = 0.5
 	}
 	return x, y, okX || okY
+}
+
+// parseContentValue parses a content declaration. Only literal strings are
+// supported, so url(), attr(), counter() and the quote keywords leave the
+// pseudo element without generated text. Private-use codepoints are dropped
+// because terminals draw icon-font glyphs as missing cells.
+func parseContentValue(val string) (string, bool) {
+	s := strings.TrimSpace(val)
+	if s == "" || (s[0] != '"' && s[0] != '\'') {
+		return "", false
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if isCSSSpace(s[i]) {
+			i++
+			continue
+		}
+		if s[i] != '"' && s[i] != '\'' {
+			return "", false
+		}
+		text, next, ok := parseCSSString(s, i)
+		if !ok {
+			return "", false
+		}
+		b.WriteString(text)
+		i = next
+	}
+	return filterGeneratedContent(b.String()), true
+}
+
+// parseCSSString decodes one quoted CSS string starting at s[start], returning
+// the decoded text and the index just past the closing quote.
+func parseCSSString(s string, start int) (string, int, bool) {
+	quote := s[start]
+	var b strings.Builder
+	for i := start + 1; i < len(s); {
+		c := s[i]
+		if c == quote {
+			return b.String(), i + 1, true
+		}
+		if c == '\n' {
+			return "", 0, false
+		}
+		if c != '\\' {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			b.WriteRune(r)
+			i += size
+			continue
+		}
+		i++
+		if i >= len(s) {
+			return "", 0, false
+		}
+		if s[i] == '\n' {
+			// A backslash-newline is a line continuation.
+			i++
+			continue
+		}
+		if isHexDigit(s[i]) {
+			v, n := 0, 0
+			for i < len(s) && n < 6 && isHexDigit(s[i]) {
+				d, _ := hexVal(s[i])
+				v = v*16 + d
+				i++
+				n++
+			}
+			// One whitespace character after a hex escape is part of it.
+			if i < len(s) && isCSSSpace(s[i]) {
+				i++
+			}
+			if v == 0 || v > 0x10FFFF || (v >= 0xD800 && v <= 0xDFFF) {
+				v = 0xFFFD
+			}
+			b.WriteRune(rune(v))
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		b.WriteRune(r)
+		i += size
+	}
+	return "", 0, false
+}
+
+// filterGeneratedContent removes private-use codepoints, which terminals
+// render as missing glyphs. Content made only of icon-font codepoints becomes
+// empty, so it keeps the empty-box behaviour instead of reserving a blank cell.
+func filterGeneratedContent(s string) string {
+	var b strings.Builder
+	removed := false
+	for _, r := range s {
+		if isPrivateUseRune(r) {
+			removed = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := b.String()
+	if removed && strings.TrimSpace(out) == "" {
+		return ""
+	}
+	return out
+}
+
+func isPrivateUseRune(r rune) bool {
+	return (r >= 0xE000 && r <= 0xF8FF) ||
+		(r >= 0xF0000 && r <= 0xFFFFD) ||
+		(r >= 0x100000 && r <= 0x10FFFD)
 }

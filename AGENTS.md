@@ -247,12 +247,12 @@ Standard Go layout:
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
 | `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
-| `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, empty `::before`/`::after` computation, and the style deadline. |
+| `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, `::before`/`::after` computation (empty boxes and literal text, with private-use icon glyphs and functional values rejected), and the style deadline. |
 | `style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
 | `layout.go` | Layout entry points, the `-layout-budget` deadline/fragment/row limits, `Frag`/`LinkInfo`/`Layout` types, the fragment builders, the box model, block flow and relative offsets. |
 | `layout_absolute.go` | Out-of-flow absolute/fixed boxes: deferral, containing-block resolution and placement. |
-| `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated empty `::before`/`::after` boxes. |
+| `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated `::before`/`::after` boxes with their literal text, and inline pseudo content. |
 | `layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
 | `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
@@ -1971,9 +1971,12 @@ Standard Go layout:
   parentheses; `var()`, viewport units and `env()` inside a `calc()`
   expression are unsupported. Viewport units work as direct lengths and
   resolve against the layout viewport (a 24-row default when no viewport is
-  known). Empty block-level `::before`/`::after` boxes (including the
-  `padding-top` aspect-ratio pattern) are generated; other generated content is
-  not. `-webkit-line-clamp` is approximated by clipping after N lines.
+  known). Literal `::before`/`::after` strings are generated as ordinary text,
+  including inline, block and flex/grid pseudo-elements; empty boxes (the
+  `padding-top` aspect-ratio pattern) still work. Private-use icon-font
+  codepoints are dropped because terminals draw them as missing glyphs, and
+  `attr()`, `counter()`, `url()` and the quote keywords generate nothing.
+  `-webkit-line-clamp` is approximated by clipping after N lines.
   CSS nesting resolves nested style rules against their parent selector
   (`&`, descendant and combinator children); nested at-rules are skipped.
   Selector identifiers support backslash escapes, so utility classes such as
@@ -2109,8 +2112,8 @@ Known unsupported families (do not present these as available):
   floats inside inline wrappers and across nested blocks, float edge cases
   that cross nested formatting contexts, `position:sticky`, `z-index`
   stacking, animations,
-  transitions, non-empty generated content, background gradients/repeat, full
-  flexbox.
+  transitions, generated content beyond literal `::before`/`::after` strings
+  (`attr()`, counters, images), background gradients/repeat, full flexbox.
 
 Do not add a stub just to silence an error when a library would then depend on
 behavior MOB³ cannot provide; document it here instead or implement the real
@@ -2364,6 +2367,15 @@ engine work only; do not add site-specific exceptions.
   occupy cells or wrap into narrow columns. Suppress only boxes that are fully
   outside the layout box and cannot become visible.
 
+### P1 — Selectors and container queries
+
+- **`:has()` selector.** Rules using `:has()` are dropped entirely, so layout
+  rules written with it never apply (5/11 pages in the current sample used it).
+  Matching needs a bounded descendant check against the rebuilt tree.
+- **`@container` queries.** Container-query blocks are dropped today and 4/11
+  sampled pages use them. Only add an approximation if it can be made sound
+  through size containment; do not guess from the viewport.
+
 ### P2 — Flex and float layout
 
 - **Shrinking and min-content.** Audit flex/grid items that collapse to one
@@ -2377,14 +2389,12 @@ engine work only; do not add site-specific exceptions.
 - **Flex alignment edge cases.** `align-items:stretch` and `align-self` are
   still approximate; verify icon/label rows and cards with mixed heights.
 
-### P3 — Images and generated content
+### P3 — Images and backgrounds
 
 - **Image candidate fallback.** When a `<picture>` source candidate fails to
   decode (for example an AVIF URL without a `type` hint), the `img` fallback is
   not retried, and `srcset` URLs containing literal commas are split as
   candidates.
-- **Generated content.** Empty block `::before`/`::after` boxes work; support
-  non-empty text/icons and inline pseudo boxes where practical.
 - **Background gradients and repeat.** `background-image:url(...)` is
   rendered (see the images section), but gradients and tiled repeat patterns
   are not; such values leave the box's background colour only.

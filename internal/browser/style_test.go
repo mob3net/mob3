@@ -283,3 +283,32 @@ func TestBoxSizingInherit(t *testing.T) {
 		}
 	}
 }
+
+func TestParseContentValue(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{`""`, "", true},
+		{`"→ "`, "→ ", true},
+		{`'a' 'b'`, "ab", true},
+		{`"\2192"`, "→", true},
+		{`"\f101"`, "", true},   // private-use icon glyph
+		{`"\2605 "`, "★", true}, // the space ends the hex escape
+		{`"\""`, `"`, true},
+		{`attr(data-label)`, "", false},
+		{`counter(items)`, "", false},
+		{`url(icon.png)`, "", false},
+		{`none`, "", false},
+		{`normal`, "", false},
+		{`"unterminated`, "", false},
+		{`"a" junk`, "", false},
+	}
+	for _, tc := range cases {
+		got, ok := parseContentValue(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("parseContentValue(%q) = %q,%v; want %q,%v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}

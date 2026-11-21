@@ -14,7 +14,7 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
   columns with percentage offsets and the common `box-sizing: inherit` reset,
   basic grid tracks with explicit `grid-row`/`grid-area` placement, simple
   `calc()` and viewport-unit sizing, aspect-ratio
-  `::before`/`::after` boxes, images sized with `object-fit`, CSS
+  `::before`/`::after` boxes and literal pseudo-element text, images sized with `object-fit`, CSS
   `background-image` photos on block containers, forms
   and simple JavaScript DOM effects.
 - Older pages that declare a single-byte charset (Windows-1250/1251/1253/1257
@@ -58,7 +58,8 @@ curl command.
 - Sites that require a browser check, CAPTCHA, unusual TLS or a specific
   certificate.
 - Complex grid/flex layouts, sticky positioning, z-index stacking, full float
-  behavior, animations and generated content.
+  behavior, animations and non-text generated content (`attr()`, counters,
+  images, icon-font private-use glyphs).
 - Visual results from canvas, WebGL, video and WebAudio.
 - Multipart/file-upload forms.
 

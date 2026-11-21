@@ -237,8 +237,9 @@ func (e *styleEngine) applyMatchingIndex(idx *ruleIndex, n *Node, st *Style, par
 	e.applyMatched(matched, st, parent)
 }
 
-// computePseudo builds an empty generated ::before/::after box when its rule
-// sets content: "". Non-empty content and inline pseudo-elements are skipped.
+// computePseudo builds a generated ::before/::after box when its rule sets
+// content. An empty string produces the aspect-ratio box; a literal string
+// carries text; functional values were already rejected while parsing.
 func (e *styleEngine) computePseudo(n *Node, parent *Style, pseudo string) *Style {
 	idx := e.beforeIndex
 	if pseudo == "after" {
@@ -251,7 +252,7 @@ func (e *styleEngine) computePseudo(n *Node, parent *Style, pseudo string) *Styl
 	st := inheritStyle(parent)
 	e.applyMatched(matched, st, parent)
 	e.resolveStyleUnits(st)
-	if !st.ContentSet || st.Content != "" || st.Display == "none" || st.Hidden {
+	if !st.ContentSet || st.Display == "none" || st.Hidden {
 		return nil
 	}
 	return st
