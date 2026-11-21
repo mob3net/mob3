@@ -1635,6 +1635,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-history-cache</b> int</td><td>in-memory back/forward history cache limit in MB, 0 disables (default 128)</td></tr>
 <tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB, 0 uses the Go default (default 0)</td></tr>
 <tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
+<tr><td><b>-zoom</b> string</td><td>layout zoom percent from 25 to 200, with or without % (default "100"); + and - step the presets</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
 <tr><td><b>-color</b></td><td>force ANSI color when dumping</td></tr>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>

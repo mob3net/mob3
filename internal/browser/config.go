@@ -56,6 +56,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-history-cache", Value: strconv.Itoa(int(b.historyCacheBytes >> 20)), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: "MB; 0 = Go default", Editable: true},
 		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
+		{Flag: "-zoom", Value: zoomPercentLabel(b.zoom), Note: "percent, 25-200; + - step", Editable: true},
 		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
@@ -161,6 +162,13 @@ func (b *Browser) applyConfig(q url.Values) {
 	if v, ok := q["layout-budget"]; ok && len(v) > 0 {
 		if budget, ok := ParseLayoutBudget(v[0]); ok {
 			b.layoutBudget = budget
+		}
+	}
+	if v, ok := q["zoom"]; ok && len(v) > 0 {
+		if pct, valid := parseZoomPercent(v[0]); valid {
+			b.zoom = pct / 100
+			setLayoutZoom(b.zoom)
+			b.bigTextBlocked = false
 		}
 	}
 	if v, ok := q["text-scale"]; ok && len(v) > 0 {

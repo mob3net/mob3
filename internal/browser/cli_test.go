@@ -233,3 +233,41 @@ func TestRunMissingFile(t *testing.T) {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
 }
+
+func TestRunZoomFlag(t *testing.T) {
+	defer setLayoutZoom(1)
+	path := filepath.Join(t.TempDir(), "zoom.html")
+	src := `<html><body style="margin:0"><p style="margin:0 0 0 64px">indent</p></body></html>`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	indentOf := func(out []byte) int {
+		for _, line := range strings.Split(string(out), "\n") {
+			if i := strings.Index(line, "indent"); i >= 0 {
+				return i
+			}
+		}
+		return -1
+	}
+	code, baseOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", path})
+	if code != 0 {
+		t.Fatalf("dump exit code = %d", code)
+	}
+	code, zoomOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-zoom", "200", path})
+	if code != 0 {
+		t.Fatalf("zoomed dump exit code = %d", code)
+	}
+	baseIndent, zoomIndent := indentOf(baseOut), indentOf(zoomOut)
+	if baseIndent < 0 || zoomIndent < 0 {
+		t.Fatalf("indented text missing: base=%d zoom=%d", baseIndent, zoomIndent)
+	}
+	// 64px is 8 cells at 100% and 16 cells at 200%.
+	if baseIndent != 8 || zoomIndent != 16 {
+		t.Fatalf("indent = %d at 100%% and %d at 200%%, want 8 and 16", baseIndent, zoomIndent)
+	}
+
+	code, _ = runCaptured(t, []string{"-dump", "-no-color", "-zoom", "10", path})
+	if code != 2 {
+		t.Fatalf("invalid -zoom exit code = %d, want 2", code)
+	}
+}

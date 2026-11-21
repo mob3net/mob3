@@ -953,20 +953,23 @@ var zoomSteps = []float64{0.25, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 1.75, 2}
 // per terminal cell, so fixed pixel sizes, images, spacing and kitty scaled
 // headings grow or shrink while text keeps its normal cell size.
 func (b *Browser) zoomBy(dir int) {
-	idx := 0
-	for i, s := range zoomSteps {
-		if math.Abs(s-b.zoom) < math.Abs(zoomSteps[idx]-b.zoom) {
-			idx = i
+	if dir > 0 {
+		for _, s := range zoomSteps {
+			if s > b.zoom+1e-9 {
+				b.applyZoom(s)
+				return
+			}
+		}
+		b.applyZoom(zoomSteps[len(zoomSteps)-1])
+		return
+	}
+	for i := len(zoomSteps) - 1; i >= 0; i-- {
+		if zoomSteps[i] < b.zoom-1e-9 {
+			b.applyZoom(zoomSteps[i])
+			return
 		}
 	}
-	next := idx + dir
-	if next < 0 {
-		next = 0
-	}
-	if next >= len(zoomSteps) {
-		next = len(zoomSteps) - 1
-	}
-	b.applyZoom(zoomSteps[next])
+	b.applyZoom(zoomSteps[0])
 }
 
 // resetZoom returns the layout zoom to 100%.

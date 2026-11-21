@@ -40,6 +40,7 @@ func Run(args []string) int {
 	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
 	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB (0 uses the Go default)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
+	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
@@ -129,6 +130,12 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", *layoutBudget)
 		return 2
 	}
+	zoomPct, ok := parseZoomPercent(*zoomFlag)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "mob3: invalid -zoom %q (use a percentage from 25 to 200)\n", *zoomFlag)
+		return 2
+	}
+	zoomFactor := zoomPct / 100
 	SetColorMode(DetectColorMode())
 
 	if *mcpMode {
@@ -142,6 +149,8 @@ func Run(args []string) int {
 		}
 		a := NewAutomation(w, h)
 		defer a.Close()
+		a.b.zoom = zoomFactor
+		setLayoutZoom(zoomFactor)
 		a.b.setLoader(loader)
 		loader.noImages = true
 		a.b.noJS = *noJS
@@ -159,7 +168,7 @@ func Run(args []string) int {
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget, zoomFactor)
 	}
 
 	// Interactive pages show text first and fetch images in the background so
@@ -169,7 +178,7 @@ func Run(args []string) int {
 	state, err := makeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget)
+		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget, zoomFactor)
 	}
 	w, h, ok := terminalSize(os.Stdout)
 	if !ok {
@@ -179,6 +188,8 @@ func Run(args []string) int {
 		w = *widthFlag
 	}
 	b := NewBrowser(w, h)
+	b.zoom = zoomFactor
+	setLayoutZoom(zoomFactor)
 	b.interactive = true
 	b.setLoader(loader)
 	b.reader = *reader
@@ -203,6 +214,7 @@ func Run(args []string) int {
 		"-history-cache": strconv.Itoa(*historyCache),
 		"-mem-limit":     strconv.Itoa(*memLimit),
 		"-layout-budget": budget.Name,
+		"-zoom":          zoomPercentLabel(zoomFactor),
 		"-color":         onOff(*forceColor),
 		"-no-color":      onOff(*noColor),
 		"-mcp":           onOff(*mcpMode),
@@ -373,7 +385,7 @@ func Run(args []string) int {
 	}
 }
 
-func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMemLimit int64, budget LayoutBudget) int {
+func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMemLimit int64, budget LayoutBudget, zoom float64) int {
 	if width <= 0 {
 		if w, _, ok := terminalSize(os.Stdout); ok {
 			width = w
@@ -381,6 +393,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 			width = 100
 		}
 	}
+	setLayoutZoom(zoom)
 	loader.imageViewportPx = cssWidthPx(width)
 	// A PNG has no browsing context, so it shows one page: page 1 unless the
 	// caller selected another. Dumps keep every page.
@@ -402,6 +415,10 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 	}
 	if !noJS {
 		runner := NewBrowser(width, 3)
+		// NewBrowser resets the package-wide cell ratio; restore the run's zoom
+		// before scripts run so script-visible viewport sizes match the dump.
+		runner.zoom = zoom
+		setLayoutZoom(zoom)
 		runner.noJS = false
 		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
@@ -410,6 +427,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 			loader.loadImages(context.Background(), page.Root, page.Base, allowFile)
 		}
 	}
+	setLayoutZoom(zoom)
 	root, author := page.Root, page.Author
 	if reader && page.PDF == nil {
 		if extracted, ok := extractReaderPage(page.Root, page.Title); ok {

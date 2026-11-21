@@ -34,6 +34,7 @@ falls back to dump mode and prints the rendered page.
 | `-history-cache int` | 128 | Back/forward history cache limit in MB of estimated page size; `0` disables it |
 | `-mem-limit int` | 0 | Soft process memory limit in MB for the Go heap; `0` (the default) uses the Go default |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
+| `-zoom string` | `100%` | Layout zoom percent from 25 to 200; `%` is optional and `+`/`-` step the presets |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
 | `-color` | off | Force ANSI colors when dumping |
 | `-no-color` | off | Disable ANSI colors in dump mode |
@@ -127,6 +128,17 @@ caps:
 in `about:config`; a zero individual limit disables that check. When a limit is
 hit, the page renders partially and the status says
 `Page truncated (layout limit)`.
+
+## Page zoom
+
+`-zoom 150` starts at 150% (values 25 to 200, `%` optional). In the interactive
+browser `+` and `-` step through 25, 50, 67, 80, 100, 125, 150, 175 and 200%,
+and `0` returns to 100%. Zoom changes how many CSS pixels one terminal cell
+represents, not the text size: body text keeps one cell per character and its
+normal line height, while fixed pixel widths, spacing, borders, images and
+kitty scaled large headings grow or shrink. The CSS viewport follows the ratio,
+so responsive pages reflow. It applies to dump, PNG and MCP runs, is editable in
+`about:config`, and is never persisted.
 
 ## JavaScript and cache limits
 

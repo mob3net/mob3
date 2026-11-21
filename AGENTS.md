@@ -482,7 +482,9 @@ Standard Go layout:
 - **Cell mapping and zoom:** the base mapping is `1 column = 8 CSS px` and
   `1 row = 16 CSS px`. Two image rows are packed into one terminal cell
   vertically to preserve image aspect ratio. `+`/`-` step a session layout zoom
-  through 25, 50, 67, 80, 100, 125, 150, 175 and 200%, and `0` resets it. Zoom
+  through 25, 50, 67, 80, 100, 125, 150, 175 and 200%, and `0` resets it.
+  `-zoom N` (25-200, `%` optional) starts interactive, dump, PNG and MCP runs
+  at that level. Zoom
   divides the CSS pixels per cell, so fixed pixel widths,
   padding, borders, absolute offsets, images and kitty scaled headings grow or
   shrink while text metrics stay on the base cell size: glyphs remain one cell
@@ -797,7 +799,7 @@ Standard Go layout:
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home, js-memory, cache, history-cache,
-  mem-limit, layout-budget, text-scale, ua, search);
+  mem-limit, layout-budget, zoom, text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted. The page starts
   with the current viewport in characters and pixels (`width*cellW` by
@@ -806,8 +808,8 @@ Standard Go layout:
   `about:help`.
 - **MCP automation:** `-mcp` starts a headless `Automation` session and serves
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
-  optional start URL, `-width` and `-height` (default 30); `-no-js` and
-  `-layout-budget` are honored, and images are disabled. Tools cover
+  optional start URL, `-width` and `-height` (default 30); `-no-js`,
+  `-layout-budget` and `-zoom` are honored, and images are disabled. Tools cover
   navigate, snapshot, click, link listing, form/control listing, fill, select,
   toggle, submit, wait/wait_for, type, press, scroll, history navigation,
   JS evaluation, session history, diagnostics (`requests`, `logs`, `source`) and
@@ -1850,8 +1852,8 @@ Standard Go layout:
   percentage layouts barely change in cells while fixed-pixel content grows.
   There is no horizontal scrolling, so zoomed-in fixed-width content can clip
   on the right instead of scrolling sideways, and bitmaps decoded before a
-  zoom-out can be upscaled. Zoom has no CLI flag or `about:config` row and is
-  never persisted.
+  zoom-out can be upscaled. Zoom starts at `-zoom N`, is editable in
+  `about:config`, and is never persisted.
 - PDF support is text only. Pages are extracted, never rasterized: figures,
   images, chart art, shadings, annotations and link targets do not appear,
   scanned documents show no text, and encrypted (password-protected) files are

@@ -190,3 +190,32 @@ func TestConfigCheckboxForm(t *testing.T) {
 		t.Fatal("unchecked ignore-blocks did not turn it off")
 	}
 }
+
+func TestConfigAppliesZoom(t *testing.T) {
+	b := NewBrowser(80, 24)
+	defer setLayoutZoom(1)
+	b.applyConfig(url.Values{"zoom": {"150%"}})
+	if b.zoom != 1.5 {
+		t.Fatalf("zoom = %g, want 1.5", b.zoom)
+	}
+	if got := px(16).resolveH(0, 16); got != 3 {
+		t.Fatalf("16px at 150%% = %d cells, want 3", got)
+	}
+	found := false
+	for _, it := range b.configItems() {
+		if it.Flag == "-zoom" {
+			found = true
+			if it.Value != "150%" {
+				t.Fatalf("-zoom value = %q, want 150%%", it.Value)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("about:config does not list -zoom")
+	}
+	// Out-of-range values are ignored.
+	b.applyConfig(url.Values{"zoom": {"10"}})
+	if b.zoom != 1.5 {
+		t.Fatalf("invalid zoom changed value to %g", b.zoom)
+	}
+}

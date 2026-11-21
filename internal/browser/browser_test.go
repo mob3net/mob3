@@ -1494,3 +1494,17 @@ func TestZoomKeysStepThroughPresets(t *testing.T) {
 	}
 	b.applyZoom(1)
 }
+
+func TestZoomStepsFromArbitraryStart(t *testing.T) {
+	b := NewBrowser(80, 24)
+	defer setLayoutZoom(1)
+	b.applyZoom(1.4)
+	b.HandleKey("+")
+	if b.zoom != 1.5 {
+		t.Fatalf("+ from 140%% = %g, want 1.5", b.zoom)
+	}
+	b.HandleKey("-")
+	if b.zoom != 1.25 {
+		t.Fatalf("- from 150%% = %g, want 1.25", b.zoom)
+	}
+}

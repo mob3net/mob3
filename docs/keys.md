@@ -45,7 +45,7 @@ were before following the anchor, and Forward returns to the anchored section.
 If only the fragment changes, the page is not reloaded.
 
 Zoom changes how many CSS pixels one terminal cell represents, from 25% to
-200% in preset steps. It is not text scaling: glyphs stay one cell per
+200% in preset steps. Use `-zoom N` at launch to start at another level. It is not text scaling: glyphs stay one cell per
 character and lines keep their normal height, so text stays readable while
 fixed pixel widths, padding, borders, images and kitty scaled large headings
 grow or shrink. The CSS viewport shrinks or grows with the ratio, so responsive
