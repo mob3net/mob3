@@ -1,0 +1,11 @@
+
+
+   Alpha first item
+   Beta second item
+
+    Left cell                           Right cell
+
+
+
+
+Text after the card keeps its place.

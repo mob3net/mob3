@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Comments in declaration blocks</title>
+<style>
+body { margin: 0; font: 16px/1.4 sans-serif; }
+.card {
+  padding: 8px;
+  border: 1px solid #c9d1d9;
+  /* the card's title sits above its body { like this } */
+  background: #eef2f7;
+}
+.row { display: flex; gap: 8px; padding: 4px; }
+.row strong { color: #1f4f9f; }
+table { width: 100%; border-collapse: collapse; }
+td { border: 1px solid #d0d7de; padding: 4px; }
+</style></head>
+<body>
+<div class="card">
+  <div class="row"><strong>Alpha</strong><span>first item</span></div>
+  <div class="row"><strong>Beta</strong><span>second item</span></div>
+  <table><tr><td>Left cell</td><td>Right cell</td></tr></table>
+</div>
+<p>Text after the card keeps its place.</p>
+</body></html>
