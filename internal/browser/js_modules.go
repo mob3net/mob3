@@ -524,3 +524,13 @@ func jsValueString(v sobek.Value) string {
 	}
 	return "module evaluation failed"
 }
+
+// sourceBytes reports how much module source this page keeps loaded.
+func (m *jsModuleLoader) sourceBytes() int {
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.bytes
+}

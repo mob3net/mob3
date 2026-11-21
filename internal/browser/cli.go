@@ -36,6 +36,7 @@ func Run(args []string) int {
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
+	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
@@ -187,6 +188,7 @@ func Run(args []string) int {
 		"-graphics":      *graphics,
 		"-bookmarks":     bookmarksValue,
 		"-cache":         strconv.Itoa(*cache),
+		"-history-cache": strconv.Itoa(*historyCache),
 		"-layout-budget": budget.Name,
 		"-color":         onOff(*forceColor),
 		"-no-color":      onOff(*noColor),
@@ -198,6 +200,7 @@ func Run(args []string) int {
 	b.noPDF = *noPDF
 	b.jsMemLimit = jsMemLimit
 	b.layoutBudget = budget
+	b.setHistoryCacheLimitMB(*historyCache)
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
 	case "off", "none", "false":
 		b.noBigText = true

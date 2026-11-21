@@ -65,6 +65,9 @@ type Browser struct {
 	history []historyEntry
 	histIdx int
 	histMu  sync.RWMutex
+	// historyCacheBytes bounds the estimated size of the back/forward page cache.
+	// Zero disables page caching.
+	historyCacheBytes int64
 	// nextScroll is consumed by the next navigation started from history.
 	nextScroll    int
 	nextScrollSet bool
@@ -270,12 +273,13 @@ func NewBrowser(w, h int) *Browser {
 	}
 	b := &Browser{
 		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1,
-		jsMemLimit:   defaultJSMemoryLimit,
-		layoutBudget: DefaultLayoutBudget,
-		loadCh:       make(chan loadResult, 1),
-		importCh:     make(chan jsImportTask, 16),
-		imageCh:      make(chan imageBatch, 1),
-		home:         "about:home",
+		jsMemLimit:        defaultJSMemoryLimit,
+		layoutBudget:      DefaultLayoutBudget,
+		historyCacheBytes: defaultHistoryCacheBytes,
+		loadCh:            make(chan loadResult, 1),
+		importCh:          make(chan jsImportTask, 16),
+		imageCh:           make(chan imageBatch, 1),
+		home:              "about:home",
 	}
 	b.setLoader(b.loader)
 	return b

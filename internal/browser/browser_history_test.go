@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"image"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -267,7 +268,7 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 	}
 }
 
-func TestPageCacheIsBounded(t *testing.T) {
+func TestHistoryCacheIsBounded(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -494,4 +495,132 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	if len(urls) != 2 || urls[0] != "https://example.com/start" || urls[1] != "https://example.com/next" {
 		t.Fatalf("history = %v, want start then next", urls)
 	}
+}
+
+func TestHistoryCacheEvictsByWeight(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.historyCacheBytes = 3 << 20
+	now := time.Now()
+	b.history = []historyEntry{
+		{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20, at: now}},
+		{URL: "https://example.com/b", cached: &cachedPage{bytes: 1 << 20, at: now.Add(time.Second)}},
+		{URL: "https://example.com/c", cached: &cachedPage{bytes: 1 << 20, at: now.Add(2 * time.Second)}},
+		{URL: "https://example.com/d", cached: &cachedPage{bytes: 1 << 20, at: now.Add(3 * time.Second)}},
+	}
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
+	total := int64(0)
+	cached := 0
+	for _, e := range b.history {
+		if e.cached != nil {
+			cached++
+			total += e.cached.bytes
+		}
+	}
+	if total > b.historyCacheBytes {
+		t.Fatalf("cached bytes = %d, budget = %d", total, b.historyCacheBytes)
+	}
+	if cached != 3 {
+		t.Fatalf("cached pages = %d, want 3", cached)
+	}
+	if b.history[0].cached != nil {
+		t.Fatal("oldest page survived the weight budget")
+	}
+	if b.history[len(b.history)-1].cached == nil {
+		t.Fatal("newest page was evicted")
+	}
+}
+
+func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.historyCacheBytes = 2 << 20 // single-page cap is 1 MiB
+	u := mustParse(t, "https://example.com/heavy")
+	b.url = u
+	b.history = []historyEntry{{URL: u.String()}}
+	b.histIdx = 0
+	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body><p>heavy</p></body></html>`),
+		RawHTML: strings.Repeat("x", 1200*1024)}
+	if b.cacheCurrentPage() {
+		t.Fatal("page heavier than the single-page cap was cached")
+	}
+	if b.history[0].cached != nil {
+		t.Fatal("heavy page was stored on the history entry")
+	}
+	b.page.RawHTML = "<html><body><p>light</p></body></html>"
+	if !b.cacheCurrentPage() {
+		t.Fatal("light page was not cached")
+	}
+	if b.history[0].cached == nil || b.history[0].cached.bytes <= 0 {
+		t.Fatal("light page has no recorded weight")
+	}
+}
+
+func TestPageWeightCountsScriptsImagesAndRuntime(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	if got := imageWeight(img); got != 100*100*4 {
+		t.Fatalf("RGBA weight = %d", got)
+	}
+	if got := imageWeight(image.NewGray(image.Rect(0, 0, 50, 40))); got != 50*40 {
+		t.Fatalf("gray weight = %d", got)
+	}
+	yc := image.NewYCbCr(image.Rect(0, 0, 40, 30), image.YCbCrSubsampleRatio420)
+	if got, want := imageWeight(yc), int64(40*30*3/2); got != want {
+		t.Fatalf("YCbCr weight = %d, want %d", got, want)
+	}
+
+	doc := ParseHTML(`<html><body><img src="a.png" alt="a"><p>text</p></body></html>`)
+	doc.FindFirst("img").Img = img
+	page := &Page{Root: doc, RawHTML: strings.Repeat("h", 1000),
+		Scripts: []Script{{Code: strings.Repeat("s", 500)}}, Author: make([]Rule, 3)}
+	plain := pageWeight(page, nil, nil, nil)
+	if plain < 1000+500+100*100*4 {
+		t.Fatalf("weight = %d, does not count source, scripts and image", plain)
+	}
+	withJS := pageWeight(page, &jsRuntime{}, nil, nil)
+	if withJS-plain < jsRuntimeWeight {
+		t.Fatalf("runtime allowance = %d, want at least %d", withJS-plain, jsRuntimeWeight)
+	}
+}
+
+func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.history = []historyEntry{{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20}}}
+	b.setHistoryCacheLimitMB(0)
+	if b.historyCacheBytes != 0 {
+		t.Fatalf("budget = %d, want 0", b.historyCacheBytes)
+	}
+	if b.history[0].cached != nil {
+		t.Fatal("disabling the page cache kept an entry")
+	}
+	if b.cacheCurrentPage() {
+		t.Fatal("a page was cached with the cache disabled")
+	}
+}
+
+func TestConfigAppliesHistoryCacheLimit(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.history = []historyEntry{{URL: "https://example.com/a", cached: &cachedPage{bytes: 4 << 20}}}
+	b.applyConfig(url.Values{"history-cache": {"1"}})
+	if b.historyCacheBytes != 1<<20 {
+		t.Fatalf("budget = %d, want 1 MiB", b.historyCacheBytes)
+	}
+	// A 4 MiB entry does not fit a 1 MiB budget; the newest entry is protected
+	// only up to the single-page cap, which a re-trim during caching enforces.
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
+	if total := cachedBytes(b.history); total > b.historyCacheBytes && len(b.history) > 1 {
+		t.Fatalf("cached bytes = %d, budget = %d", total, b.historyCacheBytes)
+	}
+}
+
+func cachedBytes(history []historyEntry) int64 {
+	total := int64(0)
+	for _, e := range history {
+		if e.cached != nil {
+			total += e.cached.bytes
+		}
+	}
+	return total
 }

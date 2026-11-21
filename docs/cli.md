@@ -31,6 +31,7 @@ falls back to dump mode and prints the rendered page.
 | `-home string` | `about:home` | Startup and Home-button target |
 | `-js-memory int` | 256 | JavaScript heap limit in MB; `0` disables the watchdog |
 | `-cache int` | 32 | In-memory resource cache limit in MB; `0` disables it |
+| `-history-cache int` | 128 | Back/forward history cache limit in MB of estimated page size; `0` disables it |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
 | `-color` | off | Force ANSI colors when dumping |

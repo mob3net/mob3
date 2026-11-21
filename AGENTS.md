@@ -260,7 +260,7 @@ Standard Go layout:
 | `browser_chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
 | `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
-| `browser_history.go` | Session history and the in-memory back/forward page cache (suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
+| `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
@@ -742,8 +742,8 @@ Standard Go layout:
   prominence.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home, js-memory, cache, layout-budget,
-  text-scale, ua, search);
+  session (no-js, ignore-blocks, home, js-memory, cache, history-cache,
+  layout-budget, text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted. The page starts
   with the current viewport in characters and pixels (`width*cellW` by
@@ -1106,11 +1106,19 @@ Standard Go layout:
   `h`/Back and Forward return to the stored scroll position, using an in-place
   update when only the fragment changes. Visiting a different URL starts at the
   top unless it is a history entry being restored. Applied documents are kept in
-  an in-memory back/forward cache of up to 10 pages, with their DOM, styles,
-  decoded images and JavaScript runtime; Back and Forward restore a cached
-  document without fetching, parsing or re-running scripts. Its timers pause
-  while cached and resume where they left off, and the oldest cached page is
-  dropped beyond the cap. `about:` pages and downloads are never cached.
+  an in-memory back/forward cache, with their DOM, styles, decoded images and
+  JavaScript runtime; Back and Forward restore a cached document without
+  fetching, parsing or re-running scripts. Its timers pause while cached and
+  resume where they left off. The cache is memory-aware: each suspended page is
+  weighed once (raw source, script text, POST body, DOM with attributes and
+  text, decoded image bytes, plus a conservative allowance for a live JS
+  runtime and its node wrappers), pages evicted least-recently-used first until
+  the total fits `-history-cache` MB (128 by default, `0` disables page
+  caching), and a page heavier than half the budget is never cached at all, so
+  one heavy document cannot pin the allowance. The newest entry is kept when
+  the budget is tight, `maxCachedPages` (10) stays as a second guard, and the
+  limit can be changed live in `about:config`. `about:` pages and downloads are
+  never cached.
   `location.replace` and `location.reload` update the active history entry
   instead of pushing a new one. HTTP 3xx redirects are followed inside one
   load, so only the final URL is recorded. Client redirects that happen while
