@@ -153,6 +153,7 @@ caret.
 | `Backspace` | Delete backwards |
 | `Delete` | Delete forwards |
 | `Ctrl-A` | Select all; typing, `Backspace` or `Delete` replaces the whole value |
+| `Ctrl-K` | Delete to the end |
 | `Ctrl-U` | Clear |
 | `Enter` | Submit (or insert a newline in a textarea) |
 | `Esc` | Leave the field |

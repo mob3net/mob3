@@ -275,7 +275,7 @@ Standard Go layout:
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
 | `browser_chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
-| `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
+| `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
 | `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim, scavenge request after a heavy eviction), back/forward/reload, and meta-refresh targets. |
 | `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the one-shot scavenge request consumed between frames. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
@@ -1112,7 +1112,7 @@ Standard Go layout:
   Alt-D delete words; Delete removes forward. Ctrl-A selects the whole value
   and paints it with a selection background: typing, Backspace or Delete
   replaces the value, and any caret move or leaving the field cancels the
-  selection. Ctrl-U clears, and Esc finishes;
+  selection. Ctrl-U clears, Ctrl-K deletes to the end, and Esc finishes;
   Enter submits from other fields but inserts a newline at the caret in a
   textarea. Textareas render as
   at least two rows (an explicit `rows` value up to 12 is honoured) and wrap

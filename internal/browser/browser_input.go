@@ -158,15 +158,135 @@ func forwardWordBoundary(s string, i int) int {
 	return i
 }
 
+// editConfig selects the per-control differences for editLineKey.
+type editConfig struct {
+	// selAll, when non-nil, enables Ctrl-A select-all: the next edit replaces
+	// the whole value and a caret move clears the selection. Controls without a
+	// selection model leave it nil.
+	selAll *bool
+	// collapseSelection makes a caret move with a full selection jump to the
+	// edge of the value instead of moving from the caret.
+	collapseSelection bool
+	// maxRunes refuses new input once the value already holds that many runes;
+	// 0 means unlimited.
+	maxRunes int
+}
+
+// editLineKey applies one text-editing key to a value and its caret. handled is
+// false for keys the control owns (Enter, Escape, Tab, Up/Down, history) and
+// for unprintable input, so the caller can run those itself. Visible-window and
+// event side effects stay with the caller.
+func editLineKey(value string, caret int, k string, cfg editConfig) (string, int, bool) {
+	if caret < 0 {
+		caret = 0
+	}
+	if caret > len(value) {
+		caret = len(value)
+	}
+	all := cfg.selAll != nil && *cfg.selAll
+	clearSelection := func() {
+		if cfg.selAll != nil {
+			*cfg.selAll = false
+		}
+	}
+	at := func(n int) (string, int, bool) {
+		clearSelection()
+		return value, n, true
+	}
+	switch k {
+	case "ctrl-a":
+		if cfg.selAll == nil {
+			return value, caret, false
+		}
+		*cfg.selAll = true
+		return value, len(value), true
+	case "left", "ctrl-b":
+		if all && cfg.collapseSelection {
+			return at(0)
+		}
+		return at(prevRuneBoundary(value, caret))
+	case "right", "ctrl-f":
+		if all && cfg.collapseSelection {
+			return at(len(value))
+		}
+		return at(nextRuneBoundary(value, caret))
+	case "alt-b", "ctrl-left", "alt-left":
+		if all && cfg.collapseSelection {
+			return at(0)
+		}
+		return at(prevWordBoundary(value, caret))
+	case "alt-f", "ctrl-right", "alt-right":
+		if all && cfg.collapseSelection {
+			return at(len(value))
+		}
+		return at(nextWordBoundary(value, caret))
+	case "home":
+		return at(0)
+	case "end", "ctrl-e":
+		return at(len(value))
+	case "backspace":
+		clearSelection()
+		if all {
+			return "", 0, true
+		}
+		if caret > 0 {
+			prev := prevRuneBoundary(value, caret)
+			return value[:prev] + value[caret:], prev, true
+		}
+		return value, caret, true
+	case "delete":
+		clearSelection()
+		if all {
+			return "", 0, true
+		}
+		if caret < len(value) {
+			next := nextRuneBoundary(value, caret)
+			return value[:caret] + value[next:], caret, true
+		}
+		return value, caret, true
+	case "alt-backspace", "ctrl-backspace", "ctrl-w":
+		clearSelection()
+		if all {
+			return "", 0, true
+		}
+		cut := prevWordBoundary(value, caret)
+		return value[:cut] + value[caret:], cut, true
+	case "alt-delete", "ctrl-delete", "alt-d":
+		clearSelection()
+		if all {
+			return "", 0, true
+		}
+		end := forwardWordBoundary(value, caret)
+		return value[:caret] + value[end:], caret, true
+	case "ctrl-u":
+		clearSelection()
+		return "", 0, true
+	case "ctrl-k":
+		clearSelection()
+		if all {
+			return "", 0, true
+		}
+		return value[:caret], caret, true
+	}
+	if utf8.RuneCountInString(k) == 1 {
+		r, _ := utf8.DecodeRuneInString(k)
+		if r >= 32 && r != 127 {
+			clearSelection()
+			if cfg.maxRunes > 0 && utf8.RuneCountInString(value) >= cfg.maxRunes {
+				return value, caret, true
+			}
+			if all {
+				return k, len(k), true
+			}
+			return value[:caret] + k + value[caret:], caret + len(k), true
+		}
+	}
+	return value, caret, false
+}
+
 func (b *Browser) handlePromptKey(k string) bool {
 	text := b.promptText
 	cur := b.promptCursor
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(text) {
-		cur = len(text)
-	}
 	switch k {
 	case "enter":
 		text = strings.TrimSpace(text)
@@ -201,132 +321,14 @@ func (b *Browser) handlePromptKey(k string) bool {
 			cur = len(text)
 		}
 		b.promptSelectAll = false
-	case "left":
-		if b.promptSelectAll {
-			cur = 0
-			b.promptSelectAll = false
-		} else {
-			cur = prevRuneBoundary(text, cur)
-		}
-	case "right":
-		if b.promptSelectAll {
-			cur = len(text)
-			b.promptSelectAll = false
-		} else {
-			cur = nextRuneBoundary(text, cur)
-		}
-	case "home":
-		cur = 0
-		b.promptSelectAll = false
-	case "end":
-		cur = len(text)
-		b.promptSelectAll = false
-	case "ctrl-a":
-		b.promptSelectAll = true
-		cur = len(text)
-	case "ctrl-e":
-		cur = len(text)
-		b.promptSelectAll = false
-	case "ctrl-b":
-		if b.promptSelectAll {
-			cur = 0
-			b.promptSelectAll = false
-		} else {
-			cur = prevRuneBoundary(text, cur)
-		}
-	case "ctrl-f":
-		if b.promptSelectAll {
-			cur = len(text)
-			b.promptSelectAll = false
-		} else {
-			cur = nextRuneBoundary(text, cur)
-		}
-	case "alt-b", "ctrl-left", "alt-left":
-		if b.promptSelectAll {
-			cur = 0
-			b.promptSelectAll = false
-		} else {
-			cur = prevWordBoundary(text, cur)
-		}
-	case "alt-f", "ctrl-right", "alt-right":
-		if b.promptSelectAll {
-			cur = len(text)
-			b.promptSelectAll = false
-		} else {
-			cur = nextWordBoundary(text, cur)
-		}
-	case "backspace":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
-		} else if cur > 0 {
-			prev := prevRuneBoundary(text, cur)
-			text = text[:prev] + text[cur:]
-			cur = prev
-		}
-	case "delete":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
-		} else if cur < len(text) {
-			next := nextRuneBoundary(text, cur)
-			text = text[:cur] + text[next:]
-		}
-	case "ctrl-u":
-		text = ""
-		cur = 0
-		b.promptSelectAll = false
-	case "ctrl-k":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
-		} else {
-			text = text[:cur]
-		}
-	case "alt-backspace", "ctrl-backspace", "ctrl-w":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
-			break
-		}
-		cut := prevWordBoundary(text, cur)
-		if cut < cur {
-			text = text[:cut] + text[cur:]
-			cur = cut
-		}
-	case "alt-delete", "ctrl-delete", "alt-d":
-		if b.promptSelectAll {
-			text = ""
-			cur = 0
-			b.promptSelectAll = false
-			break
-		}
-		end := forwardWordBoundary(text, cur)
-		if end > cur {
-			text = text[:cur] + text[end:]
-		}
 	case "ctrl-c":
 		b.closeURLPrompt()
 		return false
-	default:
-		if utf8.RuneCountInString(k) == 1 {
-			r, _ := utf8.DecodeRuneInString(k)
-			if r >= 32 && r != 127 {
-				if b.promptSelectAll {
-					text = k
-					cur = len(k)
-					b.promptSelectAll = false
-				} else {
-					text = text[:cur] + k + text[cur:]
-					cur += len(k)
-				}
-			}
-		}
 	}
+	text, cur, _ = editLineKey(text, cur, k, editConfig{
+		selAll:            &b.promptSelectAll,
+		collapseSelection: true,
+	})
 	b.promptText = text
 	if cur > len(text) {
 		cur = len(text)

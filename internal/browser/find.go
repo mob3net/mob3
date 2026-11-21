@@ -3,7 +3,6 @@ package browser
 import (
 	"fmt"
 	"unicode"
-	"unicode/utf8"
 )
 
 const (
@@ -111,12 +110,6 @@ func (b *Browser) findBarCount() string {
 func (b *Browser) handleFindKey(k string) bool {
 	text := b.findText
 	cur := b.findCursor
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(text) {
-		cur = len(text)
-	}
 	switch k {
 	case "esc":
 		b.findActive = false
@@ -137,54 +130,12 @@ func (b *Browser) handleFindKey(k string) bool {
 		b.findActive = false
 		b.status = b.findStatusText()
 		return false
-	case "left", "ctrl-b":
-		cur = prevRuneBoundary(text, cur)
-	case "right", "ctrl-f":
-		cur = nextRuneBoundary(text, cur)
-	case "alt-b", "ctrl-left", "alt-left":
-		cur = prevWordBoundary(text, cur)
-	case "alt-f", "ctrl-right", "alt-right":
-		cur = nextWordBoundary(text, cur)
-	case "home", "ctrl-a":
-		cur = 0
-	case "end", "ctrl-e":
-		cur = len(text)
-	case "backspace":
-		if cur > 0 {
-			prev := prevRuneBoundary(text, cur)
-			text = text[:prev] + text[cur:]
-			cur = prev
-		}
-	case "alt-backspace", "ctrl-backspace", "ctrl-w":
-		cut := prevWordBoundary(text, cur)
-		if cut < cur {
-			text = text[:cut] + text[cur:]
-			cur = cut
-		}
-	case "delete":
-		if cur < len(text) {
-			next := nextRuneBoundary(text, cur)
-			text = text[:cur] + text[next:]
-		}
-	case "alt-delete", "ctrl-delete", "alt-d":
-		end := forwardWordBoundary(text, cur)
-		if end > cur {
-			text = text[:cur] + text[end:]
-		}
-	case "ctrl-u":
-		text = ""
-		cur = 0
-	case "ctrl-k":
-		text = text[:cur]
-	default:
-		if utf8.RuneCountInString(k) == 1 {
-			r, _ := utf8.DecodeRuneInString(k)
-			if r >= 32 && r != 127 && len([]rune(text)) < 512 {
-				text = text[:cur] + k + text[cur:]
-				cur += len(k)
-			}
-		}
 	}
+	if k == "ctrl-a" {
+		// The query has no selection model, so Ctrl-A means line start here.
+		k = "home"
+	}
+	text, cur, _ = editLineKey(text, cur, k, editConfig{maxRunes: 512})
 	changed := text != b.findText
 	b.findText = text
 	if cur > len(text) {

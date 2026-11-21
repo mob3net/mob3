@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/grafana/sobek"
 )
@@ -310,15 +309,10 @@ func (b *Browser) consoleCyclePane(dir int) {
 }
 
 // handleConsoleInputKey edits the one-line JavaScript input row.
+// handleConsoleInputKey edits the one-line JavaScript input row.
 func (b *Browser) handleConsoleInputKey(k string) bool {
 	text := b.consoleText
 	cur := b.consoleCursor
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(text) {
-		cur = len(text)
-	}
 	switch k {
 	case "esc":
 		// Leave the input first; a second Esc closes the console.
@@ -345,54 +339,12 @@ func (b *Browser) handleConsoleInputKey(k string) bool {
 			text = next
 			cur = len(text)
 		}
-	case "left", "ctrl-b":
-		cur = prevRuneBoundary(text, cur)
-	case "right", "ctrl-f":
-		cur = nextRuneBoundary(text, cur)
-	case "alt-b", "ctrl-left", "alt-left":
-		cur = prevWordBoundary(text, cur)
-	case "alt-f", "ctrl-right", "alt-right":
-		cur = nextWordBoundary(text, cur)
-	case "home", "ctrl-a":
-		cur = 0
-	case "end", "ctrl-e":
-		cur = len(text)
-	case "backspace":
-		if cur > 0 {
-			prev := prevRuneBoundary(text, cur)
-			text = text[:prev] + text[cur:]
-			cur = prev
-		}
-	case "alt-backspace", "ctrl-backspace", "ctrl-w":
-		cut := prevWordBoundary(text, cur)
-		if cut < cur {
-			text = text[:cut] + text[cur:]
-			cur = cut
-		}
-	case "delete":
-		if cur < len(text) {
-			next := nextRuneBoundary(text, cur)
-			text = text[:cur] + text[next:]
-		}
-	case "alt-delete", "ctrl-delete", "alt-d":
-		end := forwardWordBoundary(text, cur)
-		if end > cur {
-			text = text[:cur] + text[end:]
-		}
-	case "ctrl-u":
-		text = ""
-		cur = 0
-	case "ctrl-k":
-		text = text[:cur]
-	default:
-		if utf8.RuneCountInString(k) == 1 {
-			r, _ := utf8.DecodeRuneInString(k)
-			if r >= 32 && r != 127 && len([]rune(text)) < 8192 {
-				text = text[:cur] + k + text[cur:]
-				cur += len(k)
-			}
-		}
 	}
+	if k == "ctrl-a" {
+		// The input has no selection model, so Ctrl-A means line start here.
+		k = "home"
+	}
+	text, cur, _ = editLineKey(text, cur, k, editConfig{maxRunes: 8192})
 	b.consoleText = text
 	if cur > len(text) {
 		cur = len(text)
@@ -1751,81 +1703,11 @@ func dialogPromptKey(d *jsDialog, k string) (text string, cursor int, done, ok b
 		return text, cursor, true, true
 	case "esc", "ctrl-c":
 		return text, cursor, true, false
-	case "left":
-		if d.selectAll {
-			cursor = 0
-			d.selectAll = false
-		} else {
-			cursor = prevRuneBoundary(text, cursor)
-		}
-	case "right":
-		if d.selectAll {
-			cursor = len(text)
-			d.selectAll = false
-		} else {
-			cursor = nextRuneBoundary(text, cursor)
-		}
-	case "home":
-		cursor = 0
-		d.selectAll = false
-	case "end":
-		cursor = len(text)
-		d.selectAll = false
-	case "ctrl-a":
-		d.selectAll = true
-		cursor = len(text)
-	case "backspace":
-		if d.selectAll {
-			text = ""
-			cursor = 0
-			d.selectAll = false
-		} else if cursor > 0 {
-			prev := prevRuneBoundary(text, cursor)
-			text = text[:prev] + text[cursor:]
-			cursor = prev
-		}
-	case "delete":
-		if d.selectAll {
-			text = ""
-			cursor = 0
-			d.selectAll = false
-		} else if cursor < len(text) {
-			next := nextRuneBoundary(text, cursor)
-			text = text[:cursor] + text[next:]
-		}
-	case "ctrl-u":
-		text = ""
-		cursor = 0
-		d.selectAll = false
-	case "ctrl-w":
-		if d.selectAll {
-			text = ""
-			cursor = 0
-			d.selectAll = false
-			break
-		}
-		before := strings.TrimRight(text[:cursor], " ")
-		cut := 0
-		if i := strings.LastIndexAny(before, " /"); i >= 0 {
-			cut = i + 1
-		}
-		text = text[:cut] + text[cursor:]
-		cursor = cut
-	default:
-		if utf8.RuneCountInString(k) == 1 {
-			r, _ := utf8.DecodeRuneInString(k)
-			if r >= 32 && r != 127 {
-				if d.selectAll {
-					text = k
-					cursor = len(k)
-					d.selectAll = false
-				} else {
-					text = text[:cursor] + k + text[cursor:]
-					cursor += len(k)
-				}
-			}
-		}
 	}
+	text, cursor, _ = editLineKey(text, cursor, k, editConfig{
+		selAll:            &d.selectAll,
+		collapseSelection: true,
+	})
 	return text, cursor, false, false
 }
 

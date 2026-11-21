@@ -1795,7 +1795,9 @@ the download popup instead.</p>
 <p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through
 links and form controls. <b>Ctrl-A</b> selects the whole value; typing,
 <b>Backspace</b> or <b>Delete</b> replaces it, and moving the caret cancels the
-selection. <b>Ctrl-U</b> clears the field. <b>Enter</b> submits, <b>Esc</b> leaves, <b>Space</b>
+selection. <b>Ctrl-U</b> clears the field, <b>Ctrl-K</b> deletes to the end,
+and <b>Ctrl-B</b>/<b>Ctrl-F</b>, <b>Alt-B</b>/<b>Alt-F</b> and <b>Ctrl-W</b>
+edit by word. <b>Enter</b> submits, <b>Esc</b> leaves, <b>Space</b>
 or <b>Enter</b> activates a focused checkbox, radio, select, button or link,
 and arrows change radio groups, selects and ranges (<b>h</b>/<b>l</b> and
 <b>j</b>/<b>k</b> also work there). Checkboxes,

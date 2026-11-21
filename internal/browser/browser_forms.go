@@ -1208,23 +1208,21 @@ func (b *Browser) handleInputKey(k string) bool {
 	if cur < 0 || cur > len(value) {
 		cur = len(value)
 	}
-	all := b.inputSelectAll
-	if k != "ctrl-a" {
-		b.inputSelectAll = false
-	}
 	switch k {
 	case "ctrl-a":
 		b.inputSelectAll = true
 		return false
 	case "esc":
+		b.inputSelectAll = false
 		b.setInputFocus(nil)
 		b.status = exitHint
 		return false
 	case "enter":
 		if n.Tag == "textarea" {
+			all := b.inputSelectAll
+			b.inputSelectAll = false
 			if all {
-				value = ""
-				cur = 0
+				value, cur = "", 0
 			}
 			if utf8.RuneCountInString(value) < 2048 && !inputAtMaxLength(n, value) {
 				n.InputCursor = cur + 1
@@ -1232,132 +1230,60 @@ func (b *Browser) handleInputKey(k string) bool {
 			}
 			return false
 		}
+		b.inputSelectAll = false
 		b.submitInput()
 		return false
-	case "left":
-		n.InputCursor = prevRuneBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "right":
-		n.InputCursor = nextRuneBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "home":
-		if n.Tag == "textarea" {
-			cur = inputLineStart(value, cur)
-		} else {
-			cur = 0
-		}
-		n.InputCursor = cur
-		b.refreshInputCursor(n)
-		return false
-	case "end":
-		if n.Tag == "textarea" {
-			cur = inputLineEnd(value, cur)
-		} else {
-			cur = len(value)
-		}
-		n.InputCursor = cur
-		b.refreshInputCursor(n)
-		return false
-	case "up":
-		if n.Tag == "textarea" {
-			n.InputCursor = textareaVerticalOffset(value, cur, -1)
-			b.refreshInputCursor(n)
-		}
-		return false
-	case "down":
-		if n.Tag == "textarea" {
-			n.InputCursor = textareaVerticalOffset(value, cur, 1)
-			b.refreshInputCursor(n)
-		}
-		return false
-	case "ctrl-b":
-		n.InputCursor = prevRuneBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "ctrl-f":
-		n.InputCursor = nextRuneBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "alt-b", "ctrl-left", "alt-left":
-		n.InputCursor = prevWordBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "alt-f", "ctrl-right", "alt-right":
-		n.InputCursor = nextWordBoundary(value, cur)
-		b.refreshInputCursor(n)
-		return false
-	case "backspace":
-		if all {
-			n.InputCursor = 0
-			b.setInputValue(n, "")
-			return false
-		}
-		if cur > 0 {
-			prev := prevRuneBoundary(value, cur)
-			n.InputCursor = prev
-			b.setInputValue(n, value[:prev]+value[cur:])
-		}
-		return false
-	case "alt-backspace", "ctrl-backspace", "ctrl-w":
-		if all {
-			n.InputCursor = 0
-			b.setInputValue(n, "")
-			return false
-		}
-		cut := prevWordBoundary(value, cur)
-		if cut < cur {
-			n.InputCursor = cut
-			b.setInputValue(n, value[:cut]+value[cur:])
-		}
-		return false
-	case "delete":
-		if all {
-			n.InputCursor = 0
-			b.setInputValue(n, "")
-			return false
-		}
-		if cur < len(value) {
-			next := nextRuneBoundary(value, cur)
-			n.InputCursor = cur
-			b.setInputValue(n, value[:cur]+value[next:])
-		}
-		return false
-	case "alt-delete", "ctrl-delete", "alt-d":
-		if all {
-			n.InputCursor = 0
-			b.setInputValue(n, "")
-			return false
-		}
-		end := forwardWordBoundary(value, cur)
-		if end > cur {
-			n.InputCursor = cur
-			b.setInputValue(n, value[:cur]+value[end:])
-		}
-		return false
-	case "ctrl-u":
-		n.InputCursor = 0
-		b.setInputValue(n, "")
-		return false
 	case "tab":
+		b.inputSelectAll = false
 		b.tabStep(1)
 		return false
 	case "backtab":
+		b.inputSelectAll = false
 		b.tabStep(-1)
 		return false
 	case "ctrl-c":
+		b.inputSelectAll = false
 		return true
-	}
-	if utf8.RuneCountInString(k) == 1 {
-		r, _ := utf8.DecodeRuneInString(k)
-		if r >= 32 && r != 127 && len([]rune(value)) < 2048 && !inputAtMaxLength(n, value) {
-			if all {
-				value = ""
-				cur = 0
+	case "home":
+		if n.Tag == "textarea" {
+			b.inputSelectAll = false
+			n.InputCursor = inputLineStart(value, cur)
+			b.refreshInputCursor(n)
+			return false
+		}
+	case "end":
+		if n.Tag == "textarea" {
+			b.inputSelectAll = false
+			n.InputCursor = inputLineEnd(value, cur)
+			b.refreshInputCursor(n)
+			return false
+		}
+	case "up", "down":
+		b.inputSelectAll = false
+		if n.Tag == "textarea" {
+			delta := -1
+			if k == "down" {
+				delta = 1
 			}
-			n.InputCursor = cur + len(k)
-			b.setInputValue(n, value[:cur]+k+value[cur:])
+			n.InputCursor = textareaVerticalOffset(value, cur, delta)
+			b.refreshInputCursor(n)
+		}
+		return false
+	}
+	maxRunes := 2048
+	if limit := maxLength(n); limit > 0 && limit < maxRunes {
+		maxRunes = limit
+	}
+	newValue, newCur, handled := editLineKey(value, cur, k, editConfig{
+		selAll:   &b.inputSelectAll,
+		maxRunes: maxRunes,
+	})
+	if handled {
+		n.InputCursor = newCur
+		if newValue != value {
+			b.setInputValue(n, newValue)
+		} else {
+			b.refreshInputCursor(n)
 		}
 	}
 	return false
