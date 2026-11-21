@@ -98,9 +98,10 @@ evicted first, and a page heavier than half the budget is never cached. When a
 heavy cached page is evicted, one collection plus scavenge runs between frames
 so its memory returns to the OS.
 
-`-mem-limit` (512 MB by default) sets a soft limit on the Go heap, making the
-runtime collect harder as memory approaches it; `0` leaves the runtime default
-in place. These limits are best-effort resource bounds, not a sandbox.
+`-mem-limit` sets an optional soft limit on the Go heap, making the runtime
+collect harder as memory approaches it. It is off by default (`0`), so the Go
+runtime default and any `GOMEMLIMIT` environment setting apply. These limits are
+best-effort resource bounds, not a sandbox.
 
 ## JavaScript safety limits
 

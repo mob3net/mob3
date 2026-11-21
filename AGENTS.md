@@ -1487,15 +1487,15 @@ Standard Go layout:
   default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
   the CPU timeout in place). Exceeding the budget interrupts the script with an
   error.
-- **Process memory limit:** `-mem-limit` (512 MB by default) applies a soft
-  heap limit with `debug.SetMemoryLimit`, so the runtime collects harder as the
-  heap approaches it instead of letting the previous peak become the new floor.
-  It is advice, not an allocation cap: it must stay above the working set (a
-  heavy page plus the history cache) or the collector runs continuously. `0`
-  leaves the Go runtime default untouched, which still honours a `GOMEMLIMIT`
-  from the environment at startup; a limit set later (including from
-  `about:config`) replaces it. The limit is process-wide and applies to dump
-  and MCP runs too.
+- **Process memory limit:** `-mem-limit` is off by default (`0`), which leaves
+  the Go runtime default in place, including `GOGC` and any `GOMEMLIMIT` from
+  the environment. A positive value applies a soft heap limit with
+  `debug.SetMemoryLimit`, so the runtime collects harder as the heap approaches
+  it instead of letting the previous peak become the new floor. It is advice,
+  not an allocation cap: it must stay above the working set (a heavy page plus
+  the history cache) or the collector runs continuously. A limit set later
+  (including from `about:config`) replaces `GOMEMLIMIT`. The flag is
+  process-wide and applies to dump and MCP runs too.
 - **Scavenge after eviction:** when the history cache evicts a page holding at
   least a quarter of its budget, the browser requests exactly one
   `debug.FreeOSMemory()` (a collection plus scavenge) and runs it between

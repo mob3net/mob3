@@ -38,7 +38,7 @@ func Run(args []string) int {
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
-	memLimit := fs.Int("mem-limit", int(defaultMemoryLimitBytes>>20), "soft process memory limit in MB (0 uses the Go default)")
+	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB (0 uses the Go default)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
