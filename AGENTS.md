@@ -1299,7 +1299,11 @@ Standard Go layout:
   Elements expose `baseURI`, `clientTop`/`clientLeft`, `nodeValue` (null),
   `isSameNode`/`isEqualNode`, `hasAttributes`, attribute-node methods,
   `checkVisibility`, element scroll no-ops, pointer-capture no-ops,
-  `requestFullscreen`, and `shadowRoot` (null). `DOMParser` parses HTML into a
+  `requestFullscreen`, and `shadowRoot` (null). `document.baseURI` follows the
+  document's `<base>` element (the same URL element baseURI uses, without the
+  page fragment), so script-built API URLs such as
+  `new URL("api/i18n", document.baseURI)` stay under the mount point even when
+  the page was opened at `#/`. `DOMParser` parses HTML into a
   detached document; `XMLSerializer` uses the HTML serializer; `DataTransfer`
   is in-memory; `document.startViewTransition` runs its callback immediately.
   `MessageChannel` delivers `postMessage` through the timer queue;

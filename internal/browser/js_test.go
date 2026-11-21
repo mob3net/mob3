@@ -1636,3 +1636,22 @@ func TestJSConsoleKeepsErrorStack(t *testing.T) {
 		t.Fatalf("console log dropped the error stack: %q", log)
 	}
 }
+
+func TestDocumentBaseURIUsesBaseElement(t *testing.T) {
+	// A page opened at "#/" must still expose the <base> the server declared,
+	// without the fragment, so script-built API URLs do not become ".../#/api".
+	u, _ := url.Parse("https://example.com/#/files")
+	base, _ := url.Parse("https://example.com/")
+	doc := ParseHTML(`<html><head><base href="/"></head><body></body></html>`)
+	page := &Page{URL: u, Base: base, Root: doc, Title: "test",
+		Scripts: []Script{{Code: `
+			document.title = document.baseURI + "|" + new URL("api/i18n", document.baseURI).href;
+		`, Src: "inline script"}}}
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.startJS(page)
+	want := "https://example.com/|https://example.com/api/i18n"
+	if page.Title != want {
+		t.Fatalf("baseURI resolution = %q, want %q", page.Title, want)
+	}
+}

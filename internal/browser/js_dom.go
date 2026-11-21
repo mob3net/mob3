@@ -1776,8 +1776,17 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		}
 		return j.currentScript
 	}, nil)
-	if j.page != nil && j.page.URL != nil {
-		base := j.page.URL.String()
+	// document.baseURI follows the <base> element the page declares, like the
+	// element baseURI does. Falling back to the document URL would keep the
+	// fragment in it, so a script that resolves API URLs against baseURI would
+	// build ".../#/api" and request the page itself instead of the endpoint.
+	if j.page != nil {
+		base := ""
+		if j.page.Base != nil {
+			base = j.page.Base.String()
+		} else if j.page.URL != nil {
+			base = j.page.URL.String()
+		}
 		j.accessor(o, "baseURI", func() sobek.Value { return j.vm.ToValue(base) }, nil)
 	}
 	_ = o.Set("styleSheets", j.vm.NewArray())
