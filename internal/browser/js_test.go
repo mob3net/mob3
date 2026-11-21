@@ -1772,3 +1772,20 @@ func TestScriptInjectedStyleApplies(t *testing.T) {
 	}
 	t.Fatal("BOX text not found")
 }
+
+func TestJSScriptInnerHTMLIsRawText(t *testing.T) {
+	page := newJSPage(`<html><body><p id="out"></p></body></html>`, `
+		var s = document.createElement("script");
+		s.innerHTML = "for (var r = 0; r < n; r++) { total += r; }";
+		var d = document.createElement("div");
+		d.innerHTML = "<b>bold</b>";
+		document.getElementById("out").textContent =
+			s.textContent + "|" + d.querySelector("b").textContent;
+	`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	want := "for (var r = 0; r < n; r++) { total += r; }|bold"
+	if got := page.Root.FindFirst("p").TextContent(); got != want {
+		t.Fatalf("innerHTML = %q, want %q (log: %s)", got, want, strings.Join(b.jsLog, "; "))
+	}
+}
