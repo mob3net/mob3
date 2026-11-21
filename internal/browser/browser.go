@@ -101,6 +101,9 @@ type Browser struct {
 	prev    []string
 	gfx     *gfxRenderer
 	bigText bool
+	// scaledLayout records whether the current layout was built with kitty
+	// scaled text, so draw can rebuild when an overlay toggles it.
+	scaledLayout bool
 	// bigTextBlocked disables kitty scaled text for a page whose scaled runs
 	// overlap neighbouring columns.
 	bigTextBlocked bool
@@ -808,7 +811,7 @@ func (b *Browser) rebuild() {
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	start := time.Now()
-	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText
+	b.bigText = b.scaledTextWanted()
 	root, author := b.page.Root, b.page.Author
 	if b.reader && b.readerRoot != nil {
 		root, author = b.readerRoot, readerRules
@@ -823,7 +826,7 @@ func (b *Browser) rebuild() {
 	if !b.noDraw && layoutWidth >= 2 {
 		layoutWidth--
 	}
-	b.bigText = b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked
+	b.bigText = b.scaledTextWanted()
 	imagesOff := b.loader != nil && b.loader.noImages
 	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
 	b.layout.BackgroundsOff = b.hideBackgrounds
@@ -843,6 +846,7 @@ func (b *Browser) rebuild() {
 		b.layout.BackgroundsOff = b.hideBackgrounds
 		b.updatePDFPageStarts()
 	}
+	b.scaledLayout = b.bigText
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
@@ -871,6 +875,21 @@ func (b *Browser) rebuild() {
 	if b.loader != nil && b.loader.deferImages && !b.reader && !b.deferredImages {
 		b.startDeferredImageLoad()
 	}
+}
+
+// overlayOpen reports whether a modal window or popup is drawn over the page.
+// Terminal-side graphics composite above the cell grid, so scaled text is
+// disabled while one is open and the layout is rebuilt without it.
+func (b *Browser) overlayOpen() bool {
+	return b.dialog != nil || b.download != nil || b.notice != nil ||
+		b.selectMenu != nil || b.viewMenu != nil
+}
+
+// scaledTextWanted reports whether the page should use kitty scaled text.
+// Modals disable it because terminal-side scaled glyphs composite above the
+// cell grid and would paint over the modal.
+func (b *Browser) scaledTextWanted() bool {
+	return b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked && !b.overlayOpen()
 }
 
 // toggleReader switches between the page and an extracted article view without

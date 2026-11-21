@@ -880,3 +880,25 @@ func TestStatusShortcutUnderlinesErrorE(t *testing.T) {
 		}
 	}
 }
+
+func TestModalDisablesScaledText(t *testing.T) {
+	t.Setenv("TERM", "xterm-kitty")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	b := NewBrowser(40, 10)
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
+	b.rebuild()
+	if !b.bigText {
+		t.Fatal("scaled text should be enabled in kitty by default")
+	}
+	b.HandleKey("X")
+	drawQuiet(b)
+	if b.bigText {
+		t.Fatal("scaled text stayed on while the view modal was open")
+	}
+	b.HandleKey("esc")
+	drawQuiet(b)
+	if !b.bigText {
+		t.Fatal("scaled text did not return after the modal closed")
+	}
+}

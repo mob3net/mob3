@@ -248,6 +248,13 @@ func (b *Browser) draw() {
 		b.drawConsole(w, h)
 		return
 	}
+	// Kitty scaled text is composited by the terminal above the cell grid, so
+	// a modal cannot hide a large heading that runs across it. Rebuild the page
+	// without scaled text while a modal or popup is open, and restore it when
+	// the overlay closes.
+	if b.layout != nil && b.scaledTextWanted() != b.scaledLayout {
+		b.rebuild()
+	}
 	// Deferred image batches keep their layout until the viewport can see them.
 	b.applyPendingImageLayout()
 	fg, bg := b.pageFG(), b.pageBG()

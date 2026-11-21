@@ -495,6 +495,10 @@ Standard Go layout:
   an opaque fixed-chrome fill (a cookie bar or fixed header) is likewise
   painted at normal size: terminal-side scaled text composites above the cell
   grid and would spill large glyphs over the fixed fill that is painted later.
+  While a modal window or popup is open the page is rebuilt without scaled
+  text and restored when it closes, so terminal-side glyphs cannot paint over
+  the modal; this is the text counterpart of native images falling back to
+  half-block art.
 - **No font files:** the terminal font is used for all glyphs; font size affects
   line height and emphasis, not glyph scale outside kitty.
 - **UA page style:** the grid defaults to a white page background and
@@ -1403,7 +1407,9 @@ Standard Go layout:
   the mouse. Clicking the dimmed backdrop also closes the modal. While a modal
   or select popup is open, native inline images are disabled in favour of
   half-block art so terminal image placements cannot paint over the modal;
-  native images return when it closes.
+  native images return when it closes. Kitty scaled text is likewise disabled
+  while a modal is open (the layout is rebuilt without it), because scaled
+  glyphs are terminal-side and would be composited over the modal.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
   block script execution until answered. Alert closes on Enter/Space/Esc;
   confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text
