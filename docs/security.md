@@ -9,6 +9,8 @@
 
 - No sandbox, process isolation, site isolation or permission prompts.
 - No CSP enforcement, certificate warnings or certificate management UI.
+  `-certs` changes which root bundle is trusted; it is not certificate
+  inspection, revocation checking or pinning.
 - No phishing, malware, tracker or fingerprinting protection.
 - No proxy configuration UI.
 - No private/incognito concept: every session is ephemeral, but pages and
@@ -23,10 +25,11 @@ cache, log or download files. Closing MOB³ saves nothing.
   JavaScript state live in memory only.
 - The download popup only shows a `curl` command; it writes nothing.
 - Disk reads are limited to explicit local `file:` pages and their resources,
-  an explicitly supplied `-bookmarks` file, and `/proc/self/statm` for the
-  Linux memory footer.
+  an explicitly supplied `-bookmarks` file, an explicitly supplied `-certs`
+  PEM bundle, and `/proc/self/statm` for the Linux memory footer.
 - OS-level reads by Go's TLS, DNS and timezone libraries are not application
-  storage.
+  storage. By default TLS roots come from the platform store; `-certs` can
+  switch to the CA bundle compiled into the binary or to a named PEM file.
 
 ## Cookies and storage
 
@@ -63,6 +66,17 @@ MOB³ never saves downloads. A download link opens a popup with a
 ready-to-copy `curl` command without fetching the file, except for a `.pdf`
 download, which is fetched and shown in the text viewer. Running the `curl`
 command is your choice and outside MOB³.
+
+## TLS trust store
+
+HTTPS verification uses the platform root store by default. If the platform
+provides no roots at all, the Mozilla NSS bundle compiled into the binary from
+`golang.org/x/crypto/x509roots/fallback` is used automatically.
+`-certs=embedded` selects that same bundle explicitly, replacing a stale
+platform store, and `-certs=FILE.pem` uses a bundle you supply. The embedded
+bundle keeps Mozilla's distrust-after dates, so a constrained root stops
+validating certificates issued after that date. Revocation is still not checked
+in any mode, and there is no certificate UI or warning flow.
 
 ## Automation
 

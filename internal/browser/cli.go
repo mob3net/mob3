@@ -23,6 +23,7 @@ func Run(args []string) int {
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
+	certs := fs.String("certs", "system", "TLS trust store: system, embedded, or a PEM bundle file")
 	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
@@ -121,6 +122,10 @@ func Run(args []string) int {
 	if *ua != "" {
 		loader.userAgent = *ua
 	}
+	if err := loader.SetCertSource(*certs); err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)
+		return 2
+	}
 	var jsMemLimit int64
 	if *jsMemory > 0 {
 		jsMemLimit = int64(*jsMemory) << 20
@@ -217,6 +222,7 @@ func Run(args []string) int {
 		"-zoom":          zoomPercentLabel(zoomFactor),
 		"-color":         onOff(*forceColor),
 		"-no-color":      onOff(*noColor),
+		"-certs":         loader.certSource,
 		"-mcp":           onOff(*mcpMode),
 		"-version":       Version,
 	}

@@ -3,6 +3,7 @@ package browser
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -91,6 +92,14 @@ type Loader struct {
 	userAgent string
 	searchURL string
 	noScripts bool
+	// transport is the stable RoundTripper whose base is replaced when the
+	// certificate source changes; client.Transport always points at it.
+	transport *certTransport
+	// certSource labels the active TLS trust store ("system", "embedded", or a
+	// bundle path) and certPool holds its roots. A nil pool means the platform
+	// store. See SetCertSource.
+	certSource string
+	certPool   *x509.CertPool
 	// historyFn supplies the in-memory session history for about:history.
 	historyFn func() ([]string, int)
 	bookmarks []Bookmark
@@ -250,16 +259,12 @@ func (l *Loader) requestCount() int {
 	return len(l.requests)
 }
 
-// NewLoader creates a loader with cookie support and a sane timeout.
+// NewLoader creates a loader with cookie support and a sane timeout. The
+// platform trust store is used until SetCertSource selects another one; the
+// client's transport is a stable wrapper so that swap never races a request.
 func NewLoader() *Loader {
 	jar := newCookieJar()
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          16,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   15 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
-	}
+	tr := &certTransport{base: newHTTPTransport(nil)}
 	return &Loader{
 		cache:           newResourceCache(defaultResourceCacheLimit),
 		cookies:         jar,
@@ -276,8 +281,10 @@ func NewLoader() *Loader {
 				return nil
 			},
 		},
-		userAgent: defaultUserAgent,
-		searchURL: DefaultSearchURL,
+		userAgent:  defaultUserAgent,
+		searchURL:  DefaultSearchURL,
+		transport:  tr,
+		certSource: CertSourceSystem,
 	}
 }
 
@@ -1641,6 +1648,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
 <tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
+<tr><td><b>-certs</b> string</td><td>TLS trust store: system, embedded, or a PEM bundle file (default "system")</td></tr>
 <tr><td><b>-mcp</b></td><td>run the MCP automation server on stdin/stdout</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>

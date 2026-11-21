@@ -14,6 +14,8 @@ github.com/grafana/sobek v0.0.0-20261119094010-6eceb967bb5b h1:XaKKTIYjMh1fbPVGx
 github.com/grafana/sobek v0.0.0-20261119094010-6eceb967bb5b/go.mod h1:IEklgr8b8AjMvu4Mt9X+6AbAg1d8xcus80/px3NPU18=
 github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef h1:Ch6Q+AZUxDBCVqdkI8FSpFyZDtCVBc2VmejdNrm5rRQ=
 github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef/go.mod h1:nXTWP6+gD5+LUJ8krVhhoeHjvHTutPxMYl5SvkcnJNE=
+golang.org/x/crypto/x509roots/fallback v0.0.0-20261115193255-739070949446 h1:8hk854wkDB8NBK5A42QtEsIeC+alb1soEzMK9BDKaRE=
+golang.org/x/crypto/x509roots/fallback v0.0.0-20261115193255-739070949446/go.mod h1:HPze8vhfG6fO06AM+VSvxRm4E3+5Yk375mgrJ5M2z1E=
 golang.org/x/image v0.48.0 h1:1AvuPcuoOTJpA7s4VZ5umrb90T3So0rkB/bSGmxkxik=
 golang.org/x/image v0.48.0/go.mod h1:mmtg64iqJKGqEgy+r13dfybl85tmxUd2lMnmaiSdWYY=
 golang.org/x/net v0.63.0 h1:HCoTmNh9EpD1PpK8gBNFY4gcTY4N+KQEO8ylfIKqFJ0=

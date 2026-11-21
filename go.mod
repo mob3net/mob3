@@ -8,6 +8,7 @@ require (
 	github.com/go-gfx/oksvg v0.4.0
 	github.com/grafana/sobek v0.0.0-20261119094010-6eceb967bb5b
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20261115193255-739070949446
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.63.0
 	golang.org/x/text v0.44.0

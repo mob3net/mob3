@@ -86,6 +86,9 @@ type Browser struct {
 	loopStopped     bool
 	home            string
 	cliConfig       map[string]string
+	// configNotice shows why an edited about:config value was rejected, such
+	// as an unreadable -certs bundle.
+	configNotice string
 
 	prompt          bool
 	promptText      string

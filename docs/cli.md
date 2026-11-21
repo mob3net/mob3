@@ -40,6 +40,7 @@ falls back to dump mode and prints the rendered page.
 | `-no-color` | off | Disable ANSI colors in dump mode |
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
+| `-certs string` | `system` | TLS trust store: `system`, `embedded`, or a PEM bundle file |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
@@ -142,6 +143,47 @@ so responsive pages reflow. It applies to dump, PNG and MCP runs, is editable in
 always shows the current level as a clickable badge at its far right; clicking
 it opens a window for choosing a preset with the mouse or arrow keys and
 `Enter`.
+
+## TLS certificate store
+
+`-certs` chooses where HTTPS trust comes from:
+
+| Value | Trust store |
+| --- | --- |
+| `system` (default) | The operating system's root certificates, read by Go when a TLS connection needs them; if the system has no roots at all, the embedded bundle is used automatically |
+| `embedded` | The Mozilla NSS root set, compiled into the binary from `golang.org/x/crypto/x509roots/fallback` |
+| `FILE.pem` | A PEM bundle you name; only a regular file is read, capped at 4 MiB |
+
+The embedded bundle is the official one maintained by the Go project: it is
+parsed from Mozilla's NSS trust store and keeps Mozilla's distrust-after dates,
+so a constrained root stops validating certificates issued after that date. It
+is refreshed by bumping the module and re-vendoring, not by editing a data file:
+
+```sh
+go get golang.org/x/crypto/x509roots/fallback@latest
+go mod vendor
+```
+
+The chosen store replaces the operating system store instead of adding to it,
+so the same roots are trusted on every machine. This matters on an operating
+system the vendor no longer updates: its CA package may be missing or years out
+of date, and `-certs=embedded` restores modern HTTPS without touching the rest
+of the system. The automatic fallback covers only a system with *no* roots; an
+old but present CA package is not overridden, which is exactly when the flag is
+needed.
+
+The value can be switched between `system` and `embedded` for the session in
+`about:config`. It applies to every later request, and pooled connections made
+with the previous store are closed. A PEM path is a start-up option only:
+`about:config` is reachable from page navigation, and reading an arbitrary local
+bundle there would give a remote page a local-file read it should not have. An
+unreadable or empty bundle named at startup is an error and the run stops; a
+rejected value in `about:config` keeps the current store and shows the reason
+on the page.
+
+Trust-store choice is not a security boundary: revocation is not checked, and
+there is no certificate UI, pinning or warning flow beyond the connection error
+the request returns.
 
 ## JavaScript and cache limits
 

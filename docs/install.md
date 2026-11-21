@@ -26,6 +26,16 @@ mob3 -version
 Windows users run the Linux binary under WSL. Interactive mode needs a real
 Linux or macOS terminal.
 
+## Old or unsupported systems
+
+The binary is static, so it needs no runtime libraries. A system with no CA
+certificate package at all is handled automatically: the Mozilla NSS root
+bundle maintained by the Go project is compiled in and used when the platform
+has no roots. A system whose CA package is old but present should start with
+`-certs=embedded` to trust that same current bundle instead, or point `-certs`
+at your own PEM file. Both replace the platform store for the session. See
+[TLS certificate store](cli.md#tls-certificate-store).
+
 ## Docker
 
 ```sh

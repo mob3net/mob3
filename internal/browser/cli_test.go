@@ -271,3 +271,24 @@ func TestRunZoomFlag(t *testing.T) {
 		t.Fatalf("invalid -zoom exit code = %d, want 2", code)
 	}
 }
+
+func TestRunCertsFlag(t *testing.T) {
+	code, out := runCaptured(t, []string{
+		"-certs", "embedded", "-dump", "-no-color", "-width", "40",
+		"data:text/html,<p>certs ok</p>",
+	})
+	if code != 0 {
+		t.Fatalf("embedded certs dump exit code = %d", code)
+	}
+	if !strings.Contains(string(out), "certs ok") {
+		t.Fatalf("embedded certs dump output = %q", out)
+	}
+
+	code, _ = runCaptured(t, []string{
+		"-certs", filepath.Join(t.TempDir(), "missing.pem"),
+		"-dump", "data:text/html,<p>x</p>",
+	})
+	if code != 2 {
+		t.Fatalf("missing bundle exit code = %d, want 2", code)
+	}
+}

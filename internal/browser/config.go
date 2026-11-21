@@ -62,6 +62,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
 		{Flag: "-ua", Value: ua, Note: "next request", Editable: true},
 		{Flag: "-search", Value: search, Note: "empty disables search", Editable: true},
+		{Flag: "-certs", Value: b.certSourceLabel(), Note: "system or embedded; PEM path at startup", Editable: true},
 		{Flag: "-mcp", Value: get("-mcp", "off"), Note: "startup"},
 		{Flag: "-version", Value: get("-version", Version), Note: "read only"},
 	}
@@ -93,6 +94,8 @@ func parseOnOff(s string) (bool, bool) {
 
 // applyConfig updates mutable settings from an about:config query.
 func (b *Browser) applyConfig(q url.Values) {
+	// Every visit or apply starts without a leftover error notice.
+	b.configNotice = ""
 	if len(q) == 0 {
 		return
 	}
@@ -190,11 +193,27 @@ func (b *Browser) applyConfig(q url.Values) {
 	if v, ok := q["search"]; ok && len(v) > 0 && b.loader != nil {
 		b.loader.searchURL = strings.TrimSpace(v[0])
 	}
+	if v, ok := q["certs"]; (ok && len(v) > 0) || (form && b.loader != nil) {
+		if b.loader != nil {
+			val := ""
+			if len(v) > 0 {
+				val = v[0]
+			}
+			// Only the built-in sources are accepted here. A PEM path stays a
+			// start-up option so a page that navigates to about:config cannot
+			// make the browser read a local bundle.
+			if !isBuiltinCertSource(val) {
+				b.configNotice = "Certificate source not changed: about:config sets system or embedded; pass a PEM bundle to -certs at startup"
+			} else if err := b.loader.SetCertSource(val); err != nil {
+				b.configNotice = "Certificate source not changed: " + err.Error()
+			}
+		}
+	}
 }
 
 // configPage builds the about:config document.
 func (b *Browser) configPage(u *url.URL, updated bool) *Page {
-	doc := configPageHTML(b.configItems(), updated, b.width, b.viewportHeight(), b.cellW, b.cellH)
+	doc := configPageHTML(b.configItems(), updated, b.configNotice, b.width, b.viewportHeight(), b.cellW, b.cellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
 	if style := root.FindFirst("style"); style != nil {
@@ -203,7 +222,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 	return page
 }
 
-func configPageHTML(items []configItem, updated bool, width, height, cellW, cellH int) string {
+func configPageHTML(items []configItem, updated bool, notice string, width, height, cellW, cellH int) string {
 	var b strings.Builder
 	b.WriteString(`<!DOCTYPE html><html><head><title>Config</title>
 <style>
@@ -217,6 +236,7 @@ input { width: 34em; max-width: 100%; }
 .fixed { color: #57606a; }
 .viewport { background: #f6f8fa; border: 1px solid #d0d7de; padding: 8px 10px; }
 .updated { background: #e6f4ea; border: 1px solid #8cc59b; padding: 8px; }
+.warn { background: #fff3cd; border: 1px solid #d4a72c; padding: 8px; color: #442c00; }
 </style></head><body>
 <h1>Config</h1>
 `)
@@ -231,6 +251,11 @@ input { width: 34em; max-width: 100%; }
 		width, height, width*cellW, height*cellH, cellW, cellH))
 	if updated {
 		b.WriteString(`<p class="updated">Settings updated for this session.</p>`)
+	}
+	if notice != "" {
+		b.WriteString(`<p class="warn">`)
+		b.WriteString(EscapeHTML(notice))
+		b.WriteString(`</p>`)
 	}
 	b.WriteString(`<p>Changes are in memory only and disappear when MOB³ exits.
 Options marked <b>startup</b> cannot be changed without restarting; they are

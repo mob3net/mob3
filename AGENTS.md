@@ -127,7 +127,8 @@ written in Go
   cache, the back/forward page cache and all JS state live in memory only. The
   running browser writes no
   files at all. Disk reads are limited to explicit local `file:` pages
-  and their local resources, an explicitly passed `-bookmarks` file, plus
+  and their local resources, an explicitly passed `-bookmarks` file, an
+  explicitly passed `-certs` PEM bundle, plus
   `/proc/self/statm` for the Linux memory footer; OS-level reads performed by
   Go's TLS, DNS and timezone libraries are not application storage. Do not add
   automatic disk caching or restore-on-start behavior.
@@ -140,9 +141,13 @@ written in Go
   `github.com/srwiley/rasterx` (user-requested SVG support), and their pure-Go
   transitive modules (`regexp2/v2`, `sourcemap`,
   `pprof`, `golang.org/x/image`, `golang.org/x/net`, `golang.org/x/text`,
-  `golang.org/x/sys` for `x/image`'s SIMD rasterizer). No other third-party
-  modules without a new explicit user decision. sobek is pure Go
-  and must not change the single-binary or no-cgo constraints. All dependencies
+  `golang.org/x/sys` for `x/image`'s SIMD rasterizer), plus
+  `golang.org/x/crypto/x509roots/fallback` (user-requested current TLS trust
+  bundle; its own module with no requirements of its own, carrying the
+  Mozilla NSS-derived roots and their distrust-after constraints). No other
+  third-party modules without a new explicit user decision. All of them are
+  pure Go and must not change the single-binary or no-cgo constraints. All
+  dependencies
   are **vendored in `vendor/` and committed**; builds use `-mod=vendor` and need
   no network. Run `go mod vendor` after any `go.mod`/`go.sum` change and keep
   `vendor/modules.txt` in sync.
@@ -161,7 +166,11 @@ written in Go
   `Promise.prototype.constructor`) and leaves the wrapper pending. That broke
   module evaluation with sobek's internal "sync module was not executed
   synchronously" panic. Re-apply the patched block after running
-  `go mod vendor`.
+  `go mod vendor`. `golang.org/x/crypto/x509roots/fallback` is pseudo-versioned
+  separately from `x/crypto`; bump it with
+  `go get golang.org/x/crypto/x509roots/fallback@latest` plus `go mod vendor`
+  so the trust bundle tracks Mozilla, and let govulncheck report stale
+  releases.
 - **SVG is not in core Go.** The standard library and `golang.org/x/image`
   provide no SVG parser or renderer, and there is no known plan to add one.
   MOB³ therefore uses the vendored, pure-Go `github.com/go-gfx/oksvg` (a
@@ -257,6 +266,7 @@ Standard Go layout:
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, module script collection and import map parsing, concurrent foreground and CSS-background image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
+| `certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default), `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`), or a PEM file path (regular file only, read capped at 4 MiB). The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
 | `pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
@@ -824,9 +834,14 @@ Standard Go layout:
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home, js-memory, cache, history-cache,
-  mem-limit, layout-budget, zoom, text-scale, ua, search);
+  mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
   on/off options are checkboxes; options labelled “startup” are read-only, and
-  colour options are “dump only”. Changes are never persisted. The page starts
+  colour options are “dump only”. A rejected value keeps the current setting
+  and shows the reason above the table (an unreadable or empty `-certs`
+  bundle). `certs` accepts only `system` and `embedded` here: `about:config` is
+  reachable from page navigation, so a PEM path stays command-line-only and a
+  remote page cannot make the browser read a local bundle. Changes are never
+  persisted. The page starts
   with the current viewport in characters and pixels (`width*cellW` by
   `viewportHeight*cellH`, using the terminal cell pixels or the 8×16 default)
   and the form uses the same centered `max-width:900px` reading column as
@@ -1681,6 +1696,26 @@ Standard Go layout:
   documented in `README.md`, the built-in help page and `AGENTS.md` whenever it
   changes.
 - HTTPS uses Go’s TLS; there is no certificate UI or proxy configuration UI.
+- **TLS trust store:** `-certs` selects the roots used for HTTPS. `system`
+  (the default) keeps the platform store Go reads; `embedded` uses the official
+  Mozilla NSS bundle from `golang.org/x/crypto/x509roots/fallback`; any other
+  value names a PEM bundle on disk (regular file only, 4 MiB cap, at least one
+  parseable certificate required, or the load fails). The module's `fallback`
+  package is imported too, so `x509.SetFallbackRoots` supplies the same roots
+  when the platform has none at all; a present but stale store is not
+  overridden. The embedded roots keep Mozilla's distrust-after constraints
+  (`AddCertWithConstraint`), so a constrained root stops validating
+  certificates issued after that date. The selected source replaces the
+  platform store instead of merging, so a machine whose CA package is stale or
+  missing verifies modern sites like an updated one. Each source is labelled in
+  `about:config`, where `system` and `embedded` can be switched for the
+  session; a PEM path is command-line-only, because a page can navigate to
+  `about:config` and must not be able to make the browser read a local bundle.
+  A switch applies to later requests and swaps the transport after closing the
+  old idle connections; a rejected value keeps the previous store with the
+  reason shown on the page. The bundle is refreshed by bumping the module and
+  re-vendoring, and is only as fresh as the pinned version. Revocation is not
+  checked in any mode.
 
 ## 7. Build, test and compatibility
 
@@ -1872,6 +1907,10 @@ Standard Go layout:
   copy and wheel scrolling. `y` copies selected page text through OSC 52;
   terminal-native Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API
   remains unsupported.
+- TLS trust is selected by `-certs` but never inspected: there is no revocation
+  checking (CRL/OCSP), certificate UI, pinning, or warning flow beyond the
+  connection error a request returns. The embedded bundle carries only the
+  roots current when the binary was built.
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
