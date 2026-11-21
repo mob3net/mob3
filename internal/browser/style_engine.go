@@ -11,6 +11,9 @@ type styleEngine struct {
 	author     []Rule
 	viewportPx int
 	viewportH  float64
+	// rootFontPx is the font size of the root element, used to resolve rem
+	// lengths. It starts at the initial 16px and follows html's font-size.
+	rootFontPx float64
 	dark       bool
 	deadline   time.Time
 	media      map[string]bool
@@ -88,7 +91,7 @@ func (idx *ruleIndex) candidates(n *Node) []Rule {
 }
 
 func newStyleEngine(author []Rule, viewportPx int) *styleEngine {
-	e := &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx}
+	e := &styleEngine{ua: uaRules, author: author, viewportPx: viewportPx, rootFontPx: defaultStyle().FontSize}
 	e.viewportH = 24 * cellH
 	e.authorIndex = indexRules(filterNormalRules(author))
 	e.authorBefore = filterPseudoRules(author, "before")
@@ -333,6 +336,11 @@ func (e *styleEngine) nodeStyle(n *Node, parent *Style) *Style {
 		}
 	}
 	e.resolveStyleUnits(st)
+	if n.Tag == "html" && st.FontSize > 0 {
+		// rem on the root element itself uses the initial font size; rem in
+		// the rest of the document follows the root's computed size.
+		e.rootFontPx = st.FontSize
+	}
 	if clipHidesContent(st.Clip) {
 		st.Display = "none"
 	}

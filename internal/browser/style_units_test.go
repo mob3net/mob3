@@ -33,7 +33,8 @@ func TestLengthUnitsParse(t *testing.T) {
 		unit Unit
 		v    float64
 	}{
-		{"margin-top", st.Margin[0], UnitREM, 2},
+		// rem resolves to px against the root font size during the cascade.
+		{"margin-top", st.Margin[0], UnitPX, 32},
 		{"margin-right", st.Margin[1], UnitEM, 3},
 		{"margin-bottom", st.Margin[2], UnitPX, 4},
 		{"margin-left", st.Margin[3], UnitCH, 5},
@@ -105,5 +106,28 @@ func TestCalcLengths(t *testing.T) {
 		if l := parseLength(bad, 16); l.Set {
 			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
 		}
+	}
+}
+
+func TestRemUsesRootFontSize(t *testing.T) {
+	doc := ParseHTML(`<html><head><style>
+		html { font-size: 14px; }
+		body { margin: 0; }
+		.box { width: 10rem; margin-left: 1.5rem; padding-left: 1rem; }
+	</style></head><body><div class="box">text</div></body></html>`)
+	rules := ParseStylesheet(`html { font-size: 14px } body { margin: 0 }
+		.box { width: 10rem; margin-left: 1.5rem; padding-left: 1rem }`)
+	ly := BuildLayout(doc, rules, 80)
+	box, _ := findSelectorNode(doc, ".box")
+	st := ly.Styles[box]
+	// 1rem is the root's 14px: 10rem = 140px = 18 cells, 1.5rem = 21px = 3 cells.
+	if got := st.Width.resolveH(80, st.FontSize); got != 18 {
+		t.Fatalf("width:10rem = %d cells, want 18 (root font 14px)", got)
+	}
+	if got := st.Margin[3].resolveH(80, st.FontSize); got != 3 {
+		t.Fatalf("margin-left:1.5rem = %d cells, want 3", got)
+	}
+	if got := st.Padding[3].resolveH(80, st.FontSize); got != 2 {
+		t.Fatalf("padding-left:1rem = %d cells, want 2", got)
 	}
 }

@@ -89,6 +89,21 @@ func resolveLengthLH(l *Length, linePx float64) {
 }
 
 func (e *styleEngine) resolveStyleUnits(st *Style) {
+	// rem resolves against the root element's font size, not a fixed 16px, so
+	// a page that sets html{font-size:14px} (Bulma, many frameworks) gets the
+	// same rem-based margins, padding and widths as a browser.
+	for _, l := range []*Length{
+		&st.TextIndent,
+		&st.Margin[0], &st.Margin[1], &st.Margin[2], &st.Margin[3],
+		&st.Padding[0], &st.Padding[1], &st.Padding[2], &st.Padding[3],
+		&st.Border[0], &st.Border[1], &st.Border[2], &st.Border[3],
+		&st.Width, &st.Height, &st.MinWidth, &st.MaxWidth,
+		&st.MinHeight, &st.MaxHeight,
+		&st.Top, &st.Right, &st.Bottom, &st.Left,
+		&st.FlexBasis, &st.Gap, &st.RowGap,
+	} {
+		resolveLengthREM(l, e.rootFontPx)
+	}
 	lh := st.LineHeight
 	if lh <= 0 {
 		lh = 1
@@ -134,6 +149,13 @@ func (e *styleEngine) resolveStyleUnits(st *Style) {
 	resolveLengthLH(&st.Gap, linePx)
 	resolveViewportLength(&st.RowGap, float64(e.viewportPx), e.viewportH)
 	resolveLengthLH(&st.RowGap, linePx)
+}
+
+// resolveLengthREM converts a rem length to px using the root font size.
+func resolveLengthREM(l *Length, rootPx float64) {
+	if l.Set && !l.Calc && l.U == UnitREM {
+		*l = px(l.V * rootPx)
+	}
 }
 
 // resolveViewportLength converts vw/vh/vmin/vmax lengths to px.
