@@ -32,6 +32,7 @@ key, mouse and form reference for the running build.
 | `E` | Open the full warning or error message that the footer truncated (the `E` in `Error:` is underlined) |
 | `d` | Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere) |
 | `y` | Copy selected text, the current URL when nothing is selected, the download curl command, or the whole active console section |
+| `Y` | Copy the whole rendered page as plain text (no colors or browser chrome) for pasting into a bug report; the first line is a `#` metadata line with URL, sizes, zoom and modes |
 | `H` | Session history |
 | `?` | Help page |
 | `!` | JavaScript console |

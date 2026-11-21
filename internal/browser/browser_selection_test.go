@@ -160,3 +160,72 @@ func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
 		t.Fatalf("status = %q", b.status)
 	}
 }
+
+// TestYankWholePageAsText checks that Y copies the rendered page as plain text
+// with no chrome, colors or terminal escapes.
+func TestYankWholePageAsText(t *testing.T) {
+	root := ParseHTML(`<html><head><style>body{margin:0}p{margin:0}</style></head>` +
+		`<body><p>First line</p><p>Second line</p></body></html>`)
+	u := mustParse(t, "https://example.com/debug")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.url = u
+	b.rebuild()
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+
+	b.HandleKey("Y")
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(decoded)
+	for _, want := range []string{"First line", "Second line"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("yanked page is missing %q:\n%s", want, text)
+		}
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasSuffix(line, " ") {
+			t.Errorf("yanked line keeps trailing spaces: %q", line)
+		}
+	}
+	if !strings.HasPrefix(text, "# url=https://example.com/debug ") {
+		t.Errorf("yanked page has no metadata header:\n%s", text)
+	}
+	if strings.Count(text, "https://example.com/debug") != 1 {
+		t.Errorf("yanked page repeats the URL outside the header:\n%s", text)
+	}
+	for _, want := range []string{
+		"build=", "term=40x10", "page=39x7", "zoom=100%", "dark=off",
+		"reader=off", "js=on", "graphics=none", "cell=8x16", "lines=",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("metadata header is missing %q:\n%s", want, text)
+		}
+	}
+	if strings.ContainsAny(text, "\x1b") {
+		t.Errorf("yanked page includes terminal escapes")
+	}
+	if !strings.HasPrefix(b.status, "Copied page (") {
+		t.Fatalf("status after Y = %q", b.status)
+	}
+}
+
+func TestYankWholePageWithoutPage(t *testing.T) {
+	b := NewBrowser(40, 10)
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	b.HandleKey("Y")
+	if b.status != "Nothing to copy" {
+		t.Fatalf("status = %q, want Nothing to copy", b.status)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("clipboard written without a page: %q", buf.String())
+	}
+}

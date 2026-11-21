@@ -1672,6 +1672,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
 <tr><td><b>d</b></td><td>open the curl download popup for the current PDF (PDF viewer only; does nothing elsewhere)</td></tr>
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, the download curl command, or the active console section</td></tr>
+<tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>

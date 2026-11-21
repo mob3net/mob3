@@ -1128,6 +1128,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.downloadCurrentPDF()
 	case "y":
 		b.copySelection()
+	case "Y":
+		b.copyPageText()
 	case "esc":
 		if b.findText != "" {
 			b.clearFind()

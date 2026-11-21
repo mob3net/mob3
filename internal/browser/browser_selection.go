@@ -212,3 +212,87 @@ func (b *Browser) paintSelection(g *Grid, top, bottom int) {
 		}
 	}
 }
+
+// copyPageText copies the whole rendered page as plain text: the rows -dump
+// would print, with browser chrome, colors and focus highlights left out, so a
+// layout can be pasted into a bug report. The page is painted in chunks and
+// stops once the clipboard budget is reached, keeping a huge document from
+// allocating a full-page grid; the status reports the truncation.
+func (b *Browser) copyPageText() {
+	ly := b.layout
+	if ly == nil || b.page == nil {
+		b.status = "Nothing to copy"
+		return
+	}
+	width := ly.Width
+	if width < 1 {
+		width = b.width
+	}
+	rows := ly.Height
+	if rows < 1 {
+		rows = 1
+	}
+	pageFG := RGB(0x1f, 0x23, 0x28)
+	if ly.Body != nil && ly.Body.Style != nil && ly.Body.Style.Color.Set {
+		pageFG = ly.Body.Style.Color
+	}
+	pageBG := ly.PageBG
+	if !pageBG.Set {
+		pageBG = RGB(255, 255, 255)
+	}
+	const chunkRows = 256
+	var out strings.Builder
+	truncated := false
+	for start := 0; start < rows; start += chunkRows {
+		if out.Len() >= maxClipboardBytes {
+			truncated = true
+			break
+		}
+		h := chunkRows
+		if rows-start < h {
+			h = rows - start
+		}
+		g := NewGrid(width, h, pageFG, pageBG)
+		PaintLayout(g, ly, start, 0, h, nil, pageFG)
+		for _, line := range g.Lines(false) {
+			out.WriteString(line)
+			out.WriteByte('\n')
+		}
+	}
+	text := strings.TrimRight(out.String(), "\n")
+	if text == "" {
+		b.status = "Nothing to copy"
+		return
+	}
+	pageLines := strings.Count(text, "\n") + 1
+	copyTruncated := truncated || len(text) > maxClipboardBytes
+
+	// A single metadata line makes a pasted page self-describing: which URL,
+	// which terminal and page size, and which modes produced the text.
+	url := ""
+	if b.url != nil {
+		url = stripTerminalControls(b.url.String())
+	}
+	if len(url) > 500 {
+		cut := 500
+		for cut > 0 && !utf8.RuneStart(url[cut]) {
+			cut--
+		}
+		url = url[:cut] + "…"
+	}
+	header := fmt.Sprintf(
+		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
+		url, Version, b.width, b.height, width, b.viewportHeight(), rows,
+		zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
+		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.cellW, b.cellH,
+		ly.Truncated, copyTruncated, pageLines)
+	text = header + "\n" + text
+	if !b.copyText(text) {
+		return
+	}
+	if copyTruncated || len(text) > maxClipboardBytes {
+		b.status = fmt.Sprintf("Copied page (%d lines, truncated)", pageLines+1)
+	} else {
+		b.status = fmt.Sprintf("Copied page (%d lines)", pageLines+1)
+	}
+}
