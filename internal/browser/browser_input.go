@@ -1139,6 +1139,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.copySelection()
 	case "Y":
 		b.copyPageText()
+	case "ctrl-y":
+		b.copyViewportText()
 	case "esc":
 		if b.findText != "" {
 			b.clearFind()

@@ -3,6 +3,7 @@ package browser
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -202,7 +203,7 @@ func TestYankWholePageAsText(t *testing.T) {
 		t.Errorf("yanked page repeats the URL outside the header:\n%s", text)
 	}
 	for _, want := range []string{
-		"build=", "term=40x10", "page=39x7", "zoom=100%", "dark=off",
+		"build=", "term=40x10", "page=39x7", "scroll=0", "zoom=100%", "dark=off",
 		"reader=off", "js=on", "graphics=none", "cell=8x16", "lines=",
 	} {
 		if !strings.Contains(text, want) {
@@ -227,5 +228,48 @@ func TestYankWholePageWithoutPage(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Fatalf("clipboard written without a page: %q", buf.String())
+	}
+}
+
+// TestCopyViewportText checks that Ctrl-Y copies only the page rows visible at
+// the current scroll, with the same metadata header as Y.
+func TestCopyViewportText(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&body, "<p>line%02d</p>", i)
+	}
+	root := ParseHTML(`<html><head><style>body{margin:0}p{margin:0}</style></head>` +
+		`<body>` + body.String() + `</body></html>`)
+	u := mustParse(t, "https://example.com/scroll")
+	b := NewBrowser(40, 10)
+	b.page = &Page{URL: u, Base: u, Root: root, Author: fixtureAuthorRules(root)}
+	b.url = u
+	b.rebuild()
+	b.scroll = 20
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+
+	b.HandleKey("ctrl-y")
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(decoded)
+	if !strings.HasPrefix(text, "# url=https://example.com/scroll ") || !strings.Contains(text, "scroll=20") {
+		t.Fatalf("viewport copy has no scroll header:\n%s", text)
+	}
+	if !strings.Contains(text, "line20") || !strings.Contains(text, "line26") {
+		t.Errorf("viewport copy misses visible rows:\n%s", text)
+	}
+	if strings.Contains(text, "line00") || strings.Contains(text, "line27") {
+		t.Errorf("viewport copy includes rows outside the viewport:\n%s", text)
+	}
+	if !strings.HasPrefix(b.status, "Copied viewport (") {
+		t.Fatalf("status after Ctrl-Y = %q", b.status)
 	}
 }

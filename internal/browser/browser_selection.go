@@ -219,6 +219,17 @@ func (b *Browser) paintSelection(g *Grid, top, bottom int) {
 // stops once the clipboard budget is reached, keeping a huge document from
 // allocating a full-page grid; the status reports the truncation.
 func (b *Browser) copyPageText() {
+	b.copyRenderedPage(false)
+}
+
+// copyViewportText copies only the page rows visible at the current scroll
+// position, with the same metadata header, so a bug report can show the frame
+// the user is actually looking at.
+func (b *Browser) copyViewportText() {
+	b.copyRenderedPage(true)
+}
+
+func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	ly := b.layout
 	if ly == nil || b.page == nil {
 		b.status = "Nothing to copy"
@@ -228,9 +239,36 @@ func (b *Browser) copyPageText() {
 	if width < 1 {
 		width = b.width
 	}
-	rows := ly.Height
+	start := 0
+	docRows := ly.Height
+	rows := docRows
+	label := "Copied page"
+	if visibleOnly {
+		label = "Copied viewport"
+		// Anchor fixed and sticky fragments for the frame the user sees.
+		ly.SetFixedScroll(b.scroll)
+		start = b.scroll
+		if start < 0 {
+			start = 0
+		}
+		rows = b.viewportHeight()
+		if rows < 1 {
+			rows = 1
+		}
+		if start >= ly.Height {
+			rows = 0
+		} else if start+rows > ly.Height {
+			rows = ly.Height - start
+		}
+	} else if ly.fixedApplied && ly.fixedScroll != 0 {
+		// A whole-page copy shows fixed and sticky boxes at their flow
+		// positions, not shifted by the current scroll.
+		ly.SetFixedScroll(0)
+		defer ly.SetFixedScroll(b.scroll)
+	}
 	if rows < 1 {
-		rows = 1
+		b.status = "Nothing to copy"
+		return
 	}
 	pageFG := RGB(0x1f, 0x23, 0x28)
 	if ly.Body != nil && ly.Body.Style != nil && ly.Body.Style.Color.Set {
@@ -243,17 +281,17 @@ func (b *Browser) copyPageText() {
 	const chunkRows = 256
 	var out strings.Builder
 	truncated := false
-	for start := 0; start < rows; start += chunkRows {
+	for off := 0; off < rows; off += chunkRows {
 		if out.Len() >= maxClipboardBytes {
 			truncated = true
 			break
 		}
 		h := chunkRows
-		if rows-start < h {
-			h = rows - start
+		if rows-off < h {
+			h = rows - off
 		}
 		g := NewGrid(width, h, pageFG, pageBG)
-		PaintLayout(g, ly, start, 0, h, nil, pageFG)
+		PaintLayout(g, ly, start+off, 0, h, nil, pageFG)
 		for _, line := range g.Lines(false) {
 			out.WriteString(line)
 			out.WriteByte('\n')
@@ -281,9 +319,9 @@ func (b *Browser) copyPageText() {
 		url = url[:cut] + "…"
 	}
 	header := fmt.Sprintf(
-		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
-		url, Version, b.width, b.height, width, b.viewportHeight(), rows,
-		zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
+		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d scroll=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
+		url, Version, b.width, b.height, width, b.viewportHeight(), docRows,
+		b.scroll, zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
 		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.cellW, b.cellH,
 		ly.Truncated, copyTruncated, pageLines)
 	text = header + "\n" + text
@@ -291,8 +329,8 @@ func (b *Browser) copyPageText() {
 		return
 	}
 	if copyTruncated || len(text) > maxClipboardBytes {
-		b.status = fmt.Sprintf("Copied page (%d lines, truncated)", pageLines+1)
+		b.status = fmt.Sprintf("%s (%d lines, truncated)", label, pageLines+1)
 	} else {
-		b.status = fmt.Sprintf("Copied page (%d lines)", pageLines+1)
+		b.status = fmt.Sprintf("%s (%d lines)", label, pageLines+1)
 	}
 }

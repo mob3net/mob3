@@ -939,11 +939,13 @@ Standard Go layout:
   the download popup's curl command, or the whole active console section,
   and clear the page highlight, `Y` copy the whole rendered page as plain
   text (the `-dump` rows without colors or browser chrome, capped by the
-  clipboard limit) for pasting into a bug report. The `Y` text starts with
-  one `#` metadata line: `url`, `build`, `term` (columns×rows), `page`
-  (layout columns×viewport rows), `rows` (document height), `zoom`, `dark`,
-  `reader`, `js`, `graphics`, `cell` (pixels), `layout_truncated`,
-  `copy_truncated` and `lines`,
+  clipboard limit) for pasting into a bug report. `Ctrl-Y` copies only the
+  page rows visible at the current scroll with the same metadata line, so a
+  report can show what is actually on screen. The `#` metadata line carries
+  `url`, `build`, `term` (columns×rows), `page` (layout columns×viewport rows),
+  `rows` (document height), `scroll` (top visible document row), `zoom`,
+  `dark`, `reader`, `js`, `graphics`, `cell` (pixels), `layout_truncated`,
+  `copy_truncated` and `lines` (copied page rows),
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting, while `:q` plus Enter exits
   immediately. The quit confirmation takes priority over a hovered link in the
