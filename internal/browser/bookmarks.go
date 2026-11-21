@@ -120,21 +120,16 @@ func addBookmark(out *[]Bookmark, a *Node, folder []string) {
 // bookmarksPageHTML renders imported bookmarks grouped by folder.
 func bookmarksPageHTML(bookmarks []Bookmark) string {
 	var b strings.Builder
-	b.WriteString(`<!DOCTYPE html><html><head><title>Bookmarks</title>
-<style>
-body { margin: 16px; max-width: 900px; }
-h1 { font-size: 32px; }
-h3 { margin: 16px 0 4px; }
-li { margin: 4px 0; }
-.url { color: #57606a; font-size: 14px; }
-</style></head><body>
-<h1>Bookmarks</h1>
+	b.WriteString(`<h1>Bookmarks</h1>
 <p>Imported from a Netscape bookmark file. Bookmarks live in memory only and
 disappear when MOB³ exits.</p>
 `)
+	const css = `h3 { margin: 16px 0 4px; }
+li { margin: 4px 0; }
+`
 	if len(bookmarks) == 0 {
-		b.WriteString(`<p>No bookmarks imported. Start MOB³ with <b>-bookmarks file.html</b>.</p></body></html>`)
-		return b.String()
+		b.WriteString(`<p>No bookmarks imported. Start MOB³ with <b>-bookmarks file.html</b>.</p>`)
+		return appPageHTML("Bookmarks — MOB³", css, b.String())
 	}
 	order := make([]string, 0, 8)
 	groups := make(map[string][]Bookmark)
@@ -159,12 +154,11 @@ disappear when MOB³ exits.</p>
 			b.WriteString(EscapeHTML(bm.URL))
 			b.WriteString(`">`)
 			b.WriteString(EscapeHTML(bm.Title))
-			b.WriteString(`</a> <span class="url">`)
+			b.WriteString(`</a> <span class="muted">`)
 			b.WriteString(EscapeHTML(bm.URL))
 			b.WriteString(`</span></li>`)
 		}
 		b.WriteString(`</ul>`)
 	}
-	b.WriteString(`</body></html>`)
-	return b.String()
+	return appPageHTML("Bookmarks — MOB³", css, b.String())
 }

@@ -266,6 +266,7 @@ Standard Go layout:
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, module script collection and import map parsing, concurrent foreground and CSS-background image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
+| `pages.go` | The shell and shared stylesheet (`appPageCSS`) for MOB³'s own pages: one centered 900px reading column, a 32px `h1`, and table, muted, warning and `pre` styles, with page-specific CSS appended by `appPageHTML`. Help, config, history, bookmarks, the blocked page and the cannot-display and load-error pages use it; the start page keeps the reader column and PDF pages keep their content-sized boxes. |
 | `certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default), `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`), or a PEM file path (regular file only, read capped at 4 MiB). The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `bookmarks.go` | Netscape bookmark HTML parser, size-capped file import, and the `about:bookmarks` page renderer. |
 | `pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
@@ -1042,6 +1043,13 @@ Standard Go layout:
   fallback) and works with JavaScript disabled.
   `about:history` uses the centered `max-width:900px` column shared with
   `about:help`.
+- **Built-in page styling:** the generated help, config, history, bookmarks,
+  blocked (“Site blocked”) and error pages share `appPageCSS`/`appPageHTML`:
+  one centered 900px reading column, a 32px `h1`, and the same table, muted,
+  warning and `pre` styles. Page-specific rules are appended (config form
+  controls, the blocked page's red heading and blue retry box, bookmark folder
+  spacing), and page-derived text is escaped by the shell. The start page keeps
+  its reader-mode column and the PDF viewer keeps its content-sized page boxes.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
   command-line flags, keys, mouse and forms) and shows the current build

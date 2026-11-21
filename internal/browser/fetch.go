@@ -441,10 +441,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 				downloadName = unescaped
 			}
 		}
-		text = "<html><head><title>" + EscapeHTML(mediaType) + "</title></head><body>" +
-			"<h2>Cannot display " + EscapeHTML(mediaType) + "</h2>" +
-			"<p>The browser only renders HTML pages. The URL was:</p><pre>" +
-			EscapeHTML(finalURL.String()) + "</pre></body></html>"
+		text = cannotDisplayPageHTML(mediaType, finalURL)
 	}
 	root := ParseHTML(text)
 	if !l.noScripts {
@@ -522,27 +519,23 @@ func blockedPageHTML(rawURL, reason string, status int) string {
 	if reason == "" {
 		reason = "site protection"
 	}
-	return `<!DOCTYPE html><html><head><title>Site blocked</title>
-<style>
-body { margin: 16px; max-width: 900px; }
-h1 { font-size: 32px; color: #b42318; }
-.warn { background:#fff3cd; border:1px solid #d4a72c; padding:8px; }
-.try { margin: 16px 0; padding: 8px; border: 1px solid #2f6feb; background: #eef4ff; }
-</style></head><body>
-<h1>Site blocked</h1>
+	body := `<h1>Site blocked</h1>
 <p class="warn">This site blocked MOB³ or requires a browser check that it
 cannot complete. Common causes are Cloudflare, CAPTCHA, anti-bot or firewall
 protection, and login protections that need a full browser with
 JavaScript/WASM, fingerprinting and browser APIs.</p>
-<p>Detected: <b>` + EscapeHTML(reason) + `</b>` + ` (HTTP ` + strconv.Itoa(status) + `).</p>
+<p>Detected: <b>` + EscapeHTML(reason) + `</b> (HTTP ` + strconv.Itoa(status) + `).</p>
 <p class="try"><a href="about:retry">Try anyway</a> — reload this URL without block
 detection and run the challenge page's scripts. This is a one-shot bypass; the
 site may still refuse access. Challenge pages can run arbitrary script, and
 MOB³ is not a secure browser, so only do this if you trust the site.</p>
 <p>The requested page was not loaded. Try a different source, use the site's
 direct or alternative URL, or open it in a full browser.</p>
-<p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>
-</body></html>`
+<p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>`
+	const css = `h1 { color: #b42318; }
+.try { margin: 16px 0; padding: 8px; border: 1px solid #2f6feb; background: #eef4ff; }
+`
+	return appPageHTML("Site blocked", css, body)
 }
 
 // importMapJSON is the subset of the import map format the engine reads.
@@ -661,7 +654,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	case "blank":
 		doc = "<html><body></body></html>"
 	case "help":
-		doc = strings.Replace(helpPageHTML, "{{VERSION}}", EscapeHTML(Version), 1)
+		doc = helpPageHTML()
 	case "history":
 		var urls []string
 		current := -1
@@ -1603,18 +1596,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 	return changed
 }
 
-const helpPageHTML = `<!DOCTYPE html>
-<html><head><title>Help — MOB³</title>
-<style>
-body { max-width: 900px; margin: 8px auto; }
-h1 { font-size: 32px; margin-bottom: 4px; }
-table { margin: 8px 0 16px; }
-th, td { padding: 3px 10px; text-align: left; border-bottom: 1px solid #d0d7de; }
-th { color: #57606a; }
-.muted { color: #57606a; }
-.warn { background:#fff3cd; border:1px solid #d4a72c; padding:8px; color:#442c00; }
-</style></head><body>
-<h1>MOB³ Help</h1>
+const helpPageBody = `<h1>MOB³ Help</h1>
 <p class="muted">Version <b>{{VERSION}}</b> · a small terminal browser. Keys are vim-first.</p>
 <p class="muted">MOB³ keeps history, cookies, storage and caches in memory only.
 Nothing is written to disk.</p>
@@ -1851,19 +1833,18 @@ or the Tools scrollback — because selecting long output by dragging is
 awkward. Use <b>Shift</b>-drag when you only want part of it. Script
 <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open modal dialogs.</p>
 
-<p><a href="about:start">Back to the start page</a></p>
-</body></html>`
+<p><a href="about:start">Back to the start page</a></p>`
+
+// helpPageHTML wraps the help body in the shared page shell.
+func helpPageHTML() string {
+	return appPageHTML("Help — MOB³", "",
+		strings.Replace(helpPageBody, "{{VERSION}}", EscapeHTML(Version), 1))
+}
 
 // historyPageHTML renders the in-memory session history as clickable links.
 func historyPageHTML(urls []string, current int) string {
 	var b strings.Builder
-	b.WriteString(`<!DOCTYPE html><html><head><title>History</title>
-<style>
-body { margin: 8px auto; max-width: 900px; }
-h1 { font-size: 32px; }
-li { margin: 6px 0; }
-</style></head><body>
-<h1>Session history</h1>
+	b.WriteString(`<h1>Session history</h1>
 <p>Pages visited in this session, most recent first. History is kept in
 memory only and disappears when MOB³ exits.</p>
 `)
@@ -1895,8 +1876,7 @@ memory only and disappears when MOB³ exits.</p>
 	if len(urls) > limit {
 		b.WriteString(`<p>Only the most recent 50 entries are shown.</p>`)
 	}
-	b.WriteString(`</body></html>`)
-	return b.String()
+	return appPageHTML("History — MOB³", "li { margin: 6px 0; }\n", b.String())
 }
 
 const startPageHTML = `<!DOCTYPE html>

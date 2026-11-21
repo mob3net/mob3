@@ -614,7 +614,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.status = "Error: " + res.err.Error()
 		b.finishProgress()
 		if b.page == nil {
-			doc := "<html><body><h2>Could not load page</h2><p>" + EscapeHTML(res.err.Error()) + "</p></body></html>"
+			doc := loadErrorPageHTML(res.err.Error())
 			root := ParseHTML(doc)
 			b.page = &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
 			b.url = res.u

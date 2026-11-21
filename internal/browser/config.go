@@ -224,21 +224,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 
 func configPageHTML(items []configItem, updated bool, notice string, width, height, cellW, cellH int) string {
 	var b strings.Builder
-	b.WriteString(`<!DOCTYPE html><html><head><title>Config</title>
-<style>
-body { margin: 8px auto; max-width: 900px; }
-h1 { font-size: 32px; }
-table { border-collapse: collapse; margin: 12px 0; }
-th, td { padding: 5px 10px; border-bottom: 1px solid #d0d7de; text-align: left; vertical-align: top; }
-th { color: #57606a; }
-input { width: 34em; max-width: 100%; }
-.note { color: #57606a; }
-.fixed { color: #57606a; }
-.viewport { background: #f6f8fa; border: 1px solid #d0d7de; padding: 8px 10px; }
-.updated { background: #e6f4ea; border: 1px solid #8cc59b; padding: 8px; }
-.warn { background: #fff3cd; border: 1px solid #d4a72c; padding: 8px; color: #442c00; }
-</style></head><body>
-<h1>Config</h1>
+	b.WriteString(`<h1>Config</h1>
 `)
 	if cellW < 1 {
 		cellW = 8
@@ -330,9 +316,13 @@ session.</p>
 	b.WriteString(`</table>
 <p><button name="apply" value="1">Apply changes</button></p>
 </form>
-<p><a href="about:start">Back to the start page</a></p>
-</body></html>`)
-	return b.String()
+<p><a href="about:start">Back to the start page</a></p>`)
+	return appPageHTML("Config — MOB³", `input { width: 34em; max-width: 100%; }
+.note { color: #57606a; }
+.fixed { color: #57606a; }
+.viewport { background: #f6f8fa; border: 1px solid #d0d7de; padding: 8px 10px; }
+.updated { background: #e6f4ea; border: 1px solid #8cc59b; padding: 8px; }
+`, b.String())
 }
 
 func isAboutConfigURL(u *url.URL) bool {

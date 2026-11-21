@@ -27,15 +27,16 @@ func TestDocsCoverFlagsAndTools(t *testing.T) {
 		}
 	}
 
-	start := strings.Index(helpPageHTML, "<h2>Command line</h2>")
+	help := helpPageHTML()
+	start := strings.Index(help, "<h2>Command line</h2>")
 	if start < 0 {
 		t.Fatal("help page has no command-line section")
 	}
-	end := strings.Index(helpPageHTML[start:], "\n<h2>")
+	end := strings.Index(help[start:], "\n<h2>")
 	if end < 0 {
 		t.Fatal("help page command-line section has no end")
 	}
-	section := helpPageHTML[start : start+end]
+	section := help[start : start+end]
 	flagRE := regexp.MustCompile(`<b>(-[a-z][a-z-]*)</b>`)
 	cli := readDoc(t, "cli.md")
 	flags := flagRE.FindAllStringSubmatch(section, -1)
