@@ -20,6 +20,8 @@ key, mouse and form reference for the running build.
 | `D` | Toggle dark mode |
 | `J` | Toggle JavaScript and reload the page without or with scripts |
 | `i` | Cycle graphics modes in place: full graphics, blocks, none (no reload) |
+| `+` / `-` | Zoom the page in / out (25% to 200%). Fixed pixel layout, spacing, images and large kitty headings grow; body text keeps its size and line height |
+| `0` | Reset zoom to 100% |
 | `X` | Open the view options window (Fixed elements, Background images); `Space`/`Enter` toggles the selected switch |
 | `o` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
@@ -41,6 +43,15 @@ Back and Forward remember the scroll position you last had on each history
 entry. In-page `#` links become history entries too, so `h` returns to where you
 were before following the anchor, and Forward returns to the anchored section.
 If only the fragment changes, the page is not reloaded.
+
+Zoom changes how many CSS pixels one terminal cell represents, from 25% to
+200% in preset steps. It is not text scaling: glyphs stay one cell per
+character and lines keep their normal height, so text stays readable while
+fixed pixel widths, padding, borders, images and kitty scaled large headings
+grow or shrink. The CSS viewport shrinks or grows with the ratio, so responsive
+pages reflow and percentage columns keep filling the terminal. Zoom lasts for
+the session and applies to every page, including pages restored from the
+back/forward cache.
 
 ## Console
 

@@ -378,7 +378,8 @@ Standard Go layout:
   Nested layers use dotted names. Anonymous `@layer { … }` blocks get their
   own slot in the same order.
 - **Responsive media queries:** `@media` conditions are stored per rule and
-  matched against the layout viewport (`columns * 8` CSS px). `screen`/`all`,
+  matched against the layout viewport (`columns` × the current CSS pixels per
+  cell, 8 at 100% zoom). `screen`/`all`,
   min/max-width (and device-width), and range syntax such as `(width>=960px)`
   work; `print` never matches; `prefers-color-scheme` follows the dark-mode
   state (`dark` when `-dark`/`D` is on, `light` otherwise), while other
@@ -478,17 +479,28 @@ Standard Go layout:
   `display:none`.
 - **Anti-FOUC visibility:** `visibility:hidden` on `html` or `body` is ignored
   so the page and its fixed chrome render; explicit hidden boxes remain hidden.
-- **Cell mapping:** `1 column = 8 CSS px`, `1 row = 16 CSS px`. Two image rows
-  are packed into one terminal cell vertically to preserve image aspect ratio.
+- **Cell mapping and zoom:** the base mapping is `1 column = 8 CSS px` and
+  `1 row = 16 CSS px`. Two image rows are packed into one terminal cell
+  vertically to preserve image aspect ratio. `+`/`-` step a session layout zoom
+  through 25, 50, 67, 80, 100, 125, 150, 175 and 200%, and `0` resets it. Zoom
+  divides the CSS pixels per cell, so fixed pixel widths,
+  padding, borders, absolute offsets, images and kitty scaled headings grow or
+  shrink while text metrics stay on the base cell size: glyphs remain one cell
+  per character and line heights keep their normal rows. Percentages stay
+  relative to the CSS viewport, which narrows or widens with the ratio, and
+  media queries and script-visible viewport sizes follow it, so responsive
+  pages reflow. Zoom is memory-only session state shared by every page,
+  including pages restored from the back/forward cache.
 - **Line height:** computed with `floor(fontSize * lineHeight / 16)`, minimum
-  1 row. This avoids body text with `line-height: 1.6` consuming two terminal
-  rows. Rule of thumb: only fonts ≥32px produce a 2-row line box.
+  1 row, using the base 16px row regardless of zoom. This avoids body text with
+  `line-height: 1.6` consuming two terminal rows. Rule of thumb: only fonts
+  ≥32px produce a 2-row line box.
 - **Base font:** 16px, line-height 1. UA headings use bold/color/margins; h1 is
   32px (2 rows), others are effectively 1 row.
 - **Large type:** true scaled glyphs use kitty’s text-sizing protocol in real
   kitty with the minimal `OSC 66 ; s=N ; text BEL` form; layout allocates
-  `round(font-size/16)` cells per character and matching line rows for runs
-  scaled above 1. Do not send the optional `w` key: metadata uses `:` between
+  `round(font-size/16)` cells per character at 100%, multiplied by the zoom and
+  capped at kitty’s `s=7`, with matching line rows for runs scaled above 1. Do not send the optional `w` key: metadata uses `:` between
   keys, and terminals that only parse `s` render a `w=...` prefix as literal
   text. Disabled on non-kitty terminals, in dump mode, and with
   `-text-scale=off`, where the bold/line-height hierarchy remains. A page whose
@@ -848,7 +860,8 @@ Standard Go layout:
   with kitty key disambiguation; legacy terminals send it as Tab, so `[`/`]`
   are the portable pair; arrow keys do not navigate), `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
-  `i` cycle graphics modes, `X` open the page view options window (a switch
+  `i` cycle graphics modes, `+`/`-` zoom the page in/out (25% to 200%, `0`
+  resets to 100%), `X` open the page view options window (a switch
   list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
   on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements and
   Background images (hiding the bitmaps but keeping neutral placeholders), and
@@ -1833,6 +1846,12 @@ Standard Go layout:
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
+- Page zoom deliberately leaves text at its normal cell size, so fluid
+  percentage layouts barely change in cells while fixed-pixel content grows.
+  There is no horizontal scrolling, so zoomed-in fixed-width content can clip
+  on the right instead of scrolling sideways, and bitmaps decoded before a
+  zoom-out can be upscaled. Zoom has no CLI flag or `about:config` row and is
+  never persisted.
 - PDF support is text only. Pages are extracted, never rasterized: figures,
   images, chart art, shadings, annotations and link targets do not appear,
   scanned documents show no text, and encrypted (password-protected) files are

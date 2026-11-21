@@ -237,12 +237,13 @@ func pdfDisplayName(u *url.URL) string {
 
 // pdfStyle is the generated page's stylesheet. The viewport holds the page
 // text and a separator after each page; the page count and file name live in
-// the browser footer instead. The %d is the page width in CSS pixels, derived
-// from the widest line so the reading column is centered like a printed page.
+// the browser footer instead. The %d is the page width in terminal cells,
+// derived from the widest line; ch units map to one cell, so the centered
+// reading column keeps its width when the layout zoom changes.
 const pdfStyle = `
 body { margin: 12px 16px; }
 .pdf-note { color: #8a4b00; font-size: 14px; margin: 4px 0 10px; }
-.pdf-page { width: 100%%; max-width: %dpx; margin: 0 auto 12px; padding: 0; }
+.pdf-page { width: 100%%; max-width: %dch; margin: 0 auto 12px; padding: 0; }
 pre.pdf-text { white-space: pre-wrap; font-size: 14px; line-height: 1.3; margin: 0; padding: 0; background: transparent; }
 .pdf-page-no { color: #9a9a9a; font-size: 12px; text-align: right; margin: 4px 0 0; }
 pre.pdf-rule { color: #b3b3b3; font-size: 14px; line-height: 1.3; margin: 0; padding: 0; background: transparent; white-space: nowrap; overflow: hidden; }
@@ -346,14 +347,16 @@ func pdfSpansHTML(spans []pdfSpan) string {
 	return b.String()
 }
 
-// pdfPageWidth converts the widest extracted line into a centered page width.
+// pdfPageWidth converts the widest extracted line into a centered page width
+// in terminal cells. ch units resolve to one cell, so the page keeps the same
+// reading column at every zoom level.
 func pdfPageWidth(cells int) int {
-	width := cells*8 + 32
-	if width < 320 {
-		width = 320
+	width := cells + 4
+	if width < 40 {
+		width = 40
 	}
-	if width > 1600 {
-		width = 1600
+	if width > 200 {
+		width = 200
 	}
 	return width
 }

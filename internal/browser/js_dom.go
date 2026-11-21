@@ -552,7 +552,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 				}
 				return j.vm.ToValue(h)
 			}
-			vw, vh := j.b.width*8, j.b.height*16
+			vw, vh := cssWidthPx(j.b.width), cssHeightPx(j.b.height)
 			if width {
 				return j.vm.ToValue(j.elementWidthPx(n, vw))
 			}
@@ -573,7 +573,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoMethod(p, "getBoundingClientRect", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		x, y, w, h, ok := j.elementRect(n)
 		if !ok {
-			vw, vh := j.b.width*8, j.b.height*16
+			vw, vh := cssWidthPx(j.b.width), cssHeightPx(j.b.height)
 			x, y = 0, 0
 			w = j.elementWidthPx(n, vw)
 			h = j.elementHeightPx(n, vh)
@@ -2228,7 +2228,7 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 	}
 	if j.b.layout != nil {
 		if r, ok := j.b.layout.Boxes[n]; ok && r.W > 0 {
-			return r.W * 8
+			return cssWidthPx(r.W)
 		}
 	}
 	// Before the first layout pass (scripts run ahead of it) a block-level box
@@ -2343,7 +2343,7 @@ func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {
 	}
 	if j.b.layout != nil {
 		if r, ok := j.b.layout.Boxes[n]; ok && r.H > 0 {
-			return r.H * 16
+			return cssHeightPx(r.H)
 		}
 	}
 	return 0

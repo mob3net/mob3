@@ -38,7 +38,7 @@ func layoutTextOverlaps(ly *Layout) bool {
 		if f.Kind != fragText || f.W <= 0 || f.H <= 0 || strings.TrimSpace(f.Text) == "" {
 			continue
 		}
-		scaled := f.Style != nil && f.Style.TextScale() > 1
+		scaled := f.Style != nil && bigTextScale(f.Style, layoutZoom) > 1
 		for y := f.Y; y < f.Y+f.H; y++ {
 			rows[y] = append(rows[y], span{x: f.X, end: f.X + f.W, scaled: scaled})
 		}
@@ -324,7 +324,7 @@ func (l *layouter) lineH(st *Style) int {
 	}
 	h := st.LineHeightCells()
 	if l.bigText {
-		if s := st.TextScale(); s > h {
+		if s := bigTextScale(st, l.zoom); s > h {
 			h = s
 		}
 	}
@@ -336,7 +336,7 @@ func (l *layouter) scale(st *Style) int {
 	if !l.bigText || st == nil {
 		return 1
 	}
-	return st.TextScale()
+	return bigTextScale(st, l.zoom)
 }
 
 // textWidth measures s in layout cells, honouring glyph scaling.

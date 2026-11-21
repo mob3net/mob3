@@ -7,9 +7,50 @@ import (
 )
 
 const (
-	cellW = 8.0  // CSS pixels per terminal column
-	cellH = 16.0 // CSS pixels per terminal row
+	// baseCellW/baseCellH are the normal CSS pixels per terminal cell. Text
+	// metrics use them directly so glyph widths and line heights do not change
+	// with zoom.
+	baseCellW = 8.0
+	baseCellH = 16.0
+
+	// maxTextScale is the largest glyph scale the kitty text-sizing protocol
+	// accepts for the s parameter.
+	maxTextScale = 7
 )
+
+// cellW and cellH are the CSS pixels per terminal column and row at the
+// current layout zoom. Zoom makes each CSS pixel take more cells (cellW and
+// cellH shrink), so fixed pixel sizes, images and padding grow while text keeps
+// its normal cell size. They are package variables because every length in the
+// engine resolves through resolveH/resolveV, which have no layout context.
+var (
+	cellW = baseCellW
+	cellH = baseCellH
+
+	// layoutZoom is the current zoom factor: 1 is normal, 2 doubles every
+	// non-text CSS pixel dimension in cells.
+	layoutZoom = 1.0
+)
+
+// setLayoutZoom installs a session zoom factor.
+func setLayoutZoom(z float64) {
+	if z <= 0 {
+		z = 1
+	}
+	layoutZoom = z
+	cellW = baseCellW / z
+	cellH = baseCellH / z
+}
+
+// cssWidthPx converts terminal columns to CSS pixels at the current zoom.
+func cssWidthPx(cols int) int {
+	return int(math.Round(float64(cols) * cellW))
+}
+
+// cssHeightPx converts terminal rows to CSS pixels at the current zoom.
+func cssHeightPx(rows int) int {
+	return int(math.Round(float64(rows) * cellH))
+}
 
 const (
 	UnitNone Unit = iota
@@ -173,16 +214,41 @@ func parseAspectRatio(v string, st *Style) {
 
 // TextScale is the visual size multiplier used by terminal text sizing. Runs
 // at the base 16px font have scale 1; 24px rounds to 2, 40px to 3, and so on.
+// It is the unzoomed scale; callers apply layoutZoom for the session.
 func (s *Style) TextScale() int {
 	if s == nil || s.FontSize < 20 {
 		return 1
 	}
-	n := int(math.Round(s.FontSize / cellH))
+	n := int(math.Round(s.FontSize / baseCellH))
 	if n < 1 {
 		n = 1
 	}
 	if n > 4 {
 		n = 4
+	}
+	return n
+}
+
+// bigTextScale returns the glyph scale for st at a zoom factor. The font's own
+// size sets the base scale and zoom multiplies it, so headings grow with the
+// zoom while base-size text remains one cell. Kitty accepts scale 1-7.
+func bigTextScale(st *Style, zoom float64) int {
+	if st == nil {
+		return 1
+	}
+	base := st.TextScale()
+	if base <= 1 {
+		return 1
+	}
+	if zoom <= 0 {
+		zoom = 1
+	}
+	n := int(math.Round(float64(base) * zoom))
+	if n < 1 {
+		n = 1
+	}
+	if n > maxTextScale {
+		n = maxTextScale
 	}
 	return n
 }
@@ -193,7 +259,7 @@ func (s *Style) LineHeightCells() int {
 	if lh <= 0 {
 		lh = 1
 	}
-	h := int(math.Floor(s.FontSize * lh / cellH))
+	h := int(math.Floor(s.FontSize * lh / baseCellH))
 	if h < 1 {
 		h = 1
 	}

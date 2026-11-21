@@ -294,7 +294,7 @@ func (b *Browser) computePageSingle(query []rune) []findMatch {
 		}
 		scale := 1
 		if b.bigText && f.Style != nil {
-			scale = f.Style.TextScale()
+			scale = bigTextScale(f.Style, layoutZoom)
 		}
 		runes := []rune(f.Text)
 		for _, span := range findRuneSpans(runes, query) {
@@ -359,7 +359,7 @@ func (b *Browser) pageFindStream() ([]rune, []findUnit) {
 		}
 		scale := 1
 		if b.bigText && f.Style != nil {
-			scale = f.Style.TextScale()
+			scale = bigTextScale(f.Style, layoutZoom)
 		}
 		x := f.X
 		for _, r := range runes {

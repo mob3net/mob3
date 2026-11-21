@@ -141,3 +141,36 @@ func TestLayoutImportedCSSGolden(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutZoomFixture renders the zoom fixture at 200% so the golden shows
+// that fixed pixel boxes and padding grow while glyph runs keep their cell
+// width. Text metrics stay at the unzoomed cell size; only boxes and images
+// scale.
+func TestLayoutZoomFixture(t *testing.T) {
+	file := "testdata/pages/zoom-scale.html"
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setLayoutZoom(2)
+	defer setLayoutZoom(1)
+	for _, width := range fixtureWidths {
+		root := ParseHTML(string(data))
+		author := fixtureAuthorRules(root)
+		got := renderFixture(root, author, width)
+		golden := file + ".zoom2.w" + itoaFixture(width) + ".txt"
+		if *updateFixtures {
+			if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		want, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatalf("%s: %v (run go test -run TestLayoutFixtures -update)", golden, err)
+		}
+		if got != string(want) {
+			t.Errorf("zoom fixture mismatch at width %d\n--- want ---\n%s\n--- got ---\n%s", width, want, got)
+		}
+	}
+}

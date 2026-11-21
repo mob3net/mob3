@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -101,6 +102,9 @@ type Browser struct {
 	prev    []string
 	gfx     *gfxRenderer
 	bigText bool
+	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
+	// per terminal cell for everything except text metrics.
+	zoom float64
 	// scaledLayout records whether the current layout was built with kitty
 	// scaled text, so draw can rebuild when an overlay toggles it.
 	scaledLayout bool
@@ -282,7 +286,7 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1,
+		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1, zoom: 1,
 		jsMemLimit:        defaultJSMemoryLimit,
 		layoutBudget:      DefaultLayoutBudget,
 		historyCacheBytes: defaultHistoryCacheBytes,
@@ -292,6 +296,7 @@ func NewBrowser(w, h int) *Browser {
 		home:              "about:home",
 	}
 	b.setLoader(b.loader)
+	setLayoutZoom(b.zoom)
 	return b
 }
 
@@ -303,7 +308,7 @@ func (b *Browser) setLoader(l *Loader) {
 	if l != nil {
 		l.historyFn = b.historySnapshot
 		if b.width > 0 {
-			l.imageViewportPx = b.width * 8
+			l.imageViewportPx = cssWidthPx(b.width)
 		}
 		b.applyImageCap()
 	}
@@ -939,6 +944,55 @@ func (b *Browser) toggleDark() {
 	if !b.dark {
 		b.status = "Dark mode off"
 	}
+}
+
+// zoomSteps are the layout zoom levels, smallest first.
+var zoomSteps = []float64{0.25, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 1.75, 2}
+
+// zoomBy steps the layout zoom to the next preset. Zoom changes the CSS pixels
+// per terminal cell, so fixed pixel sizes, images, spacing and kitty scaled
+// headings grow or shrink while text keeps its normal cell size.
+func (b *Browser) zoomBy(dir int) {
+	idx := 0
+	for i, s := range zoomSteps {
+		if math.Abs(s-b.zoom) < math.Abs(zoomSteps[idx]-b.zoom) {
+			idx = i
+		}
+	}
+	next := idx + dir
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(zoomSteps) {
+		next = len(zoomSteps) - 1
+	}
+	b.applyZoom(zoomSteps[next])
+}
+
+// resetZoom returns the layout zoom to 100%.
+func (b *Browser) resetZoom() {
+	b.applyZoom(1)
+}
+
+// applyZoom installs a layout zoom factor and rebuilds the page so media
+// queries and every pixel-based length see the new cell ratio.
+func (b *Browser) applyZoom(z float64) {
+	if b.zoom != z {
+		b.zoom = z
+		setLayoutZoom(z)
+		// A page whose scaled runs overlapped may be fine at another zoom, so
+		// re-evaluate the fallback instead of keeping it for the session.
+		b.bigTextBlocked = false
+		b.prev = nil
+		b.rebuild()
+		if limit := b.maxScroll(); b.scroll > limit {
+			b.scroll = limit
+		}
+		if b.scroll < 0 {
+			b.scroll = 0
+		}
+	}
+	b.status = fmt.Sprintf("Zoom %d%%", int(math.Round(z*100)))
 }
 
 // toggleJavaScript switches page scripting for the rest of the session. The

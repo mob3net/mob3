@@ -1060,7 +1060,7 @@ func (j *jsRuntime) elementRect(n *Node) (x, y, w, h int, ok bool) {
 		return 0, 0, 0, 0, false
 	}
 	if n.Tag == "html" || n.Tag == "body" {
-		return 0, 0, j.b.width * 8, j.b.height * 16, true
+		return 0, 0, cssWidthPx(j.b.width), cssHeightPx(j.b.height), true
 	}
 	ly := j.b.layout
 	if ly == nil {
@@ -1091,7 +1091,7 @@ func (j *jsRuntime) elementRect(n *Node) (x, y, w, h int, ok bool) {
 		}
 	}
 	if r, found := ly.Boxes[n]; found {
-		add(r.X*8, (r.Y-scroll)*16, r.W*8, r.H*16)
+		add(cssWidthPx(r.X), cssHeightPx(r.Y-scroll), cssWidthPx(r.W), cssHeightPx(r.H))
 	}
 	inSubtree := func(p *Node) bool {
 		for ; p != nil; p = p.Parent {
@@ -1106,7 +1106,7 @@ func (j *jsRuntime) elementRect(n *Node) (x, y, w, h int, ok bool) {
 		if f.Node == nil || !inSubtree(f.Node) {
 			continue
 		}
-		add(f.X*8, (f.Y-scroll)*16, f.W*8, f.H*16)
+		add(cssWidthPx(f.X), cssHeightPx(f.Y-scroll), cssWidthPx(f.W), cssHeightPx(f.H))
 	}
 	if !ok {
 		return 0, 0, 0, 0, false

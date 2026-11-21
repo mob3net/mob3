@@ -506,7 +506,7 @@ func (j *jsRuntime) matchMediaFunc() func(sobek.FunctionCall) sobek.Value {
 			_ = o.SetPrototype(j.mediaQueryProto)
 		}
 		_ = o.Set("media", q)
-		_ = o.Set("matches", mediaMatches(q, j.b.width*cellW, j.b.dark))
+		_ = o.Set("matches", mediaMatches(q, cssWidthPx(j.b.width), j.b.dark))
 		_ = o.Set("onchange", sobek.Null())
 		noop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 		_ = o.Set("addListener", noop)
@@ -819,16 +819,12 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 	_ = o.Set("history", j.histObj)
 	_ = o.Set("localStorage", j.storageLocal)
 	_ = o.Set("sessionStorage", j.storageSession)
-	_ = o.Set("innerWidth", j.b.width*8)
-	_ = o.Set("innerHeight", j.b.height*16)
-	_ = o.Set("outerWidth", j.b.width*8)
-	_ = o.Set("outerHeight", j.b.height*16)
+	_ = o.Set("innerWidth", cssWidthPx(j.b.width))
+	_ = o.Set("innerHeight", cssHeightPx(j.b.height))
+	_ = o.Set("outerWidth", cssWidthPx(j.b.width))
+	_ = o.Set("outerHeight", cssHeightPx(j.b.height))
 	_ = o.Set("devicePixelRatio", 1)
-	cellH := j.b.cellH
-	if cellH <= 0 {
-		cellH = 16
-	}
-	scrollPx := func() int { return j.b.scroll * cellH }
+	scrollPx := func() int { return int(float64(j.b.scroll) * cellH) }
 	j.accessor(o, "scrollX", func() sobek.Value { return j.vm.ToValue(0) }, nil)
 	j.accessor(o, "scrollY", func() sobek.Value { return j.vm.ToValue(scrollPx()) }, nil)
 	j.accessor(o, "pageXOffset", func() sobek.Value { return j.vm.ToValue(0) }, nil)
@@ -859,7 +855,7 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		} else {
 			top = call.Argument(1).ToFloat()
 		}
-		j.b.scroll = int(top) / cellH
+		j.b.scroll = int(top / cellH)
 		j.b.clampScroll()
 		return sobek.Undefined()
 	}
@@ -874,7 +870,7 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		} else {
 			delta = call.Argument(1).ToFloat()
 		}
-		j.b.scroll += int(delta) / cellH
+		j.b.scroll += int(delta / cellH)
 		j.b.clampScroll()
 		return sobek.Undefined()
 	}))
@@ -887,16 +883,16 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		return j.computedStyleObject(j.unwrap(call.Argument(0)))
 	}))
 	screen := j.vm.NewObject()
-	_ = screen.Set("width", j.b.width*8)
-	_ = screen.Set("height", j.b.height*16)
-	_ = screen.Set("availWidth", j.b.width*8)
-	_ = screen.Set("availHeight", j.b.height*16)
+	_ = screen.Set("width", cssWidthPx(j.b.width))
+	_ = screen.Set("height", cssHeightPx(j.b.height))
+	_ = screen.Set("availWidth", cssWidthPx(j.b.width))
+	_ = screen.Set("availHeight", cssHeightPx(j.b.height))
 	_ = screen.Set("colorDepth", 24)
 	_ = screen.Set("pixelDepth", 24)
 	_ = o.Set("screen", screen)
 	vv := j.vm.NewObject()
-	_ = vv.Set("width", j.b.width*8)
-	_ = vv.Set("height", j.b.height*16)
+	_ = vv.Set("width", cssWidthPx(j.b.width))
+	_ = vv.Set("height", cssHeightPx(j.b.height))
 	_ = vv.Set("scale", 1)
 	_ = vv.Set("offsetLeft", 0)
 	_ = vv.Set("offsetTop", 0)

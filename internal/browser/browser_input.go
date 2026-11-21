@@ -1068,6 +1068,12 @@ func (b *Browser) HandleKey(k string) bool {
 		b.toggleReader()
 	case "D":
 		b.toggleDark()
+	case "+":
+		b.zoomBy(1)
+	case "-":
+		b.zoomBy(-1)
+	case "0":
+		b.resetZoom()
 	case "J":
 		b.toggleJavaScript()
 	case "o":

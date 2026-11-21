@@ -421,7 +421,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			y := f.Y - scroll + topRow
 			h := maxInt(1, f.H)
 			if bigText && f.Style != nil {
-				if s := f.Style.TextScale(); s > 1 {
+				if s := bigTextScale(f.Style, layoutZoom); s > 1 {
 					h = maxInt(h, s)
 				}
 			}
@@ -469,7 +469,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			}
 			scale := 1
 			if bigText {
-				scale = st.TextScale()
+				scale = bigTextScale(st, layoutZoom)
 			}
 			if scale > 1 && (y+scale > bottomRow || hitsChrome(f.X, y, f.W*scale, scale)) {
 				// A scaled run from the last content row would be drawn over

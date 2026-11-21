@@ -388,3 +388,97 @@ func TestFloatDropsBelowShorterFloat(t *testing.T) {
 		t.Fatalf("fourth float x = %d, want it beside the third at %d", d.X, c.X+c.W)
 	}
 }
+
+func TestZoomScalesBoxesNotText(t *testing.T) {
+	defer setLayoutZoom(1)
+	src := `<div style="width:80px;padding:16px">hi</div>`
+	measure := func(bigText bool) (boxW, textW, textH int) {
+		root := ParseHTML(src)
+		var ly *Layout
+		if bigText {
+			ly = BuildLayoutBig(root, nil, 100, true)
+		} else {
+			ly = BuildLayout(root, nil, 100)
+		}
+		if r, ok := ly.Boxes[root.FindFirst("div")]; ok {
+			boxW = r.W
+		}
+		for i := range ly.Frags {
+			f := &ly.Frags[i]
+			if f.Kind == fragText && strings.TrimSpace(f.Text) != "" {
+				return boxW, f.W, f.H
+			}
+		}
+		return boxW, 0, 0
+	}
+
+	setLayoutZoom(1)
+	box1, text1, h1 := measure(false)
+	// 80px is 10 cells plus 2+2 cells of padding.
+	if box1 != 14 {
+		t.Fatalf("zoom 1 box = %d cells, want 14", box1)
+	}
+	if text1 != 2 || h1 != 1 {
+		t.Fatalf("zoom 1 text = %d cells x %d rows, want 2x1", text1, h1)
+	}
+
+	setLayoutZoom(2)
+	box2, text2, h2 := measure(false)
+	// Fixed pixels and padding double; the word keeps its two cells and row.
+	if box2 != 28 {
+		t.Fatalf("zoom 2 box = %d cells, want 28", box2)
+	}
+	if text2 != text1 || h2 != h1 {
+		t.Fatalf("zoom 2 text = %d cells x %d rows, want %dx%d", text2, h2, text1, h1)
+	}
+
+	// A scaled heading grows with the zoom while body text does not.
+	bigRoot := ParseHTML(`<h1>head</h1><p>body</p>`)
+	setLayoutZoom(1)
+	base := BuildLayoutBig(bigRoot, nil, 100, true)
+	headW1, headH1 := fragSize(base, "head")
+	bodyW1, bodyH1 := fragSize(base, "body")
+	setLayoutZoom(2)
+	zoomed := BuildLayoutBig(bigRoot, nil, 100, true)
+	headW2, headH2 := fragSize(zoomed, "head")
+	bodyW2, bodyH2 := fragSize(zoomed, "body")
+	if headW1 != 8 || headH1 != 2 {
+		t.Fatalf("heading at zoom 1 = %dx%d, want 8x2", headW1, headH1)
+	}
+	if headW2 != 16 || headH2 != 4 {
+		t.Fatalf("heading at zoom 2 = %dx%d, want 16x4", headW2, headH2)
+	}
+	if bodyW1 != bodyW2 || bodyH1 != bodyH2 {
+		t.Fatalf("body text changed with zoom: %dx%d -> %dx%d", bodyW1, bodyH1, bodyW2, bodyH2)
+	}
+}
+
+func fragSize(ly *Layout, text string) (w, h int) {
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && strings.TrimSpace(f.Text) == text {
+			return f.W, f.H
+		}
+	}
+	return 0, 0
+}
+
+func TestZoomShrinksMediaViewport(t *testing.T) {
+	defer setLayoutZoom(1)
+	rules := ParseStylesheet(`@media (max-width: 500px) { .m { display:none } }`)
+	atZoom := func(z float64) string {
+		setLayoutZoom(z)
+		doc := ParseHTML(`<p class="m">x</p>`)
+		st := BuildLayout(doc, rules, 100).Styles[doc.FindFirst("p")]
+		if st == nil {
+			t.Fatal("no style")
+		}
+		return st.Display
+	}
+	if got := atZoom(1); got == "none" {
+		t.Fatalf("80 columns at 100%% zoom reported a narrow viewport")
+	}
+	if got := atZoom(2); got != "none" {
+		t.Fatalf("80 columns at 200%% zoom = %q, want the narrow media query to match", got)
+	}
+}

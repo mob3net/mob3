@@ -381,7 +381,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 			width = 100
 		}
 	}
-	loader.imageViewportPx = width * 8
+	loader.imageViewportPx = cssWidthPx(width)
 	// A PNG has no browsing context, so it shows one page: page 1 unless the
 	// caller selected another. Dumps keep every page.
 	if pdfPage == 0 && pngOut {

@@ -129,6 +129,7 @@ type layouter struct {
 	frags     []Frag
 	boxes     map[*Node]Rect
 	bigText   bool
+	zoom      float64
 	truncated bool
 	deadline  time.Time
 	expired   bool
@@ -280,13 +281,13 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	if budget.Time <= 0 {
 		deadline = time.Time{}
 	}
-	engine := newStyleEngineDeadline(author, width*cellW, deadline)
+	engine := newStyleEngineDeadline(author, cssWidthPx(width), deadline)
 	if viewportH > 0 {
 		engine.viewportH = float64(viewportH) * cellH
 	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
+	l := &layouter{styles: styles, width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}

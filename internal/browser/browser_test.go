@@ -1443,3 +1443,54 @@ func TestViewMenuTogglesBackgrounds(t *testing.T) {
 		t.Fatalf("status = %q", b.status)
 	}
 }
+
+func TestZoomKeysStepThroughPresets(t *testing.T) {
+	b := NewBrowser(80, 24)
+	if b.zoom != 1 {
+		t.Fatalf("new browser zoom = %g, want 1", b.zoom)
+	}
+	// Control-modified aliases are deliberately not bound.
+	b.HandleKey("ctrl-=")
+	b.HandleKey("ctrl-+")
+	b.HandleKey("ctrl--")
+	b.HandleKey("ctrl-0")
+	if b.zoom != 1 {
+		t.Fatalf("ctrl zoom aliases changed zoom to %g, want 1", b.zoom)
+	}
+	b.HandleKey("+")
+	if b.zoom != 1.25 || b.status != "Zoom 125%" {
+		t.Fatalf("+ zoom=%g status=%q, want 1.25 / Zoom 125%%", b.zoom, b.status)
+	}
+	b.HandleKey("+")
+	if b.zoom != 1.5 {
+		t.Fatalf("+ zoom = %g, want 1.5", b.zoom)
+	}
+	b.HandleKey("-")
+	if b.zoom != 1.25 {
+		t.Fatalf("- zoom = %g, want 1.25", b.zoom)
+	}
+	b.HandleKey("-")
+	if b.zoom != 1 {
+		t.Fatalf("- zoom = %g, want 1", b.zoom)
+	}
+	b.HandleKey("0")
+	if b.zoom != 1 {
+		t.Fatalf("0 zoom = %g, want 1", b.zoom)
+	}
+	for i := 0; i < 20; i++ {
+		b.HandleKey("-")
+	}
+	if b.zoom != zoomSteps[0] || zoomSteps[0] != 0.25 {
+		t.Fatalf("zoom floor = %g (steps[0]=%g), want 0.25", b.zoom, zoomSteps[0])
+	}
+	if b.status != "Zoom 25%" {
+		t.Fatalf("zoom floor status = %q, want Zoom 25%%", b.status)
+	}
+	for i := 0; i < 20; i++ {
+		b.HandleKey("+")
+	}
+	if b.zoom != zoomSteps[len(zoomSteps)-1] {
+		t.Fatalf("zoom ceiling = %g, want %g", b.zoom, zoomSteps[len(zoomSteps)-1])
+	}
+	b.applyZoom(1)
+}

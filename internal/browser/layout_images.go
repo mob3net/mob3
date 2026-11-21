@@ -155,7 +155,7 @@ func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int 
 	if posY > 1 {
 		posY = 1
 	}
-	bw, bh := boxW*cellW, boxH*cellH
+	bw, bh := float64(boxW)*cellW, float64(boxH)*cellH
 	fit := st.ObjectFit
 	if fit == "" {
 		fit = "fill"
@@ -218,13 +218,13 @@ func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int 
 			add(fx, fy, fw, fh, image.Rectangle{})
 			return fh
 		}
-		cw := boxW * cellW
-		ch := boxH * cellH
-		if cw > iw {
-			cw = iw
+		cw := float64(boxW) * cellW
+		ch := float64(boxH) * cellH
+		if cw > float64(iw) {
+			cw = float64(iw)
 		}
-		if ch > ih {
-			ch = ih
+		if ch > float64(ih) {
+			ch = float64(ih)
 		}
 		if cw < 1 {
 			cw = 1
@@ -232,9 +232,9 @@ func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int 
 		if ch < 1 {
 			ch = 1
 		}
-		sx := b.Min.X + int(math.Round(float64(iw-cw)*posX))
-		sy := b.Min.Y + int(math.Round(float64(ih-ch)*posY))
-		add(x, y, boxW, boxH, image.Rect(sx, sy, sx+cw, sy+ch))
+		sx := b.Min.X + int(math.Round((float64(iw)-cw)*posX))
+		sy := b.Min.Y + int(math.Round((float64(ih)-ch)*posY))
+		add(x, y, boxW, boxH, image.Rect(sx, sy, sx+int(math.Round(cw)), sy+int(math.Round(ch))))
 		return boxH
 	default: // fill
 		add(x, y, boxW, boxH, image.Rectangle{})
