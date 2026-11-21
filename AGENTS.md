@@ -2040,18 +2040,22 @@ temporary and remove them before handing work back.
 
 ### Reproduce first
 
-- **Reproduce at the user's viewport.** The common interactive viewport is
-  **177×42 cells**, sometimes larger. Layout problems that only appear when
-  columns sit side by side can be invisible at 80-120 columns, where the page
-  wraps. Start at 177 columns (or the width the user reports) before reading
-  CSS or probing layout. A PNG is often the quickest way to see the symptom:
+- **Reproduce at the user's viewport.** The user runs `make run` in a
+  **152×35** terminal, so the interactive layout width is **151 columns**
+  (one is reserved for the scrollbar) and the page viewport is 32 rows. A
+  layout that looks fine at 177 columns can still be wrong there: a fixed
+  1260px page canvas is 158 cells and does not fit, so check the declared
+  width against 151 before reading CSS. Wide comparisons are still useful:
+  **177×42** is the common second size, and 220 shows column layouts that
+  only appear when there is room. A PNG is often the quickest way to see the
+  symptom:
 
   ```sh
-  make && bin/mob3 -width 177 -height 42 -png "$URL" > bin/test.png
+  make && bin/mob3 -width 152 -height 35 -png "$URL" > bin/test.png
   ```
 
-  A wide comparison is still useful for column layouts:
-  `for w in 100 177 220; do bin/mob3 -width $w -height 42 -png "$URL" > bin/test-$w.png; done`.
+  A width sweep is useful for column layouts:
+  `for w in 120 152 177 220; do bin/mob3 -width $w -height 42 -png "$URL" > bin/test-$w.png; done`.
   Use a dump or a layout probe instead when that is faster or when text
   ordering is the question; the PNG is a tool, not a required first step.
   Keep the site URL in the shell command only, never in code or docs.
@@ -2064,6 +2068,48 @@ temporary and remove them before handing work back.
 - Use `grep`/ripgrep on the saved HTML and downloaded CSS for class names,
   media queries, `display`, `position`, `float`, `grid-*`, `flex*`, `calc(`,
   `transform`, `content`, and `visibility`.
+
+### Zoom probe
+
+Zoom is a layout oracle, not just a convenience: it changes the CSS pixels per
+cell without changing text metrics. At 100% a cell is 8×16 CSS px; at 200% a
+cell is 4×8 CSS px, so the CSS viewport narrows, fixed-pixel boxes, padding,
+borders, absolute offsets and images take more cells, percentages stay relative
+to the reflowed viewport, media queries re-evaluate, and glyphs stay one cell
+per character on the normal 16px line grid.
+
+Render the same page at several levels before reading CSS:
+
+```sh
+for z in 100 150 200; do
+  bin/mob3 -zoom $z -width 152 -height 35 -png "$URL" > bin/zoom-$z.png
+done
+```
+
+Interactive runs use `+`/`-` and `0` for the same probe, which is often faster
+when the symptom is below the fold. `-zoom` also works with `-dump` and `-mcp`.
+
+Read the result as a separation test:
+
+- **Invariant across every zoom level** means the cause is a placement bug, not
+  a sizing or pixel-ratio artifact: the box's used width can be right while its
+  X is wrong. Check `margin:auto` centering, flex `justify-content`/`align-items`
+  (including `margin:auto` on a single item), grid placement, the float band,
+  the absolute/fixed containing block, and inline versus block classification.
+  Compare the fragment's X range with its parent's box; content that stays
+  glued to one edge while its parent grows or shrinks is the tell.
+- **Changing with zoom** points at a sizing path instead: a fixed-pixel canvas
+  that overflows and clips, the image display cap, a percentage that reflows at
+  a media breakpoint, or a length resolved too early. A fixed-width canvas is
+  expected to hug the left edge (no auto margin) and clip at every zoom level;
+  that is correct, not the invariant bug above.
+- Half-and-half symptoms usually mean a fixed-pixel child inside a correct
+  container: the child keeps its position relative to the container's left
+  edge while its own cells change.
+
+Then confirm with a layout probe and, when useful, a Chromium comparison at the
+same CSS viewport (`columns × cell width ÷ zoom`). Keep the site URL in the
+shell command only.
 
 ### Layout probe
 
