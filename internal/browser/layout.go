@@ -621,7 +621,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 				// even when it is wider than the parent, so the box overflows
 				// to the right as it does in a browser instead of collapsing
 				// to the terminal width and reflowing the whole page.
-				if st.Width.U == UnitPercent || st.Width.Calc {
+				if st.Width.Calc || lengthHasPercent(st.Width) {
 					if w < contentW {
 						contentW = w
 					}
@@ -913,5 +913,27 @@ const (
 // lengthHasPercent reports whether a length depends on a percentage basis, so
 // it must only resolve against a definite containing block height.
 func lengthHasPercent(v Length) bool {
+	if v.Func != nil {
+		return lengthFuncHasPercent(v.Func)
+	}
 	return v.U == UnitPercent || (v.Calc && v.CalcPct != 0)
+}
+
+func lengthFuncHasPercent(f *lengthFunc) bool {
+	if f == nil {
+		return false
+	}
+	for i := range f.Terms {
+		t := &f.Terms[i]
+		if t.Fn != nil {
+			if lengthFuncHasPercent(t.Fn) {
+				return true
+			}
+			continue
+		}
+		if t.Pct != 0 {
+			return true
+		}
+	}
+	return false
 }

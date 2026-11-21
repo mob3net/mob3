@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 8px; }
+p { margin: 0 0 8px; }
+.limit { width: min(100%, 240px); border: 1px solid #999999; padding: clamp(4px, 2%, 12px); }
+.calc-vw { width: calc(100% - 4vw); border: 1px solid #cccccc; }
+.cards { display: flex; gap: min(8px, 2vw); }
+.cards div { flex: 1; width: min(100%, 160px); border: 1px solid #bbbbbb; padding: 2px clamp(2px, 1vw, 8px); }
+.nested { width: min(max(30%, 120px), 200px); background: #eeeeee; }
+</style></head><body>
+<div class="limit">min width</div>
+<div class="calc-vw">calc viewport</div>
+<div class="cards"><div>one</div><div>two</div></div>
+<div class="nested">nested function</div>
+</body></html>

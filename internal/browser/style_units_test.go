@@ -102,7 +102,63 @@ func TestCalcLengths(t *testing.T) {
 			t.Errorf("%q at %d columns = %d, want %d", tc.value, tc.basis, got, tc.want)
 		}
 	}
-	for _, bad := range []string{"calc(50vw - 650px)", "calc(var(--gap) + 1px)"} {
+	for _, bad := range []string{"calc(var(--gap) + 1px)"} {
+		if l := parseLength(bad, 16); l.Set {
+			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
+		}
+	}
+
+	// Viewport units inside calc() resolve once the layout viewport is known.
+	vw := parseLength("calc(100vw - 40px)", 16)
+	if !vw.Set || !vw.Calc {
+		t.Fatalf("calc(100vw - 40px) = %+v, want a calc length", vw)
+	}
+	resolveViewportLength(&vw, 1000, 800)
+	if got := vw.resolveH(0, 16); got != 120 {
+		t.Errorf("calc(100vw - 40px) at a 1000px viewport = %d cells, want 120", got)
+	}
+}
+
+func TestLengthFunctions(t *testing.T) {
+	cases := []struct {
+		value string
+		basis int
+		want  int
+	}{
+		{"min(100%, 240px)", 100, 30},
+		{"min(100%, 240px)", 20, 20},
+		{"max(50%, 100px)", 20, 13},
+		{"clamp(100px, 50%, 300px)", 100, 38},
+		{"clamp(100px, 50%, 300px)", 10, 13},
+		{"min(max(50%, 100px), 200px)", 20, 13},
+		{"min(calc(100% - 20px), 200px)", 50, 25},
+		{"clamp(25%, 50%, 75%)", 80, 40},
+		{"max(2em, 1ch)", 0, 4},
+	}
+	for _, tc := range cases {
+		l := parseLength(tc.value, 16)
+		if !l.Set || l.Func == nil {
+			t.Fatalf("parseLength(%q) = %+v, want a length function", tc.value, l)
+		}
+		if got := l.resolveH(tc.basis, 16); got != tc.want {
+			t.Errorf("%q at %d columns = %d, want %d", tc.value, tc.basis, got, tc.want)
+		}
+	}
+
+	// Viewport units inside a function resolve after the cascade.
+	vp := parseLength("min(100vw, 1200px)", 16)
+	if !vp.Set || vp.Func == nil {
+		t.Fatalf("min(100vw, 1200px) = %+v, want a length function", vp)
+	}
+	resolveViewportLength(&vp, 1000, 800)
+	if got := vp.resolveH(0, 16); got != 125 {
+		t.Errorf("min(100vw, 1200px) at a 1000px viewport = %d cells, want 125", got)
+	}
+
+	for _, bad := range []string{
+		"min()", "clamp(1px, 2px)", "min(1px, 2)", "min(auto, 1px)",
+		"max(1px,)", "min(1px, var(--x))", "clamp(1px, 2px, 3px, 4px)",
+	} {
 		if l := parseLength(bad, 16); l.Set {
 			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
 		}

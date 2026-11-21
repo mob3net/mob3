@@ -148,7 +148,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		// large basis inflated the min-content width (a 100x100 thumbnail
 		// measured 32 cells), which then forced flex and grid items wider than
 		// their slot and painted the image over the neighbouring text.
-		if st.Width.Set && !st.Width.IsAuto() && (st.Width.U == UnitPercent || (st.Width.Calc && st.Width.CalcPct > 0)) {
+		if st.Width.Set && !st.Width.IsAuto() && lengthHasPercent(st.Width) {
 			copied := *st
 			copied.Width = Length{}
 			cw, _ := imageSize(n, &copied, l.width, l.imageCapWidth())
@@ -192,7 +192,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return w, w
 	}
 	pad, _ := l.paddingH(n)
-	if st.Width.Set && !st.Width.IsAuto() && !st.Width.Calc && st.Width.U != UnitPercent {
+	if st.Width.Set && !st.Width.IsAuto() && !st.Width.Calc && !lengthHasPercent(st.Width) {
 		// A definite absolute width fixes the element's used width for
 		// intrinsic sizing too, so shrink-to-fit containers do not ignore
 		// explicitly sized children such as logos.
@@ -336,7 +336,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 // `max-width:110px` measured at its source size, so the float stayed 220px
 // wide and pushed the text beside it into a narrow column.
 func (l *layouter) limitImageMeasure(st *Style, cw int) int {
-	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() || st.MaxWidth.Calc {
+	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() || st.MaxWidth.Calc || lengthHasPercent(st.MaxWidth) {
 		return cw
 	}
 	mw := st.MaxWidth.resolveH(l.width, st.FontSize)

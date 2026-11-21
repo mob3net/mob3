@@ -2193,7 +2193,9 @@ func lengthPx(l Length, font, basis float64) (int, bool) {
 	}
 	switch {
 	case l.Calc:
-		return int(l.CalcPx + basis*l.CalcPct/100 + 0.5), true
+		return int(l.CalcPx + l.CalcVW/100*basis + basis*l.CalcPct/100 + 0.5), true
+	case l.Func != nil:
+		return int(l.Func.px(basis) + 0.5), true
 	case l.U == UnitPercent:
 		return int(basis*l.V/100 + 0.5), true
 	}

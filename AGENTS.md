@@ -250,7 +250,7 @@ Standard Go layout:
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
 | `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing` (including `inherit`, so the common `html{box-sizing:border-box} *{box-sizing:inherit}` reset reaches every element), min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
-| `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`, resolved against the root element's computed font size rather than a fixed 16px so framework sheets that set `html{font-size:14px}` get browser-like spacing), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
+| `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`, resolved against the root element's computed font size rather than a fixed 16px so framework sheets that set `html{font-size:14px}` get browser-like spacing), viewport units (`vw`/`vh`/`vmin`/`vmax`, including inside `calc()`), `calc()` arithmetic, and `min()`/`max()`/`clamp()` with percentages, viewport units, `calc()` arguments and nesting, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
 | `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
@@ -1979,11 +1979,13 @@ Standard Go layout:
 - Reader mode is heuristic: unusual layouts can lose content or retain
   clutter, it renders a snapshot rather than live JS updates, and images,
   forms and other interactive controls are removed.
-- `calc()` supports `+`, `-`, `*`, `/`, percentages, px/em/rem/pt/ch/lh and
-  parentheses; `var()`, viewport units and `env()` inside a `calc()`
-  expression are unsupported. Viewport units work as direct lengths and
-  resolve against the layout viewport (a 24-row default when no viewport is
-  known). Literal `::before`/`::after` strings are generated as ordinary text,
+- `calc()` supports `+`, `-`, `*`, `/`, percentages, px/em/rem/pt/ch/lh,
+  viewport units and parentheses; `var()` and `env()` inside a `calc()`
+  expression are unsupported. `min()`, `max()` and `clamp()` accept plain
+  lengths, percentages, viewport units, `calc()` arguments and nested length
+  functions. Viewport units work as direct lengths and resolve against the
+  layout viewport (a 24-row default when no viewport is known). Literal
+  `::before`/`::after` strings are generated as ordinary text,
   including inline, block and flex/grid pseudo-elements; empty boxes (the
   `padding-top` aspect-ratio pattern) still work. Private-use icon-font
   codepoints are dropped because terminals draw them as missing glyphs, and
@@ -2360,9 +2362,6 @@ engine work only; do not add site-specific exceptions.
   lines, row spans and `grid-area` rows are still flat. Grids that need them
   lose vertical placement. `layout_grid.go` (`grid`, `gridCells`,
   `gridRowPlacement`, `hasNamedGridRows`) is the entry point.
-- **Length functions.** Add `min()`, `max()` and `clamp()` for lengths,
-  including percentages, and allow viewport units inside `calc()`. `env()` and
-  registered custom properties remain out of scope unless separately approved.
 - **Grid alignment and auto flow.** Add basic `justify-items`,
   `justify-self`, `align-self`, `grid-auto-flow`, and `order` for grid items
   (order currently applies only to flex).

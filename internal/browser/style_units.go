@@ -20,6 +20,98 @@ type Length struct {
 	Calc    bool
 	CalcPct float64
 	CalcPx  float64
+	// CalcVW/CalcVH/CalcVMin/CalcVMax are the viewport components of a
+	// calc() expression. resolveStyleUnits folds them into CalcPx once the
+	// layout viewport is known.
+	CalcVW, CalcVH, CalcVMin, CalcVMax float64
+	// Func is a min()/max()/clamp() expression. Like calc() it resolves
+	// against the containing-block basis.
+	Func *lengthFunc
+}
+
+// lengthFuncKind identifies a CSS length function.
+type lengthFuncKind int
+
+const (
+	lengthFuncMin lengthFuncKind = iota
+	lengthFuncMax
+	lengthFuncClamp
+)
+
+// lengthTerm is one argument of a length function: a percentage of the basis
+// plus pixels, viewport components resolved after the cascade, or a nested
+// function.
+type lengthTerm struct {
+	Pct, Px            float64
+	VW, VH, VMin, VMax float64
+	Fn                 *lengthFunc
+}
+
+// lengthFunc is a min()/max()/clamp() expression resolved against a basis.
+type lengthFunc struct {
+	Kind  lengthFuncKind
+	Terms []lengthTerm
+}
+
+// px evaluates the function in CSS pixels for a percentage basis in pixels.
+func (f *lengthFunc) px(basis float64) float64 {
+	if f == nil {
+		return 0
+	}
+	switch f.Kind {
+	case lengthFuncClamp:
+		if len(f.Terms) != 3 {
+			return 0
+		}
+		lo := f.term(f.Terms[0], basis)
+		v := f.term(f.Terms[1], basis)
+		hi := f.term(f.Terms[2], basis)
+		if v < lo {
+			v = lo
+		}
+		if v > hi {
+			v = hi
+		}
+		return v
+	case lengthFuncMin, lengthFuncMax:
+		if len(f.Terms) == 0 {
+			return 0
+		}
+		v := f.term(f.Terms[0], basis)
+		for i := 1; i < len(f.Terms); i++ {
+			x := f.term(f.Terms[i], basis)
+			if (f.Kind == lengthFuncMin && x < v) || (f.Kind == lengthFuncMax && x > v) {
+				v = x
+			}
+		}
+		return v
+	}
+	return 0
+}
+
+func (f *lengthFunc) term(t lengthTerm, basis float64) float64 {
+	if t.Fn != nil {
+		return t.Fn.px(basis)
+	}
+	return t.Pct*basis/100 + t.Px
+}
+
+// resolveViewport folds viewport-unit terms into pixels once the layout
+// viewport is known.
+func (f *lengthFunc) resolveViewport(vw, vh float64) {
+	if f == nil {
+		return
+	}
+	for i := range f.Terms {
+		t := &f.Terms[i]
+		if t.Fn != nil {
+			t.Fn.resolveViewport(vw, vh)
+			continue
+		}
+		t.Px += t.VW/100*vw + t.VH/100*vh +
+			t.VMin/100*math.Min(vw, vh) + t.VMax/100*math.Max(vw, vh)
+		t.VW, t.VH, t.VMin, t.VMax = 0, 0, 0, 0
+	}
 }
 
 func px(v float64) Length { return Length{V: v, U: UnitPX, Set: true} }
@@ -31,6 +123,10 @@ func (l Length) IsAuto() bool { return !l.Set || l.Auto }
 func (l Length) cssPx(fontPx float64) float64 {
 	if l.Calc {
 		return l.CalcPx
+	}
+	if l.Func != nil {
+		// No basis is available here; percentage terms contribute nothing.
+		return l.Func.px(0)
 	}
 	switch l.U {
 	case UnitPX:
@@ -59,6 +155,9 @@ func (l Length) resolveH(basis int, fontPx float64) int {
 	if l.Calc {
 		return int(math.Round(l.CalcPx/cellW + float64(basis)*l.CalcPct/100))
 	}
+	if l.Func != nil {
+		return int(math.Round(l.Func.px(float64(basis)*cellW) / cellW))
+	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
 	}
@@ -72,6 +171,9 @@ func (l Length) resolveV(basis int, fontPx float64) int {
 	}
 	if l.Calc {
 		return int(math.Round(l.CalcPx/cellH + float64(basis)*l.CalcPct/100))
+	}
+	if l.Func != nil {
+		return int(math.Round(l.Func.px(float64(basis)*cellH) / cellH))
 	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
@@ -160,7 +262,17 @@ func resolveLengthREM(l *Length, rootPx float64) {
 
 // resolveViewportLength converts vw/vh/vmin/vmax lengths to px.
 func resolveViewportLength(l *Length, vw, vh float64) {
-	if !l.Set || l.Calc {
+	if !l.Set {
+		return
+	}
+	if l.Func != nil {
+		l.Func.resolveViewport(vw, vh)
+		return
+	}
+	if l.Calc {
+		l.CalcPx += l.CalcVW/100*vw + l.CalcVH/100*vh +
+			l.CalcVMin/100*math.Min(vw, vh) + l.CalcVMax/100*math.Max(vw, vh)
+		l.CalcVW, l.CalcVH, l.CalcVMin, l.CalcVMax = 0, 0, 0, 0
 		return
 	}
 	var px float64
@@ -184,6 +296,19 @@ func parseLength(v string, fontPx float64) Length {
 	if strings.HasPrefix(v, "calc(") && strings.HasSuffix(v, ")") {
 		return parseCalcLength(v[len("calc("):len(v)-1], fontPx)
 	}
+	if strings.HasPrefix(v, "min(") || strings.HasPrefix(v, "max(") || strings.HasPrefix(v, "clamp(") {
+		if l, ok := parseLengthFunction(v, fontPx); ok {
+			return l
+		}
+		return Length{}
+	}
+	return parseLengthSimple(v)
+}
+
+// parseLengthSimple parses a plain length token, without calc() or the
+// min()/max()/clamp() functions.
+func parseLengthSimple(v string) Length {
+	v = strings.ToLower(strings.TrimSpace(v))
 	if v == "auto" {
 		return Length{Auto: true}
 	}
@@ -238,7 +363,8 @@ func nonFiniteLength(val string) bool {
 	if v == "" {
 		return false
 	}
-	if strings.HasPrefix(v, "calc(") {
+	if strings.HasPrefix(v, "calc(") || strings.HasPrefix(v, "min(") ||
+		strings.HasPrefix(v, "max(") || strings.HasPrefix(v, "clamp(") {
 		for _, bad := range []string{"nan", "infinity", "inf"} {
 			if strings.Contains(v, bad) {
 				return true
@@ -271,8 +397,9 @@ func lengthProperty(prop string) bool {
 // calcValue is a simple calc() value: a percentage of the basis plus a CSS
 // pixel length. scalar marks a unitless number used only inside * and /.
 type calcValue struct {
-	pct, px float64
-	scalar  bool
+	pct, px            float64
+	vw, vh, vmin, vmax float64
+	scalar             bool
 }
 
 // parseCalcLength evaluates the simple arithmetic that covers common CSS
@@ -282,10 +409,16 @@ func parseCalcLength(expr string, fontPx float64) Length {
 	pos := 0
 	v, ok := parseCalcSum(expr, &pos, fontPx)
 	skipCalcSpace(expr, &pos)
-	if !ok || pos != len(expr) || v.scalar || !finiteNumber(v.pct) || !finiteNumber(v.px) {
+	if !ok || pos != len(expr) || v.scalar ||
+		!finiteNumber(v.pct) || !finiteNumber(v.px) ||
+		!finiteNumber(v.vw) || !finiteNumber(v.vh) ||
+		!finiteNumber(v.vmin) || !finiteNumber(v.vmax) {
 		return Length{}
 	}
-	return Length{Set: true, Calc: true, CalcPct: v.pct, CalcPx: v.px}
+	return Length{
+		Set: true, Calc: true, CalcPct: v.pct, CalcPx: v.px,
+		CalcVW: v.vw, CalcVH: v.vh, CalcVMin: v.vmin, CalcVMax: v.vmax,
+	}
 }
 
 func skipCalcSpace(s string, pos *int) {
@@ -313,9 +446,17 @@ func parseCalcSum(s string, pos *int, fontPx float64) (calcValue, bool) {
 		if op == '+' {
 			left.pct += right.pct
 			left.px += right.px
+			left.vw += right.vw
+			left.vh += right.vh
+			left.vmin += right.vmin
+			left.vmax += right.vmax
 		} else {
 			left.pct -= right.pct
 			left.px -= right.px
+			left.vw -= right.vw
+			left.vh -= right.vh
+			left.vmin -= right.vmin
+			left.vmax -= right.vmax
 		}
 	}
 	return left, true
@@ -343,10 +484,17 @@ func parseCalcProduct(s string, pos *int, fontPx float64) (calcValue, bool) {
 				left.px *= right.px
 			case left.scalar:
 				k := left.px
-				left = calcValue{pct: right.pct * k, px: right.px * k}
+				left = calcValue{
+					pct: right.pct * k, px: right.px * k, vw: right.vw * k,
+					vh: right.vh * k, vmin: right.vmin * k, vmax: right.vmax * k,
+				}
 			case right.scalar:
 				left.pct *= right.px
 				left.px *= right.px
+				left.vw *= right.px
+				left.vh *= right.px
+				left.vmin *= right.px
+				left.vmax *= right.px
 			default:
 				return calcValue{}, false
 			}
@@ -359,6 +507,10 @@ func parseCalcProduct(s string, pos *int, fontPx float64) (calcValue, bool) {
 			} else {
 				left.pct /= right.px
 				left.px /= right.px
+				left.vw /= right.px
+				left.vh /= right.px
+				left.vmin /= right.px
+				left.vmax /= right.px
 			}
 		}
 	}
@@ -451,11 +603,165 @@ func parseCalcFactor(s string, pos *int, fontPx float64) (calcValue, bool) {
 		u = UnitCH
 	case "lh":
 		u = UnitLH
+	case "vw":
+		return calcValue{vw: num}, true
+	case "vh":
+		return calcValue{vh: num}, true
+	case "vmin":
+		return calcValue{vmin: num}, true
+	case "vmax":
+		return calcValue{vmax: num}, true
 	default:
 		return calcValue{}, false
 	}
 	l := Length{V: num, U: u, Set: true}
 	return calcValue{px: l.cssPx(fontPx)}, true
+}
+
+// splitCSSFunction splits a "name(args)" value, returning the lowercased name
+// and the argument text. Nested parentheses are respected.
+func splitCSSFunction(v string) (string, string, bool) {
+	open := strings.IndexByte(v, '(')
+	if open <= 0 || !strings.HasSuffix(v, ")") {
+		return "", "", false
+	}
+	name := strings.ToLower(strings.TrimSpace(v[:open]))
+	if name == "" {
+		return "", "", false
+	}
+	depth := 0
+	for i := open; i < len(v); i++ {
+		switch v[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				if strings.TrimSpace(v[i+1:]) != "" {
+					return "", "", false
+				}
+				return name, v[open+1 : i], true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// splitCSSArgs splits function arguments at top-level commas.
+func splitCSSArgs(body string) []string {
+	var out []string
+	depth := 0
+	start := 0
+	for i := 0; i < len(body); i++ {
+		switch body[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				out = append(out, body[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(out, body[start:])
+}
+
+// parseLengthFunction parses min(), max() or clamp() with length arguments,
+// which may be plain lengths, calc() expressions, percentages, viewport units,
+// or nested length functions.
+func parseLengthFunction(v string, fontPx float64) (Length, bool) {
+	name, body, ok := splitCSSFunction(v)
+	if !ok {
+		return Length{}, false
+	}
+	var kind lengthFuncKind
+	switch name {
+	case "min":
+		kind = lengthFuncMin
+	case "max":
+		kind = lengthFuncMax
+	case "clamp":
+		kind = lengthFuncClamp
+	default:
+		return Length{}, false
+	}
+	args := splitCSSArgs(body)
+	if kind == lengthFuncClamp {
+		if len(args) != 3 {
+			return Length{}, false
+		}
+	} else if len(args) == 0 {
+		return Length{}, false
+	}
+	terms := make([]lengthTerm, 0, len(args))
+	for _, arg := range args {
+		t, ok := parseLengthTerm(arg, fontPx)
+		if !ok {
+			return Length{}, false
+		}
+		terms = append(terms, t)
+	}
+	return Length{Set: true, Func: &lengthFunc{Kind: kind, Terms: terms}}, true
+}
+
+func parseLengthTerm(arg string, fontPx float64) (lengthTerm, bool) {
+	s := strings.ToLower(strings.TrimSpace(arg))
+	if s == "" {
+		return lengthTerm{}, false
+	}
+	if name, body, ok := splitCSSFunction(s); ok {
+		switch name {
+		case "min", "max", "clamp":
+			l, ok := parseLengthFunction(s, fontPx)
+			if !ok {
+				return lengthTerm{}, false
+			}
+			return lengthTerm{Fn: l.Func}, true
+		case "calc":
+			l := parseCalcLength(body, fontPx)
+			if !l.Set || l.Func != nil {
+				return lengthTerm{}, false
+			}
+			return termFromLength(l, fontPx), true
+		}
+		return lengthTerm{}, false
+	}
+	l := parseLengthSimple(s)
+	if !l.Set || l.Auto || l.Func != nil {
+		return lengthTerm{}, false
+	}
+	// A non-zero unitless number is not a length. Zero is allowed anywhere.
+	if f, err := strconv.ParseFloat(s, 64); err == nil && f != 0 {
+		return lengthTerm{}, false
+	}
+	return termFromLength(l, fontPx), true
+}
+
+// termFromLength converts a parsed length into a function argument.
+func termFromLength(l Length, fontPx float64) lengthTerm {
+	if l.Calc {
+		return lengthTerm{
+			Pct: l.CalcPct, Px: l.CalcPx,
+			VW: l.CalcVW, VH: l.CalcVH, VMin: l.CalcVMin, VMax: l.CalcVMax,
+		}
+	}
+	switch l.U {
+	case UnitPercent:
+		return lengthTerm{Pct: l.V}
+	case UnitVW:
+		return lengthTerm{VW: l.V}
+	case UnitVH:
+		return lengthTerm{VH: l.V}
+	case UnitVMin:
+		return lengthTerm{VMin: l.V}
+	case UnitVMax:
+		return lengthTerm{VMax: l.V}
+	}
+	return lengthTerm{Px: l.cssPx(fontPx)}
 }
 
 func parseFontSize(v string, parentPx float64) (float64, bool) {
