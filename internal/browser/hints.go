@@ -456,7 +456,7 @@ func (b *Browser) activateHintControl(n *Node, r Rect) {
 	switch {
 	case isFileInput(n):
 		b.focusControlTarget(n, nil)
-		b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")
+		b.showUploadNotice()
 	case n.Tag == "option":
 		sel := nearestSelect(n)
 		if sel == nil {

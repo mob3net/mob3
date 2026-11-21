@@ -1227,6 +1227,14 @@ func (b *Browser) showStatusDetails() {
 	}
 }
 
+// showUploadNotice explains that file uploads are not implemented, in the modal
+// and on the status line so the reason stays visible after the modal closes.
+func (b *Browser) showUploadNotice() {
+	const msg = "File uploads and multipart forms are not supported"
+	b.showNotice("Upload not supported", msg+".")
+	b.status = "Upload not supported — " + msg
+}
+
 func (b *Browser) showNotice(title, message string) {
 	b.download = nil
 	b.notice = &noticeDialog{title: title, message: message}

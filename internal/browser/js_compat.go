@@ -1036,20 +1036,82 @@ func (j *jsRuntime) datasetObject(n *Node) sobek.Value {
 }
 
 func (j *jsRuntime) clientRectObject(n *Node) *sobek.Object {
+	x, y, w, h, _ := j.elementRect(n)
 	r := j.vm.NewObject()
-	w, h := 0, 0
-	if n != nil && (n.Tag == "html" || n.Tag == "body") && j.b != nil {
-		w, h = j.b.width*8, j.b.height*16
-	}
-	_ = r.Set("x", 0)
-	_ = r.Set("y", 0)
-	_ = r.Set("top", 0)
-	_ = r.Set("left", 0)
-	_ = r.Set("right", w)
-	_ = r.Set("bottom", h)
+	_ = r.Set("x", x)
+	_ = r.Set("y", y)
+	_ = r.Set("top", y)
+	_ = r.Set("left", x)
+	_ = r.Set("right", x+w)
+	_ = r.Set("bottom", y+h)
 	_ = r.Set("width", w)
 	_ = r.Set("height", h)
 	return r
+}
+
+// elementRect returns a viewport-relative CSS-pixel rectangle for a node. It
+// unions the element's laid-out block box, when there is one, with the
+// fragments of its subtree, because inline content, form widgets and text runs
+// carry the fragments while a block container may have no fragment of its own.
+// Scripts position popovers and dropdowns from this rectangle; returning zeros
+// made every such menu open at the page corner.
+func (j *jsRuntime) elementRect(n *Node) (x, y, w, h int, ok bool) {
+	if n == nil || j.b == nil {
+		return 0, 0, 0, 0, false
+	}
+	if n.Tag == "html" || n.Tag == "body" {
+		return 0, 0, j.b.width * 8, j.b.height * 16, true
+	}
+	ly := j.b.layout
+	if ly == nil {
+		return 0, 0, 0, 0, false
+	}
+	scroll := j.b.scroll
+	minX, minY, maxX, maxY := 0, 0, 0, 0
+	add := func(fx, fy, fw, fh int) {
+		if fw <= 0 || fh <= 0 {
+			return
+		}
+		if !ok {
+			minX, minY, maxX, maxY = fx, fy, fx+fw, fy+fh
+			ok = true
+			return
+		}
+		if fx < minX {
+			minX = fx
+		}
+		if fy < minY {
+			minY = fy
+		}
+		if fx+fw > maxX {
+			maxX = fx + fw
+		}
+		if fy+fh > maxY {
+			maxY = fy + fh
+		}
+	}
+	if r, found := ly.Boxes[n]; found {
+		add(r.X*8, (r.Y-scroll)*16, r.W*8, r.H*16)
+	}
+	inSubtree := func(p *Node) bool {
+		for ; p != nil; p = p.Parent {
+			if p == n {
+				return true
+			}
+		}
+		return false
+	}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Node == nil || !inSubtree(f.Node) {
+			continue
+		}
+		add(f.X*8, (f.Y-scroll)*16, f.W*8, f.H*16)
+	}
+	if !ok {
+		return 0, 0, 0, 0, false
+	}
+	return minX, minY, maxX - minX, maxY - minY, true
 }
 
 func nodeRoot(n *Node) *Node {

@@ -901,7 +901,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					}
 					if isFileInput(n) {
 						b.selecting = false
-						b.showNotice("Upload not supported", "File uploads and multipart forms are not supported.")
+						b.showUploadNotice()
 						return false
 					}
 					if isToggleControl(n) {

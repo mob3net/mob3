@@ -70,6 +70,10 @@ type Layout struct {
 	// click hit testing falls back to them when the pointer is over padding or
 	// background rather than a text fragment.
 	Boxes map[*Node]Rect
+	// engine is the style engine that produced Styles, kept so a script
+	// measurement of an element created after this layout can recompute that
+	// element's style without rebuilding the page.
+	engine *styleEngine
 
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
@@ -351,6 +355,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
 		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
 		Cursor: l.cursor, HasCursor: l.hasCursor, Boxes: l.boxes,
+		engine: engine,
 	}
 	out.buildLinks()
 	// A page that already renders a dark background is using its own dark

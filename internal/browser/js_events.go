@@ -416,7 +416,9 @@ func (j *jsRuntime) callEventListeners(m map[string][]jsListener, typ string, th
 			m[typ] = list
 			i--
 		}
-		if j.eventStopped(ev) {
+		// stopPropagation only ends bubbling to ancestors; only
+		// stopImmediatePropagation skips the rest of this element's listeners.
+		if j.eventFlag(ev, "__mob3StopImmediate") {
 			return
 		}
 	}

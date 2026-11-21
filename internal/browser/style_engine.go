@@ -179,34 +179,7 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 			}
 			return
 		}
-		st := inheritStyle(parent)
-		if !e.outOfTime() {
-			e.applyMatching(e.ua, n, st, parent)
-			ApplyPresentationAttrs(n, st)
-			e.applyMatchingIndex(e.authorIndex, n, st, parent)
-			if inline := n.Attr("style"); inline != "" {
-				decls := ParseDeclarations(inline)
-				applyDecls(st, decls, parent, false, parentSize(parent))
-				applyDecls(st, decls, parent, true, parentSize(parent))
-			}
-		}
-		e.resolveStyleUnits(st)
-		if clipHidesContent(st.Clip) {
-			st.Display = "none"
-		}
-		// Common screen-reader-only pattern: a 1px clipped box. Rendering it
-		// would produce one character per line, so hide it.
-		if st.Overflow == "hidden" && st.Width.Set && st.Width.U == UnitPX && st.Width.V <= 1 &&
-			st.Height.Set && st.Height.U == UnitPX && st.Height.V <= 1 {
-			st.Display = "none"
-		}
-		if (n.Tag == "body" || n.Tag == "html") && st.Hidden {
-			// Treat body/html visibility:hidden as the common anti-FOUC guard
-			// that scripts remove; the rest of the document is already being
-			// rendered, so inheriting it would only hide fixed chrome.
-			st.Hidden = false
-		}
-		n.Style = st
+		st := e.nodeStyle(n, parent)
 		styles[n] = st
 		if len(e.authorBefore) > 0 {
 			n.Before = e.computePseudo(n, st, "before")
@@ -342,4 +315,64 @@ func layerPriority(layer int, important bool) int {
 		return math.MaxInt
 	}
 	return layer
+}
+
+// nodeStyle computes one element's style against its parent's, exactly as the
+// full pass does. A node with no inheritance payload bypasses the cascade when
+// the style pass is out of time, matching computeAll.
+func (e *styleEngine) nodeStyle(n *Node, parent *Style) *Style {
+	st := inheritStyle(parent)
+	if !e.outOfTime() {
+		e.applyMatching(e.ua, n, st, parent)
+		ApplyPresentationAttrs(n, st)
+		e.applyMatchingIndex(e.authorIndex, n, st, parent)
+		if inline := n.Attr("style"); inline != "" {
+			decls := ParseDeclarations(inline)
+			applyDecls(st, decls, parent, false, parentSize(parent))
+			applyDecls(st, decls, parent, true, parentSize(parent))
+		}
+	}
+	e.resolveStyleUnits(st)
+	if clipHidesContent(st.Clip) {
+		st.Display = "none"
+	}
+	// Common screen-reader-only pattern: a 1px clipped box. Rendering it
+	// would produce one character per line, so hide it.
+	if st.Overflow == "hidden" && st.Width.Set && st.Width.U == UnitPX && st.Width.V <= 1 &&
+		st.Height.Set && st.Height.U == UnitPX && st.Height.V <= 1 {
+		st.Display = "none"
+	}
+	if (n.Tag == "body" || n.Tag == "html") && st.Hidden {
+		// Treat body/html visibility:hidden as the common anti-FOUC guard
+		// that scripts remove; the rest of the document is already being
+		// rendered, so inheriting it would only hide fixed chrome.
+		st.Hidden = false
+	}
+	n.Style = st
+	return st
+}
+
+// computeNode computes the style of one element on demand, walking from the
+// document root down so inherited values and ancestor selectors match a full
+// pass. It is used when script measurement or getComputedStyle asks about an
+// element created after the last layout.
+func (e *styleEngine) computeNode(n *Node) *Style {
+	if n == nil {
+		return nil
+	}
+	if n.Type == TextNode {
+		if n.Parent != nil {
+			return n.Parent.Style
+		}
+		return nil
+	}
+	var chain []*Node
+	for x := n; x != nil && x.Type != DocumentNode; x = x.Parent {
+		chain = append(chain, x)
+	}
+	parent := defaultStyle()
+	for i := len(chain) - 1; i >= 0; i-- {
+		parent = e.nodeStyle(chain[i], parent)
+	}
+	return n.Style
 }

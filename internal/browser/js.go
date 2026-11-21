@@ -1086,7 +1086,10 @@ type jsEvent struct {
 	typ       string
 	target    sobek.Value
 	prevented bool
+	// stopped stops propagation to ancestors; immediate also stops the
+	// remaining listeners on the element that is currently handling the event.
 	stopped   bool
+	immediate bool
 }
 
 func (j *jsRuntime) eventObject(ev *jsEvent) *sobek.Object {
@@ -1108,6 +1111,7 @@ func (j *jsRuntime) eventObject(ev *jsEvent) *sobek.Object {
 	}))
 	_ = o.Set("stopImmediatePropagation", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
 		ev.stopped = true
+		ev.immediate = true
 		return sobek.Undefined()
 	}))
 	return o
@@ -1123,7 +1127,7 @@ func (j *jsRuntime) callList(m map[string][]jsListener, typ string, this, evObj 
 			m[typ] = list
 			i--
 		}
-		if ev.stopped {
+		if ev.immediate {
 			return
 		}
 	}

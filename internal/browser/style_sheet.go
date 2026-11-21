@@ -16,6 +16,7 @@ type Declaration struct {
 
 // ParseDeclarations parses the body of a style attribute or rule block.
 func ParseDeclarations(s string) []Declaration {
+	s = stripCSSComments(s)
 	var out []Declaration
 	for _, chunk := range splitTopLevel(s, ';') {
 		chunk = strings.TrimSpace(chunk)
@@ -579,6 +580,13 @@ func parseRules(src string, st *parseState, media string) []Rule {
 		depth := 0
 		for i < len(src) {
 			c := src[i]
+			if c == '/' && i+1 < len(src) && src[i+1] == '*' {
+				if j := strings.Index(src[i+2:], "*/"); j >= 0 {
+					i += j + 4
+					continue
+				}
+				break
+			}
 			if c == '"' || c == '\'' {
 				i = skipString(src, i)
 				continue
@@ -628,6 +636,16 @@ func scanBlock(s string, open int) (body string, next int, ok bool) {
 	i := open + 1
 	start := i
 	for i < len(s) {
+		if s[i] == '/' && i+1 < len(s) && s[i+1] == '*' {
+			// Comments are skipped here too: an apostrophe or a brace inside
+			// one would otherwise start a phantom string or change the depth
+			// and make the rest of the sheet unparseable.
+			if j := strings.Index(s[i+2:], "*/"); j >= 0 {
+				i += j + 4
+				continue
+			}
+			return "", len(s), false
+		}
 		switch s[i] {
 		case '"', '\'':
 			i = skipString(s, i)
@@ -777,4 +795,33 @@ func splitFields(s string) []string {
 		out = append(out, b.String())
 	}
 	return out
+}
+
+// stripCSSComments removes /* ... */ comments outside strings, so a comment
+// between declarations cannot merge them into one bogus property.
+func stripCSSComments(s string) string {
+	if !strings.Contains(s, "/*") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c == '"' || c == '\'' {
+			j := skipString(s, i)
+			b.WriteString(s[i:j])
+			i = j
+			continue
+		}
+		if c == '/' && i+1 < len(s) && s[i+1] == '*' {
+			if j := strings.Index(s[i+2:], "*/"); j >= 0 {
+				i += j + 4
+				continue
+			}
+			break
+		}
+		b.WriteByte(c)
+		i++
+	}
+	return b.String()
 }

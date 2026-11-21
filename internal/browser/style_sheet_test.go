@@ -265,3 +265,38 @@ func TestBackgroundImageParsing(t *testing.T) {
 		t.Fatalf("background position = %v,%v", st.BackgroundPosX, st.BackgroundPosY)
 	}
 }
+
+func TestStylesheetSkipsCommentsInsideBlocks(t *testing.T) {
+	// A comment holding an apostrophe used to start a phantom string in the
+	// block scanner, which made the rest of the sheet unparseable (FileGator's
+	// browser.css lost ~200 rules after "the button's title").
+	rules := ParseStylesheet(`
+		.a { color: red; /* the button's title */ width: 10px; }
+		.b { color: blue; /* braces { } inside */ height: 4px; }
+		.c { color: green; }
+	`)
+	var got []string
+	for _, r := range rules {
+		got = append(got, r.Selector.Text)
+		if r.Selector.Text == ".a" {
+			found := false
+			for _, d := range r.Decls {
+				if d.Prop == "width" && d.Value == "10px" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("comment swallowed the declaration after it: %+v", r.Decls)
+			}
+		}
+	}
+	want := []string{".a", ".b", ".c"}
+	if len(got) != len(want) {
+		t.Fatalf("rules = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rules = %v, want %v", got, want)
+		}
+	}
+}

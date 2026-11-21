@@ -546,6 +546,12 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "naturalHeight", func(n *Node) sobek.Value { return j.vm.ToValue(0) }, nil)
 	metric := func(width bool) func(n *Node) sobek.Value {
 		return func(n *Node) sobek.Value {
+			if _, _, w, h, ok := j.elementRect(n); ok {
+				if width {
+					return j.vm.ToValue(w)
+				}
+				return j.vm.ToValue(h)
+			}
 			vw, vh := j.b.width*8, j.b.height*16
 			if width {
 				return j.vm.ToValue(j.elementWidthPx(n, vw))
@@ -565,14 +571,12 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "scrollTop", func(n *Node) sobek.Value { return j.vm.ToValue(0) }, func(n *Node, _ sobek.Value) {})
 	j.protoAccessor(p, "scrollLeft", func(n *Node) sobek.Value { return j.vm.ToValue(0) }, func(n *Node, _ sobek.Value) {})
 	j.protoMethod(p, "getBoundingClientRect", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		vw, vh := j.b.width*8, j.b.height*16
-		w := j.elementWidthPx(n, vw)
-		h := j.elementHeightPx(n, vh)
-		x, y := 0, 0
-		if j.b.layout != nil {
-			if r, ok := j.b.layout.Boxes[n]; ok {
-				x, y = r.X*8, r.Y*16
-			}
+		x, y, w, h, ok := j.elementRect(n)
+		if !ok {
+			vw, vh := j.b.width*8, j.b.height*16
+			x, y = 0, 0
+			w = j.elementWidthPx(n, vw)
+			h = j.elementHeightPx(n, vh)
 		}
 		r := j.vm.NewObject()
 		_ = r.Set("x", x)
@@ -981,6 +985,12 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.nodeArray(nodes)
 	})
 	j.protoMethod(p, "click", func(n *Node, call sobek.FunctionCall) sobek.Value {
+		// A page usually opens the file picker by calling click() on a hidden
+		// file input (an Upload button wrapping it). There is no picker here,
+		// so show the same unsupported-upload notice a direct click does.
+		if isFileInput(n) && j.b != nil {
+			j.b.showUploadNotice()
+		}
 		j.fireNodeEvent(n, "click")
 		j.markDirty()
 		return sobek.Undefined()
@@ -1453,15 +1463,29 @@ func (j *jsRuntime) newDetachedDocument(title string) *sobek.Object {
 // computedStyleObject returns a getComputedStyle-like snapshot. Values come
 // from the resolved style when layout has run; detached or not-yet-styled
 // elements get sensible defaults.
+// nodeStyle returns a node's computed style, computing it on demand when the
+// node was created after the layout that filled the style map. Without this a
+// script-created menu has no style, so getComputedStyle reports "static" and
+// offsetWidth falls back to a full-width block guess.
+func (j *jsRuntime) nodeStyle(n *Node) *Style {
+	if n == nil {
+		return nil
+	}
+	if n.Style != nil {
+		return n.Style
+	}
+	if j.b != nil && j.b.layout != nil && j.b.layout.engine != nil {
+		return j.b.layout.engine.computeNode(n)
+	}
+	return nil
+}
+
 func (j *jsRuntime) computedStyleObject(n *Node) *sobek.Object {
 	o := j.vm.NewObject()
 	if j.cssStyleProto != nil {
 		_ = o.SetPrototype(j.cssStyleProto)
 	}
-	st := (*Style)(nil)
-	if n != nil {
-		st = n.Style
-	}
+	st := j.nodeStyle(n)
 	if st == nil {
 		st = &Style{}
 	}
@@ -2183,6 +2207,7 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 	if n.Tag == "html" || n.Tag == "body" {
 		return viewport
 	}
+	j.nodeStyle(n)
 	font := 16.0
 	if n.Style != nil && n.Style.FontSize > 0 {
 		font = n.Style.FontSize
@@ -2212,6 +2237,19 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 	// `width:0px` into the DOM and collapse the whole slider.
 	if blockLevelNode(n) {
 		return j.containingWidthPx(n, viewport)
+	}
+	// A shrink-to-fit box that has not been laid out yet (a dropdown appended
+	// by script) is at least its min-width. Menus read offsetWidth right after
+	// appending to centre themselves; reporting 0 made them fall back to a
+	// guessed width and open at the page corner.
+	if n.Style != nil && n.Style.MinWidth.Set && !n.Style.MinWidth.IsAuto() {
+		basis := 0.0
+		if n.Style.MinWidth.U == UnitPercent {
+			basis = float64(viewport)
+		}
+		if px, ok := lengthPx(n.Style.MinWidth, font, basis); ok && px > 0 {
+			return px
+		}
 	}
 	return 0
 }
@@ -2284,6 +2322,7 @@ func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {
 	if n.Tag == "html" || n.Tag == "body" {
 		return viewport
 	}
+	j.nodeStyle(n)
 	font := 16.0
 	if n.Style != nil && n.Style.FontSize > 0 {
 		font = n.Style.FontSize

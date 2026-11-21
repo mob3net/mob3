@@ -1655,3 +1655,92 @@ func TestDocumentBaseURIUsesBaseElement(t *testing.T) {
 		t.Fatalf("baseURI resolution = %q, want %q", page.Title, want)
 	}
 }
+
+func TestGetBoundingClientRectUsesLayoutFragments(t *testing.T) {
+	u, _ := url.Parse("https://example.com/")
+	doc := ParseHTML(`<html><body><div id="box">hello</div></body></html>`)
+	page := &Page{URL: u, Base: u, Root: doc, Title: "test",
+		Scripts: []Script{{Code: `
+			var r = document.getElementById("box").getBoundingClientRect();
+			document.title = [r.width > 0, r.height > 0, r.left >= 0, r.top >= 0].join(",");
+		`, Src: "inline script"}}}
+	b := NewBrowser(60, 20)
+	b.page = page
+	b.rebuild()
+	b.startJS(page)
+	if page.Title != "true,true,true,true" {
+		t.Fatalf("rect = %q, want a non-empty viewport rect", page.Title)
+	}
+}
+
+func TestScriptCreatedElementGetsStyleAndMinWidth(t *testing.T) {
+	u, _ := url.Parse("https://example.com/")
+	doc := ParseHTML(`<html><head><style>.menu { position: fixed; min-width: 11rem; }</style></head>` +
+		`<body><p>text</p></body></html>`)
+	page := &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu { position: fixed; min-width: 11rem; }`),
+		Title: "test",
+		Scripts: []Script{{Code: `
+			var d = document.createElement("div");
+			d.className = "menu";
+			document.body.append(d);
+			document.title = getComputedStyle(d).position + "|" + d.offsetWidth;
+		`, Src: "inline script"}}}
+	b := NewBrowser(60, 20)
+	b.page = page
+	b.rebuild()
+	b.startJS(page)
+	// 11rem at 16px is 176px; a fixed box must not be guessed as a full-width
+	// block, or menus centre themselves against the page corner.
+	if page.Title != "fixed|176" {
+		t.Fatalf("script-created style/width = %q, want fixed|176", page.Title)
+	}
+}
+
+func TestProgrammaticFileInputClickShowsUploadNotice(t *testing.T) {
+	page := newJSPage(`<html><body><input id="pick" type="file"></body></html>`,
+		`document.getElementById("pick").click();`)
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.startJS(page)
+	if b.notice == nil || !strings.Contains(b.notice.title, "Upload") {
+		t.Fatalf("file input click left no upload notice: %+v", b.notice)
+	}
+	if !strings.Contains(b.status, "Upload not supported") {
+		t.Fatalf("status = %q, want an upload warning", b.status)
+	}
+}
+
+func TestStopPropagationKeepsSiblingListeners(t *testing.T) {
+	page := newJSPage(`<html><body><div id="anc"><button id="b">x</button></div></body></html>`,
+		`var log = [];
+		 document.getElementById("b").addEventListener("click", function (e) {
+			log.push("first");
+			e.stopPropagation();
+		 });
+		 document.getElementById("b").addEventListener("click", function () { log.push("second"); });
+		 document.getElementById("anc").addEventListener("click", function () { log.push("ancestor"); });
+		 document.getElementById("b").click();
+		 document.title = log.join(",");`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "first,second" {
+		t.Fatalf("listener log = %q, want first,second (ancestor suppressed)", page.Title)
+	}
+}
+
+func TestStopImmediatePropagationSkipsSiblingListeners(t *testing.T) {
+	page := newJSPage(`<html><body><button id="b">x</button></body></html>`,
+		`var log = [];
+		 document.getElementById("b").addEventListener("click", function (e) {
+			log.push("first");
+			e.stopImmediatePropagation();
+		 });
+		 document.getElementById("b").addEventListener("click", function () { log.push("second"); });
+		 document.getElementById("b").click();
+		 document.title = log.join(",");`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "first" {
+		t.Fatalf("listener log = %q, want only first", page.Title)
+	}
+}

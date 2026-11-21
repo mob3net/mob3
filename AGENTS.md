@@ -231,7 +231,7 @@ Standard Go layout:
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. |
-| `style_sheet.go` | Declaration and stylesheet parsing: tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
+| `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
 | `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, empty `::before`/`::after` computation, and the style deadline. |
 | `style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
@@ -273,7 +273,7 @@ Standard Go layout:
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
-| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods and element-child views (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`, `firstElementChild`/`lastElementChild`, `children`), because frameworks that hydrate with `document` as the root container call them on the document itself. `<template>.content` is a real inert fragment, and a node whose tag has a registered custom element class is constructed with that class when first wrapped. |
+| `js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. Measurement resolves from the laid-out fragments, and a script-created element gets its style computed on demand so `getComputedStyle`/`offsetWidth` see its rules before the next rebuild. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods and element-child views (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`, `firstElementChild`/`lastElementChild`, `children`), because frameworks that hydrate with `document` as the root container call them on the document itself. `<template>.content` is a real inert fragment, and a node whose tag has a registered custom element class is constructed with that class when first wrapped. |
 | `js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |
 | `js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
 | `js_stubs.go` | Platform interface stubs: `EventTarget`, `NodeList`, `HTMLCollection`, `DOMStringMap`, `CSS`, `ShadowRoot`, `customElements`, `IntersectionObserver`, `ResizeObserver`, `PerformanceObserver`, `Path2D`, `ReadableStream`, `Worker`, Web Animations no-ops, `DOMParser`/`XMLSerializer`, `DataTransfer`, extra event subclasses, interface constructors (`DOMTokenList`, `CSSStyleDeclaration`, `Storage`, `MediaQueryList`, `TreeWalker`, …), `Element.prototype.matches`/`closest` /vendor-alias delegates, and isolated inert iframe `contentDocument`/`contentWindow`. `localStorage`/`sessionStorage` use the `Storage` prototype so `instanceof` and prototype patches work. Constructable `CSSStyleSheet` accepts `insertRule`/`deleteRule`/`replaceSync`, and `PerformanceObserver.supportedEntryTypes` is an empty list so feature detection that reads it does not throw. |
@@ -1294,7 +1294,12 @@ Standard Go layout:
   `ProgressEvent` constructors exist; `document.createEvent` returns the
   matching type with `initEvent`/`initCustomEvent`/`initMouseEvent`, and
   `dispatchEvent` (with bubbling and `preventDefault`) works on elements,
-  `document` and `window`. `element.click()` dispatches a click. `NodeFilter`,
+  `document` and `window`. `stopPropagation` ends bubbling to ancestors but
+  still runs the element's remaining listeners; only
+  `stopImmediatePropagation` skips them, as in the DOM. `element.click()`
+  dispatches a click, and clicking an `<input type=file>` from script shows the
+  unsupported-upload notice (pages open the picker through a hidden input).
+  `NodeFilter`,
   `Node.*` constants and `performance.timing`/`navigation` are present.
   Elements expose `baseURI`, `clientTop`/`clientLeft`, `nodeValue` (null),
   `isSameNode`/`isEqualNode`, `hasAttributes`, attribute-node methods,
@@ -1914,8 +1919,13 @@ Intentional limits of the shims:
 - `MutationObserver` is a no-op, `MessageChannel` is timer-backed,
   `getSelection`/`Range` are informational, and `TreeWalker` rebuilds the
   preorder list on each step.
-- Measurement APIs are approximate: scripts run before layout, so
-  `getComputedStyle` and rectangles may reflect defaults until after load.
+- Measurement APIs are coarse: `getBoundingClientRect`/`getClientRects` union
+  the element's laid-out fragments and block box, so they are exact to the
+  terminal cell; `getComputedStyle` and `offsetWidth`/`offsetHeight` compute an
+  element's style on demand when a script created it after the last layout,
+  using the layout's cached rule index and the declared `min-width` as the
+  width fallback. An element created and measured in one turn still has no
+  laid-out box until the next rebuild.
 - Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not follow scrolling or resizing. `ReadableStream` is an in-memory
   reader, `Worker` never runs, and iframe documents are inert stubs.
