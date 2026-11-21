@@ -23,7 +23,7 @@ key, mouse and form reference for the running build.
 | `+` / `-` | Zoom the page in / out (25% to 200%). Fixed pixel layout, spacing, images and large kitty headings grow; body text keeps its size and line height |
 | `0` | Reset zoom to 100% |
 | `X` | Open the view options window (Fixed elements, Background images); `Space`/`Enter` toggles the selected switch |
-| `o` | Open the URL prompt |
+| `o` / `Ctrl-L` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
 | `f` | Highlight letters in the visible links and follow one by typing them |
@@ -64,8 +64,8 @@ closes it immediately.
 
 ## URL prompt
 
-`o`, `:` or clicking the URL bar opens the prompt prefilled with the current
-URL and selected. Typing replaces the selection; `Backspace` clears it first.
+`o`, `Ctrl-L`, `:` or clicking the URL bar opens the prompt prefilled with the
+current URL and selected. Typing replaces the selection; `Backspace` clears it first.
 `:` is a Vim-style command prompt: `q` or `:q` plus `Enter` exits immediately,
 without the confirmation that `q` asks for. History of earlier URLs and search
 terms is kept in memory for the session.

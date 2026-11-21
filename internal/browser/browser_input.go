@@ -1076,7 +1076,7 @@ func (b *Browser) HandleKey(k string) bool {
 		b.resetZoom()
 	case "J":
 		b.toggleJavaScript()
-	case "o":
+	case "o", "ctrl-l":
 		b.openURLPrompt()
 	case ":":
 		b.openVimPrompt()

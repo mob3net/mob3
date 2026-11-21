@@ -885,7 +885,7 @@ Standard Go layout:
   on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements and
   Background images (hiding the bitmaps but keeping neutral placeholders), and
   the list is built from one `viewOption` registry so later view toggles can
-  be added), `o` URL prompt (or `:` for a Vim-style command prompt where
+  be added), `o`/`Ctrl-L` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL, `E` open the full warning or error
@@ -1240,8 +1240,8 @@ Standard Go layout:
   and automation loads stay synchronous.
 - **Refused schemes:** `javascript:`, `mailto:` and `tel:` links show a status
   message.
-- **URL input rules:** opening the URL prompt (`o`, `:` or clicking the URL
-  field) prefills the current URL and selects it all, so typing replaces it
+- **URL input rules:** opening the URL prompt (`o`, `Ctrl-L`, `:` or clicking
+  the URL field) prefills the current URL and selects it all, so typing replaces it
   like a normal browser address bar; Backspace clears the selection first. A
   prompt opened with `:` quits immediately when `q` or `:q` is confirmed with
   Enter, and the

@@ -1668,7 +1668,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>+</b> / <b>-</b></td><td>zoom the page in / out (25% to 200%); fixed pixel layout, spacing, images and large kitty headings grow, body text keeps its size</td></tr>
 <tr><td><b>0</b></td><td>reset zoom to 100%</td></tr>
 <tr><td><b>X</b></td><td>open the view options window (Fixed elements, Background images) and toggle the selected switch</td></tr>
-<tr><td><b>o</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
+<tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>F</b></td><td>same as <b>f</b>, but show the destination and wait for <b>Enter</b>/<b>y</b></td></tr>

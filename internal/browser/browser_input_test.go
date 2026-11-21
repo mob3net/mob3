@@ -170,6 +170,37 @@ func TestVimURLKey(t *testing.T) {
 	}
 }
 
+func TestCtrlLOpensURLPrompt(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.url = mustParse(t, "https://example.com/page")
+	b.HandleKey("ctrl-l")
+	if !b.prompt {
+		t.Fatal("ctrl-l did not open the URL prompt")
+	}
+	if b.promptText != "https://example.com/page" || !b.promptSelectAll {
+		t.Fatalf("prompt = %q selectAll=%v", b.promptText, b.promptSelectAll)
+	}
+	b.HandleKey("x")
+	if b.promptText != "x" || b.promptSelectAll {
+		t.Fatalf("typing did not replace selection: %q selectAll=%v", b.promptText, b.promptSelectAll)
+	}
+
+	doc := ParseHTML(`<html><body><input name="q"></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	f := NewBrowser(80, 10)
+	f.page = &Page{URL: u, Base: u, Root: doc}
+	f.rebuild()
+	q := inputByName(doc, "q")
+	if q == nil {
+		t.Fatal("input not found")
+	}
+	f.setInputFocus(q)
+	f.HandleKey("ctrl-l")
+	if f.prompt {
+		t.Fatal("ctrl-l opened the URL prompt from a focused field")
+	}
+}
+
 func TestEscapeShowsExitHint(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.layout = &Layout{Height: 10}
