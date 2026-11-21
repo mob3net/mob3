@@ -137,8 +137,81 @@ func (b *Browser) startDeferredImageLoad() {
 	}()
 }
 
+// fragmentRows maps each node to the first laid-out row of its own fragments.
+func (b *Browser) fragmentRows(nodes []*Node) map[*Node]int {
+	rows := make(map[*Node]int, len(nodes))
+	if b.layout == nil || len(b.layout.Frags) == 0 || len(nodes) == 0 {
+		return rows
+	}
+	want := make(map[*Node]struct{}, len(nodes))
+	for _, n := range nodes {
+		want[n] = struct{}{}
+	}
+	for i := range b.layout.Frags {
+		f := &b.layout.Frags[i]
+		if f.Node == nil {
+			continue
+		}
+		if _, ok := want[f.Node]; !ok {
+			continue
+		}
+		if _, seen := rows[f.Node]; seen {
+			continue
+		}
+		rows[f.Node] = f.Y
+	}
+	return rows
+}
+
+// imageChangeReachesViewport reports whether any changed image starts above
+// the current viewport bottom, and returns the topmost laid-out row of the
+// images that do not. A node with no laid-out fragment counts as reaching the
+// viewport because it cannot be proven to be out of view.
+func (b *Browser) imageChangeReachesViewport(nodes []*Node) (bool, int) {
+	rows := b.fragmentRows(nodes)
+	viewH := b.viewportHeight()
+	if viewH < 1 {
+		viewH = 1
+	}
+	viewBottom := b.scroll + viewH
+	top := 0
+	for _, n := range nodes {
+		y, ok := rows[n]
+		if !ok || y < viewBottom {
+			return true, 0
+		}
+		if top == 0 || y < top {
+			top = y
+		}
+	}
+	return false, top
+}
+
+// applyPendingImageLayout lays out deferred images once the viewport is about
+// to show them, or once it reaches the end of the document where a taller page
+// may be waiting. While every pending image is still below the fold it leaves
+// the layout and the frame untouched.
+func (b *Browser) applyPendingImageLayout() {
+	if b.pendingImageRow <= 0 || b.layout == nil {
+		return
+	}
+	viewH := b.viewportHeight()
+	if viewH < 1 {
+		viewH = 1
+	}
+	viewBottom := b.scroll + viewH
+	atBottom := b.layout.Height > 0 && viewBottom >= b.layout.Height
+	if !atBottom && b.pendingImageRow >= viewBottom {
+		return
+	}
+	b.pendingImageRow = 0
+	b.rebuild()
+	b.prev = nil
+}
+
 // applyDeferredImageBatch installs background image results for the current
-// page and rebuilds once. It reports whether anything changed.
+// page, rebuilding only when the new images can affect what the viewport shows.
+// It reports whether anything changed.
 func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 	if b.page == nil || batch.seq != b.loadSeq || !b.deferredImages {
 		return false
@@ -152,6 +225,7 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 		b.progress = 0.9 + 0.09*frac
 	}
 	changed := false
+	var changedNodes []*Node
 	for _, r := range batch.results {
 		if r.Node == nil {
 			continue
@@ -169,6 +243,7 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 			r.Node.Img = r.Img
 			r.Node.ImgFailed = false
 			changed = true
+			changedNodes = append(changedNodes, r.Node)
 		}
 	}
 	if batch.done {
@@ -177,11 +252,24 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 		b.finishProgress()
 	}
 	if changed {
-		b.rebuild()
-		// Reflowed text and new terminal image placements can leave stale
-		// cells and scaled glyphs behind. Force the same full repaint that a
-		// scroll triggers instead of trusting the line diff.
-		b.prev = nil
+		if reaches, top := b.imageChangeReachesViewport(changedNodes); !reaches {
+			// The new images sit below the viewport, so their boxes cannot move
+			// anything the user can see. Keep the current layout and frame, and
+			// lay them out only when the viewport approaches their row.
+			if b.pendingImageRow == 0 || top < b.pendingImageRow {
+				b.pendingImageRow = top
+			}
+		} else {
+			b.pendingImageRow = 0
+			b.rebuild()
+			// Native terminal placements and kitty scaled glyphs are drawn
+			// outside the cell text, so a line diff cannot erase a stale copy.
+			// Half-block art lives in the cells the diff repaints, so a
+			// text-only frame keeps the diff and avoids a full-screen blink.
+			if b.inlineImagesEnabled() || b.bigText {
+				b.prev = nil
+			}
+		}
 	}
 	// A batch with only failures or the final done marker still advances the
 	// loading bar and footer count, so the frame needs a repaint.

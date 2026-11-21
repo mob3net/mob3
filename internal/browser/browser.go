@@ -138,14 +138,20 @@ type Browser struct {
 	imageCancel  context.CancelFunc
 	// imageTotal and imageDone drive the loading bar and footer count while a
 	// deferred image batch is in flight.
-	imageTotal   int
-	imageDone    int
-	loadSeq      int
-	cancelLoad   context.CancelFunc
-	loading      bool
-	progress     float64
-	progressHold int
-	loadFn       func(context.Context, string, string, []byte, string) (*Page, error)
+	imageTotal int
+	imageDone  int
+	// pendingImageRow is the topmost laid-out row of images whose decoded data
+	// arrived while they sat below the viewport. Their layout is deferred until
+	// the viewport approaches that row or the end of the document, so a batch
+	// far down the page cannot reflow and repaint the visible frame. Zero means
+	// nothing is pending.
+	pendingImageRow int
+	loadSeq         int
+	cancelLoad      context.CancelFunc
+	loading         bool
+	progress        float64
+	progressHold    int
+	loadFn          func(context.Context, string, string, []byte, string) (*Page, error)
 
 	lastMethod      string
 	lastBody        []byte
@@ -763,6 +769,9 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	// The new layout includes every image decoded so far, so nothing is left
+	// waiting for the viewport.
+	b.pendingImageRow = 0
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
 	if b.js != nil && !b.reader && (b.loader == nil || !b.loader.deferImages) {

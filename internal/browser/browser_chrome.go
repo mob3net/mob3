@@ -248,6 +248,8 @@ func (b *Browser) draw() {
 		b.drawConsole(w, h)
 		return
 	}
+	// Deferred image batches keep their layout until the viewport can see them.
+	b.applyPendingImageLayout()
 	fg, bg := b.pageFG(), b.pageBG()
 	g := NewGrid(w, h, fg, bg)
 	top, bottom := b.viewport()

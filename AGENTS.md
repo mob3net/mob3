@@ -1135,9 +1135,14 @@ Standard Go layout:
   order as the tie-breaker) and six workers pull from that queue, taking the
   next image as soon as one finishes. Decoded results stream back in batches of
   up to 16; the event loop applies each batch and redraws, so images appear
-  progressively. Applying a batch that installs images forces a full repaint
-  (the same path as scrolling), so reflowed text and terminal image placements
-  cannot leave stale rows or scaled glyphs behind. Offscreen images are still
+  progressively. A batch whose images all start below the viewport does not
+  reflow, repaint or blink the visible frame: the decoded images are stored on
+  their nodes, and the layout is deferred until a frame's viewport reaches
+  their topmost row or reaches the end of the document, where later content may
+  be waiting. A batch that touches the viewport rebuilds at once; half-block
+  text modes repaint the affected rows through the normal line diff, while
+  native terminal placements or kitty scaled text force the same full repaint
+  as scrolling so stale graphics cannot survive. Offscreen images are still
   queued after the visible ones and load eventually. While a batch is pending the URL-row progress bar stays
   visible at 90% and advances toward completion as images finish, and an idle
   footer shows `Loading images n/total` until the batch is done (`Esc` completes

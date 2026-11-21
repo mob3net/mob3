@@ -58,6 +58,11 @@ escapes unless passthrough is configured. `-g` is an alias for `-graphics`.
 
 Dump mode always uses half-block art for images that were loaded.
 
+Images stream in after the page text and appear progressively. A batch that
+only affects images below the current viewport does not redraw the visible
+frame, so the page stays steady while the rest loads; content below is laid out
+when you scroll to it.
+
 ## Color and dump mode
 
 `-dump` prints the whole document height (capped at 20,000 rows) without browser
