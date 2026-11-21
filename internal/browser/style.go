@@ -777,6 +777,13 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.BoxSizing = "border-box"
 		case "content-box":
 			st.BoxSizing = "content-box"
+		case "inherit":
+			// box-sizing is not inherited, but the usual reset
+			// `html{box-sizing:border-box} *{box-sizing:inherit}` relies on
+			// this keyword to copy the root's value down the tree.
+			if parent != nil {
+				st.BoxSizing = parent.BoxSizing
+			}
 		}
 	case "list-style", "list-style-type":
 		for _, f := range splitFields(lower) {

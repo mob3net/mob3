@@ -328,7 +328,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			// The flex line already resolved this item's width, including
 			// percentages and grow/shrink; do not apply Width again inside
 			// block layout or the box drifts from its assigned slot.
-			h, _ = l.blockLayout(it, xx, y, basis, 0, true)
+			h, _ = l.blockLayoutPct(it, xx, y, basis, 0, true, availW)
 		} else {
 			h = l.inlineFlow([]*Node{it}, xx, y, basis, base)
 		}

@@ -264,3 +264,22 @@ func TestCustomPropertiesCopyOnWrite(t *testing.T) {
 		t.Fatalf("override child color = %+v, want %+v", altChild.Color, want)
 	}
 }
+
+func TestBoxSizingInherit(t *testing.T) {
+	doc := ParseHTML(`<html><body><div id="d"><span id="s">x</span></div></body></html>`)
+	rules := ParseStylesheet(`html{box-sizing:border-box} *{box-sizing:inherit}`)
+	ly := BuildLayout(doc, rules, 40)
+	for _, id := range []string{"d", "s"} {
+		var n *Node
+		for _, c := range doc.FindAll(func(n *Node) bool { return n.Attr("id") == id }) {
+			n = c
+		}
+		if n == nil {
+			t.Fatalf("no #%s", id)
+		}
+		st := ly.Styles[n]
+		if st == nil || st.BoxSizing != "border-box" {
+			t.Fatalf("#%s box-sizing = %v, want border-box through inherit", id, st)
+		}
+	}
+}

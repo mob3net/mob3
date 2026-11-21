@@ -233,7 +233,7 @@ Standard Go layout:
 | --- | --- |
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
-| `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing`, min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
+| `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing` (including `inherit`, so the common `html{box-sizing:border-box} *{box-sizing:inherit}` reset reaches every element), min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`, resolved against the root element's computed font size rather than a fixed 16px so framework sheets that set `html{font-size:14px}` get browser-like spacing), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
@@ -429,7 +429,11 @@ Standard Go layout:
   supports start/end/center/space-between/around/evenly, `margin:auto` on a
   flex item absorbs the free space before justify-content (so
   `margin-left:auto` pushes an item to the right), and `align-items` supports
-  start/center/end cross-axis placement. Cross-axis alignment shifts
+  start/center/end cross-axis placement. A flex item's percentage margins,
+  padding, borders and min/max sizes resolve against the flex container's
+  content box, not the slot the line assigns it, so percentage offset columns
+  (a quarter-width offset before a quarter-width rail) keep their gutter.
+  Cross-axis alignment shifts
   only that item's own fragments, so later siblings and following content keep
   their positions. Form controls always use the
   inline widget path even when CSS

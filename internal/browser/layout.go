@@ -580,6 +580,14 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 // when positive, stretches the content box to at least that height (used by
 // absolutely positioned boxes with both top and bottom offsets).
 func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthResolved bool) (int, Rect) {
+	return l.blockLayoutPct(n, x, y, availW, forceContentH, widthResolved, availW)
+}
+
+// blockLayoutPct is blockLayout with a separate basis for percentage lengths.
+// A flex or grid item's used width is the slot the line assigned it, but its
+// percentage margins, padding, borders and min/max sizes resolve against the
+// container's content box, as in CSS.
+func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widthResolved bool, pctW int) (int, Rect) {
 	if l.outOfTime() {
 		return 0, Rect{}
 	}
@@ -594,14 +602,17 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	if availW < 1 {
 		availW = 1
 	}
+	if pctW < 1 {
+		pctW = 1
+	}
 	parentCB := l.cb
 	fragStart := len(l.frags)
 	absStart := len(l.abs)
-	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, availW)
+	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, pctW)
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if !widthResolved {
 		if st.Width.Set && !st.Width.IsAuto() {
-			w := l.widthValue(st, st.Width, availW)
+			w := l.widthValue(st, st.Width, pctW)
 			if w >= 0 {
 				// A percentage or calc() width resolves against the containing
 				// block, so only let it shrink the box: a padded width:100%
@@ -620,12 +631,12 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 			}
 		}
 		if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {
-			if w := l.widthValue(st, st.MaxWidth, availW); w < contentW {
+			if w := l.widthValue(st, st.MaxWidth, pctW); w < contentW {
 				contentW = w
 			}
 		}
 		if st.MinWidth.Set && !st.MinWidth.IsAuto() {
-			if w := l.widthValue(st, st.MinWidth, availW); w > contentW {
+			if w := l.widthValue(st, st.MinWidth, pctW); w > contentW {
 				contentW = w
 			}
 		}

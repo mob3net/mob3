@@ -113,6 +113,30 @@ func TestFlexWrapToleratesCellRounding(t *testing.T) {
 	}
 }
 
+func TestFlexPercentageMarginUsesContainerWidth(t *testing.T) {
+	// A flex item's percentage margin resolves against the flex container,
+	// not against the item's own assigned width. Bootstrap/Bulma offset
+	// columns rely on this: a quarter-width offset must move the item a
+	// quarter of the row, leaving a visible gutter after the previous column.
+	ly := build(`<html><body style="margin:0">
+<div style="display:flex;width:640px">
+<div style="width:50%">left</div>
+<div style="width:25%;margin-left:25%">right</div>
+</div></body></html>`, 80)
+	x := -1
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && f.Text == "right" {
+			x = f.X
+		}
+	}
+	if x < 0 {
+		t.Fatal("offset item missing")
+	}
+	if x < 60 {
+		t.Fatalf("offset item x=%d, want it past the 60-cell offset", x)
+	}
+}
+
 func TestFlexRow(t *testing.T) {
 	ly := build(`<div style="display:flex"><div style="flex:1">a</div><div style="flex:1">b</div></div>`, 40)
 	pos := map[string]int{}

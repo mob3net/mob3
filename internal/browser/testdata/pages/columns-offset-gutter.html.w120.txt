@@ -1,0 +1,2 @@
+ Left column text wraps inside half the                      Right
+ row and stops before the gutter.
