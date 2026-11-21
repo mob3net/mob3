@@ -452,9 +452,10 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 		case fragFill:
 			clippedTop := maxInt(y, topRow)
 			clippedBot := minInt(y+f.H, bottomRow)
-			if f.Fixed {
-				// Fixed chrome paints after the page, so its fills must also
-				// erase glyphs from content that scrolled underneath.
+			if f.Fixed || f.Sticky != 0 {
+				// Viewport-anchored chrome (fixed or sticky) paints after the
+				// page, so its fills must also erase glyphs from content that
+				// scrolled underneath.
 				g.ClearGlyphs(f.X, clippedTop, f.W, clippedBot-clippedTop)
 			}
 			g.Fill(f.X, clippedTop, f.W, clippedBot-clippedTop, f.Color)

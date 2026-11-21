@@ -542,6 +542,9 @@ func TestStickyTopFollowsScroll(t *testing.T) {
 	if !strings.Contains(top, "HEAD") {
 		t.Fatalf("sticky header did not paint above the scrolled text: %q", top)
 	}
+	if strings.Contains(top, "two") {
+		t.Fatalf("content shows through the sticky fill: %q", top)
+	}
 }
 
 // TestZIndexPaintOrder checks that positioned boxes paint in z-index order

@@ -231,3 +231,29 @@ func TestGridMaxTrackExpression(t *testing.T) {
 		t.Fatalf("rail track = %+v, want at least the 340px (43 cell) minimum", tracks[1])
 	}
 }
+
+// TestGridJustifyItemsCenter covers horizontal grid item alignment, including
+// the implicit single-column grid used by max-width page wrappers.
+func TestGridJustifyItemsCenter(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.stack { display: grid; justify-items: center; }
+	.card { width: 40px; }
+	.row { display: grid; grid-template-columns: 1fr 1fr; }
+	.end { width: 40px; justify-self: end; }
+	</style></head><body>
+	<div class="stack"><div class="card">center</div></div>
+	<div class="row"><div class="end">end</div></div>
+	</body></html>`)
+	ly := BuildLayout(root, fixtureAuthorRules(root), 40)
+	card, _ := findSelectorNode(root, ".card")
+	if box := ly.Boxes[card]; box.X != 17 || box.W != 5 {
+		t.Fatalf("centered card box = %+v, want X=17 W=5", box)
+	}
+	end, _ := findSelectorNode(root, ".end")
+	// The first 20-column track ends at column 20; a 5-cell item at its end
+	// starts at 15.
+	if box := ly.Boxes[end]; box.X != 15 || box.W != 5 {
+		t.Fatalf("end-aligned item box = %+v, want X=15 W=5", box)
+	}
+}

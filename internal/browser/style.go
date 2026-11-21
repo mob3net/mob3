@@ -162,6 +162,8 @@ type Style struct {
 	GridColumn      string
 	GridRow         string
 	GridAutoFlow    string
+	JustifyItems    string
+	JustifySelf     string
 	ObjectFit       string
 	ObjectPosX      float64
 	ObjectPosY      float64
@@ -934,6 +936,28 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "grid-auto-flow":
 		st.GridAutoFlow = lower
+	case "justify-items":
+		st.JustifyItems = gridJustifyKeyword(lower)
+	case "justify-self":
+		if strings.EqualFold(lower, "auto") {
+			st.JustifySelf = ""
+		} else {
+			st.JustifySelf = gridJustifyKeyword(lower)
+		}
+	case "place-items":
+		fields := splitFields(lower)
+		if len(fields) == 1 {
+			st.JustifyItems = gridJustifyKeyword(fields[0])
+		} else if len(fields) >= 2 {
+			st.JustifyItems = gridJustifyKeyword(fields[1])
+		}
+	case "place-self":
+		fields := splitFields(lower)
+		if len(fields) == 1 {
+			st.JustifySelf = gridJustifyKeyword(fields[0])
+		} else if len(fields) >= 2 {
+			st.JustifySelf = gridJustifyKeyword(fields[1])
+		}
 	case "transform":
 		// Content moved fully off-screen (common for cloned fixed navs and
 		// closed drawers) should not take part in layout.
@@ -1438,4 +1462,21 @@ func isPrivateUseRune(r rune) bool {
 	return (r >= 0xE000 && r <= 0xF8FF) ||
 		(r >= 0xF0000 && r <= 0xFFFFD) ||
 		(r >= 0x100000 && r <= 0x10FFFD)
+}
+
+// gridJustifyKeyword normalizes a horizontal grid alignment keyword. The
+// engine supports start, end, center and stretch; unknown values leave the
+// item at its start edge.
+func gridJustifyKeyword(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "start", "flex-start", "left":
+		return "start"
+	case "end", "flex-end", "right":
+		return "end"
+	case "center":
+		return "center"
+	case "stretch", "normal":
+		return "stretch"
+	}
+	return ""
 }

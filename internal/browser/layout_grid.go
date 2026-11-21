@@ -555,10 +555,21 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		return l.flow(n, x, y, availW)
 	}
 	tracks, gridLines := parseGridTemplate(st.GridCols, availW, st.FontSize)
-	if len(tracks) == 0 || hasNamedGridRows(n) {
+	if hasNamedGridRows(n) {
 		// Named row lines need full two-dimensional placement. Without it,
 		// stacking the items is more readable than letting them overlap.
 		return l.flow(n, x, y, availW)
+	}
+	if len(tracks) == 0 {
+		// A grid with no explicit template has one implicit column. Keep it as
+		// a grid when the container centers or right-aligns its items, so a
+		// max-width child is aligned instead of falling back to block flow and
+		// sticking to the left edge.
+		if st.JustifyItems == "center" || st.JustifyItems == "end" {
+			tracks = []gridTrack{{flex: 1}}
+		} else {
+			return l.flow(n, x, y, availW)
+		}
 	}
 	gap := st.Gap.resolveH(availW, st.FontSize)
 	if !st.Gap.Set {
@@ -682,9 +693,13 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			}
 			// An auto-placed item stays in its assigned track and wraps its
 			// content; max-content width never expands its span across columns.
-			if h := l.block(c.node, cellX, y, cellW); h > rowH {
+			fragStart := len(l.frags)
+			absStart := len(l.abs)
+			h := l.block(c.node, cellX, y, cellW)
+			if h > rowH {
 				rowH = h
 			}
+			l.alignGridItemX(n, c.node, cellX, cellW, fragStart, absStart)
 		}
 		y += rowH
 		if r < maxRow && rowH > 0 {
@@ -798,4 +813,55 @@ func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridA
 		}
 	}
 	return cells
+}
+
+// alignGridItemX applies justify-items/justify-self to one placed grid item.
+// Vertical alignment and auto-flow remain approximated.
+func (l *layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart, absStart int) {
+	align := ""
+	if item != nil && item.Style != nil {
+		align = item.Style.JustifySelf
+	}
+	if align == "" && container != nil && container.Style != nil {
+		align = container.Style.JustifyItems
+	}
+	if align != "center" && align != "end" {
+		return
+	}
+	box, ok := l.boxes[item]
+	if !ok || item.Style == nil {
+		return
+	}
+	ml, mr, _, _, _, _, _, _, _, _, _, _ := l.boxMetrics(item.Style, cellW)
+	leftover := cellW - ml - mr - box.W
+	if leftover <= 0 {
+		return
+	}
+	dx := leftover
+	if align == "center" {
+		dx = leftover / 2
+	}
+	if dx == 0 {
+		return
+	}
+	for i := fragStart; i < len(l.frags); i++ {
+		l.frags[i].X += dx
+	}
+	for i := absStart; i < len(l.abs); i++ {
+		l.abs[i].staticX += dx
+	}
+	var walk func(*Node)
+	walk = func(n *Node) {
+		if r, ok := l.boxes[n]; ok {
+			r.X += dx
+			l.boxes[n] = r
+		}
+		if cb := l.cbs[n]; cb != nil {
+			cb.x += dx
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(item)
 }

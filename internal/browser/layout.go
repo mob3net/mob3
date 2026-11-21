@@ -1049,8 +1049,16 @@ func (ly *Layout) buildPaintOrder() {
 	}
 	sort.SliceStable(order, func(a, b int) bool {
 		fa, fb := &ly.Frags[order[a]], &ly.Frags[order[b]]
-		if pa, pb := paintPass(fa), paintPass(fb); pa != pb {
+		pa, pb := paintPass(fa), paintPass(fb)
+		if pa != pb {
 			return pa < pb
+		}
+		// Sticky bars keep tree order. Their offsets are rounded to cells, so
+		// a bar can overlap a taller sticky header by a row even when CSS puts
+		// it exactly below; z-sorting would let the header's border erase the
+		// bar that a browser shows underneath it.
+		if pa == 1 {
+			return false
 		}
 		return fa.Z < fb.Z
 	})

@@ -1,0 +1,6 @@
+
+                                centered card
+
+
+             left cell                                            right cell
+

@@ -264,7 +264,7 @@ Standard Go layout:
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
 | `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
-| `layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
+| `layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas, horizontal `justify-items`/`justify-self` (including an implicit single-column grid) and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. Column flex stacks blockified children with a vertical gap, so a `<picture>` media box gets its `aspect-ratio` height instead of staying an empty inline. |
 | `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. A percentage-width image is measured at its intrinsic width (the percentage is container-relative) with a one-cell minimum, so it cannot force a flex or grid item wider than its slot. |
 | `layout_links.go` | Link rectangles, overlay anchors, and fixed/sticky scroll re-anchoring (sticky groups clamp against their containing block). |
@@ -498,9 +498,13 @@ Standard Go layout:
   place children by their `grid-area` name; a name spanning several columns
   starts a new row when it
   would move backwards, and an `auto` track used by a named area is sized to
-  that area's content instead of collapsing to one cell. Row spans beyond that
-  new-row rule, `grid-template-rows`, named row lines, auto-fill/auto-fit and
-  alignment remain approximated.
+  that area's content instead of collapsing to one cell. Horizontal
+  `justify-items`/`justify-self` (and the `place-items`/`place-self`
+  shorthands) align an item's margin box start/center/end/stretch within its
+  column, including a grid with no explicit template, which becomes one
+  implicit column when it centers or end-aligns its items. Row spans beyond
+  that new-row rule, `grid-template-rows`, named row lines, auto-fill/auto-fit
+  and vertical alignment remain approximated.
 - **Box sizing and constraints:** `box-sizing:border-box` makes declared
   widths/heights/min/max include padding and borders in block and absolute
   layout and in flex item widths/basis. A declared fixed `width` (px, em,
@@ -1977,9 +1981,11 @@ Standard Go layout:
   vertical gap), `flex-wrap`, `order`, row `justify-content` and
   basic row `align-items`; column `justify-content`/`align-items` are not
   applied. Grid supports
-  basic row-major tracks, named-area column placement and explicit numeric
-  `grid-row` starts, but not `grid-template-rows`, named row lines or row
-  spans. Left/right floats shrink to fit, wrap following lines and honour
+  basic row-major tracks, named-area column placement, explicit numeric
+  `grid-row` starts and horizontal `justify-items`/`justify-self`, but not
+  `grid-template-rows`, named row lines or row spans; vertical alignment stays
+  top-aligned and `grid-auto-flow`/`order` are approximated. Left/right
+  floats shrink to fit, wrap following lines and honour
   `clear`; floats are scoped to their block flow, lines that cross
   a float's bottom resume the full width, and floats inside inline wrappers
   remain inline. `position:sticky` follows the scroll for a `top` offset;
@@ -2385,9 +2391,10 @@ engine work only; do not add site-specific exceptions.
   lines, row spans and `grid-area` rows are still flat. Grids that need them
   lose vertical placement. `layout_grid.go` (`grid`, `gridCells`,
   `gridRowPlacement`, `hasNamedGridRows`) is the entry point.
-- **Grid alignment and auto flow.** Add basic `justify-items`,
-  `justify-self`, `align-self`, `grid-auto-flow`, and `order` for grid items
-  (order currently applies only to flex).
+- **Grid vertical alignment and auto flow.** Horizontal
+  `justify-items`/`justify-self` work, including implicit single-column grids;
+  `align-self`, vertical `align-items`, `grid-auto-flow` and `order` for grid
+  items remain approximated (order currently applies only to flex).
 
 ### P1 — Overflow and hidden content
 
