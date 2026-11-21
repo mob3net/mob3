@@ -1,0 +1,5 @@
+Left rail         Lead story written first in the     Right rail
+                  DOM
+
+
+A full-width row below

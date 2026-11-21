@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><style>
+body{margin:0;font-family:monospace}
+.page{display:grid;grid-template-columns:repeat(24,1fr);column-gap:16px;row-gap:16px}
+.lead{grid-column:7/span 12;grid-row:1}
+.left{grid-column:1/span 6;grid-row:1}
+.right{grid-column:19/span 6;grid-row:1}
+.full{grid-column:1/span 24;grid-row:2}
+</style></head>
+<body>
+<div class="page">
+<div class="lead">Lead story written first in the DOM</div>
+<div class="left">Left rail</div>
+<div class="right">Right rail</div>
+<div class="full">A full-width row below</div>
+</div>
+</body></html>

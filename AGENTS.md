@@ -454,11 +454,17 @@ Standard Go layout:
   vertically. With no `fr` track, leftover space is shared between the `auto`
   tracks so plain `auto auto` rows still fill the width. Dense grids
   whose average track would be under 6 cells fall back to block flow so text
-  stays readable. Named `grid-template-areas` place children by their
-  `grid-area` name; a name spanning several columns starts a new row when it
+  stays readable, but only when the placed items themselves are also under 6
+  cells: a 24-track page grid whose cards span 6-12 tracks keeps its columns.
+  An explicit numeric `grid-row` places the item in that row even when it
+  appears after a card to its right in the DOM, so a centre lead card and side
+  rails written in a different order stay on one row. Named `grid-template-areas`
+  place children by their `grid-area` name; a name spanning several columns
+  starts a new row when it
   would move backwards, and an `auto` track used by a named area is sized to
   that area's content instead of collapsing to one cell. Row spans beyond that
-  new-row rule, auto-fill/auto-fit and alignment remain approximated.
+  new-row rule, `grid-template-rows`, named row lines, auto-fill/auto-fit and
+  alignment remain approximated.
 - **Box sizing and constraints:** `box-sizing:border-box` makes declared
   widths/heights/min/max include padding and borders in block and absolute
   layout and in flex item widths/basis. A declared fixed `width` (px, em,
@@ -1868,7 +1874,8 @@ Standard Go layout:
   read in their unrotated text order.
 - Flexbox supports basic rows, `flex-wrap`, `order`, `justify-content` and
   basic `align-items`; grid supports
-  basic row-major tracks plus named-area column placement, but not full row
+  basic row-major tracks, named-area column placement and explicit numeric
+  `grid-row` starts, but not `grid-template-rows`, named row lines or row
   spans. Left/right floats shrink to fit, wrap following lines and honour
   `clear`; floats are scoped to their block flow, lines that cross
   a float's bottom resume the full width, and floats inside inline wrappers
@@ -2261,11 +2268,11 @@ engine work only; do not add site-specific exceptions.
 
 ### P0 — Main content and hero placement
 
-- **Two-dimensional CSS grid.** Parse `grid-template-rows`, resolve named and
-  numeric `grid-row` lines, honour row spans and `grid-area` rows. Grids that
-  currently fall back to block flow lose or displace lead stories and hero
-  sections. `layout_grid.go` (`grid`, `parseGridTemplate`, `gridPlacementNamed`,
-  `hasNamedGridRows`) is the entry point.
+- **Two-dimensional CSS grid.** Explicit numeric `grid-row` starts keep a
+  lead card and its side rails on one row, but `grid-template-rows`, named row
+  lines, row spans and `grid-area` rows are still flat. Grids that need them
+  lose vertical placement. `layout_grid.go` (`grid`, `gridCells`,
+  `gridRowPlacement`, `hasNamedGridRows`) is the entry point.
 - **Length functions.** Add `min()`, `max()` and `clamp()` for lengths,
   including percentages, and allow viewport units inside `calc()`. `env()` and
   registered custom properties remain out of scope unless separately approved.

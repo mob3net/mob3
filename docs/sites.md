@@ -12,7 +12,7 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 - Responsive pages that use `@media` width queries, CSS cascade layers
   (`@layer`), basic flex rows including framework columns with percentage
   offsets and the common `box-sizing: inherit` reset, basic grid
-  tracks, simple `calc()` and viewport-unit sizing, aspect-ratio
+  tracks with explicit `grid-row` placement, simple `calc()` and viewport-unit sizing, aspect-ratio
   `::before`/`::after` boxes, images sized with `object-fit`, CSS
   `background-image` photos on block containers, forms
   and simple JavaScript DOM effects.

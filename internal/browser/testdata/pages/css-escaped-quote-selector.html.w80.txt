@@ -1,5 +1,4 @@
  Escaped utility panel
  Left            Right side text
 
-
 Text after the grid keeps its place.

@@ -53,13 +53,20 @@ func hasNamedGridRows(n *Node) bool {
 		if child.Type != ElementNode || child.Style == nil {
 			continue
 		}
-		row := strings.TrimSpace(strings.ToLower(child.Style.GridRow))
-		if row == "" {
-			continue
-		}
-		for _, r := range row {
-			if (r >= 'a' && r <= 'z') || r == '_' {
-				return true
+		// Only a line *name* needs two-dimensional placement. The value also
+		// contains keywords and numbers (`1/span 1`, `span 2`, `auto`), which
+		// must not be mistaken for names just because "span" has letters.
+		row := strings.ToLower(child.Style.GridRow)
+		for _, tok := range strings.FieldsFunc(row, func(r rune) bool {
+			return r == '/' || r == ',' || r == ' ' || r == '\t'
+		}) {
+			if tok == "" || tok == "span" || tok == "auto" {
+				continue
+			}
+			for _, r := range tok {
+				if (r >= 'a' && r <= 'z') || r == '_' {
+					return true
+				}
 			}
 		}
 	}
@@ -534,12 +541,33 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		}
 	}
 	if len(widths) > 4 {
-		total := 0
+		// A many-track grid whose columns are all narrow is more readable as
+		// block flow, but tiny *tracks* alone are not the test: a 24-track
+		// page grid places cards across 6-12 tracks, so their text is still
+		// wide. Judge the width of the placed items instead.
+		totalTracks := 0
 		for _, w := range widths {
-			total += w
+			totalTracks += w
 		}
-		if total/len(widths) < 6 {
-			return l.flow(n, x, y, availW)
+		if totalTracks/len(widths) < 6 {
+			totalCells, cellCount := 0, 0
+			for _, c := range cells {
+				if c.out {
+					continue
+				}
+				w := 0
+				for i := 0; i < c.span && c.start+i < len(widths); i++ {
+					w += widths[c.start+i]
+					if i > 0 {
+						w += gap
+					}
+				}
+				totalCells += w
+				cellCount++
+			}
+			if cellCount == 0 || totalCells/cellCount < 6 {
+				return l.flow(n, x, y, availW)
+			}
 		}
 	}
 	colX := make([]int, len(widths))
@@ -548,44 +576,48 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		colX[i] = cx
 		cx += w + gap
 	}
-	col := 0
-	rowH := 0
 	startY := y
+	maxRow := 0
 	for _, c := range cells {
-		child := c.node
 		if c.out {
-			l.deferAbsolute(child, x, y)
+			l.deferAbsolute(c.node, x, y)
 			continue
 		}
-		if c.wrap {
-			y += rowH + rowGap
-			rowH = 0
-		}
-		col = c.start
-		span := c.span
-		cellX := colX[col]
-		cellW := 0
-		for i := 0; i < span && col+i < len(widths); i++ {
-			cellW += widths[col+i]
-			if i > 0 {
-				cellW += gap
-			}
-		}
-		// An auto-placed item stays in its assigned track and wraps its
-		// content; max-content width never expands its span across columns.
-		h := l.block(child, cellX, y, cellW)
-		if h > rowH {
-			rowH = h
-		}
-		col += span
-		if col >= len(widths) {
-			y += rowH + rowGap
-			rowH = 0
-			col = 0
+		if c.row > maxRow {
+			maxRow = c.row
 		}
 	}
-	if col > 0 {
+	// Lay out one row at a time: items on the same row share its height, and
+	// an explicit grid-row keeps a side rail level with the lead card even
+	// when the lead card comes first in the DOM.
+	for r := 0; r <= maxRow; r++ {
+		rowH := 0
+		for _, c := range cells {
+			if c.out || c.row != r {
+				continue
+			}
+			col := c.start
+			if col < 0 || col >= len(widths) {
+				col = 0
+			}
+			cellX := colX[col]
+			cellW := 0
+			for i := 0; i < c.span && col+i < len(widths); i++ {
+				cellW += widths[col+i]
+				if i > 0 {
+					cellW += gap
+				}
+			}
+			// An auto-placed item stays in its assigned track and wraps its
+			// content; max-content width never expands its span across columns.
+			if h := l.block(c.node, cellX, y, cellW); h > rowH {
+				rowH = h
+			}
+		}
 		y += rowH
+		if r < maxRow && rowH > 0 {
+			y += rowGap
+		}
 	}
 	return y - startY
 }
@@ -595,20 +627,57 @@ type gridCell struct {
 	node     *Node
 	start    int
 	span     int
+	row      int
 	explicit bool
 	out      bool // out-of-flow item, deferred to the absolute pass
-	wrap     bool // starts a new row before being laid out
+}
+
+// gridRowPlacement reads a numeric grid-row start. Named lines are handled by
+// hasNamedGridRows, which sends such grids to block flow before this is used.
+func gridRowPlacement(raw string) (start, span int, set bool) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" || raw == "auto" {
+		return 0, 1, false
+	}
+	parts := splitTopLevel(raw, '/')
+	first := strings.TrimSpace(parts[0])
+	if first == "" || first == "auto" || strings.HasPrefix(first, "span ") {
+		return 0, 1, false
+	}
+	n, err := strconv.Atoi(first)
+	if err != nil {
+		return 0, 1, false
+	}
+	start = n - 1
+	if start < 0 {
+		return 0, 1, false
+	}
+	span = 1
+	if len(parts) > 1 {
+		end := strings.TrimSpace(parts[1])
+		if strings.HasPrefix(end, "span ") {
+			if v, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(end, "span "))); err == nil && v > 0 {
+				span = v
+			}
+		} else if v, err := strconv.Atoi(end); err == nil && v > n {
+			span = v - n
+		}
+	}
+	return start, span, true
 }
 
 // gridCells resolves every item's column start and span in row-major order.
 // Sizing the tracks and laying the items out share this placement, so an item
-// cannot be measured for one column and painted in another.
+// cannot be measured for one column and painted in another. An explicit
+// numeric grid-row lands in that row even when it appears later in the DOM
+// than a card placed to its right, which keeps page grids with a centre lead
+// card and side rails on one row instead of stacking the rails below it.
 func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridAreaSpan) []gridCell {
 	if cols < 1 {
 		return nil
 	}
 	var cells []gridCell
-	col := 0
+	autoRow, autoCol := 0, 0
 	for _, child := range layoutChildren(n) {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
@@ -623,30 +692,37 @@ func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridA
 				start, span, explicit = a.start, a.span, true
 			}
 		}
-		wrap := false
-		if explicit && start >= 0 && start < cols {
-			// An explicit placement that would move backwards on the current
-			// row starts a new row (named areas commonly span a full row).
-			if start < col && col > 0 {
-				wrap = true
-				col = 0
-			}
-			col = start
-		}
 		if span < 1 {
 			span = 1
 		}
 		if span > cols {
 			span = cols
 		}
-		if col+span > cols {
-			wrap = true
-			col = 0
+		if row, _, rowSet := gridRowPlacement(child.Style.GridRow); rowSet {
+			if start < 0 || start+span > cols {
+				start = 0
+			}
+			cells = append(cells, gridCell{node: child, start: start, span: span, row: row, explicit: true})
+			continue
 		}
-		cells = append(cells, gridCell{node: child, start: col, span: span, explicit: explicit, wrap: wrap})
-		col += span
-		if col >= cols {
-			col = 0
+		if explicit && start >= 0 && start < cols {
+			// An explicit placement that would move backwards on the current
+			// row starts a new row (named areas commonly span a full row).
+			if start < autoCol {
+				autoRow++
+				autoCol = 0
+			}
+			autoCol = start
+		}
+		if autoCol+span > cols {
+			autoRow++
+			autoCol = 0
+		}
+		cells = append(cells, gridCell{node: child, start: autoCol, span: span, explicit: explicit, row: autoRow})
+		autoCol += span
+		if autoCol >= cols {
+			autoCol = 0
+			autoRow++
 		}
 	}
 	return cells

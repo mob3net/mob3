@@ -6,7 +6,6 @@
 
    Wide summary across both columns
 
-
  Area heading
 
   Side       Main content for the named area

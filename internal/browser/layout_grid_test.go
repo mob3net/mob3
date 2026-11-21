@@ -122,3 +122,60 @@ func TestGridAutoItemStaysInItsTrack(t *testing.T) {
 		t.Fatalf("second column x offset = %d, want 15", rb.X-ra.X)
 	}
 }
+
+func TestGridDenseTracksJudgedByItemWidth(t *testing.T) {
+	// A page grid uses many narrow tracks (24 of 3-4 cells) but its cards span
+	// 6-12 tracks, so their text is wide. The dense-grid fallback must judge
+	// the placed items, not the average track, or the whole grid collapses
+	// into a single left-aligned column.
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:repeat(24,1fr);column-gap:16px">` +
+		`<div id="center" style="grid-column:7/span 12">centre lead story</div>` +
+		`<div id="left" style="grid-column:1/span 6;grid-row:1">left rail</div>` +
+		`<div id="right" style="grid-column:19/span 6;grid-row:1">right rail</div>` +
+		`</div></body></html>`)
+	ly := BuildLayout(doc, nil, 120)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	center, left, right := box["center"], box["left"], box["right"]
+	if center.W < 20 {
+		t.Fatalf("lead card width = %d cells, want its 12-track span", center.W)
+	}
+	// The left and right rails are declared on row 1 after the lead card in
+	// the DOM, so they must stay level with it instead of wrapping below.
+	if left.Y != center.Y || right.Y != center.Y {
+		t.Fatalf("rails not on the lead row: center y=%d left y=%d right y=%d", center.Y, left.Y, right.Y)
+	}
+	if !(left.X < center.X && center.X < right.X) {
+		t.Fatalf("columns out of order: left x=%d center x=%d right x=%d", left.X, center.X, right.X)
+	}
+}
+
+func TestGridExplicitRowBeatsDOMOrder(t *testing.T) {
+	// A centre card written first and side cards with grid-row:1 later in the
+	// DOM form one row, as they would in a browser.
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px">` +
+		`<div id="mid" style="grid-column:2;grid-row:1">middle</div>` +
+		`<div id="left" style="grid-column:1;grid-row:1">left side</div>` +
+		`<div id="right" style="grid-column:3;grid-row:1">right side</div>` +
+		`</div></body></html>`)
+	ly := BuildLayout(doc, nil, 80)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	mid, left, right := box["mid"], box["left"], box["right"]
+	if left.Y != mid.Y || right.Y != mid.Y {
+		t.Fatalf("explicit row split: mid y=%d left y=%d right y=%d", mid.Y, left.Y, right.Y)
+	}
+	if !(left.X < mid.X && mid.X < right.X) {
+		t.Fatalf("columns out of order: left x=%d mid x=%d right x=%d", left.X, mid.X, right.X)
+	}
+}
