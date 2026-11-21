@@ -822,8 +822,9 @@ Standard Go layout:
   text when the footer had to truncate it (the footer status line is also
   clickable, and the `E` in `Error:` is underlined to advertise the key),
   `d` open the curl download popup for the current PDF page,
-  `y` copy selected page text, the current URL when nothing is selected, or
-  the download popup's curl command, and clear the highlight,
+  `y` copy selected page text, the current URL when nothing is selected,
+  the download popup's curl command, or the whole active console section,
+  and clear the page highlight,
   `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting, while `:q` plus Enter exits
   immediately. The quit confirmation takes priority over a hovered link in the
@@ -1425,7 +1426,13 @@ Standard Go layout:
   navigational and mutating tools stay in `-mcp`.
   `Esc` leaves the input row when it is focused and closes the console on the
   next press; `!` closes immediately, and `q` asks to confirm quitting when
-  the input row is not focused (`q` is literal text while typing). The footer
+  the input row is not focused (`q` is literal text while typing). With the
+  input row inactive, `y` copies the whole active section to the clipboard:
+  the JavaScript log, the raw page HTML (not the wrapped display lines), the
+  request list, storage, or the Tools scrollback, so long output can be taken
+  without dragging a terminal selection, and the console footer hint
+  advertises `y: copy all` instead of the old Shift-drag note. While the input
+  row is focused `y` is ordinary text. The footer
   keeps its clickable `>_` icon while the console is open; clicking it closes
   the console the same way `Esc` does (including the usual exit hint).
   The JS log and input draft reset when a new page is successfully applied,

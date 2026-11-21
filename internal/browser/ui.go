@@ -196,8 +196,35 @@ func (b *Browser) handleConsoleKey(k string) bool {
 		b.scrollConsoleToEnd(b.consolePane, true)
 	case "G":
 		b.scrollConsoleToEnd(b.consolePane, false)
+	case "y":
+		b.copyConsole()
 	}
 	return false
+}
+
+// consoleCopyText returns the full text of the active console section. The
+// HTML section copies its raw source rather than the display-wrapped lines.
+func (b *Browser) consoleCopyText() string {
+	switch b.consolePane {
+	case consoleRequests:
+		return strings.Join(b.requestLines(), "\n")
+	case consoleStorage:
+		return strings.Join(b.storageLines(), "\n")
+	case consoleHTML:
+		if b.page != nil {
+			return b.page.RawHTML
+		}
+	case consoleTools:
+		return strings.Join(b.toolLog, "\n")
+	}
+	return strings.Join(b.jsLog, "\n")
+}
+
+// copyConsole copies the whole active console section. Terminal text
+// selection needs Shift+drag, so y gives one key that copies all of the log,
+// the HTML source or the other section bodies.
+func (b *Browser) copyConsole() {
+	b.copyText(strings.TrimRight(b.consoleCopyText(), "\n"))
 }
 
 // scrollConsolePane scrolls the open console section.
@@ -1116,7 +1143,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if hintW < 1 {
 			hintW = 1
 		}
-		hint := " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · Shift+drag: select · q: quit · Esc: close "
+		hint := " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · y: copy all · q: quit · Esc: close "
 		hintFG := fg
 		if b.quitPending {
 			hint = " " + quitConfirmText

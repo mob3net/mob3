@@ -1673,7 +1673,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
 <tr><td><b>d</b></td><td>open the curl download popup for the current PDF</td></tr>
-<tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, or the download curl command</td></tr>
+<tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, the download curl command, or the active console section</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
 <tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
@@ -1753,7 +1753,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>
 <tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
-<tr><td>click a console tab</td><td>switch console sections; Shift-drag selects text</td></tr>
+<tr><td>click a console tab</td><td>switch console sections; <b>y</b> copies the active section</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
 <tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
@@ -1831,8 +1831,10 @@ submitted.</p>
 <h2>JavaScript console</h2>
 <p><b>!</b> opens logs, requests, storage, the page HTML and Tools. Use
 <b>Tab</b> or <b>h</b>/<b>l</b> to switch tabs, <b>:</b>/<b>Enter</b> to focus the input, <b>Enter</b>
-to run JavaScript, <b>j</b>/<b>k</b> to scroll and <b>Esc</b> to close. Use
-<b>Shift</b>-drag to select text while the console is open. Script
+to run JavaScript, <b>j</b>/<b>k</b> to scroll and <b>Esc</b> to close. <b>y</b>
+copies the whole active tab — the logs, the raw HTML source, the request list
+or the Tools scrollback — because selecting long output by dragging is
+awkward. Use <b>Shift</b>-drag when you only want part of it. Script
 <b>alert</b>, <b>confirm</b> and <b>prompt</b> calls open modal dialogs.</p>
 
 <p><a href="about:start">Back to the start page</a></p>

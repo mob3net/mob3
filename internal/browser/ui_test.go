@@ -1,7 +1,9 @@
 package browser
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -935,5 +937,73 @@ func TestConsoleHTabsAndLTabs(t *testing.T) {
 	b.handleConsoleKey("h")
 	if b.consoleText != "h" || b.consolePane != consoleTools {
 		t.Fatalf("focused input: text=%q pane=%d", b.consoleText, b.consolePane)
+	}
+}
+
+func consoleClipboardText(t *testing.T, buf *bytes.Buffer) string {
+	t.Helper()
+	out := buf.String()
+	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
+		t.Fatalf("clipboard sequence = %q", out)
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		t.Fatalf("clipboard payload: %v", err)
+	}
+	return string(decoded)
+}
+
+func TestConsoleYCopiesActiveSection(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.jsLog = []string{"[log] hello", "[error] boom"}
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	b.HandleKey("y")
+	if got := consoleClipboardText(t, &buf); got != "[log] hello\n[error] boom" {
+		t.Fatalf("log copy = %q", got)
+	}
+	if b.status != "Copied 24 chars" {
+		t.Fatalf("status = %q", b.status)
+	}
+
+	// The HTML tab copies the raw source, not the width-wrapped display lines.
+	b.page = &Page{RawHTML: "<html>\n<body>raw source</body>\n</html>"}
+	b.selectConsolePane(consoleHTML)
+	buf.Reset()
+	b.HandleKey("y")
+	if got := consoleClipboardText(t, &buf); got != b.page.RawHTML {
+		t.Fatalf("HTML copy = %q", got)
+	}
+}
+
+func TestConsoleYTypesWhileEditingInput(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consoleEdit = true
+	b.consoleText = ""
+	b.consoleCursor = 0
+	var buf bytes.Buffer
+	b.clipboardWriter = &buf
+	b.HandleKey("y")
+	if b.consoleText != "y" {
+		t.Fatalf("console input = %q, want the typed letter", b.consoleText)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("typing copied text: %q", buf.String())
+	}
+}
+
+func TestConsoleFooterHintAdvertisesCopyKey(t *testing.T) {
+	b := NewBrowser(100, 12)
+	b.consoleOpen = true
+	withQuietStdout(t, func() { b.drawConsole(100, 12) })
+	text := strings.Join(b.prev, "\n")
+	if !strings.Contains(text, "y: copy all") {
+		t.Fatalf("console hint does not advertise y: %q", text)
+	}
+	if strings.Contains(text, "Shift+drag") {
+		t.Fatalf("console hint still mentions Shift+drag: %q", text)
 	}
 }

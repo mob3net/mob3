@@ -29,7 +29,7 @@ key, mouse and form reference for the running build.
 | `u` | Show the current URL in the footer |
 | `E` | Open the full warning or error message that the footer truncated (the `E` in `Error:` is underlined) |
 | `d` | Open the curl download popup for the current PDF page |
-| `y` | Copy selected text, or the current URL when nothing is selected |
+| `y` | Copy selected text, the current URL when nothing is selected, the download curl command, or the whole active console section |
 | `H` | Session history |
 | `?` | Help page |
 | `!` | JavaScript console |
@@ -46,8 +46,10 @@ If only the fragment changes, the page is not reloaded.
 
 `!` or the `>_` footer icon opens the console. Inside it, `:` or `Enter` focuses
 the JavaScript input row, `Tab`/`Shift-Tab` or `h`/`l` switch sections, `j`/`k` and
-`g`/`G` scroll the active section. `Esc` leaves the input row first and closes
-the console on the next press; `!` closes it immediately.
+`g`/`G` scroll the active section, and `y` copies the whole active section (the
+logs, the raw page HTML, the request list, storage, or the Tools scrollback).
+`Esc` leaves the input row first and closes the console on the next press; `!`
+closes it immediately.
 
 ## URL prompt
 
