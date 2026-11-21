@@ -260,7 +260,8 @@ Standard Go layout:
 | `browser_chrome.go` | Frame painting: `draw`/`flushGrid`, toolbar and footer layout, status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
 | `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. |
-| `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim), back/forward/reload, and meta-refresh targets. |
+| `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim, scavenge request after a heavy eviction), back/forward/reload, and meta-refresh targets. |
+| `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the one-shot scavenge request consumed between frames. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
@@ -743,7 +744,7 @@ Standard Go layout:
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home, js-memory, cache, history-cache,
-  layout-budget, text-scale, ua, search);
+  mem-limit, layout-budget, text-scale, ua, search);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. Changes are never persisted. The page starts
   with the current viewport in characters and pixels (`width*cellW` by
@@ -1117,8 +1118,10 @@ Standard Go layout:
   caching), and a page heavier than half the budget is never cached at all, so
   one heavy document cannot pin the allowance. The newest entry is kept when
   the budget is tight, `maxCachedPages` (10) stays as a second guard, and the
-  limit can be changed live in `about:config`. `about:` pages and downloads are
-  never cached.
+  limit can be changed live in `about:config`. When an evicted page held at
+  least a quarter of the budget, one `debug.FreeOSMemory()` is requested and
+  run between frames, returning its memory to the OS at once.
+  `about:` pages and downloads are never cached.
   `location.replace` and `location.reload` update the active history entry
   instead of pushing a new one. HTTP 3xx redirects are followed inside one
   load, so only the final URL is recorded. Client redirects that happen while
@@ -1484,6 +1487,21 @@ Standard Go layout:
   default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
   the CPU timeout in place). Exceeding the budget interrupts the script with an
   error.
+- **Process memory limit:** `-mem-limit` (512 MB by default) applies a soft
+  heap limit with `debug.SetMemoryLimit`, so the runtime collects harder as the
+  heap approaches it instead of letting the previous peak become the new floor.
+  It is advice, not an allocation cap: it must stay above the working set (a
+  heavy page plus the history cache) or the collector runs continuously. `0`
+  leaves the Go runtime default untouched, which still honours a `GOMEMLIMIT`
+  from the environment at startup; a limit set later (including from
+  `about:config`) replaces it. The limit is process-wide and applies to dump
+  and MCP runs too.
+- **Scavenge after eviction:** when the history cache evicts a page holding at
+  least a quarter of its budget, the browser requests exactly one
+  `debug.FreeOSMemory()` (a collection plus scavenge) and runs it between
+  frames, never inside a load, so the freed pages return to the OS and the
+  footer `MEM` readout drops instead of waiting for the background scavenger.
+  Small evictions do not trigger it.
 - **Layout budget:** style and layout stop after the selected cooperative
   deadline (2 seconds on `standard`), and layout also stops after the selected
   fragment and document-row caps, bounding CPU and memory for pathological or

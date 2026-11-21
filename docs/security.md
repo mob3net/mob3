@@ -90,6 +90,18 @@ panics, so a malformed file degrades to a note instead of a crash. It never
 rasterizes a page and writes nothing to disk. Like the rest of the engine it is
 not audited and is not a security boundary.
 
+## Memory and caches
+
+The back/forward history cache is bounded by estimated page weight
+(`-history-cache`, 128 MB by default): the least recently used pages are
+evicted first, and a page heavier than half the budget is never cached. When a
+heavy cached page is evicted, one collection plus scavenge runs between frames
+so its memory returns to the OS.
+
+`-mem-limit` (512 MB by default) sets a soft limit on the Go heap, making the
+runtime collect harder as memory approaches it; `0` leaves the runtime default
+in place. These limits are best-effort resource bounds, not a sandbox.
+
 ## JavaScript safety limits
 
 Each script and callback runs under a 2-second sobek interrupt watchdog and a

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ func Run(args []string) int {
 	jsMemory := fs.Int("js-memory", int(defaultJSMemoryLimit>>20), "JavaScript heap limit in MB (0 disables)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
+	memLimit := fs.Int("mem-limit", int(defaultMemoryLimitBytes>>20), "soft process memory limit in MB (0 uses the Go default)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
@@ -60,6 +62,16 @@ func Run(args []string) int {
 	if *heightFlag < 0 {
 		fmt.Fprintln(os.Stderr, "mob3: -height must be 0 or positive")
 		return 2
+	}
+	// The soft heap limit is process-wide, so every run mode gets it. Zero
+	// leaves the Go runtime default (including a GOMEMLIMIT from the
+	// environment) untouched.
+	if *memLimit < 0 {
+		fmt.Fprintln(os.Stderr, "mob3: -mem-limit must be 0 or positive")
+		return 2
+	}
+	if *memLimit > 0 {
+		debug.SetMemoryLimit(int64(*memLimit) << 20)
 	}
 	// 0 keeps every page for a dump and page 1 for a PNG; -1 means all pages.
 	pdfPageSel := 0
@@ -189,6 +201,7 @@ func Run(args []string) int {
 		"-bookmarks":     bookmarksValue,
 		"-cache":         strconv.Itoa(*cache),
 		"-history-cache": strconv.Itoa(*historyCache),
+		"-mem-limit":     strconv.Itoa(*memLimit),
 		"-layout-budget": budget.Name,
 		"-color":         onOff(*forceColor),
 		"-no-color":      onOff(*noColor),
@@ -201,6 +214,7 @@ func Run(args []string) int {
 	b.jsMemLimit = jsMemLimit
 	b.layoutBudget = budget
 	b.setHistoryCacheLimitMB(*historyCache)
+	b.memLimitBytes = int64(*memLimit) << 20
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
 	case "off", "none", "false":
 		b.noBigText = true
@@ -268,6 +282,12 @@ func Run(args []string) int {
 	b.sampleUsage()
 	b.Navigate(start, true)
 	for {
+		// A heavy page evicted from the history cache asks for one scavenge so
+		// its memory leaves the process instead of waiting for the background
+		// scavenger. This runs between frames, never inside a load.
+		if b.takeScavengePending() {
+			debug.FreeOSMemory()
+		}
 		if b.skipDraw {
 			b.skipDraw = false
 		} else {

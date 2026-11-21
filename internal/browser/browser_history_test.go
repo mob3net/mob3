@@ -624,3 +624,56 @@ func cachedBytes(history []historyEntry) int64 {
 	}
 	return total
 }
+
+func TestLightEvictionDoesNotScavenge(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
+	now := time.Now()
+	for i := 0; i < 12; i++ {
+		b.history = append(b.history, historyEntry{
+			URL:    fmt.Sprintf("https://example.com/p%d", i),
+			cached: &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)},
+		})
+	}
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
+	if cachedBytes(b.history) > b.historyCacheBytes {
+		t.Fatalf("cached bytes = %d, budget = %d", cachedBytes(b.history), b.historyCacheBytes)
+	}
+	if b.takeScavengePending() {
+		t.Fatal("small evictions requested a scavenge")
+	}
+}
+
+func TestHeavyEvictionRequestsScavenge(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
+	now := time.Now()
+	b.history = []historyEntry{
+		{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20, at: now}},
+		{URL: "https://example.com/b", cached: &cachedPage{bytes: 4 << 20, at: now.Add(time.Second)}},
+		{URL: "https://example.com/c", cached: &cachedPage{bytes: 4 << 20, at: now.Add(2 * time.Second)}},
+	}
+	// Only the light oldest page is evicted to fit the budget, so no scavenge.
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
+	if b.takeScavengePending() {
+		t.Fatal("fitting the budget with a light eviction requested a scavenge")
+	}
+	// A new heavy page pushes out the older heavy one (4 MiB), which is at
+	// least a quarter of the budget.
+	b.history = append(b.history, historyEntry{
+		URL: "https://example.com/d", cached: &cachedPage{bytes: 4 << 20, at: now.Add(3 * time.Second)},
+	})
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
+	if !b.takeScavengePending() {
+		t.Fatal("heavy eviction did not request a scavenge")
+	}
+	if b.takeScavengePending() {
+		t.Fatal("scavenge request was not consumed exactly once")
+	}
+}

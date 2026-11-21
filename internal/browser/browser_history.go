@@ -157,6 +157,20 @@ func (b *Browser) setHistoryCacheLimitMB(mb int) {
 	b.trimHistoryCacheLocked()
 }
 
+// noteEvictedPage asks the event loop for one scavenge when the evicted page
+// held a large part of the cache budget, so its memory returns to the OS now
+// instead of waiting for the background scavenger. Small evictions do not
+// justify a stop-the-world pass.
+func (b *Browser) noteEvictedPage(size int64) {
+	if size <= 0 {
+		return
+	}
+	if b.historyCacheBytes > 0 && size < b.historyCacheBytes/4 {
+		return
+	}
+	b.scavengePending.Store(true)
+}
+
 func metaRefreshTarget(page *Page) string {
 	if page == nil || page.Root == nil {
 		return ""
@@ -296,6 +310,7 @@ func (b *Browser) trimHistoryCacheLocked() {
 			}
 		}
 		total -= slots[oldest].bytes
+		b.noteEvictedPage(slots[oldest].bytes)
 		b.history[slots[oldest].idx].cached = nil
 		slots = append(slots[:oldest], slots[oldest+1:]...)
 		return true

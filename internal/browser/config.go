@@ -54,6 +54,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-cache", Value: strconv.Itoa(cacheMB), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-history-cache", Value: strconv.Itoa(int(b.historyCacheBytes >> 20)), Note: "MB; 0 disables", Editable: true},
+		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: "MB; 0 = Go default", Editable: true},
 		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
 		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
@@ -150,6 +151,11 @@ func (b *Browser) applyConfig(q url.Values) {
 	if v, ok := q["history-cache"]; ok && len(v) > 0 {
 		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 {
 			b.setHistoryCacheLimitMB(mb)
+		}
+	}
+	if v, ok := q["mem-limit"]; ok && len(v) > 0 {
+		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 {
+			b.setMemoryLimitMB(mb)
 		}
 	}
 	if v, ok := q["layout-budget"]; ok && len(v) > 0 {

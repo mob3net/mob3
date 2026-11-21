@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -68,6 +69,12 @@ type Browser struct {
 	// historyCacheBytes bounds the estimated size of the back/forward page cache.
 	// Zero disables page caching.
 	historyCacheBytes int64
+	// memLimitBytes is the process soft heap limit in bytes; zero leaves the
+	// runtime default in place.
+	memLimitBytes int64
+	// scavengePending asks the event loop for one debug.FreeOSMemory call after a
+	// heavy cached page was evicted, so its memory returns to the OS at once.
+	scavengePending atomic.Bool
 	// nextScroll is consumed by the next navigation started from history.
 	nextScroll    int
 	nextScrollSet bool
