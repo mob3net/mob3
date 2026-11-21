@@ -1618,3 +1618,21 @@ func TestElementMetricsReadInlineStyle(t *testing.T) {
 		t.Fatalf("metrics = %q, want 320,100,320", got)
 	}
 }
+
+func TestJSConsoleKeepsErrorStack(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`,
+		`try { console.error("i18n init failed", new Error("boom")); } catch (e) {}`)
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.startJS(page)
+	if len(b.jsLog) != 1 {
+		t.Fatalf("log = %v", b.jsLog)
+	}
+	log := b.jsLog[0]
+	if !strings.Contains(log, "i18n init failed") || !strings.Contains(log, "boom") {
+		t.Fatalf("log = %q", log)
+	}
+	if !strings.Contains(log, "at ") {
+		t.Fatalf("console log dropped the error stack: %q", log)
+	}
+}

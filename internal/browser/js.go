@@ -781,7 +781,7 @@ func (j *jsRuntime) consoleObject() *sobek.Object {
 		return func(call sobek.FunctionCall) sobek.Value {
 			parts := make([]string, 0, len(call.Arguments))
 			for _, a := range call.Arguments {
-				parts = append(parts, a.String())
+				parts = append(parts, j.consoleArg(a))
 			}
 			msg := strings.Join(parts, " ")
 			j.b.logJS(level, msg)
@@ -793,6 +793,19 @@ func (j *jsRuntime) consoleObject() *sobek.Object {
 	_ = o.Set("warn", j.vm.ToValue(logf("warn")))
 	_ = o.Set("error", j.vm.ToValue(logf("error")))
 	return o
+}
+
+// consoleArg renders one console argument. Error objects keep their stack so a
+// caught-and-logged exception still shows where it was thrown.
+func (j *jsRuntime) consoleArg(v sobek.Value) string {
+	if obj, ok := v.(*sobek.Object); ok {
+		if st := obj.Get("stack"); st != nil && !sobek.IsUndefined(st) && !sobek.IsNull(st) {
+			if s := strings.TrimSpace(st.String()); s != "" {
+				return s
+			}
+		}
+	}
+	return v.String()
 }
 
 func (j *jsRuntime) windowObject() *sobek.Object {
