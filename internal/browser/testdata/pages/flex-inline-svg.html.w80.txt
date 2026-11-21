@@ -1,0 +1,10 @@
+
+                                   Acme logo
+
+
+ Home Docs About
+
+Text after the flex row stays in flow.
+
+
+▣ inline icon after text

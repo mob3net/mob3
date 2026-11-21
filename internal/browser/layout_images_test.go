@@ -352,3 +352,34 @@ func TestBackgroundImagesOff(t *testing.T) {
 		t.Fatalf("suppressed background painted image cells: %+v", cell)
 	}
 }
+
+func TestInlineSVGInFlexRowIsPainted(t *testing.T) {
+	doc := ParseHTML(`<div style="display:flex;justify-content:center">` +
+		`<svg viewBox="0 0 40 20"><circle cx="20" cy="10" r="8"/></svg></div>`)
+	svg := doc.FindFirst("svg")
+	svg.Img = image.NewRGBA(image.Rect(0, 0, 80, 40))
+	ly := BuildLayout(doc, nil, 40)
+	var got *Frag
+	for i := range ly.Frags {
+		if ly.Frags[i].Kind == fragImage && ly.Frags[i].Node == svg {
+			got = &ly.Frags[i]
+		}
+	}
+	if got == nil {
+		t.Fatal("inline SVG used as a flex item produced no image fragment")
+	}
+	if got.W != 10 {
+		t.Fatalf("flex SVG width = %d, want 10 cells", got.W)
+	}
+	if got.H < 2 {
+		t.Fatalf("flex SVG height = %d", got.H)
+	}
+}
+
+func TestInlineSVGInFlexRowFallsBackToLabel(t *testing.T) {
+	ly := build(`<div style="display:flex;justify-content:center">`+
+		`<svg viewBox="0 0 20 20"><title>Acme</title></svg></div>`, 30)
+	if textFrag(ly, "Acme") == nil {
+		t.Fatalf("SVG title missing from the flex row: %+v", ly.Frags)
+	}
+}

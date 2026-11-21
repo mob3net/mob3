@@ -240,7 +240,7 @@ Standard Go layout:
 | `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated empty `::before`/`::after` boxes. |
 | `layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
-| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
+| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
 | `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. |
@@ -619,7 +619,10 @@ Standard Go layout:
   restored and rasterized before layout. If inline SVG decoding fails it falls
   back to a `<title>` or visible text; an icon-only SVG with only an
   `aria-label` renders a one-cell `▣` marker instead of its accessibility name.
-  `aria-hidden` SVGs are skipped. Broken images show `[image: alt]` clipped to
+  `aria-hidden` SVGs are skipped. An inline SVG that becomes a block box — a
+  flex or grid item, `display:block`, or an absolutely positioned box — goes
+  through the same image path and keeps that fallback instead of being treated
+  as an empty element. Broken images show `[image: alt]` clipped to
   the image's box width and reserve the image's CSS box height, so a missing
   logo does not collapse its header row (a box narrower than 8 cells uses a
   `▣` marker); an
@@ -1926,7 +1929,8 @@ Known unsupported families (do not present these as available):
 - DOM: Shadow DOM (`attachShadow` and rendered shadow content), custom element
   lifecycle callbacks and attribute reactivity, real asynchronous
   Intersection/Resize/Performance observers (observers fire one synthetic
-  entry), iframe browsing contexts (inert stub), video/audio playback.
+  entry), iframe browsing contexts (inert stub), video/audio playback,
+  `form.elements` (HTMLFormControlsCollection) and `form.requestSubmit()`.
 - Network/browser: streaming fetch, upload progress, CORS preflight and
   credentialed cross-origin requests, `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`

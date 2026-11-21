@@ -150,7 +150,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	} else {
 		l.parentH = 0
 	}
-	if n.Tag == "img" && st.Height.Set && st.Height.U == UnitPercent && cbH > 0 {
+	if (n.Tag == "img" || n.Tag == "svg") && st.Height.Set && st.Height.U == UnitPercent && cbH > 0 {
 		l.forcedImageH = st.Height.resolveV(cbH, st.FontSize)
 	}
 	start := len(l.frags)

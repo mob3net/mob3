@@ -656,7 +656,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	// is added before any child fragments. Its height is filled in once the
 	// block's total height is known.
 	bgImgIndex := -1
-	if !l.imagesOff && n.Tag != "img" && pixelsBackground(n, st) && n.Img != nil {
+	if !l.imagesOff && n.Tag != "img" && n.Tag != "svg" && pixelsBackground(n, st) && n.Img != nil {
 		l.frags = append(l.frags, Frag{Kind: fragImage, X: boxX, Y: top, W: boxW, H: 1, Img: n.Img, Node: n, Background: true})
 		bgImgIndex = len(l.frags) - 1
 	}
@@ -686,6 +686,8 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	switch {
 	case n.Tag == "img":
 		contentH = l.blockImage(n, contentX, contentY, contentW)
+	case n.Tag == "svg":
+		contentH = l.blockSVG(n, contentX, contentY, contentW)
 	case st.Display == "table":
 		contentH = l.table(n, contentX, contentY, contentW)
 	case st.Display == "grid":
@@ -708,7 +710,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 			contentH = maxH
 		}
 	}
-	if n.Tag != "img" && st.AspectRatio > 0 && (!st.Height.Set || st.Height.IsAuto()) {
+	if n.Tag != "img" && n.Tag != "svg" && st.AspectRatio > 0 && (!st.Height.Set || st.Height.IsAuto()) {
 		h := int(math.Round(float64(contentW) * float64(cellW) / (st.AspectRatio * float64(cellH))))
 		if h > contentH {
 			contentH = h

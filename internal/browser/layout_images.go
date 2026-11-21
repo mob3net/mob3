@@ -6,6 +6,58 @@ import (
 	"strings"
 )
 
+// svgLabel returns the text that represents an inline SVG that was not
+// rasterized: its <title>, its visible text, or an icon marker for an
+// aria-label. visible is false for an SVG the page hides from assistive
+// technology, which must render nothing.
+func svgLabel(n *Node) (label string, visible bool) {
+	if strings.EqualFold(n.Attr("aria-hidden"), "true") {
+		return "", false
+	}
+	if t := n.FindFirst("title"); t != nil {
+		if label := strings.TrimSpace(t.TextContent()); label != "" {
+			return label, true
+		}
+	}
+	if label := strings.TrimSpace(visibleText(n)); label != "" {
+		return label, true
+	}
+	if strings.TrimSpace(n.Attr("aria-label")) != "" {
+		// An aria-label on an icon-only SVG is an accessibility name, not page
+		// text. Rendering it into a tiny icon slot truncates it into garbage,
+		// so use a compact icon marker instead.
+		return "▣", true
+	}
+	return "", true
+}
+
+// imageFallbackLabel returns the text that stands in for an image that is not
+// painted: an <img> alt, or an inline SVG's accessibility fallback.
+func imageFallbackLabel(n *Node) (label string, visible bool) {
+	if n.Tag == "svg" {
+		return svgLabel(n)
+	}
+	return strings.TrimSpace(n.Attr("alt")), true
+}
+
+// blockSVG lays out an SVG that became a block box, such as a flex or grid
+// item. It paints the rasterized image, or the accessibility fallback when
+// rasterization did not happen (images off or a decoder failure).
+func (l *layouter) blockSVG(n *Node, x, y, w int) int {
+	if n.Img != nil && !l.imagesOff {
+		return l.blockImage(n, x, y, w)
+	}
+	label, visible := svgLabel(n)
+	if !visible || label == "" {
+		return 0
+	}
+	if w > 0 {
+		label = truncateWidth(label, w)
+	}
+	l.addText(x, y, label, n.Style, n)
+	return 1
+}
+
 func (c *inlineCtx) addImage(n *Node, st *Style) {
 	maxW := c.lineMaxW()
 	if n.Img == nil || c.l.imagesOff {
@@ -56,7 +108,10 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 		return l.addFittedImage(n, st, x, y, w, boxH)
 	}
 	if n.Img == nil || l.imagesOff {
-		alt := strings.TrimSpace(n.Attr("alt"))
+		alt, visible := imageFallbackLabel(n)
+		if !visible {
+			return 0
+		}
 		iw, ih := imageSize(n, st, w, l.imageCapWidth())
 		if alt == "" {
 			if iw >= 2 || ih >= 2 {

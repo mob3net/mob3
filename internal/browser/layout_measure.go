@@ -126,7 +126,15 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		}
 		return total, minW
 	}
-	if n.Tag == "img" {
+	if n.Tag == "svg" && (n.Img == nil || l.imagesOff) {
+		label, visible := svgLabel(n)
+		if !visible || label == "" {
+			return 0, 0
+		}
+		w := stringWidth(label)
+		return w, w
+	}
+	if n.Tag == "img" || n.Tag == "svg" {
 		// Percentage widths depend on the container, not on the content, so
 		// they must not feed intrinsic sizing. Resolving `width:100%` against a
 		// large basis inflated the min-content width (a 100x100 thumbnail
