@@ -57,7 +57,8 @@ curl command.
 - Single-page applications, heavy shadow DOM, custom elements and CSS-in-JS.
 - Sites that require a browser check, CAPTCHA, unusual TLS or a specific
   certificate.
-- Complex grid/flex layouts, sticky positioning, z-index stacking, full float
+- Complex grid/flex layouts, sticky positioning beyond a `top` offset,
+  nested z-index stacking contexts, full float
   behavior, animations and non-text generated content (`attr()`, counters,
   images, icon-font private-use glyphs).
 - Visual results from canvas, WebGL, video and WebAudio.

@@ -267,9 +267,9 @@ Standard Go layout:
 | `layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. Column flex stacks blockified children with a vertical gap, so a `<picture>` media box gets its `aspect-ratio` height instead of staying an empty inline. |
 | `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. A percentage-width image is measured at its intrinsic width (the percentage is container-relative) with a one-cell minimum, so it cannot force a flex or grid item wider than its slot. |
-| `layout_links.go` | Link rectangles, overlay anchors and fixed-scroll re-anchoring. |
+| `layout_links.go` | Link rectangles, overlay anchors, and fixed/sticky scroll re-anchoring (sticky groups clamp against their containing block). |
 | `layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
-| `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
+| `render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, z-index paint ordering, image-placement collection, ANSI truecolor output, changed-line support; kitty/iTerm2 inline-image protocols, capability detection, PNG encoding/downscaling, placement cache; SVG decoding via the vendored renderer. |
 | `png.go` | Grid-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `fetch.go` | HTTP(S)/file/data loading, redirects, gzip, charset decoding (UTF-8 plus legacy single-byte encodings via x/text charmap), stylesheet discovery, module script collection and import map parsing, concurrent foreground and CSS-background image loading, request log, and the in-memory session cookie jar with public-suffix checking and an HttpOnly-hidden view for `document.cookie`. |
 | `cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 32 MiB default budget, 2 MiB per-entry cap, and immediate limit changes from config. |
@@ -322,8 +322,9 @@ Standard Go layout:
   treating it as a universal match would apply e.g. `position:absolute` to the
   whole document). Basic row-direction flexbox and
   basic CSS grid are supported; left/right floats are placed at the current
-  row, shrink to fit, shorten following line boxes and honour `clear`, and
-  `position:sticky` falls back to block flow.
+  row, shrink to fit, shorten following line boxes and honour `clear`, and a
+  box with `position:sticky` and a `top` offset follows the scroll within its
+  containing block.
 - **Floats:** `float:left`/`right` (and the `inline-start`/`inline-end`
   aliases) take the box out of normal flow. Floats are placed at the current
   flow row, shrink to fit their content or declared width, and a float with a
@@ -372,7 +373,13 @@ Standard Go layout:
   final position is applied after layout, the containing block it establishes
   and its auto-placed absolute descendants move with it, so nested cards and
   badges stay at the intended edge.
-  `z-index` is ignored, `sticky` falls back to block flow, and relative
+  `z-index` orders positioned boxes at paint time: the nearest positioned
+  ancestor's layer is inherited, and fragments sort by z-index within the
+  scrolling page, sticky and fixed phases. Hit testing uses the same layer, so
+  the overlay that paints on top also receives the click. This is a flat
+  approximation: nested stacking contexts, negative layers behind a parent's
+  background, and contexts created by `opacity`, `transform` or flex/grid
+  items are not modelled. Relative
   offsets are applied to block boxes only (inline relative is ignored).
 - **Overlay links:** an empty anchor with an absolute or fixed box contributes
   an invisible `fragLink` rectangle, so card overlay links are clickable and
@@ -387,7 +394,11 @@ Standard Go layout:
   underneath them; a fixed fill also clears the cells it covers so page glyphs
   cannot show through. Resizing rebuilds layout with the new viewport height. In dump mode, where no viewport exists, fixed boxes fall back
   to page-anchored absolute placement so their content still renders.
-  `position:sticky` remains approximated as block flow.
+  A `position:sticky` box with a `top` offset stays in flow, is pushed down to
+  that offset while its containing block is scrolled, stops at the containing
+  block's bottom, paints above in-flow content but below fixed chrome, and is
+  treated as an overlay by hit testing. `bottom`/`left`/`right` sticky and
+  nested sticky boxes keep their block-flow position.
 - **Cascade layers:** `@layer` blocks are parsed instead of dropped, so
   component CSS wrapped in layers still applies. Layer order follows
   declaration order across the document's stylesheets, including
@@ -1969,12 +1980,16 @@ Standard Go layout:
   spans. Left/right floats shrink to fit, wrap following lines and honour
   `clear`; floats are scoped to their block flow, lines that cross
   a float's bottom resume the full width, and floats inside inline wrappers
-  remain inline. `position:sticky` falls back to block
-  flow. `display:contents` is
+  remain inline. `position:sticky` follows the scroll for a `top` offset;
+  `bottom`/`left`/`right` offsets and nested sticky boxes keep their block-flow
+  position. `display:contents` is
   expanded so its children participate directly in the parent's flow, flex row
   or grid. Absolute, relative and
-  fixed positioning work, but `z-index` stacking is ignored and
-  relative offsets are not applied to inline boxes.
+  fixed positioning work; `z-index` sorts positioned boxes by layer at paint
+  and hit-test time, but nested stacking contexts, negative layers behind an
+  ancestor's background, and contexts created by `opacity`, `transform` or
+  flex/grid items are approximated. Relative offsets are not applied to inline
+  boxes.
 - SVG support is partial: paths (including compact arc flags and arcs with
   several parameter sets), shapes, gradients, transforms, `clipPath`,
   `fill-rule` and `<use>` of paths/groups work; SVG text, `<use>` resolving to
@@ -2130,8 +2145,8 @@ Known unsupported families (do not present these as available):
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,
   floats inside inline wrappers and across nested blocks, float edge cases
-  that cross nested formatting contexts, `position:sticky`, `z-index`
-  stacking, animations,
+  that cross nested formatting contexts, sticky offsets other than `top`,
+  nested `z-index` stacking contexts, animations,
   transitions, generated content beyond literal `::before`/`::after` strings
   (`attr()`, counters, images), background gradients/repeat, full flexbox.
 
@@ -2372,13 +2387,8 @@ engine work only; do not add site-specific exceptions.
   `justify-self`, `align-self`, `grid-auto-flow`, and `order` for grid items
   (order currently applies only to flex).
 
-### P1 — Overflow, stacking and hidden content
+### P1 — Overflow and hidden content
 
-- **`z-index` stacking.** Implement basic stacking for positioned boxes so
-  overlays do not paint under/over unrelated content by tree order alone.
-- **Sticky and fixed chrome.** `position:sticky` still falls back to block
-  flow. Ensure sticky/fixed headers reserve their in-flow space where the page
-  depends on it, without duplicating menus or covering the first content rows.
 - **Visually hidden UI.** Extend detection beyond `clip:rect(1px…)` and
   `inset(50%)`: off-screen absolute/fixed skip links and mobile menus can still
   occupy cells or wrap into narrow columns. Suppress only boxes that are fully

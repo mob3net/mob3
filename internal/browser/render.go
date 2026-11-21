@@ -385,7 +385,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	var chrome []Rect
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if !f.Fixed || f.Kind != fragFill || !f.Color.opaque() {
+		if (!f.Fixed && f.Sticky == 0) || f.Kind != fragFill || !f.Color.opaque() {
 			continue
 		}
 		y := f.Y - scroll + topRow
@@ -557,11 +557,26 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			}
 		}
 	}
-	// Paint the scrolling page first and viewport-anchored (fixed) chrome
-	// last, so headers and bars stay above content that scrolls under them.
-	for i := range ly.Frags {
-		if !ly.Frags[i].Fixed {
+	// Paint the scrolling page first, sticky boxes above it (they overlap
+	// content while scrolled), and viewport-anchored (fixed) chrome last.
+	// A page with z-index uses the precomputed order, which sorts within each
+	// phase.
+	if len(ly.paintOrder) > 0 {
+		for _, i := range ly.paintOrder {
 			paintOne(&ly.Frags[i])
+		}
+		return
+	}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if !f.Fixed && f.Sticky == 0 {
+			paintOne(f)
+		}
+	}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if !f.Fixed && f.Sticky != 0 {
+			paintOne(f)
 		}
 	}
 	for i := range ly.Frags {

@@ -166,6 +166,8 @@ type Style struct {
 	ObjectPosX      float64
 	ObjectPosY      float64
 	AspectRatio     float64
+	// ZIndex is the z-index of a positioned box; 0 is auto.
+	ZIndex int
 }
 
 func parseObjectPosition(v string, st *Style) {
@@ -969,6 +971,11 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "position":
 		st.Position = lower
+	case "z-index":
+		st.ZIndex = 0
+		if v, err := strconv.Atoi(strings.TrimSpace(lower)); err == nil && v >= -10000 && v <= 10000 {
+			st.ZIndex = v
+		}
 	case "object-fit":
 		switch lower {
 		case "fill", "contain", "cover", "none", "scale-down":

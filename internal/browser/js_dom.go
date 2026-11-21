@@ -1546,7 +1546,7 @@ func (j *jsRuntime) computedStyleObject(n *Node) *sobek.Object {
 		"right":            lengthCSS(st.Right, "auto"),
 		"bottom":           lengthCSS(st.Bottom, "auto"),
 		"left":             lengthCSS(st.Left, "auto"),
-		"z-index":          "auto",
+		"z-index":          zIndexCSS(st),
 		"max-width":        lengthCSS(st.MaxWidth, "none"),
 		"list-style-type":  styleDefault(st.ListStyle, "disc"),
 		"flex-direction":   styleDefault(st.FlexDir, "row"),
@@ -2754,4 +2754,12 @@ func nodesEqual(a, b *Node) bool {
 		}
 	}
 	return true
+}
+
+// zIndexCSS reports a computed z-index for the DOM measurement APIs.
+func zIndexCSS(st *Style) string {
+	if st == nil || st.ZIndex == 0 {
+		return "auto"
+	}
+	return strconv.Itoa(st.ZIndex)
 }

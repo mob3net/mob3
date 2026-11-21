@@ -31,14 +31,21 @@ func (b *Browser) linkAt(x, y int) int {
 	if b.layout == nil {
 		return -1
 	}
+	best, bestLayer := -1, -1
 	for i, li := range b.layout.Links {
 		for _, r := range li.Rects {
-			if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
-				return i
+			if x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
+				continue
 			}
+			// Positioned overlays and sticky bars paint above in-flow links,
+			// so a click on their cells must follow the visible link.
+			if layer := overlayLayer(li.Node); layer > bestLayer {
+				best, bestLayer = i, layer
+			}
+			break
 		}
 	}
-	return -1
+	return best
 }
 
 // openURLPrompt opens the URL field prefilled with the current URL, selected
@@ -561,8 +568,10 @@ func (b *Browser) nodeAt(x, y int) *Node {
 // overlayLayer ranks positioned boxes above normal flow for hit testing.
 func overlayLayer(n *Node) int {
 	for p := n; p != nil; p = p.Parent {
-		if p.Style != nil && (p.Style.Position == "absolute" || p.Style.Position == "fixed") {
-			return 2
+		if p.Style != nil && isPositionedStyle(p.Style) {
+			// Positioned content is an overlay; a higher z-index wins among
+			// overlapping overlays, and negative z falls behind normal flow.
+			return 2 + p.Style.ZIndex
 		}
 	}
 	return 0

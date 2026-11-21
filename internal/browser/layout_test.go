@@ -482,3 +482,97 @@ func TestZoomShrinksMediaViewport(t *testing.T) {
 		t.Fatalf("80 columns at 200%% zoom = %q, want the narrow media query to match", got)
 	}
 }
+
+// TestStickyTopFollowsScroll checks the sticky offset, its containing-block
+// clamp, and that a scrolled sticky header paints above the text underneath.
+func TestStickyTopFollowsScroll(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.stick { position: sticky; top: 0; background: #dddddd; }
+	.tail p { margin: 0; }
+	</style></head><body>
+	<div class="wrap"><div class="stick">HEAD</div>
+	<div class="tail"><p>one</p><p>two</p><p>three</p><p>four</p></div></div>
+	</body></html>`)
+	ly := BuildLayout(root, fixtureAuthorRules(root), 40)
+	stick, _ := findSelectorNode(root, ".stick")
+	box, ok := ly.Boxes[stick]
+	if !ok {
+		t.Fatal("sticky box was not laid out")
+	}
+	idx := -1
+	for i := range ly.Frags {
+		if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "HEAD" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatal("sticky header text not found")
+	}
+	base := ly.Frags[idx].Y
+
+	ly.SetFixedScroll(2)
+	if got := ly.Frags[idx].Y; got != base+2 {
+		t.Fatalf("sticky Y at scroll 2 = %d, want %d", got, base+2)
+	}
+
+	ly.SetFixedScroll(1000)
+	wrap, _ := findSelectorNode(root, ".wrap")
+	cb := ly.Boxes[wrap]
+	want := cb.Y + cb.H - box.H
+	if got := ly.Frags[idx].Y; got != want {
+		t.Fatalf("sticky Y at the containing-block end = %d, want %d", got, want)
+	}
+
+	ly.SetFixedScroll(0)
+	if got := ly.Frags[idx].Y; got != base {
+		t.Fatalf("sticky Y after scrolling back = %d, want %d", got, base)
+	}
+
+	// Scroll so the header overlaps the first line, then paint the viewport.
+	ly.SetFixedScroll(2)
+	pageFG := RGB(0x1f, 0x23, 0x28)
+	if ly.Body != nil && ly.Body.Style != nil && ly.Body.Style.Color.Set {
+		pageFG = ly.Body.Style.Color
+	}
+	g := NewGrid(40, 12, pageFG, RGB(255, 255, 255))
+	PaintLayout(g, ly, 2, 0, 12, nil, pageFG)
+	top := g.Lines(false)[0]
+	if !strings.Contains(top, "HEAD") {
+		t.Fatalf("sticky header did not paint above the scrolled text: %q", top)
+	}
+}
+
+// TestZIndexPaintOrder checks that positioned boxes paint in z-index order
+// even when the higher layer comes first in the DOM, and that hit testing
+// follows the visible layer.
+func TestZIndexPaintOrder(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.card { position: absolute; top: 0; left: 0; background: #ffffff; }
+	.high { z-index: 2; }
+	.low { z-index: 1; }
+	</style></head><body>
+	<div class="card high">HIGH</div>
+	<div class="card low">LOW</div>
+	</body></html>`)
+	ly := BuildLayout(root, fixtureAuthorRules(root), 20)
+	if len(ly.paintOrder) == 0 {
+		t.Fatal("z-index page has no paint order")
+	}
+	pageFG := RGB(0x1f, 0x23, 0x28)
+	g := NewGrid(20, 3, pageFG, RGB(255, 255, 255))
+	PaintLayout(g, ly, 0, 0, 3, nil, pageFG)
+	if top := g.Lines(false)[0]; !strings.HasPrefix(top, "HIGH") {
+		t.Fatalf("painted top row = %q, want the higher z-index text", top)
+	}
+
+	b := NewBrowser(20, 3)
+	b.page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
+	b.layout = ly
+	n := b.nodeAt(0, 0)
+	if n == nil || !strings.Contains(n.Attr("class"), "high") {
+		t.Fatalf("hit testing picked %+v, want the higher z-index box", n)
+	}
+}

@@ -3,6 +3,7 @@ package browser
 import (
 	"image"
 	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -51,6 +52,14 @@ type Frag struct {
 	// from FixedY (the viewport row) plus the browser scroll offset.
 	Fixed  bool
 	FixedY int
+	// Sticky marks a fragment of a position:sticky box, as a 1-based sticky
+	// group. Y is recalculated on scroll from StickyBaseY plus the group's
+	// clamp against its containing block.
+	Sticky      int
+	StickyBaseY int
+	// Z is the paint layer inherited from the nearest positioned box with a
+	// z-index. 0 keeps tree order.
+	Z int
 }
 
 // Layout is the result of styling and layout.
@@ -74,6 +83,10 @@ type Layout struct {
 	// measurement of an element created after this layout can recompute that
 	// element's style without rebuilding the page.
 	engine *styleEngine
+	// stickies holds the position:sticky groups resolved after layout.
+	stickies []stickyBox
+	// paintOrder is the fragment paint sequence when any z-index applies.
+	paintOrder []int
 
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
@@ -136,6 +149,11 @@ type layouter struct {
 	maxFrags  int
 	maxRows   int
 	hideFixed bool
+	// stickyNodes records position:sticky boxes as they are laid out, so the
+	// groups can be resolved against their final containing blocks.
+	stickyNodes []*Node
+	// paintZ is the z-index inherited by the box currently being laid out.
+	paintZ int
 	// imagesOff lays decoded images out as alt labels without clearing them,
 	// so graphics mode changes can hide images without reloading the page.
 	imagesOff bool
@@ -356,8 +374,9 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
 		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
 		Cursor: l.cursor, HasCursor: l.hasCursor, Boxes: l.boxes,
-		engine: engine,
+		engine: engine, stickies: l.resolveStickies(),
 	}
+	out.buildPaintOrder()
 	out.buildLinks()
 	// A page that already renders a dark background is using its own dark
 	// theme (or responded to prefers-color-scheme); keep its palette. The
@@ -615,6 +634,15 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	parentCB := l.cb
 	fragStart := len(l.frags)
 	absStart := len(l.abs)
+	prevPaintZ := l.paintZ
+	if st.ZIndex != 0 && isPositionedStyle(st) {
+		l.paintZ = st.ZIndex
+	}
+	stickyGroup := 0
+	if st.Position == "sticky" && offsetSet(st.Top) && !l.nestedSticky(n) {
+		l.stickyNodes = append(l.stickyNodes, n)
+		stickyGroup = len(l.stickyNodes)
+	}
 	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, pctW)
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if !widthResolved {
@@ -872,6 +900,28 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	if st.Position != "fixed" {
 		l.boxes[n] = Rect{X: boxX + rx, Y: top + ry, W: boxW, H: totalH}
 	}
+	if stickyGroup != 0 {
+		// Mark the fragments laid out for this box, including its background
+		// and border fills, so they move together when scrolling.
+		for i := fragStart; i < len(l.frags); i++ {
+			f := &l.frags[i]
+			if f.Fixed || f.Sticky != 0 {
+				continue
+			}
+			f.Sticky = stickyGroup
+			f.StickyBaseY = f.Y
+		}
+	}
+	if z := l.paintZ; z != 0 {
+		// The nearest explicitly positioned ancestor wins, so a nested
+		// z-indexed box keeps its own layer instead of the outer one.
+		for i := fragStart; i < len(l.frags); i++ {
+			if l.frags[i].Z == 0 {
+				l.frags[i].Z = z
+			}
+		}
+	}
+	l.paintZ = prevPaintZ
 	return mt + totalH + mb, Rect{X: boxX, Y: top, W: boxW, H: totalH}
 }
 
@@ -943,4 +993,66 @@ func lengthFuncHasPercent(f *lengthFunc) bool {
 		}
 	}
 	return false
+}
+
+// isPositionedStyle reports whether a style takes part in z-index stacking.
+func isPositionedStyle(st *Style) bool {
+	if st == nil {
+		return false
+	}
+	switch st.Position {
+	case "relative", "absolute", "fixed", "sticky":
+		return true
+	}
+	return false
+}
+
+// inheritedZ returns the z-index of the nearest positioned ancestor.
+func (l *layouter) inheritedZ(n *Node) int {
+	for p := n.Parent; p != nil; p = p.Parent {
+		if p.Style != nil && isPositionedStyle(p.Style) && p.Style.ZIndex != 0 {
+			return p.Style.ZIndex
+		}
+	}
+	return 0
+}
+
+// paintPass orders the three painting phases: scrolling content, sticky
+// boxes, then fixed chrome.
+func paintPass(f *Frag) int {
+	switch {
+	case f.Fixed:
+		return 2
+	case f.Sticky != 0:
+		return 1
+	}
+	return 0
+}
+
+// buildPaintOrder precomputes the paint sequence when a page uses z-index.
+// Within one phase fragments sort by z-index, and stable ties keep tree order.
+func (ly *Layout) buildPaintOrder() {
+	any := false
+	for i := range ly.Frags {
+		if ly.Frags[i].Z != 0 {
+			any = true
+			break
+		}
+	}
+	if !any {
+		ly.paintOrder = nil
+		return
+	}
+	order := make([]int, len(ly.Frags))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		fa, fb := &ly.Frags[order[a]], &ly.Frags[order[b]]
+		if pa, pb := paintPass(fa), paintPass(fb); pa != pb {
+			return pa < pb
+		}
+		return fa.Z < fb.Z
+	})
+	ly.paintOrder = order
 }

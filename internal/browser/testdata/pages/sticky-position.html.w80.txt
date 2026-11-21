@@ -1,0 +1,4 @@
+Sticky header
+First paragraph of the section.
+Second paragraph stays in normal flow.
+Third paragraph closes the section.

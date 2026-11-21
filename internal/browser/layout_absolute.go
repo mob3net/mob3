@@ -155,7 +155,10 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	}
 	start := len(l.frags)
 	absStart := len(l.abs)
+	prevZ := l.paintZ
+	l.paintZ = l.inheritedZ(n)
 	_, rect := l.blockLayout(n, x, y, availW, forceH, true)
+	l.paintZ = prevZ
 	l.forcedImageH = prevImageH
 	l.parentH = prevParentH
 	frags := make([]Frag, len(l.frags)-start)
