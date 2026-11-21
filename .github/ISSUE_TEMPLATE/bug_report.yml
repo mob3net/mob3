@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a page that looks wrong, a crash, or any other problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping. Fill in whatever you can — nothing here is
+        required. A URL and a screenshot are already useful.
+
+        Security vulnerabilities go to
+        [private advisories](https://github.com/mob3net/mob3/security/advisories/new),
+        not this public form.
+
+  - type: input
+    id: url
+    attributes:
+      label: Page URL
+      description: Where does it happen? A public URL is best. For a local page, attach the HTML in the last field.
+      placeholder: "https://example.com/article"
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What is wrong?
+      description: A sentence or two is enough. Mention the footer message if there is one.
+      placeholder: "The text beside the image wraps after every character."
+
+  - type: upload
+    id: screenshot-actual
+    attributes:
+      label: Screenshot of what is wrong
+      description: "Drag in a PNG/JPG/GIF/WebP. `mob3 -png URL > page.png` also works. Blur any private data."
+    validations:
+      accept: ".png,.jpg,.jpeg,.gif,.webp"
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: How should it look instead?
+      description: Leave this blank if the second screenshot makes it clear.
+      placeholder: "The text should stay in a readable column beside the image."
+
+  - type: upload
+    id: screenshot-expected
+    attributes:
+      label: Screenshot of how it should look
+      description: A capture from another browser, a quick mock-up, or an annotated copy of the first screenshot is fine.
+    validations:
+      accept: ".png,.jpg,.jpeg,.gif,.webp"
+
+  - type: input
+    id: environment
+    attributes:
+      label: Version and terminal
+      description: Run `mob3 -version`, then add your OS, terminal emulator and size.
+      placeholder: "mob3 v1.2.3 · Linux amd64 · kitty · 177x42"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Steps, flags, console output, other terminal widths, or a saved HTML/CSS file.
+      placeholder: |
+        1. Run: mob3 -graphics blocks URL
+        2. Scroll to the article body
+        Also happens at 120 columns.

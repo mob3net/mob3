@@ -23,7 +23,10 @@ licensing options.
 ## Where to report bugs?
 
 Please report all bugs in this repository's issues tracker:
-<https://github.com/mob3net/mob3/issues>.
+<https://github.com/mob3net/mob3/issues>. The bug report form requires nothing:
+share the page URL, what is wrong, how it should look instead, a screenshot of
+each, and the MOB³ version with your terminal if you can. Clear before/after
+pictures are what make rendering problems fixable.
 
 ## Security policy
 

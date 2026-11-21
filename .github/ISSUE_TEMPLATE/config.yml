@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mob3net/mob3/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue for them.
+  - name: Read the documentation
+    url: https://mob3.net/docs/
+    about: Install, command-line flags, keys, automation, security and known limitations.
+  - name: Contributing and licensing
+    url: https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md
+    about: Read the contribution agreement and the code of conduct before sending a pull request.

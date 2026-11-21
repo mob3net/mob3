@@ -83,7 +83,13 @@ written in Go
   keep CI green. Bugs go to the repository issues tracker; vulnerabilities go
   privately through GitHub Security Advisories. The `PR` workflow checks the
   statement; the `CI` workflow runs formatting, vet and tests on pull requests
-  and pushes to `main`.
+  and pushes to `main`. The bug report form in
+  `.github/ISSUE_TEMPLATE/bug_report.yml` requires nothing and stays
+  deliberately short — page URL, current and expected result with a screenshot
+  of each, and the build and terminal — so people are not discouraged from
+  reporting. Extra detail goes in the single optional field rather than new
+  required ones; keep the form aligned with the CLI when it changes. Security
+  reports stay on the private advisory link, never the public form.
 - **Commit messages.** End every completed change with a short, one-line commit
   message summarizing the work. Do not commit unless explicitly asked; just
   provide the message.
