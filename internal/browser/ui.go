@@ -1269,85 +1269,121 @@ func (b *Browser) handleSelectMenuMouse(ev MouseEvent) {
 	}
 }
 
-// paintSelectMenu overlays the open single-select option popup.
-func (b *Browser) paintSelectMenu(g *Grid) {
-	m := b.selectMenu
-	if m == nil || len(m.options) == 0 || g.W < 8 || g.H < 4 {
-		return
+// menuRow is one visible line of a centered choice menu. marker is the
+// two-cell prefix drawn before the label ("✓ " for the current value, "  " for
+// none, "☑ "/"☐ " for a switch, "● " for the active zoom).
+type menuRow struct {
+	label  string
+	marker string
+}
+
+// paintChoiceMenu draws a centered list dialog with the active row highlighted,
+// scrolls it so the active row stays visible, and returns the click rectangle
+// of every visible row. Each caller keeps its own title, hint, markers and
+// payload; this owns the shared geometry so the select popup, the view options
+// window and the zoom window cannot drift apart. A nil scroll computes the
+// window for this paint; otherwise the caller's persistent position is clamped
+// and written back.
+func (b *Browser) paintChoiceMenu(g *Grid, title, hint string, minW int, rows []menuRow, active int, scroll *int) []Rect {
+	if len(rows) == 0 || g.W < 8 || g.H < 4 {
+		return nil
 	}
 	maxLabel := 0
-	for _, opt := range m.options {
-		if w := stringWidth("✓ " + optionLabel(opt)); w > maxLabel {
+	for _, row := range rows {
+		if w := stringWidth(row.marker + row.label); w > maxLabel {
 			maxLabel = w
 		}
 	}
-	hint := " ↑↓ choose · Enter select · Esc close "
 	boxW := maxLabel + 6
 	if w := stringWidth(hint) + 4; w > boxW {
 		boxW = w
 	}
-	if boxW < 40 {
-		boxW = 40
+	if boxW < minW {
+		boxW = minW
 	}
 	if boxW > g.W {
 		boxW = g.W
 	}
 	if boxW < 8 {
-		return
+		return nil
 	}
 	inner := boxW - 4
 	maxRows := g.H - 4
 	if maxRows < 1 {
 		maxRows = 1
 	}
-	visible := len(m.options)
+	visible := len(rows)
 	if visible > maxRows {
 		visible = maxRows
 	}
-	if m.idx < m.scroll {
-		m.scroll = m.idx
+	top := 0
+	if scroll != nil {
+		top = *scroll
 	}
-	if m.idx >= m.scroll+visible {
-		m.scroll = m.idx - visible + 1
+	if active < top {
+		top = active
 	}
-	if m.scroll < 0 {
-		m.scroll = 0
+	if active >= top+visible {
+		top = active - visible + 1
 	}
-	if m.scroll+visible > len(m.options) {
-		m.scroll = len(m.options) - visible
+	if top < 0 {
+		top = 0
+	}
+	if top+visible > len(rows) {
+		top = len(rows) - visible
+	}
+	if scroll != nil {
+		*scroll = top
 	}
 	boxH := visible + 4
 	if boxH > g.H {
 		boxH = g.H
 	}
-	x, y := b.modalFrame(g, boxW, boxH, "Select an option")
+	x, y := b.modalFrame(g, boxW, boxH, title)
 	fg := RGB(0x1f, 0x23, 0x28)
 	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
 	activeBG := RGB(0x2f, 0x6f, 0xbf)
 	activeFG := RGB(0xff, 0xff, 0xff)
-	b.selectHits = b.selectHits[:0]
+	rects := make([]Rect, 0, visible)
 	for i := 0; i < visible; i++ {
-		idx := m.scroll + i
-		opt := m.options[idx]
-		marker := "  "
-		if opt.HasAttr("selected") {
-			marker = "✓ "
-		}
+		idx := top + i
+		row := rows[idx]
 		rowBG, rowFG := modalBG, fg
-		rowStyle := style
-		if idx == m.idx {
+		if idx == active {
 			rowBG, rowFG = activeBG, activeFG
 		}
 		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
-		text := padWidth(truncateWidth(marker+optionLabel(opt), inner), inner)
-		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
-		b.selectHits = append(b.selectHits, selectHit{
-			rect:   Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
-			option: opt,
-		})
+		text := padWidth(truncateWidth(row.marker+row.label, inner), inner)
+		g.Text(x+2, y+2+i, text, style, rowFG)
+		rects = append(rects, Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1})
 	}
 	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
 	modalDim(g, x, y, boxW, boxH)
+	return rects
+}
+
+// paintSelectMenu overlays the open single-select option popup.
+func (b *Browser) paintSelectMenu(g *Grid) {
+	m := b.selectMenu
+	if m == nil || len(m.options) == 0 {
+		return
+	}
+	rows := make([]menuRow, len(m.options))
+	for i, opt := range m.options {
+		rows[i] = menuRow{label: optionLabel(opt), marker: "  "}
+		if opt.HasAttr("selected") {
+			rows[i].marker = "✓ "
+		}
+	}
+	rects := b.paintChoiceMenu(g, "Select an option",
+		" ↑↓ choose · Enter select · Esc close ", 40, rows, m.idx, &m.scroll)
+	if len(rects) == 0 {
+		return
+	}
+	b.selectHits = b.selectHits[:0]
+	for i, rect := range rects {
+		b.selectHits = append(b.selectHits, selectHit{rect: rect, option: m.options[m.scroll+i]})
+	}
 }
 
 // viewOption is one toggleable row in the page view window.
@@ -1475,83 +1511,30 @@ func (b *Browser) handleViewMenuMouse(ev MouseEvent) {
 // paintViewMenu overlays the open page view window.
 func (b *Browser) paintViewMenu(g *Grid) {
 	m := b.viewMenu
-	if m == nil || g.W < 8 || g.H < 4 {
+	if m == nil {
 		return
 	}
 	opts := viewOptions()
 	if len(opts) == 0 {
 		return
 	}
-	maxLabel := 0
-	for _, opt := range opts {
-		if w := stringWidth("☑ " + opt.label); w > maxLabel {
-			maxLabel = w
+	rows := make([]menuRow, len(opts))
+	for i, opt := range opts {
+		rows[i] = menuRow{label: opt.label, marker: "☐ "}
+		if opt.on(b) {
+			rows[i].marker = "☑ "
 		}
 	}
-	hint := " ↑↓ choose · Space toggle · Esc close "
-	boxW := maxLabel + 6
-	if w := stringWidth(hint) + 4; w > boxW {
-		boxW = w
-	}
-	if boxW < 40 {
-		boxW = 40
-	}
-	if boxW > g.W {
-		boxW = g.W
-	}
-	if boxW < 8 {
+	scroll := 0
+	rects := b.paintChoiceMenu(g, "View options",
+		" ↑↓ choose · Space toggle · Esc close ", 40, rows, m.idx, &scroll)
+	if len(rects) == 0 {
 		return
 	}
-	inner := boxW - 4
-	maxRows := g.H - 4
-	if maxRows < 1 {
-		maxRows = 1
-	}
-	visible := len(opts)
-	if visible > maxRows {
-		visible = maxRows
-	}
-	// The list is short for now, but keep the selected row inside the box as
-	// more switches are added.
-	scroll := 0
-	if m.idx >= visible {
-		scroll = m.idx - visible + 1
-	}
-	if scroll < 0 {
-		scroll = 0
-	}
-	boxH := visible + 4
-	if boxH > g.H {
-		boxH = g.H
-	}
-	x, y := b.modalFrame(g, boxW, boxH, "View options")
-	fg := RGB(0x1f, 0x23, 0x28)
-	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	activeBG := RGB(0x2f, 0x6f, 0xbf)
-	activeFG := RGB(0xff, 0xff, 0xff)
 	b.viewMenuHits = b.viewMenuHits[:0]
-	for i := 0; i < visible; i++ {
-		idx := scroll + i
-		opt := opts[idx]
-		marker := "☐ "
-		if opt.on(b) {
-			marker = "☑ "
-		}
-		rowBG, rowFG := modalBG, fg
-		rowStyle := style
-		if idx == m.idx {
-			rowBG, rowFG = activeBG, activeFG
-		}
-		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
-		text := padWidth(truncateWidth(marker+opt.label, inner), inner)
-		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
-		b.viewMenuHits = append(b.viewMenuHits, viewMenuHit{
-			rect: Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
-			idx:  idx,
-		})
+	for i, rect := range rects {
+		b.viewMenuHits = append(b.viewMenuHits, viewMenuHit{rect: rect, idx: scroll + i})
 	}
-	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-	modalDim(g, x, y, boxW, boxH)
 }
 
 // zoomMenuHit is one clickable row in the open zoom window.
@@ -1647,77 +1630,27 @@ func (b *Browser) handleZoomMenuMouse(ev MouseEvent) {
 // paintZoomMenu overlays the open zoom window.
 func (b *Browser) paintZoomMenu(g *Grid) {
 	m := b.zoomMenu
-	if m == nil || g.W < 8 || g.H < 4 {
+	if m == nil {
 		return
 	}
-	labels := make([]string, len(zoomSteps))
-	maxLabel := 0
+	current := zoomPercentLabel(b.zoom)
+	rows := make([]menuRow, len(zoomSteps))
 	for i, z := range zoomSteps {
-		labels[i] = zoomPercentLabel(z)
-		if w := stringWidth("● " + labels[i]); w > maxLabel {
-			maxLabel = w
+		rows[i] = menuRow{label: zoomPercentLabel(z), marker: "  "}
+		if rows[i].label == current {
+			rows[i].marker = "● "
 		}
-	}
-	hint := " ↑↓ choose · Enter apply · Esc close "
-	boxW := maxLabel + 6
-	if w := stringWidth(hint) + 4; w > boxW {
-		boxW = w
-	}
-	if boxW < 32 {
-		boxW = 32
-	}
-	if boxW > g.W {
-		boxW = g.W
-	}
-	if boxW < 8 {
-		return
-	}
-	inner := boxW - 4
-	maxRows := g.H - 4
-	if maxRows < 1 {
-		maxRows = 1
-	}
-	visible := len(labels)
-	if visible > maxRows {
-		visible = maxRows
 	}
 	scroll := 0
-	if m.idx >= visible {
-		scroll = m.idx - visible + 1
+	rects := b.paintChoiceMenu(g, "Zoom",
+		" ↑↓ choose · Enter apply · Esc close ", 32, rows, m.idx, &scroll)
+	if len(rects) == 0 {
+		return
 	}
-	boxH := visible + 4
-	if boxH > g.H {
-		boxH = g.H
-	}
-	x, y := b.modalFrame(g, boxW, boxH, "Zoom")
-	fg := RGB(0x1f, 0x23, 0x28)
-	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	activeBG := RGB(0x2f, 0x6f, 0xbf)
-	activeFG := RGB(0xff, 0xff, 0xff)
-	current := zoomPercentLabel(b.zoom)
 	b.zoomMenuHits = b.zoomMenuHits[:0]
-	for i := 0; i < visible; i++ {
-		idx := scroll + i
-		label := labels[idx]
-		marker := "  "
-		if label == current {
-			marker = "● "
-		}
-		rowBG, rowFG := modalBG, fg
-		rowStyle := style
-		if idx == m.idx {
-			rowBG, rowFG = activeBG, activeFG
-		}
-		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
-		text := padWidth(truncateWidth(marker+label, inner), inner)
-		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
-		b.zoomMenuHits = append(b.zoomMenuHits, zoomMenuHit{
-			rect: Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
-			idx:  idx,
-		})
+	for i, rect := range rects {
+		b.zoomMenuHits = append(b.zoomMenuHits, zoomMenuHit{rect: rect, idx: scroll + i})
 	}
-	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-	modalDim(g, x, y, boxW, boxH)
 }
 
 // downloadDialog is the modal curl hint offered for download links and

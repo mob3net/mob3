@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -1091,5 +1092,49 @@ func TestTextareaTypingPatchesLayout(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("patched layout does not show the typed character")
+	}
+}
+
+// TestLongSelectMenuScrolls pins the shared choice-menu painter's scroll
+// window: a long option list follows the active row, and a click maps to the
+// option actually drawn under the pointer rather than the first one.
+func TestLongSelectMenuScrolls(t *testing.T) {
+	var opts strings.Builder
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&opts, `<option value="v%d">Option %d</option>`, i, i)
+	}
+	doc := ParseHTML(`<html><body><form action="/submit"><select name="n">` + opts.String() + `</select></form></body></html>`)
+	u, _ := url.Parse("https://example.com/")
+	b := NewBrowser(60, 12)
+	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.url = u
+	b.rebuild()
+	sel := doc.FindFirst("select")
+	b.openSelectMenu(sel)
+	if b.selectMenu == nil || len(b.selectMenu.options) != 40 {
+		t.Fatalf("select popup = %+v", b.selectMenu)
+	}
+	for i := 0; i < 39; i++ {
+		b.HandleKey("down")
+	}
+	drawQuiet(b)
+	m := b.selectMenu
+	if m == nil || m.idx != 39 {
+		t.Fatalf("popup = %+v, want the last option active", m)
+	}
+	if m.scroll == 0 {
+		t.Fatal("popup did not scroll a long option list")
+	}
+	if len(b.selectHits) == 0 || b.selectHits[0].option != selectOptions(sel)[m.scroll] {
+		t.Fatal("first visible row does not map to the scrolled option")
+	}
+	scroll := m.scroll
+	first := b.selectHits[0].rect
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: first.X + 1, Y: first.Y + 1, Press: true})
+	if b.selectMenu != nil {
+		t.Fatal("popup stayed open after clicking a row")
+	}
+	if got, want := inputValue(sel), fmt.Sprintf("v%d", scroll); got != want {
+		t.Fatalf("select value = %q, want %q", got, want)
 	}
 }
