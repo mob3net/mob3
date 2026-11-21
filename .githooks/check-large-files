@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Reject files above the repository size cap.
+#
+# The cap keeps clones cheap and diffs readable. The generated vendor/ tree is
+# exempt because `go mod vendor` rewrites it.
+#
+# Usage:
+#   .githooks/check-large-files          # files staged for the next commit
+#   .githooks/check-large-files --all    # every tracked file (CI)
+set -euo pipefail
+
+max_bytes=$((2 * 1024 * 1024))
+max_label="2 MB"
+
+if [ "${1:-}" = "--all" ]; then
+	list=(git ls-files -z)
+else
+	list=(git diff --cached --name-only --diff-filter=ACMR -z)
+fi
+
+status=0
+while IFS= read -r -d '' path; do
+	case "$path" in
+	vendor/*) continue ;;
+	esac
+	size=$(git cat-file -s ":$path" 2>/dev/null) || continue
+	if [ "$size" -le "$max_bytes" ]; then
+		continue
+	fi
+	printf 'error: %s is %d bytes, above the %s limit\n' \
+		"$path" "$size" "$max_label" >&2
+	status=1
+done < <("${list[@]}")
+
+if [ "$status" -ne 0 ]; then
+	printf 'Shrink, compress or split the file, or keep it out of the repository.\n' >&2
+fi
+exit "$status"

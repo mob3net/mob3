@@ -67,6 +67,13 @@ written in Go
 - **No site names in the codebase.** Do not mention specific websites in code,
   comments, tests, commit messages or documentation. Describe layout and
   compatibility behavior generically instead.
+- **No large files.** A tracked file must stay at or under 2 MB, except the
+  generated `vendor/` tree that `go mod vendor` rewrites. `.githooks/pre-commit`
+  (installed once with `make hooks`) rejects a staged file above the cap, and
+  the CI `Large files` step runs the same script with `--all` over every tracked
+  file, so `--no-verify` cannot land one unnoticed. Shrink, compress or split
+  the file instead of raising the cap; raising it is a user decision recorded
+  here.
 - **Docs stay current.** Update `README.md` and the relevant `docs/` page in the
   same change whenever user-visible behavior, flags, keys, build output,
   supported features or limitations change. Long-form docs live under `docs/`
@@ -1748,6 +1755,11 @@ Standard Go layout:
   access.
 - Binaries and test/coverage output are covered by `.gitignore`; keep it in sync
   when the layout or build output changes.
+- `make hooks` points `core.hooksPath` at `.githooks/` so the size-cap
+  pre-commit check runs locally. The hook is optional per clone; the CI
+  `Large files` step in `.github/workflows/ci.yml` runs
+  `.githooks/check-large-files --all` and is the enforcement that cannot be
+  skipped.
 - `go vet ./...` must stay clean, and `gofmt` is applied to project files before
   handing work back. Do not reformat files under `vendor/`.
 - Interactive mode is supported on Linux (`term_linux.go`) and macOS

@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Large files
+        run: ./.githooks/check-large-files --all
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

@@ -18,6 +18,10 @@ gofmt -w <files>
 
 `make` writes a static `bin/mob3`. `make clean` removes it. `make vendor`
 regenerates `vendor/` after a dependency change and must be committed.
+`make hooks` points Git at `.githooks/`; its pre-commit hook rejects a staged
+file above 2 MB (the generated `vendor/` tree is exempt), and CI runs
+`.githooks/check-large-files --all` over every tracked file so `--no-verify`
+cannot slip one through. Compress or split the file instead.
 
 Tests must not require network access. Use the existing fake loader and
 `httptest`-free helpers where possible. Add or update tests in the same change

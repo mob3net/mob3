@@ -2,7 +2,7 @@ CGO_ENABLED ?= 0
 BINARY ?= bin/mob3
 VERSION ?= dev
 
-.PHONY: all build static test vet vendor clean run docker
+.PHONY: all build static test vet vendor hooks clean run docker
 
 all: build
 
@@ -26,6 +26,9 @@ vet:
 
 vendor:
 	go mod vendor
+
+hooks:
+	git config core.hooksPath .githooks
 
 run: build
 	./$(BINARY)

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Git pre-commit hook. Install with `make hooks`.
+set -euo pipefail
+
+hook_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+exec "$hook_dir/check-large-files"
