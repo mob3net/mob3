@@ -230,8 +230,8 @@ Standard Go layout:
 | `style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing`, min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade), viewport units (`vw`/`vh`/`vmin`/`vmax`) and simple `calc()` arithmetic, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
-| `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. |
-| `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
+| `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
+| `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
 | `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, empty `::before`/`::after` computation, and the style deadline. |
 | `style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
@@ -525,6 +525,10 @@ Standard Go layout:
   rounded to cells once, so a 1px border plus 4px padding and 4px margin take
   one cell rather than one cell each. A positive total still rounds up to at
   least one cell, so adjacent menu links do not glue together.
+- **Translucent fills:** a background fill with alpha is composited over the
+  cell's current background instead of replacing it, so a page's scrim,
+  divider or dimmed overlay reads as a tint over the page background rather
+  than as a solid black band. Repeated fills stack.
 - **Contrast fallback:** when resolved text and effective background colors are
   too close (for example white text whose background came from an unsupported
   gradient or CSS variable), foreground switches to near-black on light
@@ -1740,7 +1744,12 @@ Standard Go layout:
   (field initializers run, `attachShadow` in the constructor works) but
   lifecycle callbacks (`connectedCallback`, `attributeChangedCallback`,
   `adoptedCallback`) are not fired, `customElements.upgrade` is a no-op, and
-  shadow content is not rendered or matched by page selectors. Storage
+  shadow content is not rendered or matched by page selectors. Because the
+  shadow tree is absent, light-DOM content that a component would only project
+  into an unopened menu, drawer or popover (a sort or filter dropdown, an
+  overflow menu) is laid out inline; only the page's own CSS can hide it.
+  Selector rules using `:defined` are dropped, so a page's SSR "not yet
+  upgraded" hiding rules never apply. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests

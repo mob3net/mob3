@@ -70,6 +70,10 @@ func scanCSSStatement(src string, i int) int {
 			continue
 		}
 		switch c {
+		case '\\':
+			// An escape is part of the identifier, not a statement boundary.
+			i += 2
+			continue
 		case '"', '\'':
 			quote = c
 		case '(':
@@ -449,6 +453,9 @@ func matchingBrace(s string, open int) (int, bool) {
 	depth := 0
 	for i := open; i < len(s); {
 		switch s[i] {
+		case '\\':
+			i += 2
+			continue
 		case '"', '\'':
 			i = skipString(s, i)
 			continue
@@ -580,6 +587,15 @@ func parseRules(src string, st *parseState, media string) []Rule {
 		depth := 0
 		for i < len(src) {
 			c := src[i]
+			if c == '\\' {
+				// A backslash escapes the next byte in a CSS identifier, so an
+				// escaped quote (for example `.before\:content-\[\'\'\]`) must
+				// not be read as the start of a string. Missing this made the
+				// scanner consume the rest of the sheet looking for a closing
+				// quote, dropping every later rule.
+				i += 2
+				continue
+			}
 			if c == '/' && i+1 < len(src) && src[i+1] == '*' {
 				if j := strings.Index(src[i+2:], "*/"); j >= 0 {
 					i += j + 4
@@ -647,6 +663,9 @@ func scanBlock(s string, open int) (body string, next int, ok bool) {
 			return "", len(s), false
 		}
 		switch s[i] {
+		case '\\':
+			i += 2
+			continue
 		case '"', '\'':
 			i = skipString(s, i)
 			continue

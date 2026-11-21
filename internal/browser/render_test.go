@@ -717,3 +717,21 @@ func TestDecodeSVGBoundsDashStroke(t *testing.T) {
 		t.Fatal("hostile dash array stalled the renderer")
 	}
 }
+
+func TestTranslucentFillBlendsWithBackdrop(t *testing.T) {
+	g := NewGrid(2, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	g.Fill(0, 0, 1, 1, Color{R: 0, G: 0, B: 0, A: 51, Set: true})
+	if c := g.Cells[0].BG; c.R != 204 || c.G != 204 || c.B != 204 || c.A != 255 {
+		t.Fatalf("20%% black over white = %+v, want 204,204,204,255", c)
+	}
+	// Stacking a second scrim darkens the result further.
+	g.Fill(0, 0, 1, 1, Color{R: 0, G: 0, B: 0, A: 51, Set: true})
+	if c := g.Cells[0].BG; c.R >= 204 {
+		t.Fatalf("second scrim did not darken: %+v", c)
+	}
+	// An opaque fill still replaces the backdrop.
+	g.Fill(1, 0, 1, 1, RGB(10, 20, 30))
+	if got := g.Cells[1].BG; got != RGB(10, 20, 30) {
+		t.Fatalf("opaque fill = %+v", got)
+	}
+}

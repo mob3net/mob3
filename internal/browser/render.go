@@ -58,6 +58,9 @@ func NewGrid(w, h int, fg, bg Color) *Grid {
 	return g
 }
 
+// Fill paints a rectangle of background cells. A translucent fill is composited
+// over whatever background each cell already has, so a 20%-black scrim reads as
+// light grey on a white page instead of solid black.
 func (g *Grid) Fill(x, y, w, h int, c Color) {
 	if !c.Set || c.A == 0 {
 		return
@@ -68,7 +71,11 @@ func (g *Grid) Fill(x, y, w, h int, c Color) {
 		row := yy * g.W
 		for xx := x0; xx < x1; xx++ {
 			cell := &g.Cells[row+xx]
-			cell.BG = c
+			if c.A < 255 {
+				cell.BG = blendOver(cell.BG, c)
+			} else {
+				cell.BG = c
+			}
 			cell.Cont = false
 			cell.Img = false
 			cell.Raw = ""
@@ -76,6 +83,27 @@ func (g *Grid) Fill(x, y, w, h int, c Color) {
 			cell.Skip = false
 		}
 	}
+}
+
+// blendOver composites src over dst using straight-alpha source-over.
+func blendOver(dst, src Color) Color {
+	if src.A >= 255 {
+		return src
+	}
+	if !dst.Set || dst.A == 0 {
+		src.A = 255
+		return src
+	}
+	sa := uint32(src.A)
+	da := uint32(dst.A) * uint32(255-src.A) / 255
+	outA := sa + da
+	if outA == 0 {
+		return Color{}
+	}
+	mix := func(s, d uint8) uint8 {
+		return uint8((uint32(s)*sa + uint32(d)*da) / outA)
+	}
+	return Color{R: mix(src.R, dst.R), G: mix(src.G, dst.G), B: mix(src.B, dst.B), A: uint8(outA), Set: true}
 }
 
 // Highlight recolors the background and foreground of existing cells without

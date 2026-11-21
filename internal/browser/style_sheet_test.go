@@ -300,3 +300,45 @@ func TestStylesheetSkipsCommentsInsideBlocks(t *testing.T) {
 		}
 	}
 }
+
+func TestStylesheetSurvivesEscapedQuoteSelectors(t *testing.T) {
+	// Generated utility sheets contain selectors such as
+	// `.before\:content-\[\'\'\]::before`. The escaped quote is part of the
+	// class name, not the start of a string; reading it as one made the
+	// scanner consume the rest of the sheet and drop every later rule.
+	rules := ParseStylesheet(`
+		.before\:content-\[\'\'\]::before { --tw-content: ''; content: var(--tw-content); }
+		@media (min-width: 600px) {
+			.later { color: red; }
+		}
+		.last { color: blue; }
+	`)
+	var got []string
+	for _, r := range rules {
+		got = append(got, r.Selector.Text)
+	}
+	want := []string{`.before\:content-\[\'\'\]::before`, ".later", ".last"}
+	if len(got) != len(want) {
+		t.Fatalf("rules = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rules = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestUnsupportedPseudoInvalidatesSelector(t *testing.T) {
+	// A pseudo-class the engine cannot evaluate must drop the rule. Matching
+	// it as false would turn `:not(:defined)` into a match for every element
+	// and hide whole subtrees.
+	if _, err := ParseSelector(".card:not(:defined)"); err == nil {
+		t.Fatal(":not(:defined) parsed instead of being rejected")
+	}
+	if rules := ParseStylesheet(`.card:not(:defined) { display: none } .shown { color: red }`); len(rules) != 1 || rules[0].Selector.Text != ".shown" {
+		t.Fatalf("rules = %+v, want only .shown", rules)
+	}
+	if sel, err := ParseSelector(".card:not(:disabled)"); err != nil || sel == nil {
+		t.Fatalf("supported :not(:disabled) rejected: %v", err)
+	}
+}

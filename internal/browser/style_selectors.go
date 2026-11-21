@@ -326,8 +326,19 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 					spec[k] += best[k]
 				}
 			} else {
-				p.Pseudos = append(p.Pseudos, name+"("+arg+")")
-				spec[1]++
+				// A pseudo-class we cannot evaluate must invalidate the whole
+				// selector rather than match false: inside :not() a false
+				// result would invert into a match for every element.
+				switch name {
+				case "first-child", "last-child", "only-child",
+					"first-of-type", "last-of-type", "nth-child", "nth-last-child",
+					"root", "empty", "link", "any-link", "checked", "disabled",
+					"enabled", "hover", "focus", "active", "visited", "target", "never":
+					p.Pseudos = append(p.Pseudos, name+"("+arg+")")
+					spec[1]++
+				default:
+					return p, spec, 0, false
+				}
 			}
 			i = j
 		default:
