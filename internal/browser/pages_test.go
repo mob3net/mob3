@@ -57,3 +57,23 @@ func TestAppPageHTML(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadErrorPageUsesShellStyles checks the load-error placeholder attaches
+// the generated page's stylesheet, since it is built outside the loader.
+func TestLoadErrorPageUsesShellStyles(t *testing.T) {
+	root := ParseHTML(loadErrorPageHTML("dial tcp: connection refused"))
+	page := &Page{Root: root}
+	applyPageStyles(root, page)
+	if len(page.Author) == 0 {
+		t.Fatal("load error page stylesheet was not applied")
+	}
+	ly := BuildLayout(root, page.Author, 152)
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Node != nil && f.Node.Parent != nil &&
+			f.Node.Parent.Tag == "h1" && f.X >= 8 {
+			return
+		}
+	}
+	t.Fatal("load error heading is not in the centered page column")
+}

@@ -55,3 +55,16 @@ func loadErrorPageHTML(message string) string {
 	return appPageHTML("Error", "",
 		`<h1>Could not load page</h1><p>`+EscapeHTML(message)+`</p>`)
 }
+
+// applyPageStyles copies a generated page's <style> element into the page's
+// author rules. Pages built outside the loader (the config page and the
+// load-error placeholder) use it; loader-built pages collect their styles
+// through collectStylesheets, which also handles linked sheets.
+func applyPageStyles(root *Node, page *Page) {
+	if root == nil || page == nil {
+		return
+	}
+	if style := root.FindFirst("style"); style != nil {
+		page.Author = ParseStylesheet(style.TextContent())
+	}
+}

@@ -216,9 +216,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 	doc := configPageHTML(b.configItems(), updated, b.configNotice, b.width, b.viewportHeight(), b.cellW, b.cellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
-	if style := root.FindFirst("style"); style != nil {
-		page.Author = ParseStylesheet(style.TextContent())
-	}
+	applyPageStyles(root, page)
 	return page
 }
 

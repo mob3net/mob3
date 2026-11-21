@@ -270,6 +270,24 @@ func TestBlockedChallenge(t *testing.T) {
 	if !strings.Contains(page.Root.TextContent(), "Try anyway") {
 		t.Fatal("Try anyway label missing")
 	}
+	// The blocked page's own stylesheet must be applied, or it renders at the
+	// terminal width with no warning box instead of the shared page column.
+	if len(page.Author) == 0 {
+		t.Fatal("blocked page stylesheet was not collected")
+	}
+	ly := BuildLayout(page.Root, page.Author, 152)
+	centered := false
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Node != nil && f.Node.Parent != nil &&
+			f.Node.Parent.Tag == "h1" && f.X >= 8 {
+			centered = true
+			break
+		}
+	}
+	if !centered {
+		t.Fatal("blocked page heading is not in the centered page column")
+	}
 }
 
 func TestJavaScriptMIME(t *testing.T) {

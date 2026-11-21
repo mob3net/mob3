@@ -616,7 +616,9 @@ func (b *Browser) finishLoad(res loadResult) {
 		if b.page == nil {
 			doc := loadErrorPageHTML(res.err.Error())
 			root := ParseHTML(doc)
-			b.page = &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
+			page := &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
+			applyPageStyles(root, page)
+			b.page = page
 			b.url = res.u
 			b.rebuild()
 		}

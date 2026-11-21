@@ -1695,9 +1695,11 @@ Standard Go layout:
   `data-src` hydration) are loaded after scripts and timer-driven rebuilds.
 - Blocked responses are replaced with a locally generated “Site blocked” page
   with a `about:retry` **Try anyway** link; by default they do not run the
-  site’s challenge scripts or load its assets. Clicking the link re-fetches the
-  page once with block detection disabled, and `-ignore-blocks` disables the
-  detection for all loads.
+  site’s challenge scripts or load its assets. The generated page's inline
+  stylesheet is collected through the normal author-stylesheet path, so it uses
+  the shared built-in page shell instead of bare user-agent styles. Clicking the
+  link re-fetches the page once with block detection disabled, and
+  `-ignore-blocks` disables the detection for all loads.
 - Default User-Agent: **`MOB3/1.0 (+terminal; +https://mob3.net)`**. MOB³ identifies itself
   rather than impersonating another browser; UA-sniffing sites may therefore
   serve simplified or no-JavaScript pages. `-ua` overrides it. Keep this string

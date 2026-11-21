@@ -419,10 +419,15 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	if !ignoreBlocks {
 		if blocked, reason := blockedResponse(status, text); blocked {
 			root := ParseHTML(blockedPageHTML(finalURL.String(), reason, status))
-			return &Page{
+			page := &Page{
 				URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML,
 				Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
-			}, nil
+			}
+			// The generated page carries its own stylesheet. Collect it like any
+			// other document, or the blocked page falls back to bare
+			// user-agent styles: full-width text and no warning box.
+			page.Author = l.collectStylesheets(ctx, root, page.Base, false)
+			return page, nil
 		}
 	}
 	download := false
