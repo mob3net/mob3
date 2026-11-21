@@ -721,6 +721,8 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		contentH = l.blockSVG(n, contentX, contentY, contentW)
 	case st.Display == "table":
 		contentH = l.table(n, contentX, contentY, contentW)
+	case st.Display == "flex" && st.FlexDir == "column":
+		contentH = l.flexColumn(n, contentX, contentY, contentW)
 	case st.Display == "grid":
 		contentH = l.grid(n, contentX, contentY, contentW)
 	case st.Display == "flex" && st.FlexDir != "column":

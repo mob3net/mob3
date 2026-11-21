@@ -499,3 +499,63 @@ func TestFlexGrowRemainderSpreadAcrossItems(t *testing.T) {
 		}
 	}
 }
+
+func TestFlexPseudoAspectBoxGivesHeight(t *testing.T) {
+	// The responsive-media pattern puts an empty ::after with a percentage
+	// padding-bottom inside a flex box to give an absolutely positioned image
+	// a height. As a flex item it must produce a box, or the container is
+	// zero-height and the image covers the following text.
+	doc := ParseHTML(`<html><body style="margin:0">
+<div id="box" style="display:flex;flex-direction:column"><div id="inner" style="width:160px"></div></div>
+<p id="after">following text</p>
+</body></html>`)
+	rules := ParseStylesheet(`#inner::after{content:"";display:block;padding-bottom:56.25%}`)
+	ly := BuildLayout(doc, rules, 40)
+	var after *Frag
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Text == "following" {
+			after = f
+		}
+	}
+	if after == nil {
+		t.Fatal("following text missing")
+	}
+	// The aspect box is 160px wide (20 cells) and 56.25% tall (90px, about 6
+	// rows at 16px per row); the following text must start below it.
+	if after.Y < 5 {
+		t.Fatalf("following text y=%d, want it below the aspect box", after.Y)
+	}
+}
+
+func TestFlexColumnBlockifiesInlineChildren(t *testing.T) {
+	ly := build(`<html><body style="margin:0">
+<div style="display:flex;flex-direction:column">
+<span id="pic" style="width:160px;aspect-ratio:16/9"></span>
+</div>
+<p id="after">caption</p>
+</body></html>`, 40)
+	var pic *Node
+	for n := range ly.Styles {
+		if n.Attr("id") == "pic" {
+			pic = n
+		}
+	}
+	if pic == nil {
+		t.Fatal("picture-like child missing")
+	}
+	r := ly.Boxes[pic]
+	if r.W < 10 || r.H < 2 {
+		t.Fatalf("column flex child box = %+v, want a blockified aspect-ratio box", r)
+	}
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind == fragText && f.Text == "caption" {
+			if f.Y < r.Y+r.H {
+				t.Fatalf("caption y=%d overlaps column child bottom %d", f.Y, r.Y+r.H)
+			}
+			return
+		}
+	}
+	t.Fatal("caption missing")
+}

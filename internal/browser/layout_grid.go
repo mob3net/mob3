@@ -19,7 +19,21 @@ func splitGridParts(s string) []string {
 	start := 0
 	depth := 0
 	brackets := 0
+	lower := strings.ToLower(s)
 	for i := 0; i < len(s); i++ {
+		// Custom property substitution can join two track values without a
+		// space (`calc(...)minmax(0,1fr)`, `389pxminmax(0,1fr)`). The CSS
+		// tokenizer keeps the dimension and the following function token
+		// apart, so treat a top-level track function as a new part.
+		if depth == 0 && brackets == 0 && start < i && gridTrackFunctionAt(lower, i) {
+			prev := s[i-1]
+			if prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r' && prev != ',' && prev != '(' && prev != '/' {
+				if part := strings.TrimSpace(s[start:i]); part != "" {
+					out = append(out, part)
+				}
+				start = i
+			}
+		}
 		switch s[i] {
 		case '(':
 			depth++
@@ -48,6 +62,20 @@ func splitGridParts(s string) []string {
 	return out
 }
 
+// gridTrackFunctionAt reports whether a track-sizing function starts at i.
+func gridTrackFunctionAt(lower string, i int) bool {
+	// The "max(" in "minmax(" is part of the same token, not a new track.
+	if i >= 3 && lower[i-3:i] == "min" && strings.HasPrefix(lower[i:], "max(") {
+		return false
+	}
+	for _, f := range []string{"minmax(", "repeat(", "fit-content(", "max(", "min(", "clamp("} {
+		if strings.HasPrefix(lower[i:], f) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasNamedGridRows(n *Node) bool {
 	for _, child := range layoutChildren(n) {
 		if child.Type != ElementNode || child.Style == nil {
@@ -71,6 +99,44 @@ func hasNamedGridRows(n *Node) bool {
 		}
 	}
 	return false
+}
+
+// parseMinMaxTrack resolves a max()/min() track expression to the largest or
+// smallest fixed size among its arguments. Grids use `max(340px,calc(...))` for
+// a rail that never drops below its content width.
+func parseMinMaxTrack(part string, avail int, font float64) (gridTrack, bool) {
+	low := strings.ToLower(part)
+	isMax := strings.HasPrefix(low, "max(")
+	prefix := "min("
+	if isMax {
+		prefix = "max("
+	}
+	if !strings.HasPrefix(low, prefix) || !strings.HasSuffix(part, ")") {
+		return gridTrack{}, false
+	}
+	inner := part[len(prefix) : len(part)-1]
+	best := 0
+	found := false
+	for _, f := range splitTopLevel(inner, ',') {
+		f = strings.TrimSpace(f)
+		fl := strings.ToLower(f)
+		if f == "" || fl == "auto" || strings.HasSuffix(fl, "fr") {
+			continue
+		}
+		l := parseLength(f, font)
+		if !l.Set || l.Auto {
+			continue
+		}
+		w := l.resolveH(avail, font)
+		if !found || (isMax && w > best) || (!isMax && w < best) {
+			best = w
+			found = true
+		}
+	}
+	if !found {
+		return gridTrack{auto: true}, true
+	}
+	return gridTrack{fixed: best}, true
 }
 
 func parseGridTracks(raw string, avail int, font float64) []gridTrack {
@@ -116,6 +182,12 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 			tracks, _ := parseGridTemplate(rest, avail, font)
 			for i := 0; i < count && i < 64; i++ {
 				out = append(out, tracks...)
+			}
+			continue
+		}
+		if (strings.HasPrefix(lower, "max(") || strings.HasPrefix(lower, "min(")) && strings.HasSuffix(part, ")") {
+			if t, ok := parseMinMaxTrack(part, avail, font); ok {
+				out = append(out, t)
 			}
 			continue
 		}
@@ -678,7 +750,7 @@ func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridA
 	}
 	var cells []gridCell
 	autoRow, autoCol := 0, 0
-	for _, child := range layoutChildren(n) {
+	for _, child := range layoutChildrenWithPseudo(n) {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
 		}

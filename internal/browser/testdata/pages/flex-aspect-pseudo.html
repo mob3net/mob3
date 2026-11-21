@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><style>
+body{margin:0;font-family:monospace}
+.box{display:flex;flex-direction:column;width:320px}
+.media{width:100%}
+.media::after{content:"";display:block;padding-bottom:56.25%}
+.picture{width:100%;aspect-ratio:16/9}
+</style></head>
+<body>
+<div class="box"><div class="media"></div></div>
+<p>After the generated aspect box</p>
+<div class="box"><span class="picture"></span></div>
+<p>After the inline aspect-ratio picture</p>
+</body></html>

@@ -894,13 +894,38 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "grid-template-areas":
 		st.GridAreas = val
 	case "grid-area":
-		if fields := splitFields(val); len(fields) > 0 {
-			name := fields[0]
-			if name != "auto" && name != "span" {
-				if _, err := strconv.Atoi(name); err != nil {
-					st.GridArea = name
+		// Numeric grid-area is the row/column shorthand: `1/2` is row 1,
+		// column 2, and `1/1/2/3` adds the end lines. A name is an entry in
+		// grid-template-areas instead.
+		parts := splitTopLevel(val, '/')
+		if len(parts) == 0 {
+			break
+		}
+		first := strings.TrimSpace(parts[0])
+		if first == "" || first == "auto" || first == "span" {
+			break
+		}
+		if _, err := strconv.Atoi(first); err == nil {
+			row := first
+			if len(parts) > 2 {
+				if end := strings.TrimSpace(parts[2]); end != "" && end != "auto" {
+					row += " / " + end
 				}
 			}
+			st.GridRow = row
+			if len(parts) > 1 {
+				col := strings.TrimSpace(parts[1])
+				if col != "" && col != "auto" {
+					if len(parts) > 3 {
+						if end := strings.TrimSpace(parts[3]); end != "" && end != "auto" {
+							col += " / " + end
+						}
+					}
+					st.GridColumn = col
+				}
+			}
+		} else {
+			st.GridArea = first
 		}
 	case "grid-column", "grid-column-start", "grid-column-end":
 		if prop == "grid-column" {

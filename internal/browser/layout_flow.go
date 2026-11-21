@@ -87,6 +87,30 @@ func layoutChildren(parent *Node) []*Node {
 	return out
 }
 
+// layoutChildrenWithPseudo returns the in-flow children plus generated
+// ::before/::after boxes. A flex or grid container makes those boxes into
+// items, and the common aspect-ratio pattern puts an empty ::after with a
+// percentage padding-bottom in a flex media box to give the absolutely
+// positioned image a height; dropping it collapses the box to zero and lets
+// the image paint over the following text.
+func layoutChildrenWithPseudo(parent *Node) []*Node {
+	kids := layoutChildren(parent)
+	before := pseudoElement(parent, parent.Before)
+	after := pseudoElement(parent, parent.After)
+	if before == nil && after == nil {
+		return kids
+	}
+	out := make([]*Node, 0, len(kids)+2)
+	if before != nil {
+		out = append(out, before)
+	}
+	out = append(out, kids...)
+	if after != nil {
+		out = append(out, after)
+	}
+	return out
+}
+
 func (l *layouter) flow(parent *Node, x, y, width int) int {
 	if l.outOfTime() {
 		return 0

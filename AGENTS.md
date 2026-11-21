@@ -248,8 +248,8 @@ Standard Go layout:
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
 | `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
-| `layout_grid.go` | CSS grid: template/track parsing, placement, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
-| `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. |
+| `layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
+| `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. Column flex stacks blockified children with a vertical gap, so a `<picture>` media box gets its `aspect-ratio` height instead of staying an empty inline. |
 | `layout_measure.go` | Intrinsic measurement: `measure`, max/min-content widths and inline text measurement. A percentage-width image is measured at its intrinsic width (the percentage is container-relative) with a one-cell minimum, so it cannot force a flex or grid item wider than its slot. |
 | `layout_links.go` | Link rectangles, overlay anchors and fixed-scroll re-anchoring. |
 | `layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
@@ -397,7 +397,7 @@ Standard Go layout:
   200k; the default), `high` (5s, 1M, 1M) and `none` (disables all three,
   which can freeze the UI on hostile pages). A zero limit disables that
   individual check.
-- **Flexbox row:** `display:flex` with row direction lays children
+- **Flexbox:** `display:flex` with row direction lays children
   side by side, honouring explicit widths, `flex`/`flex-grow`/`flex-basis`,
   `flex-shrink` (items shrink in proportion to their factor and their slack
   above min-content; `flex-shrink:0` items keep their size and overflow, so
@@ -412,6 +412,13 @@ Standard Go layout:
   are treated as atomic inline-block boxes so buttons and badges stay inside
   the surrounding line instead of becoming full-width rows. Items keep at least their
   min-content width instead of shrinking into one-character columns.
+  Empty `::before`/`::after` boxes on a flex or grid container are items, so the
+  common responsive-media pattern (`::after{content:"";padding-bottom:56.25%}`
+  beside an absolutely positioned image) gives its box a height. Column flex
+  stacks blockified children with a vertical gap: an inline `<picture>` with
+  `width`/`aspect-ratio` becomes a full-width block with a height instead of an
+  inline box with none; column gaps use the row cell height and column
+  `justify-content`/`align-items` are not applied.
   `flex-wrap:wrap` starts a new row when the next item's base width would
   overflow; each wrapped row is sized independently and wrapped rows stack
   without an extra gap. Each length rounds to whole cells on its own, so a row
@@ -1872,8 +1879,10 @@ Standard Go layout:
   glyphs are only recovered when the font carries a `/ToUnicode` map, so some
   PDFs show `fi`/`fl` ligatures and math symbols as spaces. Rotated pages are
   read in their unrotated text order.
-- Flexbox supports basic rows, `flex-wrap`, `order`, `justify-content` and
-  basic `align-items`; grid supports
+- Flexbox supports basic rows and column stacking (blockified children with a
+  vertical gap), `flex-wrap`, `order`, row `justify-content` and
+  basic row `align-items`; column `justify-content`/`align-items` are not
+  applied. Grid supports
   basic row-major tracks, named-area column placement and explicit numeric
   `grid-row` starts, but not `grid-template-rows`, named row lines or row
   spans. Left/right floats shrink to fit, wrap following lines and honour

@@ -179,3 +179,55 @@ func TestGridExplicitRowBeatsDOMOrder(t *testing.T) {
 		t.Fatalf("columns out of order: left x=%d mid x=%d right x=%d", left.X, mid.X, right.X)
 	}
 }
+
+func TestGridAreaShorthandPlacesColumn(t *testing.T) {
+	// `grid-area: 1/2` is the row/column shorthand, not a named area. A media
+	// card written after the text card must land in the second column.
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 2fr;gap:8px">` +
+		`<div id="text" style="grid-area:1/1">headline</div>` +
+		`<div id="media" style="grid-area:1/2">image</div>` +
+		`</div></body></html>`)
+	ly := BuildLayout(doc, nil, 90)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	text, media := box["text"], box["media"]
+	if media.X <= text.X+text.W {
+		t.Fatalf("media x=%d does not start after text (x=%d w=%d)", media.X, text.X, text.W)
+	}
+	if media.W < 2*text.W-1 {
+		t.Fatalf("media width=%d, want the 2fr column, text=%d", media.W, text.W)
+	}
+}
+
+func TestGridJoinedTrackValues(t *testing.T) {
+	// var() substitution is textual, so `var(--w)minmax(0,1fr)` can arrive as
+	// `389pxminmax(0,1fr)`. The CSS tokenizer keeps the dimension and the
+	// function apart; the string parser must split them too.
+	tracks := parseGridTracks("389pxminmax(0,1fr)", 151, 16)
+	if len(tracks) != 2 {
+		t.Fatalf("tracks = %d (%+v), want 2", len(tracks), tracks)
+	}
+	if tracks[0].fixed == 0 || tracks[1].flex == 0 {
+		t.Fatalf("tracks = %+v, want a fixed column and a 1fr column", tracks)
+	}
+}
+
+func TestGridMaxTrackExpression(t *testing.T) {
+	// Page zones use `minmax(0,1fr)max(340px,calc(33.33% - 12px))`, joined by
+	// var() substitution. The rail track never goes below 340px.
+	tracks := parseGridTracks("minmax(0,1fr)max(340px,calc(33.33% - 12px))", 143, 16)
+	if len(tracks) != 2 {
+		t.Fatalf("tracks = %d (%+v), want 2", len(tracks), tracks)
+	}
+	if tracks[0].flex == 0 {
+		t.Fatalf("first track = %+v, want 1fr", tracks[0])
+	}
+	if tracks[1].fixed < 43 {
+		t.Fatalf("rail track = %+v, want at least the 340px (43 cell) minimum", tracks[1])
+	}
+}

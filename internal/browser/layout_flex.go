@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"math"
 	"sort"
 )
 
@@ -9,7 +10,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		return 0
 	}
 	var items []*Node
-	for _, c := range layoutChildren(n) {
+	for _, c := range layoutChildrenWithPseudo(n) {
 		if c.Type == ElementNode && c.Style != nil && c.Style.Display != "none" {
 			if isOutOfFlow(c.Style) {
 				l.deferAbsolute(c, x, y)
@@ -62,6 +63,49 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		return totalH
 	}
 	return l.layFlexLine(items, x, y, availW, gap, n.Style)
+}
+
+// flexColumn stacks blockified children for a column flex container. Column
+// flex is approximated as full-width block stacking with a vertical gap;
+// justify-content and align-items are not applied. Blockifying matters even
+// for this subset: a responsive <picture> inside a column flex media box is a
+// flex item, so its width/aspect-ratio must produce a block box instead of an
+// inline one with no height.
+func (l *layouter) flexColumn(n *Node, x, y, availW int) int {
+	if l.outOfTime() {
+		return 0
+	}
+	var items []*Node
+	for _, c := range layoutChildrenWithPseudo(n) {
+		if c.Type != ElementNode || c.Style == nil || c.Style.Display == "none" {
+			continue
+		}
+		if isOutOfFlow(c.Style) {
+			l.deferAbsolute(c, x, y)
+			continue
+		}
+		items = append(items, c)
+	}
+	if len(items) == 0 {
+		return 0
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Style.Order < items[j].Style.Order })
+	gap := 0
+	if n.Style != nil {
+		vBasis := int(math.Round(float64(availW) * cellW / cellH))
+		gap = nonNeg(n.Style.Gap.resolveV(vBasis, n.Style.FontSize))
+	}
+	cur := y
+	for i, it := range items {
+		if i > 0 && gap > 0 {
+			cur += gap
+		}
+		cur += l.block(it, x, cur, availW)
+	}
+	if cur < y {
+		return 0
+	}
+	return cur - y
 }
 
 // flexItemBasis returns the base width used to decide where wrapped flex rows
