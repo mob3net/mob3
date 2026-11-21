@@ -144,6 +144,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			copied := *st
 			copied.Width = Length{}
 			cw, _ := imageSize(n, &copied, l.width, l.imageCapWidth())
+			cw = l.limitImageMeasure(st, cw)
 			if cw < 1 {
 				cw = 1
 			}
@@ -152,6 +153,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			return cw, 1
 		}
 		cw, _ := imageSize(n, st, l.width, l.imageCapWidth())
+		cw = l.limitImageMeasure(st, cw)
 		if cw < 1 {
 			cw = 1
 		}
@@ -319,4 +321,19 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		minW = maxW
 	}
 	return maxW + pad, minW + pad
+}
+
+// limitImageMeasure applies a declared max-width to an image's intrinsic
+// measurement. Without it a floated thumbnail with `width:100%` and
+// `max-width:110px` measured at its source size, so the float stayed 220px
+// wide and pushed the text beside it into a narrow column.
+func (l *layouter) limitImageMeasure(st *Style, cw int) int {
+	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() || st.MaxWidth.Calc {
+		return cw
+	}
+	mw := st.MaxWidth.resolveH(l.width, st.FontSize)
+	if mw > 0 && cw > mw {
+		return mw
+	}
+	return cw
 }

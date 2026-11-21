@@ -1,0 +1,4 @@
+ Main column text stays on the left side  Side column
+ of the row.
+
+Text after the row.

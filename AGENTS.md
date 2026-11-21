@@ -310,7 +310,15 @@ Standard Go layout:
   resolve against the containing block, not the remaining float band, and a
   declared width is not re-resolved against the float's own used width; a
   declared width also caps the content's min-content width, so a long word
-  cannot widen the float. A block containing floats contributes their summed
+  cannot widen the float. A one-cell shortfall in the band counts as fitting:
+  percentage column pairs (75% beside 25%) are exact in a browser but their
+  cell-rounded widths can exceed the row by one, and dropping the second float
+  would put a sidebar below the article. A blockified `inline-block` child
+  (an explicit width plus a block descendant) is still an atomic inline box,
+  so beside an active float it sits at the line band's edge rather than at the
+  container's left edge, where it would overlap the float and squeeze its own
+  text into a one-character column; if its declared width does not fit beside
+  the float it starts below it like a wrapped line. A block containing floats contributes their summed
   width as its max-content width, so shrink-to-fit and flex items reserve a
   full float row instead of one float. Lines resume the full width
   once they pass the float's bottom, and the containing flow reserves the
@@ -599,7 +607,10 @@ Standard Go layout:
   it (returning the intrinsic width with a one-cell minimum), so a
   `width:100%` thumbnail can never force its flex or grid slot wider than the
   slot itself and paint over neighbouring text; the image then fills the slot
-  and shrinks with it. A decoded image is downscaled once at load to the largest box the
+  and shrinks with it. A declared `max-width` caps that intrinsic measurement
+  too, so a floated thumbnail styled `width:100%;max-width:110px` measures as
+  the 110px cap instead of its source size and does not leave the adjacent
+  text wrapped in a narrow column. A decoded image is downscaled once at load to the largest box the
   terminal can paint — the viewport in CSS pixels, floored at 1024×512 — with
   aspect ratio preserved, and only that copy is stored on the node and in the
   image cache, so a many-megapixel photo never keeps its full bitmap alive.

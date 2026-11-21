@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Floated image max-width</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.4 sans-serif; }
+.card { padding: 4px; background: #eef2f7; }
+.thumb { float: left; margin-right: 8px; height: 40px; }
+.thumb img { width: 100%; max-width: 56px; }
+.text { margin: 0; background: #fde68a; padding: 4px; }
+</style></head>
+<body>
+<div class="card">
+  <a class="thumb" href="#"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAIAAABM5OhcAAABHUlEQVR4nO3SQQ3AIADAQED1RCACqTOxhmS5U9BH57PPgK+t2wH8k7FIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIuEsUgYi4SxSBiLhLFIGIvEC+FnAmzjhjtYAAAAAElFTkSuQmCC" alt="" width="200" height="100"></a>
+  <p class="text">Text beside the floated thumbnail keeps its place after it.</p>
+</div>
+</body></html>

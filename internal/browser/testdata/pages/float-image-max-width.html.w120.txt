@@ -1,0 +1,3 @@
+ ░      Text beside the floated thumbnail keeps its place after it.
+
+

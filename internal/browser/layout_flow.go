@@ -127,6 +127,21 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 			}
 			if l.isBlock(c) || l.inlineWrapperIsBlock(c) {
 				flush()
+				if c.Style.Display == "inline-block" && len(l.floats) > startFloats {
+					// A blockified inline-block is still an atomic inline box,
+					// so it sits in the line's band beside an active float
+					// instead of starting at the container's left edge (where
+					// it would overlap the float).
+					bx, bw := l.floatBand(x, cur, width)
+					if need := l.declaredFloatWidth(c, width); need > 0 && need > bw+1 {
+						// It cannot fit beside the float: start below it, the
+						// way a line box that does not fit wraps.
+						bx = x
+						cur = l.clearY("both", cur)
+					}
+					cur += l.block(c, bx, cur, width)
+					continue
+				}
 				cur += l.block(c, x, cur, width)
 				continue
 			}
@@ -212,7 +227,11 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 	if need := l.declaredFloatWidth(n, width); need > 0 {
 		for attempt := 0; attempt < 8; attempt++ {
 			left, right := l.floatBand(x, y, width)
-			if right-left >= need {
+			// Percentage column pairs (75% beside 25%) are exact in a
+			// browser but round up to one extra cell here. A one-cell
+			// shortfall is rounding, not a reason to drop the float below
+			// its row; the width is clamped to the band below.
+			if right-left+1 >= need {
 				break
 			}
 			next := l.floatDropY(x, y, width, need)

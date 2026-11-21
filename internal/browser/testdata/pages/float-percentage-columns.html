@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Percentage float columns</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.4 sans-serif; }
+.row { width: 432px; overflow: hidden; }
+.main { float: left; width: 75%; background: #eef2f7; }
+.side { float: right; width: 25%; background: #fde68a; }
+.cell { padding: 4px; }
+</style></head>
+<body>
+<div class="row">
+  <div class="main cell">Main column text stays on the left side of the row.</div>
+  <div class="side cell">Side column</div>
+</div>
+<p>Text after the row.</p>
+</body></html>

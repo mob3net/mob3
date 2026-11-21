@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Inline-block columns beside a float</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.4 sans-serif; }
+.list { width: 480px; }
+.big { float: left; width: 50%; height: 96px; background: #eef2f7; padding: 4px; }
+.item { display: inline-block; vertical-align: top; width: 50%; padding: 4px; }
+.inner { background: #fde68a; padding: 4px; }
+</style></head>
+<body>
+<div class="list">
+  <div class="big">Big card</div>
+  <div class="item"><div class="inner">First item beside the big card.</div></div>
+  <div class="item"><div class="inner">Second item below the first.</div></div>
+</div>
+<p>Text after the list.</p>
+</body></html>
