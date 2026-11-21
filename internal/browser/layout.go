@@ -572,6 +572,13 @@ func (l *layouter) inlineWrapperIsBlock(n *Node) bool {
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
 func (l *layouter) block(n *Node, x, y, availW int) int {
+	// A form control blockified by a column flex container or grid item keeps
+	// the inline widget path. The block path would render its children as
+	// plain text and drop the widget value/glyph and the Node-tagged fragment
+	// that focus, link hints and activation look for.
+	if isFormControl(n) {
+		return l.inlineFlow([]*Node{n}, x, y, availW, n.Style)
+	}
 	h, _ := l.blockLayout(n, x, y, availW, 0, false)
 	return h
 }

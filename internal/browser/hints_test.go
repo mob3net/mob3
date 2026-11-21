@@ -564,3 +564,42 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 		t.Fatalf("scrolled fixed bar hints: button=%v link=%v", button, link)
 	}
 }
+
+// TestColumnFlexButtonIsHintable covers controls blockified by a column flex
+// container: they must keep the inline widget fragment, or link hints have no
+// target for the button and the widget's own rendering is lost.
+func TestColumnFlexButtonIsHintable(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	root := ParseHTML(`<html><head><style>
+	#bar { display: flex; flex-direction: column; position: fixed; right: 0; bottom: 0; }
+	#bar .text { width: 100%; }
+	</style></head><body>
+	<p>page text</p>
+	<div id="bar"><div class="text">Cookies are used here.</div>
+	<button id="ok" type="button">Got it</button></div>
+	</body></html>`)
+	b := NewBrowser(60, 24)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.url = u
+	b.rebuild()
+
+	var btn *Node
+	for _, n := range root.FindAll(func(n *Node) bool { return n.Attr("id") == "ok" }) {
+		btn = n
+		break
+	}
+	if btn == nil {
+		t.Fatal("button not found")
+	}
+	top, bottom := b.viewport()
+	if _, ok := b.visibleInputRect(btn, top, bottom); !ok {
+		t.Fatal("fixed column-flex button has no widget fragment")
+	}
+	b.openLinkHints(false)
+	for _, target := range b.hintTargets {
+		if target.node == btn {
+			return
+		}
+	}
+	t.Fatal("fixed column-flex button is not a link-hint target")
+}
