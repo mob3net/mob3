@@ -34,7 +34,14 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 		used := 0
 		for _, it := range items {
 			w := l.flexItemBasis(it, availW)
-			if len(line) > 0 && used+gap+w > availW {
+			// Each length is rounded to whole cells on its own, so a row that
+			// fits exactly in CSS pixels can be one cell over here (for
+			// example 940px + 300px + a 20px gap in a 1260px container rounds
+			// to 118 + 38 + 3 cells in a 158-cell row). Treat a one-cell
+			// shortfall as fitting, as the float band does, and let the shrink
+			// pass absorb the difference instead of wrapping a whole column
+			// below the other.
+			if len(line) > 0 && used+gap+w > availW+1 {
 				lines = append(lines, line)
 				line = nil
 				used = 0

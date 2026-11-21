@@ -643,6 +643,35 @@ func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
 	}
 }
 
+func TestImagesUnderTextUseBlocks(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	g := NewGrid(20, 10, RGB(255, 255, 255), RGB(255, 255, 255))
+
+	// Text painted over an image (a caption or tab strip on a hero photo)
+	// must keep the image in half-block art: a native placement would be
+	// composited above the text grid and hide it.
+	ly := &Layout{Frags: []Frag{
+		{Kind: fragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
+		{Kind: fragText, X: 1, Y: 0, W: 4, H: 1, Text: "tabs", Style: &Style{}},
+	}}
+	var placements []ImagePlacement
+	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
+	if len(placements) != 0 {
+		t.Fatalf("image under text produced %d placements, want half-block art", len(placements))
+	}
+
+	// Text beside the image, not on it, leaves the native placement alone.
+	ly = &Layout{Frags: []Frag{
+		{Kind: fragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
+		{Kind: fragText, X: 10, Y: 0, W: 4, H: 1, Text: "side", Style: &Style{}},
+	}}
+	placements = nil
+	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
+	if len(placements) != 1 {
+		t.Fatalf("image beside text produced %d placements, want 1", len(placements))
+	}
+}
+
 // svgAlpha decodes an SVG document and returns the alpha of one pixel.
 func svgAlpha(t *testing.T, doc string, x, y int) uint32 {
 	t.Helper()

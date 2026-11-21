@@ -1,0 +1,2 @@
+Left column of a fixed desktop canvas that stays 960px      Right column stays beside it instead of wrapping under the
+wide and overflows a narrow terminal.                       left one.

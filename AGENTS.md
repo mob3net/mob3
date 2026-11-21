@@ -413,7 +413,12 @@ Standard Go layout:
   min-content width instead of shrinking into one-character columns.
   `flex-wrap:wrap` starts a new row when the next item's base width would
   overflow; each wrapped row is sized independently and wrapped rows stack
-  without an extra gap. `flex-wrap:nowrap` (including `!important` overrides)
+  without an extra gap. Each length rounds to whole cells on its own, so a row
+  that fits exactly in CSS pixels can measure one cell over here (a 940px
+  column, a 300px rail and a 20px gap are 118 + 38 + 3 cells in a 158-cell
+  container); a one-cell shortfall counts as fitting, as it does for floats,
+  and the shrink pass absorbs the difference instead of wrapping a whole
+  column below the other. `flex-wrap:nowrap` (including `!important` overrides)
   keeps items on one line. A flex item's assigned width is used as its box
   width without re-resolving percentage widths inside block layout, so padded
   percentage columns keep their slots and do not overlap the next column.
@@ -451,7 +456,12 @@ Standard Go layout:
   new-row rule, auto-fill/auto-fit and alignment remain approximated.
 - **Box sizing and constraints:** `box-sizing:border-box` makes declared
   widths/heights/min/max include padding and borders in block and absolute
-  layout and in flex item widths/basis. An explicit `height` is the used
+  layout and in flex item widths/basis. A declared fixed `width` (px, em,
+  rem, pt, viewport units) is used even when it is wider than the containing
+  block, so a fixed desktop canvas overflows to the right and clips instead of
+  collapsing to the terminal width and reflowing the page; percentage and
+  `calc()` widths only shrink the box, so padded percentage columns stay
+  inside the parent. An explicit `height` is the used
   height, not a minimum: overflowing children keep their fragments and may
   paint outside the box unless `overflow` clips them. `min-width`, `max-width`,
   `min-height` and `max-height` apply to block boxes; a percentage height
@@ -665,6 +675,9 @@ Standard Go layout:
   fill falls back to half-block art for that frame, because terminal image
   placements are composited above the text grid and cannot be erased by the
   fixed fill; fixed images (such as a logo inside a fixed header) stay native.
+  The same fallback applies to an image with page text painted over it (a
+  caption, a tab strip over a hero photo), since a placement would hide that
+  text.
 - **Background images:** `background-image:url(...)` is fetched through the
   same image cache and painted behind the box's content, so text, links and
   form controls stay above it. Only block-level boxes are painted (`block`,

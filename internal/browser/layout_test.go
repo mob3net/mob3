@@ -135,6 +135,41 @@ func TestPercentageWidth(t *testing.T) {
 	t.Fatal("no 50% wide background")
 }
 
+func TestFixedWidthOverflowsNarrowContainer(t *testing.T) {
+	// A fixed desktop canvas wider than the terminal keeps its declared
+	// width, so its columns stay side by side and the page clips at the
+	// right edge instead of reflowing into one left column.
+	ly := build(`<html><body style="margin:0">
+<div style="width:960px;background:#000;height:8px"></div>
+<div style="width:960px;display:flex;gap:16px">
+<div style="width:460px">alpha</div>
+<div style="width:460px">beta</div>
+</div></body></html>`, 80)
+	wide := false
+	for _, f := range ly.Frags {
+		if f.Kind == fragFill && f.W == 120 {
+			wide = true
+		}
+	}
+	if !wide {
+		t.Fatal("960px canvas was clamped to the 80-column viewport")
+	}
+	pos := map[string]Frag{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && (f.Text == "alpha" || f.Text == "beta") {
+			pos[f.Text] = f
+		}
+	}
+	a, okA := pos["alpha"]
+	b, okB := pos["beta"]
+	if !okA || !okB {
+		t.Fatal("missing columns")
+	}
+	if a.Y != b.Y || b.X <= a.X {
+		t.Fatalf("fixed canvas reflowed: alpha x=%d y=%d beta x=%d y=%d", a.X, a.Y, b.X, b.Y)
+	}
+}
+
 func TestBuildLayoutDeadlineTruncates(t *testing.T) {
 	doc := ParseHTML(`<html><body><p id="p">hello</p><div>world</div></body></html>`)
 	rules := ParseStylesheet(`p { color: red }`)

@@ -85,6 +85,34 @@ func TestFlexTextareaRendersWidget(t *testing.T) {
 	}
 }
 
+func TestFlexWrapToleratesCellRounding(t *testing.T) {
+	// 470px + 470px + a 20px gap is exactly 960px, but each length rounds to
+	// whole cells on its own (59 + 59 + 3 = 121 in a 120-cell row). The row
+	// must keep both columns side by side instead of wrapping the second one.
+	ly := build(`<html><body style="margin:0">
+<div style="display:flex;flex-wrap:wrap;width:960px;gap:20px">
+<div style="width:470px">alpha</div>
+<div style="width:470px">beta</div>
+</div></body></html>`, 120)
+	pos := map[string]Frag{}
+	for _, f := range ly.Frags {
+		if f.Kind == fragText && (f.Text == "alpha" || f.Text == "beta") {
+			pos[f.Text] = f
+		}
+	}
+	a, okA := pos["alpha"]
+	b, okB := pos["beta"]
+	if !okA || !okB {
+		t.Fatal("missing flex items")
+	}
+	if a.Y != b.Y {
+		t.Fatalf("rounded row wrapped: alpha y=%d beta y=%d", a.Y, b.Y)
+	}
+	if b.X <= a.X+a.W {
+		t.Fatalf("columns overlap: alpha x=%d w=%d beta x=%d", a.X, a.W, b.X)
+	}
+}
+
 func TestFlexRow(t *testing.T) {
 	ly := build(`<div style="display:flex"><div style="flex:1">a</div><div style="flex:1">b</div></div>`, 40)
 	pos := map[string]int{}

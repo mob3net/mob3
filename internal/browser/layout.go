@@ -600,8 +600,22 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if !widthResolved {
 		if st.Width.Set && !st.Width.IsAuto() {
-			if w := l.widthValue(st, st.Width, availW); w < contentW {
-				contentW = w
+			w := l.widthValue(st, st.Width, availW)
+			if w >= 0 {
+				// A percentage or calc() width resolves against the containing
+				// block, so only let it shrink the box: a padded width:100%
+				// box keeps its content inside the parent. An absolute width
+				// (a fixed desktop canvas, a wide sidebar) is used as declared
+				// even when it is wider than the parent, so the box overflows
+				// to the right as it does in a browser instead of collapsing
+				// to the terminal width and reflowing the whole page.
+				if st.Width.U == UnitPercent || st.Width.Calc {
+					if w < contentW {
+						contentW = w
+					}
+				} else {
+					contentW = w
+				}
 			}
 		}
 		if st.MaxWidth.Set && !st.MaxWidth.IsAuto() {

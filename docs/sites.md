@@ -18,6 +18,10 @@ text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 - Older pages that declare a single-byte charset (Windows-1250/1251/1253/1257
   and ISO-8859-2/5/7 and similar) are decoded correctly from the
   `Content-Type` header or `<meta charset>`.
+- Fixed-width desktop layouts keep their declared canvas width even when it is
+  wider than the terminal, so columns stay in place and the page clips at the
+  right edge, like a browser window narrower than the page, instead of
+  collapsing into one reflowed column.
 - Classic bundles that only need platform APIs to exist: `IntersectionObserver`
   and `ResizeObserver` (one synthetic entry per target), `NodeList`,
   `EventTarget`, `CSS.escape`, `customElements`, `ReadableStream`, `Path2D`,

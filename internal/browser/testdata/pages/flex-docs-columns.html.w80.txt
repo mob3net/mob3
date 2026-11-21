@@ -1,16 +1,11 @@
 
-   Guide
+   Guide                   Documentation
    • Introduction
    • Quick start
-   • Parameters
-   • Errors
-   Documentation
+   • Parameters            Sidebar entries stay in their own column while the
+   • Errors                documentation text fills the remaining width
+                           without overlapping the navigation.
 
 
-   Sidebar entries stay in their own column while the
-   documentation text fills the remaining width without
-   overlapping the navigation.
-
-
-   A short second paragraph checks the gutter and wrapping
-   at both widths.
+                           A short second paragraph checks the gutter and
+                           wrapping at both widths.

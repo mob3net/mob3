@@ -407,6 +407,39 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	paintBlocks := func(f *Frag, y0, y1 int) bool {
 		return hitsChrome(f.X, y0, f.W, y1-y0)
 	}
+	// Native placements are composited above the cell grid, so an image with
+	// page text painted over it (a caption, a tab strip on a hero photo) must
+	// fall back to half-block art as well; a placement would hide the text.
+	var overlayRows map[int][]Rect
+	if placements != nil {
+		overlayRows = make(map[int][]Rect)
+		for i := range ly.Frags {
+			f := &ly.Frags[i]
+			if f.Kind != fragText || f.Text == "" || f.W <= 0 {
+				continue
+			}
+			y := f.Y - scroll + topRow
+			h := maxInt(1, f.H)
+			if bigText && f.Style != nil {
+				if s := f.Style.TextScale(); s > 1 {
+					h = maxInt(h, s)
+				}
+			}
+			for r := maxInt(y, topRow); r < minInt(y+h, bottomRow); r++ {
+				overlayRows[r] = append(overlayRows[r], Rect{X: f.X, Y: r, W: f.W, H: 1})
+			}
+		}
+	}
+	hasTextOverlay := func(x, y, w, h int) bool {
+		for r := y; r < y+h; r++ {
+			for _, tr := range overlayRows[r] {
+				if x < tr.X+tr.W && x+w > tr.X {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	paintOne := func(f *Frag) {
 		y := f.Y - scroll + topRow
 		if y >= bottomRow {
@@ -504,7 +537,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
 				return
 			}
-			if placements != nil && (f.Fixed || !paintBlocks(f, y0, y1)) {
+			if placements != nil && !hasTextOverlay(f.X, y0, f.W, y1-y0) && (f.Fixed || !paintBlocks(f, y0, y1)) {
 				src := ""
 				if f.Node != nil {
 					src = f.Node.ImgSrc

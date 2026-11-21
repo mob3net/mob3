@@ -1,0 +1,2 @@
+Left column text long enough to wrap over several rows so     Right column text that also wraps, proving the second
+the two columns are visibly side by side.                     column did not drop below the first one.

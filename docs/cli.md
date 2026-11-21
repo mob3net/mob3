@@ -58,7 +58,10 @@ Auto-detection uses environment variables. Under tmux, screen or zellij it
 falls back to half-block art because the multiplexer usually consumes graphics
 escapes unless passthrough is configured. `-g` is an alias for `-graphics`.
 
-Dump mode always uses half-block art for images that were loaded.
+Dump mode always uses half-block art for images that were loaded. An image
+with page text painted over it, such as a caption or a tab strip on a hero
+photo, is also drawn as half-block art: native placements composite above the
+text grid and would hide that text.
 
 Images stream in after the page text and appear progressively. A batch that
 only affects images below the current viewport does not redraw the visible
