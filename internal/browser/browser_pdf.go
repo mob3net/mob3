@@ -79,10 +79,10 @@ func (b *Browser) pdfPageNumber() int {
 	return cur
 }
 
-// downloadCurrentPDF opens the curl dialog for the current PDF document.
+// downloadCurrentPDF opens the curl dialog for the current PDF document. It
+// does nothing unless the PDF viewer is showing.
 func (b *Browser) downloadCurrentPDF() {
 	if b.page == nil || b.page.PDF == nil {
-		b.status = "No PDF on this page"
 		return
 	}
 	u := b.url

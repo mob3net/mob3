@@ -30,7 +30,7 @@ key, mouse and form reference for the running build.
 | `F` | Same as `f`, but show the destination and wait for `Enter`/`y` confirmation |
 | `u` | Show the current URL in the footer |
 | `E` | Open the full warning or error message that the footer truncated (the `E` in `Error:` is underlined) |
-| `d` | Open the curl download popup for the current PDF page |
+| `d` | Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere) |
 | `y` | Copy selected text, the current URL when nothing is selected, the download curl command, or the whole active console section |
 | `H` | Session history |
 | `?` | Help page |

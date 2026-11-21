@@ -899,7 +899,8 @@ Standard Go layout:
   destination confirmation, `u` show URL, `E` open the full warning or error
   text when the footer had to truncate it (the footer status line is also
   clickable, and the `E` in `Error:` is underlined to advertise the key),
-  `d` open the curl download popup for the current PDF page,
+  `d` open the curl download popup for the current PDF page (only in the PDF
+  viewer; elsewhere `d` does nothing),
   `y` copy selected page text, the current URL when nothing is selected,
   the download popup's curl command, or the whole active console section,
   and clear the page highlight,
@@ -1306,7 +1307,8 @@ Standard Go layout:
   flags. The footer's left status becomes
   `Page n/N (d -> Download name)`, where `n` is the page under the viewport as
   the user scrolls; the `(d -> Download name)` part is a clickable label and
-  `d` does the same, both opening the curl download popup. On narrow terminals
+  `d` does the same, both opening the curl download popup. Outside the PDF
+  viewer `d` does nothing. On narrow terminals
   the file name inside the hint is shortened first, then the hint becomes
   `(d)`, and finally only `Page n/N` remains. `-pdf-page auto|all|N` selects the
   page for `-dump`/`-png`: a dump keeps every page, `-png` renders page 1 by

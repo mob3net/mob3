@@ -513,6 +513,19 @@ func TestPDFDownloadKey(t *testing.T) {
 	}
 }
 
+func TestPDFDownloadKeyOnlyWorksInViewer(t *testing.T) {
+	b := NewBrowser(100, 20)
+	b.page = &Page{URL: mustParse(t, "https://example.com/page"), Root: ParseHTML(`<html><body>text</body></html>`)}
+	b.status = ""
+	b.HandleKey("d")
+	if b.download != nil {
+		t.Fatal("d opened the download dialog outside the PDF viewer")
+	}
+	if b.status != "" {
+		t.Fatalf("d changed the status outside the PDF viewer: %q", b.status)
+	}
+}
+
 func TestPDFFooterDownloadHit(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
 	root := ParseHTML(`<html><body><div class="pdf-page"><pre>line</pre></div></body></html>`)
