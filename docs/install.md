@@ -43,9 +43,15 @@ docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
 ```
 
 The image is published for `linux/386`, `linux/amd64`, `linux/arm64`,
-`linux/arm/v6` and `linux/arm/v7`. It runs as a non-root user and includes CA
-certificates, `LICENSE` and third-party notices. It is a terminal application:
-use `-it` to attach it to a TTY.
+`linux/arm/v6` and `linux/arm/v7`. It runs as a non-root user and includes
+`LICENSE` and third-party notices. It is a terminal application: use `-it` to
+attach it to a TTY.
+
+The image installs no CA certificate package. HTTPS uses the Mozilla NSS bundle
+compiled into the binary, which Go's fallback trust applies when the container
+has no platform roots, so the trust set is the one that shipped with that
+release. Pass `-certs=/path/to/bundle.pem` to use a mounted bundle for private
+roots.
 
 ## MCP clients
 

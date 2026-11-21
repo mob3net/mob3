@@ -28,8 +28,7 @@ LABEL org.opencontainers.image.title="MOB³" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.source="https://github.com/mob3net/mob3"
 
-RUN apk add --no-cache ca-certificates && \
-    adduser -D -H -u 10001 mob3
+RUN adduser -D -H -u 10001 mob3
 
 COPY --from=build /out/mob3 /usr/local/bin/mob3
 COPY LICENSE THIRD_PARTY_NOTICES /usr/share/doc/mob3/

@@ -1725,8 +1725,12 @@ Standard Go layout:
 - Build output lives in `bin/` (ignored by git); `make clean` removes `bin/`.
 - `Dockerfile` is a multi-stage build: `golang:1.27-bookworm` cross-compiles
   the vendored static binary from `$BUILDPLATFORM`, and `alpine:3` runs it as a
-  non-root user with CA certificates. Alpine is required so the image can cover
-  `linux/arm/v6`; distroless has no armv6 manifest. The build stage copies only
+  non-root user. Alpine is required so the image can cover
+  `linux/arm/v6`; distroless has no armv6 manifest. The runtime image installs
+  no CA certificate package: with no platform roots, Go's fallback trust uses
+  the Mozilla NSS bundle compiled into the binary, so image trust matches the
+  release instead of aging with the base image, and `-certs` can point at a
+  mounted PEM bundle for private roots. The build stage copies only
   `go.mod`, `go.sum`, `vendor/`, `cmd/` and `internal/`; do not use `COPY . .` or
   a `.dockerignore`. `make docker` builds `mob3`, and the image includes
   `LICENSE` and `THIRD_PARTY_NOTICES` under `/usr/share/doc/mob3`.
