@@ -35,6 +35,7 @@ const (
 	headerGraphics
 	headerDownload
 	headerStatus
+	headerZoom
 )
 
 // headerHit is a clickable region in the top bar, in zero-based screen cells.
@@ -162,6 +163,12 @@ func drawUnderlinedRune(g *Grid, x, y int, label string, target rune, st *Style,
 	if rest := label[idx+len(string(target)):]; rest != "" {
 		g.Text(x, y, rest, st, fg)
 	}
+}
+
+// zoomBadge returns the URL-row zoom label with one space on each side. The
+// badge is always shown and clicking it opens the zoom preset window.
+func (b *Browser) zoomBadge() string {
+	return " " + zoomPercentLabel(b.zoom) + " "
 }
 
 // drawHeaderButton paints one top-bar button and records its click region.
@@ -428,8 +435,21 @@ func (b *Browser) draw() {
 			if configW > 0 {
 				b.drawHeaderButton(g, configX, 0, configLabel, headerConfig, btnBG, headerFG, hs)
 			}
-			// URL row.
-			drawField(0, 1, w)
+			// URL row. The zoom badge keeps the far-right cells, so the URL
+			// and the prompt both truncate before it instead of running under.
+			zoomLabel := b.zoomBadge()
+			fieldW := w
+			if zoomLabel != "" {
+				if zw := stringWidth(zoomLabel); zw < w {
+					fieldW = w - zw
+				} else {
+					zoomLabel = ""
+				}
+			}
+			drawField(0, 1, fieldW)
+			if zoomLabel != "" {
+				b.drawHeaderButton(g, fieldW, 1, zoomLabel, headerZoom, btnBG, headerFG, hs)
+			}
 		} else {
 			x := 0
 			if w >= 24 {
@@ -480,7 +500,18 @@ func (b *Browser) draw() {
 				configW = 0
 				urlW = w - x
 			}
+			zoomLabel := b.zoomBadge()
+			if zoomLabel != "" {
+				if zw := stringWidth(zoomLabel); zw < urlW {
+					urlW -= zw
+				} else {
+					zoomLabel = ""
+				}
+			}
 			drawField(x, 0, urlW)
+			if zoomLabel != "" {
+				b.drawHeaderButton(g, x+urlW, 0, zoomLabel, headerZoom, btnBG, headerFG, hs)
+			}
 			if bookmarksW > 0 {
 				b.drawHeaderButton(g, w-configW-helpW-historyW-bookmarksW, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
 			}
@@ -631,6 +662,8 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.paintSelectMenu(g)
 	case b.viewMenu != nil:
 		b.paintViewMenu(g)
+	case b.zoomMenu != nil:
+		b.paintZoomMenu(g)
 	}
 	var lines []string
 	if b.color {

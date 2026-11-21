@@ -3,6 +3,7 @@ package browser
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -1545,6 +1546,172 @@ func (b *Browser) paintViewMenu(g *Grid) {
 		text := padWidth(truncateWidth(marker+opt.label, inner), inner)
 		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
 		b.viewMenuHits = append(b.viewMenuHits, viewMenuHit{
+			rect: Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
+			idx:  idx,
+		})
+	}
+	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
+	modalDim(g, x, y, boxW, boxH)
+}
+
+// zoomMenuHit is one clickable row in the open zoom window.
+type zoomMenuHit struct {
+	rect Rect
+	idx  int
+}
+
+// zoomMenuDialog is the window listing the layout zoom presets.
+type zoomMenuDialog struct {
+	idx int
+}
+
+// openZoomMenu shows the zoom presets with the current level selected.
+func (b *Browser) openZoomMenu() {
+	idx := 0
+	best := math.Abs(zoomSteps[0] - b.zoom)
+	for i, z := range zoomSteps[1:] {
+		if d := math.Abs(z - b.zoom); d < best {
+			idx = i + 1
+			best = d
+		}
+	}
+	b.zoomMenu = &zoomMenuDialog{idx: idx}
+	b.zoomMenuHits = nil
+	b.status = ""
+}
+
+// applyZoomMenuChoice closes the zoom window and applies the chosen preset.
+func (b *Browser) applyZoomMenuChoice(idx int) {
+	if idx < 0 || idx >= len(zoomSteps) {
+		return
+	}
+	b.zoomMenu = nil
+	b.zoomMenuHits = nil
+	b.applyZoom(zoomSteps[idx])
+}
+
+// handleZoomMenuKey drives the zoom window from the keyboard.
+func (b *Browser) handleZoomMenuKey(k string) bool {
+	m := b.zoomMenu
+	if m == nil {
+		return false
+	}
+	switch k {
+	case "esc", "q", "ctrl-c":
+		b.zoomMenu = nil
+		b.zoomMenuHits = nil
+		b.status = ""
+	case "up", "k", "ctrl-p":
+		if m.idx > 0 {
+			m.idx--
+		}
+	case "down", "j", "ctrl-n":
+		if m.idx < len(zoomSteps)-1 {
+			m.idx++
+		}
+	case "home", "g":
+		m.idx = 0
+	case "end", "G":
+		m.idx = len(zoomSteps) - 1
+	case " ", "enter":
+		b.applyZoomMenuChoice(m.idx)
+	}
+	return false
+}
+
+// handleZoomMenuMouse applies a clicked preset or closes the window when the
+// dimmed backdrop or the close button is clicked.
+func (b *Browser) handleZoomMenuMouse(ev MouseEvent) {
+	if !ev.Press || ev.Motion || ev.Wheel != 0 || ev.Button != MouseButtonLeft {
+		return
+	}
+	x, y := ev.X-1, ev.Y-1
+	for _, hit := range b.zoomMenuHits {
+		r := hit.rect
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			if b.zoomMenu != nil {
+				b.zoomMenu.idx = hit.idx
+			}
+			b.applyZoomMenuChoice(hit.idx)
+			return
+		}
+	}
+	switch b.modalMouseAction(ev) {
+	case "close", "outside":
+		b.zoomMenu = nil
+		b.zoomMenuHits = nil
+		b.status = ""
+	}
+}
+
+// paintZoomMenu overlays the open zoom window.
+func (b *Browser) paintZoomMenu(g *Grid) {
+	m := b.zoomMenu
+	if m == nil || g.W < 8 || g.H < 4 {
+		return
+	}
+	labels := make([]string, len(zoomSteps))
+	maxLabel := 0
+	for i, z := range zoomSteps {
+		labels[i] = zoomPercentLabel(z)
+		if w := stringWidth("● " + labels[i]); w > maxLabel {
+			maxLabel = w
+		}
+	}
+	hint := " ↑↓ choose · Enter apply · Esc close "
+	boxW := maxLabel + 6
+	if w := stringWidth(hint) + 4; w > boxW {
+		boxW = w
+	}
+	if boxW < 32 {
+		boxW = 32
+	}
+	if boxW > g.W {
+		boxW = g.W
+	}
+	if boxW < 8 {
+		return
+	}
+	inner := boxW - 4
+	maxRows := g.H - 4
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	visible := len(labels)
+	if visible > maxRows {
+		visible = maxRows
+	}
+	scroll := 0
+	if m.idx >= visible {
+		scroll = m.idx - visible + 1
+	}
+	boxH := visible + 4
+	if boxH > g.H {
+		boxH = g.H
+	}
+	x, y := b.modalFrame(g, boxW, boxH, "Zoom")
+	fg := RGB(0x1f, 0x23, 0x28)
+	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
+	activeBG := RGB(0x2f, 0x6f, 0xbf)
+	activeFG := RGB(0xff, 0xff, 0xff)
+	current := zoomPercentLabel(b.zoom)
+	b.zoomMenuHits = b.zoomMenuHits[:0]
+	for i := 0; i < visible; i++ {
+		idx := scroll + i
+		label := labels[idx]
+		marker := "  "
+		if label == current {
+			marker = "● "
+		}
+		rowBG, rowFG := modalBG, fg
+		rowStyle := style
+		if idx == m.idx {
+			rowBG, rowFG = activeBG, activeFG
+		}
+		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
+		text := padWidth(truncateWidth(marker+label, inner), inner)
+		g.Text(x+2, y+2+i, text, rowStyle, rowFG)
+		b.zoomMenuHits = append(b.zoomMenuHits, zoomMenuHit{
 			rect: Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1},
 			idx:  idx,
 		})

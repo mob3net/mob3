@@ -238,6 +238,10 @@ type Browser struct {
 	viewMenu *viewMenuDialog
 	// viewMenuHits are the clickable rows of the open view menu.
 	viewMenuHits []viewMenuHit
+	// zoomMenu is the open window listing layout zoom presets.
+	zoomMenu *zoomMenuDialog
+	// zoomMenuHits are the clickable rows of the open zoom menu.
+	zoomMenuHits []zoomMenuHit
 	// modalClose is the close-button hit region of the modal drawn last.
 	modalClose Rect
 	// modalBox is the full modal rectangle, used to close on backdrop clicks.
@@ -594,6 +598,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.selectHits = nil
 	b.viewMenu = nil
 	b.viewMenuHits = nil
+	b.zoomMenu = nil
+	b.zoomMenuHits = nil
 	b.quitPending = false
 	b.jsErr = false
 	b.moduleErr = false
@@ -887,7 +893,7 @@ func (b *Browser) rebuild() {
 // disabled while one is open and the layout is rebuilt without it.
 func (b *Browser) overlayOpen() bool {
 	return b.dialog != nil || b.download != nil || b.notice != nil ||
-		b.selectMenu != nil || b.viewMenu != nil
+		b.selectMenu != nil || b.viewMenu != nil || b.zoomMenu != nil
 }
 
 // scaledTextWanted reports whether the page should use kitty scaled text.

@@ -51,7 +51,9 @@ fixed pixel widths, padding, borders, images and kitty scaled large headings
 grow or shrink. The CSS viewport shrinks or grows with the ratio, so responsive
 pages reflow and percentage columns keep filling the terminal. Zoom lasts for
 the session and applies to every page, including pages restored from the
-back/forward cache.
+back/forward cache. The URL row always shows the current level as a clickable
+badge at its far right; clicking it opens a window where a preset can be chosen
+with the mouse or the arrow keys and `Enter`.
 
 ## Console
 
@@ -172,6 +174,8 @@ uploads are unsupported.
 - Click a link to follow it; a download link opens the `curl` popup without fetching, except a `.pdf` download, which opens in the viewer.
 - Click the URL bar to open the prompt; click outside to close it.
 - Click in the prompt to move the caret.
+- Click the zoom badge at the right end of the URL row to open the zoom window
+  and choose a preset.
 - Click `←`, `→`, `⟳`, `⌂`, History, Bookmarks, Help or `⚙` in the toolbar.
 - Right click a link to copy its URL (OSC 52); elsewhere it does nothing.
 - The mouse back/forward buttons navigate.

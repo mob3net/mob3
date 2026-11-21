@@ -138,7 +138,10 @@ represents, not the text size: body text keeps one cell per character and its
 normal line height, while fixed pixel widths, spacing, borders, images and
 kitty scaled large headings grow or shrink. The CSS viewport follows the ratio,
 so responsive pages reflow. It applies to dump, PNG and MCP runs, is editable in
-`about:config`, and is never persisted.
+`about:config`, and is never persisted. In the interactive browser the URL row
+always shows the current level as a clickable badge at its far right; clicking
+it opens a window for choosing a preset with the mouse or arrow keys and
+`Enter`.
 
 ## JavaScript and cache limits
 

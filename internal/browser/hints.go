@@ -615,7 +615,7 @@ func (b *Browser) inlineImagesEnabled() bool {
 	if b.gfx == nil || b.linkHints {
 		return false
 	}
-	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil && b.viewMenu == nil
+	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil && b.viewMenu == nil && b.zoomMenu == nil
 }
 
 // paintLinkHints draws the chosen letters of each matching link with a yellow

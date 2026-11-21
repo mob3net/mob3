@@ -17,13 +17,14 @@ func TestHeaderHitRegions(t *testing.T) {
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 9 {
+	if len(b.headerHits) != 10 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
 	bookW := stringWidth(" ★ ")
 	histW := stringWidth(" ≡ ")
 	helpW := stringWidth(" ? ")
 	cfgW := stringWidth(" ⚙ ")
+	zoomW := stringWidth(" 100% ")
 	want := []headerHit{
 		{headerBack, 0, 0, 3, 1},
 		{headerForward, 3, 0, 3, 1},
@@ -33,7 +34,8 @@ func TestHeaderHitRegions(t *testing.T) {
 		{headerHistory, b.width - cfgW - helpW - histW, 0, histW, 1},
 		{headerHelp, b.width - cfgW - helpW, 0, helpW, 1},
 		{headerConfig, b.width - cfgW, 0, cfgW, 1},
-		{headerURL, 0, 1, 60, 1},
+		{headerURL, 0, 1, 60 - zoomW, 1},
+		{headerZoom, 60 - zoomW, 1, zoomW, 1},
 	}
 	for i := range want {
 		if b.headerHits[i] != want[i] {
@@ -101,10 +103,10 @@ func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
 	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	drawQuiet(b)
-	if len(b.headerHits) != 6 || b.headerHits[0].kind != headerHome ||
+	if len(b.headerHits) != 7 || b.headerHits[0].kind != headerHome ||
 		b.headerHits[1].kind != headerBookmarks || b.headerHits[2].kind != headerHistory ||
 		b.headerHits[3].kind != headerHelp || b.headerHits[4].kind != headerConfig ||
-		b.headerHits[5].kind != headerURL {
+		b.headerHits[5].kind != headerURL || b.headerHits[6].kind != headerZoom {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
 	if b.headerHits[4].x+b.headerHits[4].w != b.width {
@@ -900,5 +902,150 @@ func TestModalDisablesScaledText(t *testing.T) {
 	drawQuiet(b)
 	if !b.bigText {
 		t.Fatal("scaled text did not return after the modal closed")
+	}
+}
+
+func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.zoom = 1.5
+	drawQuiet(b)
+	var badge, field *headerHit
+	for i := range b.headerHits {
+		switch b.headerHits[i].kind {
+		case headerZoom:
+			badge = &b.headerHits[i]
+		case headerURL:
+			field = &b.headerHits[i]
+		}
+	}
+	if badge == nil || field == nil {
+		t.Fatalf("zoom badge missing at 150%%: %+v", b.headerHits)
+	}
+	if badge.y != 1 || badge.x+badge.w != b.width {
+		t.Fatalf("zoom badge = %+v, want the far right of the URL row", *badge)
+	}
+	if want := stringWidth(" 150% "); badge.w != want {
+		t.Fatalf("zoom badge width = %d, want %d", badge.w, want)
+	}
+	if field.x+field.w != badge.x {
+		t.Fatalf("URL field ends at %d, badge starts at %d", field.x+field.w, badge.x)
+	}
+	if line := plainLine(b.prev[1]); !strings.Contains(line, "150%") {
+		t.Fatalf("URL row = %q, want the 150%% badge", line)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: badge.x + 1, Y: badge.y + 1, Press: true})
+	})
+	if b.zoomMenu == nil {
+		t.Fatal("clicking the zoom badge did not open the zoom window")
+	}
+	if b.zoom != 1.5 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	}
+	drawQuiet(b)
+	var row *zoomMenuHit
+	for i := range b.zoomMenuHits {
+		if b.zoomMenuHits[i].idx == 4 { // 100%
+			row = &b.zoomMenuHits[i]
+			break
+		}
+	}
+	if row == nil {
+		t.Fatalf("100%% row missing from the zoom window: %+v", b.zoomMenuHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: row.rect.X + 1, Y: row.rect.Y + 1, Press: true})
+	})
+	if b.zoom != 1 {
+		t.Fatalf("clicking 100%% left zoom at %g, want 1", b.zoom)
+	}
+	if b.zoomMenu != nil {
+		t.Fatal("the zoom window stayed open after a choice")
+	}
+	drawQuiet(b)
+	found := false
+	for _, hit := range b.headerHits {
+		if hit.kind == headerZoom {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("zoom badge hidden at 100%%: %+v", b.headerHits)
+	}
+	if line := plainLine(b.prev[1]); !strings.Contains(line, "100%") {
+		t.Fatalf("URL row = %q, want the 100%% badge", line)
+	}
+}
+
+func TestZoomMenuKeyboard(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.openZoomMenu()
+	if b.zoomMenu == nil || b.zoomMenu.idx != 4 {
+		t.Fatalf("zoom menu = %+v, want 100%% selected", b.zoomMenu)
+	}
+	b.HandleKey("down")
+	b.HandleKey("enter")
+	if b.zoom != 1.25 || b.zoomMenu != nil {
+		t.Fatalf("zoom=%g menu=%+v, want 1.25 and closed", b.zoom, b.zoomMenu)
+	}
+	if b.status != "Zoom 125%" {
+		t.Fatalf("status = %q, want Zoom 125%%", b.status)
+	}
+	b.openZoomMenu()
+	b.HandleKey("esc")
+	if b.zoomMenu != nil || b.zoom != 1.25 {
+		t.Fatalf("Esc changed zoom or left the menu open: zoom=%g menu=%+v", b.zoom, b.zoomMenu)
+	}
+	b.zoom = 1.4 // not a preset, from a -zoom value
+	b.openZoomMenu()
+	if b.zoomMenu == nil || b.zoomMenu.idx != 6 {
+		t.Fatalf("zoom menu at 140%% = %+v, want nearest preset 150%%", b.zoomMenu)
+	}
+}
+
+func TestZoomBadgeClickClosesPrompt(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.zoom = 2
+	b.openURLPrompt()
+	drawQuiet(b)
+	var badge *headerHit
+	for i := range b.headerHits {
+		if b.headerHits[i].kind == headerZoom {
+			badge = &b.headerHits[i]
+		}
+	}
+	if badge == nil {
+		t.Fatalf("zoom badge missing while the prompt is open: %+v", b.headerHits)
+	}
+	withQuietStdout(t, func() {
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: badge.x + 1, Y: badge.y + 1, Press: true})
+	})
+	if b.prompt {
+		t.Fatal("clicking the zoom badge did not close the URL prompt")
+	}
+	if b.zoomMenu == nil {
+		t.Fatal("clicking the zoom badge did not open the zoom window")
+	}
+	if b.zoom != 2 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	}
+}
+
+func TestZoomBadgeSingleRowHeader(t *testing.T) {
+	b := NewBrowser(60, 24)
+	b.height = 4
+	b.zoom = 0.5
+	drawQuiet(b)
+	var badge *headerHit
+	for i := range b.headerHits {
+		if b.headerHits[i].kind == headerZoom {
+			badge = &b.headerHits[i]
+		}
+	}
+	if badge == nil || badge.y != 0 {
+		t.Fatalf("single-row zoom badge = %+v, hits = %+v", badge, b.headerHits)
+	}
+	if line := plainLine(b.prev[0]); !strings.Contains(line, "50%") {
+		t.Fatalf("single-row header = %q, want the 50%% badge", line)
 	}
 }

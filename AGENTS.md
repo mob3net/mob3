@@ -509,7 +509,11 @@ Standard Go layout:
   relative to the CSS viewport, which narrows or widens with the ratio, and
   media queries and script-visible viewport sizes follow it, so responsive
   pages reflow. Zoom is memory-only session state shared by every page,
-  including pages restored from the back/forward cache.
+  including pages restored from the back/forward cache. The URL row always
+  shows the current zoom as a clickable ` 100% ` badge at its far right (one
+  space on each side); clicking it opens a centered Zoom window listing the
+  presets, which can be chosen with the mouse or arrow keys and `Enter`, and
+  `Esc` closes it.
 - **Line height:** computed with `floor(fontSize * lineHeight / 16)`, minimum
   1 row, using the base 16px row regardless of zoom. This avoids body text with
   `line-height: 1.6` consuming two terminal rows. Rule of thumb: only fonts
@@ -805,7 +809,11 @@ Standard Go layout:
   file. While a page is loading, the reload icon becomes `×` and clicking it
   cancels the in-flight load exactly like `Esc` (status `Stopped loading`),
   then the reload icon returns. The URL row is a full-width field that becomes the editable
-  `Open: …` prompt with a cursor marker while the prompt is open. While loading,
+  `Open: …` prompt with a cursor marker while the prompt is open. A clickable
+  ` 100% ` zoom badge always keeps the far-right cells of that row (one space
+  on each side), and the URL or prompt text truncates before it; clicking the
+  badge opens the centered Zoom window for choosing a preset with the mouse or
+  arrow keys. While loading,
   the URL row fills from the left with a blue progress tint that eases toward
   90%, completes on finish and lingers briefly before clearing; it is driven by
   an event-loop timer only while progress is active, so idle pages stay asleep.

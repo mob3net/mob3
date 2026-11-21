@@ -227,6 +227,7 @@ func TestModalsDisableInlineImages(t *testing.T) {
 		{"notice", func() { b.notice = &noticeDialog{} }, func() { b.notice = nil }},
 		{"select", func() { b.selectMenu = &selectMenuDialog{} }, func() { b.selectMenu = nil }},
 		{"view", func() { b.viewMenu = &viewMenuDialog{} }, func() { b.viewMenu = nil }},
+		{"zoom", func() { b.zoomMenu = &zoomMenuDialog{} }, func() { b.zoomMenu = nil }},
 	}
 	for _, m := range modals {
 		m.set()
