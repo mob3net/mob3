@@ -1744,3 +1744,31 @@ func TestStopImmediatePropagationSkipsSiblingListeners(t *testing.T) {
 		t.Fatalf("listener log = %q, want only first", page.Title)
 	}
 }
+
+// TestScriptInjectedStyleApplies checks the full path: a page script adds a
+// <style> element, the next rebuild collects it, and the layout uses it.
+func TestScriptInjectedStyleApplies(t *testing.T) {
+	root := ParseHTML(`<html><head><style>body{margin:0}</style></head>` +
+		`<body><div id="x">BOX</div></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	page := &Page{
+		URL: u, Base: u, Root: root, Author: ParseStylesheet(`body{margin:0}`),
+		Scripts: []Script{{Src: "inline", Code: `var s=document.createElement('style');
+			s.textContent='#x{padding-left:40px}';
+			document.head.appendChild(s);`}},
+	}
+	b := NewBrowser(40, 10)
+	b.page = page
+	b.url = u
+	b.startJS(page)
+	b.rebuild()
+	for i := range b.layout.Frags {
+		if f := &b.layout.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
+			if f.X != 5 {
+				t.Fatalf("BOX at X=%d, want 5 after the script-injected rule", f.X)
+			}
+			return
+		}
+	}
+	t.Fatal("BOX text not found")
+}

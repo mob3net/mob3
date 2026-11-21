@@ -383,3 +383,36 @@ func TestInlineSVGInFlexRowFallsBackToLabel(t *testing.T) {
 		t.Fatalf("SVG title missing from the flex row: %+v", ly.Frags)
 	}
 }
+
+// TestInlineImagePercentInsideSizedWrapper covers a width:100% image inside a
+// fixed-size inline wrapper (an avatar ring or w-xl icon): the percentage must
+// resolve against the wrapper, not the terminal line, or the image grows to the
+// display cap.
+func TestInlineImagePercentInsideSizedWrapper(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.outer { display: inline-flex; width: 2rem; height: 2rem; }
+	.holder { display: inline-block; width: 100%; height: 100%; }
+	.icon { width: 100%; height: 100%; }
+	</style></head><body>
+	<span class="outer"><span class="holder"><img class="icon" width="32" height="32"></span></span>
+	</body></html>`)
+	img, _ := findSelectorNode(root, ".icon")
+	im := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			im.Set(x, y, color.RGBA{200, 0, 0, 255})
+		}
+	}
+	img.Img = im
+	ly := BuildLayout(root, fixtureAuthorRules(root), 100)
+	for i := range ly.Frags {
+		if f := &ly.Frags[i]; f.Kind == fragImage {
+			if f.W != 4 || f.H != 2 {
+				t.Fatalf("image box = %dx%d cells, want 4x2 inside the 2rem wrapper", f.W, f.H)
+			}
+			return
+		}
+	}
+	t.Fatal("image fragment not found")
+}

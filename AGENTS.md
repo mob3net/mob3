@@ -253,7 +253,7 @@ Standard Go layout:
 | `style_units.go` | Lengths: `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`, resolved against the root element's computed font size rather than a fixed 16px so framework sheets that set `html{font-size:14px}` get browser-like spacing), viewport units (`vw`/`vh`/`vmin`/`vmax`, including inside `calc()`), `calc()` arithmetic, and `min()`/`max()`/`clamp()` with percentages, viewport units, `calc()` arguments and nesting, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected so a scripted invalid length behaves like an unset declaration. |
 | `style_color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion and alpha. |
 | `style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
-| `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
+| `style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. `Page.seedParsedStyles`/`collectDynamicStyles` collect inline `<style>` elements added or changed by scripts after load and append their rules after the existing author rules, so component CSS from JS frameworks applies on the next rebuild. |
 | `style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, `::before`/`::after` computation (empty boxes and literal text, with private-use icon glyphs and functional values rejected), and the style deadline. |
 | `style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
@@ -262,7 +262,7 @@ Standard Go layout:
 | `layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated `::before`/`::after` boxes with their literal text, and inline pseudo content. |
 | `layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
-| `layout_images.go` | Image layout: intrinsic sizing, display caps, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
+| `layout_images.go` | Image layout: intrinsic sizing, display caps, inline percentage widths resolved against sized inline ancestors, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
 | `layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
 | `layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas, horizontal `justify-items`/`justify-self` (including an implicit single-column grid) and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. Column flex stacks blockified children with a vertical gap, so a `<picture>` media box gets its `aspect-ratio` height instead of staying an empty inline. |
@@ -695,7 +695,11 @@ Standard Go layout:
   it (returning the intrinsic width with a one-cell minimum), so a
   `width:100%` thumbnail can never force its flex or grid slot wider than the
   slot itself and paint over neighbouring text; the image then fills the slot
-  and shrinks with it. A declared `max-width` caps that intrinsic measurement
+  and shrinks with it. An inline image's percentage width resolves against the
+  nearest sized inline ancestor (a fixed-size avatar ring or wrapper), not the
+  terminal line, so a `width:100%` icon inside `w-xl` stays small instead of
+  growing to the display cap; the line width is the fallback when no ancestor
+  has a definite width. A declared `max-width` caps that intrinsic measurement
   too, so a floated thumbnail styled `width:100%;max-width:110px` measures as
   the 110px cap instead of its source size and does not leave the adjacent
   text wrapped in a narrow column. A decoded image is downscaled once at load to the largest box the
@@ -1710,7 +1714,11 @@ Standard Go layout:
   stay part of the import URL and never end the statement. Parsing is cancellable and capped at 4 MiB of source, 50k
   rules, 256 KiB per declaration block, 4 KiB per selector and 1 second of
   parse time; repeated selector text is parsed once per sheet. This bounds
-  CPU/GC cost on generated or hostile CSS.
+  CPU/GC cost on generated or hostile CSS. Inline `<style>` elements added or
+  changed by scripts after load are collected before the next rebuild and
+  ordered after the existing author rules; a dynamic `<link rel=stylesheet>` is
+  not fetched, and removing or rewriting a style leaves its earlier rules in
+  place.
 - **Session resource cache:** CSS and JavaScript response bodies and decoded
   images share a session-only LRU byte cache. The default budget is 32 MiB with
   a 2 MiB per-entry cap; `-cache` sets the budget in MB and `0` disables it.
@@ -2026,7 +2034,10 @@ Standard Go layout:
   `.desktop\:grid-col-3` and `.\32 col` match their `desktop:grid-col-3` and
   `2col` class names.
   CSS custom properties support simple `var()` substitution, including
-  fallbacks; registered properties and Houdini APIs are not supported. The
+  fallbacks; registered properties and Houdini APIs are not supported. Inline
+  `<style>` rules injected by scripts are collected after load, but dynamically
+  inserted `<link rel=stylesheet>` elements are not fetched, and a style
+  element that is removed or edited keeps its previously parsed rules. The
   inherited property map is shared down the tree and copied only when an
   element declares a custom property itself, so a large `:root` token set
   costs one map per declaring element instead of one full copy per node

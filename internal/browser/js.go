@@ -307,6 +307,9 @@ func (b *Browser) startJS(page *Page) {
 	}
 	// With scripting enabled, <noscript> content is not displayed.
 	removeNoscript(page.Root)
+	// Record the styles already collected at load; anything added or changed
+	// from here on is component CSS injected by a script.
+	page.seedParsedStyles()
 	j := newJSRuntime(b, page)
 	j.titleSet = func(s string) {
 		page.Title = s

@@ -428,6 +428,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		runner.noJS = false
 		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
+		page.collectDynamicStyles()
 		if !loader.noImages {
 			allowFile := page.URL != nil && page.URL.Scheme == "file"
 			loader.loadImages(context.Background(), page.Root, page.Base, allowFile)

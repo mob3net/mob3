@@ -70,6 +70,9 @@ type Page struct {
 	DownloadName string
 	// PDF holds the extracted text when this page came from a PDF response.
 	PDF *PDFDocument
+	// parsedStyles records the inline <style> elements already represented in
+	// Author, so component CSS injected by scripts is parsed once.
+	parsedStyles map[*Node]string
 }
 
 // Script is one page script in document order. Src is a label for errors.

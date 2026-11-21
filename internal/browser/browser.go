@@ -799,6 +799,11 @@ func (b *Browser) rebuild() {
 	if b.page == nil {
 		return
 	}
+	// Frameworks inject their component CSS as <style> elements after load;
+	// collect new or changed ones before this layout pass.
+	if b.js != nil && !b.reader {
+		b.page.collectDynamicStyles()
+	}
 	// The new layout includes every image decoded so far, so nothing is left
 	// waiting for the viewport.
 	b.pendingImageRow = 0

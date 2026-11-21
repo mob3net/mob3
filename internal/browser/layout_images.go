@@ -59,7 +59,7 @@ func (l *layouter) blockSVG(n *Node, x, y, w int) int {
 }
 
 func (c *inlineCtx) addImage(n *Node, st *Style) {
-	maxW := c.lineMaxW()
+	maxW := c.l.inlineImageWidth(n, c.lineMaxW())
 	if n.Img == nil || c.l.imagesOff {
 		alt := n.Attr("alt")
 		w, h := imageSize(n, st, maxW, c.imageCapW)
@@ -384,4 +384,45 @@ func clampUnit(v float64) float64 {
 		return 1
 	}
 	return v
+}
+
+// inlineImageWidth resolves the containing-block width for an inline image's
+// percentage size. An image inside a sized inline wrapper (a w-xl avatar ring
+// or a w-full thumbnail holder) must use that wrapper, not the whole line: a
+// width:100% image would otherwise be measured against the terminal line and
+// hit the image display cap. Ancestors are resolved outermost first so a
+// chain such as holder{width:100%} inside outer{width:2rem} narrows to 2rem.
+func (l *layouter) inlineImageWidth(n *Node, fallback int) int {
+	var chain []*Style
+	for p := n.Parent; p != nil; p = p.Parent {
+		if p.Type != ElementNode || p.Style == nil {
+			continue
+		}
+		st := p.Style
+		if st.Width.Set && !st.Width.IsAuto() {
+			chain = append(chain, st)
+			if !lengthHasPercent(st.Width) {
+				break
+			}
+			continue
+		}
+		switch st.Display {
+		case "block", "flex", "grid", "list-item", "table", "table-row", "table-cell":
+			// The inline formatting context's own width is the fallback.
+			p = nil
+		}
+		if p == nil {
+			break
+		}
+	}
+	basis := fallback
+	for i := len(chain) - 1; i >= 0; i-- {
+		if w := chain[i].Width.resolveH(basis, chain[i].FontSize); w > 0 {
+			basis = w
+		}
+	}
+	if basis < 1 {
+		basis = 1
+	}
+	return basis
 }
