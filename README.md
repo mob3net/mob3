@@ -6,6 +6,8 @@
 
 MOB³ is a lightweight terminal web browser with a built-in HTML rendering engine, JavaScript runtime, ANSI renderer and inline image support. It brings Vim-style interaction, mouse controls and browser-like navigation together with headless MCP support for scripts and AI agents.
 
+The design goal is most of the features people actually use, with a fraction of the CPU and memory a mainstream browser needs: a small static binary, fast startup and pages that stay lightweight.
+
 Project page: [mob3.net](https://mob3.net)
 
 GitHub: [github.com/mob3net/mob3](https://github.com/mob3net/mob3)

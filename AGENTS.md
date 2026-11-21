@@ -13,6 +13,27 @@ written in Go
 
 ## 1. Working agreement
 
+- **Efficiency is the product goal.** The target is **most of the features
+  people actually use, for a small fraction of the CPU and memory** of a
+  mainstream browser: capability per unit of resource, not parity at any price.
+  This decides ambiguous feature work. Prefer the cheap approximation over the
+  exact but expensive implementation whenever the user-visible result is close
+  (block backgrounds instead of inline ones, half-block art instead of sixel,
+  text PDFs instead of rasterized pages, partial SVG instead of a full
+  renderer).
+  Do not add background loops, perpetual repaints, prefetching, polling or a
+  dependency for a marginal feature. Idle stays at zero CPU, startup stays
+  instant, first paint stays ahead of image work, and every unbounded input
+  path keeps a cap. When two features have similar value, take the one with
+  the smaller steady-state footprint, and do not regress idle CPU, resident
+  memory or first-paint latency for a new feature: measure before and after
+  when a change touches the draw loop, timers, layout, the style pass or the JS
+  runtime, comparing on one machine and the same pages. User-facing docs state
+  the goal qualitatively — most of the features people use, with a fraction of
+  the CPU and memory a mainstream browser needs — and do not publish measured
+  figures or a baseline table, because they depend on hardware and the page
+  corpus and go stale. The local measurement recipe lives in the Efficiency
+  target section of `docs/development.md`.
 - **Ask before deciding.** Anything that needs attention, approval, or is a
   software design decision must be asked, not assumed. Preferred method: ask
   **one question at a time**, wait for the answer. Do not ask many decisions at

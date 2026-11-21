@@ -23,6 +23,37 @@ Tests must not require network access. Use the existing fake loader and
 `httptest`-free helpers where possible. Add or update tests in the same change
 as behaviour.
 
+## Efficiency target
+
+The product goal is to cover most of the features people actually use while
+using far less CPU and memory than a mainstream browser. Concretely, when a
+choice is ambiguous, prefer the cheap approximation over the exact but
+expensive implementation, keep idle pages asleep, cap unbounded work, and never
+trade a large steady-state footprint for a marginal feature. See the working
+agreement in `AGENTS.md` for the rule in force.
+
+Measure locally, before and after, whenever a change touches the draw loop,
+timers, layout, the style pass or the JavaScript runtime. Comparing wall time,
+peak RSS and idle CPU on the same machine and the same pages is what matters;
+do not record hardware- or corpus-specific figures in the docs, because they go
+stale and invite false comparisons.
+
+```sh
+make
+ls -l bin/mob3
+TIMEFORMAT='%3R s'; time (for i in $(seq 20); do bin/mob3 -version >/dev/null; done)
+/usr/bin/time -v bin/mob3 -dump -width 177 -no-color page.html >/dev/null
+```
+
+Peak RSS in `-dump` includes Go GC headroom and is higher than a settled
+interactive session, so compare like with like. For settled interactive RSS and
+idle CPU, run the browser inside a pseudo terminal
+(`script -qec "bin/mob3 FILE" /dev/null`), take the `mob3` PID from `pgrep`,
+and compare fields 14+15 of `/proc/<pid>/stat` (utime + stime) over a window: an
+idle page must not consume measurable CPU. Per-phase parse, layout and live-heap
+attribution comes from a temporary `zz_*_test.go` benchmark following the
+debugging recipe in `AGENTS.md`; delete it afterwards.
+
 ## Documentation
 
 - `README.md` is the short landing page: what MOB³ is, how to run it, and what

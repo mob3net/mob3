@@ -51,7 +51,8 @@ Start with `mob3 -mcp` and the [automation reference](automation.md).
 - **Distraction-free browsing** — access websites without the overhead of a
   graphical browser.
 - **Low-resource environments** — browse on machines with limited memory, CPU
-  or graphical capabilities.
+  or graphical capabilities. The project aims to cover most of the features
+  people use while using far less CPU and memory than a mainstream browser.
 - **Privacy-conscious browsing** — keep browsing history, cookies, storage and
   caches in memory only; nothing is written to disk.
 - **Inline image viewing** — view web images directly in compatible terminals
