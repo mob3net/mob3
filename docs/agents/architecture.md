@@ -145,6 +145,7 @@ Standard Go layout:
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly stays in the browser for now. |
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
+| `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets and terminal writes. |
 | `internal/protocol` `Chrome` message | Header/footer cell layer for content-only frames; overlay and console frames use the full-screen fallback. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |

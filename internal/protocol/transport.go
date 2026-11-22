@@ -116,9 +116,6 @@ type inProcSession struct {
 
 	sendMu sync.Mutex
 	buf    []byte
-	// outBuf is owned by the handler goroutine; Send decodes a copy into
-	// events before returning.
-	outBuf []byte
 
 	closed    atomic.Bool
 	serveDone chan struct{}
@@ -194,7 +191,7 @@ func (s *inProcSession) Close() error {
 func (s *inProcSession) serve(h Handler) {
 	defer close(s.serveDone)
 	out := newOutbox(s.ctx, s.events, cap(s.events))
-	sink := inProcSink{s: s, out: out}
+	sink := &eventSink{id: s.id, lim: s.lim, out: out}
 	err := h.Serve(s.ctx, s.abortCh, s.in, sink)
 	if err != nil && s.ctx.Err() == nil {
 		// A handler error is a contained engine failure. Report it before the
@@ -222,21 +219,23 @@ func copyFrame(f Frame, lim Limits) (Frame, error) {
 	return out, nil
 }
 
-// inProcSink is the handler-facing event port. Encoding and decoding happen
-// before Send returns, so the engine can reuse its frame buffers immediately.
-type inProcSink struct {
-	s   *inProcSession
+// eventSink is the handler-facing event port used by both transports.
+// Encoding and decoding happen before Send returns, so the engine can reuse its
+// frame buffers immediately. buf is owned by the handler goroutine.
+type eventSink struct {
+	id  SessionID
+	lim Limits
 	out *outbox
+	buf []byte
 }
 
 // Send validates and copies one event, then queues it for the front end. A
 // malformed frame is reported as Crash and, when possible, repaired into a
 // drawable frame so the front end can still repaint and reach the console. A
 // malformed non-frame event is replaced by Crash.
-func (k inProcSink) Send(ev Event) error {
-	s := k.s
+func (k *eventSink) Send(ev Event) error {
 	if ev.Session == 0 {
-		ev.Session = s.id
+		ev.Session = k.id
 	}
 	var err error
 	if f, ok := ev.Body.(Frame); ok {
@@ -244,27 +243,27 @@ func (k inProcSink) Send(ev Event) error {
 		// same semantic checks as the codec without the wire round trip, and it
 		// still detaches the engine's reusable buffers before Send returns.
 		var copied Frame
-		if copied, err = copyFrame(f, s.lim); err == nil {
+		if copied, err = copyFrame(f, k.lim); err == nil {
 			ev.Body = copied
-		} else if repaired, ok := repairFrame(f, s.lim); ok {
+		} else if repaired, ok := repairFrame(f, k.lim); ok {
 			// Report first, then send the sanitized frame. The front end resets
 			// its row diff on Crash, so the repaired frame is a full repaint.
-			if qerr := k.out.send(Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}); qerr != nil {
+			if qerr := k.out.send(Event{Session: k.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}); qerr != nil {
 				return qerr
 			}
 			ev.Body = repaired
 			err = nil
 		}
 	} else {
-		s.outBuf, err = AppendEvent(s.outBuf[:0], ev, s.lim)
+		k.buf, err = AppendEvent(k.buf[:0], ev, k.lim)
 		if err == nil {
 			var decoded Event
-			decoded, _, err = DecodeEvent(s.outBuf, s.lim)
+			decoded, _, err = DecodeEvent(k.buf, k.lim)
 			ev = decoded
 		}
 	}
 	if err != nil {
-		ev = Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
+		ev = Event{Session: k.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
 	}
 	return k.out.send(ev)
 }
