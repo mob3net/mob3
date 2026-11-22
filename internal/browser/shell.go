@@ -43,6 +43,28 @@ func (b *Browser) viewportHeight() int {
 	return bottom - top
 }
 
+// frontendChromePath reports whether the normal front-end chrome path is in
+// use: no overlay, console or find bar, and enough rows for a header/footer.
+func (b *Browser) frontendChromePath() bool {
+	return b.emitFrames && b.frontendChrome && b.height >= 3 &&
+		!b.overlayOpen() && !b.consoleOpen && !b.findActive
+}
+
+// keysEngine reports whether the engine currently owns key interpretation.
+func (b *Browser) keysEngine() bool {
+	return b.prompt || b.findActive || b.consoleOpen || b.dialog != nil ||
+		b.download != nil || b.notice != nil || b.selectMenu != nil ||
+		b.viewMenu != nil || b.zoomMenu != nil || b.quitPending ||
+		b.inputFocus != nil || b.controlFocus != nil || b.linkHints || b.hintConfirm
+}
+
+// frontendChromeActive is the normal path while the front end also owns the
+// base key/mouse state. Editable page controls and shell modals fall back to
+// the engine chrome and input.
+func (b *Browser) frontendChromeActive() bool {
+	return b.frontendChromePath() && !b.keysEngine()
+}
+
 // contentRect computes the content rectangle once for a frame. The engine is
 // expected to receive only this rectangle, never the full terminal size.
 func (b *Browser) contentRect() contentRect {
@@ -110,8 +132,7 @@ func (b *Browser) stateMessage() protocol.State {
 	// engine-composed fallback for now.
 	st.Width, st.Height = b.width, b.height
 	st.HeaderRows = b.headerRows()
-	st.FrontendChrome = b.emitFrames && b.frontendChrome && b.height >= 3 &&
-		!b.overlayOpen() && !b.consoleOpen && !b.findActive
+	st.FrontendChrome = b.frontendChromeActive()
 	st.ZoomLabel = b.zoomBadge()
 	st.PromptActive = b.prompt
 	st.PromptText = b.promptText
@@ -119,6 +140,7 @@ func (b *Browser) stateMessage() protocol.State {
 	st.PromptSelectAll = b.promptSelectAll
 	st.FindActive = b.findActive
 	st.QuitPending = b.quitPending
+	st.KeysEngine = b.keysEngine()
 	fm := b.footerModel()
 	st.FooterLeft, st.FooterRight = fm.left, fm.right
 	st.FooterLevel = footerLevelMessage(fm.level)

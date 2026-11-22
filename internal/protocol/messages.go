@@ -137,6 +137,8 @@ const (
 	AppStatusDetails
 	AppDownload
 	AppHome
+	AppOpenVimPrompt
+	AppOpenViewMenu
 )
 
 // App requests an application action. Arg carries an action-specific value.

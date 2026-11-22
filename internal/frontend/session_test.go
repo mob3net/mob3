@@ -110,3 +110,101 @@ func TestPresenterRepaintsAfterConsoleFrame(t *testing.T) {
 		t.Fatalf("page was not repainted after the console: %q", out.String())
 	}
 }
+
+func TestShellKeysQuitAndActions(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s, Presenter: NewPresenter(io.Discard, false)}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if handled, quit := loop.handleShellKey("q"); !handled || quit || !loop.quitPending {
+		t.Fatalf("q: handled=%v quit=%v pending=%v", handled, quit, loop.quitPending)
+	}
+	if handled, quit := loop.handleShellKey("n"); !handled || quit || loop.quitPending {
+		t.Fatalf("cancel: handled=%v quit=%v pending=%v", handled, quit, loop.quitPending)
+	}
+	if handled, quit := loop.handleShellKey("q"); !handled || quit {
+		t.Fatal("q did not reopen quit")
+	}
+	if handled, quit := loop.handleShellKey("y"); !handled || !quit {
+		t.Fatal("y did not confirm quit")
+	}
+}
+
+func TestShellKeysSendAppActions(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	cases := map[string]any{
+		"o": protocol.App{Action: protocol.AppOpenURL},
+		":": protocol.App{Action: protocol.AppOpenVimPrompt},
+		"r": protocol.App{Action: protocol.AppReload},
+		"R": protocol.App{Action: protocol.AppToggleReader},
+		"D": protocol.App{Action: protocol.AppToggleDark},
+		"+": protocol.App{Action: protocol.AppZoomIn},
+		"-": protocol.App{Action: protocol.AppZoomOut},
+		"0": protocol.App{Action: protocol.AppZoomReset},
+		"J": protocol.App{Action: protocol.AppToggleJS},
+		"i": protocol.App{Action: protocol.AppToggleImages},
+		"E": protocol.App{Action: protocol.AppStatusDetails},
+		"d": protocol.App{Action: protocol.AppDownload},
+		"!": protocol.App{Action: protocol.AppToggleConsole},
+		"X": protocol.App{Action: protocol.AppOpenViewMenu},
+		"Z": protocol.App{Action: protocol.AppOpenZoom},
+		"?": protocol.Navigate{URL: "about:help", Push: true},
+		"H": protocol.Navigate{URL: "about:history", Push: true},
+	}
+	for key, want := range cases {
+		s.cmds = nil
+		if handled, quit := loop.handleShellKey(key); !handled || quit {
+			t.Fatalf("%q not handled", key)
+		}
+		if len(s.cmds) != 1 || s.cmds[0].Body != want {
+			t.Fatalf("%q sent %#v, want %#v", key, s.cmds, want)
+		}
+	}
+}
+
+func TestShellKeysStayWithEngineWhenCaptured(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{KeysEngine: true, FrontendChrome: true}
+	for _, key := range []string{"q", "o", "r", "?"} {
+		if handled, _ := loop.handleShellKey(key); handled {
+			t.Fatalf("%q was consumed by the front end", key)
+		}
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+}
+
+func TestScrollbarMouseSendsScroll(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{
+		FrontendChrome: true, Width: 20, Height: 10, HeaderRows: 1,
+		MaxScroll: 100,
+	}
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 5, Press: true}) {
+		t.Fatal("scrollbar press not consumed")
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("commands = %d", len(s.cmds))
+	}
+	sc, ok := s.cmds[0].Body.(protocol.Scroll)
+	if !ok || !sc.HasTo || sc.To < 0 || sc.To > 100 {
+		t.Fatalf("scroll command = %#v", s.cmds[0].Body)
+	}
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 6, Press: true, Motion: true}) {
+		t.Fatal("scrollbar drag not consumed")
+	}
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 6, Press: false}) {
+		t.Fatal("scrollbar release not consumed")
+	}
+	if loop.scrollDrag {
+		t.Fatal("drag did not end")
+	}
+	if loop.handleChromeMouse(MouseEvent{Button: 0, X: 10, Y: 5, Press: true}) {
+		t.Fatal("content mouse was consumed")
+	}
+}

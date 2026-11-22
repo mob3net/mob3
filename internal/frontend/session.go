@@ -38,6 +38,10 @@ type SessionLoop struct {
 	Stderr io.Writer
 	State  LoopState
 
+	quitPending bool
+	quitBase    protocol.State
+	scrollDrag  bool
+
 	// Report handles a contained crash. When nil, the loop writes one short
 	// line to Stderr and sends a ClientError command back to the session.
 	Report func(string)
@@ -57,6 +61,12 @@ func (l *SessionLoop) Run() error {
 		case k := <-l.Keys:
 			if k == "eof" {
 				return nil
+			}
+			if handled, quit := l.handleShellKey(k); handled {
+				if quit {
+					return nil
+				}
+				continue
 			}
 			if k == "esc" || k == "ctrl-c" {
 				l.Session.Abort()
@@ -123,6 +133,13 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.quitPending {
+			l.quitBase = v
+			if v.KeysEngine {
+				l.cancelQuit()
+			}
+			return false, nil
+		}
 		l.State.Page = v
 		l.State.Scroll = v.Scroll
 		l.State.Native = v.Flags&protocol.StateNativeImages != 0
@@ -148,12 +165,115 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 	return false, nil
 }
 
+const quitPrompt = "Are you sure you want to quit? (y)"
+
+// handleShellKey consumes base shell keys while the engine is not in a prompt,
+// find bar, menu, console, dialog or editable page control. It reports whether
+// the key was consumed and whether the loop should exit.
+func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.quitPending {
+		switch k {
+		case "y", "Y", "enter":
+			return true, true
+		default:
+			l.cancelQuit()
+			return true, false
+		}
+	}
+	if l.State.Page.KeysEngine {
+		return false, false
+	}
+	send := func(body protocol.CommandBody) (bool, bool) {
+		_ = l.Session.Send(protocol.Command{Body: body})
+		return true, false
+	}
+	switch k {
+	case "q":
+		l.startQuit()
+		return true, false
+	case "ctrl-c":
+		l.Session.Abort()
+		l.startQuit()
+		return true, false
+	case "o", "ctrl-l":
+		return send(protocol.App{Action: protocol.AppOpenURL})
+	case ":":
+		return send(protocol.App{Action: protocol.AppOpenVimPrompt})
+	case "r":
+		return send(protocol.App{Action: protocol.AppReload})
+	case "R":
+		return send(protocol.App{Action: protocol.AppToggleReader})
+	case "D":
+		return send(protocol.App{Action: protocol.AppToggleDark})
+	case "+":
+		return send(protocol.App{Action: protocol.AppZoomIn})
+	case "-":
+		return send(protocol.App{Action: protocol.AppZoomOut})
+	case "0":
+		return send(protocol.App{Action: protocol.AppZoomReset})
+	case "J":
+		return send(protocol.App{Action: protocol.AppToggleJS})
+	case "i":
+		return send(protocol.App{Action: protocol.AppToggleImages})
+	case "E":
+		return send(protocol.App{Action: protocol.AppStatusDetails})
+	case "d":
+		return send(protocol.App{Action: protocol.AppDownload})
+	case "!":
+		return send(protocol.App{Action: protocol.AppToggleConsole})
+	case "X":
+		return send(protocol.App{Action: protocol.AppOpenViewMenu})
+	case "Z":
+		return send(protocol.App{Action: protocol.AppOpenZoom})
+	case "?":
+		return send(protocol.Navigate{URL: "about:help", Push: true})
+	case "H":
+		return send(protocol.Navigate{URL: "about:history", Push: true})
+	}
+	return false, false
+}
+
+func (l *SessionLoop) startQuit() {
+	if l.quitPending {
+		return
+	}
+	l.quitPending = true
+	l.quitBase = l.State.Page
+	st := l.State.Page
+	st.QuitPending = true
+	st.FooterLeft = " " + quitPrompt
+	st.FooterLevel = protocol.FooterWarning
+	st.FooterStatusHit = false
+	st.PDFHint, st.PDFHintX = "", -1
+	st.KeysEngine = true
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) cancelQuit() {
+	if !l.quitPending {
+		return
+	}
+	l.quitPending = false
+	l.State.Page = l.quitBase
+	if l.Presenter != nil {
+		l.Presenter.SetState(l.quitBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
 // handleChromeMouse consumes a pointer report on the front-end-owned header or
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	if l.quitPending {
+		return true
+	}
 	st := l.State.Page
-	if !st.FrontendChrome || st.PromptActive || st.Width <= 0 || st.Height <= 0 {
+	if !st.FrontendChrome || st.KeysEngine || st.PromptActive || st.Width <= 0 || st.Height <= 0 {
 		return false
 	}
 	x, y := ev.X-1, ev.Y-1
@@ -161,7 +281,7 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 		return false
 	}
 	if y >= st.HeaderRows && y != st.Height-1 {
-		return false
+		return l.handleScrollbarMouse(ev)
 	}
 	if ev.Wheel != 0 {
 		// Wheels scroll the page regardless of the pointer row.
@@ -180,6 +300,69 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 		return true
 	}
 	return true
+}
+
+// handleScrollbarMouse owns the scrollbar track in the last content column.
+// It reports whether the report was consumed; other content mouse events pass
+// through to the engine.
+func (l *SessionLoop) handleScrollbarMouse(ev MouseEvent) bool {
+	st := l.State.Page
+	if st.MaxScroll <= 0 || st.Width < 2 {
+		return false
+	}
+	contentH := st.Height - st.HeaderRows - 1
+	if contentH < 2 || ev.X != st.Width {
+		return false
+	}
+	row := ev.Y - 1 - st.HeaderRows
+	if row < 0 || row >= contentH {
+		return false
+	}
+	if ev.Wheel != 0 {
+		return false
+	}
+	if !l.scrollDrag {
+		if !ev.Press || ev.Button != 0 {
+			return false
+		}
+		l.scrollDrag = true
+		l.scrollTo(row, contentH)
+		return true
+	}
+	if ev.Press || ev.Motion {
+		l.scrollTo(row, contentH)
+		return true
+	}
+	l.scrollDrag = false
+	return true
+}
+
+func (l *SessionLoop) scrollTo(row, contentH int) {
+	st := l.State.Page
+	max := st.MaxScroll
+	thumbH := contentH * contentH / (contentH + max)
+	if thumbH < 1 {
+		thumbH = 1
+	}
+	if thumbH > contentH {
+		thumbH = contentH
+	}
+	span := contentH - thumbH
+	rel := row - thumbH/2
+	if span <= 0 {
+		rel = 0
+	}
+	if rel < 0 {
+		rel = 0
+	}
+	if rel > span {
+		rel = span
+	}
+	target := 0
+	if span > 0 {
+		target = rel * max / span
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.Scroll{To: target, HasTo: true}})
 }
 
 func (l *SessionLoop) activateChromeHit(kind ChromeHitKind) {

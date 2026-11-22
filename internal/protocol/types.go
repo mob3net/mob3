@@ -282,6 +282,10 @@ type State struct {
 	ZoomLabel                 string
 	FindActive                bool
 	QuitPending               bool
+	// KeysEngine is true while the engine owns key interpretation: a prompt,
+	// find bar, console, menu, dialog, form field, link hint or page input is
+	// active. The front end sends every key through when it is set.
+	KeysEngine bool
 }
 
 // Limits bounds every variable-size field on decode. A hostile engine must not

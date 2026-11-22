@@ -227,8 +227,13 @@ func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 	case protocol.AppOpenURL:
 		b.clearInputFocus()
 		b.openURLPrompt()
+	case protocol.AppOpenVimPrompt:
+		b.clearInputFocus()
+		b.openVimPrompt()
 	case protocol.AppOpenZoom:
 		b.openZoomMenu()
+	case protocol.AppOpenViewMenu:
+		b.openViewMenu()
 	case protocol.AppToggleConsole:
 		b.toggleConsole()
 	case protocol.AppToggleJS:

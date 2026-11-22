@@ -299,12 +299,17 @@ func (b *Browser) draw() {
 		// reach the terminal edge. Keep the reserved scrollbar column blank.
 		cg.ClearGlyphs(w-1, 0, 1, contentH)
 	}
-	b.drawScrollBar(cg, 0, contentH)
-	if b.scrollBar != nil {
-		// Mouse hit testing works in terminal coordinates; the track was
-		// computed in content coordinates.
-		b.scrollBar.trackTop += top
-		b.scrollBar.thumbTop += top
+	if b.frontendChromeActive() {
+		// The front end paints and hit-tests the scrollbar for normal frames.
+		b.scrollBar = nil
+	} else {
+		b.drawScrollBar(cg, 0, contentH)
+		if b.scrollBar != nil {
+			// Mouse hit testing works in terminal coordinates; the track was
+			// computed in content coordinates.
+			b.scrollBar.trackTop += top
+			b.scrollBar.thumbTop += top
+		}
 	}
 
 	g := reuseGrid(b.screenGrid, w, h, fg, bg)
@@ -315,7 +320,7 @@ func (b *Browser) draw() {
 		g.Runs = append(g.Runs, r)
 	}
 	b.drawChrome(g)
-	if b.emitFrames && b.frontendChrome && b.height >= 3 && !b.overlayOpen() && !b.consoleOpen {
+	if b.frontendChromePath() {
 		b.presentComposed(cg, g, top, contentH, placements)
 		return
 	}

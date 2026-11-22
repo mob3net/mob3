@@ -193,6 +193,7 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.str(v.ZoomLabel)
 		e.bool(v.FindActive)
 		e.bool(v.QuitPending)
+		e.bool(v.KeysEngine)
 	case Links:
 		kind = EvLinks
 		e.u32(v.Version)
@@ -420,6 +421,7 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			ZoomLabel:       d.str(),
 			FindActive:      d.bool(),
 			QuitPending:     d.bool(),
+			KeysEngine:      d.bool(),
 		}
 	case EvLinks:
 		version := d.u32()

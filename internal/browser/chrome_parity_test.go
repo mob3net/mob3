@@ -60,9 +60,6 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 			tc.setup(b)
 
 			st := b.stateMessage()
-			if !st.FrontendChrome {
-				t.Fatalf("state did not mark frontend chrome")
-			}
 			layout := frontend.LayoutChrome(st)
 			g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
 			b.drawChrome(g)
@@ -133,5 +130,51 @@ func TestFrontendChromeMatchesEngineSizes(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestFrontendScrollBarMatchesEngine(t *testing.T) {
+	b := NewBrowser(100, 35)
+	b.layout = &Layout{Height: 200}
+	b.scroll = 50
+	contentH := b.viewportHeight()
+	g := NewGrid(b.width, contentH, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.drawScrollBar(g, 0, contentH)
+	f := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	for i := range f.Cells {
+		f.Cells[i].R = ' '
+	}
+	frontend.DrawScrollBarFrame(&f, protocol.State{
+		FrontendChrome: true, MaxScroll: b.maxScroll(), Scroll: b.scroll,
+	})
+	for y := 0; y < contentH; y++ {
+		got := f.Cells[y*b.width+b.width-1]
+		want := protoCell(g.Cells[y*b.width+b.width-1])
+		if !sameChromeCell(got, want) {
+			t.Fatalf("scrollbar row %d = %+v, want %+v", y, got, want)
+		}
+	}
+}
+
+func TestStateKeysEngineFlag(t *testing.T) {
+	b := NewBrowser(80, 24)
+	b.emitFrames = true
+	b.frontendChrome = true
+	if st := b.stateMessage(); st.KeysEngine {
+		t.Fatal("base page marked engine keys")
+	}
+	b.prompt = true
+	if st := b.stateMessage(); !st.KeysEngine {
+		t.Fatal("prompt did not mark engine keys")
+	}
+	b.prompt = false
+	b.findActive = true
+	if st := b.stateMessage(); !st.KeysEngine {
+		t.Fatal("find did not mark engine keys")
+	}
+	b.findActive = false
+	b.inputFocus = &Node{}
+	if st := b.stateMessage(); !st.KeysEngine {
+		t.Fatal("input focus did not mark engine keys")
 	}
 }

@@ -216,10 +216,10 @@ published by the Pages build.
   split. The front end never names an engine type, and `internal/protocol` is
   canonical for the message set. The engine no longer imports `net/http`:
   JS `fetch`/XHR and cookie parsing use the host broker. Session construction,
-  scrollbar/overlay/console chrome, dialogs and navigation still live in
-  `internal/browser`; the terminal loop and normal header/footer chrome are
-  `frontend.SessionLoop` and `frontend/chrome.go`. The tracker records the
-  remaining split.
+  prompt/find/menu/console/dialog chrome and navigation still live in
+  `internal/browser`; the terminal loop, normal header/footer chrome, base
+  shell keys and the scrollbar are `frontend.SessionLoop` and
+  `frontend/chrome.go`. The tracker records the remaining split.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package

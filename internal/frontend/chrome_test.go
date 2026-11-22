@@ -158,3 +158,31 @@ func TestPresenterComposesFrontendChrome(t *testing.T) {
 		t.Error("footer was not composed below the content")
 	}
 }
+
+func TestDrawScrollBarFrame(t *testing.T) {
+	f := protocol.Frame{W: 20, H: 10, Cells: make([]protocol.Cell, 200)}
+	for i := range f.Cells {
+		f.Cells[i].R = 'x'
+	}
+	DrawScrollBarFrame(&f, protocol.State{FrontendChrome: true, MaxScroll: 100, Scroll: 50})
+	thumb := rgb(0x7a, 0x8a, 0x9a)
+	track := rgb(0xdd, 0xe3, 0xea)
+	foundThumb, foundTrack := false, false
+	for y := 0; y < f.H; y++ {
+		c := f.Cells[y*f.W+f.W-1]
+		if c.R != ' ' {
+			t.Fatalf("scrollbar row %d kept glyph %q", y, c.R)
+		}
+		switch c.BG {
+		case thumb:
+			foundThumb = true
+		case track:
+			foundTrack = true
+		default:
+			t.Fatalf("scrollbar row %d has background %+v", y, c.BG)
+		}
+	}
+	if !foundThumb || !foundTrack {
+		t.Fatalf("thumb=%v track=%v", foundThumb, foundTrack)
+	}
+}

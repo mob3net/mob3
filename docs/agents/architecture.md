@@ -99,9 +99,10 @@ destination; the tracker lists what remains.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
-  (`frontend.SessionLoop`), normal header/footer composition and header/footer
-  mouse input. It does not yet own the scrollbar, keyboard shell modes, menus,
-  dialogs, the console, the find bar or navigation state.
+  (`frontend.SessionLoop`), normal header/footer composition, header/footer
+  and scrollbar mouse input, base shell keys and local quit confirmation. It
+  does not yet own prompt editing, find, menus, dialogs, the console or
+  navigation state.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -167,8 +168,8 @@ destination; the tracker lists what remains.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: keys, abort, resize, events, chrome state, header/footer mouse routing, crash dedup and clipboard writes. |
-| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. |
+| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. The scrollbar painter is in `present.go`. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
 | `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for overlays, the console, the find bar and tests. Normal frames are composed from `State`; removed when the remaining chrome moves. |
@@ -189,10 +190,10 @@ destination; the tracker lists what remains.
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
 | `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
-| `browser_chrome.go` | Session-side composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, scrollbar and memory readout remain here. |
+| `browser_chrome.go` | Session-side fallback composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, the fallback scrollbar and memory readout remain here. |
 | `shell.go` | Shell-owned geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
-| `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
+| `browser_input.go` | Engine key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. Base shell keys and local quit are front-end-owned; form fields, prompts, find, menus, console and dialogs still use the shared line editor. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
 | `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim, scavenge request after a heavy eviction), back/forward/reload, and meta-refresh targets. |
 | `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`), the percentage-derived JS/image/SVG budgets, the weighted decoded-image byte limiter, and the one-shot scavenge request consumed between frames. |
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |

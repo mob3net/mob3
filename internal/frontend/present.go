@@ -22,6 +22,8 @@ type Presenter struct {
 	nativeSet  bool
 	chrome     protocol.Chrome
 	state      protocol.State
+	lastFrame  protocol.Frame
+	hasFrame   bool
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -69,6 +71,16 @@ func (p *Presenter) SetState(st protocol.State) {
 	p.state = st
 }
 
+// Refresh re-presents the last frame with the current state. It is used when
+// the front end changes a chrome-only value (such as a local quit prompt)
+// without receiving a new engine frame.
+func (p *Presenter) Refresh() error {
+	if p == nil || !p.hasFrame {
+		return nil
+	}
+	return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
+}
+
 // Present writes one frame. scroll is the page scroll offset; native reports
 // that the engine is writing terminal-native image placements itself, so the
 // presenter must leave the screen alone. A scroll, native-mode or size change
@@ -90,6 +102,11 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	if scroll != p.lastScroll {
 		p.lastScroll = scroll
 		p.prev = nil
+	}
+	p.lastFrame = f
+	p.hasFrame = true
+	if p.state.FrontendChrome {
+		DrawScrollBarFrame(&f, p.state)
 	}
 	lines := EncodeFrame(f, p.color, !p.color)
 	if len(lines) != f.H {
@@ -182,6 +199,47 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	}
 	_, err := io.WriteString(p.out, sb.String())
 	return err
+}
+
+// DrawScrollBarFrame paints the page scrollbar on the last content column from
+// the state snapshot. The engine draws the same cells on its fallback path.
+func DrawScrollBarFrame(f *protocol.Frame, st protocol.State) {
+	max := st.MaxScroll
+	if max <= 0 || f.W < 2 || f.H < 2 || len(f.Cells) < f.W*f.H {
+		return
+	}
+	vh := f.H
+	thumbH := vh * vh / (vh + max)
+	if thumbH < 1 {
+		thumbH = 1
+	}
+	if thumbH > vh {
+		thumbH = vh
+	}
+	scroll := st.Scroll
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll > max {
+		scroll = max
+	}
+	thumbTop := 0
+	if vh > thumbH {
+		thumbTop = (vh - thumbH) * scroll / max
+	}
+	track := rgb(0xdd, 0xe3, 0xea)
+	thumb := rgb(0x7a, 0x8a, 0x9a)
+	for y := 0; y < vh; y++ {
+		bg := track
+		if y >= thumbTop && y < thumbTop+thumbH {
+			bg = thumb
+		}
+		c := &f.Cells[y*f.W+f.W-1]
+		c.R = ' '
+		c.BG = bg
+		c.Flags &^= protocol.CellCont | protocol.CellSkip
+		c.Run = 0
+	}
 }
 
 // chromeRow mirrors the shell reservation while the engine still composes
