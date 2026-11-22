@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -126,9 +127,38 @@ func TestApplyConfig(t *testing.T) {
 func TestConfigNavigation(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
+	oldHome, oldMem := b.home, b.jsMemLimit
+	// A typed query without the form token applies nothing.
 	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome&js-memory=32", true)
 	if b.page == nil || b.page.Title != "Config — MOB³" {
 		t.Fatalf("config page = %+v", b.page)
+	}
+	if b.home != oldHome || b.jsMemLimit != oldMem {
+		t.Fatal("typed about:config query changed settings without a token")
+	}
+	if !strings.Contains(b.page.Root.TextContent(), "Settings not changed") {
+		t.Fatal("missing notice for a token-less config query")
+	}
+
+	// The rendered form carries a token and posts its values.
+	form := b.page.Root.FindFirst("form")
+	if form == nil || strings.ToLower(form.Attr("method")) != "post" {
+		t.Fatalf("config form = %v, want method post", form)
+	}
+	token := configInputValue(b.page, configTokenParam)
+	if token == "" || token != b.configToken {
+		t.Fatalf("form token = %q, browser token = %q", token, b.configToken)
+	}
+	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+		switch n.Attr("name") {
+		case "home":
+			n.Value, n.ValueSet = "https://example.com/home", true
+		case "js-memory":
+			n.Value, n.ValueSet = "32", true
+		}
+	}
+	if started, reason := b.submitForm(form); !started {
+		t.Fatalf("config form did not submit: %s", reason)
 	}
 	if b.home != "https://example.com/home" {
 		t.Fatalf("home = %q", b.home)
@@ -138,11 +168,35 @@ func TestConfigNavigation(t *testing.T) {
 	}
 	values := map[string]string{}
 	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		values[n.Attr("name")] = n.Attr("value")
+		values[n.Attr("name")] = inputValue(n)
 	}
 	if values["home"] != "https://example.com/home" || values["js-memory"] != "32" {
 		t.Fatalf("config inputs = %+v", values)
 	}
+	if b.configToken == token {
+		t.Fatal("config token was not rotated after use")
+	}
+
+	// Replaying the used token from an old page applies nothing.
+	body := url.Values{
+		configTokenParam: {token},
+		"config-form":    {"1"},
+		"home":           {"https://evil.example/"},
+	}.Encode()
+	b.navigateRequest(http.MethodPost, "about:config", []byte(body), "application/x-www-form-urlencoded", true)
+	if b.home == "https://evil.example/" {
+		t.Fatal("replayed config token changed the home page")
+	}
+}
+
+// configInputValue returns the first input value with the given name.
+func configInputValue(page *Page, name string) string {
+	for _, n := range page.Root.FindAll(func(n *Node) bool {
+		return n.Tag == "input" && n.Attr("name") == name
+	}) {
+		return inputValue(n)
+	}
+	return ""
 }
 
 func TestConfigBlockedInReaderMode(t *testing.T) {

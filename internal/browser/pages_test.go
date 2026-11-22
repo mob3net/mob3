@@ -19,7 +19,7 @@ func TestBuiltinPagesShareShell(t *testing.T) {
 			{Title: "One", URL: "https://example.com/one", Folder: "Folder"},
 		}),
 		"blocked":        blockedPageHTML("https://example.com/", "anti-bot challenge", 403),
-		"config":         configPageHTML(nil, false, "", 80, 24, 8, 16),
+		"config":         configPageHTML(nil, false, "", "", 80, 24, 8, 16),
 		"cannot display": cannotDisplayPageHTML("image/png", u),
 		"load error":     loadErrorPageHTML("dial tcp: connection refused"),
 	}

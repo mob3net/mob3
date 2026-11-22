@@ -1,11 +1,64 @@
 package browser
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 )
+
+// configTokenParam carries the one-shot form token. It is a hidden input, so a
+// config submission puts it in the POST body rather than the URL.
+const configTokenParam = "config-token"
+
+// configValues returns the values an about:config navigation submits. A GET
+// form puts them in the query; the config form itself posts them.
+func configValues(method string, u *url.URL, body []byte) url.Values {
+	q := u.Query()
+	if method == http.MethodPost && len(body) > 0 {
+		if vals, err := url.ParseQuery(string(body)); err == nil {
+			for k, v := range vals {
+				q[k] = v
+			}
+		}
+	}
+	return q
+}
+
+// configHasSettings reports whether q carries any option, as opposed to just a
+// token or the form marker.
+func configHasSettings(q url.Values) bool {
+	for k := range q {
+		if k != configTokenParam && k != "config-form" {
+			return true
+		}
+	}
+	return false
+}
+
+// consumeConfigToken accepts the token minted for the rendered config page and
+// clears it so a replay from history cannot apply the same settings again.
+func (b *Browser) consumeConfigToken(token string) bool {
+	if token == "" || b.configToken == "" || token != b.configToken {
+		return false
+	}
+	b.configToken = ""
+	return true
+}
+
+// newConfigToken returns an unpredictable per-render form token. It returns an
+// empty string if the system random source fails, which fails closed: the form
+// then cannot be submitted.
+func newConfigToken() string {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buf[:])
+}
 
 // configItem is one row on the about:config page.
 type configItem struct {
@@ -213,14 +266,17 @@ func (b *Browser) applyConfig(q url.Values) {
 
 // configPage builds the about:config document.
 func (b *Browser) configPage(u *url.URL, updated bool) *Page {
-	doc := configPageHTML(b.configItems(), updated, b.configNotice, b.width, b.viewportHeight(), b.cellW, b.cellH)
+	if b.configToken == "" {
+		b.configToken = newConfigToken()
+	}
+	doc := configPageHTML(b.configItems(), updated, b.configNotice, b.configToken, b.width, b.viewportHeight(), b.cellW, b.cellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
 	applyPageStyles(root, page)
 	return page
 }
 
-func configPageHTML(items []configItem, updated bool, notice string, width, height, cellW, cellH int) string {
+func configPageHTML(items []configItem, updated bool, notice, token string, width, height, cellW, cellH int) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Config</h1>
 `)
@@ -246,9 +302,14 @@ Options marked <b>startup</b> cannot be changed without restarting; they are
 shown read-only. Options marked <b>dump only</b> apply only to <b>-dump</b>
 runs. On/off options use checkboxes; all other fields can be edited for this
 session.</p>
-<form action="about:config" method="get">
+<form action="about:config" method="post">
 <input type="hidden" name="config-form" value="1">
-<table>
+`)
+	if token != "" {
+		b.WriteString(`<input type="hidden" name="` + configTokenParam + `" value="` + EscapeHTML(token) + `">
+`)
+	}
+	b.WriteString(`<table>
 <tr><th>Option</th><th>Current value</th><th>Notes</th></tr>
 `)
 	for _, it := range items {

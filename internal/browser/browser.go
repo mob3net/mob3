@@ -89,6 +89,11 @@ type Browser struct {
 	// configNotice shows why an edited about:config value was rejected, such
 	// as an unreadable -certs bundle.
 	configNotice string
+	// configToken is the one-shot token embedded in the current about:config
+	// form. A config submission applies only when it presents this token, so
+	// page content cannot rewrite session settings by navigating to
+	// about:config with a query.
+	configToken string
 
 	prompt          bool
 	promptText      string
@@ -464,8 +469,15 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 			b.loader.beginPage()
 		}
 		b.loadSeq++
-		b.applyConfig(u.Query())
-		page := b.configPage(u, len(u.Query()) > 0)
+		q := configValues(method, u, body)
+		applied := false
+		if b.consumeConfigToken(q.Get(configTokenParam)) {
+			b.applyConfig(q)
+			applied = true
+		} else if configHasSettings(q) {
+			b.configNotice = "Settings not changed: use the Apply button on the config page"
+		}
+		page := b.configPage(u, applied)
 		b.finishLoad(loadResult{
 			seq: b.loadSeq, page: page, u: u, push: push, method: http.MethodGet,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
