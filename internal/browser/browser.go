@@ -275,6 +275,9 @@ type Browser struct {
 	placementBytes  int
 	nextPlacementID int
 	nextDialogID    uint32
+	nextSelectID    uint32
+	selectFrontend  bool
+	selectID        uint32
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.
@@ -621,6 +624,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.clearHintConfirm()
 	b.selectMenu = nil
 	b.selectHits = nil
+	b.selectFrontend = false
+	b.selectID = 0
 	b.viewMenu = nil
 	b.viewMenuHits = nil
 	b.zoomMenu = nil
@@ -925,7 +930,7 @@ func (b *Browser) rebuild() {
 // disabled while one is open and the layout is rebuilt without it.
 func (b *Browser) overlayOpen() bool {
 	return b.dialog != nil || b.download != nil || b.notice != nil ||
-		b.selectMenu != nil || b.viewMenu != nil || b.zoomMenu != nil
+		(b.selectMenu != nil && !b.selectFrontend) || b.viewMenu != nil || b.zoomMenu != nil
 }
 
 // scaledTextWanted reports whether the page should use kitty scaled text.

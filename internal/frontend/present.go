@@ -23,6 +23,7 @@ type Presenter struct {
 	chrome     protocol.Chrome
 	state      protocol.State
 	dialog     *DialogView
+	selectView *SelectView
 	lastFrame  protocol.Frame
 	hasFrame   bool
 }
@@ -67,6 +68,12 @@ func (p *Presenter) SetChrome(c protocol.Chrome) {
 // Refresh composes it over the content frame.
 func (p *Presenter) SetDialog(d *DialogView) {
 	p.dialog = d
+	p.prev = nil
+}
+
+// SetSelect installs or clears the page select popup.
+func (p *Presenter) SetSelect(v *SelectView) {
+	p.selectView = v
 	p.prev = nil
 }
 
@@ -137,6 +144,13 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 				}
 			} else if p.dialog != nil {
 				if full, ok := ComposeDialogFrame(p.state, f, p.dialog); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
+			} else if p.selectView != nil {
+				if full, ok := ComposeSelectFrame(p.state, f, p.selectView); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows

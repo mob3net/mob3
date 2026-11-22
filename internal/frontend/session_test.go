@@ -411,3 +411,46 @@ func TestDialogEventAndAnswers(t *testing.T) {
 		t.Fatalf("alert commands = %#v", s.cmds)
 	}
 }
+
+func TestSelectEventKeysAndMouse(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Select{
+		ID: 4, Options: []string{"One", "Two", "Three"}, Selected: 0,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.selectActive || loop.selectView.Index != 0 {
+		t.Fatalf("select = %v %+v", loop.selectActive, loop.selectView)
+	}
+	loop.handleSelectKey("down")
+	loop.handleSelectKey("enter")
+	if loop.selectActive {
+		t.Fatal("select stayed open")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 4, Index: 1}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Select{ID: 5, Options: []string{"A", "B"}, Selected: 0}})
+	layout := LayoutSelect(loop.State.Page, &loop.selectView)
+	if len(layout.Rects) < 2 {
+		t.Fatal("no select rows")
+	}
+	r := layout.Rects[1]
+	if !loop.handleSelectMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
+		t.Fatal("select row click not consumed")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 5, Index: 1}) {
+		t.Fatalf("mouse commands = %#v", s.cmds)
+	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Select{ID: 6, Options: []string{"A"}, Selected: 0}})
+	loop.handleSelectKey("esc")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 6, Cancel: true}) {
+		t.Fatalf("cancel commands = %#v", s.cmds)
+	}
+}

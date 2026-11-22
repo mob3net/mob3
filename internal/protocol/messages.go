@@ -173,6 +173,25 @@ type Shutdown struct{}
 
 func (Shutdown) commandKind() Kind { return CmdShutdown }
 
+// Select asks the front end to display a page select popup. The engine blocks
+// no timers; the front end answers with SelectResult.
+type Select struct {
+	ID       uint32
+	Options  []string
+	Selected int
+}
+
+func (Select) eventKind() Kind { return EvSelect }
+
+// SelectResult answers a Select event.
+type SelectResult struct {
+	ID     uint32
+	Index  int
+	Cancel bool
+}
+
+func (SelectResult) commandKind() Kind { return CmdSelectResult }
+
 // DialogKind identifies a script dialog.
 type DialogKind uint8
 

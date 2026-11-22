@@ -103,6 +103,7 @@ network destination.
 | D63 | 2026-11-22 | Move the page find bar, query, caret and result count to the front end. `/` opens a local bar; edits send `protocol.Find{Query}` and navigation sends `Next`/`Prev`; the engine computes matches, scrolls and paints highlights, then answers with `protocol.FindResults`. Enter/Esc close the bar but leave matches for `n`/`N`; the next base Esc clears them. Console HTML find stays engine-owned because the console is still an engine modal. | Find is the last base text-entry mode. Keeping match computation in the engine preserves layout-aware highlights while the front end owns the visible bar and input. Menus, dialogs, console and navigation state remain. |
 | D64 | 2026-11-22 | Move the view and zoom windows to the front end. `X`/`Z` and the zoom badge open local windows; the front end draws the full-screen dimmed box from `State`, handles keyboard and mouse selection, and sends `AppToggleFixed`/`Sticky`/`Backgrounds` or `AppZoomSet`. The engine retains its menu code for direct callers, automation and the fallback. | This is the first modal overlay the front end composes over the full screen (header, content and footer). The select menu, dialogs and console still need page/JS/console data, so they stay engine-owned for now. |
 | D65 | 2026-11-22 | Move JavaScript alert/confirm/prompt dialogs to the front end. The engine sends `Dialog` with an ID and blocks in `runTransportDialog`; the front end draws the modal, edits the prompt with the shared line editor, and answers with `DialogResult`. The engine keeps the direct-key dialog path for tests and automation. | This closes the dialog request/response seam and removes the last JS-driven modal input from the engine's interactive path. The select menu and console remain engine-owned. |
+| D66 | 2026-11-22 | Move the page select popup to the front end. The engine sends `Select` with option labels and the selected index; the front end draws, navigates and answers with `SelectResult`; the engine commits the option and fires the change events. The engine keeps the old popup path for tests and automation and excludes the pending select from `overlayOpen` while the front end owns it. | This removes the last form-control popup from the engine's interactive drawing path. The console remains the last large engine-owned UI. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -152,7 +153,7 @@ seam; the note names which part goes where.
 | --- | --- | --- |
 | `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
-| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows and JS dialogs are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`). Select menu, console and engine fallback menus/dialogs still live here; engine find match computation/highlights, page hit testing, form editing and hint computation remain. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs and the select popup are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`). The console and engine fallback menus/dialogs/select still live here; engine find match computation/highlights, page hit testing, form editing and hint computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
 | `browser_forms.go`, `browser_selection.go`, `reader.go` | engine | Form state, selection and reader extraction are page content. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
@@ -257,8 +258,10 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
       `Find`/`FindResults`. Console HTML find remains engine-owned.
 - [x] View and zoom windows are front-end-owned, including the full-screen
       dimmed overlay, keyboard/mouse selection and toggle/zoom actions.
-- [~] The select menu and console still own key interpretation inside the
-      engine. The full shell/page key split is not complete until those move.
+- [x] The page select popup is front-end-owned through
+      `Select`/`SelectResult`; the engine commits the chosen option.
+- [~] The console still owns key interpretation inside the engine. The full
+      shell/page key split is not complete until it moves.
 - [x] JS dialogs are request/response messages: the engine sends `Dialog` and
       blocks, the front end draws/edits and answers with `DialogResult`. The
       direct-key path remains for tests and automation.
@@ -413,9 +416,9 @@ trusted-shell split, then Phase 6. Dependency order:
 - [~] The normal header/footer contract is in `protocol.State`. Still needed:
       menu, console, hint, dialog, download/notice, selection and image-progress
       state.
-- [~] Base shell keys, quit, URL/vim prompt, page find, view/zoom windows and
-      header/footer mouse are front-end-owned. Select menu, console, dialogs,
-      hints and console find still route through the engine.
+- [~] Base shell keys, quit, URL/vim prompt, page find, view/zoom windows,
+      dialogs, the select popup and header/footer mouse are front-end-owned.
+      The console, hints and console find still route through the engine.
 - [~] Toolbar, footer and scrollbar drawing moved. Overlays, console, find bar
       and menus still live in `internal/browser`; `Browser.drawChrome`,
       `presentComposed`, `protocol.Chrome` and the full-frame fallback remain
@@ -1000,3 +1003,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7d | Batch 4: page find bar/query/caret/results moved to the front end; added `Find` command handling and `FindResults` replies in the engine; Enter/Esc leave matches for `n`/`N`, next Esc clears. Console HTML find stays engine-owned. | `go test ./...`, `go vet`, full `-race`, find command/bar/input tests, PTY find/navigation checks, dump/PNG hashes | Batch 5: view/zoom/select menus and dialogs |
 | 2026-11-22 | 7e | Batch 5: view/zoom windows moved to the front end, including the full-screen dimmed overlay, keyboard/mouse rows and `AppZoomSet`; engine keeps its menu fallback. Added `State.Menu`/`MenuIndex`/`ViewFlags`/`ZoomPercent` and menu layout/draw tests. Select menu, dialogs and console remain. | `go test ./...`, `go vet`, full `-race`, menu key/mouse/layout tests, PTY view/zoom checks, dump/PNG hashes | Batch 6: select menu, dialogs and console |
 | 2026-11-22 | 7f | Batch 6: JS dialogs moved to the front end via `Dialog`/`DialogResult`; engine blocks in `runTransportDialog`, front end draws alert/confirm/prompt, edits the prompt and answers. Kept the direct-key dialog path for tests/automation. Added dialog layout/draw, transport round-trip and engine-parity tests. | `go test ./...`, `go vet`, full `-race`, dialog transport/layout/parity tests, PTY alert/confirm/prompt checks, dump/PNG hashes | Batch 7: select menu and console |
+| 2026-11-22 | 7g | Batch 7: page select popup moved to the front end via `Select`/`SelectResult`; engine sends option labels and commits the answer, front end draws/navigates/mouse-selects. Kept the engine popup for tests/automation and excluded the pending select from the fallback overlay. Added select layout/draw, transport, key/mouse and engine-parity tests. | `go test ./...`, `go vet`, full `-race`, select transport/layout/parity tests, PTY select checks, dump/PNG hashes | Batch 8: console |

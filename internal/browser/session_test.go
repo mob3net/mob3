@@ -386,3 +386,38 @@ func TestDialogTransportRoundTrip(t *testing.T) {
 		t.Fatalf("dialog event = %+v", sink.dialog)
 	}
 }
+
+type selectSink struct{ sel protocol.Select }
+
+func (s *selectSink) Send(ev protocol.Event) error {
+	if v, ok := ev.Body.(protocol.Select); ok {
+		s.sel = v
+	}
+	return nil
+}
+
+func TestSelectTransportRoundTrip(t *testing.T) {
+	sel := &Node{Type: ElementNode, Tag: "select", Children: []*Node{
+		{Type: ElementNode, Tag: "option", Text: "One"},
+		{Type: ElementNode, Tag: "option", Text: "Two", Attrs: []Attr{{Key: "selected", Value: ""}}},
+	}}
+	b := NewBrowser(60, 10)
+	b.noDraw = true
+	sink := &selectSink{}
+	in := make(chan protocol.Command, 2)
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = sink
+	b.openSelectMenu(sel)
+	if sink.sel.ID != 1 || len(sink.sel.Options) != 2 || sink.sel.Selected != 1 {
+		t.Fatalf("select event = %+v", sink.sel)
+	}
+	b.applySelectResult(protocol.SelectResult{ID: sink.sel.ID, Index: 0})
+	if !sel.Children[0].HasAttr("selected") || sel.Children[1].HasAttr("selected") {
+		t.Fatal("select result did not commit the option")
+	}
+	if b.selectMenu != nil || b.selectFrontend {
+		t.Fatal("select menu stayed open")
+	}
+}

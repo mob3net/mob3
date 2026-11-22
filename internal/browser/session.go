@@ -205,12 +205,30 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		b.abortGen.Add(1)
 	case protocol.Find:
 		b.applyFindCommand(v)
+	case protocol.SelectResult:
+		b.applySelectResult(v)
 	case protocol.ClientError:
 		b.logEngineError(v.Message)
 	case protocol.Shutdown:
 		return true, nil
 	}
 	return false, nil
+}
+
+func (b *Browser) applySelectResult(v protocol.SelectResult) {
+	if !b.selectFrontend || v.ID != b.selectID {
+		return
+	}
+	b.selectFrontend = false
+	b.selectID = 0
+	m := b.selectMenu
+	if v.Cancel || m == nil || v.Index < 0 || v.Index >= len(m.options) {
+		b.selectMenu = nil
+		b.selectHits = nil
+		b.status = ""
+		return
+	}
+	b.commitSelectOption(m.options[v.Index])
 }
 
 // handleAppAction applies an application-level action from the front end.

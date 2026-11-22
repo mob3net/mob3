@@ -301,3 +301,25 @@ func TestDialogLayoutAndDraw(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectLayoutAndDraw(t *testing.T) {
+	st := chromeState()
+	view := &SelectView{ID: 1, Options: []string{"One", "Two", "Three"}, Selected: 1, Index: 1}
+	layout := LayoutSelect(st, view)
+	if len(layout.Rows) != 3 || layout.Rows[1].Marker != "✓ " {
+		t.Fatalf("layout = %+v", layout)
+	}
+	c := newCanvas(st.Width, st.Height)
+	DrawSelect(c, st, view)
+	var text strings.Builder
+	for _, cell := range c.cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"Select an option", "One", "Two", "Three"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("select %q does not contain %q", text.String(), want)
+		}
+	}
+}

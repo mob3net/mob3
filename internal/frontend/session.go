@@ -59,6 +59,10 @@ type SessionLoop struct {
 	dialogView   DialogView
 	dialogBase   protocol.State
 
+	selectActive bool
+	selectView   SelectView
+	selectBase   protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -158,6 +162,18 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.selectActive {
+			l.selectBase = v
+			if !v.KeysEngine {
+				l.closeSelect()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncSelect()
+			return false, nil
+		}
 		if l.menuKind != protocol.MenuNone {
 			l.menuBase = v
 			if v.KeysEngine {
@@ -207,6 +223,8 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
+	case protocol.Select:
+		l.startSelect(v)
 	case protocol.Dialog:
 		l.startDialog(v)
 	case protocol.FindResults:
@@ -239,6 +257,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.selectActive {
+		return l.handleSelectKey(k)
+	}
 	if l.dialogActive {
 		return l.handleDialogKey(k)
 	}
@@ -320,11 +341,111 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	return false, false
 }
 
+func (l *SessionLoop) startSelect(v protocol.Select) {
+	l.cancelQuit()
+	l.closePrompt()
+	l.closeFind()
+	l.closeMenu()
+	l.selectActive = true
+	l.selectView = SelectView{ID: v.ID, Options: v.Options, Selected: v.Selected, Index: v.Selected}
+	if l.selectView.Index < 0 || l.selectView.Index >= len(l.selectView.Options) {
+		l.selectView.Index = 0
+	}
+	l.selectBase = l.State.Page
+	l.syncSelect()
+}
+
+func (l *SessionLoop) syncSelect() {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetSelect(&l.selectView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeSelect() {
+	if !l.selectActive {
+		return
+	}
+	l.selectActive = false
+	l.State.Page = l.selectBase
+	if l.Presenter != nil {
+		l.Presenter.SetSelect(nil)
+		l.Presenter.SetState(l.selectBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) answerSelect(index int, cancel bool) {
+	id := l.selectView.ID
+	l.closeSelect()
+	_ = l.Session.Send(protocol.Command{Body: protocol.SelectResult{ID: id, Index: index, Cancel: cancel}})
+}
+
+func (l *SessionLoop) handleSelectKey(k string) (handled, quit bool) {
+	n := len(l.selectView.Options)
+	switch k {
+	case "esc", "q", "ctrl-c":
+		l.answerSelect(0, true)
+		return true, false
+	case "up", "k", "ctrl-p":
+		if l.selectView.Index > 0 {
+			l.selectView.Index--
+		}
+	case "down", "j", "ctrl-n":
+		if l.selectView.Index < n-1 {
+			l.selectView.Index++
+		}
+	case "home", "g":
+		l.selectView.Index = 0
+	case "end", "G":
+		if n > 0 {
+			l.selectView.Index = n - 1
+		}
+	case "enter", " ":
+		if n > 0 {
+			l.answerSelect(l.selectView.Index, false)
+		}
+		return true, false
+	}
+	l.syncSelect()
+	return true, false
+}
+
+func (l *SessionLoop) handleSelectMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	layout := LayoutSelect(l.State.Page, &l.selectView)
+	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+		l.answerSelect(0, true)
+		return true
+	}
+	for i, r := range layout.Rects {
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			l.answerSelect(layout.Top+i, false)
+			return true
+		}
+	}
+	l.answerSelect(0, true)
+	return true
+}
+
 func (l *SessionLoop) startDialog(v protocol.Dialog) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
 	l.closeMenu()
+	l.closeSelect()
 	l.dialogActive = true
 	l.dialog = v
 	l.dialogBase = l.State.Page
@@ -795,6 +916,9 @@ func (l *SessionLoop) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	if l.selectActive {
+		return l.handleSelectMouse(ev)
+	}
 	if l.dialogActive {
 		return l.handleDialogMouse(ev)
 	}

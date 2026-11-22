@@ -1256,6 +1256,22 @@ func (b *Browser) openSelectMenu(sel *Node) {
 	b.selectMenu = &selectMenuDialog{node: sel, options: opts, idx: idx}
 	b.selectHits = nil
 	b.status = ""
+	if b.sessionOut != nil {
+		b.nextSelectID++
+		b.selectID = b.nextSelectID
+		b.selectFrontend = true
+		labels := make([]string, len(opts))
+		for i, opt := range opts {
+			labels[i] = optionLabel(opt)
+		}
+		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Select{
+			ID: b.selectID, Options: labels, Selected: idx,
+		}}); err != nil {
+			b.selectMenu = nil
+			b.selectFrontend = false
+			b.selectID = 0
+		}
+	}
 }
 
 // commitSelectOption applies the chosen option, closes the popup and fires the
@@ -1820,6 +1836,12 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 // The engine loop stays blocked in the JS caller; the front end owns the modal
 // drawing and input.
 func (b *Browser) runTransportDialog(d *jsDialog) (string, bool) {
+	// A dialog takes over from an open select popup; the front end cancels its
+	// local copy when it starts the dialog.
+	b.selectMenu = nil
+	b.selectHits = nil
+	b.selectFrontend = false
+	b.selectID = 0
 	kind := protocol.DialogAlert
 	switch d.kind {
 	case "confirm":

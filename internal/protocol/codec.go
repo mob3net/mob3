@@ -115,6 +115,11 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.u32(v.ID)
 		e.bool(v.OK)
 		e.str(v.Text)
+	case SelectResult:
+		kind = CmdSelectResult
+		e.u32(v.ID)
+		e.i32(v.Index)
+		e.bool(v.Cancel)
 	case ClientError:
 		kind = CmdClientError
 		e.str(v.Message)
@@ -215,6 +220,14 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.u8(uint8(v.Kind))
 		e.str(v.Text)
 		e.str(v.Default)
+	case Select:
+		kind = EvSelect
+		e.u32(v.ID)
+		e.count(len(v.Options))
+		for _, opt := range v.Options {
+			e.str(opt)
+		}
+		e.i32(v.Selected)
 	case Clipboard:
 		kind = EvClipboard
 		e.str(v.Text)
@@ -334,6 +347,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = Shutdown{}
 	case CmdDialogResult:
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
+	case CmdSelectResult:
+		body = SelectResult{ID: d.u32(), Index: d.i32(), Cancel: d.bool()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
 	case CmdAutomation:
@@ -452,6 +467,14 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Links{Version: version, Items: items}
 	case EvDialog:
 		body = Dialog{ID: d.u32(), Kind: DialogKind(d.u8()), Text: d.str(), Default: d.str()}
+	case EvSelect:
+		id := d.u32()
+		n := d.count(lim.MaxLinks)
+		opts := make([]string, n)
+		for i := range opts {
+			opts[i] = d.str()
+		}
+		body = Select{ID: id, Options: opts, Selected: d.i32()}
 	case EvClipboard:
 		body = Clipboard{Text: d.str()}
 	case EvConsole:

@@ -25,53 +25,67 @@ type MenuLayout struct {
 
 var zoomPresets = []int{25, 50, 67, 80, 100, 125, 150, 175, 200}
 
-// LayoutMenu computes the choice-window geometry without drawing it.
+// ChoiceView is the common data for a centered choice window.
+type ChoiceView struct {
+	Title, Hint string
+	Rows        []MenuRow
+	Active      int
+	MinW        int
+}
+
+// LayoutMenu computes the view/zoom window geometry without drawing it.
 func LayoutMenu(st protocol.State) MenuLayout {
-	w, h := st.Width, st.Height
-	var title, hint string
-	var rows []MenuRow
-	active := st.MenuIndex
+	var view ChoiceView
 	switch st.Menu {
 	case protocol.MenuView:
-		title = "View options"
-		hint = " ↑↓ choose · Space toggle · Esc close "
-		rows = []MenuRow{
-			{Label: "Fixed elements", Marker: marker(st.ViewFlags&protocol.ViewFlagFixed != 0), On: st.ViewFlags&protocol.ViewFlagFixed != 0},
-			{Label: "Sticky elements", Marker: marker(st.ViewFlags&protocol.ViewFlagSticky != 0), On: st.ViewFlags&protocol.ViewFlagSticky != 0},
-			{Label: "Background images", Marker: marker(st.ViewFlags&protocol.ViewFlagBackgrounds != 0), On: st.ViewFlags&protocol.ViewFlagBackgrounds != 0},
+		view = ChoiceView{
+			Title: "View options",
+			Hint:  " ↑↓ choose · Space toggle · Esc close ",
+			Rows: []MenuRow{
+				{Label: "Fixed elements", Marker: marker(st.ViewFlags&protocol.ViewFlagFixed != 0), On: st.ViewFlags&protocol.ViewFlagFixed != 0},
+				{Label: "Sticky elements", Marker: marker(st.ViewFlags&protocol.ViewFlagSticky != 0), On: st.ViewFlags&protocol.ViewFlagSticky != 0},
+				{Label: "Background images", Marker: marker(st.ViewFlags&protocol.ViewFlagBackgrounds != 0), On: st.ViewFlags&protocol.ViewFlagBackgrounds != 0},
+			},
+			Active: st.MenuIndex,
+			MinW:   40,
 		}
 	case protocol.MenuZoom:
-		title = "Zoom"
-		hint = " ↑↓ choose · Enter apply · Esc close "
+		view = ChoiceView{
+			Title:  "Zoom",
+			Hint:   " ↑↓ choose · Enter apply · Esc close ",
+			Active: st.MenuIndex,
+			MinW:   32,
+		}
 		for _, pct := range zoomPresets {
 			m := "  "
 			if pct == st.ZoomPercent {
 				m = "● "
 			}
-			rows = append(rows, MenuRow{Label: itoa(pct) + "%", Marker: m, On: pct == st.ZoomPercent})
+			view.Rows = append(view.Rows, MenuRow{Label: itoa(pct) + "%", Marker: m, On: pct == st.ZoomPercent})
 		}
 	default:
 		return MenuLayout{}
 	}
-	if w < 8 || h < 4 || len(rows) == 0 {
+	return layoutChoice(st, view)
+}
+
+func layoutChoice(st protocol.State, view ChoiceView) MenuLayout {
+	w, h := st.Width, st.Height
+	if w < 8 || h < 4 || len(view.Rows) == 0 {
 		return MenuLayout{}
 	}
 	maxLabel := 0
-	for _, row := range rows {
+	for _, row := range view.Rows {
 		if n := stringWidth(row.Marker + row.Label); n > maxLabel {
 			maxLabel = n
 		}
 	}
-	minW := 40
-	if st.Menu == protocol.MenuZoom {
-		minW = 32
-	}
 	boxW := maxLabel + 6
-	if n := stringWidth(hint) + 4; n > boxW {
+	if n := stringWidth(view.Hint) + 4; n > boxW {
 		boxW = n
 	}
-	if boxW < minW {
-		boxW = minW
+	if boxW < view.MinW {
+		boxW = view.MinW
 	}
 	if boxW > w {
 		boxW = w
@@ -79,27 +93,20 @@ func LayoutMenu(st protocol.State) MenuLayout {
 	if boxW < 8 {
 		return MenuLayout{}
 	}
-	inner := boxW - 4
 	maxRows := h - 4
 	if maxRows < 1 {
 		maxRows = 1
 	}
-	visible := len(rows)
+	visible := len(view.Rows)
 	if visible > maxRows {
 		visible = maxRows
 	}
-	top := 0
-	if active < top {
-		top = active
-	}
-	if active >= top+visible {
-		top = active - visible + 1
-	}
+	top := view.Active
 	if top < 0 {
 		top = 0
 	}
-	if top+visible > len(rows) {
-		top = len(rows) - visible
+	if top+visible > len(view.Rows) {
+		top = len(view.Rows) - visible
 	}
 	if top < 0 {
 		top = 0
@@ -114,9 +121,8 @@ func LayoutMenu(st protocol.State) MenuLayout {
 	for i := 0; i < visible; i++ {
 		rects = append(rects, protocol.Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1})
 	}
-	_ = inner
 	return MenuLayout{
-		Title: title, Hint: hint, Rows: rows, Active: active, Top: top,
+		Title: view.Title, Hint: view.Hint, Rows: view.Rows, Active: view.Active, Top: top,
 		BoxX: x, BoxY: y, BoxW: boxW, BoxH: boxH, Rects: rects,
 		Close: protocol.Rect{X: x + boxW - 3, Y: y, W: 3, H: 1},
 	}
@@ -173,11 +179,29 @@ func ComposeOverlayFrame(st protocol.State, content protocol.Frame, draw func(*c
 	return full, true
 }
 
-// DrawMenu paints a choice window on a full-screen canvas from state.
+// DrawMenu paints the view/zoom window on a full-screen canvas.
 func DrawMenu(c *chromeCanvas, st protocol.State) MenuLayout {
 	layout := LayoutMenu(st)
-	if layout.BoxW <= 0 || layout.BoxH <= 0 {
+	if layout.BoxW <= 0 {
 		return layout
+	}
+	drawChoiceLayout(c, layout)
+	return layout
+}
+
+// DrawSelect paints the page select popup on a full-screen canvas.
+func DrawSelect(c *chromeCanvas, st protocol.State, view *SelectView) MenuLayout {
+	layout := LayoutSelect(st, view)
+	if layout.BoxW <= 0 {
+		return layout
+	}
+	drawChoiceLayout(c, layout)
+	return layout
+}
+
+func drawChoiceLayout(c *chromeCanvas, layout MenuLayout) {
+	if layout.BoxW <= 0 || layout.BoxH <= 0 {
+		return
 	}
 	modalFrame(c, layout)
 	fg := rgb(0x1f, 0x23, 0x28)
@@ -201,7 +225,6 @@ func DrawMenu(c *chromeCanvas, st protocol.State) MenuLayout {
 	c.text(layout.BoxX+2, layout.BoxY+layout.BoxH-2,
 		padWidth(truncateWidth(layout.Hint, layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
 	modalDim(c, layout)
-	return layout
 }
 
 var (

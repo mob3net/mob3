@@ -237,3 +237,38 @@ func TestFrontendDialogMatchesEngine(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendSelectMatchesEngine(t *testing.T) {
+	b := NewBrowser(100, 30)
+	b.emitFrames = true
+	b.frontendChrome = true
+	b.url, _ = url.Parse("https://example.com/")
+	b.page = &Page{Title: "Example", Root: &Node{}}
+	opts := []*Node{
+		{Type: ElementNode, Tag: "option", Children: []*Node{{Type: TextNode, Text: "One"}}},
+		{Type: ElementNode, Tag: "option", Attrs: []Attr{{Key: "selected", Value: ""}}, Children: []*Node{{Type: TextNode, Text: "Two"}}},
+		{Type: ElementNode, Tag: "option", Children: []*Node{{Type: TextNode, Text: "Three"}}},
+	}
+	b.selectMenu = &selectMenuDialog{node: opts[0], options: opts, idx: 1}
+	b.selectFrontend = false
+	st := b.stateMessage()
+	st.FrontendChrome = true
+	contentH := b.height - b.headerRows() - 1
+	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	for i := range content.Cells {
+		content.Cells[i].R = ' '
+	}
+	full, ok := frontend.ComposeSelectFrame(st, content, &frontend.SelectView{
+		ID: 1, Options: []string{"One", "Two", "Three"}, Selected: 1, Index: 1,
+	})
+	if !ok {
+		t.Fatal("select frame was not composed")
+	}
+	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.drawChrome(g)
+	for i := range full.Cells {
+		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {
+			t.Fatalf("select cell %d = %+v, want %+v", i, got, want)
+		}
+	}
+}
