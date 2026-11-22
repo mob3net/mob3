@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 0 complete; Phase 1 next.**
+Status: **Phase 1 complete; Phase 2 next.**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -52,6 +52,7 @@ network destination.
 | D16 | 2026-11-22 | The engine renders `about:` pages from host-supplied data; the host mints and validates the config token. | Keeps trusted state and policy on the host while reusing the HTML engine. |
 | D17 | 2026-11-22 | The request log lives in the host; the front end displays it. | The engine does not need to see network policy records. |
 | D18 | 2026-11-22 | Wire v1 is a 24-byte binary header plus fixed-value bodies; `Cell` is 20 bytes; scaled text is a structured run; control runes and scaled-run text are rejected on decode. | No reflection, no JSON, a small hostile-input surface, and no escape sequence can cross the boundary. |
+| D19 | 2026-11-22 | Phase 1 leaves `Lines`/`LinesMono` and the gfx renderer physically in `render.go`; they are called only from the frontend path and move with the package split in Phase 3. | The functional gate is that the paint path has no ANSI writer, no `os` and no terminal state. Moving ~600 lines now would add risk without changing behavior. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -100,7 +101,9 @@ which part goes where.
 | `html.go` | engine | Tokenizer and tree builder. |
 | `style*.go` | engine | All style, selector, sheet, media and UA files. |
 | `layout*.go` | engine | All layout files, including forms, images, tables, grid, flex and measurement. |
-| `render.go` | engine + frontend | Grid, paint and image placement stay in the engine; `Lines`/`LinesMono`, ANSI, kitty/iTerm2 and capability detection move to the frontend. |
+| `render.go` | engine + frontend | Grid, paint and image placement stay in the engine; `Lines`/`LinesMono`, ANSI and kitty/iTerm2 move to the frontend in Phase 3 (D19). |
+| `frame_protocol.go` | engine | Maps the internal grid to `protocol.Frame` at the seam. |
+| `term_detect.go` | frontend | Environment capability detection; the paint path takes capabilities as input. |
 | `png.go` | frontend | Cells to PNG. |
 | `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. |
 | `cache.go` | host | Resource cache. |
@@ -137,12 +140,15 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | Phase | Scope | Estimate | Status | Exit gate |
 | --- | --- | --- | --- | --- |
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
-| 1 | Frame boundary and paint split | 1–2 weeks | Next | `-dump`/`-png` byte-identical; engine has no ANSI writer |
-| 2 | Chrome and state ownership | 2–3 weeks | Not started | UI tests pass; engine has no terminal or chrome concepts |
+| 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
+| 2 | Chrome and state ownership | 2–3 weeks | Next | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Not started | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
+
+\* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
+Phase 3 under D19.
 
 ### Phase 0 — Contract and baseline
 
@@ -166,15 +172,20 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 
 ### Phase 1 — Frame boundary
 
-- [ ] Engine paints into a content-rect `Frame`, not the full-screen `Grid`.
-- [ ] Replace `Cell.Raw` with structured scaled-text runs; `Cell` becomes
-      plain data.
-- [ ] Move `Grid.Lines`/`LinesMono`, gfx, kitty/iTerm2 placement and
-      `png.go` to the front end.
-- [ ] Move terminal capability detection out of `render.go`.
-- [ ] Reuse two frame buffers; no steady-state allocation per frame.
-- [ ] Keep the existing row diff on the front-end side.
-- [ ] Frame-snapshot golden tests.
+- [x] Engine paints into a content-rect frame, not the full-screen `Grid`.
+      `draw` paints the page viewport at row 0, then blits it below the chrome;
+      `toProtocolFrame` maps the result to the wire contract.
+- [x] Replace `Cell.Raw` with structured scaled-text runs; `Cell` is now plain
+      data and shrank from 56 to 24 bytes.
+- [ ] Move `Grid.Lines`/`LinesMono`, gfx and kitty/iTerm2 placement out of
+      `render.go`. Deferred to Phase 3 (D19); `png.go` is already separate.
+- [x] Move terminal capability detection out of `render.go` to
+      `term_detect.go`; the paint path no longer imports `os`.
+- [x] Reuse two frame buffers. `BenchmarkBoundaryContentFrame` is 0 B/op;
+      ANSI string building still allocates as before.
+- [x] Keep the existing row diff on the front-end side (`flushGrid`).
+- [x] Frame tests: content-blit equivalence, protocol round-trip, cell-size
+      guard, dump/PNG hashes.
 
 ### Phase 2 — Chrome and state ownership
 
@@ -293,13 +304,37 @@ page is `boundaryBaselineHTML()` in
 | `-png` hash | `5a5adb26413007dc5a35abd99cd7144823fb46f2f0f946609901ec54f82256aa` | byte-identical |
 | Codec frame, 152×35, encode+decode | 320–328 µs, 106 668 B/op, 2 allocs | no regression |
 | Synthetic parse | 0.61–0.78 ms, 1.00 MB, 6 101 allocs | no regression |
-| Layout+paint+ANSI, 100×35 | 12.9–13.3 ms, 19.8 MB, 48 618 allocs | ≤5% regression |
+| Layout+paint+ANSI, 100×35 | 12.4–13.3 ms, 19.93 MB, 56 858 allocs | ≤5% regression |
+| Full draw, forced repaint | 898–905 µs, 716 078 B/op, 28 213 allocs | no regression |
 | Idle frames/s | pending Phase 5 | 0 |
 
-The codec benchmark is `BenchmarkCodecFrame` in `internal/protocol`; the parse
-and paint benchmarks are in `internal/browser/boundary_baseline_test.go`. A
-later process split is expected to add a second Go runtime and IPC; those
-numbers are recorded separately and are not B's budget.
+The codec benchmark is `BenchmarkCodecFrame` in `internal/protocol`; the parse,
+paint, draw and content-frame benchmarks are in
+`internal/browser/boundary_baseline_test.go`. A later process split is expected
+to add a second Go runtime and IPC; those numbers are recorded separately and
+are not B's budget.
+
+### Phase 1 deltas
+
+Before values were measured in a temporary worktree at the Phase 0 commit with
+the same synthetic page and the same benchmark bodies; the worktree was removed
+after measuring.
+
+| Metric | Before Phase 1 | After Phase 1 | Delta |
+| --- | --- | --- | --- |
+| `Cell` size | 56 B | 24 B | −57% per cell |
+| Full draw, forced repaint | 898–905 µs, 716 078 B/op, 28 213 allocs | 821–824 µs, 519 539 B/op, 28 212 allocs | −8.7% time, −27.4% B/op, allocs flat |
+| Layout+paint+ANSI, 100×35 | 12.4–13.3 ms, 19.93 MB, 56 858 allocs | 12.8–13.7 ms, 19.83 MB, 56 858 allocs | flat within noise |
+| Content paint+blit, 100×33 | new path | 90.9–100.8 µs, 0 B/op | frame buffers are allocation-free |
+| Synthetic parse | 0.61–0.78 ms, 1.00 MB | 0.57–0.58 ms, 1.00 MB | noise, no regression |
+| Startup (tiny `-dump`) | 4.7–4.9 ms | 4.5–5.0 ms | flat |
+| Synthetic `-dump` | 34–38 ms, 44–45 MB | 25–36 ms, 40–42 MB | noisy, no regression |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+
+The draw win is the reused grids: the old path allocated a full 100×35 grid
+per repaint, which at 56 bytes per cell is about 196 KB. The new path reuses a
+content grid and a screen grid; the remaining draw allocations are ANSI line
+building.
 
 ## 8. Open questions
 
@@ -343,3 +378,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | — | Plan and decisions recorded; docs updated; Pages publish guarded to `main` | `git diff --check` | Phase 0 |
 | 2026-11-22 | 0 | `internal/protocol` types, ports, binary codec, round-trip/truncation/limit tests, decoder fuzz targets, import-boundary test, codec benchmark; baseline hash/timing tests and measurements | `go test ./internal/protocol`, fuzz 8 s each, `go test ./internal/browser -run TestBoundary`, `go vet` | Phase 1: frame boundary |
 | 2026-11-22 | 0 | Codec hardening: 32-bit body-length guard, scaled-run scale cap, control-text rejection; full suite and race green | `go test ./...`, `go test -race ./internal/protocol`, fuzz 8 s each | Phase 1: frame boundary |
+| 2026-11-22 | 1 | Content-rect painting with reused screen/content grids; `Cell.Raw` replaced by structured runs; `Cell` 56→24 B; terminal detection moved to `term_detect.go`; `toProtocolFrame` mapping and round-trip test; content-blit equivalence, cell-size guard; draw and content-frame benchmarks | `go test ./...`, `go vet`, `go test -race` on the frame tests, baseline hashes | Phase 2: chrome and state ownership |

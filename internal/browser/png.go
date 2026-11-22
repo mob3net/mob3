@@ -128,7 +128,7 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 				drawImageCell(img, rect, c, bg)
 				continue
 			}
-			if c.Raw != "" {
+			if c.Run != 0 || c.Skip {
 				continue
 			}
 			r := c.R

@@ -110,6 +110,10 @@ type Browser struct {
 	prev    []string
 	gfx     *gfxRenderer
 	bigText bool
+	// screenGrid and contentGrid are reused between frames. The content grid
+	// is exactly the page viewport; the screen grid adds chrome and overlays.
+	screenGrid  *Grid
+	contentGrid *Grid
 	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
 	// per terminal cell for everything except text metrics.
 	zoom float64

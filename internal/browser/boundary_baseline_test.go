@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // boundaryBaselineHTML is the synthetic page used to record the pre-migration
@@ -115,12 +116,59 @@ func BenchmarkBoundaryLayoutPaint(b *testing.B) {
 	// Warm the computed styles so the benchmark measures the rebuild, not the
 	// first style pass.
 	_ = BuildLayout(root, nil, 100)
+	fg, bg := RGB(0x1f, 0x23, 0x28), RGB(255, 255, 255)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ly := BuildLayout(root, nil, 100)
-		g := NewGrid(100, 35, Color{Set: true}, Color{Set: true})
-		PaintLayout(g, ly, 0, 0, 35, nil, Color{Set: true})
+		g := NewGrid(100, 35, fg, bg)
+		PaintLayout(g, ly, 0, 0, 35, nil, fg)
 		_ = g.Lines(true)
+	}
+}
+
+// BenchmarkBoundaryDraw measures a full interactive repaint with the chrome
+// and ANSI output, forcing a complete frame each iteration.
+func BenchmarkBoundaryDraw(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: root, Title: "bench"}
+	br.layout = ly
+	br.color = true
+	br.bigText = false
+	old := os.Stdout
+	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
+	os.Stdout = devnull
+	b.Cleanup(func() {
+		os.Stdout = old
+		_ = devnull.Close()
+	})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.prev = nil
+		br.draw()
+	}
+}
+
+// BenchmarkBoundaryContentFrame measures the new hot path: reuse a content
+// grid, paint the viewport, reuse the screen grid and blit the content rows.
+func BenchmarkBoundaryContentFrame(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	fg, bg := RGB(0x1f, 0x23, 0x28), RGB(255, 255, 255)
+	content := NewGrid(100, 33, fg, bg)
+	screen := NewGrid(100, 35, fg, bg)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		content.Reset(fg, bg)
+		PaintLayout(content, ly, 0, 0, 33, nil, fg)
+		screen.Reset(fg, bg)
+		blitGrid(screen, content, 2)
 	}
 }

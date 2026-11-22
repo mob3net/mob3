@@ -7,7 +7,28 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 )
+
+// TestFrameCellLayout guards the frame memory budget: adding a string or a
+// pointer to Cell silently doubles the cost of every viewport and screen grid.
+func TestFrameCellLayout(t *testing.T) {
+	if got := unsafe.Sizeof(Cell{}); got > 24 {
+		t.Fatalf("Cell is %d bytes; the frame budget requires at most 24", got)
+	}
+}
+
+func TestGridResetClearsRuns(t *testing.T) {
+	g := NewGrid(8, 4, RGB(255, 255, 255), RGB(0, 0, 0))
+	g.TextBig(0, 0, "Big", &Style{FontSize: 32, LineHeight: 1}, RGB(1, 2, 3), Color{}, 2)
+	if len(g.Runs) == 0 || g.Cells[0].Run == 0 {
+		t.Fatal("scaled run was not recorded")
+	}
+	g.Reset(RGB(9, 9, 9), RGB(0, 0, 0))
+	if len(g.Runs) != 0 || g.Cells[0].Run != 0 || g.Cells[0].R != ' ' {
+		t.Fatalf("reset left state: runs=%d cell=%+v", len(g.Runs), g.Cells[0])
+	}
+}
 
 func TestClearGlyphsKeepsBackground(t *testing.T) {
 	g := NewGrid(20, 3, RGB(0, 0, 0), RGB(255, 255, 255))
@@ -143,10 +164,27 @@ func TestKittyTransmitChunks(t *testing.T) {
 	}
 }
 
+// gridRun returns the structured scaled run starting at a cell.
+func gridRun(g *Grid, x, y int) (scaledRun, bool) {
+	c := g.Cells[y*g.W+x]
+	if c.Run == 0 || int(c.Run) > len(g.Runs) {
+		return scaledRun{}, false
+	}
+	return g.Runs[int(c.Run)-1], true
+}
+
+func runEscape(r scaledRun) string {
+	return fmt.Sprintf("\x1b]66;s=%d;%s\x07", r.Scale, r.Text)
+}
+
 func TestBigTextStripsControls(t *testing.T) {
 	g := NewGrid(20, 4, RGB(0, 0, 0), RGB(255, 255, 255))
 	g.TextBig(0, 0, "A\x1b]52;c;evil\x07B", &Style{FontSize: 32, LineHeight: 1}, RGB(0, 0, 0), Color{}, 2)
-	raw := g.Cells[0].Raw
+	r, ok := gridRun(g, 0, 0)
+	if !ok {
+		t.Fatal("scaled run was not recorded")
+	}
+	raw := runEscape(r)
 	if strings.Contains(raw, "\x1b]52") || strings.Count(raw, "\x07") != 1 {
 		t.Fatalf("control characters escaped into OSC 66: %q", raw)
 	}
@@ -178,15 +216,19 @@ func TestBigTextPaint(t *testing.T) {
 	}}
 	g := NewGrid(10, 4, RGB(0, 0, 0), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 4, nil, RGB(0, 0, 0), nil, true)
-	c := g.Cells[0]
-	if !strings.Contains(c.Raw, "\x1b]66;s=2;AB\x07") {
-		t.Fatalf("raw scaled text = %q", c.Raw)
+	r, ok := gridRun(g, 0, 0)
+	if !ok {
+		t.Fatal("scaled run was not recorded")
 	}
-	if strings.Contains(c.Raw, "w=") {
-		t.Fatalf("raw scaled text must not send an explicit w key: %q", c.Raw)
+	raw := runEscape(r)
+	if !strings.Contains(raw, "\x1b]66;s=2;AB\x07") {
+		t.Fatalf("raw scaled text = %q", raw)
 	}
-	if c.RawW != 4 {
-		t.Fatalf("raw width = %d, want 4", c.RawW)
+	if strings.Contains(raw, "w=") {
+		t.Fatalf("raw scaled text must not send an explicit w key: %q", raw)
+	}
+	if r.Cells != 4 {
+		t.Fatalf("run width = %d, want 4", r.Cells)
 	}
 	if !g.Cells[1].Skip || !g.Cells[1*g.W].Skip {
 		t.Fatal("covered cells were not marked")
@@ -199,6 +241,44 @@ func TestBigTextPaint(t *testing.T) {
 	g.Fill(0, 1, 10, 1, RGB(1, 2, 3))
 	if g.Cells[1*g.W].Skip {
 		t.Fatal("Fill did not clear covered cells")
+	}
+}
+
+func TestContentFrameBlitMatchesFullPaint(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+h1{font-size:32px;line-height:1} p{margin:0}
+.bar{position:fixed;top:0;left:0;width:100%;background:#eee}
+</style></head><body><h1>Big</h1><div class="bar">status</div>` +
+		strings.Repeat("<p>content line</p>", 30) + `</body></html>`)
+	ly := BuildLayoutViewportDeadline(root, nil, 40, 12, true, time.Time{})
+	ly.SetFixedScroll(0)
+	fg, bg := RGB(0x1f, 0x23, 0x28), RGB(255, 255, 255)
+	full := NewGrid(40, 12, fg, bg)
+	PaintLayoutBig(full, ly, 0, 2, 10, nil, fg, nil, true)
+	content := NewGrid(40, 8, fg, bg)
+	PaintLayoutBig(content, ly, 0, 0, 8, nil, fg, nil, true)
+	screen := NewGrid(40, 12, fg, bg)
+	blitGrid(screen, content, 2)
+	for _, r := range content.Runs {
+		r.Y += 2
+		screen.Runs = append(screen.Runs, r)
+	}
+	for y := 2; y < 10; y++ {
+		for x := 0; x < 40; x++ {
+			got := screen.Cells[y*40+x]
+			want := full.Cells[y*40+x]
+			if got != want {
+				t.Fatalf("cell %d,%d: content+blit %+v, full paint %+v", x, y, got, want)
+			}
+		}
+	}
+	if len(screen.Runs) != len(full.Runs) {
+		t.Fatalf("runs = %d, full paint = %d", len(screen.Runs), len(full.Runs))
+	}
+	for i := range screen.Runs {
+		if screen.Runs[i] != full.Runs[i] {
+			t.Fatalf("run %d: content+blit %+v, full paint %+v", i, screen.Runs[i], full.Runs[i])
+		}
 	}
 }
 
@@ -447,8 +527,8 @@ func TestBigTextWhitespaceHasNoScaledUnderline(t *testing.T) {
 	g.TextBig(0, 0, " ", st, RGB(0, 0, 0), Color{}, 2)
 	for _, idx := range []int{0, 1, 10, 11} {
 		c := g.Cells[idx]
-		if c.Raw != "" || c.Skip || c.Underline {
-			t.Fatalf("cell %d still renders a scaled underlined space: raw=%q skip=%v underline=%v", idx, c.Raw, c.Skip, c.Underline)
+		if c.Run != 0 || c.Skip || c.Underline {
+			t.Fatalf("cell %d still renders a scaled underlined space: run=%d skip=%v underline=%v", idx, c.Run, c.Skip, c.Underline)
 		}
 		if c.R != ' ' {
 			t.Fatalf("cell %d is not blank: %q", idx, c.R)
@@ -464,13 +544,13 @@ func TestBigTextStaysInsideViewport(t *testing.T) {
 	g := NewGrid(20, 6, RGB(0, 0, 0), RGB(255, 255, 255))
 	// Rows 0-4 are the page viewport; row 5 is the footer.
 	PaintLayoutBig(g, ly, 0, 0, 5, nil, RGB(0, 0, 0), nil, true)
-	if g.Cells[2*20].Raw == "" {
+	if g.Cells[2*20].Run == 0 {
 		t.Fatal("a scaled run that fits the viewport was not scaled")
 	}
-	if g.Cells[5*20].Raw != "" || g.Cells[5*20].Skip {
+	if g.Cells[5*20].Run != 0 || g.Cells[5*20].Skip {
 		t.Fatal("scaled text from the last content row painted into the footer row")
 	}
-	if g.Cells[4*20].Raw != "" {
+	if g.Cells[4*20].Run != 0 {
 		t.Fatal("last-row text was still sent as scaled text")
 	}
 	if g.Cells[4*20].R != 'B' {
@@ -489,8 +569,8 @@ func TestBigTextDisabledUnderFixedChrome(t *testing.T) {
 	}}
 	g := NewGrid(20, 8, RGB(255, 255, 255), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 8, nil, RGB(0, 0, 0), nil, true)
-	if raw := g.Cells[4*20].Raw; raw != "" {
-		t.Fatalf("scaled text touching fixed chrome was sent as OSC 66: %q", raw)
+	if g.Cells[4*20].Run != 0 {
+		t.Fatalf("scaled text touching fixed chrome was sent as OSC 66: run=%d", g.Cells[4*20].Run)
 	}
 	if g.Cells[4*20].Skip || g.Cells[4*20].R != 'A' {
 		t.Fatalf("normal-size fallback missing: cell=%+v", g.Cells[4*20])
@@ -503,7 +583,11 @@ func TestBigTextDisabledUnderFixedChrome(t *testing.T) {
 	}}
 	g = NewGrid(20, 10, RGB(255, 255, 255), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 10, nil, RGB(0, 0, 0), nil, true)
-	if raw := g.Cells[4*20].Raw; !strings.Contains(raw, "\x1b]66;s=2;AB\x07") {
+	r, ok := gridRun(g, 0, 4)
+	if !ok {
+		t.Fatal("unobstructed scaled text was not painted")
+	}
+	if raw := runEscape(r); !strings.Contains(raw, "\x1b]66;s=2;AB\x07") {
 		t.Fatalf("unobstructed scaled text was not painted: %q", raw)
 	}
 }

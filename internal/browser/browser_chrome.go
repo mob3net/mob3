@@ -263,8 +263,16 @@ func (b *Browser) draw() {
 	// Deferred image batches keep their layout until the viewport can see them.
 	b.applyPendingImageLayout()
 	fg, bg := b.pageFG(), b.pageBG()
-	g := NewGrid(w, h, fg, bg)
 	top, bottom := b.viewport()
+	contentH := bottom - top
+	if contentH < 1 {
+		contentH = 1
+	}
+	// The engine paints only the content rectangle. Chrome is composed on the
+	// screen grid afterwards, so page content has no way to reach the toolbar,
+	// footer or dialogs.
+	cg := reuseGrid(b.contentGrid, w, contentH, fg, bg)
+	b.contentGrid = cg
 	var placements []ImagePlacement
 	var collect *[]ImagePlacement
 	// While hints are shown, draw images as half-block art instead of native
@@ -276,19 +284,36 @@ func (b *Browser) draw() {
 	if b.layout != nil {
 		b.layout.SetFixedScroll(b.scroll)
 	}
-	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, b.focusedLink(), fg, collect, b.bigText)
-	b.paintControlFocus(g, top, bottom)
-	b.paintInputSelection(g, top, bottom)
-	b.paintInputCursor(g, top, bottom)
-	b.paintSelection(g, top, bottom)
-	b.paintFindPage(g, top, bottom)
-	b.paintLinkHints(g, top, bottom)
+	PaintLayoutBig(cg, b.layout, b.scroll, 0, contentH, b.focusedLink(), fg, collect, b.bigText)
+	b.paintControlFocus(cg, 0, contentH)
+	b.paintInputSelection(cg, 0, contentH)
+	b.paintInputCursor(cg, 0, contentH)
+	b.paintSelection(cg, 0, contentH)
+	b.paintFindPage(cg, 0, contentH)
+	b.paintLinkHints(cg, 0, contentH)
 	if !b.noDraw && b.width >= 2 {
 		// Overflowing content (wide nowrap blocks, absolute boxes) may still
 		// reach the terminal edge. Keep the reserved scrollbar column blank.
-		g.ClearGlyphs(b.width-1, top, 1, bottom-top)
+		cg.ClearGlyphs(w-1, 0, 1, contentH)
 	}
-	b.drawScrollBar(g, top, bottom)
+	b.drawScrollBar(cg, 0, contentH)
+	if b.scrollBar != nil {
+		// Mouse hit testing works in terminal coordinates; the track was
+		// computed in content coordinates.
+		b.scrollBar.trackTop += top
+		b.scrollBar.thumbTop += top
+	}
+
+	g := reuseGrid(b.screenGrid, w, h, fg, bg)
+	b.screenGrid = g
+	blitGrid(g, cg, top)
+	for _, r := range cg.Runs {
+		r.Y += top
+		g.Runs = append(g.Runs, r)
+	}
+	for i := range placements {
+		placements[i].Y += top
+	}
 
 	headerBG := RGB(0x1f, 0x29, 0x37)
 	footerBG := RGB(0xea, 0xee, 0xf2)

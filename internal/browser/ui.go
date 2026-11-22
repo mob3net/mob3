@@ -1838,8 +1838,7 @@ func (b *Browser) modalFrame(g *Grid, boxW, boxH int, title string) (int, int) {
 			c.Bold, c.Italic, c.Underline, c.Strike = false, false, false, false
 			c.Cont = false
 			c.Img = false
-			c.Raw = ""
-			c.RawW = 0
+			c.Run = 0
 			c.Skip = false
 		}
 	}

@@ -10,7 +10,6 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,8 +20,11 @@ import (
 
 // Cell is one terminal cell in the framebuffer.
 type Cell struct {
-	R         rune
-	FG, BG    Color
+	R      rune
+	FG, BG Color
+	// Run is a 1-based index into Grid.Runs for the scaled text starting at
+	// this cell; Skip marks the cells covered by the rest of that run.
+	Run       uint16
 	Bold      bool
 	Italic    bool
 	Underline bool
@@ -30,17 +32,31 @@ type Cell struct {
 	Reverse   bool
 	Cont      bool
 	Img       bool
-	// Raw is an escape sequence that renders scaled text occupying RawW
-	// cells; Skip marks cells covered by the rest of that multicell.
-	Raw  string
-	RawW int
-	Skip bool
+	Skip      bool
+}
+
+// scaledRun is the structured form of a kitty scaled-text run. The terminal
+// escape sequence is built only when the grid is encoded; page state never
+// carries a raw escape.
+type scaledRun struct {
+	X, Y      int
+	Cells     int
+	Scale     int
+	Text      string
+	FG, BG    Color
+	Bold      bool
+	Italic    bool
+	Underline bool
+	Strike    bool
+	Reverse   bool
 }
 
 // Grid is a terminal framebuffer.
 type Grid struct {
 	W, H  int
 	Cells []Cell
+	// Runs holds the scaled-text runs referenced by Cell.Run, in index order.
+	Runs []scaledRun
 }
 
 // NewGrid creates a grid filled with spaces and the given background.
@@ -52,10 +68,41 @@ func NewGrid(w, h int, fg, bg Color) *Grid {
 		h = 1
 	}
 	g := &Grid{W: w, H: h, Cells: make([]Cell, w*h)}
-	for i := range g.Cells {
-		g.Cells[i] = Cell{R: ' ', FG: fg, BG: bg}
-	}
+	g.Reset(fg, bg)
 	return g
+}
+
+// Reset blanks every cell and drops all scaled runs, keeping the buffers for
+// reuse between frames.
+func (g *Grid) Reset(fg, bg Color) {
+	c := Cell{R: ' ', FG: fg, BG: bg}
+	for i := range g.Cells {
+		g.Cells[i] = c
+	}
+	g.Runs = g.Runs[:0]
+}
+
+// reuseGrid returns g ready for a frame of the given size, allocating only
+// when the size changed.
+func reuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
+	if g == nil || g.W != w || g.H != h {
+		return NewGrid(w, h, fg, bg)
+	}
+	g.Reset(fg, bg)
+	return g
+}
+
+// blitGrid copies src into dst starting at row y. Cell run indexes refer to
+// src.Runs, so the caller must copy those runs in the same order.
+func blitGrid(dst, src *Grid, y int) {
+	if dst == nil || src == nil || y < 0 || y >= dst.H {
+		return
+	}
+	rows := minInt(src.H, dst.H-y)
+	w := minInt(src.W, dst.W)
+	for r := 0; r < rows; r++ {
+		copy(dst.Cells[(y+r)*dst.W:(y+r)*dst.W+w], src.Cells[r*src.W:r*src.W+w])
+	}
 }
 
 // Fill paints a rectangle of background cells. A translucent fill is composited
@@ -78,8 +125,7 @@ func (g *Grid) Fill(x, y, w, h int, c Color) {
 			}
 			cell.Cont = false
 			cell.Img = false
-			cell.Raw = ""
-			cell.RawW = 0
+			cell.Run = 0
 			cell.Skip = false
 		}
 	}
@@ -138,8 +184,7 @@ func (g *Grid) ClearGlyphs(x, y, w, h int) {
 			cell.Strike = false
 			cell.Cont = false
 			cell.Img = false
-			cell.Raw = ""
-			cell.RawW = 0
+			cell.Run = 0
 			cell.Skip = false
 		}
 	}
@@ -209,8 +254,7 @@ func (g *Grid) Put(x, y int, r rune, st *Style, fg, bg Color) {
 	}
 	c.Cont = false
 	c.Img = false
-	c.Raw = ""
-	c.RawW = 0
+	c.Run = 0
 	c.Skip = false
 	if rw == 2 && x+1 < g.W {
 		c2 := &g.Cells[y*g.W+x+1]
@@ -219,8 +263,7 @@ func (g *Grid) Put(x, y int, r rune, st *Style, fg, bg Color) {
 		c2.BG = c.BG
 		c2.FG = c.FG
 		c2.Img = false
-		c2.Raw = ""
-		c2.RawW = 0
+		c2.Run = 0
 		c2.Skip = false
 	}
 }
@@ -286,20 +329,14 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 		}
 		return
 	}
-	var b strings.Builder
-	// Use the minimal documented form: scale only. With w omitted (w=0), the
-	// terminal derives the cell width itself, which matches the layout width
-	// of scale*stringWidth(s). Some kitty-compatible terminals accept `s` but
-	// render a literal `w=...` prefix as text, so never send the w key.
-	b.WriteString("\x1b]66;s=")
-	b.WriteString(strconv.Itoa(scale))
-	b.WriteString(";")
-	b.WriteString(s)
-	b.WriteString("\x07")
-
+	if len(g.Runs) >= 0xffff {
+		// Cell.Run is 16-bit; fall back to normal text rather than corrupting
+		// the run index on a pathologically run-heavy frame.
+		g.Text(x, y, s, st, fg)
+		return
+	}
 	c := &g.Cells[y*g.W+x]
-	c.Raw = b.String()
-	c.RawW = total
+	c.Run = uint16(len(g.Runs) + 1)
 	c.FG = fg
 	if bg.Set {
 		c.BG = bg
@@ -309,20 +346,26 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 	c.Img = false
 	c.Skip = false
 	c.Reverse = false
+	run := scaledRun{
+		X: x, Y: y, Cells: total, Scale: scale, Text: s,
+		FG: fg, BG: c.BG,
+	}
 	if st != nil {
 		c.Bold = st.Bold
 		c.Italic = st.Italic
 		c.Underline = st.Underline
 		c.Strike = st.Strike
+		run.Bold, run.Italic, run.Underline, run.Strike = st.Bold, st.Italic, st.Underline, st.Strike
 	} else {
 		c.Bold, c.Italic, c.Underline, c.Strike = false, false, false, false
 	}
+	g.Runs = append(g.Runs, run)
 	mark := func(cx, cy int) {
 		if cx < 0 || cx >= g.W || cy < 0 || cy >= g.H {
 			return
 		}
 		cc := &g.Cells[cy*g.W+cx]
-		cc.Raw = ""
+		cc.Run = 0
 		cc.Skip = true
 		cc.R = ' '
 		cc.Cont = false
@@ -836,20 +879,6 @@ func SetColorMode(mode ColorMode) {
 	terminalColorMode = mode
 }
 
-// DetectColorMode reports the color depth to use. macOS Terminal.app does not
-// implement 24-bit SGR sequences and garbles them, so it gets 256-color output;
-// terminals that advertise truecolor through COLORTERM keep 24-bit output.
-func DetectColorMode() ColorMode {
-	ct := strings.ToLower(os.Getenv("COLORTERM"))
-	if strings.Contains(ct, "truecolor") || strings.Contains(ct, "24bit") {
-		return ColorTrueColor
-	}
-	if strings.EqualFold(os.Getenv("TERM_PROGRAM"), "Apple_Terminal") {
-		return Color256
-	}
-	return ColorTrueColor
-}
-
 func fgCode(c Color) string {
 	if !c.Set {
 		return "39"
@@ -966,15 +995,27 @@ func (g *Grid) lines(color, attrs bool) []string {
 			if c.Cont {
 				continue
 			}
-			if c.Raw != "" {
+			if c.Run != 0 && int(c.Run) <= len(g.Runs) {
+				r := g.Runs[int(c.Run)-1]
 				if color {
-					b.WriteString(ansiFor(c))
+					b.WriteString(ansiFor(Cell{
+						R: ' ', FG: r.FG, BG: r.BG,
+						Bold: r.Bold, Italic: r.Italic, Underline: r.Underline,
+						Strike: r.Strike, Reverse: r.Reverse,
+					}))
 					last = ""
-					b.WriteString(c.Raw)
+					// Use the minimal documented form: scale only. With w
+					// omitted, the terminal derives the cell width itself,
+					// matching the layout width of scale*stringWidth(s).
+					b.WriteString("\x1b]66;s=")
+					b.WriteString(strconv.Itoa(r.Scale))
+					b.WriteString(";")
+					b.WriteString(r.Text)
+					b.WriteString("\x07")
 				} else {
-					b.WriteString(strings.Repeat(" ", maxInt(1, c.RawW)))
+					b.WriteString(strings.Repeat(" ", maxInt(1, r.Cells)))
 				}
-				x += c.RawW - 1
+				x += r.Cells - 1
 				continue
 			}
 			r := c.R
@@ -1072,45 +1113,6 @@ func DetectGraphics(mode GraphicsMode) GraphicsMode {
 	return GraphicsBlocks
 }
 
-func inMultiplexer() bool {
-	term := strings.ToLower(os.Getenv("TERM"))
-	return os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != "" ||
-		strings.HasPrefix(term, "screen") || strings.HasPrefix(term, "tmux")
-}
-
-func kittyTerminal() bool {
-	term := strings.ToLower(os.Getenv("TERM"))
-	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	if strings.Contains(term, "kitty") || os.Getenv("KITTY_WINDOW_ID") != "" {
-		return true
-	}
-	if strings.Contains(program, "wezterm") || os.Getenv("WEZTERM_PANE") != "" {
-		return true
-	}
-	if strings.Contains(program, "ghostty") || os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
-		return true
-	}
-	return false
-}
-
-// kittyKeyboardEnabled reports whether the terminal is expected to implement
-// the kitty keyboard protocol. Multiplexers are excluded because their
-// forwarding of the push/pop sequences is inconsistent.
-func kittyKeyboardEnabled() bool {
-	if inMultiplexer() || os.Getenv("STY") != "" {
-		return false
-	}
-	if kittyTerminal() {
-		return true
-	}
-	return strings.HasPrefix(strings.ToLower(os.Getenv("TERM")), "foot")
-}
-
-func itermTerminal() bool {
-	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	return strings.Contains(program, "iterm") || strings.EqualFold(os.Getenv("LC_TERMINAL"), "iTerm2")
-}
-
 // gfxKey identifies a scaled image. ptr is a best-effort object identity while
 // src keeps images from different pages apart if the address is reused.
 type gfxKey struct {
@@ -1184,8 +1186,7 @@ func (r *gfxRenderer) TextSizing() bool {
 	if r == nil || r.mode != GraphicsKitty {
 		return false
 	}
-	term := strings.ToLower(os.Getenv("TERM"))
-	return strings.Contains(term, "kitty") || os.Getenv("KITTY_WINDOW_ID") != ""
+	return kittyTerminal()
 }
 
 // BeginFrame emits protocol bookkeeping before the text frame is written.
