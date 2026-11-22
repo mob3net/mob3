@@ -463,6 +463,11 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 		return "", errors.New("no loader for module fetch")
 	}
 	ctx := withRequestKind(context.Background(), "js")
+	pageURL := m.base
+	if m.j.page != nil && m.j.page.URL != nil {
+		pageURL = m.j.page.URL
+	}
+	ctx = withRequestPage(ctx, pageURL, m.j.page != nil && m.j.page.Local)
 	data, ctype, _, status, err := m.j.b.loader.fetchCtx(ctx, u, m.allowFile)
 	if err != nil {
 		return "", err

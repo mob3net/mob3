@@ -46,6 +46,14 @@ agreement, the non-negotiable constraints and the change protocol.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
+- Mixed content is not blocked: an HTTPS page may still load HTTP subresources.
+  A local-network guard blocks public pages from reaching loopback, private,
+  link-local, CGNAT and reserved addresses; literal local hosts and local names
+  are rejected immediately and other names are checked after DNS resolution at
+  connect time. Documents that loaded locally keep access, and top-level
+  navigation is not blocked. This is best-effort, not a sandbox; with an HTTP
+  proxy the target is resolved by the proxy, so only literal/local names are
+  caught.
 - Browser checks and anti-bot/firewall blocks cannot be completed. On
   401/403/429/503 responses, MOB³ looks for Cloudflare, CAPTCHA,
   DataDome/PerimeterX, Imperva/Sucuri, “verify you are human”, “unusual

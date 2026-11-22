@@ -54,6 +54,17 @@ agreement, the non-negotiable constraints and the change protocol.
   cross-origin requests and same-origin-to-cross-origin redirects are not
   supported. Cross-origin responses without a matching CORS header fail, so
   cookies cannot be read cross-site through XHR or fetch.
+- **Local-network guard:** a document loaded from a public `http`/`https`
+  address may not fetch subresources, `fetch` or XHR from loopback, RFC 1918 or
+  ULA private, link-local, CGNAT or reserved addresses. Literal hosts and local
+  names (`localhost`, `*.localhost`, `*.local`) are rejected before the request
+  is made; names that merely resolve locally are rejected after DNS resolution
+  at connect time. A document that itself loaded from a local address keeps
+  access, and top-level navigation is never blocked. Blocked requests show as
+  `ERR` in the console request list. A resource cached while browsing a local
+  document is not reused by a public document. With an environment HTTP proxy
+  the target is resolved by the proxy, so only literal and local names are
+  caught.
 - **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
   only when the document itself was loaded from `file:`. Remote (http/https/
   data) documents cannot load file resources, navigate the viewport to `file:`

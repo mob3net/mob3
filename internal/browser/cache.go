@@ -26,6 +26,10 @@ type cacheEntry struct {
 	finalURL    string
 	rawSize     int
 	size        int64
+	// local marks a resource fetched while browsing a local document. A public
+	// document may not reuse it from the cache; the local-network guard would
+	// otherwise be bypassed without a request.
+	local bool
 }
 
 // resourceCache is a session-only LRU byte cache shared by raw subresources and
@@ -82,57 +86,57 @@ func (c *resourceCache) stats() (used, limit int64, entries int) {
 	return c.size, c.limit, len(c.entries)
 }
 
-func (c *resourceCache) getBytes(key string) (data []byte, contentType, finalURL string, ok bool) {
+func (c *resourceCache) getBytes(key string) (data []byte, contentType, finalURL string, local, ok bool) {
 	if c == nil {
-		return nil, "", "", false
+		return nil, "", "", false, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el := c.entries[key]
 	if el == nil {
-		return nil, "", "", false
+		return nil, "", "", false, false
 	}
 	e := el.Value.(*cacheEntry)
 	if e.data == nil {
-		return nil, "", "", false
+		return nil, "", "", false, false
 	}
 	c.lru.MoveToFront(el)
-	return e.data, e.contentType, e.finalURL, true
+	return e.data, e.contentType, e.finalURL, e.local, true
 }
 
-func (c *resourceCache) putBytes(key string, data []byte, contentType, finalURL string) {
+func (c *resourceCache) putBytes(key string, data []byte, contentType, finalURL string, local bool) {
 	if c == nil || len(data) == 0 {
 		return
 	}
 	c.put(&cacheEntry{
 		key: key, data: data, contentType: contentType,
-		finalURL: finalURL, size: int64(len(data)),
+		finalURL: finalURL, size: int64(len(data)), local: local,
 	})
 }
 
-func (c *resourceCache) getImage(key string) (image.Image, int, bool) {
+func (c *resourceCache) getImage(key string) (image.Image, int, bool, bool) {
 	if c == nil {
-		return nil, 0, false
+		return nil, 0, false, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el := c.entries[key]
 	if el == nil {
-		return nil, 0, false
+		return nil, 0, false, false
 	}
 	e := el.Value.(*cacheEntry)
 	if e.img == nil {
-		return nil, 0, false
+		return nil, 0, false, false
 	}
 	c.lru.MoveToFront(el)
-	return e.img, e.rawSize, true
+	return e.img, e.rawSize, e.local, true
 }
 
-func (c *resourceCache) putImage(key string, img image.Image, rawSize int) {
+func (c *resourceCache) putImage(key string, img image.Image, rawSize int, local bool) {
 	if img == nil {
 		return
 	}
-	c.put(&cacheEntry{key: key, img: img, rawSize: rawSize, size: imageMemorySize(img)})
+	c.put(&cacheEntry{key: key, img: img, rawSize: rawSize, size: imageMemorySize(img), local: local})
 }
 
 func (c *resourceCache) put(e *cacheEntry) {

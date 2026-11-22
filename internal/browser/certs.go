@@ -226,6 +226,7 @@ func (t *certTransport) current() *http.Transport {
 func newHTTPTransport(pool *x509.CertPool) *http.Transport {
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           localNetworkDialContext,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       30 * time.Second,
 		TLSHandshakeTimeout:   15 * time.Second,

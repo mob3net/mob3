@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -958,6 +960,224 @@ func TestCookieJarHttpOnlyReplacement(t *testing.T) {
 	}
 	if got := cookieMap(jar.Cookies(u))["token"]; got != "hidden" {
 		t.Fatalf("HTTP cookie jar token = %q, want hidden", got)
+	}
+}
+
+func TestLocalHostClassification(t *testing.T) {
+	local := []string{
+		"127.0.0.1", "127.1.2.3", "10.1.2.3", "172.16.0.1", "172.31.255.255",
+		"192.168.1.1", "169.254.1.1", "100.64.0.1", "100.127.255.255",
+		"192.0.0.1", "198.18.0.1", "198.19.255.255", "240.0.0.1",
+		"0.0.0.0", "255.255.255.255", "::1", "fc00::1", "fdff::1", "fe80::1",
+		"fe80::1%eth0", "::", "localhost", "foo.localhost", "printer.local", "LOCAL",
+	}
+	for _, host := range local {
+		if !isLocalHost(host) {
+			t.Errorf("isLocalHost(%q) = false, want true", host)
+		}
+	}
+	public := []string{
+		"8.8.8.8", "1.1.1.1", "172.15.0.1", "172.32.0.1", "100.63.255.255",
+		"100.128.0.0", "192.0.1.1", "198.20.0.1", "example.com",
+		"notlocalhost.com", "local.example.com",
+	}
+	for _, host := range public {
+		if isLocalHost(host) {
+			t.Errorf("isLocalHost(%q) = true, want false", host)
+		}
+	}
+}
+
+func TestLocalNetworkControl(t *testing.T) {
+	for _, addr := range []string{"127.0.0.1:80", "[::1]:8080", "192.168.1.1:443", "10.0.0.1:80"} {
+		if err := localNetworkControl("tcp", addr, nil); !errors.Is(err, errLocalNetworkBlocked) {
+			t.Errorf("localNetworkControl(%q) = %v, want blocked", addr, err)
+		}
+	}
+	for _, addr := range []string{"8.8.8.8:443", "1.1.1.1:80"} {
+		if err := localNetworkControl("tcp", addr, nil); err != nil {
+			t.Errorf("localNetworkControl(%q) = %v, want allowed", addr, err)
+		}
+	}
+}
+
+func TestLocalNetworkGuardBlocksPublicSubresource(t *testing.T) {
+	l := NewLoader()
+	reached := false
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		return nil, errors.New("transport should not run")
+	})
+	page := mustURL(t, "https://example.com/")
+	ctx := withRequestKind(context.Background(), "img")
+	ctx = withRequestPage(ctx, page, false)
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x"), false); !errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatalf("fetch error = %v, want local-network block", err)
+	}
+	if reached {
+		t.Fatal("blocked request reached the transport")
+	}
+	recs := l.requestSnapshot()
+	if len(recs) != 1 || !strings.Contains(recs[0].Err, "local-network") {
+		t.Fatalf("blocked request log = %+v, want a local-network error", recs)
+	}
+}
+
+func TestLocalNetworkGuardAllowsLocalPageAndNavigation(t *testing.T) {
+	l := NewLoader()
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		h.Set("Access-Control-Allow-Origin", "*")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})
+	localPage := mustURL(t, "http://127.0.0.1:3000/")
+	ctx := withRequestKind(context.Background(), "img")
+	ctx = withRequestPage(ctx, localPage, true)
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x"), false); err != nil {
+		t.Fatalf("local page subresource was blocked: %v", err)
+	}
+	// A top-level navigation carries no page meta and stays allowed.
+	if _, _, _, _, err := l.fetchCtx(context.Background(), mustURL(t, "http://127.0.0.1:8080/"), false); err != nil {
+		t.Fatalf("top-level navigation was blocked: %v", err)
+	}
+}
+
+func TestLoadRequestMarksLocalPage(t *testing.T) {
+	l := NewLoader()
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/html")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("<html><body>ok</body></html>")), Request: req,
+		}, nil
+	})
+	local, err := l.Load("http://127.0.0.1:8080/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !local.Local {
+		t.Fatal("loopback document is not marked local")
+	}
+	public, err := l.Load("https://example.com/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if public.Local {
+		t.Fatal("public document is marked local")
+	}
+}
+
+func TestXHRLocalNetworkGuard(t *testing.T) {
+	b := NewBrowser(40, 10)
+	loader := NewLoader()
+	b.loader = loader
+	reached := false
+	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		h.Set("Access-Control-Allow-Origin", "*")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})
+	page := newJSPage(`<html><body></body></html>`, "")
+	j := newJSRuntime(b, page)
+	if _, _, _, _, _, err := j.httpXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil); !errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatalf("public-page XHR error = %v, want local-network block", err)
+	}
+	if reached {
+		t.Fatal("blocked public-page XHR reached the transport")
+	}
+	// The same target is reachable from a page that itself loaded locally.
+	page.Local = true
+	if _, _, _, _, _, err := j.httpXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil); err != nil {
+		t.Fatalf("local-page XHR was blocked: %v", err)
+	}
+	if !reached {
+		t.Fatal("local-page XHR did not reach the transport")
+	}
+}
+
+func TestLocalNetworkDialContext(t *testing.T) {
+	blocked := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
+	if _, err := localNetworkDialContext(blocked, "tcp", "127.0.0.1:1"); !errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatalf("literal loopback dial = %v, want blocked", err)
+	}
+	// A name that resolves locally is caught after DNS resolution.
+	if _, err := localNetworkDialContext(blocked, "tcp", "localhost:1"); !errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatalf("localhost dial = %v, want blocked", err)
+	}
+	// A top-level navigation is not guarded; the dial is attempted normally.
+	if _, err := localNetworkDialContext(context.Background(), "tcp", "127.0.0.1:1"); errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatal("top-level dial used the local-network guard")
+	}
+}
+
+func TestLocalNetworkDialContextFromRequest(t *testing.T) {
+	tr := &http.Transport{DialContext: localNetworkDialContext}
+	target := mustURL(t, "http://localhost:1/")
+	ctx := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
+	ctx = withRequestTarget(ctx, target)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.RoundTrip(req); !errors.Is(err, errLocalNetworkBlocked) {
+		t.Fatalf("RoundTrip error = %v, want local-network block", err)
+	}
+}
+
+func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
+	l := NewLoader()
+	u := mustURL(t, "https://intranet.example/app.css")
+	l.cache.putBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
+	reached := false
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		h := make(http.Header)
+		h.Set("Content-Type", "text/css")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("network")), Request: req,
+		}, nil
+	})
+	public := withRequestKind(context.Background(), "css")
+	public = withRequestPage(public, mustURL(t, "https://example.com/"), false)
+	data, _, _, _, err := l.fetchCtx(public, u, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "network" {
+		t.Fatalf("public page read cached local body %q", data)
+	}
+	if !reached {
+		t.Fatal("public page skipped the local cache entry but made no request")
+	}
+
+	// A local document may use the same entry without a request.
+	local := withRequestKind(context.Background(), "css")
+	local = withRequestPage(local, mustURL(t, "http://127.0.0.1:3000/"), true)
+	l.cache.putBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
+	reached = false
+	data, _, _, _, err = l.fetchCtx(local, u, false)
+	if err != nil || string(data) != "local-secret" || reached {
+		t.Fatalf("local page cache hit = %q, %v (request made: %v)", data, err, reached)
+	}
+}
+
+func TestRemoteAddrLocal(t *testing.T) {
+	if !remoteAddrLocal(&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 80}) {
+		t.Fatal("loopback peer not local")
+	}
+	if remoteAddrLocal(&net.TCPAddr{IP: net.ParseIP("8.8.8.8"), Port: 443}) {
+		t.Fatal("public peer marked local")
 	}
 }
 

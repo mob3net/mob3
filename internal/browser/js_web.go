@@ -2,6 +2,7 @@ package browser
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -974,7 +975,14 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if len(body) > 0 {
 		reader = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, u.String(), reader)
+	reqCtx := withRequestKind(context.Background(), kind)
+	reqCtx = withRequestPage(reqCtx, origin, j.page.Local)
+	reqCtx = withRequestTarget(reqCtx, u)
+	if requestMetaFrom(reqCtx).blockLocal && isLocalURL(u) {
+		j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
+		return 0, nil, "", nil, nil, errLocalNetworkBlocked
+	}
+	req, err := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
 	if err != nil {
 		return 0, nil, "", nil, nil, err
 	}
@@ -1007,6 +1015,10 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	resp, err := client.Do(req)
 	if err != nil {
 		j.ioActive.Store(false)
+		if isLocalNetworkError(err) {
+			j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
+			err = errLocalNetworkBlocked
+		}
 		return 0, nil, "", nil, nil, err
 	}
 	defer j.ioActive.Store(false)

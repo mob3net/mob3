@@ -108,6 +108,7 @@ func (b *Browser) startDeferredImageLoad() {
 	b.progress = 0.9
 	b.progressHold = 0
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = withRequestPage(ctx, b.page.URL, b.page.Local)
 	b.imageCancel = cancel
 	b.deferredImages = true
 	seq := b.loadSeq
@@ -281,5 +282,6 @@ func (b *Browser) refreshImages() bool {
 		return false
 	}
 	allowFile := b.page.URL != nil && b.page.URL.Scheme == "file"
-	return b.loader.loadImages(context.Background(), b.page.Root, b.page.Base, allowFile)
+	ctx := withRequestPage(context.Background(), b.page.URL, b.page.Local)
+	return b.loader.loadImages(ctx, b.page.Root, b.page.Base, allowFile)
 }
