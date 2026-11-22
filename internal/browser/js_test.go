@@ -219,6 +219,25 @@ func TestJSUserAbortInterruptsScript(t *testing.T) {
 	}
 }
 
+func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
+	page := newJSPage(`<html><body></body></html>`,
+		`var t = Date.now(); while (Date.now() - t < 80) {}`)
+	page.Scripts = append(page.Scripts, Script{
+		Src:  "inline script",
+		Code: "globalThis.afterAbort = 1;",
+	})
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		b.abortGen.Add(1)
+	}()
+	b.startJS(page)
+	if v := b.js.vm.Get("afterAbort"); v != nil && v.ToInteger() != 0 {
+		t.Fatal("a script after the user abort still ran")
+	}
+}
+
 func TestJSRuntimeFreezeShiftsTimers(t *testing.T) {
 	base := time.Now()
 	j := &jsRuntime{timers: map[int]*jsTimer{

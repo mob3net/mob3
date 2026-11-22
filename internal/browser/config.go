@@ -49,9 +49,9 @@ func (b *Browser) consumeConfigToken(token string) bool {
 	return true
 }
 
-// newConfigToken returns an unpredictable per-render form token. It returns an
-// empty string if the system random source fails, which fails closed: the form
-// then cannot be submitted.
+// newConfigToken returns an unpredictable per-session form token. It is
+// rotated after each successful apply. It returns an empty string if the system
+// random source fails, which fails closed: the form then cannot be submitted.
 func newConfigToken() string {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {

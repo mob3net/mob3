@@ -230,7 +230,7 @@ options are read-only; dump-only colour options do not affect the interactive
 UI. The top shows the current viewport in characters and pixels (using the
 terminal's reported cell size, or 8×16 by default). Nothing is persisted.
 
-The form posts its values with a one-shot token generated for the rendered
-page. A link, script or typed `about:config?...` query without that token
-applies nothing, so page content cannot rewrite session settings; use the
-form's **Apply changes** button.
+The form posts its values with a one-shot session token. A link, script or
+typed `about:config?...` query without that token applies nothing, so page
+content cannot rewrite session settings; use the form's **Apply changes**
+button.

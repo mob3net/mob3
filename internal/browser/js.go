@@ -348,12 +348,18 @@ func (b *Browser) startJS(page *Page) {
 	}
 	b.js = j
 	j.loadDeadline.Store(time.Now().Add(j.pageBudget).UnixNano())
+	// A press after the phase starts also skips the next script even if it
+	// lands between two scripts instead of inside the running one.
+	phaseAbort := b.abortGen.Load()
 	executed := 0
 	for _, sc := range page.Scripts {
 		// The page-wide budget and a user abort stop the whole phase. Checking
 		// before each script means a document with many scripts never starts
 		// the next one once the limit is gone.
-		if j.deadlineExpired() {
+		if b.abortGen.Load() != phaseAbort {
+			j.stopScripts.Store(true)
+			j.stopReason.Store(jsStopUser)
+		} else if j.deadlineExpired() {
 			j.stopScripts.Store(true)
 			j.stopReason.Store(jsStopBudget)
 		}

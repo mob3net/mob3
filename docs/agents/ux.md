@@ -33,7 +33,7 @@ agreement, the non-negotiable constraints and the change protocol.
   bundle). `certs` accepts only `system` and `embedded` here: `about:config` is
   reachable from page navigation, so a PEM path stays command-line-only and a
   remote page cannot make the browser read a local bundle. Changes are never
-  persisted. The form posts its values with a one-shot per-render token, so a
+  persisted. The form posts its values with a one-shot session token, so a
   link, script or typed `about:config?...` URL without that token applies
   nothing; use the form's Apply button. The page starts
   with the current viewport in characters and pixels (`width*cellW` by
