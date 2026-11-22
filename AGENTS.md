@@ -216,11 +216,11 @@ published by the Pages build.
   split. The front end never names an engine type, and `internal/protocol` is
   canonical for the message set. The engine no longer imports `net/http`:
   JS `fetch`/XHR and cookie parsing use the host broker. Session construction,
-  console input/HTML find and navigation still live in `internal/browser`; the
+  console HTML find and navigation still live in `internal/browser`; the
   terminal loop, normal header/footer chrome, base shell keys, scrollbar,
   URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup,
-  download/notice modals, link hints and console composition are
-  `frontend.SessionLoop`, `frontend/chrome.go`, `frontend/prompt.go`,
+  download/notice modals, link hints, console composition and console input
+  are `frontend.SessionLoop`, `frontend/chrome.go`, `frontend/prompt.go`,
   `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`,
   `frontend/download.go`, `frontend/hints.go` and `frontend/console.go`. The
   tracker records the remaining split.

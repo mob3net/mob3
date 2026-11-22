@@ -107,6 +107,7 @@ network destination.
 | D67 | 2026-11-22 | Move download and notice modals to the front end. The engine sends `Download` (with the curl command) or `Notice`; the front end draws the modal, copies the command with OSC 52, and answers with `ModalClose`. The engine keeps its modal code for direct callers, tests and automation and excludes front-end-owned modals from `overlayOpen`. | Clipboard and modal presentation are terminal/front-end work. The console and link-hint overlay remain the last engine-owned UI pieces. |
 | D68 | 2026-11-22 | Move the link-hint overlay and its prefix/confirmation input to the front end. The engine computes targets, labels, glyph cells and hrefs, sends `Hints`, and follows the chosen target on `HintResult`. The front end paints the highlighted letters/fallback labels, narrows by prefix, shows the F destination confirmation and answers. The engine keeps its hint key path for direct callers and tests. | Hints are transient presentation and input; keeping target discovery/selection in the engine preserves layout-aware labels. The console is the last large engine-owned UI. |
 | D69 | 2026-11-22 | Move console **composition** to the front end. The engine sends `ConsoleView` with tabs, the active pane's visible lines, request summary, input row/cursor and footer; the front end draws the full-screen console and overlays dialogs/select/download/notice. Console key input, scrolling, tab selection, input editing and HTML find remain engine-side for the next batch, which still sends a fresh snapshot after each change. Engine drawing remains for the console HTML find fallback. | This is a display-only console batch: it moves the last large cell composition while keeping the state machine stable. The next batch moves console input and removes the engine console renderer. |
+| D70 | 2026-11-22 | Move console input, tab switching, scrolling, input editing/history, copy and quit to the front end. `ConsoleAction` carries pane/cycle/scroll/top/bottom/focus/cancel/input/copy/quit/cancel-quit/close; the engine applies it and sends a fresh `ConsoleView`. Mouse tabs/wheel remain engine-routed keys. Console HTML find still uses the engine fallback and keys (`/`, `n`, `N`) are forwarded there; a normal frame clears the front-end console-active state and a new `ConsoleView` restores it. | This closes the console state machine except its find mode, which needs layout-aware match highlighting. The last remaining architecture work is navigation/ownership and the session split. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -156,7 +157,7 @@ seam; the note names which part goes where.
 | --- | --- | --- |
 | `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
-| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints and console composition are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Console input/find state and engine fallback modals/hints still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition and console input are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Console HTML find and engine fallback modals/hints still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
 | `browser_forms.go`, `browser_selection.go`, `reader.go` | engine | Form state, selection and reader extraction are page content. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
@@ -268,9 +269,10 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 - [x] The link-hint overlay and prefix/confirmation input are front-end-owned
       through `Hints`/`HintResult`; target discovery and following stay in the
       engine.
-- [~] The console view is front-end-composed from `ConsoleView`. Console key
-      input, scrolling, tab selection, input editing and HTML find still live
-      in the engine, which sends a new snapshot after each change.
+- [x] The console view, input, tab switching, scrolling, input history, copy
+      and quit are front-end-owned through `ConsoleView`/`ConsoleAction`.
+- [~] Console HTML find still uses the engine fallback for layout-aware
+      highlighting; `/`, `n` and `N` are forwarded there.
 - [x] JS dialogs are request/response messages: the engine sends `Dialog` and
       blocks, the front end draws/edits and answers with `DialogResult`. The
       direct-key path remains for tests and automation.
@@ -426,9 +428,9 @@ trusted-shell split, then Phase 6. Dependency order:
       menu, console, hint, dialog, download/notice, selection and image-progress
       state.
 - [~] Base shell keys, quit, URL/vim prompt, page find, view/zoom windows,
-      dialogs, the select popup, download/notice modals, link hints and
-      header/footer mouse are front-end-owned. The console is front-end-drawn;
-      its input/find state machine still routes through the engine.
+      dialogs, the select popup, download/notice modals, link hints, console
+      input and header/footer mouse are front-end-owned. Console HTML find and
+      navigation state still route through the engine.
 - [~] Toolbar, footer and scrollbar drawing moved. Overlays, console, find bar
       and menus still live in `internal/browser`; `Browser.drawChrome`,
       `presentComposed`, `protocol.Chrome` and the full-frame fallback remain
@@ -1017,3 +1019,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7h | Batch 8: download and notice modals moved to the front end via `Download`/`Notice` and `ModalClose`; OSC 52 copy lives in the front end; engine keeps its fallback modal path. Added modal layout/draw, transport, copy/close and download-parity tests. | `go test ./...`, `go vet`, full `-race`, modal transport/copy/parity tests, PTY download-link copy, dump/PNG hashes | Batch 9: console and hint overlay |
 | 2026-11-22 | 7i | Batch 9: link hints moved to the front end via `Hints`/`HintResult`; engine computes targets/labels/glyph cells/hrefs, front end paints, narrows prefixes, confirms F destinations and answers. Engine keeps its direct hint path. Added hint transport/input/draw tests and PTY f/F checks. | `go test ./...`, `go vet`, full `-race`, hint transport/input/draw tests, PTY f/F checks, dump/PNG hashes | Batch 10: console |
 | 2026-11-22 | 7j | Batch 10: console composition moved to the front end via `ConsoleView`; engine supplies visible lines/tabs/summary/input/footer, front end draws the full screen and overlays dialogs/select/download/notice. Console input/find remains engine-side by design. Added console snapshot/draw/transport tests and PTY console checks. | `go test ./...`, `go vet`, full `-race`, console view/draw tests, PTY console tabs/input/close, dump/PNG hashes | Batch 11: console input and find |
+| 2026-11-22 | 7k | Batch 11: console input, tabs, scrolling, history, copy and quit moved to the front end via `ConsoleAction`; engine applies actions and returns snapshots. HTML find remains engine fallback and `/`/`n`/`N` forward there. Added console action/input/quit tests and PTY console editing/tab/close checks. | `go test ./...`, `go vet`, full `-race`, console action/input tests, PTY console editing/tab/close, dump/PNG hashes | Batch 12: console HTML find, then navigation/session split |

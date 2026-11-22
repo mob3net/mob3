@@ -192,6 +192,34 @@ type SelectResult struct {
 
 func (SelectResult) commandKind() Kind { return CmdSelectResult }
 
+// ConsoleOp is one front-end console action.
+type ConsoleOp uint8
+
+const (
+	ConsolePane ConsoleOp = iota + 1
+	ConsoleCycle
+	ConsoleScroll
+	ConsoleTop
+	ConsoleBottom
+	ConsoleFocus
+	ConsoleCancelEdit
+	ConsoleInput
+	ConsoleCopy
+	ConsoleQuit
+	ConsoleCancelQuit
+	ConsoleClose
+)
+
+// ConsoleAction applies one console operation.
+type ConsoleAction struct {
+	Op    ConsoleOp
+	Pane  int
+	Delta int
+	Text  string
+}
+
+func (ConsoleAction) commandKind() Kind { return CmdConsoleAction }
+
 // ConsoleView is the visible console screen: tabs, the active pane's visible
 // lines, optional request summary, input row and footer.
 type ConsoleView struct {

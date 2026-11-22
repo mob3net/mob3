@@ -172,6 +172,43 @@ func (b *Browser) closeConsole() {
 	b.toggleConsole()
 }
 
+func (b *Browser) applyConsoleAction(v protocol.ConsoleAction) {
+	if !b.consoleOpen {
+		return
+	}
+	switch v.Op {
+	case protocol.ConsolePane:
+		b.selectConsolePane(v.Pane)
+		b.consoleEdit = false
+	case protocol.ConsoleCycle:
+		b.consoleCyclePane(v.Delta)
+	case protocol.ConsoleScroll:
+		b.scrollConsolePane(b.consolePane, v.Delta)
+	case protocol.ConsoleTop:
+		b.scrollConsoleToEnd(b.consolePane, true)
+	case protocol.ConsoleBottom:
+		b.scrollConsoleToEnd(b.consolePane, false)
+	case protocol.ConsoleFocus:
+		b.focusConsoleInput()
+	case protocol.ConsoleCancelEdit:
+		b.consoleEdit = false
+	case protocol.ConsoleInput:
+		b.consoleText = v.Text
+		b.runConsoleInput()
+		b.consoleEdit = true
+	case protocol.ConsoleCopy:
+		b.copyConsole()
+	case protocol.ConsoleQuit:
+		b.quitPending = true
+		b.status = quitConfirmText
+	case protocol.ConsoleCancelQuit:
+		b.quitPending = false
+		b.status = ""
+	case protocol.ConsoleClose:
+		b.closeConsole()
+	}
+}
+
 func (b *Browser) handleConsoleKey(k string) bool {
 	if b.findActive {
 		return b.handleFindKey(k)

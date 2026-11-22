@@ -102,8 +102,8 @@ destination; the tracker lists what remains.
   (`frontend.SessionLoop`), normal header/footer composition, header/footer
   and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
-  select popup, download/notice modals, link hints and console composition. It
-  does not yet own console input/HTML find or navigation state.
+  select popup, download/notice modals, link hints, console composition and
+  console input. It does not yet own console HTML find or navigation state.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -169,14 +169,14 @@ destination; the tracker lists what remains.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
 | `internal/frontend/select.go` | Page select popup model, layout and `SelectResult` answer. |
 | `internal/frontend/download.go` | Download curl hint and notice modal layout/drawing. |
 | `internal/frontend/hints.go` | Link-hint overlay painting and prefix matching data. |
-| `internal/frontend/console.go` | Console snapshot renderer (tabs, pane lines, input row, footer) and console overlay stacking. |
+| `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data and console overlay stacking. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. The scrollbar painter is in `present.go`. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |

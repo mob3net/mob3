@@ -75,6 +75,14 @@ type SessionLoop struct {
 	hintView   HintView
 	hintBase   protocol.State
 
+	consoleActive bool
+	consoleView   protocol.ConsoleView
+	consolePane   int
+	consoleEdit   bool
+	consoleText   string
+	consoleCursor int
+	consoleHist   [5]promptHistory
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -272,9 +280,7 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			l.Presenter.SetState(v)
 		}
 	case protocol.ConsoleView:
-		if l.Presenter != nil {
-			_ = l.Presenter.PresentConsole(&v)
-		}
+		l.applyConsoleView(v)
 	case protocol.Hints:
 		l.startHints(v)
 	case protocol.Download:
@@ -299,6 +305,7 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			_, _ = l.State.Clipboard.Write([]byte(OSC52(v.Text)))
 		}
 	case protocol.Frame:
+		l.consoleActive = false
 		if l.Presenter != nil {
 			if err := l.Presenter.Present(v, l.State.Scroll, l.State.Native); err != nil {
 				return false, err
@@ -315,6 +322,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.consoleActive {
+		return l.handleConsoleKey(k)
+	}
 	if l.hintActive {
 		return l.handleHintKey(k)
 	}
@@ -406,6 +416,144 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
 	return false, false
+}
+
+func (l *SessionLoop) applyConsoleView(v protocol.ConsoleView) {
+	if !l.consoleActive {
+		l.consolePane = v.Pane
+		l.consoleEdit = false
+		l.consoleText = ""
+		l.consoleCursor = 0
+	}
+	l.consoleActive = true
+	l.consolePane = v.Pane
+	l.consoleView = v
+	if l.consoleEdit {
+		l.consoleView.Input = l.consoleText
+		l.consoleView.Cursor = l.consoleCursor
+		l.consoleView.Edit = true
+		l.consoleView.Hint = ""
+	}
+	l.presentConsole()
+}
+
+func (l *SessionLoop) presentConsole() {
+	if l.Presenter == nil {
+		return
+	}
+	l.consoleView.Input = l.consoleText
+	l.consoleView.Cursor = l.consoleCursor
+	l.consoleView.Edit = l.consoleEdit
+	if l.consoleEdit {
+		l.consoleView.Hint = ""
+	}
+	l.consoleView.Pane = l.consolePane
+	_ = l.Presenter.PresentConsole(&l.consoleView)
+}
+
+func (l *SessionLoop) consoleAction(a protocol.ConsoleAction) {
+	_ = l.Session.Send(protocol.Command{Body: a})
+}
+
+func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
+	if l.consoleView.Quit {
+		switch k {
+		case "y", "Y", "enter":
+			return true, true
+		default:
+			l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCancelQuit})
+			return true, false
+		}
+	}
+	if l.consoleEdit {
+		switch k {
+		case "esc":
+			l.consoleEdit = false
+			l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCancelEdit})
+			l.presentConsole()
+			return true, false
+		case "ctrl-c":
+			return true, false
+		case "tab":
+			l.consoleEdit = false
+			l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
+			l.presentConsole()
+			return true, false
+		case "backtab":
+			l.consoleEdit = false
+			l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
+			l.presentConsole()
+			return true, false
+		case "enter":
+			text := strings.TrimSpace(l.consoleText)
+			if text != "" {
+				l.consoleHist[l.consolePane].record(text)
+				l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: text})
+			}
+			l.consoleText = ""
+			l.consoleCursor = 0
+			l.presentConsole()
+			return true, false
+		case "up", "ctrl-p":
+			if prev, ok := l.consoleHist[l.consolePane].up(l.consoleText); ok {
+				l.consoleText = prev
+				l.consoleCursor = len(prev)
+			}
+			l.presentConsole()
+			return true, false
+		case "down", "ctrl-n":
+			if next, ok := l.consoleHist[l.consolePane].down(l.consoleText); ok {
+				l.consoleText = next
+				l.consoleCursor = len(next)
+			}
+			l.presentConsole()
+			return true, false
+		}
+		if k == "ctrl-a" {
+			k = "home"
+		}
+		text, cur, _ := editLineKey(l.consoleText, l.consoleCursor, k, editConfig{maxRunes: 8192})
+		l.consoleText = text
+		if cur > len(text) {
+			cur = len(text)
+		}
+		l.consoleCursor = cur
+		l.presentConsole()
+		return true, false
+	}
+	switch k {
+	case "esc", "!":
+		l.consoleActive = false
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleClose})
+	case "q", "ctrl-c":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleQuit})
+	case "tab", "l", "right":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
+	case "backtab", "h", "left":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
+	case ":", "enter":
+		if l.consolePane != 4 {
+			l.consolePane = 0
+		}
+		l.consoleEdit = true
+		l.consoleText = ""
+		l.consoleCursor = 0
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+		l.presentConsole()
+	case "k", "up":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: 1})
+	case "j", "down":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+	case "g":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleTop})
+	case "G":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleBottom})
+	case "y":
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
+	case "/", "n", "N":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}})
+	}
+	return true, false
 }
 
 func (l *SessionLoop) startHints(v protocol.Hints) {

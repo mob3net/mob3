@@ -516,3 +516,29 @@ func TestConsoleViewTransport(t *testing.T) {
 		t.Fatalf("request view = %+v", sink.view)
 	}
 }
+
+func TestConsoleActionInputAndTabs(t *testing.T) {
+	b := NewBrowser(80, 24)
+	b.noDraw = true
+	b.toggleConsole()
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+	if !b.consoleEdit {
+		t.Fatal("focus did not open input")
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: "1+1"})
+	if len(b.jsLog) == 0 || b.consoleText != "" {
+		t.Fatalf("jsLog = %#v text=%q", b.jsLog, b.consoleText)
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: consoleRequests})
+	if b.consolePane != consoleRequests || b.consoleEdit {
+		t.Fatalf("pane=%d edit=%v", b.consolePane, b.consoleEdit)
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: 1})
+	if b.reqScroll == 0 {
+		t.Fatal("scroll did not change")
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleClose})
+	if b.consoleOpen {
+		t.Fatal("console stayed open")
+	}
+}

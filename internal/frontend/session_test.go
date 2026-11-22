@@ -541,3 +541,69 @@ func TestHintAskConfirmsDestination(t *testing.T) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
 }
+
+func TestConsoleInputKeys(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	view := protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: 0,
+		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
+		Hint: "JavaScript input",
+	}
+	loop.applyEvent(protocol.Event{Body: view})
+	if !loop.consoleActive {
+		t.Fatal("console did not activate")
+	}
+	loop.handleConsoleKey(":")
+	if !loop.consoleEdit {
+		t.Fatal("console input did not focus")
+	}
+	s.cmds = nil
+	for _, r := range "1+1" {
+		loop.handleConsoleKey(string(r))
+	}
+	if loop.consoleText != "1+1" || loop.consoleCursor != 3 {
+		t.Fatalf("input = %q cursor=%d", loop.consoleText, loop.consoleCursor)
+	}
+	loop.handleConsoleKey("enter")
+	if len(s.cmds) != 1 {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleInput || a.Text != "1+1" {
+		t.Fatalf("input action = %#v", s.cmds[0].Body)
+	}
+	if loop.consoleText != "" {
+		t.Fatalf("input not cleared: %q", loop.consoleText)
+	}
+	s.cmds = nil
+	loop.handleConsoleKey("esc") // leave input
+	s.cmds = nil
+	loop.handleConsoleKey("tab")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1}) {
+		t.Fatalf("cycle action = %#v", s.cmds)
+	}
+}
+
+func TestConsoleQuitAndCloseKeys(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Tabs: []string{"a"}}})
+	loop.handleConsoleKey("q")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleQuit}) {
+		t.Fatalf("quit action = %#v", s.cmds)
+	}
+	s.cmds = nil
+	loop.writeConsoleQuitForTest()
+	if handled, quit := loop.handleConsoleKey("y"); !handled || !quit {
+		t.Fatalf("y handled=%v quit=%v", handled, quit)
+	}
+	s.cmds = nil
+	loop.consoleActive = true
+	loop.consoleView.Quit = false
+	loop.handleConsoleKey("esc")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
+		t.Fatalf("close action = %#v", s.cmds)
+	}
+}
+
+func (l *SessionLoop) writeConsoleQuitForTest() { l.consoleView.Quit = true }

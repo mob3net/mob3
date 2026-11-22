@@ -35,6 +35,7 @@ func testCommands() []Command {
 		{Session: 11, Seq: 11, Body: SelectResult{ID: 9, Index: 2, Cancel: true}},
 		{Session: 12, Seq: 12, Body: ModalClose{Kind: ModalDownload, Copied: true, Chars: 12}},
 		{Session: 13, Seq: 13, Body: HintResult{Target: 2}},
+		{Session: 15, Seq: 15, Body: ConsoleAction{Op: ConsoleInput, Text: "1+1"}},
 		{Session: 8, Seq: 8, Body: Find{Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},

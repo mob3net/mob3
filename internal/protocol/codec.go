@@ -129,6 +129,12 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		kind = CmdHintResult
 		e.i32(v.Target)
 		e.bool(v.Cancel)
+	case ConsoleAction:
+		kind = CmdConsoleAction
+		e.u8(uint8(v.Op))
+		e.i32(v.Pane)
+		e.i32(v.Delta)
+		e.str(v.Text)
 	case ClientError:
 		kind = CmdClientError
 		e.str(v.Message)
@@ -408,6 +414,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = ModalClose{Kind: d.u8(), Copied: d.bool(), Chars: d.i32()}
 	case CmdHintResult:
 		body = HintResult{Target: d.i32(), Cancel: d.bool()}
+	case CmdConsoleAction:
+		body = ConsoleAction{Op: ConsoleOp(d.u8()), Pane: d.i32(), Delta: d.i32(), Text: d.str()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
 	case CmdAutomation:

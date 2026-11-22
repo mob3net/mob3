@@ -53,6 +53,7 @@ const (
 	CmdSelectResult
 	CmdModalClose
 	CmdHintResult
+	CmdConsoleAction
 )
 
 const (

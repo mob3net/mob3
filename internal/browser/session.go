@@ -212,6 +212,8 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		b.applyModalClose(v)
 	case protocol.HintResult:
 		b.applyHintResult(v)
+	case protocol.ConsoleAction:
+		b.applyConsoleAction(v)
 	case protocol.ClientError:
 		b.logEngineError(v.Message)
 	case protocol.Shutdown:
