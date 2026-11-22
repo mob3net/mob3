@@ -752,8 +752,9 @@ agreement, the non-negotiable constraints and the change protocol.
   size column with `cached`, and a pinned bottom line shows cache bytes used,
   total budget and entry count; the list is in memory
   only, resets on navigation and is capped at the latest 512 entries. A
-  local-network request blocked by the guard shows as `ERR` with its reason.
-  Long request and storage lines wrap to the pane width with a hanging indent. Storage
+  local-network or mixed-content request blocked by the guard shows as `ERR`
+  with its reason; upgraded image requests show the HTTPS URL. Long request and
+  storage lines wrap to the pane width with a hanging indent. Storage
   lists the current page's cookies, including HttpOnly cookies, one per line:
   `name=value`, `[HttpOnly]`/`[Secure]`/`[SameSite=…]` flags, the domain (a
   leading dot marks a domain cookie), path, and `session` or

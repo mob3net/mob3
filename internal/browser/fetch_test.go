@@ -1097,6 +1097,8 @@ func TestXHRLocalNetworkGuard(t *testing.T) {
 	}
 	// The same target is reachable from a page that itself loaded locally.
 	page.Local = true
+	page.URL = mustURL(t, "http://127.0.0.1:3000/")
+	page.Base = page.URL
 	if _, _, _, _, _, err := j.httpXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil); err != nil {
 		t.Fatalf("local-page XHR was blocked: %v", err)
 	}
@@ -1169,6 +1171,119 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	data, _, _, _, err = l.fetchCtx(local, u, false)
 	if err != nil || string(data) != "local-secret" || reached {
 		t.Fatalf("local page cache hit = %q, %v (request made: %v)", data, err, reached)
+	}
+}
+
+func TestMixedContentBlocksActiveSubresources(t *testing.T) {
+	l := NewLoader()
+	reached := false
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		return nil, errors.New("transport should not run")
+	})
+	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
+	for _, kind := range []string{"js", "css"} {
+		ctx := withRequestKind(secure, kind)
+		if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://example.com/x"), false); !errors.Is(err, errMixedContentBlocked) {
+			t.Fatalf("%s mixed content error = %v, want blocked", kind, err)
+		}
+	}
+	if reached {
+		t.Fatal("blocked mixed content reached the transport")
+	}
+}
+
+func TestMixedContentUpgradesImages(t *testing.T) {
+	l := NewLoader()
+	var got string
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		got = req.URL.String()
+		h := make(http.Header)
+		h.Set("Content-Type", "image/png")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("png")), Request: req,
+		}, nil
+	})
+	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
+	ctx := withRequestKind(secure, "img")
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/a.png"), false); err != nil {
+		t.Fatalf("image upgrade failed: %v", err)
+	}
+	if got != "https://cdn.example/a.png" {
+		t.Fatalf("image URL = %q, want the HTTPS upgrade", got)
+	}
+	// An IP-literal image cannot be upgraded and is blocked instead.
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://93.184.216.34/a.png"), false); !errors.Is(err, errMixedContentBlocked) {
+		t.Fatalf("IP-literal image error = %v, want blocked", err)
+	}
+}
+
+func TestMixedContentAllowsInsecureDocument(t *testing.T) {
+	l := NewLoader()
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/javascript")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("1")), Request: req,
+		}, nil
+	})
+	page := withRequestPage(context.Background(), mustURL(t, "http://example.com/"), false)
+	ctx := withRequestKind(page, "js")
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/x.js"), false); err != nil {
+		t.Fatalf("HTTP page subresource was blocked: %v", err)
+	}
+}
+
+func TestMixedContentBlocksDowngradeRedirect(t *testing.T) {
+	l := NewLoader()
+	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Location", "http://example.com/next.js")
+		return &http.Response{
+			StatusCode: http.StatusFound, Status: "302 Found", Header: h,
+			Body: io.NopCloser(strings.NewReader("")), Request: req,
+		}, nil
+	})
+	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
+	ctx := withRequestKind(secure, "js")
+	_, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "https://example.com/start.js"), false)
+	if !errors.Is(err, errMixedContentBlocked) {
+		t.Fatalf("downgrade redirect error = %v, want blocked", err)
+	}
+}
+
+func TestXHRMixedContent(t *testing.T) {
+	b := NewBrowser(40, 10)
+	loader := NewLoader()
+	b.loader = loader
+	reached := false
+	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		reached = true
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		h.Set("Access-Control-Allow-Origin", "*")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})
+	page := newJSPage(`<html><body></body></html>`, "")
+	j := newJSRuntime(b, page)
+	if _, _, _, _, _, err := j.httpXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil); !errors.Is(err, errMixedContentBlocked) {
+		t.Fatalf("secure-page XHR error = %v, want mixed-content block", err)
+	}
+	if reached {
+		t.Fatal("blocked XHR reached the transport")
+	}
+	// The same request is allowed from an insecure document.
+	page.URL = mustURL(t, "http://example.com/")
+	if _, _, _, _, _, err := j.httpXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil); err != nil {
+		t.Fatalf("insecure-page XHR was blocked: %v", err)
+	}
+	if !reached {
+		t.Fatal("insecure-page XHR did not reach the transport")
 	}
 }
 

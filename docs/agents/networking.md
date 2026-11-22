@@ -65,6 +65,13 @@ agreement, the non-negotiable constraints and the change protocol.
   document is not reused by a public document. With an environment HTTP proxy
   the target is resolved by the proxy, so only literal and local names are
   caught.
+- **Mixed content:** a document loaded over `https` upgrades `http` image
+  requests (including CSS background images) to `https`; a failed upgrade is not
+  retried over HTTP. Other `http` subresources (scripts, stylesheets, modules,
+  `@import`, XHR/fetch) are blocked, and a secure subresource redirect to HTTP is
+  blocked. IP-literal image hosts are blocked rather than upgraded. Top-level
+  navigation and documents loaded over `http` are unaffected. Blocked requests
+  show as `ERR` in the console request list.
 - **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
   only when the document itself was loaded from `file:`. Remote (http/https/
   data) documents cannot load file resources, navigate the viewport to `file:`

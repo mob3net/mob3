@@ -46,14 +46,19 @@ agreement, the non-negotiable constraints and the change protocol.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
-- Mixed content is not blocked: an HTTPS page may still load HTTP subresources.
-  A local-network guard blocks public pages from reaching loopback, private,
-  link-local, CGNAT and reserved addresses; literal local hosts and local names
-  are rejected immediately and other names are checked after DNS resolution at
-  connect time. Documents that loaded locally keep access, and top-level
-  navigation is not blocked. This is best-effort, not a sandbox; with an HTTP
-  proxy the target is resolved by the proxy, so only literal/local names are
-  caught.
+- Mixed content is handled for `https` documents: HTTP image requests
+  (including CSS background images and `srcset`/`<picture>` candidates) are
+  upgraded to HTTPS without an HTTP fallback, while HTTP scripts, stylesheets,
+  modules, `@import`, XHR/fetch and secure-subresource redirects to HTTP are
+  blocked. IP-literal image hosts are blocked instead of upgraded. Audio/video
+  and web fonts are not fetched, form submissions are not mixed-content checked,
+  there is no per-site override, and top-level navigation to HTTP stays allowed. The local-network guard blocks public pages
+  from reaching loopback, private, link-local, CGNAT and reserved addresses;
+  literal local hosts and local names are rejected immediately and other names
+  are checked after DNS resolution at connect time. Documents that loaded
+  locally keep access, and top-level navigation is not blocked. This is
+  best-effort, not a sandbox; with an HTTP proxy the target is resolved by the
+  proxy, so only literal/local names are caught.
 - Browser checks and anti-bot/firewall blocks cannot be completed. On
   401/403/429/503 responses, MOB³ looks for Cloudflare, CAPTCHA,
   DataDome/PerimeterX, Imperva/Sucuri, “verify you are human”, “unusual

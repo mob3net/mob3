@@ -978,9 +978,14 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	reqCtx := withRequestKind(context.Background(), kind)
 	reqCtx = withRequestPage(reqCtx, origin, j.page.Local)
 	reqCtx = withRequestTarget(reqCtx, u)
-	if requestMetaFrom(reqCtx).blockLocal && isLocalURL(u) {
+	meta := requestMetaFrom(reqCtx)
+	if meta.blockLocal && isLocalURL(u) {
 		j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
 		return 0, nil, "", nil, nil, errLocalNetworkBlocked
+	}
+	if meta.pageSecure && u.Scheme == "http" {
+		j.b.logJS("warn", "blocked mixed content: "+u.Redacted())
+		return 0, nil, "", nil, nil, errMixedContentBlocked
 	}
 	req, err := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
 	if err != nil {
@@ -1004,6 +1009,9 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
 		}
+		if origin.Scheme == "https" && next.URL.Scheme == "http" {
+			return errMixedContentBlocked
+		}
 		if !crossOrigin && !sameOrigin(next.URL, origin) {
 			return errors.New("cross-origin redirect blocked")
 		}
@@ -1018,6 +1026,10 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		if isLocalNetworkError(err) {
 			j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
 			err = errLocalNetworkBlocked
+		}
+		if isMixedContentError(err) {
+			j.b.logJS("warn", "blocked mixed content: "+u.Redacted())
+			err = errMixedContentBlocked
 		}
 		return 0, nil, "", nil, nil, err
 	}

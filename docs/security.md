@@ -55,9 +55,10 @@ Documents that themselves loaded from a local address keep access, and
 top-level navigation is not blocked. Blocked requests appear as `ERR` in the
 console request list.
 
-MOB³ does not implement browser-style mixed-content blocking: an HTTPS page may
-still load `http` subresources. The local-network guard only covers local and
-private destinations.
+MOB³ upgrades HTTP image requests on HTTPS pages to HTTPS and does not retry
+them over HTTP; HTTP scripts, stylesheets, modules, `@import`, XHR/fetch and
+secure-subresource redirects to HTTP are blocked. IP-literal image hosts are
+blocked rather than upgraded. Top-level navigation to HTTP remains allowed.
 
 ## Blocked sites and challenges
 

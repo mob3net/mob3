@@ -174,10 +174,12 @@ type requestMeta struct {
 	// pageURL is the document that initiated the request. blockLocal marks a
 	// request from a public document that may therefore not reach loopback,
 	// private or link-local addresses. targetURL lets the dial guard tell a
-	// direct connection from one made through an HTTP proxy.
+	// direct connection from one made through an HTTP proxy. pageSecure marks
+	// an HTTPS document, whose HTTP subresources are upgraded or blocked.
 	pageURL    string
 	targetURL  string
 	blockLocal bool
+	pageSecure bool
 }
 
 // pageSpace records whether the document's own connection landed on a local
@@ -205,6 +207,7 @@ func withRequestPage(ctx context.Context, page *url.URL, pageLocal bool) context
 	if page != nil {
 		m.pageURL = page.String()
 		m.blockLocal = (page.Scheme == "http" || page.Scheme == "https") && !pageLocal
+		m.pageSecure = page.Scheme == "https"
 	}
 	return context.WithValue(ctx, requestMetaKey{}, m)
 }
@@ -242,6 +245,30 @@ func requestUsesProxy(raw string) bool {
 // errLocalNetworkBlocked is returned when a public document tries to reach a
 // loopback, private or link-local address.
 var errLocalNetworkBlocked = errors.New("blocked local-network request")
+
+// errMixedContentBlocked is returned when an HTTPS document requests a
+// blockable HTTP subresource, or a redirect tries to downgrade one.
+var errMixedContentBlocked = errors.New("blocked mixed content: HTTP subresource on an HTTPS page")
+
+// applyMixedContent upgrades an HTTP image requested by an HTTPS document to
+// HTTPS, and rejects every other HTTP subresource. Upgraded images are not
+// retried over HTTP if the HTTPS request fails.
+func applyMixedContent(ctx context.Context, u *url.URL) (*url.URL, error) {
+	meta := requestMetaFrom(ctx)
+	if u == nil || !meta.pageSecure || u.Scheme != "http" {
+		return u, nil
+	}
+	if meta.kind == "img" && net.ParseIP(u.Hostname()) == nil {
+		up := *u
+		up.Scheme = "https"
+		return &up, nil
+	}
+	return u, errMixedContentBlocked
+}
+
+func isMixedContentError(err error) bool {
+	return errors.Is(err, errMixedContentBlocked)
+}
 
 // isLocalHost reports whether a URL host is a loopback, private, link-local or
 // local name. Hosts that only resolve locally are caught after DNS resolution
@@ -894,6 +921,15 @@ func (l *Loader) fetchCtx(ctx context.Context, u *url.URL, allowFile bool) (data
 	return l.fetchRequest(ctx, http.MethodGet, u, nil, "", allowFile)
 }
 
+// recordBlocked adds a blocked request to the console request log.
+func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, err error) {
+	if kind == "" || u == nil {
+		return
+	}
+	reqID, _ := l.startRequest(gen, method, u.String(), kind)
+	l.finishRequest(reqID, gen, 0, 0, 0, err)
+}
+
 func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string, allowFile bool) (data []byte, ctype string, final *url.URL, status int, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, "", u, 0, err
@@ -923,11 +959,12 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	if meta.blockLocal && isLocalURL(u) {
 		// A public document may not address a literal local host. Names that
 		// only resolve locally are caught by localNetworkControl at dial time.
-		if meta.kind != "" {
-			reqID, _ := l.startRequest(gen, method, u.String(), meta.kind)
-			l.finishRequest(reqID, gen, 0, 0, 0, errLocalNetworkBlocked)
-		}
+		l.recordBlocked(gen, method, u, meta.kind, errLocalNetworkBlocked)
 		return nil, "", u, 0, errLocalNetworkBlocked
+	}
+	if u, err = applyMixedContent(ctx, u); err != nil {
+		l.recordBlocked(gen, method, u, meta.kind, err)
+		return nil, "", u, 0, err
 	}
 	cacheable := method == http.MethodGet && len(body) == 0 &&
 		(u.Scheme == "http" || u.Scheme == "https") &&
@@ -1012,10 +1049,28 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		req.Header.Set("User-Agent", l.userAgent)
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
 		req.Header.Set("Accept-Language", "en")
-		resp, e := l.client.Do(req)
+		client := l.client
+		if meta.pageSecure && meta.kind != "" && meta.kind != "doc" {
+			// A secure subresource may not redirect back down to HTTP.
+			c := *l.client
+			c.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("too many redirects")
+				}
+				if next.URL.Scheme == "http" {
+					return errMixedContentBlocked
+				}
+				return nil
+			}
+			client = &c
+		}
+		resp, e := client.Do(req)
 		if e != nil {
 			if isLocalNetworkError(e) {
 				e = errLocalNetworkBlocked
+			}
+			if isMixedContentError(e) {
+				e = errMixedContentBlocked
 			}
 			return nil, "", u, 0, e
 		}
@@ -1656,6 +1711,11 @@ func decodeMedia(ctx context.Context, ctype string, data []byte) (image.Image, e
 
 // fetchImageResult downloads and decodes one image, using the session cache.
 func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
+	u, err := applyMixedContent(ctx, u)
+	if err != nil {
+		l.recordBlocked(gen, "GET", u, "img", err)
+		return nil, false
+	}
 	key := u.String()
 	meta := requestMetaFrom(ctx)
 	if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.blockLocal && cachedLocal) {
@@ -1777,6 +1837,12 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 		n.ImgFailed = false
 		u, err := base.Parse(src)
 		if err != nil {
+			n.ImgFailed = true
+			continue
+		}
+		u, mcErr := applyMixedContent(ctx, u)
+		if mcErr != nil {
+			l.recordBlocked(gen, "GET", u, "img", mcErr)
 			n.ImgFailed = true
 			continue
 		}
