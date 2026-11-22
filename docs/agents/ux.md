@@ -651,7 +651,8 @@ agreement, the non-negotiable constraints and the change protocol.
   `length` plus named property reads, writes and `delete` against the same
   map. `document.cookie` reads and writes the same in-memory session jar
   as HTTP requests, honors Domain/Path/Expires/Max-Age/Secure and hides
-  HttpOnly cookies; `navigator.cookieEnabled` is true. Cookies are not
+  HttpOnly cookies; it also cannot replace or delete a server-set HttpOnly
+  cookie. `navigator.cookieEnabled` is true. Cookies are not
   persisted. `XMLHttpRequest` supports
   basic HTTP methods, headers, `responseText`/`response` (text/
   json/arraybuffer), status and callbacks. Same-origin requests always work;
@@ -727,7 +728,8 @@ agreement, the non-negotiable constraints and the change protocol.
   commands and results append to a scrollback that keeps the newest 500 lines
   and survives page loads; new output replaces the oldest lines, a single
   oversized result keeps its beginning with a truncation note, and
-  `clear`/`cls` empties it. The JS logs input accepts
+  `clear`/`cls` empties it. Long tool output wraps to the pane width with a
+  hanging indent; copying keeps it unwrapped. The JS logs input accepts
   `clear`/`cls` too and empties the JS log (and its error state) instead of
   evaluating JavaScript. These commands must never start or wait for a
   navigation, because the interactive event loop owns load results;
@@ -749,9 +751,14 @@ agreement, the non-negotiable constraints and the change protocol.
   for the page, CSS, scripts, images, `fetch` and XHR. Cache hits replace the
   size column with `cached`, and a pinned bottom line shows cache bytes used,
   total budget and entry count; the list is in memory
-  only, resets on navigation and is capped at the latest 512 entries. Storage
-  lists the current page's cookies — including HttpOnly cookies, marked as
-  such — and the in-memory `localStorage`/`sessionStorage` key/value pairs.
+  only, resets on navigation and is capped at the latest 512 entries. Long
+  request and storage lines wrap to the pane width with a hanging indent. Storage
+  lists the current page's cookies, including HttpOnly cookies, one per line:
+  `name=value`, `[HttpOnly]`/`[Secure]`/`[SameSite=…]` flags, the domain (a
+  leading dot marks a domain cookie), path, and `session` or
+  `expires YYYY-MM-DD`. The in-memory `localStorage`/`sessionStorage`
+  key/value pairs follow; long values wrap with a hanging indent to the pane
+  width, while `y` copies them unwrapped.
   HTML shows the raw decoded page source (pre-JavaScript DOM, wrapped to the
   console width and opening at the top) retained as `Page.RawHTML`, cached per
   page and width.

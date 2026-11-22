@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -464,7 +465,50 @@ func wrapCells(s string, width int) []string {
 	return out
 }
 
+// wrapCellsHanging is wrapCells with an indent for continuation lines, so a
+// wrapped request or storage entry stays visually attached to its prefix.
+func wrapCellsHanging(s string, width, indent int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	if indent < 0 || indent+2 > width {
+		indent = 0
+	}
+	var out []string
+	var line strings.Builder
+	col := 0
+	for _, r := range s {
+		rw := runeWidth(r)
+		if rw == 0 {
+			line.WriteRune(r)
+			continue
+		}
+		if col+rw > width {
+			out = append(out, line.String())
+			line.Reset()
+			for i := 0; i < indent; i++ {
+				line.WriteByte(' ')
+			}
+			col = indent
+		}
+		line.WriteRune(r)
+		col += rw
+	}
+	if line.Len() > 0 {
+		out = append(out, line.String())
+	}
+	if len(out) == 0 {
+		out = append(out, "")
+	}
+	return out
+}
+
 func (b *Browser) requestLines() []string {
+	return b.requestLinesWidth(0)
+}
+
+// requestLinesWidth formats the request log, wrapping long URLs to width cells.
+func (b *Browser) requestLinesWidth(width int) []string {
 	if b.loader == nil {
 		return []string{"(requests unavailable)"}
 	}
@@ -491,7 +535,7 @@ func (b *Browser) requestLines() []string {
 		if r.Err != "" {
 			line += "  " + stripTerminalControls(r.Err)
 		}
-		out = append(out, line)
+		out = appendWrappedHanging(out, line, width)
 	}
 	if len(out) == 0 {
 		out = append(out, "(no requests for this page)")
@@ -527,9 +571,9 @@ func humanSize(n int) string {
 func (b *Browser) consolePaneLines(pane, width int) []string {
 	switch pane {
 	case consoleRequests:
-		return b.requestLines()
+		return b.requestLinesWidth(width)
 	case consoleStorage:
-		return b.storageLines()
+		return b.storageLinesWidth(width)
 	case consoleHTML:
 		return b.htmlLines(width)
 	case consoleTools:
@@ -550,7 +594,7 @@ func (b *Browser) toolLines(width int) []string {
 			out = append(out, "")
 			continue
 		}
-		out = append(out, wrapCells(entry, width)...)
+		out = append(out, wrapCellsHanging(entry, width, 4)...)
 	}
 	return out
 }
@@ -723,8 +767,13 @@ func toolsHelpLines() []string {
 }
 
 // storageLines summarises the current page's cookies, localStorage and
-// sessionStorage. Everything is in memory only.
+// sessionStorage. Everything is in memory only. A non-positive width keeps each
+// entry on one line for copying.
 func (b *Browser) storageLines() []string {
+	return b.storageLinesWidth(0)
+}
+
+func (b *Browser) storageLinesWidth(width int) []string {
 	out := []string{"Cookies"}
 	if b.url == nil || b.loader == nil || (b.url.Scheme != "http" && b.url.Scheme != "https") {
 		out = append(out, "  (not available for this page)")
@@ -747,10 +796,24 @@ func (b *Browser) storageLines() []string {
 			if c.HttpOnly {
 				line += "  [HttpOnly]"
 			}
-			if c.Domain != "" || c.Path != "" {
-				line += "  (" + sanitizeStorageText(c.Domain) + sanitizeStorageText(c.Path) + ")"
+			if c.Secure {
+				line += "  [Secure]"
 			}
-			out = append(out, line)
+			switch c.SameSite {
+			case http.SameSiteLaxMode:
+				line += "  [SameSite=Lax]"
+			case http.SameSiteStrictMode:
+				line += "  [SameSite=Strict]"
+			case http.SameSiteNoneMode:
+				line += "  [SameSite=None]"
+			}
+			line += "  " + sanitizeStorageText(c.Domain) + "  " + sanitizeStorageText(c.Path)
+			if c.Expires.IsZero() {
+				line += "  session"
+			} else {
+				line += "  expires " + c.Expires.UTC().Format("2006-01-02")
+			}
+			out = appendStorageWrapped(out, line, width)
 		}
 	}
 	var local, session map[string]string
@@ -759,10 +822,25 @@ func (b *Browser) storageLines() []string {
 		session = b.js.storageSessionData
 	}
 	out = append(out, "")
-	out = appendStorageSection(out, "localStorage", local, b.js != nil)
+	out = appendStorageSection(out, "localStorage", local, b.js != nil, width)
 	out = append(out, "")
-	out = appendStorageSection(out, "sessionStorage", session, b.js != nil)
+	out = appendStorageSection(out, "sessionStorage", session, b.js != nil, width)
 	return out
+}
+
+// appendStorageWrapped appends a preformatted line, hard-wrapping it to width
+// cells with a hanging indent when width is positive.
+func appendStorageWrapped(out []string, line string, width int) []string {
+	return appendWrappedHanging(out, line, width)
+}
+
+// appendWrappedHanging appends line wrapped to width with a four-cell hanging
+// indent. A non-positive width keeps it on one line for copying.
+func appendWrappedHanging(out []string, line string, width int) []string {
+	if width <= 0 {
+		return append(out, line)
+	}
+	return append(out, wrapCellsHanging(line, width, 4)...)
 }
 
 // htmlLines returns the raw HTML source of the current page, wrapped to
@@ -797,7 +875,7 @@ func (b *Browser) htmlLines(width int) []string {
 	return out
 }
 
-func appendStorageSection(out []string, label string, data map[string]string, available bool) []string {
+func appendStorageSection(out []string, label string, data map[string]string, available bool, width int) []string {
 	out = append(out, label)
 	if !available {
 		return append(out, "  (JavaScript disabled)")
@@ -811,9 +889,17 @@ func appendStorageSection(out []string, label string, data map[string]string, av
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		out = append(out, "  "+sanitizeStorageText(k)+" = "+sanitizeStorageText(data[k]))
+		out = appendStorageEntry(out, k, data[k], width)
 	}
 	return out
+}
+
+// appendStorageEntry appends "  key = value", wrapping the value to width with
+// a hanging indent so a long JSON value stays readable. A non-positive width
+// keeps the entry on one line for copying.
+func appendStorageEntry(out []string, key, value string, width int) []string {
+	line := "  " + sanitizeStorageText(key) + " = " + sanitizeStorageText(value)
+	return appendWrappedHanging(out, line, width)
 }
 
 // sanitizeStorageText keeps a single-cell line per value so one huge or
@@ -1003,7 +1089,6 @@ func (b *Browser) drawConsole(w, h int) {
 		g.Fill(0, h-1, w, 1, ftrBG)
 	}
 	l := newConsoleLayout(h, b.consolePane)
-	reqs := b.requestLines()
 	headStyle := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
 	b.drawConsoleTabs(g, l.tabsY, w, hdrBG, activeBG, headStyle, fg)
 
@@ -1024,13 +1109,13 @@ func (b *Browser) drawConsole(w, h int) {
 			if reqRows > 1 {
 				reqRows--
 			}
-			drawPane(reqs, b.reqScroll, l.bodyY, reqRows)
+			drawPane(b.requestLinesWidth(w-2), b.reqScroll, l.bodyY, reqRows)
 			summaryY := l.bodyY + l.bodyRows - 1
 			summary := truncateWidth(b.requestCacheSummary(), w-2)
 			g.Fill(1, summaryY, maxInt(0, w-2), 1, ftrBG)
 			g.Text(1, summaryY, summary, &Style{Color: RGB(0x8a, 0x9a, 0xaa), FontSize: 16, LineHeight: 1}, RGB(0x8a, 0x9a, 0xaa))
 		case consoleStorage:
-			drawPane(b.storageLines(), b.storageScroll, l.bodyY, l.bodyRows)
+			drawPane(b.storageLinesWidth(w-2), b.storageScroll, l.bodyY, l.bodyRows)
 		case consoleHTML:
 			htmlLines := b.htmlLines(w - 2)
 			drawPane(htmlLines, b.htmlScroll, l.bodyY, l.bodyRows)

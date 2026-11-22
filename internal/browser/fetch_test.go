@@ -961,6 +961,63 @@ func TestCookieJarHttpOnlyReplacement(t *testing.T) {
 	}
 }
 
+func TestCookieJarDocumentCookieCannotReplaceHttpOnly(t *testing.T) {
+	jar := newCookieJar()
+	u := mustURL(t, "https://example.com/foo/bar")
+	jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: "server", Path: "/", HttpOnly: true}})
+
+	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "evil", Path: "/"})
+	if got := cookieMap(jar.Cookies(u))["session"]; got != "server" {
+		t.Fatalf("document.cookie replaced the HttpOnly value with %q", got)
+	}
+	if _, ok := cookieMap(jar.documentCookies(u))["session"]; ok {
+		t.Fatal("replaced HttpOnly cookie became visible")
+	}
+
+	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "", Path: "/", MaxAge: -1})
+	if got := cookieMap(jar.Cookies(u))["session"]; got != "server" {
+		t.Fatalf("document.cookie deleted the HttpOnly cookie (got %q)", got)
+	}
+}
+
+func TestCookieJarDocumentCookieOtherPath(t *testing.T) {
+	jar := newCookieJar()
+	u := mustURL(t, "https://example.com/foo/bar")
+	jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: "server", Path: "/", HttpOnly: true}})
+	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "page", Path: "/foo"})
+	if got := cookieMap(jar.documentCookies(u))["session"]; got != "page" {
+		t.Fatalf("script cookie on another path = %q, want page", got)
+	}
+	root := cookieMap(jar.Cookies(mustURL(t, "https://example.com/")))
+	if root["session"] != "server" {
+		t.Fatalf("HttpOnly cookie on / = %q, want server", root["session"])
+	}
+}
+
+func TestCookieJarHttpOnlyDisplayTracksIdentity(t *testing.T) {
+	jar := newCookieJar()
+	u := mustURL(t, "https://example.com/")
+	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "a", Path: "/", HttpOnly: true}})
+	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "b", Path: "/", HttpOnly: true}})
+	if got := httpOnlyValue(jar.cookiesForDisplay(u), "sid"); got != "b" {
+		t.Fatalf("displayed HttpOnly value = %q, want b", got)
+	}
+	// A server may replace the cookie without the flag; the inspector follows.
+	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "c", Path: "/"}})
+	if got := httpOnlyValue(jar.cookiesForDisplay(u), "sid"); got != "" {
+		t.Fatalf("server-demoted cookie is still marked HttpOnly (value %q)", got)
+	}
+}
+
+func httpOnlyValue(cookies []*http.Cookie, name string) string {
+	for _, c := range cookies {
+		if c.Name == name && c.HttpOnly {
+			return c.Value
+		}
+	}
+	return ""
+}
+
 func TestCookieJarPublicSuffix(t *testing.T) {
 	jar := newCookieJar()
 	u := mustURL(t, "https://example.com/")

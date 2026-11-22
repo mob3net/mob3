@@ -168,6 +168,100 @@ func TestConsoleStorageSection(t *testing.T) {
 	}
 }
 
+func TestConsoleStorageCookieDetails(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.url = mustParse(t, "https://example.com/api/page")
+	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
+		{Name: "sid", Value: "abc", Domain: ".example.com", Path: "/api", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode},
+		{Name: "plain", Value: "v", Path: "/"},
+		{Name: "old", Value: "x", Path: "/", Expires: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{Name: "later", Value: "y", Path: "/", Expires: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
+	})
+	joined := strings.Join(b.storageLines(), "\n")
+	for _, want := range []string{
+		"sid=abc  [HttpOnly]  [Secure]  [SameSite=Lax]  .example.com  /api  session",
+		"plain=v  example.com  /  session",
+		"later=y  example.com  /  expires 2030-01-02",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("storage lines missing %q:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "old=x") {
+		t.Errorf("expired cookie was listed:\n%s", joined)
+	}
+}
+
+func TestConsoleRequestLinesWrap(t *testing.T) {
+	b := NewBrowser(60, 20)
+	gen := b.loader.currentPageGeneration()
+	id, ok := b.loader.startRequest(gen, "GET", "https://example.com/"+strings.Repeat("a", 200), "doc")
+	if !ok {
+		t.Fatal("request was not recorded")
+	}
+	b.loader.finishRequest(id, gen, 200, 1024, time.Millisecond, nil)
+	const width = 40
+	lines := b.requestLinesWidth(width)
+	if len(lines) < 2 {
+		t.Fatalf("long request did not wrap: %q", lines)
+	}
+	for _, line := range lines {
+		if w := stringWidth(line); w > width {
+			t.Fatalf("request line is %d cells, want <= %d: %q", w, width, line)
+		}
+	}
+	if !strings.HasPrefix(lines[1], "    ") {
+		t.Fatalf("request continuation is not indented: %q", lines[1])
+	}
+}
+
+func TestConsoleToolLinesWrap(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.appendToolLine(strings.Repeat("z", 200))
+	const width = 40
+	lines := b.toolLines(width)
+	if len(lines) < 2 {
+		t.Fatalf("long tool output did not wrap: %q", lines)
+	}
+	for _, line := range lines {
+		if w := stringWidth(line); w > width {
+			t.Fatalf("tool line is %d cells, want <= %d: %q", w, width, line)
+		}
+	}
+	if !strings.HasPrefix(lines[1], "    ") {
+		t.Fatalf("tool continuation is not indented: %q", lines[1])
+	}
+}
+
+func TestConsoleStorageWrapsLongValues(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.url = mustParse(t, "https://example.com/")
+	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
+		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
+	})
+	b.js = &jsRuntime{storageLocalData: map[string]string{
+		"config": strings.Repeat("x", 200),
+	}}
+	const width = 40
+	lines := b.storageLinesWidth(width)
+	for _, line := range lines {
+		if w := stringWidth(line); w > width {
+			t.Fatalf("storage line is %d cells, want <= %d: %q", w, width, line)
+		}
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "config = xx") || !strings.Contains(joined, "long=yy") {
+		t.Fatalf("storage entries missing after wrapping:\n%s", joined)
+	}
+	if !strings.Contains(joined, "\n    xx") {
+		t.Fatalf("storage value continuation is not indented:\n%s", joined)
+	}
+	// Copying keeps each entry on one unwrapped line.
+	if !strings.Contains(strings.Join(b.storageLines(), "\n"), strings.Repeat("x", 200)) {
+		t.Fatal("unwrapped storage copy lost the full value")
+	}
+}
+
 func TestConsoleOnlyOpenSectionHasBody(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.color = true

@@ -34,7 +34,8 @@ cache, log or download files. Closing MOB³ saves nothing.
 ## Cookies and storage
 
 Cookies are session-only and shared by page loads, resources, XHR, `fetch` and
-`document.cookie`. HttpOnly cookies are hidden from JavaScript. `SameSite` is
+`document.cookie`. HttpOnly cookies are hidden from JavaScript, and a script
+cannot replace or delete a server-set HttpOnly cookie. `SameSite` is
 stored but not enforced. `localStorage` and `sessionStorage` are in-memory maps
 and do not persist across restarts.
 

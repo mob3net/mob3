@@ -7,7 +7,8 @@ agreement, the non-negotiable constraints and the change protocol.
   relative links and history. The jar is memory-only, uses the public suffix
   list for domain scoping, and is shared by page loads, resources, XHR, fetch
   and `document.cookie`. HttpOnly cookies are hidden from JavaScript through a
-  separate visible jar. The SameSite attribute is stored but not enforced.
+  separate visible jar, and a script may neither replace nor delete a
+  server-set HttpOnly cookie. The SameSite attribute is stored but not enforced.
 - Page/resource cap: 12 MB. Local files are read with a `LimitReader`, only
   regular files are accepted (no `/dev/*`/FIFOs), and data URIs are rejected
   when the encoded or decoded size exceeds the cap. Images are rejected before

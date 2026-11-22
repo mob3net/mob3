@@ -220,18 +220,30 @@ func TestJSUserAbortInterruptsScript(t *testing.T) {
 }
 
 func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
-	page := newJSPage(`<html><body></body></html>`,
-		`var t = Date.now(); while (Date.now() - t < 80) {}`)
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	loader := NewLoader()
+	b.loader = loader
+	// The first script makes a synchronous request; the transport stands in
+	// for the user pressing Esc while it runs.
+	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		b.abortGen.Add(1)
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})
+	page := newJSPage(`<html><body></body></html>`, `
+		var x = new XMLHttpRequest();
+		x.open("GET", "/hit");
+		x.send();
+	`)
 	page.Scripts = append(page.Scripts, Script{
 		Src:  "inline script",
 		Code: "globalThis.afterAbort = 1;",
 	})
-	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		b.abortGen.Add(1)
-	}()
 	b.startJS(page)
 	if v := b.js.vm.Get("afterAbort"); v != nil && v.ToInteger() != 0 {
 		t.Fatal("a script after the user abort still ran")
