@@ -1,11 +1,11 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"browser/internal/host"
 	"bytes"
 	"context"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -300,35 +300,12 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		}
 		text = cannotDisplayPageHTML(mediaType, finalURL)
 	}
-	root := ParseHTML(text)
-	if !l.noScripts {
-		// <noscript> content is inactive with scripting enabled; remove it
-		// before collecting styles or scripts (some sites use it to hide the
-		// whole body until hydration).
-		removeNoscript(root)
-	}
 	page := &Page{
-		URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML, Status: status,
+		URL: finalURL, Base: finalURL, RawHTML: rawHTML, Status: status,
 		Download: download, DownloadName: downloadName, Local: pageLocal,
 	}
-	if baseEl := root.FindFirst("base"); baseEl != nil {
-		if href := baseEl.Attr("href"); href != "" {
-			if bu, err := finalURL.Parse(href); err == nil {
-				page.Base = bu
-			}
-		}
-	}
-	if t := root.FindFirst("title"); t != nil {
-		page.Title = strings.Join(strings.Fields(t.TextContent()), " ")
-	}
-	if page.Title == "" {
-		page.Title = finalURL.String()
-	}
-	page.Author = l.collectStylesheets(ctx, root, page.Base)
-	if !l.noScripts {
-		page.Scripts = l.collectScripts(ctx, root, page.Base)
-		page.ImportMap = collectImportMap(root)
-	}
+	engine.AssemblePage(ctx, loaderPageFetcher{l}, page, text, l.noScripts)
+	root := page.Root
 	l.loadInlineSVGs(root)
 	if !l.deferImages {
 		l.loadImages(ctx, root, page.Base)
@@ -393,103 +370,6 @@ direct or alternative URL, or open it in a full browser.</p>
 .try { margin: 16px 0; padding: 8px; border: 1px solid #2f6feb; background: #eef4ff; }
 `
 	return appPageHTML("Site blocked", css, body)
-}
-
-// importMapJSON is the subset of the import map format the engine reads.
-// Scoped maps are accepted but ignored: they only change which copy of a
-// package a nested dependency gets, which a terminal browser does not need.
-type importMapJSON struct {
-	Imports map[string]string            `json:"imports"`
-	Scopes  map[string]map[string]string `json:"scopes"`
-}
-
-// collectImportMap returns the imports of the document's first valid
-// <script type="importmap">. Later maps are ignored, as in browsers, and a
-// malformed map leaves bare specifiers unresolved instead of failing the page.
-func collectImportMap(root *Node) map[string]string {
-	if root == nil {
-		return nil
-	}
-	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "script" }) {
-		if !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "importmap") {
-			continue
-		}
-		var m importMapJSON
-		if err := json.Unmarshal([]byte(n.TextContent()), &m); err != nil {
-			continue
-		}
-		if len(m.Imports) > 0 {
-			return m.Imports
-		}
-	}
-	return nil
-}
-
-// collectScripts gathers inline and external JavaScript in document order.
-// ES module scripts are collected too and marked as modules; every other
-// script type is skipped.
-func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL) []Script {
-	ctx = withRequestKind(ctx, "js")
-	nodes := root.FindAll(func(n *Node) bool {
-		if n.Tag != "script" {
-			return false
-		}
-		// A nomodule script is the no-module fallback. The engine now executes
-		// modules, so running both bundles would double-execute the page.
-		if n.HasAttr("nomodule") {
-			return false
-		}
-		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
-		case "", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module":
-			return true
-		}
-		return false
-	})
-	var out []Script
-	total := 0
-	for _, n := range nodes {
-		module := strings.EqualFold(strings.TrimSpace(n.Attr("type")), "module")
-		src := strings.TrimSpace(n.Attr("src"))
-		if src == "" {
-			code := n.TextContent()
-			if strings.TrimSpace(code) == "" {
-				continue
-			}
-			total += len(code)
-			name := "inline script"
-			if module {
-				// An inline module is resolved against the document URL and has
-				// no source URL of its own.
-				name = ""
-			}
-			out = append(out, Script{Code: code, Src: name, Node: n, Module: module})
-			if total > maxResourceSize {
-				break
-			}
-			continue
-		}
-		u, err := base.Parse(src)
-		if err != nil {
-			continue
-		}
-		data, ctype, _, status, err := l.fetchCtx(ctx, u)
-		if err != nil || status < 200 || status >= 400 {
-			continue
-		}
-		// MOB³ applies strict MIME checking to external scripts: a response
-		// typed as HTML, JSON, text/plain, an image or any other non-script
-		// type is not executed. A missing Content-Type stays lenient.
-		if !isJavaScriptMIME(ctype) {
-			continue
-		}
-		code := decodeBody(data, ctype)
-		total += len(code)
-		out = append(out, Script{Code: code, Src: u.String(), Node: n, Module: module})
-		if total > maxResourceSize {
-			break
-		}
-	}
-	return out
 }
 
 // aboutPageName returns the page part of an about: URL, ignoring a query.
@@ -694,125 +574,8 @@ func lookupCharset(label string) (*charmap.Charmap, bool) {
 	return cm, ok
 }
 
-func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.URL) []Rule {
-	ctx = withRequestKind(ctx, "css")
-	var out []Rule
-	order := 0
-	layers := newLayerRegistry()
-	// Sheets are gathered first so every @layer name can be ranked in document
-	// order before any rule is assigned to a layer.
-	type sheetEntry struct {
-		src   string
-		media string
-	}
-	var sheets []sheetEntry
-	add := func(rules []Rule, media string) {
-		for i := range rules {
-			if media != "" {
-				rules[i].Media = combineMedia(media, rules[i].Media)
-			}
-			rules[i].Order = order
-			order++
-			out = append(out, rules[i])
-		}
-	}
-	seen := make(map[string]bool)
-	imported := 0
-	const maxImportDepth = 8
-	const maxImportedSheets = 40
-	var addSheet func(src string, sheetURL *url.URL, depth int, media string)
-	addSheet = func(src string, sheetURL *url.URL, depth int, media string) {
-		if depth < maxImportDepth && imported < maxImportedSheets {
-			for _, imp := range cssImports(src) {
-				if imported >= maxImportedSheets {
-					break
-				}
-				ref := sheetURL
-				if ref == nil {
-					ref = base
-				}
-				if ref == nil {
-					continue
-				}
-				u, err := ref.Parse(imp.Href)
-				if err != nil {
-					continue
-				}
-				key := u.String()
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				imported++
-				data, _, final, status, err := l.fetchCtx(ctx, u)
-				if err != nil || status < 200 || status >= 400 || final == nil {
-					continue
-				}
-				addSheet(string(data), final, depth+1, combineMedia(media, imp.Media))
-			}
-		}
-		sheets = append(sheets, sheetEntry{src: src, media: media})
-	}
-	nodes := root.FindAll(func(n *Node) bool {
-		if n.Tag == "style" {
-			return true
-		}
-		if n.Tag == "link" {
-			rel := strings.ToLower(n.Attr("rel"))
-			return strings.Contains(rel, "stylesheet") && n.Attr("href") != ""
-		}
-		return false
-	})
-	for _, n := range nodes {
-		media := strings.ToLower(n.Attr("media"))
-		if strings.Contains(media, "print") && !strings.Contains(media, "screen") && !strings.Contains(media, "all") {
-			continue
-		}
-		if n.Tag == "style" {
-			addSheet(n.TextContent(), base, 0, media)
-			continue
-		}
-		href := n.Attr("href")
-		u, err := base.Parse(href)
-		if err != nil {
-			continue
-		}
-		key := u.String()
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		data, _, final, status, err := l.fetchCtx(ctx, u)
-		if err != nil || status < 200 || status >= 400 {
-			continue
-		}
-		if final == nil {
-			final = u
-		}
-		addSheet(string(data), final, 0, media)
-	}
-	for _, sh := range sheets {
-		declareCSSLayers(sh.src, layers)
-	}
-	for _, sh := range sheets {
-		add(parseStylesheetWithLayers(ctx, sh.src, layers), sh.media)
-	}
-	return out
-}
-
 // combineMedia joins an @import/link media condition with a rule's own @media
 // condition. A comma-listed import condition is approximated.
-func combineMedia(a, b string) string {
-	a = strings.TrimSpace(a)
-	b = strings.TrimSpace(b)
-	switch {
-	case a == "":
-		return b
-	case b == "":
-		return a
-	}
-	return a + " and " + b
-}
 
 // srcsetCandidate is one entry from a srcset attribute.
 type srcsetCandidate struct {
