@@ -1846,6 +1846,7 @@ func (b *Browser) runTransportDialog(d *jsDialog) (string, bool) {
 	b.downloadFrontend = false
 	b.notice = nil
 	b.noticeFrontend = false
+	b.clearLinkHints()
 	kind := protocol.DialogAlert
 	switch d.kind {
 	case "confirm":

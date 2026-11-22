@@ -280,6 +280,7 @@ type Browser struct {
 	selectID         uint32
 	downloadFrontend bool
 	noticeFrontend   bool
+	hintsFrontend    bool
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.
@@ -630,6 +631,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.selectID = 0
 	b.downloadFrontend = false
 	b.noticeFrontend = false
+	b.hintsFrontend = false
 	b.viewMenu = nil
 	b.viewMenuHits = nil
 	b.zoomMenu = nil

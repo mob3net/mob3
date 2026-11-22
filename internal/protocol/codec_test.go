@@ -34,6 +34,7 @@ func testCommands() []Command {
 		{Session: 7, Seq: 7, Body: App{Action: AppToggleDark, Arg: 2}},
 		{Session: 11, Seq: 11, Body: SelectResult{ID: 9, Index: 2, Cancel: true}},
 		{Session: 12, Seq: 12, Body: ModalClose{Kind: ModalDownload, Copied: true, Chars: 12}},
+		{Session: 13, Seq: 13, Body: HintResult{Target: 2}},
 		{Session: 8, Seq: 8, Body: Find{Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},
@@ -69,6 +70,10 @@ func testEvents() []Event {
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin", Command: "curl -L -o f.bin -- https://example.test/f.bin"}},
 		{Session: 11, Seq: 11, Body: Select{ID: 9, Options: []string{"One", "Two"}, Selected: 1}},
 		{Session: 12, Seq: 12, Body: Notice{Title: "Notice", Message: "Body"}},
+		{Session: 13, Seq: 13, Body: Hints{Ask: true, Prefix: "d", Items: []HintItem{{
+			Target: 2, Label: "d", X: 1, Y: 2, W: 3, H: 1,
+			Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
+		}}}},
 		{Session: 11, Seq: 11, Body: Quit{}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
 		{Session: 13, Seq: 13, Body: Chrome{Show: true, Width: 3, HeaderRows: 1, Header: []Cell{{R: 'H'}, {R: 'i'}, {R: '!'}}, Footer: []Cell{{R: 'F'}, {R: 'o'}, {R: 'o'}}}},

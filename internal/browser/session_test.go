@@ -463,3 +463,26 @@ func TestDownloadAndNoticeTransport(t *testing.T) {
 		t.Fatal("notice stayed open")
 	}
 }
+
+type hintSink struct{ hints protocol.Hints }
+
+func (s *hintSink) Send(ev protocol.Event) error {
+	if v, ok := ev.Body.(protocol.Hints); ok {
+		s.hints = v
+	}
+	return nil
+}
+
+func TestHintTransportRoundTrip(t *testing.T) {
+	b := hintTestBrowser(t, `<html><body><p><a href="#one">Documentation</a></p></body></html>`, 50, 20)
+	sink := &hintSink{}
+	b.sessionOut = sink
+	b.HandleKey("f")
+	if len(sink.hints.Items) != 1 || sink.hints.Items[0].Label != "d" || !b.hintsFrontend {
+		t.Fatalf("hints = %+v frontend=%v", sink.hints, b.hintsFrontend)
+	}
+	b.applyHintResult(protocol.HintResult{Target: sink.hints.Items[0].Target})
+	if b.linkHints || b.hintsFrontend || b.focus != 0 {
+		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.linkHints, b.hintsFrontend, b.focus)
+	}
+}

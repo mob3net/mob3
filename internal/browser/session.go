@@ -210,12 +210,38 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		b.applySelectResult(v)
 	case protocol.ModalClose:
 		b.applyModalClose(v)
+	case protocol.HintResult:
+		b.applyHintResult(v)
 	case protocol.ClientError:
 		b.logEngineError(v.Message)
 	case protocol.Shutdown:
 		return true, nil
 	}
 	return false, nil
+}
+
+func (b *Browser) applyHintResult(v protocol.HintResult) {
+	if !b.hintsFrontend || !b.linkHints {
+		return
+	}
+	if v.Cancel {
+		b.clearLinkHints()
+		b.status = exitHint
+		return
+	}
+	target := v.Target
+	t := b.hintTargetAt(target)
+	top, bottom := b.viewport()
+	r, _ := b.hintTargetRect(target, top, bottom)
+	b.clearLinkHints()
+	if t.node != nil {
+		b.activateHintControl(t.node, r)
+		return
+	}
+	if t.link >= 0 {
+		b.focus = t.link
+		b.followFocused()
+	}
 }
 
 func (b *Browser) applyModalClose(v protocol.ModalClose) {

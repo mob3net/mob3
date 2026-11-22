@@ -125,6 +125,10 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.u8(v.Kind)
 		e.bool(v.Copied)
 		e.i32(v.Chars)
+	case HintResult:
+		kind = CmdHintResult
+		e.i32(v.Target)
+		e.bool(v.Cancel)
 	case ClientError:
 		kind = CmdClientError
 		e.str(v.Message)
@@ -264,6 +268,27 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		kind = EvNotice
 		e.str(v.Title)
 		e.str(v.Message)
+	case Hints:
+		kind = EvHints
+		e.bool(v.Ask)
+		e.str(v.Prefix)
+		e.count(len(v.Items))
+		for _, item := range v.Items {
+			e.i32(item.Target)
+			e.str(item.Label)
+			e.i32(item.X)
+			e.i32(item.Y)
+			e.i32(item.W)
+			e.i32(item.H)
+			e.count(len(item.Chars))
+			for _, c := range item.Chars {
+				e.str(string(c.R))
+				e.i32(c.X)
+				e.i32(c.Y)
+			}
+			e.bool(item.Link)
+			e.str(item.Href)
+		}
 	case Quit:
 		kind = EvQuit
 	case AutomationResult:
@@ -361,6 +386,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = SelectResult{ID: d.u32(), Index: d.i32(), Cancel: d.bool()}
 	case CmdModalClose:
 		body = ModalClose{Kind: d.u8(), Copied: d.bool(), Chars: d.i32()}
+	case CmdHintResult:
+		body = HintResult{Target: d.i32(), Cancel: d.bool()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
 	case CmdAutomation:
@@ -511,6 +538,28 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
 	case EvNotice:
 		body = Notice{Title: d.str(), Message: d.str()}
+	case EvHints:
+		ask := d.bool()
+		prefix := d.str()
+		n := d.count(lim.MaxLinks)
+		items := make([]HintItem, n)
+		for i := range items {
+			item := HintItem{Target: d.i32(), Label: d.str(), X: d.i32(), Y: d.i32(), W: d.i32(), H: d.i32()}
+			nChars := d.count(lim.MaxCells)
+			item.Chars = make([]HintChar, nChars)
+			for j := range item.Chars {
+				s := d.str()
+				r := rune(0)
+				if s != "" {
+					r = []rune(s)[0]
+				}
+				item.Chars[j] = HintChar{R: r, X: d.i32(), Y: d.i32()}
+			}
+			item.Link = d.bool()
+			item.Href = d.str()
+			items[i] = item
+		}
+		body = Hints{Ask: ask, Prefix: prefix, Items: items}
 	case EvQuit:
 		body = Quit{}
 	case EvAutomationResult:

@@ -192,6 +192,40 @@ type SelectResult struct {
 
 func (SelectResult) commandKind() Kind { return CmdSelectResult }
 
+// HintChar is one highlighted letter in a hint overlay.
+type HintChar struct {
+	R    rune
+	X, Y int
+}
+
+// HintItem is one link or control hint.
+type HintItem struct {
+	Target int
+	Label  string
+	X, Y   int
+	W, H   int
+	Chars  []HintChar
+	Link   bool
+	Href   string
+}
+
+// Hints asks the front end to display link hints.
+type Hints struct {
+	Ask    bool
+	Prefix string
+	Items  []HintItem
+}
+
+func (Hints) eventKind() Kind { return EvHints }
+
+// HintResult answers a Hints event.
+type HintResult struct {
+	Target int
+	Cancel bool
+}
+
+func (HintResult) commandKind() Kind { return CmdHintResult }
+
 // DialogKind identifies a script dialog.
 type DialogKind uint8
 

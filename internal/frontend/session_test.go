@@ -497,3 +497,47 @@ func TestDownloadCopyAndNoticeClose(t *testing.T) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
 }
+
+func TestHintEventKeys(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	items := []protocol.HintItem{
+		{Target: 0, Label: "d", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}},
+		{Target: 1, Label: "de", Chars: []protocol.HintChar{{R: 'E', X: 4, Y: 1}}},
+	}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Hints{Items: items}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.hintActive || loop.hintView.Prefix != "" {
+		t.Fatalf("hint = %v %+v", loop.hintActive, loop.hintView)
+	}
+	loop.handleHintKey("d")
+	if loop.hintView.Prefix != "d" {
+		t.Fatalf("prefix = %q", loop.hintView.Prefix)
+	}
+	// A unique match follows immediately.
+	loop.handleHintKey("e")
+	if loop.hintActive {
+		t.Fatal("hint stayed active")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.HintResult{Target: 1}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+}
+
+func TestHintAskConfirmsDestination(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	items := []protocol.HintItem{{Target: 3, Label: "d", Link: true, Href: "https://example.com/next", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}}}
+	loop.applyEvent(protocol.Event{Body: protocol.Hints{Ask: true, Items: items}})
+	loop.handleHintKey("d")
+	if !loop.hintView.Confirm || loop.hintView.ConfirmHref != "https://example.com/next" {
+		t.Fatalf("confirm = %+v", loop.hintView)
+	}
+	loop.handleHintKey("enter")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.HintResult{Target: 3}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+}

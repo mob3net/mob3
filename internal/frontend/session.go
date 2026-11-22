@@ -71,6 +71,10 @@ type SessionLoop struct {
 	noticeView   NoticeView
 	noticeBase   protocol.State
 
+	hintActive bool
+	hintView   HintView
+	hintBase   protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -170,6 +174,18 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.hintActive {
+			l.hintBase = v
+			if !v.KeysEngine {
+				l.closeHint()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncHint()
+			return false, nil
+		}
 		if l.downloadActive {
 			l.downloadBase = v
 			if !v.KeysEngine {
@@ -255,6 +271,8 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
+	case protocol.Hints:
+		l.startHints(v)
 	case protocol.Download:
 		l.startDownload(v)
 	case protocol.Notice:
@@ -293,6 +311,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.hintActive {
+		return l.handleHintKey(k)
+	}
 	if l.downloadActive {
 		return l.handleDownloadKey(k)
 	}
@@ -380,6 +401,127 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	case "H":
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
+	return false, false
+}
+
+func (l *SessionLoop) startHints(v protocol.Hints) {
+	l.cancelQuit()
+	l.closePrompt()
+	l.closeFind()
+	l.closeMenu()
+	l.closeSelect()
+	l.closeDownload(false, 0)
+	l.closeNotice()
+	l.hintActive = true
+	l.hintView = HintView{Ask: v.Ask, Prefix: v.Prefix, Items: v.Items}
+	l.hintBase = l.State.Page
+	if l.hintView.Prefix != "" {
+		l.State.Page.FooterLeft = " Choose hint: " + l.hintView.Prefix + " (Esc cancels)"
+	}
+	l.syncHint()
+}
+
+func (l *SessionLoop) syncHint() {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetHint(&l.hintView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeHint() {
+	if !l.hintActive {
+		return
+	}
+	l.hintActive = false
+	l.State.Page = l.hintBase
+	if l.Presenter != nil {
+		l.Presenter.SetHint(nil)
+		l.Presenter.SetState(l.hintBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) answerHint(target int) {
+	l.closeHint()
+	_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Target: target}})
+}
+
+func (l *SessionLoop) cancelHint() {
+	if !l.hintActive {
+		return
+	}
+	l.closeHint()
+	_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Cancel: true}})
+}
+
+func (l *SessionLoop) handleHintKey(k string) (handled, quit bool) {
+	if l.hintView.Confirm {
+		switch k {
+		case "enter", "y", "Y":
+			l.answerHint(l.hintView.ConfirmTarget)
+		case "esc", "n", "N", "ctrl-c":
+			l.cancelHint()
+		default:
+			l.cancelHint()
+			return false, false
+		}
+		return true, false
+	}
+	if k == "esc" || k == "ctrl-c" {
+		l.cancelHint()
+		return true, false
+	}
+	if len(k) == 1 {
+		c := k[0]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c >= 'a' && c <= 'z' {
+			next := l.hintView.Prefix + string(c)
+			matches := 0
+			for _, item := range l.hintView.Items {
+				if strings.HasPrefix(item.Label, next) {
+					matches++
+				}
+			}
+			if matches == 0 {
+				return true, false
+			}
+			if matches == 1 {
+				var item protocol.HintItem
+				for _, it := range l.hintView.Items {
+					if strings.HasPrefix(it.Label, next) {
+						item = it
+						break
+					}
+				}
+				if l.hintView.Ask && item.Link {
+					l.hintView.Confirm = true
+					l.hintView.ConfirmTarget = item.Target
+					l.hintView.ConfirmHref = item.Href
+					l.hintView.Items = nil
+					l.State.Page.FooterLeft = " " + item.Href + "  (Enter/y follows · Esc cancels)"
+					l.syncHint()
+					return true, false
+				}
+				l.answerHint(item.Target)
+				return true, false
+			}
+			l.hintView.Prefix = next
+			l.State.Page.FooterLeft = " Choose hint: " + next + " (Esc cancels)"
+			l.syncHint()
+			return true, false
+		}
+	}
+	l.cancelHint()
 	return false, false
 }
 
@@ -632,6 +774,7 @@ func (l *SessionLoop) startDialog(v protocol.Dialog) {
 	l.closeSelect()
 	l.closeDownload(false, 0)
 	l.closeNotice()
+	l.cancelHint()
 	l.dialogActive = true
 	l.dialog = v
 	l.dialogBase = l.State.Page
@@ -1102,6 +1245,10 @@ func (l *SessionLoop) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	if l.hintActive {
+		l.cancelHint()
+		return false
+	}
 	if l.downloadActive {
 		return l.handleDownloadMouse(ev)
 	}

@@ -360,3 +360,17 @@ func TestDownloadAndNoticeLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyHintsStylesMatchingLetters(t *testing.T) {
+	f := protocol.Frame{W: 10, H: 3, Cells: make([]protocol.Cell, 30)}
+	for i := range f.Cells {
+		f.Cells[i].R = 'x'
+	}
+	ApplyHints(&f, &HintView{Prefix: "", Items: []protocol.HintItem{
+		{Label: "d", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}},
+	}}, true)
+	c := f.Cells[1*10+2]
+	if c.R != 'D' || c.BG != rgb(0xff, 0xd7, 0x00) || c.Attrs&protocol.AttrUnderline == 0 {
+		t.Fatalf("hint cell = %+v", c)
+	}
+}

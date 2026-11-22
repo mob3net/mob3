@@ -2,6 +2,8 @@ package browser
 
 import (
 	"fmt"
+
+	"browser/internal/protocol"
 	"strings"
 )
 
@@ -94,6 +96,38 @@ func (b *Browser) openLinkHints(ask bool) {
 	b.hintConfirm = false
 	b.hintConfirmLink = -1
 	b.status = "Choose link or control (Esc cancels)"
+	if b.sessionOut != nil {
+		if err := b.sendHints(ask, top, bottom); err != nil {
+			b.clearLinkHints()
+			b.status = "No links or controls in view"
+			return
+		}
+		b.hintsFrontend = true
+	}
+}
+
+func (b *Browser) sendHints(ask bool, top, bottom int) error {
+	items := make([]protocol.HintItem, 0, len(b.hintItems))
+	for _, h := range b.hintItems {
+		item := protocol.HintItem{Target: h.target, Label: h.label}
+		if r, ok := b.hintTargetRect(h.target, top, bottom); ok {
+			item.X, item.Y = r.X, r.Y-b.scroll
+			item.W, item.H = r.W, r.H
+		}
+		item.Chars = make([]protocol.HintChar, len(h.chars))
+		for i, c := range h.chars {
+			item.Chars[i] = protocol.HintChar{R: c.r, X: c.x, Y: c.y - b.scroll}
+		}
+		t := b.hintTargetAt(h.target)
+		if t.node == nil && t.link >= 0 && b.layout != nil && t.link < len(b.layout.Links) {
+			item.Link = true
+			item.Href = b.resolveHref(b.layout.Links[t.link].Href)
+		}
+		items = append(items, item)
+	}
+	return b.sessionOut.Send(protocol.Event{Body: protocol.Hints{
+		Ask: ask, Prefix: b.hintPrefix, Items: items,
+	}})
 }
 
 // visibleInputRect returns the first visible fragment rectangle of an editable
@@ -342,6 +376,7 @@ func (b *Browser) clearLinkHints() {
 		return
 	}
 	b.linkHints = false
+	b.hintsFrontend = false
 	b.hintItems = nil
 	b.hintTargets = nil
 	b.hintPrefix = ""
@@ -622,7 +657,7 @@ func (b *Browser) inlineImagesEnabled() bool {
 // background and underline. The page text itself is never replaced unless a
 // link has no text letters at all.
 func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
-	if !b.linkHints || b.layout == nil {
+	if !b.linkHints || b.hintsFrontend || b.layout == nil {
 		return
 	}
 	bg := RGB(0xff, 0xd7, 0x00)

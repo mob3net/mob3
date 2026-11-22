@@ -26,6 +26,7 @@ type Presenter struct {
 	selectView *SelectView
 	download   *DownloadView
 	notice     *NoticeView
+	hint       *HintView
 	lastFrame  protocol.Frame
 	hasFrame   bool
 }
@@ -91,6 +92,12 @@ func (p *Presenter) SetNotice(v *NoticeView) {
 	p.prev = nil
 }
 
+// SetHint installs or clears the link-hint overlay.
+func (p *Presenter) SetHint(v *HintView) {
+	p.hint = v
+	p.prev = nil
+}
+
 func (p *Presenter) SetState(st protocol.State) {
 	if p.state.FrontendChrome != st.FrontendChrome ||
 		p.state.HeaderRows != st.HeaderRows ||
@@ -151,6 +158,9 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	p.hasFrame = true
 	if p.state.FrontendChrome {
 		DrawScrollBarFrame(&f, p.state)
+	}
+	if p.hint != nil {
+		ApplyHints(&f, p.hint, p.color)
 	}
 	lines := EncodeFrame(f, p.color, !p.color)
 	if len(lines) != f.H {
