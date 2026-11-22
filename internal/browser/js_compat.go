@@ -967,15 +967,15 @@ func (j *jsRuntime) installElementCompatProto(p *sobek.Object) {
 	})
 	j.protoMethod(p, "focus", func(n *Node, _ sobek.FunctionCall) sobek.Value {
 		if n.Tag == "input" || n.Tag == "textarea" {
-			j.b.inputFocus = n
+			j.host.SetInputFocus(n)
 		}
 		j.markDirty()
 		j.fireNodeEvent(n, "focus")
 		return sobek.Undefined()
 	})
 	j.protoMethod(p, "blur", func(n *Node, _ sobek.FunctionCall) sobek.Value {
-		if j.b.inputFocus == n {
-			j.b.inputFocus = nil
+		if j.host.InputFocus() == n {
+			j.host.SetInputFocus(nil)
 		}
 		j.markDirty()
 		j.fireNodeEvent(n, "blur")
@@ -1056,17 +1056,17 @@ func (j *jsRuntime) clientRectObject(n *Node) *sobek.Object {
 // Scripts position popovers and dropdowns from this rectangle; returning zeros
 // made every such menu open at the page corner.
 func (j *jsRuntime) elementRect(n *Node) (x, y, w, h int, ok bool) {
-	if n == nil || j.b == nil {
+	if n == nil || j.host == nil {
 		return 0, 0, 0, 0, false
 	}
 	if n.Tag == "html" || n.Tag == "body" {
-		return 0, 0, cssWidthPx(j.b.width), cssHeightPx(j.b.height), true
+		return 0, 0, cssWidthPx(j.host.Width()), cssHeightPx(j.host.Height()), true
 	}
-	ly := j.b.layout
+	ly := j.host.Layout()
 	if ly == nil {
 		return 0, 0, 0, 0, false
 	}
-	scroll := j.b.scroll
+	scroll := j.host.Scroll()
 	minX, minY, maxX, maxY := 0, 0, 0, 0
 	add := func(fx, fy, fw, fh int) {
 		if fw <= 0 || fh <= 0 {
@@ -1222,8 +1222,8 @@ func (j *jsRuntime) installDocumentCompat(o *sobek.Object, root *Node) {
 	j.method(o, "getSelection", func(sobek.FunctionCall) sobek.Value { return j.selectionObject() })
 	j.method(o, "hasFocus", func(sobek.FunctionCall) sobek.Value { return j.vm.ToValue(true) })
 	j.accessor(o, "activeElement", func() sobek.Value {
-		if j.b != nil && j.b.inputFocus != nil {
-			return j.wrap(j.b.inputFocus)
+		if j.host != nil && j.host.InputFocus() != nil {
+			return j.wrap(j.host.InputFocus())
 		}
 		if j.page != nil && j.page.Root != nil {
 			if body := j.page.Root.FindFirst("body"); body != nil {

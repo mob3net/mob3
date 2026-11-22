@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 3 in progress (3a frontend, 3b DOM/style/layout/paint/PDF).**
+Status: **Phase 4a in progress (JS host interface).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -60,6 +60,7 @@ network destination.
 | D24 | 2026-11-22 | Move all `layout*.go` files and the dark palette into `internal/engine`; paint, `Grid` and the content frame stay in the browser with aliases. Layout tests stay in the browser because they exercise `PaintLayout`. | Layout is the last engine layer before paint. Keeping paint tests in the browser avoids moving the terminal framebuffer until its frontend/engine split is ready. |
 | D25 | 2026-11-22 | Move `Grid`, `PaintLayout*`, `ImagePlacement` and SVG decoding into `internal/engine`; keep kitty/iTerm2 placement, PNG encoding and image scaling in the browser until Phase 5. ANSI/PNG remain in `internal/frontend`. | Paint is page content and crosses no trusted policy. Terminal placement is frontend work and needs the image/placement bridge, so it waits for the transport phase. |
 | D26 | 2026-11-22 | Move the PDF object lexer, text extractor and document assembly to `internal/engine`; keep `Loader.loadPDFPage` in the browser. JS/DOM cannot move yet: `jsRuntime` holds `*Browser` and reaches the loader, cookies, dialogs and forms directly. | PDF is a self-contained engine leaf. JS needs the session/host split first, so the next step is that split rather than a forced JS move. |
+| D27 | 2026-11-22 | `jsRuntime` no longer holds `*Browser`; it depends on a narrow `jsHost` interface (viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookies, fetch, request accounting, import queue). A `browserJSHost` adapter implements it. | This is the first session/host split step. The interface still lives in the browser and exposes brokered I/O, but JS can no longer reach arbitrary Browser fields. Next: move the contract to engine/protocol and broker the loader calls. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -109,6 +110,7 @@ which part goes where.
 | `style*.go` | `internal/engine` | `Style`, sheets, selectors, cascade, media and UA moved in 3b1; primitives were 3b0. |
 | `style_units_compat.go` | browser bridge | Aliases and wrappers for the moved style primitives. |
 | `engine_compat.go` | browser bridge | DOM/style aliases, constructors, cascade accessors and layer/import helpers. |
+| `js_host.go` | browser bridge | `jsHost` contract and `browserJSHost` adapter; JS uses no Browser fields. |
 | `style_app.go` | browser | Zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
 | `page_styles.go` | browser | `Page` inline-style collection after load. |
 | `layout*.go` | `internal/engine` | All layout files, including forms, images, tables, grid, flex and measurement. |
@@ -158,8 +160,8 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
-| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a, 3b4a) | Engine import gate passes; engine tests green |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
+| 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4a) | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -237,6 +239,20 @@ loop and dialog request/response transport land in Phase 5 under D20.
 - [x] Dump and PNG hashes unchanged.
 
 Next: 3b, the engine package.
+
+### Phase 4a — Session/host interfaces (in progress)
+
+- [x] `jsHost` interface and `browserJSHost` adapter; `jsRuntime` holds the
+      interface, not `*Browser`.
+- [x] Viewport, layout, scroll, focus, hit testing, dialogs, status, console,
+      form submission and upload notice are methods.
+- [x] Cookie reads/writes, resource fetch, request accounting, UA, HTTP client
+      and the import queue are brokered through the adapter.
+- [ ] Move the host contract to `internal/engine`/`protocol` and remove the
+      remaining browser types from it.
+- [ ] Move `js*.go` to `internal/engine`; keep the adapter in the browser.
+- [ ] Split `Loader` into the host package and migrate `about:`/form/config
+      policy.
 
 ### Phase 3b — Extract `internal/engine` (in progress)
 
@@ -471,6 +487,21 @@ path, so performance is unchanged; PDF fixture and text-extraction tests pass.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | PDF extraction tests | pass | pass | no change |
 
+### Phase 4a deltas
+
+The JS runtime now calls an interface instead of touching Browser fields. Draw
+and layout do not run JS, so their numbers are unchanged; a rerun after the
+change was 839–880 µs for a forced repaint and 96–100 µs for the content
+frame, inside the existing range. JS-heavy paths pay interface dispatch, which
+is small relative to the sobek work they already do.
+
+| Metric | Before 4a | After 4a | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 829–876 µs, 519 600 B/op | 839–880 µs, 519 599 B/op | flat |
+| Content paint+blit | 93–102 µs, 0 B/op | 96–100 µs, 0 B/op | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -538,3 +569,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 3b2 | All layout files and the dark palette moved to `internal/engine`; browser layout compat aliases/builders/utilities/form predicates; js_dom and selection use exported accessors; all tests and hashes green | `go test ./...`, `go vet`, `-race` on layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b3: paint and the content frame |
 | 2026-11-22 | 3b3 | Grid, paint, `PaintLayout*`, `ImagePlacement` and SVG decode moved to `internal/engine`; gfx/terminal placement and inline-SVG loading stay in `render_gfx.go`; paint compat aliases; all tests and hashes green | `go test ./...`, `go vet`, `-race` on paint/layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b4: JS/DOM and session |
 | 2026-11-22 | 3b4a | PDF object lexer, text extractor and document assembly moved to `internal/engine`; browser `pdf_compat.go` and `Loader.loadPDFPage` remain; tests and hashes green | `go test ./...`, `go vet`, `-race` on PDF/frame, dump/PNG hashes | Next: session/host split before JS |
+| 2026-11-22 | 4a | `jsRuntime` now holds `jsHost`, not `*Browser`; adapter covers viewport/layout/scroll/focus/hit-testing/dialogs/status/forms/cookies/fetch/requests/import queue; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/console/frame, dump/PNG hashes, draw benchmarks | Move the host contract and JS to engine |

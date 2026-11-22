@@ -512,7 +512,7 @@ func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
 	check("request")
 
 	b.js = &jsRuntime{
-		b:                  b,
+		host:               newJSHost(b),
 		storageLocalData:   map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"},
 		storageSessionData: map[string]string{},
 	}

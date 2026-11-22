@@ -35,7 +35,7 @@ const (
 // jsRuntime hosts one page's JavaScript world. Everything runs on the main
 // browser goroutine; timers are pumped from the interactive loop.
 type jsRuntime struct {
-	b    *Browser
+	host jsHost
 	vm   *sobek.Runtime
 	page *Page
 
@@ -170,7 +170,7 @@ type jsFormSubmission struct {
 
 func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j := &jsRuntime{
-		b:              b,
+		host:           newJSHost(b),
 		vm:             sobek.New(),
 		page:           page,
 		timeout:        jsTimeout,
@@ -237,7 +237,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 			return sobek.Undefined()
 		}
-		j.b.logJS("error", j.errorText(v))
+		j.host.LogJS("error", j.errorText(v))
 		return sobek.Undefined()
 	})
 	_ = j.vm.Set("reportError", reportError)
@@ -281,19 +281,19 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	_ = j.vm.Set("clearInterval", j.vm.ToValue(j.clearTimer))
 	_ = j.vm.Set("alert", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
-		j.b.logJS("alert", msg)
-		j.b.status = "JS alert: " + truncateWidth(msg, 120) + "  (! console)"
+		j.host.LogJS("alert", msg)
+		j.host.SetStatus("JS alert: " + truncateWidth(msg, 120) + "  (! console)")
 		j.dialogActive.Store(true)
-		j.b.showAlert(msg)
+		j.host.ShowAlert(msg)
 		j.dialogActive.Store(false)
 		j.vm.ClearInterrupt()
 		return sobek.Undefined()
 	}))
 	_ = j.vm.Set("confirm", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
-		j.b.logJS("confirm", msg)
+		j.host.LogJS("confirm", msg)
 		j.dialogActive.Store(true)
-		ok := j.b.showConfirm(msg)
+		ok := j.host.ShowConfirm(msg)
 		j.dialogActive.Store(false)
 		j.vm.ClearInterrupt()
 		return j.vm.ToValue(ok)
@@ -304,9 +304,9 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		if len(call.Arguments) > 1 {
 			def = call.Argument(1).String()
 		}
-		j.b.logJS("prompt", msg)
+		j.host.LogJS("prompt", msg)
 		j.dialogActive.Store(true)
-		text, ok := j.b.showPrompt(msg, def)
+		text, ok := j.host.ShowPrompt(msg, def)
 		j.dialogActive.Store(false)
 		j.vm.ClearInterrupt()
 		if !ok {
@@ -591,7 +591,7 @@ func (j *jsRuntime) reportError(err error) {
 	if msg == "" {
 		msg = "JavaScript error"
 	}
-	j.b.logJS("error", msg)
+	j.host.LogJS("error", msg)
 }
 
 func (j *jsRuntime) matchMediaFunc() func(sobek.FunctionCall) sobek.Value {
@@ -602,7 +602,7 @@ func (j *jsRuntime) matchMediaFunc() func(sobek.FunctionCall) sobek.Value {
 			_ = o.SetPrototype(j.mediaQueryProto)
 		}
 		_ = o.Set("media", q)
-		_ = o.Set("matches", mediaMatches(q, cssWidthPx(j.b.width), j.b.dark))
+		_ = o.Set("matches", mediaMatches(q, cssWidthPx(j.host.Width()), j.host.Dark()))
 		_ = o.Set("onchange", sobek.Null())
 		noop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 		_ = o.Set("addListener", noop)
@@ -706,7 +706,7 @@ func (j *jsRuntime) requestNavigation(raw string) {
 	}
 	u, err := base.Parse(raw)
 	if err != nil {
-		j.b.status = "Invalid JavaScript URL"
+		j.host.SetStatus("Invalid JavaScript URL")
 		return
 	}
 	j.pendingNav = u.String()
@@ -730,7 +730,7 @@ func (j *jsRuntime) historyObject() *sobek.Object {
 	_ = o.Set("pushState", noop)
 	_ = o.Set("replaceState", noop)
 	stub := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
-		j.b.status = "JavaScript history navigation is not supported"
+		j.host.SetStatus("JavaScript history navigation is not supported")
 		return sobek.Undefined()
 	})
 	_ = o.Set("back", stub)
@@ -756,8 +756,8 @@ func prefixHash(h string) string {
 func (j *jsRuntime) navigatorObject() *sobek.Object {
 	o := j.vm.NewObject()
 	ua := defaultUserAgent
-	if j.b.loader != nil && j.b.loader.requestUserAgent() != "" {
-		ua = j.b.loader.requestUserAgent()
+	if j.host != nil && j.host.UserAgent() != "" {
+		ua = j.host.UserAgent()
 	}
 	_ = o.Set("userAgent", ua)
 	_ = o.Set("appName", "MOB3")
@@ -791,7 +791,7 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 	// abortGen snapshots the user's escape request at entry. Esc or Ctrl-C
 	// pressed from now on interrupts this call; a press from before it started
 	// does not leak into the next timer callback or page.
-	abortGen := j.b.abortGen.Load()
+	abortGen := j.host.AbortGen()
 	done := make(chan struct{})
 	// The watchdog re-arms itself while the host is blocked in a modal dialog
 	// or a synchronous fetch. Network and user time are not script CPU time,
@@ -809,7 +809,7 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 			timer.Store(time.AfterFunc(timeout, check))
 			return
 		}
-		if j.b.abortGen.Load() != abortGen {
+		if j.host.AbortGen() != abortGen {
 			if j.loadDeadline.Load() != 0 {
 				j.stopScripts.Store(true)
 				j.stopReason.Store(jsStopUser)
@@ -833,7 +833,7 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		}
 		j.vm.ClearInterrupt()
 		if r := recover(); r != nil {
-			j.b.logJS("debug", "panic: "+fmt.Sprintf("%v", r)+"\n"+string(debug.Stack()))
+			j.host.LogJS("debug", "panic: "+fmt.Sprintf("%v", r)+"\n"+string(debug.Stack()))
 			err = fmt.Errorf("%v", r)
 		}
 	}()
@@ -991,7 +991,7 @@ func (j *jsRuntime) consoleObject() *sobek.Object {
 				parts = append(parts, j.consoleArg(a))
 			}
 			msg := strings.Join(parts, " ")
-			j.b.logJS(level, msg)
+			j.host.LogJS(level, msg)
 			return sobek.Undefined()
 		}
 	}
@@ -1026,12 +1026,12 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 	_ = o.Set("history", j.histObj)
 	_ = o.Set("localStorage", j.storageLocal)
 	_ = o.Set("sessionStorage", j.storageSession)
-	_ = o.Set("innerWidth", cssWidthPx(j.b.width))
-	_ = o.Set("innerHeight", cssHeightPx(j.b.height))
-	_ = o.Set("outerWidth", cssWidthPx(j.b.width))
-	_ = o.Set("outerHeight", cssHeightPx(j.b.height))
+	_ = o.Set("innerWidth", cssWidthPx(j.host.Width()))
+	_ = o.Set("innerHeight", cssHeightPx(j.host.Height()))
+	_ = o.Set("outerWidth", cssWidthPx(j.host.Width()))
+	_ = o.Set("outerHeight", cssHeightPx(j.host.Height()))
 	_ = o.Set("devicePixelRatio", 1)
-	scrollPx := func() int { return int(float64(j.b.scroll) * cellH) }
+	scrollPx := func() int { return int(float64(j.host.Scroll()) * cellH) }
 	j.accessor(o, "scrollX", func() sobek.Value { return j.vm.ToValue(0) }, nil)
 	j.accessor(o, "scrollY", func() sobek.Value { return j.vm.ToValue(scrollPx()) }, nil)
 	j.accessor(o, "pageXOffset", func() sobek.Value { return j.vm.ToValue(0) }, nil)
@@ -1062,8 +1062,8 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		} else {
 			top = call.Argument(1).ToFloat()
 		}
-		j.b.scroll = int(top / cellH)
-		j.b.clampScroll()
+		j.host.SetScroll(int(top / cellH))
+		j.host.ClampScroll()
 		return sobek.Undefined()
 	}
 	_ = o.Set("scroll", j.vm.ToValue(scrollWindowTo))
@@ -1077,8 +1077,8 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		} else {
 			delta = call.Argument(1).ToFloat()
 		}
-		j.b.scroll += int(delta / cellH)
-		j.b.clampScroll()
+		j.host.SetScroll(j.host.Scroll() + int(delta/cellH))
+		j.host.ClampScroll()
 		return sobek.Undefined()
 	}))
 	windowNoop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
@@ -1090,16 +1090,16 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		return j.computedStyleObject(j.unwrap(call.Argument(0)))
 	}))
 	screen := j.vm.NewObject()
-	_ = screen.Set("width", cssWidthPx(j.b.width))
-	_ = screen.Set("height", cssHeightPx(j.b.height))
-	_ = screen.Set("availWidth", cssWidthPx(j.b.width))
-	_ = screen.Set("availHeight", cssHeightPx(j.b.height))
+	_ = screen.Set("width", cssWidthPx(j.host.Width()))
+	_ = screen.Set("height", cssHeightPx(j.host.Height()))
+	_ = screen.Set("availWidth", cssWidthPx(j.host.Width()))
+	_ = screen.Set("availHeight", cssHeightPx(j.host.Height()))
 	_ = screen.Set("colorDepth", 24)
 	_ = screen.Set("pixelDepth", 24)
 	_ = o.Set("screen", screen)
 	vv := j.vm.NewObject()
-	_ = vv.Set("width", cssWidthPx(j.b.width))
-	_ = vv.Set("height", cssHeightPx(j.b.height))
+	_ = vv.Set("width", cssWidthPx(j.host.Width()))
+	_ = vv.Set("height", cssHeightPx(j.host.Height()))
 	_ = vv.Set("scale", 1)
 	_ = vv.Set("offsetLeft", 0)
 	_ = vv.Set("offsetTop", 0)

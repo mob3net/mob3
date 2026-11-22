@@ -863,7 +863,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 	})
 	j.method(o, "send", func(call sobek.FunctionCall) sobek.Value {
 		if st.url == nil || st.blocked {
-			j.b.logJS("error", "XMLHttpRequest blocked: invalid URL")
+			j.host.LogJS("error", "XMLHttpRequest blocked: invalid URL")
 			st.readyState = 4
 			st.status = 0
 			st.err = errBadSVG
@@ -955,12 +955,12 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if len(body) > maxResourceSize {
 		return 0, nil, "", nil, nil, errBadSVG
 	}
-	gen := j.b.loader.currentPageGeneration()
-	reqID, _ := j.b.loader.startRequest(gen, method, u.String(), kind)
+	gen := j.host.CurrentPageGeneration()
+	reqID, _ := j.host.StartRequest(gen, method, u.String(), kind)
 	start := time.Now()
 	defer func() {
 		if reqID != 0 {
-			j.b.loader.finishRequest(reqID, gen, status, len(data), time.Since(start), err)
+			j.host.FinishRequest(reqID, gen, status, len(data), time.Since(start), err)
 		}
 	}()
 	origin := j.page.URL
@@ -980,18 +980,18 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	reqCtx = withRequestTarget(reqCtx, u)
 	meta := requestMetaFrom(reqCtx)
 	if meta.blockLocal && isLocalURL(u) {
-		j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
+		j.host.LogJS("warn", "blocked local-network request: "+u.Redacted())
 		return 0, nil, "", nil, nil, errLocalNetworkBlocked
 	}
 	if meta.pageSecure && u.Scheme == "http" {
-		j.b.logJS("warn", "blocked mixed content: "+u.Redacted())
+		j.host.LogJS("warn", "blocked mixed content: "+u.Redacted())
 		return 0, nil, "", nil, nil, errMixedContentBlocked
 	}
 	req, err := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
 	if err != nil {
 		return 0, nil, "", nil, nil, err
 	}
-	req.Header.Set("User-Agent", j.b.loader.requestUserAgent())
+	req.Header.Set("User-Agent", j.host.UserAgent())
 	req.Header.Set("Accept", "*/*")
 	if crossOrigin {
 		req.Header.Set("Origin", urlOrigin(origin))
@@ -999,7 +999,7 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	for k, v := range reqHeaders {
 		req.Header.Set(k, v)
 	}
-	client := *j.b.loader.client
+	client := *j.host.HTTPClient()
 	if crossOrigin {
 		// Default fetch/XHR credentials are same-origin; do not leak the
 		// target's cookies into a CORS request.
@@ -1024,11 +1024,11 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if err != nil {
 		j.ioActive.Store(false)
 		if isLocalNetworkError(err) {
-			j.b.logJS("warn", "blocked local-network request: "+u.Redacted())
+			j.host.LogJS("warn", "blocked local-network request: "+u.Redacted())
 			err = errLocalNetworkBlocked
 		}
 		if isMixedContentError(err) {
-			j.b.logJS("warn", "blocked mixed content: "+u.Redacted())
+			j.host.LogJS("warn", "blocked mixed content: "+u.Redacted())
 			err = errMixedContentBlocked
 		}
 		return 0, nil, "", nil, nil, err

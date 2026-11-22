@@ -87,7 +87,7 @@ func (m *jsModuleLoader) install() {
 		if op != sobek.PromiseRejectionReject {
 			return
 		}
-		m.j.b.logJS("warn", "Unhandled promise rejection: "+m.j.errorText(p.Result()))
+		m.j.host.LogJS("warn", "Unhandled promise rejection: "+m.j.errorText(p.Result()))
 	})
 }
 
@@ -131,8 +131,8 @@ func (m *jsModuleLoader) importModule(ref interface{}, spec string, pcap interfa
 
 // canImportAsync reports whether a dynamic import can wait for the event loop.
 func (m *jsModuleLoader) canImportAsync() bool {
-	b := m.j.b
-	return m.j.loadDone && !m.j.stopped && b != nil && b.interactive && b.importCh != nil
+	b := m.j.host
+	return m.j.loadDone && !m.j.stopped && b != nil && b.Interactive() && b.ImportCh() != nil
 }
 
 // loadImportAsync fetches and parses a dynamic import's module graph off the
@@ -156,7 +156,7 @@ func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap inte
 		task.rec = rec
 	}
 	select {
-	case j.b.importCh <- task:
+	case j.host.ImportCh() <- task:
 	case <-time.After(jsTimeout * 15):
 	}
 }
@@ -457,8 +457,8 @@ func (m *jsModuleLoader) reserve(size int) error {
 // fetchModule reads one module source with the same request accounting, MIME
 // rule and session cache as classic scripts.
 func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
-	if m.j.b == nil || m.j.b.loader == nil {
-		return "", errors.New("no loader for module fetch")
+	if m.j.host == nil {
+		return "", errors.New("no host for module fetch")
 	}
 	ctx := withRequestKind(context.Background(), "js")
 	pageURL := m.base
@@ -466,7 +466,7 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 		pageURL = m.j.page.URL
 	}
 	ctx = withRequestPage(ctx, pageURL, m.j.page != nil && m.j.page.Local)
-	data, ctype, _, status, err := m.j.b.loader.fetchCtx(ctx, u)
+	data, ctype, _, status, err := m.j.host.FetchResource(ctx, u)
 	if err != nil {
 		return "", err
 	}

@@ -552,7 +552,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 				}
 				return j.vm.ToValue(h)
 			}
-			vw, vh := cssWidthPx(j.b.width), cssHeightPx(j.b.height)
+			vw, vh := cssWidthPx(j.host.Width()), cssHeightPx(j.host.Height())
 			if width {
 				return j.vm.ToValue(j.elementWidthPx(n, vw))
 			}
@@ -573,7 +573,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoMethod(p, "getBoundingClientRect", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		x, y, w, h, ok := j.elementRect(n)
 		if !ok {
-			vw, vh := cssWidthPx(j.b.width), cssHeightPx(j.b.height)
+			vw, vh := cssWidthPx(j.host.Width()), cssHeightPx(j.host.Height())
 			x, y = 0, 0
 			w = j.elementWidthPx(n, vw)
 			h = j.elementHeightPx(n, vh)
@@ -988,8 +988,8 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		// A page usually opens the file picker by calling click() on a hidden
 		// file input (an Upload button wrapping it). There is no picker here,
 		// so show the same unsupported-upload notice a direct click does.
-		if isFileInput(n) && j.b != nil {
-			j.b.showUploadNotice()
+		if isFileInput(n) && j.host != nil {
+			j.host.ShowUploadNotice()
 		}
 		j.fireNodeEvent(n, "click")
 		j.markDirty()
@@ -1347,7 +1347,7 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 
 func (j *jsRuntime) initFormObject(o *sobek.Object, n *Node) {
 	j.method(o, "submit", func(sobek.FunctionCall) sobek.Value {
-		j.b.queueFormSubmit(n)
+		j.host.QueueFormSubmit(n)
 		return sobek.Undefined()
 	})
 }
@@ -1490,8 +1490,8 @@ func (j *jsRuntime) nodeStyle(n *Node) *Style {
 	if n.Style != nil {
 		return n.Style
 	}
-	if j.b != nil && j.b.layout != nil {
-		return j.b.layout.ComputeNode(n)
+	if j.host != nil && j.host.Layout() != nil {
+		return j.host.Layout().ComputeNode(n)
 	}
 	return nil
 }
@@ -1841,10 +1841,10 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 	}
 	_ = o.Set("fonts", fonts)
 	j.accessor(o, "cookie", func() sobek.Value {
-		if j.page == nil || j.page.URL == nil || j.b == nil || j.b.loader == nil || j.b.loader.cookies == nil {
+		if j.page == nil || j.page.URL == nil || j.host == nil {
 			return j.vm.ToValue("")
 		}
-		cookies := j.b.loader.cookies.documentCookies(j.page.URL)
+		cookies := j.host.DocumentCookies(j.page.URL)
 		parts := make([]string, 0, len(cookies))
 		for _, c := range cookies {
 			parts = append(parts, c.Name+"="+c.Value)
@@ -1852,14 +1852,14 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		return j.vm.ToValue(strings.Join(parts, "; "))
 	}, func(v sobek.Value) {
 		raw := strings.TrimSpace(v.String())
-		if raw == "" || j.page == nil || j.page.URL == nil || j.b == nil || j.b.loader == nil || j.b.loader.cookies == nil {
+		if raw == "" || j.page == nil || j.page.URL == nil || j.host == nil {
 			return
 		}
 		c, err := http.ParseSetCookie(raw)
 		if err != nil || c.Name == "" {
 			return
 		}
-		j.b.loader.cookies.setDocumentCookie(j.page.URL, c)
+		j.host.SetDocumentCookie(j.page.URL, c)
 	})
 	j.method(o, "write", func(call sobek.FunctionCall) sobek.Value {
 		var b strings.Builder
@@ -1896,10 +1896,10 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
 	})
 	pointNode := func(px, py float64) *Node {
-		if j.b == nil || j.b.layout == nil {
+		if j.host == nil || j.host.Layout() == nil {
 			return nil
 		}
-		cw, ch := j.b.cellW, j.b.cellH
+		cw, ch := j.host.CellW(), j.host.CellH()
 		if cw <= 0 {
 			cw = 8
 		}
@@ -1907,11 +1907,11 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 			ch = 16
 		}
 		x := int(px) / cw
-		y := int(py)/ch + j.b.scroll
-		if x < 0 || x >= j.b.width || y < 0 {
+		y := int(py)/ch + j.host.Scroll()
+		if x < 0 || x >= j.host.Width() || y < 0 {
 			return nil
 		}
-		n := j.b.nodeAt(x, y)
+		n := j.host.NodeAt(x, y)
 		for n != nil && n.Type != ElementNode {
 			n = n.Parent
 		}
@@ -2244,8 +2244,8 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 			return px
 		}
 	}
-	if j.b.layout != nil {
-		if r, ok := j.b.layout.Boxes[n]; ok && r.W > 0 {
+	if j.host.Layout() != nil {
+		if r, ok := j.host.Layout().Boxes[n]; ok && r.W > 0 {
 			return cssWidthPx(r.W)
 		}
 	}
@@ -2359,8 +2359,8 @@ func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {
 			return px
 		}
 	}
-	if j.b.layout != nil {
-		if r, ok := j.b.layout.Boxes[n]; ok && r.H > 0 {
+	if j.host.Layout() != nil {
+		if r, ok := j.host.Layout().Boxes[n]; ok && r.H > 0 {
 			return cssHeightPx(r.H)
 		}
 	}
