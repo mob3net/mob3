@@ -1,6 +1,9 @@
 package protocol
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // BenchmarkCodecFrame measures the steady-state cost of turning one full
 // 152x35 content frame into bytes and back. Phase 0 records it as the baseline
@@ -36,6 +39,37 @@ func BenchmarkCodecFrame(b *testing.B) {
 		}
 		if _, _, err := DecodeEvent(buf, DefaultLimits); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkInProcRoundTrip measures one command and one event through the
+// in-process transport, including both codec passes and the channel hops.
+func BenchmarkInProcRoundTrip(b *testing.B) {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+		for {
+			select {
+			case c := <-in:
+				out <- Event{Body: State{URL: c.Body.(Navigate).URL, Title: "t"}}
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer s.Close()
+	cmd := Command{Body: Navigate{URL: "https://example.test/a"}}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := s.Send(cmd); err != nil {
+			b.Fatal(err)
+		}
+		if _, ok := <-s.Events(); !ok {
+			b.Fatal("event stream closed")
 		}
 	}
 }

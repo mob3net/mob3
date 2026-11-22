@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 4 complete (host fetch + engine page assembly).**
+Status: **Phase 5 in progress (in-process transport landed).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -71,6 +71,7 @@ network destination.
 | D35 | 2026-11-22 | Move request metadata, local-network/mixed-content guards, dialers, `NewHTTPTransport` and `NewHTTPClient` into `internal/host`; browser keeps thin wrappers for fetch/tests. | These are host network policy and policy enforcement; the engine only needs brokered requests. The remaining load/parse split is the next step. |
 | D36 | 2026-11-22 | Move the raw request path (`Fetcher`, data URLs, size/encoding checks, cache and request accounting) into `internal/host`. `Loader.fetchCtx/fetchRequest` are delegates that sync the host client/cache/settings/log before each call. Page assembly and parsing remain in the browser for the next slice. | Fetching is host policy and I/O; parsing is engine work. The delegate keeps test-injected clients working while the assembly split is prepared. |
 | D37 | 2026-11-22 | Move HTML page assembly and stylesheet/script/import-map collection into `internal/engine` behind `PageFetcher`; the browser adapter brokers each subresource through the host fetch path. Image/SVG loading, about/PDF/blocked orchestration stay in the Loader for now. | The engine now owns parsing and document assembly, and every subresource crosses a brokered interface. Remaining Loader code is orchestration/policy, not the engine. |
+| D38 | 2026-11-22 | Define `protocol.Handler` and `protocol.Transport`, and implement `protocol.InProc`: each session runs the handler on its own goroutine, and every command and event is encoded and decoded through the fixed codec before delivery. Abort is an out-of-band one-shot channel; an event that fails validation is replaced by `Crash`. | This is the first Phase 5 slice: the seam becomes executable before the browser loop moves onto it, and the codec is on the real path rather than only in tests. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -141,6 +142,7 @@ which part goes where.
 | network guard and transport construction | `internal/host/network.go` | Request metadata, local/mixed-content policy, dialers, `NewHTTPTransport` and `NewHTTPClient`. |
 | raw request path | `internal/host/fetch.go` | `Fetcher`, data URLs, size/encoding checks, cache and request accounting; Loader delegates. |
 | page assembly | `internal/engine/page_loader.go` | HTML parse, base/title, stylesheets, scripts and import map behind `PageFetcher`; image/SVG/about/PDF stay in the Loader. |
+| transport contract | `internal/protocol/transport.go` | `Handler`, `Transport` and the codec-validating in-process session. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -182,7 +184,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Engine cannot open sockets or read cookies |
-| 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
+| 5 | Transport and lifecycle | 1–2 weeks | In progress (5a) | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
@@ -323,12 +325,14 @@ Next: 3b, the engine package.
 
 ### Phase 5 — Transport and lifecycle
 
-- [ ] Define `Transport`; implement the in-process transport.
+- [x] Define `Transport`; implement the in-process transport.
 - [ ] Run every path through it, including `-dump`, `-png`, tests and MCP.
 - [ ] Engine runs on its own goroutine with its timer loop; front end owns the
       terminal loop.
 - [ ] Out-of-band `Abort` so Esc can cancel a busy script.
 - [ ] Frame coalescing, backpressure and hostile-frame bounds.
+      Invalid events already become `Crash`; queue depth is the only
+      backpressure today.
 - [ ] Transport-level restart hook (unused in-process, used by the later
       child).
 - [ ] Keep a socket transport behind the same interface for that later step.
@@ -441,6 +445,21 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5a deltas
+
+The transport is not on the browser draw path yet; it is exercised by tests and
+a benchmark. One command plus one event costs about 1.1 µs, including both
+codec passes and the channel hops. Codec frame cost is unchanged.
+
+| Metric | Before 5a | After 5a | Delta |
+| --- | --- | --- | --- |
+| In-process command+event round trip | new | 1.13–1.17 µs, 256 B/op, 5 allocs | new baseline |
+| Codec frame, 152×35 | 312–321 µs, 106 662 B/op | 312–321 µs, 106 662 B/op | flat |
+| Full draw, forced repaint | unchanged | unchanged | flat |
+| Content paint+blit | unchanged | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
 
 ### Phase 3a deltas
 
@@ -720,3 +739,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4b-5 | Request metadata, local/mixed-content guards, dialers, `NewHTTPTransport`/`NewHTTPClient` moved to `internal/host`; browser wrappers; all tests and hashes green | `go test ./...`, `go vet`, `-race` on network/cert/frame, dump/PNG hashes | 4b-6: split Loader into raw Fetch + engine parse |
 | 2026-11-22 | 4b-6 | Raw `Fetcher` moved to `internal/host` (data URLs, limits, encoding, cache, request log); Loader delegates; page assembly still browser; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/network/frame, dump/PNG hashes | Split page assembly/parse into engine |
 | 2026-11-22 | 4b-7 | HTML assembly and stylesheet/script/import-map collection moved to `internal/engine` behind `PageFetcher`; browser adapter brokers host fetches; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/engine/frame, dump/PNG hashes | Phase 5: transport/lifecycle |
+| 2026-11-22 | 5a | `protocol.Handler`/`Transport` and the codec-validating `InProc` session; abort channel, `Crash` substitution for invalid events, drain-on-close; round-trip/abort/close tests, a frontend frame seam test and a transport benchmark | `go test ./...`, `go vet`, `-race` on protocol/frontend, dump/PNG hashes | Wire the browser loop through the transport |

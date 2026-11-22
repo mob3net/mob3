@@ -13,7 +13,7 @@ and the migration order. Progress, decisions and measurements are tracked in
 
 | Package | Owns |
 | --- | --- |
-| `internal/protocol` | Message types, binary codec, `Session`/`Broker` ports, limits and version. Standard library only; never imports another project package. |
+| `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport, limits and version. Standard library only; never imports another project package. |
 | `internal/engine` | HTML/CSS parsing and style, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings, global visited history, download detection, and the request log. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
@@ -144,6 +144,7 @@ Standard Go layout:
 | `internal/host/network.go` | Request metadata, local-network and mixed-content policy, dialers, pooled transport and HTTP client construction. |
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly stays in the browser for now. |
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
+| `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, codec validation on every message. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | HTTP(S)/data loading, redirects, gzip, charset decoding, stylesheet discovery, module script collection and import map parsing, image loading, request log and the local-network/mixed-content guards. The cookie jar moved to `internal/host/cookies.go`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
