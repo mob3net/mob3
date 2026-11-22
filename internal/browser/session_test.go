@@ -358,3 +358,31 @@ func TestConsoleDrawEmitsFrame(t *testing.T) {
 		t.Fatalf("console frame is invalid: %v", err)
 	}
 }
+
+type dialogSink struct{ dialog protocol.Dialog }
+
+func (s *dialogSink) Send(ev protocol.Event) error {
+	if d, ok := ev.Body.(protocol.Dialog); ok {
+		s.dialog = d
+	}
+	return nil
+}
+
+func TestDialogTransportRoundTrip(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.noDraw = true
+	in := make(chan protocol.Command, 2)
+	sink := &dialogSink{}
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = sink
+	in <- protocol.Command{Body: protocol.DialogResult{ID: 1, OK: true, Text: "answer"}}
+	text, ok := b.showPrompt("name?", "def")
+	if !ok || text != "answer" {
+		t.Fatalf("prompt = %q, %v", text, ok)
+	}
+	if sink.dialog.Kind != protocol.DialogPrompt || sink.dialog.Default != "def" || sink.dialog.Text != "name?" {
+		t.Fatalf("dialog event = %+v", sink.dialog)
+	}
+}

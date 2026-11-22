@@ -274,6 +274,7 @@ type Browser struct {
 	placementCache  map[placementKey]*placementEntry
 	placementBytes  int
 	nextPlacementID int
+	nextDialogID    uint32
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.

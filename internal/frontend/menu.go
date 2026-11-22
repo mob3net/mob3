@@ -146,8 +146,13 @@ func itoa(n int) string {
 // ComposeMenuFrame stacks the normal header, content and footer into one full
 // frame and draws the active choice window over it.
 func ComposeMenuFrame(st protocol.State, content protocol.Frame) (protocol.Frame, bool) {
-	if st.Menu == protocol.MenuNone || !st.FrontendChrome ||
-		st.Width != content.W || st.HeaderRows <= 0 ||
+	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawMenu(c, st) })
+}
+
+// ComposeOverlayFrame stacks the normal header, content and footer into one
+// full frame and lets draw paint a modal layer over it.
+func ComposeOverlayFrame(st protocol.State, content protocol.Frame, draw func(*chromeCanvas)) (protocol.Frame, bool) {
+	if !st.FrontendChrome || st.Width != content.W || st.HeaderRows <= 0 ||
 		st.Height != content.H+st.HeaderRows+1 {
 		return protocol.Frame{}, false
 	}
@@ -164,7 +169,7 @@ func ComposeMenuFrame(st protocol.State, content protocol.Frame) (protocol.Frame
 	copy(full.Cells[rows*st.Width:(rows+content.H)*st.Width], content.Cells)
 	copy(full.Cells[(st.Height-1)*st.Width:], layout.Footer)
 	c := &chromeCanvas{w: st.Width, h: st.Height, cells: full.Cells}
-	DrawMenu(c, st)
+	draw(c)
 	return full, true
 }
 

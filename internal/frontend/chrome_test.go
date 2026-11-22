@@ -279,3 +279,25 @@ func TestMenuLayoutAndDraw(t *testing.T) {
 		}
 	}
 }
+
+func TestDialogLayoutAndDraw(t *testing.T) {
+	st := chromeState()
+	d := &DialogView{Kind: protocol.DialogPrompt, Text: "name?", Value: "alice", Cursor: 5, SelectAll: true}
+	layout := LayoutDialog(st, d)
+	if layout.BoxW <= 0 || layout.BoxH <= 0 {
+		t.Fatalf("layout = %+v", layout)
+	}
+	c := newCanvas(st.Width, st.Height)
+	DrawDialog(c, st, d)
+	var text strings.Builder
+	for _, cell := range c.cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"JavaScript prompt", "name?", "alice", "Enter: OK"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("dialog %q does not contain %q", text.String(), want)
+		}
+	}
+}

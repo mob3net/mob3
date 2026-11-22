@@ -1770,6 +1770,9 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 	if b.keys == nil && b.sessionIn == nil {
 		return d.text, d.kind == "alert"
 	}
+	if b.sessionOut != nil && b.sessionIn != nil {
+		return b.runTransportDialog(d)
+	}
 	b.dialog = d
 	defer func() {
 		b.dialog = nil
@@ -1808,6 +1811,62 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 			d.text, d.cursor = text, cur
 			if done {
 				return d.text, ok
+			}
+		}
+	}
+}
+
+// runTransportDialog hands a dialog to the front end and waits for its answer.
+// The engine loop stays blocked in the JS caller; the front end owns the modal
+// drawing and input.
+func (b *Browser) runTransportDialog(d *jsDialog) (string, bool) {
+	kind := protocol.DialogAlert
+	switch d.kind {
+	case "confirm":
+		kind = protocol.DialogConfirm
+	case "prompt":
+		kind = protocol.DialogPrompt
+	}
+	b.nextDialogID++
+	id := b.nextDialogID
+	b.dialog = d
+	defer func() { b.dialog = nil }()
+	if err := b.sessionOut.Send(protocol.Event{Body: protocol.Dialog{
+		ID: id, Kind: kind, Text: d.message, Default: d.text,
+	}}); err != nil {
+		return d.text, kind == protocol.DialogAlert
+	}
+	for {
+		select {
+		case <-b.sessionCtx.Done():
+			return "", false
+		case <-b.sessionAbort:
+			// The front end answers via DialogResult; an abort only wakes us.
+		case cmd, ok := <-b.sessionIn:
+			if !ok {
+				return "", false
+			}
+			switch v := cmd.Body.(type) {
+			case protocol.DialogResult:
+				if v.ID != id {
+					continue
+				}
+				if v.OK {
+					return v.Text, true
+				}
+				return "", false
+			case protocol.Resize:
+				b.resize(v.Width, v.Height)
+				if v.CellW > 0 {
+					b.cellW = v.CellW
+				}
+				if v.CellH > 0 {
+					b.cellH = v.CellH
+				}
+				b.applyImageCap()
+			case protocol.Shutdown:
+				b.sessionQuit = true
+				return "", false
 			}
 		}
 	}

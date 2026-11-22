@@ -372,3 +372,42 @@ func TestMenuMouseRowAndBackdrop(t *testing.T) {
 		t.Fatal("backdrop click did not close the menu")
 	}
 }
+
+func TestDialogEventAndAnswers(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Dialog{
+		ID: 7, Kind: protocol.DialogPrompt, Text: "name?", Default: "def",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.dialogActive || loop.dialogView.Value != "def" || !loop.dialogView.SelectAll {
+		t.Fatalf("dialog = %v %+v", loop.dialogActive, loop.dialogView)
+	}
+	loop.handleDialogKey("x")
+	if loop.dialogView.Value != "x" {
+		t.Fatalf("prompt value = %q", loop.dialogView.Value)
+	}
+	loop.handleDialogKey("enter")
+	if loop.dialogActive {
+		t.Fatal("dialog stayed open")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 7, OK: true, Text: "x"}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Dialog{ID: 8, Kind: protocol.DialogConfirm, Text: "sure?"}})
+	loop.handleDialogKey("n")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 8, OK: false}) {
+		t.Fatalf("confirm commands = %#v", s.cmds)
+	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Dialog{ID: 9, Kind: protocol.DialogAlert, Text: "hi"}})
+	loop.handleDialogKey(" ")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 9, OK: true}) {
+		t.Fatalf("alert commands = %#v", s.cmds)
+	}
+}

@@ -102,6 +102,7 @@ network destination.
 | D62 | 2026-11-22 | Move the URL/vim prompt state, line editing, recall history and mouse caret to the front end. `o`/`ctrl-l` and `:` open a local prompt seeded with the current URL and select-all; Enter sends `Navigate`, Esc cancels, `:q` exits, and prompt history is front-end-local. The engine prompt remains for direct `HandleKey` callers, automation and tests; `AppOpenURL`/`AppOpenVimPrompt` stay for those paths. | This removes the last text-entry mode from the engine's interactive key path, using the same line-editing rules copied for the prompt. Find, menus, console, dialogs, navigation state and the engine fallback remain. |
 | D63 | 2026-11-22 | Move the page find bar, query, caret and result count to the front end. `/` opens a local bar; edits send `protocol.Find{Query}` and navigation sends `Next`/`Prev`; the engine computes matches, scrolls and paints highlights, then answers with `protocol.FindResults`. Enter/Esc close the bar but leave matches for `n`/`N`; the next base Esc clears them. Console HTML find stays engine-owned because the console is still an engine modal. | Find is the last base text-entry mode. Keeping match computation in the engine preserves layout-aware highlights while the front end owns the visible bar and input. Menus, dialogs, console and navigation state remain. |
 | D64 | 2026-11-22 | Move the view and zoom windows to the front end. `X`/`Z` and the zoom badge open local windows; the front end draws the full-screen dimmed box from `State`, handles keyboard and mouse selection, and sends `AppToggleFixed`/`Sticky`/`Backgrounds` or `AppZoomSet`. The engine retains its menu code for direct callers, automation and the fallback. | This is the first modal overlay the front end composes over the full screen (header, content and footer). The select menu, dialogs and console still need page/JS/console data, so they stay engine-owned for now. |
+| D65 | 2026-11-22 | Move JavaScript alert/confirm/prompt dialogs to the front end. The engine sends `Dialog` with an ID and blocks in `runTransportDialog`; the front end draws the modal, edits the prompt with the shared line editor, and answers with `DialogResult`. The engine keeps the direct-key dialog path for tests and automation. | This closes the dialog request/response seam and removes the last JS-driven modal input from the engine's interactive path. The select menu and console remain engine-owned. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -151,7 +152,7 @@ seam; the note names which part goes where.
 | --- | --- | --- |
 | `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
-| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find and view/zoom windows are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`). Select menu, console, dialogs and engine fallback menus still live here; engine find match computation/highlights, page hit testing, form editing and hint computation remain. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows and JS dialogs are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`). Select menu, console and engine fallback menus/dialogs still live here; engine find match computation/highlights, page hit testing, form editing and hint computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
 | `browser_forms.go`, `browser_selection.go`, `reader.go` | engine | Form state, selection and reader extraction are page content. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
@@ -256,11 +257,11 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
       `Find`/`FindResults`. Console HTML find remains engine-owned.
 - [x] View and zoom windows are front-end-owned, including the full-screen
       dimmed overlay, keyboard/mouse selection and toggle/zoom actions.
-- [~] The select menu, console and dialogs still own key interpretation inside
-      the engine. The full shell/page key split is not complete until those
-      move.
-- [ ] JS dialogs become request/response messages. They still block inside the
-      session and read commands directly (D20).
+- [~] The select menu and console still own key interpretation inside the
+      engine. The full shell/page key split is not complete until those move.
+- [x] JS dialogs are request/response messages: the engine sends `Dialog` and
+      blocks, the front end draws/edits and answers with `DialogResult`. The
+      direct-key path remains for tests and automation.
 - [~] The chrome contract now carries geometry, header prompt fields, footer
       text/level/hits, PDF hint and the find/console fallback flags. Menu,
       console, dialog, hint and selection state still need messages of their
@@ -424,8 +425,9 @@ trusted-shell split, then Phase 6. Dependency order:
 
 **B. Dialogs and navigation**
 
-- [ ] Wire `protocol.Dialog`/`DialogResult` so JS alerts, confirms and prompts
-      are front-end modals; delete `Browser.runDialog` command reads.
+- [x] Wire `protocol.Dialog`/`DialogResult` so JS alerts, confirms and prompts
+      are front-end modals. The engine keeps the direct-key path for tests and
+      automation.
 - [ ] Move back/forward history, scroll restore, `about:history` data and the
       download/curl hint to the front end; keep the page cache memory-only.
 - [ ] Remove back/forward from the engine `App` actions.
@@ -997,3 +999,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7c | Batch 3: URL/vim prompt state, line editing, recall history and mouse caret moved to `frontend/prompt.go`; `o`/`ctrl-l`/`:` open the local prompt, Enter navigates, Esc cancels and `:q` exits. Engine prompt remains for direct callers/automation. | `go test ./...`, `go vet`, full `-race`, prompt edit/history/mouse tests, PTY prompt navigation and `:q`, dump/PNG hashes | Batch 4: find bar, menus and dialogs |
 | 2026-11-22 | 7d | Batch 4: page find bar/query/caret/results moved to the front end; added `Find` command handling and `FindResults` replies in the engine; Enter/Esc leave matches for `n`/`N`, next Esc clears. Console HTML find stays engine-owned. | `go test ./...`, `go vet`, full `-race`, find command/bar/input tests, PTY find/navigation checks, dump/PNG hashes | Batch 5: view/zoom/select menus and dialogs |
 | 2026-11-22 | 7e | Batch 5: view/zoom windows moved to the front end, including the full-screen dimmed overlay, keyboard/mouse rows and `AppZoomSet`; engine keeps its menu fallback. Added `State.Menu`/`MenuIndex`/`ViewFlags`/`ZoomPercent` and menu layout/draw tests. Select menu, dialogs and console remain. | `go test ./...`, `go vet`, full `-race`, menu key/mouse/layout tests, PTY view/zoom checks, dump/PNG hashes | Batch 6: select menu, dialogs and console |
+| 2026-11-22 | 7f | Batch 6: JS dialogs moved to the front end via `Dialog`/`DialogResult`; engine blocks in `runTransportDialog`, front end draws alert/confirm/prompt, edits the prompt and answers. Kept the direct-key dialog path for tests/automation. Added dialog layout/draw, transport round-trip and engine-parity tests. | `go test ./...`, `go vet`, full `-race`, dialog transport/layout/parity tests, PTY alert/confirm/prompt checks, dump/PNG hashes | Batch 7: select menu and console |

@@ -22,6 +22,7 @@ type Presenter struct {
 	nativeSet  bool
 	chrome     protocol.Chrome
 	state      protocol.State
+	dialog     *DialogView
 	lastFrame  protocol.Frame
 	hasFrame   bool
 }
@@ -62,6 +63,13 @@ func (p *Presenter) SetChrome(c protocol.Chrome) {
 // SetState stores the chrome snapshot. Normal frames are composed from it when
 // State.FrontendChrome is set; the Chrome event remains the fallback for
 // overlays, the console and older tests.
+// SetDialog installs or clears the modal dialog layer. The next Present or
+// Refresh composes it over the content frame.
+func (p *Presenter) SetDialog(d *DialogView) {
+	p.dialog = d
+	p.prev = nil
+}
+
 func (p *Presenter) SetState(st protocol.State) {
 	if p.state.FrontendChrome != st.FrontendChrome ||
 		p.state.HeaderRows != st.HeaderRows ||
@@ -122,6 +130,13 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 			len(layout.Footer) == p.state.Width {
 			if p.state.Menu != protocol.MenuNone {
 				if full, ok := ComposeMenuFrame(p.state, f); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
+			} else if p.dialog != nil {
+				if full, ok := ComposeDialogFrame(p.state, f, p.dialog); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows

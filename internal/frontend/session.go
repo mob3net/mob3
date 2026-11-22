@@ -54,6 +54,11 @@ type SessionLoop struct {
 	menuIndex int
 	menuBase  protocol.State
 
+	dialogActive bool
+	dialog       protocol.Dialog
+	dialogView   DialogView
+	dialogBase   protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -202,6 +207,8 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
+	case protocol.Dialog:
+		l.startDialog(v)
 	case protocol.FindResults:
 		if l.findActive {
 			l.findCurrent, l.findTotal = v.Current, v.Total
@@ -232,6 +239,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.dialogActive {
+		return l.handleDialogKey(k)
+	}
 	if l.promptActive {
 		return l.handlePromptKey(k)
 	}
@@ -308,6 +318,115 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
 	return false, false
+}
+
+func (l *SessionLoop) startDialog(v protocol.Dialog) {
+	l.cancelQuit()
+	l.closePrompt()
+	l.closeFind()
+	l.closeMenu()
+	l.dialogActive = true
+	l.dialog = v
+	l.dialogBase = l.State.Page
+	l.dialogView = DialogView{
+		ID: v.ID, Kind: v.Kind, Text: v.Text,
+		Value: v.Default, Cursor: len(v.Default), SelectAll: v.Kind == protocol.DialogPrompt,
+	}
+	l.syncDialog()
+}
+
+func (l *SessionLoop) syncDialog() {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetDialog(&l.dialogView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeDialog() {
+	if !l.dialogActive {
+		return
+	}
+	l.dialogActive = false
+	l.State.Page = l.dialogBase
+	if l.Presenter != nil {
+		l.Presenter.SetDialog(nil)
+		l.Presenter.SetState(l.dialogBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) answerDialog(ok bool, text string) {
+	id := l.dialog.ID
+	l.closeDialog()
+	_ = l.Session.Send(protocol.Command{Body: protocol.DialogResult{ID: id, OK: ok, Text: text}})
+}
+
+func (l *SessionLoop) handleDialogKey(k string) (handled, quit bool) {
+	switch l.dialog.Kind {
+	case protocol.DialogAlert:
+		switch k {
+		case "enter", " ", "esc":
+			l.answerDialog(true, "")
+		}
+		return true, false
+	case protocol.DialogConfirm:
+		switch k {
+		case "enter", "y", "Y":
+			l.answerDialog(true, "")
+		case "esc", "n", "N", "ctrl-c":
+			l.answerDialog(false, "")
+		}
+		return true, false
+	case protocol.DialogPrompt:
+		switch k {
+		case "enter":
+			l.answerDialog(true, l.dialogView.Value)
+			return true, false
+		case "esc", "ctrl-c":
+			l.answerDialog(false, "")
+			return true, false
+		}
+		value, cur, _ := editLineKey(l.dialogView.Value, l.dialogView.Cursor, k, editConfig{
+			selAll:            &l.dialogView.SelectAll,
+			collapseSelection: true,
+		})
+		l.dialogView.Value = value
+		if cur > len(value) {
+			cur = len(value)
+		}
+		l.dialogView.Cursor = cur
+		l.syncDialog()
+		return true, false
+	}
+	return true, false
+}
+
+func (l *SessionLoop) handleDialogMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := LayoutDialog(l.State.Page, &l.dialogView)
+	x, y := ev.X-1, ev.Y-1
+	if layout.BoxW > 0 &&
+		x >= layout.BoxX && x < layout.BoxX+layout.BoxW &&
+		y >= layout.BoxY && y < layout.BoxY+layout.BoxH {
+		if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+			y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+			l.answerDialog(l.dialog.Kind == protocol.DialogAlert, "")
+			return true
+		}
+		return true
+	}
+	l.answerDialog(l.dialog.Kind == protocol.DialogAlert, "")
+	return true
 }
 
 func zoomPresetIndex(percent int) int {
@@ -676,6 +795,9 @@ func (l *SessionLoop) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	if l.dialogActive {
+		return l.handleDialogMouse(ev)
+	}
 	if l.quitPending {
 		return true
 	}
