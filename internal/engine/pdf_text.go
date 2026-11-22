@@ -1,4 +1,4 @@
-package browser
+package engine
 
 // PDF text extraction: fonts, content-stream interpretation, and page line
 // reconstruction.
@@ -80,15 +80,15 @@ func (f *pdfFont) width(code int) float64 {
 	return f.defWidth
 }
 
-// pdfPage is one leaf page plus the attributes it inherited.
-type pdfPage struct {
+// PDFPage is one leaf page plus the attributes it inherited.
+type PDFPage struct {
 	Number    int
 	Resources pdfDict
 	Content   []byte
 }
 
-// pdfRun is a positioned text fragment on a page.
-type pdfRun struct {
+// PDFRun is a positioned text fragment on a page.
+type PDFRun struct {
 	Text   string
 	X, Y   float64 // baseline start in PDF user space (y grows up)
 	W      float64 // advance width in user space
@@ -97,10 +97,10 @@ type pdfRun struct {
 	Italic bool
 }
 
-// pdfSpan is a run of text with one style inside a reconstructed line. Size is
+// PDFSpan is a run of text with one style inside a reconstructed line. Size is
 // an explicit CSS font size in pixels (0 keeps the page's 14px default); large
 // PDF headings use it to trigger the same scaled-text path as HTML headings.
-type pdfSpan struct {
+type PDFSpan struct {
 	Text   string
 	Bold   bool
 	Italic bool
@@ -108,7 +108,7 @@ type pdfSpan struct {
 }
 
 // pages walks the page tree in document order.
-func (d *pdfDoc) pages() ([]*pdfPage, error) {
+func (d *PDFDoc) Pages() ([]*PDFPage, error) {
 	root := d.root()
 	if root == nil {
 		return nil, errPDFInvalid
@@ -117,7 +117,7 @@ func (d *pdfDoc) pages() ([]*pdfPage, error) {
 	if top == nil {
 		return nil, errPDFInvalid
 	}
-	var out []*pdfPage
+	var out []*PDFPage
 	var walk func(node pdfDict, inh pdfInherited, depth int)
 	walk = func(node pdfDict, inh pdfInherited, depth int) {
 		if len(out) >= maxPDFPages {
@@ -139,7 +139,7 @@ func (d *pdfDoc) pages() ([]*pdfPage, error) {
 		}
 		kids := d.array(node["Kids"])
 		if d.nameOf(node["Type"]) == "Page" || len(kids) == 0 {
-			p := &pdfPage{Number: len(out) + 1, Resources: inh.Resources}
+			p := &PDFPage{Number: len(out) + 1, Resources: inh.Resources}
 			p.Content = d.pageContent(node)
 			out = append(out, p)
 			return
@@ -159,7 +159,7 @@ type pdfInherited struct {
 	MediaBox  []float64
 }
 
-func (d *pdfDoc) numberArray(v any) []float64 {
+func (d *PDFDoc) numberArray(v any) []float64 {
 	arr := d.array(v)
 	out := make([]float64, 0, len(arr))
 	for _, e := range arr {
@@ -169,7 +169,7 @@ func (d *pdfDoc) numberArray(v any) []float64 {
 }
 
 // pageContent concatenates the page's content streams.
-func (d *pdfDoc) pageContent(node pdfDict) []byte {
+func (d *PDFDoc) pageContent(node pdfDict) []byte {
 	var parts [][]byte
 	total := 0
 	add := func(v any) {
@@ -205,7 +205,7 @@ func (d *pdfDoc) pageContent(node pdfDict) []byte {
 	return out
 }
 
-func (d *pdfDoc) streamOf(v any) *pdfStream {
+func (d *PDFDoc) streamOf(v any) *pdfStream {
 	if v == nil {
 		return nil
 	}
@@ -214,7 +214,7 @@ func (d *pdfDoc) streamOf(v any) *pdfStream {
 }
 
 // extract returns the positioned text of one page.
-func (d *pdfDoc) extract(p *pdfPage) []pdfRun {
+func (d *PDFDoc) Extract(p *PDFPage) []PDFRun {
 	ex := &pdfExtractor{
 		d:  d,
 		st: pdfTextState{tm: pdfIdentity, tlm: pdfIdentity, ctm: pdfIdentity, tz: 1},
@@ -232,7 +232,7 @@ func (d *pdfDoc) extract(p *pdfPage) []pdfRun {
 	return ex.runs
 }
 
-func (d *pdfDoc) loadFonts(res pdfDict) map[string]*pdfFont {
+func (d *PDFDoc) loadFonts(res pdfDict) map[string]*pdfFont {
 	out := map[string]*pdfFont{}
 	if res == nil {
 		return out
@@ -255,11 +255,11 @@ type pdfTextState struct {
 }
 
 type pdfExtractor struct {
-	d    *pdfDoc
+	d    *PDFDoc
 	st   pdfTextState
 	hold []pdfTextState
 
-	runs    []pdfRun
+	runs    []PDFRun
 	buf     strings.Builder
 	haveRun bool
 	runX    float64
@@ -589,7 +589,7 @@ func (ex *pdfExtractor) flush() {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	ex.runs = append(ex.runs, pdfRun{
+	ex.runs = append(ex.runs, PDFRun{
 		Text: text, X: ex.runX, Y: ex.runY, W: ex.runW, Size: ex.runSize,
 		Bold: ex.runBold, Italic: ex.runItal,
 	})
@@ -612,7 +612,7 @@ func sanitizePDFText(s string) string {
 	return b.String()
 }
 
-// pdfPageLines groups runs into lines and turns them into styled spans with
+// PDFPageLines groups runs into lines and turns them into styled spans with
 // column padding, so tables stay aligned in the terminal. bodySize is the
 // document's typical font size; runs clearly larger than it become headline
 // spans and get the same treatment as large HTML headings. Vertical gaps wider
@@ -622,15 +622,15 @@ func sanitizePDFText(s string) string {
 // Two-column prose is emitted column by column instead of row by row: a
 // gutter that most lines respect splits the page into left and right sequences,
 // so reading order follows the text rather than the printed page.
-func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
+func PDFPageLines(runs []PDFRun, bodySize float64) []PDFSpan {
 	if len(runs) == 0 {
 		return nil
 	}
 	lines := pdfGroupLines(runs)
-	var out []pdfSpan
+	var out []PDFSpan
 	for _, seg := range pdfSegments(lines, bodySize) {
 		if len(out) > 0 && seg.breakBefore {
-			out = append(out, pdfSpan{Text: "\n"})
+			out = append(out, PDFSpan{Text: "\n"})
 		}
 		out = append(out, pdfFlowSpans(seg.lines, bodySize)...)
 	}
@@ -638,8 +638,8 @@ func pdfPageLines(runs []pdfRun, bodySize float64) []pdfSpan {
 }
 
 // pdfGroupLines groups runs into visual lines, top to bottom.
-func pdfGroupLines(runs []pdfRun) [][]pdfRun {
-	sorted := make([]pdfRun, len(runs))
+func pdfGroupLines(runs []PDFRun) [][]PDFRun {
+	sorted := make([]PDFRun, len(runs))
 	copy(sorted, runs)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		if math.Abs(sorted[i].Y-sorted[j].Y) > 2 {
@@ -647,13 +647,13 @@ func pdfGroupLines(runs []pdfRun) [][]pdfRun {
 		}
 		return sorted[i].X < sorted[j].X
 	})
-	var lines [][]pdfRun
+	var lines [][]PDFRun
 	for _, r := range sorted {
 		if n := len(lines); n > 0 && math.Abs(lines[n-1][0].Y-r.Y) <= 2 {
 			lines[n-1] = append(lines[n-1], r)
 			continue
 		}
-		lines = append(lines, []pdfRun{r})
+		lines = append(lines, []PDFRun{r})
 	}
 	for _, line := range lines {
 		sort.SliceStable(line, func(i, j int) bool { return line[i].X < line[j].X })
@@ -664,19 +664,19 @@ func pdfGroupLines(runs []pdfRun) [][]pdfRun {
 // pdfSegment is one run of lines emitted together: either a flow of full-width
 // lines, or one half of a two-column band.
 type pdfSegment struct {
-	lines       [][]pdfRun
+	lines       [][]PDFRun
 	breakBefore bool
 }
 
 // pdfSegments splits the page into flow and column segments. Full-width lines
 // (headings, titles, rules) stay in flow and break a column band.
-func pdfSegments(lines [][]pdfRun, bodySize float64) []pdfSegment {
+func pdfSegments(lines [][]PDFRun, bodySize float64) []pdfSegment {
 	gutter, ok := pdfDetectGutter(lines)
 	if !ok {
 		return []pdfSegment{{lines: lines}}
 	}
 	var segs []pdfSegment
-	var flow, band [][]pdfRun
+	var flow, band [][]PDFRun
 	flushFlow := func() {
 		if len(flow) > 0 {
 			segs = append(segs, pdfSegment{lines: flow})
@@ -728,7 +728,7 @@ const pdfGutterMin = 9.0 // 1.5 terminal cells
 // come from the vertical coverage histogram of the page: a gutter is a narrow
 // x-band crossed by few lines, with real text on both sides. Requiring dense
 // text on each side rejects table columns and figure labels.
-func pdfDetectGutter(lines [][]pdfRun) (float64, bool) {
+func pdfDetectGutter(lines [][]PDFRun) (float64, bool) {
 	if len(lines) < 6 {
 		return 0, false
 	}
@@ -808,7 +808,7 @@ func pdfDetectGutter(lines [][]pdfRun) (float64, bool) {
 		if !ok {
 			continue
 		}
-		score := minInt(len(left), len(right))
+		score := MinInt(len(left), len(right))
 		if score > bestScore {
 			bestScore, bestX = score, x
 		}
@@ -820,7 +820,7 @@ func pdfDetectGutter(lines [][]pdfRun) (float64, bool) {
 }
 
 // pdfSplitLine divides a line's runs at x.
-func pdfSplitLine(line []pdfRun, x float64) (left, right []pdfRun) {
+func pdfSplitLine(line []PDFRun, x float64) (left, right []PDFRun) {
 	for _, run := range line {
 		switch {
 		case run.X+run.W <= x+0.5:
@@ -836,7 +836,7 @@ func pdfSplitLine(line []pdfRun, x float64) (left, right []pdfRun) {
 
 // pdfContiguous reports that runs sit next to each other without a wide gap, so
 // a side is one text column rather than several table columns.
-func pdfContiguous(runs []pdfRun) bool {
+func pdfContiguous(runs []PDFRun) bool {
 	for i := 1; i < len(runs); i++ {
 		if runs[i].X-(runs[i-1].X+runs[i-1].W) >= pdfGutterMin {
 			return false
@@ -845,7 +845,7 @@ func pdfContiguous(runs []pdfRun) bool {
 	return true
 }
 
-func pdfCrossesGutter(line []pdfRun, x float64) bool {
+func pdfCrossesGutter(line []PDFRun, x float64) bool {
 	for _, r := range line {
 		if r.X < x && r.X+r.W > x {
 			return true
@@ -856,9 +856,9 @@ func pdfCrossesGutter(line []pdfRun, x float64) bool {
 
 // pdfSplitBand turns a band of lines into left and right column sequences when
 // it really is two columns of prose.
-func pdfSplitBand(band [][]pdfRun, x float64) (left, right [][]pdfRun, ok bool) {
+func pdfSplitBand(band [][]PDFRun, x float64) (left, right [][]PDFRun, ok bool) {
 	leftN, rightN := 0, 0
-	var leftAll, rightAll [][]pdfRun
+	var leftAll, rightAll [][]PDFRun
 	for _, line := range band {
 		if pdfCrossesGutter(line, x) {
 			// Full-width lines belong to flow, not to either column.
@@ -890,7 +890,7 @@ func pdfSplitBand(band [][]pdfRun, x float64) (left, right [][]pdfRun, ok bool) 
 
 // pdfColumnGappy reports that many lines contain a wide internal gap, which
 // means the side holds more than one table column.
-func pdfColumnGappy(groups [][]pdfRun) bool {
+func pdfColumnGappy(groups [][]PDFRun) bool {
 	gappy := 0
 	for _, g := range groups {
 		if !pdfContiguous(g) {
@@ -903,7 +903,7 @@ func pdfColumnGappy(groups [][]pdfRun) bool {
 // pdfColumnDense reports that the lines fill most of their column's width, as
 // wrapped prose does. Sparse groups are more likely to be table cells or
 // figure labels.
-func pdfColumnDense(groups [][]pdfRun) bool {
+func pdfColumnDense(groups [][]PDFRun) bool {
 	if len(groups) < 5 {
 		return false
 	}
@@ -928,9 +928,9 @@ func pdfColumnDense(groups [][]pdfRun) bool {
 }
 
 // pdfFlowSpans emits one contiguous sequence of lines with gap blank lines.
-func pdfFlowSpans(lines [][]pdfRun, bodySize float64) []pdfSpan {
+func pdfFlowSpans(lines [][]PDFRun, bodySize float64) []PDFSpan {
 	leading := pdfLeading(lines, bodySize)
-	var out []pdfSpan
+	var out []PDFSpan
 	prevY := 0.0
 	prevHeadline := false
 	for i, line := range lines {
@@ -945,11 +945,11 @@ func pdfFlowSpans(lines [][]pdfRun, bodySize float64) []pdfSpan {
 				extra = 6
 			}
 			for j := 0; j < extra; j++ {
-				out = append(out, pdfSpan{Text: "\n"})
+				out = append(out, PDFSpan{Text: "\n"})
 			}
 		}
 		out = append(out, pdfLineSpans(line, bodySize)...)
-		out = append(out, pdfSpan{Text: "\n"})
+		out = append(out, PDFSpan{Text: "\n"})
 		prevY = line[0].Y
 		prevHeadline = pdfLineHeadline(line, bodySize)
 	}
@@ -958,7 +958,7 @@ func pdfFlowSpans(lines [][]pdfRun, bodySize float64) []pdfSpan {
 
 // pdfLineHeadline reports whether any run on the line is large enough to be a
 // headline span.
-func pdfLineHeadline(runs []pdfRun, bodySize float64) bool {
+func pdfLineHeadline(runs []PDFRun, bodySize float64) bool {
 	if bodySize <= 0 {
 		return false
 	}
@@ -975,7 +975,7 @@ func pdfLineHeadline(runs []pdfRun, bodySize float64) bool {
 // headers and page numbers. Two columns whose baselines are offset by half a
 // line would drag the quartile below the real leading, so the body font size
 // provides a floor.
-func pdfLeading(lines [][]pdfRun, bodySize float64) float64 {
+func pdfLeading(lines [][]PDFRun, bodySize float64) float64 {
 	leading := 0.0
 	if len(lines) >= 2 {
 		deltas := make([]float64, 0, len(lines)-1)
@@ -996,9 +996,9 @@ func pdfLeading(lines [][]pdfRun, bodySize float64) float64 {
 	return leading
 }
 
-func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
+func pdfLineSpans(runs []PDFRun, bodySize float64) []PDFSpan {
 	left := runs[0].X
-	var out []pdfSpan
+	var out []PDFSpan
 	add := func(text string, bold, italic bool, size int) {
 		if text == "" {
 			return
@@ -1007,7 +1007,7 @@ func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 			out[n-1].Text += text
 			return
 		}
-		out = append(out, pdfSpan{Text: text, Bold: bold, Italic: italic, Size: size})
+		out = append(out, PDFSpan{Text: text, Bold: bold, Italic: italic, Size: size})
 	}
 	col := 0
 	endX := runs[0].X
@@ -1048,12 +1048,12 @@ func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 				}
 			}
 		}
-		add(r.Text, r.Bold, r.Italic, pdfSpanSize(r.Size, bodySize))
+		add(r.Text, r.Bold, r.Italic, PDFSpanSize(r.Size, bodySize))
 		prevSpace = strings.HasSuffix(r.Text, " ")
-		col += stringWidth(r.Text)
+		col += StringWidth(r.Text)
 		width := r.W
 		if width <= 0 {
-			width = float64(stringWidth(r.Text)) * pdfCellPoints
+			width = float64(StringWidth(r.Text)) * pdfCellPoints
 		}
 		endX = r.X + width
 		if col > 400 {
@@ -1073,7 +1073,7 @@ func pdfLineSpans(runs []pdfRun, bodySize float64) []pdfSpan {
 }
 
 // fontFromDict builds the text-relevant view of a font resource.
-func (d *pdfDoc) fontFromDict(v any) *pdfFont {
+func (d *PDFDoc) fontFromDict(v any) *pdfFont {
 	dict := d.dict(v)
 	if dict == nil {
 		return nil
@@ -1136,7 +1136,7 @@ func firstPDFElem(v []any) any {
 }
 
 // cidWidths parses the /W array of a CID font.
-func (d *pdfDoc) cidWidths(v any) map[int]float64 {
+func (d *PDFDoc) cidWidths(v any) map[int]float64 {
 	out := map[int]float64{}
 	arr := d.array(v)
 	for i := 0; i+1 < len(arr); i++ {
@@ -1165,7 +1165,7 @@ func (d *pdfDoc) cidWidths(v any) map[int]float64 {
 
 // fontDecoder returns the code-to-text mapping for a font: ToUnicode first,
 // then the declared encoding, then printable ASCII.
-func (d *pdfDoc) fontDecoder(dict pdfDict, f *pdfFont) func(int) string {
+func (d *PDFDoc) fontDecoder(dict pdfDict, f *pdfFont) func(int) string {
 	base := pdfBaseEncoding("")
 	if enc := d.resolve(dict["Encoding"]); enc != nil {
 		switch t := enc.(type) {
@@ -1408,15 +1408,19 @@ const (
 	// HTML heading size where layout switches to two rows and kitty can scale
 	// the glyphs.
 	pdfHeadlinePx = 32
+
 	// pdfHeadlineRatio is how much larger than the body text a run must be to
 	// count as a heading.
 	pdfHeadlineRatio = 1.25
 )
 
-// pdfSpanSize maps a PDF font size to an explicit span size. Runs within a
+// PDFHeadlinePx is the size given to clearly larger PDF runs.
+const PDFHeadlinePx = pdfHeadlinePx
+
+// PDFSpanSize maps a PDF font size to an explicit span size. Runs within a
 // quarter of the body size keep the default; clearly larger runs use the
 // headline size so they take two rows and scale in kitty.
-func pdfSpanSize(size, bodySize float64) int {
+func PDFSpanSize(size, bodySize float64) int {
 	if bodySize > 0 && size >= bodySize*pdfHeadlineRatio {
 		return pdfHeadlinePx
 	}

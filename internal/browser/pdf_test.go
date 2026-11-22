@@ -392,7 +392,7 @@ func TestPDFRejectsDeepNesting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := doc.object(2); err == nil {
+	if _, err := doc.Object(2); err == nil {
 		t.Fatal("deeply nested array was accepted")
 	}
 }

@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 3 in progress (3a frontend, 3b DOM/style/layout/paint).**
+Status: **Phase 3 in progress (3a frontend, 3b DOM/style/layout/paint/PDF).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -59,6 +59,7 @@ network destination.
 | D23 | 2026-11-22 | Move `html.go`/`Node`, `Style` and the style sheet/selector/engine/media/UA files into `internal/engine`. Page style injection stays in the browser; style tests move with the engine, while layout-dependent tests stay in the browser. | The DOM/style layer is the prerequisite for layout. Keeping layout tests in the browser avoids exporting layout internals before layout moves. |
 | D24 | 2026-11-22 | Move all `layout*.go` files and the dark palette into `internal/engine`; paint, `Grid` and the content frame stay in the browser with aliases. Layout tests stay in the browser because they exercise `PaintLayout`. | Layout is the last engine layer before paint. Keeping paint tests in the browser avoids moving the terminal framebuffer until its frontend/engine split is ready. |
 | D25 | 2026-11-22 | Move `Grid`, `PaintLayout*`, `ImagePlacement` and SVG decoding into `internal/engine`; keep kitty/iTerm2 placement, PNG encoding and image scaling in the browser until Phase 5. ANSI/PNG remain in `internal/frontend`. | Paint is page content and crosses no trusted policy. Terminal placement is frontend work and needs the image/placement bridge, so it waits for the transport phase. |
+| D26 | 2026-11-22 | Move the PDF object lexer, text extractor and document assembly to `internal/engine`; keep `Loader.loadPDFPage` in the browser. JS/DOM cannot move yet: `jsRuntime` holds `*Browser` and reaches the loader, cookies, dialogs and forms directly. | PDF is a self-contained engine leaf. JS needs the session/host split first, so the next step is that split rather than a forced JS move. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -123,7 +124,7 @@ which part goes where.
 | `cache.go` | host | Resource cache. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
-| `pdf_object.go`, `pdf_text.go`, `pdf.go` | engine | Text extraction and page assembly. |
+| `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
 | `config.go` | host + engine | Model and apply host; `about:config` form markup engine. |
 | `browser.go` | engine | Session state, navigation and load lifecycle; shell state moves to the frontend. |
 | `browser_chrome.go` | frontend | `drawChrome` composes toolbar, footer, status and app overlays; `flushGrid` only encodes. |
@@ -157,7 +158,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
-| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a, 3b3) | Engine import gate passes; engine tests green |
+| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a, 3b4a) | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
@@ -252,7 +253,8 @@ Next: 3b, the engine package.
 - [x] Move the engine tests; keep layout-dependent style tests in the browser.
 - [x] Move layout and the dark palette.
 - [x] Move paint and the content frame; keep native-image/terminal encoding in the browser until Phase 5.
-- [ ] Move JS/DOM and the session.
+- [x] Move the PDF parser and document model (3b4a).
+- [ ] Move JS/DOM and the session; blocked on the session/host interface split (D26).
 - [ ] Remove the browser wrappers.
 
 ### Phase 3 — Extract `internal/engine`
@@ -457,6 +459,18 @@ were stable at the values below.
 | Content paint+blit | 79–102 µs, 0 B/op | 93–102 µs, 0 B/op | flat |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 
+### Phase 3b4a deltas
+
+PDF parsing and document assembly moved to the engine. It is not on the draw
+path, so performance is unchanged; PDF fixture and text-extraction tests pass.
+
+| Metric | Before 3b4a | After 3b4a | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 829–876 µs, 519 600 B/op | unchanged | flat |
+| Layout+paint+ANSI | 13.1–14.2 ms, 19.90 MB | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| PDF extraction tests | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -523,3 +537,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 3b1 | HTML/Node, Style, sheets, selectors, cascade, media and UA moved to `internal/engine`; engine tests moved; layout-dependent tests stayed; browser compat/page-style bridges; all hashes and tests green | `go test ./...`, `go vet`, `-race` on style/layout, dump/PNG hashes, draw and layout benchmarks | Phase 3b2: layout |
 | 2026-11-22 | 3b2 | All layout files and the dark palette moved to `internal/engine`; browser layout compat aliases/builders/utilities/form predicates; js_dom and selection use exported accessors; all tests and hashes green | `go test ./...`, `go vet`, `-race` on layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b3: paint and the content frame |
 | 2026-11-22 | 3b3 | Grid, paint, `PaintLayout*`, `ImagePlacement` and SVG decode moved to `internal/engine`; gfx/terminal placement and inline-SVG loading stay in `render_gfx.go`; paint compat aliases; all tests and hashes green | `go test ./...`, `go vet`, `-race` on paint/layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b4: JS/DOM and session |
+| 2026-11-22 | 3b4a | PDF object lexer, text extractor and document assembly moved to `internal/engine`; browser `pdf_compat.go` and `Loader.loadPDFPage` remain; tests and hashes green | `go test ./...`, `go vet`, `-race` on PDF/frame, dump/PNG hashes | Next: session/host split before JS |

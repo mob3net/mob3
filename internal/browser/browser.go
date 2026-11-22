@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"browser/internal/engine"
 	"time"
 )
 
@@ -1411,10 +1413,7 @@ func (b *Browser) scrollToAnchor(frag string) bool {
 }
 
 // EscapeHTML escapes text for error pages.
-func EscapeHTML(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-	return r.Replace(s)
-}
+func EscapeHTML(s string) string { return engine.EscapeHTML(s) }
 
 func (b *Browser) sampleUsage() {
 	b.usage.sample()

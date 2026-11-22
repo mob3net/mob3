@@ -657,3 +657,9 @@ func Unescape(s string) string {
 	}
 	return b.String()
 }
+
+// EscapeHTML escapes text for error pages.
+func EscapeHTML(s string) string {
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
+	return r.Replace(s)
+}

@@ -86,16 +86,3 @@ func skipString(s string, i int) int {
 	}
 	return len(s)
 }
-
-// hexVal decodes one hexadecimal digit.
-func hexVal(c byte) (int, bool) {
-	switch {
-	case c >= '0' && c <= '9':
-		return int(c - '0'), true
-	case c >= 'a' && c <= 'f':
-		return int(c-'a') + 10, true
-	case c >= 'A' && c <= 'F':
-		return int(c-'A') + 10, true
-	}
-	return 0, false
-}

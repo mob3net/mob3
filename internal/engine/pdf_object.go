@@ -1,4 +1,4 @@
-package browser
+package engine
 
 // PDF object model, cross-reference loading and stream filters.
 //
@@ -22,6 +22,8 @@ import (
 )
 
 const (
+	// maxResourceSize is the response size cap shared with the loader.
+	maxResourceSize = 12 << 20
 	// maxPDFPages caps how many pages one document contributes to the view.
 	maxPDFPages = 500
 	// maxPDFObjects bounds object parsing and the object cache.
@@ -70,8 +72,8 @@ type xrefEntry struct {
 	idx  int
 }
 
-// pdfDoc is one parsed PDF document.
-type pdfDoc struct {
+// PDFDoc is one parsed PDF document.
+type PDFDoc struct {
 	data      []byte
 	xref      map[int]xrefEntry
 	cache     map[int]any
@@ -87,7 +89,7 @@ type pdfDoc struct {
 	deadline  time.Time
 }
 
-func (d *pdfDoc) expired() bool {
+func (d *PDFDoc) expired() bool {
 	return !d.deadline.IsZero() && time.Now().After(d.deadline)
 }
 
@@ -533,7 +535,7 @@ func (p *pdfScanner) number() (any, error) {
 type pdfOp string
 
 // parsePDF builds a document from raw bytes.
-func parsePDF(data []byte) (*pdfDoc, error) {
+func ParsePDF(data []byte) (*PDFDoc, error) {
 	if len(data) == 0 {
 		return nil, errPDFInvalid
 	}
@@ -544,7 +546,7 @@ func parsePDF(data []byte) (*pdfDoc, error) {
 	if !bytes.Contains(head, []byte("%PDF-")) {
 		return nil, errPDFInvalid
 	}
-	d := &pdfDoc{
+	d := &PDFDoc{
 		data:     data,
 		xref:     make(map[int]xrefEntry),
 		cache:    make(map[int]any),
@@ -568,7 +570,7 @@ func parsePDF(data []byte) (*pdfDoc, error) {
 }
 
 // loadXref follows the startxref chain from the end of the file.
-func (d *pdfDoc) loadXref() error {
+func (d *PDFDoc) loadXref() error {
 	idx := bytes.LastIndex(d.data, []byte("startxref"))
 	if idx < 0 {
 		return errPDFNoXref
@@ -598,7 +600,7 @@ func (d *pdfDoc) loadXref() error {
 }
 
 // readXref parses the section at off and returns its /Prev offset.
-func (d *pdfDoc) readXref(off int) (int, error) {
+func (d *PDFDoc) readXref(off int) (int, error) {
 	if off < 0 || off >= len(d.data) {
 		return 0, errPDFInvalid
 	}
@@ -620,7 +622,7 @@ func (d *pdfDoc) readXref(off int) (int, error) {
 	return int(prev), err
 }
 
-func (d *pdfDoc) mergeTrailer(t pdfDict) {
+func (d *PDFDoc) mergeTrailer(t pdfDict) {
 	if t == nil {
 		return
 	}
@@ -634,7 +636,7 @@ func (d *pdfDoc) mergeTrailer(t pdfDict) {
 	}
 }
 
-func (d *pdfDoc) setXref(num int, ent xrefEntry) {
+func (d *PDFDoc) setXref(num int, ent xrefEntry) {
 	if num < 0 {
 		return
 	}
@@ -644,7 +646,7 @@ func (d *pdfDoc) setXref(num int, ent xrefEntry) {
 	d.xref[num] = ent
 }
 
-func (d *pdfDoc) readXrefTable(sc *pdfScanner) (int, error) {
+func (d *PDFDoc) readXrefTable(sc *pdfScanner) (int, error) {
 	for entries := 0; entries < maxPDFObjects; entries++ {
 		if d.expired() {
 			return 0, errPDFTooLarge
@@ -710,7 +712,7 @@ func (d *pdfDoc) readXrefTable(sc *pdfScanner) (int, error) {
 	return 0, errPDFTooLarge
 }
 
-func (d *pdfDoc) readXrefStream(st *pdfStream) (int, error) {
+func (d *PDFDoc) readXrefStream(st *pdfStream) (int, error) {
 	dict := st.dict
 	d.mergeTrailer(dict)
 	data, err := d.decodeStream(st)
@@ -772,7 +774,7 @@ func (d *pdfDoc) readXrefStream(st *pdfStream) (int, error) {
 
 // scanObjects rebuilds an object index by scanning for "N G obj" headers. It
 // rescues files with a damaged or missing cross-reference table.
-func (d *pdfDoc) scanObjects() error {
+func (d *PDFDoc) scanObjects() error {
 	data := d.data
 	for i := 0; i < len(data); {
 		rel := bytes.Index(data[i:], []byte("obj"))
@@ -854,7 +856,7 @@ func (d *pdfDoc) scanObjects() error {
 }
 
 // parseIndirectAt parses the indirect object whose header starts at off.
-func (d *pdfDoc) parseIndirectAt(off int64) (any, error) {
+func (d *PDFDoc) parseIndirectAt(off int64) (any, error) {
 	if off < 0 || off >= int64(len(d.data)) {
 		return nil, errPDFInvalid
 	}
@@ -886,7 +888,7 @@ func (d *pdfDoc) parseIndirectAt(off int64) (any, error) {
 	return obj, nil
 }
 
-func (d *pdfDoc) readStreamData(sc *pdfScanner, dict pdfDict) (*pdfStream, error) {
+func (d *PDFDoc) readStreamData(sc *pdfScanner, dict pdfDict) (*pdfStream, error) {
 	if sc.pos < len(sc.s) && sc.s[sc.pos] == '\r' {
 		sc.pos++
 		if sc.pos < len(sc.s) && sc.s[sc.pos] == '\n' {
@@ -928,7 +930,7 @@ func (d *pdfDoc) readStreamData(sc *pdfScanner, dict pdfDict) (*pdfStream, error
 
 // object parses object num once and caches it. Objects stored in an object
 // stream are unpacked on first use.
-func (d *pdfDoc) object(num int) (any, error) {
+func (d *PDFDoc) Object(num int) (any, error) {
 	if v, ok := d.cache[num]; ok {
 		return v, nil
 	}
@@ -964,7 +966,7 @@ func (d *pdfDoc) object(num int) (any, error) {
 }
 
 // objectStream parses and caches an object stream's members.
-func (d *pdfDoc) objectStream(stmNum int) (map[int]any, error) {
+func (d *PDFDoc) objectStream(stmNum int) (map[int]any, error) {
 	if m, ok := d.objStms[stmNum]; ok {
 		return m, nil
 	}
@@ -973,7 +975,7 @@ func (d *pdfDoc) objectStream(stmNum int) (map[int]any, error) {
 	}
 	d.loading[stmNum] = true
 	defer delete(d.loading, stmNum)
-	obj, err := d.object(stmNum)
+	obj, err := d.Object(stmNum)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,13 +1022,13 @@ func (d *pdfDoc) objectStream(stmNum int) (map[int]any, error) {
 }
 
 // resolve follows indirect references, returning nil when a target is missing.
-func (d *pdfDoc) resolve(v any) any {
+func (d *PDFDoc) resolve(v any) any {
 	for i := 0; i < 8; i++ {
 		r, ok := v.(pdfRef)
 		if !ok {
 			return v
 		}
-		next, err := d.object(r.num)
+		next, err := d.Object(r.num)
 		if err != nil {
 			return nil
 		}
@@ -1035,7 +1037,7 @@ func (d *pdfDoc) resolve(v any) any {
 	return nil
 }
 
-func (d *pdfDoc) dict(v any) pdfDict {
+func (d *PDFDoc) dict(v any) pdfDict {
 	if v == nil {
 		return nil
 	}
@@ -1043,7 +1045,7 @@ func (d *pdfDoc) dict(v any) pdfDict {
 	return dd
 }
 
-func (d *pdfDoc) array(v any) []any {
+func (d *PDFDoc) array(v any) []any {
 	if v == nil {
 		return nil
 	}
@@ -1051,24 +1053,24 @@ func (d *pdfDoc) array(v any) []any {
 	return a
 }
 
-func (d *pdfDoc) number(v any) float64 {
+func (d *PDFDoc) number(v any) float64 {
 	return pdfFloat(d.resolve(v))
 }
 
-func (d *pdfDoc) integer(v any) int {
+func (d *PDFDoc) integer(v any) int {
 	return int(d.number(v))
 }
 
-func (d *pdfDoc) nameOf(v any) string {
+func (d *PDFDoc) nameOf(v any) string {
 	n, _ := d.resolve(v).(pdfName)
 	return string(n)
 }
 
-func (d *pdfDoc) root() pdfDict {
+func (d *PDFDoc) root() pdfDict {
 	return d.dict(d.trailer["Root"])
 }
 
-func (d *pdfDoc) nameList(v any) []string {
+func (d *PDFDoc) nameList(v any) []string {
 	if v == nil {
 		return nil
 	}
@@ -1087,7 +1089,7 @@ func (d *pdfDoc) nameList(v any) []string {
 	return nil
 }
 
-func (d *pdfDoc) paramList(v any, n int) []pdfDict {
+func (d *PDFDoc) paramList(v any, n int) []pdfDict {
 	out := make([]pdfDict, n)
 	if v == nil {
 		return out
@@ -1106,7 +1108,7 @@ func (d *pdfDoc) paramList(v any, n int) []pdfDict {
 }
 
 // decodeStream applies the stream's filter chain and predictors.
-func (d *pdfDoc) decodeStream(s *pdfStream) ([]byte, error) {
+func (d *PDFDoc) decodeStream(s *pdfStream) ([]byte, error) {
 	data := s.raw
 	filters := d.nameList(s.dict["Filter"])
 	parms := d.paramList(s.dict["DecodeParms"], len(filters))
