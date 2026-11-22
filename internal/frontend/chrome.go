@@ -398,12 +398,14 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 	return out
 }
 
-func drawFindBar(f *chromeCanvas, st protocol.State) {
+func drawFindBar(f *chromeCanvas, st protocol.State) { drawFindBarAt(f, 0, st) }
+
+func drawFindBarAt(f *chromeCanvas, y int, st protocol.State) {
 	bg := rgb(0x27, 0x44, 0x63)
 	fg := rgb(0xff, 0xff, 0xff)
-	f.fill(0, 0, f.w, 1, bg)
+	f.fill(0, y, f.w, 1, bg)
 	prefix := " Find: "
-	f.text(0, 0, prefix, fg, protocol.AttrBold)
+	f.text(0, y, prefix, fg, protocol.AttrBold)
 	x := stringWidth(prefix)
 	count := " 0/0 "
 	if st.FindText != "" && st.FindTotal > 0 {
@@ -428,21 +430,21 @@ func drawFindBar(f *chromeCanvas, st protocol.State) {
 	for i := start; i < end; i++ {
 		if i == cur {
 			if xx < f.w {
-				f.put(xx, 0, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
-				f.cells[xx].BG = rgb(0xf8, 0xfa, 0xfc)
+				f.put(xx, y, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
+				f.cells[y*f.w+xx].BG = rgb(0xf8, 0xfa, 0xfc)
 			}
 			xx++
 			continue
 		}
-		f.put(xx, 0, runes[i], fg, protocol.AttrBold)
+		f.put(xx, y, runes[i], fg, protocol.AttrBold)
 		xx += runeWidth(runes[i])
 	}
 	if cur == len(runes) && cur >= start && xx < f.w {
-		f.put(xx, 0, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
-		f.cells[xx].BG = rgb(0xf8, 0xfa, 0xfc)
+		f.put(xx, y, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
+		f.cells[y*f.w+xx].BG = rgb(0xf8, 0xfa, 0xfc)
 	}
 	if countW > 0 {
-		f.text(f.w-countW, 0, count, fg, protocol.AttrBold)
+		f.text(f.w-countW, y, count, fg, protocol.AttrBold)
 	}
 }
 

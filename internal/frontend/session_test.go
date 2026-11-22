@@ -607,3 +607,42 @@ func TestConsoleQuitAndCloseKeys(t *testing.T) {
 }
 
 func (l *SessionLoop) writeConsoleQuitForTest() { l.consoleView.Quit = true }
+
+func TestConsoleFindKeys(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: 3,
+		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
+	}})
+	loop.handleConsoleKey("/")
+	if !loop.consoleFindActive {
+		t.Fatal("console find did not open")
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("open commands = %#v", s.cmds)
+	}
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "" {
+		t.Fatalf("open find = %#v", s.cmds[0].Body)
+	}
+	s.cmds = nil
+	for _, r := range "needle" {
+		loop.handleConsoleFindKey(string(r))
+	}
+	if loop.consoleFindText != "needle" || len(s.cmds) != 6 {
+		t.Fatalf("text=%q commands=%d", loop.consoleFindText, len(s.cmds))
+	}
+	s.cmds = nil
+	loop.handleConsoleFindKey("enter")
+	if loop.consoleFindActive {
+		t.Fatal("console find stayed open")
+	}
+	loop.consoleView.FindText = "needle"
+	loop.handleConsoleKey("n")
+	if len(s.cmds) != 1 {
+		t.Fatalf("next commands = %#v", s.cmds)
+	}
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || !f.Next {
+		t.Fatalf("next find = %#v", s.cmds[0].Body)
+	}
+}

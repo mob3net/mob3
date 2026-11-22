@@ -150,8 +150,17 @@ type App struct {
 
 func (App) commandKind() Kind { return CmdApp }
 
-// Find updates the incremental page find.
+// FindScope selects the page or console HTML find.
+type FindScope uint8
+
+const (
+	FindPage FindScope = iota + 1
+	FindHTML
+)
+
+// Find updates the incremental find.
 type Find struct {
+	Scope FindScope
 	Query string
 	Next  bool
 	Prev  bool
@@ -222,6 +231,12 @@ func (ConsoleAction) commandKind() Kind { return CmdConsoleAction }
 
 // ConsoleView is the visible console screen: tabs, the active pane's visible
 // lines, optional request summary, input row and footer.
+type ConsoleHighlight struct {
+	Line    int
+	X, W    int
+	Current bool
+}
+
 type ConsoleView struct {
 	Width, Height int
 	Pane          int
@@ -234,6 +249,12 @@ type ConsoleView struct {
 	Hint          string
 	Footer        string
 	Quit          bool
+	FindActive    bool
+	FindText      string
+	FindCursor    int
+	FindCurrent   int
+	FindTotal     int
+	Highlights    []ConsoleHighlight
 }
 
 func (ConsoleView) eventKind() Kind { return EvConsoleView }

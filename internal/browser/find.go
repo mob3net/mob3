@@ -650,10 +650,17 @@ func (b *Browser) applyFindCommand(v protocol.Find) {
 		b.sendFindResults()
 		return
 	}
-	b.findScope = findScopePage
-	if v.Query != b.findText {
+	scope := findScopePage
+	if v.Scope == protocol.FindHTML {
+		scope = findScopeHTML
+	}
+	changed := scope != b.findScope
+	b.findScope = scope
+	if changed || v.Query != b.findText {
 		b.findText = v.Query
 		b.findCursor = len(v.Query)
+		b.findMatches = nil
+		b.findIdx = -1
 		b.refreshFind()
 	}
 	if v.Next {

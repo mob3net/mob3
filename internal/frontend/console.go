@@ -92,6 +92,26 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 			}
 			c.text(1, l.bodyY+i, truncateWidth(protocol.StripControls(line), w-2), fg, 0)
 		}
+		matchBG, currentBG := rgb(0xff, 0xe0, 0x66), rgb(0xff, 0x9d, 0x2a)
+		matchFG := rgb(0x1f, 0x23, 0x28)
+		for _, h := range v.Highlights {
+			y := l.bodyY + h.Line
+			if y < l.bodyY || y >= l.bodyY+l.bodyRows {
+				continue
+			}
+			bg := matchBG
+			if h.Current {
+				bg = currentBG
+			}
+			for x := h.X; x < h.X+h.W && x < w; x++ {
+				if x < 0 {
+					continue
+				}
+				cell := &c.cells[y*w+x]
+				cell.BG = bg
+				cell.FG = matchFG
+			}
+		}
 		if v.Summary != "" {
 			y := l.bodyY + l.bodyRows - 1
 			c.fill(1, y, maxInt(0, w-2), 1, ftrBG)
@@ -133,6 +153,13 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 		}
 	}
 	if l.footerY >= 0 {
+		if v.FindActive {
+			drawFindBarAt(c, l.footerY, protocol.State{
+				FindActive: true, FindText: v.FindText, FindCursor: v.FindCursor,
+				FindCurrent: v.FindCurrent, FindTotal: v.FindTotal,
+			})
+			return f
+		}
 		icon := ">_"
 		iconW := stringWidth(icon)
 		reserve := 0

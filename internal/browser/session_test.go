@@ -542,3 +542,20 @@ func TestConsoleActionInputAndTabs(t *testing.T) {
 		t.Fatal("console stayed open")
 	}
 }
+
+func TestConsoleHTMLFindCommand(t *testing.T) {
+	b := NewBrowser(60, 20)
+	b.consoleOpen = true
+	b.consolePane = consoleHTML
+	b.page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
+	sink := &consoleSink{}
+	b.sessionOut = sink
+	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Query: "needle"})
+	if b.findScope != findScopeHTML || len(b.findMatches) != 2 {
+		t.Fatalf("scope=%d matches=%d", b.findScope, len(b.findMatches))
+	}
+	b.emitConsoleView()
+	if !sink.got || sink.view.FindText != "needle" || sink.view.FindTotal != 2 || len(sink.view.Highlights) == 0 {
+		t.Fatalf("console view = %+v", sink.view)
+	}
+}

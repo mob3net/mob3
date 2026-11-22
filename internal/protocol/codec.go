@@ -101,6 +101,7 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.i32(v.Arg)
 	case Find:
 		kind = CmdFind
+		e.u8(uint8(v.Scope))
 		e.str(v.Query)
 		e.bool(v.Next)
 		e.bool(v.Prev)
@@ -294,6 +295,18 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.str(v.Hint)
 		e.str(v.Footer)
 		e.bool(v.Quit)
+		e.bool(v.FindActive)
+		e.str(v.FindText)
+		e.i32(v.FindCursor)
+		e.i32(v.FindCurrent)
+		e.i32(v.FindTotal)
+		e.count(len(v.Highlights))
+		for _, h := range v.Highlights {
+			e.i32(h.Line)
+			e.i32(h.X)
+			e.i32(h.W)
+			e.bool(h.Current)
+		}
 	case Hints:
 		kind = EvHints
 		e.bool(v.Ask)
@@ -401,7 +414,7 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 	case CmdApp:
 		body = App{Action: AppAction(d.u8()), Arg: d.i32()}
 	case CmdFind:
-		body = Find{Query: d.str(), Next: d.bool(), Prev: d.bool(), Close: d.bool()}
+		body = Find{Scope: FindScope(d.u8()), Query: d.str(), Next: d.bool(), Prev: d.bool(), Close: d.bool()}
 	case CmdAbort:
 		body = Abort{Reason: d.str()}
 	case CmdShutdown:
@@ -585,6 +598,16 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		v.Hint = d.str()
 		v.Footer = d.str()
 		v.Quit = d.bool()
+		v.FindActive = d.bool()
+		v.FindText = d.str()
+		v.FindCursor = d.i32()
+		v.FindCurrent = d.i32()
+		v.FindTotal = d.i32()
+		n = d.count(lim.MaxCells)
+		v.Highlights = make([]ConsoleHighlight, n)
+		for i := range v.Highlights {
+			v.Highlights[i] = ConsoleHighlight{Line: d.i32(), X: d.i32(), W: d.i32(), Current: d.bool()}
+		}
 		body = v
 	case EvHints:
 		ask := d.bool()

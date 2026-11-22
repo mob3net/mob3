@@ -1209,6 +1209,32 @@ func (b *Browser) emitConsoleView() {
 			v.Quit = true
 		}
 	}
+	if b.findScope == findScopeHTML && b.findText != "" {
+		v.FindText = b.findText
+		v.FindCursor = b.findCursor
+		v.FindCurrent = b.findIdx + 1
+		if v.FindCurrent < 1 {
+			v.FindCurrent = 1
+		}
+		v.FindTotal = len(b.findMatches)
+		lines := b.htmlLines(w - 2)
+		start := paneStart(len(lines), b.htmlScroll, l.bodyRows)
+		for i, m := range b.findMatches {
+			rects := m.rects
+			if len(rects) == 0 {
+				rects = []findRect{{x: m.x, line: m.line, w: m.w}}
+			}
+			for _, r := range rects {
+				rel := r.line - start
+				if rel < 0 || rel >= l.bodyRows {
+					continue
+				}
+				v.Highlights = append(v.Highlights, protocol.ConsoleHighlight{
+					Line: rel, X: 1 + r.x, W: r.w, Current: i == b.findIdx,
+				})
+			}
+		}
+	}
 	_ = b.sessionOut.Send(protocol.Event{Body: v})
 	b.frameReady = false
 	b.chromeReady = false

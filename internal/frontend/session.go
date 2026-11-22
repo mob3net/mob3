@@ -83,6 +83,10 @@ type SessionLoop struct {
 	consoleCursor int
 	consoleHist   [5]promptHistory
 
+	consoleFindActive bool
+	consoleFindText   string
+	consoleFindCursor int
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -306,6 +310,7 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		}
 	case protocol.Frame:
 		l.consoleActive = false
+		l.consoleFindActive = false
 		if l.Presenter != nil {
 			if err := l.Presenter.Present(v, l.State.Scroll, l.State.Native); err != nil {
 				return false, err
@@ -428,6 +433,11 @@ func (l *SessionLoop) applyConsoleView(v protocol.ConsoleView) {
 	l.consoleActive = true
 	l.consolePane = v.Pane
 	l.consoleView = v
+	if l.consoleFindActive {
+		l.consoleView.FindActive = true
+		l.consoleView.FindText = l.consoleFindText
+		l.consoleView.FindCursor = l.consoleFindCursor
+	}
 	if l.consoleEdit {
 		l.consoleView.Input = l.consoleText
 		l.consoleView.Cursor = l.consoleCursor
@@ -448,6 +458,13 @@ func (l *SessionLoop) presentConsole() {
 		l.consoleView.Hint = ""
 	}
 	l.consoleView.Pane = l.consolePane
+	if l.consoleFindActive {
+		l.consoleView.FindActive = true
+		l.consoleView.FindText = l.consoleFindText
+		l.consoleView.FindCursor = l.consoleFindCursor
+	} else {
+		l.consoleView.FindActive = false
+	}
 	_ = l.Presenter.PresentConsole(&l.consoleView)
 }
 
@@ -456,6 +473,9 @@ func (l *SessionLoop) consoleAction(a protocol.ConsoleAction) {
 }
 
 func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
+	if l.consoleFindActive {
+		return l.handleConsoleFindKey(k)
+	}
 	if l.consoleView.Quit {
 		switch k {
 		case "y", "Y", "enter":
@@ -550,9 +570,53 @@ func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
 		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleBottom})
 	case "y":
 		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
-	case "/", "n", "N":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}})
+	case "/":
+		if l.consolePane == 3 {
+			l.consoleFindActive = true
+			l.consoleFindText = ""
+			l.consoleFindCursor = 0
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: ""}})
+			l.presentConsole()
+		}
+	case "n":
+		if l.consoleView.FindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Next: true}})
+		}
+	case "N":
+		if l.consoleView.FindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Prev: true}})
+		}
 	}
+	return true, false
+}
+
+func (l *SessionLoop) handleConsoleFindKey(k string) (handled, quit bool) {
+	switch k {
+	case "esc", "enter", "tab", "backtab":
+		l.consoleFindActive = false
+		l.presentConsole()
+		return true, false
+	case "down":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Next: true}})
+		return true, false
+	case "up":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Prev: true}})
+		return true, false
+	}
+	if k == "ctrl-a" {
+		k = "home"
+	}
+	text, cur, _ := editLineKey(l.consoleFindText, l.consoleFindCursor, k, editConfig{maxRunes: 512})
+	changed := text != l.consoleFindText
+	l.consoleFindText = text
+	if cur > len(text) {
+		cur = len(text)
+	}
+	l.consoleFindCursor = cur
+	if changed {
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: text}})
+	}
+	l.presentConsole()
 	return true, false
 }
 
