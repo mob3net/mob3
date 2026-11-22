@@ -127,7 +127,7 @@ func parseMinMaxTrack(part string, avail int, font float64) (gridTrack, bool) {
 		if !l.Set || l.Auto {
 			continue
 		}
-		w := l.resolveH(avail, font)
+		w := l.ResolveH(avail, font)
 		if !found || (isMax && w > best) || (!isMax && w < best) {
 			best = w
 			found = true
@@ -210,7 +210,7 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 			out = append(out, gridTrack{auto: true})
 		default:
 			if l := parseLength(part, font); l.Set {
-				out = append(out, gridTrack{fixed: l.resolveH(avail, font)})
+				out = append(out, gridTrack{fixed: l.ResolveH(avail, font)})
 			} else {
 				out = append(out, gridTrack{auto: true})
 			}
@@ -571,13 +571,13 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			return l.flow(n, x, y, availW)
 		}
 	}
-	gap := st.Gap.resolveH(availW, st.FontSize)
+	gap := st.Gap.ResolveH(availW, st.FontSize)
 	if !st.Gap.Set {
 		gap = 0
 	}
 	rowGap := gap
 	if st.RowGap.Set {
-		rowGap = st.RowGap.resolveH(availW, st.FontSize)
+		rowGap = st.RowGap.ResolveH(availW, st.FontSize)
 	}
 	areas := parseGridAreas(st.GridAreas)
 	cells := gridCells(n, len(tracks), gridLines, areas)

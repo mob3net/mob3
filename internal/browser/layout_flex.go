@@ -27,7 +27,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 	sort.SliceStable(items, func(i, j int) bool { return items[i].Style.Order < items[j].Style.Order })
 	gap := 0
 	if n.Style != nil {
-		gap = nonNeg(n.Style.Gap.resolveH(availW, n.Style.FontSize))
+		gap = nonNeg(n.Style.Gap.ResolveH(availW, n.Style.FontSize))
 	}
 	if n.Style != nil && n.Style.FlexWrap == "wrap" {
 		var lines [][]*Node
@@ -93,7 +93,7 @@ func (l *layouter) flexColumn(n *Node, x, y, availW int) int {
 	gap := 0
 	if n.Style != nil {
 		vBasis := int(math.Round(float64(availW) * cellW / cellH))
-		gap = nonNeg(n.Style.Gap.resolveV(vBasis, n.Style.FontSize))
+		gap = nonNeg(n.Style.Gap.ResolveV(vBasis, n.Style.FontSize))
 	}
 	cur := y
 	for i, it := range items {

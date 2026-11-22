@@ -2211,11 +2211,11 @@ func lengthPx(l Length, font, basis float64) (int, bool) {
 	case l.Calc:
 		return int(l.CalcPx + l.CalcVW/100*basis + basis*l.CalcPct/100 + 0.5), true
 	case l.Func != nil:
-		return int(l.Func.px(basis) + 0.5), true
+		return int(l.Func.PX(basis) + 0.5), true
 	case l.U == UnitPercent:
 		return int(basis*l.V/100 + 0.5), true
 	}
-	return int(l.cssPx(font) + 0.5), true
+	return int(l.CSSPx(font) + 0.5), true
 }
 
 func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {

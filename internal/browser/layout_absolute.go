@@ -67,16 +67,16 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	hasT, hasB := offsetSet(st.Top), offsetSet(st.Bottom)
 	left, right, topOff, bottomOff := 0, 0, 0, 0
 	if hasL {
-		left = st.Left.resolveH(cbW, st.FontSize)
+		left = st.Left.ResolveH(cbW, st.FontSize)
 	}
 	if hasR {
-		right = st.Right.resolveH(cbW, st.FontSize)
+		right = st.Right.ResolveH(cbW, st.FontSize)
 	}
 	if hasT {
-		topOff = st.Top.resolveV(cbH, st.FontSize)
+		topOff = st.Top.ResolveV(cbH, st.FontSize)
 	}
 	if hasB {
-		bottomOff = st.Bottom.resolveV(cbH, st.FontSize)
+		bottomOff = st.Bottom.ResolveV(cbH, st.FontSize)
 	}
 
 	borderPad := bl + br + pl + pr
@@ -151,7 +151,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 		l.parentH = 0
 	}
 	if (n.Tag == "img" || n.Tag == "svg") && st.Height.Set && st.Height.U == UnitPercent && cbH > 0 {
-		l.forcedImageH = st.Height.resolveV(cbH, st.FontSize)
+		l.forcedImageH = st.Height.ResolveV(cbH, st.FontSize)
 	}
 	start := len(l.frags)
 	absStart := len(l.abs)

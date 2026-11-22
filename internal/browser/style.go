@@ -19,30 +19,6 @@ const (
 	maxTextScale = 7
 )
 
-// cellW and cellH are the CSS pixels per terminal column and row at the
-// current layout zoom. Zoom makes each CSS pixel take more cells (cellW and
-// cellH shrink), so fixed pixel sizes, images and padding grow while text keeps
-// its normal cell size. They are package variables because every length in the
-// engine resolves through resolveH/resolveV, which have no layout context.
-var (
-	cellW = baseCellW
-	cellH = baseCellH
-
-	// layoutZoom is the current zoom factor: 1 is normal, 2 doubles every
-	// non-text CSS pixel dimension in cells.
-	layoutZoom = 1.0
-)
-
-// setLayoutZoom installs a session zoom factor.
-func setLayoutZoom(z float64) {
-	if z <= 0 {
-		z = 1
-	}
-	layoutZoom = z
-	cellW = baseCellW / z
-	cellH = baseCellH / z
-}
-
 // parseZoomPercent parses a zoom percentage from a flag or about:config field.
 // A trailing % is allowed; the value must be between 25 and 200.
 func parseZoomPercent(s string) (float64, bool) {
@@ -75,21 +51,6 @@ func cssWidthPx(cols int) int {
 func cssHeightPx(rows int) int {
 	return int(math.Round(float64(rows) * cellH))
 }
-
-const (
-	UnitNone Unit = iota
-	UnitPX
-	UnitEM
-	UnitREM
-	UnitPercent
-	UnitPT
-	UnitCH
-	UnitLH
-	UnitVW
-	UnitVH
-	UnitVMin
-	UnitVMax
-)
 
 // Style is a computed style. Lengths remain unresolved so percentages can be
 // resolved against the containing block during layout.
@@ -574,7 +535,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil && finiteNumber(f) {
 						st.LineHeight = math.Max(0.5, f)
 					} else if l := parseLength(lh, st.FontSize); l.Set {
-						st.LineHeight = math.Max(0.5, l.cssPx(st.FontSize)/st.FontSize)
+						st.LineHeight = math.Max(0.5, l.CSSPx(st.FontSize)/st.FontSize)
 					}
 				}
 				break
@@ -593,7 +554,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			if l.U == UnitPercent {
 				st.LineHeight = l.V / 100
 			} else {
-				st.LineHeight = l.cssPx(st.FontSize) / st.FontSize
+				st.LineHeight = l.CSSPx(st.FontSize) / st.FontSize
 			}
 			if st.LineHeight < 0.5 {
 				st.LineHeight = 0.5
@@ -1278,7 +1239,7 @@ func clipHidesContent(clip string) bool {
 			return false
 		}
 		l := parseLength(part, 16)
-		if !l.Set || l.cssPx(16) > 1 {
+		if !l.Set || l.CSSPx(16) > 1 {
 			return false
 		}
 	}

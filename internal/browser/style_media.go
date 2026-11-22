@@ -132,7 +132,7 @@ func mediaFeatureMatches(f string, vw int, dark bool) bool {
 
 func mediaPx(v string) int {
 	if l := parseLength(v, 16); l.Set {
-		return int(l.cssPx(16))
+		return int(l.CSSPx(16))
 	}
 	return 0
 }

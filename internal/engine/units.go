@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -26,46 +26,90 @@ type Length struct {
 	CalcVW, CalcVH, CalcVMin, CalcVMax float64
 	// Func is a min()/max()/clamp() expression. Like calc() it resolves
 	// against the containing-block basis.
-	Func *lengthFunc
+	Func *LengthFunc
 }
-
-// lengthFuncKind identifies a CSS length function.
-type lengthFuncKind int
 
 const (
-	lengthFuncMin lengthFuncKind = iota
-	lengthFuncMax
-	lengthFuncClamp
+	UnitNone Unit = iota
+	UnitPX
+	UnitEM
+	UnitREM
+	UnitPercent
+	UnitPT
+	UnitCH
+	UnitLH
+	UnitVW
+	UnitVH
+	UnitVMin
+	UnitVMax
 )
 
-// lengthTerm is one argument of a length function: a percentage of the basis
-// plus pixels, viewport components resolved after the cascade, or a nested
-// function.
-type lengthTerm struct {
-	Pct, Px            float64
-	VW, VH, VMin, VMax float64
-	Fn                 *lengthFunc
+const (
+	baseCellW = 8.0
+	baseCellH = 16.0
+)
+
+var (
+	cellW      = baseCellW
+	cellH      = baseCellH
+	layoutZoom = 1.0
+)
+
+// SetZoom installs a session zoom factor. Every length resolution in the
+// engine reads the resulting cell size.
+func SetZoom(z float64) {
+	if z <= 0 {
+		z = 1
+	}
+	layoutZoom = z
+	cellW = baseCellW / z
+	cellH = baseCellH / z
 }
 
-// lengthFunc is a min()/max()/clamp() expression resolved against a basis.
-type lengthFunc struct {
-	Kind  lengthFuncKind
-	Terms []lengthTerm
+// Zoom returns the current layout zoom.
+func Zoom() float64 { return layoutZoom }
+
+// CellW and CellH return the current CSS pixels per terminal column and row.
+func CellW() float64 { return cellW }
+func CellH() float64 { return cellH }
+
+// LengthFuncKind identifies a CSS length function.
+type LengthFuncKind int
+
+const (
+	LengthFuncMin LengthFuncKind = iota
+	LengthFuncMax
+	LengthFuncClamp
+)
+
+// LengthTerm is one argument of a length function: a percentage of the basis
+// plus pixels, viewport components resolved after the cascade, or a nested
+// function.
+type LengthTerm struct {
+	Pct, Px            float64
+	VW, VH, VMin, VMax float64
+	Fn                 *LengthFunc
+}
+
+// LengthFunc is a min()/max()/clamp() expression resolved against a basis.
+type LengthFunc struct {
+	Kind  LengthFuncKind
+	Terms []LengthTerm
 }
 
 // px evaluates the function in CSS pixels for a percentage basis in pixels.
-func (f *lengthFunc) px(basis float64) float64 {
+func (f *LengthFunc) PX(basis float64) float64 {
 	if f == nil {
 		return 0
 	}
 	switch f.Kind {
-	case lengthFuncClamp:
+	case LengthFuncClamp:
 		if len(f.Terms) != 3 {
 			return 0
 		}
-		lo := f.term(f.Terms[0], basis)
-		v := f.term(f.Terms[1], basis)
-		hi := f.term(f.Terms[2], basis)
+		lo := f.Term(f.Terms[0], basis)
+		v := f.Term(f.Terms[1], basis)
+		hi := f.Term(f.Terms[2], basis)
 		if v < lo {
 			v = lo
 		}
@@ -73,14 +117,14 @@ func (f *lengthFunc) px(basis float64) float64 {
 			v = hi
 		}
 		return v
-	case lengthFuncMin, lengthFuncMax:
+	case LengthFuncMin, LengthFuncMax:
 		if len(f.Terms) == 0 {
 			return 0
 		}
-		v := f.term(f.Terms[0], basis)
+		v := f.Term(f.Terms[0], basis)
 		for i := 1; i < len(f.Terms); i++ {
-			x := f.term(f.Terms[i], basis)
-			if (f.Kind == lengthFuncMin && x < v) || (f.Kind == lengthFuncMax && x > v) {
+			x := f.Term(f.Terms[i], basis)
+			if (f.Kind == LengthFuncMin && x < v) || (f.Kind == LengthFuncMax && x > v) {
 				v = x
 			}
 		}
@@ -89,23 +133,23 @@ func (f *lengthFunc) px(basis float64) float64 {
 	return 0
 }
 
-func (f *lengthFunc) term(t lengthTerm, basis float64) float64 {
+func (f *LengthFunc) Term(t LengthTerm, basis float64) float64 {
 	if t.Fn != nil {
-		return t.Fn.px(basis)
+		return t.Fn.PX(basis)
 	}
 	return t.Pct*basis/100 + t.Px
 }
 
 // resolveViewport folds viewport-unit terms into pixels once the layout
 // viewport is known.
-func (f *lengthFunc) resolveViewport(vw, vh float64) {
+func (f *LengthFunc) ResolveViewport(vw, vh float64) {
 	if f == nil {
 		return
 	}
 	for i := range f.Terms {
 		t := &f.Terms[i]
 		if t.Fn != nil {
-			t.Fn.resolveViewport(vw, vh)
+			t.Fn.ResolveViewport(vw, vh)
 			continue
 		}
 		t.Px += t.VW/100*vw + t.VH/100*vh +
@@ -114,19 +158,19 @@ func (f *lengthFunc) resolveViewport(vw, vh float64) {
 	}
 }
 
-func px(v float64) Length { return Length{V: v, U: UnitPX, Set: true} }
+func PX(v float64) Length { return Length{V: v, U: UnitPX, Set: true} }
 
-func pct(v float64) Length { return Length{V: v, U: UnitPercent, Set: true} }
+func Pct(v float64) Length { return Length{V: v, U: UnitPercent, Set: true} }
 
 func (l Length) IsAuto() bool { return !l.Set || l.Auto }
 
-func (l Length) cssPx(fontPx float64) float64 {
+func (l Length) CSSPx(fontPx float64) float64 {
 	if l.Calc {
 		return l.CalcPx
 	}
 	if l.Func != nil {
 		// No basis is available here; percentage terms contribute nothing.
-		return l.Func.px(0)
+		return l.Func.PX(0)
 	}
 	switch l.U {
 	case UnitPX:
@@ -148,7 +192,7 @@ func (l Length) cssPx(fontPx float64) float64 {
 }
 
 // resolveH resolves to terminal columns.
-func (l Length) resolveH(basis int, fontPx float64) int {
+func (l Length) ResolveH(basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
 	}
@@ -156,16 +200,16 @@ func (l Length) resolveH(basis int, fontPx float64) int {
 		return int(math.Round(l.CalcPx/cellW + float64(basis)*l.CalcPct/100))
 	}
 	if l.Func != nil {
-		return int(math.Round(l.Func.px(float64(basis)*cellW) / cellW))
+		return int(math.Round(l.Func.PX(float64(basis)*cellW) / cellW))
 	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
 	}
-	return int(math.Round(l.cssPx(fontPx) / cellW))
+	return int(math.Round(l.CSSPx(fontPx) / cellW))
 }
 
 // resolveV resolves to terminal rows.
-func (l Length) resolveV(basis int, fontPx float64) int {
+func (l Length) ResolveV(basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
 	}
@@ -173,100 +217,37 @@ func (l Length) resolveV(basis int, fontPx float64) int {
 		return int(math.Round(l.CalcPx/cellH + float64(basis)*l.CalcPct/100))
 	}
 	if l.Func != nil {
-		return int(math.Round(l.Func.px(float64(basis)*cellH) / cellH))
+		return int(math.Round(l.Func.PX(float64(basis)*cellH) / cellH))
 	}
 	if l.U == UnitPercent {
 		return int(math.Round(float64(basis) * l.V / 100))
 	}
-	return int(math.Round(l.cssPx(fontPx) / cellH))
+	return int(math.Round(l.CSSPx(fontPx) / cellH))
 }
 
 // resolveLengthLH converts a computed lh length to px. lh depends on the
 // element's own line-height, so this runs after the cascade rather than while
 // declarations are parsed.
-func resolveLengthLH(l *Length, linePx float64) {
+func ResolveLengthLH(l *Length, linePx float64) {
 	if l.Set && l.U == UnitLH {
-		*l = px(l.V * linePx)
+		*l = PX(l.V * linePx)
 	}
-}
-
-func (e *styleEngine) resolveStyleUnits(st *Style) {
-	// rem resolves against the root element's font size, not a fixed 16px, so
-	// a page that sets html{font-size:14px} (Bulma, many frameworks) gets the
-	// same rem-based margins, padding and widths as a browser.
-	for _, l := range []*Length{
-		&st.TextIndent,
-		&st.Margin[0], &st.Margin[1], &st.Margin[2], &st.Margin[3],
-		&st.Padding[0], &st.Padding[1], &st.Padding[2], &st.Padding[3],
-		&st.Border[0], &st.Border[1], &st.Border[2], &st.Border[3],
-		&st.Width, &st.Height, &st.MinWidth, &st.MaxWidth,
-		&st.MinHeight, &st.MaxHeight,
-		&st.Top, &st.Right, &st.Bottom, &st.Left,
-		&st.FlexBasis, &st.Gap, &st.RowGap,
-	} {
-		resolveLengthREM(l, e.rootFontPx)
-	}
-	lh := st.LineHeight
-	if lh <= 0 {
-		lh = 1
-	}
-	linePx := st.FontSize * lh
-	resolveViewportLength(&st.TextIndent, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.TextIndent, linePx)
-	for i := range st.Margin {
-		resolveViewportLength(&st.Margin[i], float64(e.viewportPx), e.viewportH)
-		resolveLengthLH(&st.Margin[i], linePx)
-	}
-	for i := range st.Padding {
-		resolveViewportLength(&st.Padding[i], float64(e.viewportPx), e.viewportH)
-		resolveLengthLH(&st.Padding[i], linePx)
-	}
-	for i := range st.Border {
-		resolveViewportLength(&st.Border[i], float64(e.viewportPx), e.viewportH)
-		resolveLengthLH(&st.Border[i], linePx)
-	}
-	resolveViewportLength(&st.Width, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Width, linePx)
-	resolveViewportLength(&st.Height, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Height, linePx)
-	resolveViewportLength(&st.MinWidth, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.MinWidth, linePx)
-	resolveViewportLength(&st.MaxWidth, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.MaxWidth, linePx)
-	resolveViewportLength(&st.MinHeight, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.MinHeight, linePx)
-	resolveViewportLength(&st.MaxHeight, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.MaxHeight, linePx)
-	resolveViewportLength(&st.Top, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Top, linePx)
-	resolveViewportLength(&st.Right, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Right, linePx)
-	resolveViewportLength(&st.Bottom, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Bottom, linePx)
-	resolveViewportLength(&st.Left, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Left, linePx)
-	resolveViewportLength(&st.FlexBasis, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.FlexBasis, linePx)
-	resolveViewportLength(&st.Gap, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.Gap, linePx)
-	resolveViewportLength(&st.RowGap, float64(e.viewportPx), e.viewportH)
-	resolveLengthLH(&st.RowGap, linePx)
 }
 
 // resolveLengthREM converts a rem length to px using the root font size.
-func resolveLengthREM(l *Length, rootPx float64) {
+func ResolveLengthREM(l *Length, rootPx float64) {
 	if l.Set && !l.Calc && l.U == UnitREM {
-		*l = px(l.V * rootPx)
+		*l = PX(l.V * rootPx)
 	}
 }
 
 // resolveViewportLength converts vw/vh/vmin/vmax lengths to px.
-func resolveViewportLength(l *Length, vw, vh float64) {
+func ResolveViewportLength(l *Length, vw, vh float64) {
 	if !l.Set {
 		return
 	}
 	if l.Func != nil {
-		l.Func.resolveViewport(vw, vh)
+		l.Func.ResolveViewport(vw, vh)
 		return
 	}
 	if l.Calc {
@@ -291,10 +272,10 @@ func resolveViewportLength(l *Length, vw, vh float64) {
 	*l = Length{V: px, U: UnitPX, Set: true}
 }
 
-func parseLength(v string, fontPx float64) Length {
+func ParseLength(v string, fontPx float64) Length {
 	v = strings.ToLower(strings.TrimSpace(v))
 	if strings.HasPrefix(v, "calc(") && strings.HasSuffix(v, ")") {
-		return parseCalcLength(v[len("calc("):len(v)-1], fontPx)
+		return ParseCalcLength(v[len("calc("):len(v)-1], fontPx)
 	}
 	if strings.HasPrefix(v, "min(") || strings.HasPrefix(v, "max(") || strings.HasPrefix(v, "clamp(") {
 		if l, ok := parseLengthFunction(v, fontPx); ok {
@@ -302,12 +283,12 @@ func parseLength(v string, fontPx float64) Length {
 		}
 		return Length{}
 	}
-	return parseLengthSimple(v)
+	return ParseLengthSimple(v)
 }
 
 // parseLengthSimple parses a plain length token, without calc() or the
 // min()/max()/clamp() functions.
-func parseLengthSimple(v string) Length {
+func ParseLengthSimple(v string) Length {
 	v = strings.ToLower(strings.TrimSpace(v))
 	if v == "auto" {
 		return Length{Auto: true}
@@ -316,7 +297,7 @@ func parseLengthSimple(v string) Length {
 		return Length{}
 	}
 	if v == "0" {
-		return px(0)
+		return PX(0)
 	}
 	units := []struct {
 		suffix string
@@ -337,13 +318,13 @@ func parseLengthSimple(v string) Length {
 		if strings.HasSuffix(v, u.suffix) {
 			num := strings.TrimSpace(strings.TrimSuffix(v, u.suffix))
 			f, err := strconv.ParseFloat(num, 64)
-			if err != nil || !finiteNumber(f) {
+			if err != nil || !FiniteNumber(f) {
 				return Length{}
 			}
 			return Length{V: f * u.mul, U: u.unit, Set: true}
 		}
 	}
-	if f, err := strconv.ParseFloat(v, 64); err == nil && finiteNumber(f) {
+	if f, err := strconv.ParseFloat(v, 64); err == nil && FiniteNumber(f) {
 		return Length{V: f, U: UnitPX, Set: true}
 	}
 	return Length{}
@@ -352,13 +333,13 @@ func parseLengthSimple(v string) Length {
 // finiteNumber reports whether f is a usable CSS number. Scripts sometimes
 // write NaN or Infinity into inline styles; browsers ignore such declarations,
 // so the same values must not become layout geometry here.
-func finiteNumber(f float64) bool {
+func FiniteNumber(f float64) bool {
 	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 // nonFiniteLength reports whether a declaration value is a NaN or Infinity
 // length. Those declarations are dropped so an earlier rule keeps its value.
-func nonFiniteLength(val string) bool {
+func NonFiniteLength(val string) bool {
 	v := strings.ToLower(strings.TrimSpace(val))
 	if v == "" {
 		return false
@@ -380,12 +361,12 @@ func nonFiniteLength(val string) bool {
 		}
 	}
 	f, err := strconv.ParseFloat(num, 64)
-	return err == nil && !finiteNumber(f)
+	return err == nil && !FiniteNumber(f)
 }
 
 // lengthProperty reports whether prop takes a length, so an invalid numeric
 // value can be dropped instead of clearing a previously declared length.
-func lengthProperty(prop string) bool {
+func LengthProperty(prop string) bool {
 	for _, part := range []string{"width", "height", "margin", "padding", "gap", "top", "right", "bottom", "left", "size", "spacing", "indent", "basis", "radius", "inset"} {
 		if strings.Contains(prop, part) {
 			return true
@@ -405,14 +386,14 @@ type calcValue struct {
 // parseCalcLength evaluates the simple arithmetic that covers common CSS
 // calc() uses: percentages and absolute units combined with + - * / and
 // parentheses. Font-relative units are resolved with fontPx.
-func parseCalcLength(expr string, fontPx float64) Length {
+func ParseCalcLength(expr string, fontPx float64) Length {
 	pos := 0
 	v, ok := parseCalcSum(expr, &pos, fontPx)
 	skipCalcSpace(expr, &pos)
 	if !ok || pos != len(expr) || v.scalar ||
-		!finiteNumber(v.pct) || !finiteNumber(v.px) ||
-		!finiteNumber(v.vw) || !finiteNumber(v.vh) ||
-		!finiteNumber(v.vmin) || !finiteNumber(v.vmax) {
+		!FiniteNumber(v.pct) || !FiniteNumber(v.px) ||
+		!FiniteNumber(v.vw) || !FiniteNumber(v.vh) ||
+		!FiniteNumber(v.vmin) || !FiniteNumber(v.vmax) {
 		return Length{}
 	}
 	return Length{
@@ -615,7 +596,7 @@ func parseCalcFactor(s string, pos *int, fontPx float64) (calcValue, bool) {
 		return calcValue{}, false
 	}
 	l := Length{V: num, U: u, Set: true}
-	return calcValue{px: l.cssPx(fontPx)}, true
+	return calcValue{px: l.CSSPx(fontPx)}, true
 }
 
 // splitCSSFunction splits a "name(args)" value, returning the lowercased name
@@ -678,26 +659,26 @@ func parseLengthFunction(v string, fontPx float64) (Length, bool) {
 	if !ok {
 		return Length{}, false
 	}
-	var kind lengthFuncKind
+	var kind LengthFuncKind
 	switch name {
 	case "min":
-		kind = lengthFuncMin
+		kind = LengthFuncMin
 	case "max":
-		kind = lengthFuncMax
+		kind = LengthFuncMax
 	case "clamp":
-		kind = lengthFuncClamp
+		kind = LengthFuncClamp
 	default:
 		return Length{}, false
 	}
 	args := splitCSSArgs(body)
-	if kind == lengthFuncClamp {
+	if kind == LengthFuncClamp {
 		if len(args) != 3 {
 			return Length{}, false
 		}
 	} else if len(args) == 0 {
 		return Length{}, false
 	}
-	terms := make([]lengthTerm, 0, len(args))
+	terms := make([]LengthTerm, 0, len(args))
 	for _, arg := range args {
 		t, ok := parseLengthTerm(arg, fontPx)
 		if !ok {
@@ -705,66 +686,66 @@ func parseLengthFunction(v string, fontPx float64) (Length, bool) {
 		}
 		terms = append(terms, t)
 	}
-	return Length{Set: true, Func: &lengthFunc{Kind: kind, Terms: terms}}, true
+	return Length{Set: true, Func: &LengthFunc{Kind: kind, Terms: terms}}, true
 }
 
-func parseLengthTerm(arg string, fontPx float64) (lengthTerm, bool) {
+func parseLengthTerm(arg string, fontPx float64) (LengthTerm, bool) {
 	s := strings.ToLower(strings.TrimSpace(arg))
 	if s == "" {
-		return lengthTerm{}, false
+		return LengthTerm{}, false
 	}
 	if name, body, ok := splitCSSFunction(s); ok {
 		switch name {
 		case "min", "max", "clamp":
 			l, ok := parseLengthFunction(s, fontPx)
 			if !ok {
-				return lengthTerm{}, false
+				return LengthTerm{}, false
 			}
-			return lengthTerm{Fn: l.Func}, true
+			return LengthTerm{Fn: l.Func}, true
 		case "calc":
-			l := parseCalcLength(body, fontPx)
+			l := ParseCalcLength(body, fontPx)
 			if !l.Set || l.Func != nil {
-				return lengthTerm{}, false
+				return LengthTerm{}, false
 			}
 			return termFromLength(l, fontPx), true
 		}
-		return lengthTerm{}, false
+		return LengthTerm{}, false
 	}
-	l := parseLengthSimple(s)
+	l := ParseLengthSimple(s)
 	if !l.Set || l.Auto || l.Func != nil {
-		return lengthTerm{}, false
+		return LengthTerm{}, false
 	}
 	// A non-zero unitless number is not a length. Zero is allowed anywhere.
 	if f, err := strconv.ParseFloat(s, 64); err == nil && f != 0 {
-		return lengthTerm{}, false
+		return LengthTerm{}, false
 	}
 	return termFromLength(l, fontPx), true
 }
 
 // termFromLength converts a parsed length into a function argument.
-func termFromLength(l Length, fontPx float64) lengthTerm {
+func termFromLength(l Length, fontPx float64) LengthTerm {
 	if l.Calc {
-		return lengthTerm{
+		return LengthTerm{
 			Pct: l.CalcPct, Px: l.CalcPx,
 			VW: l.CalcVW, VH: l.CalcVH, VMin: l.CalcVMin, VMax: l.CalcVMax,
 		}
 	}
 	switch l.U {
 	case UnitPercent:
-		return lengthTerm{Pct: l.V}
+		return LengthTerm{Pct: l.V}
 	case UnitVW:
-		return lengthTerm{VW: l.V}
+		return LengthTerm{VW: l.V}
 	case UnitVH:
-		return lengthTerm{VH: l.V}
+		return LengthTerm{VH: l.V}
 	case UnitVMin:
-		return lengthTerm{VMin: l.V}
+		return LengthTerm{VMin: l.V}
 	case UnitVMax:
-		return lengthTerm{VMax: l.V}
+		return LengthTerm{VMax: l.V}
 	}
-	return lengthTerm{Px: l.cssPx(fontPx)}
+	return LengthTerm{Px: l.CSSPx(fontPx)}
 }
 
-func parseFontSize(v string, parentPx float64) (float64, bool) {
+func ParseFontSize(v string, parentPx float64) (float64, bool) {
 	v = strings.ToLower(strings.TrimSpace(v))
 	keywords := map[string]float64{
 		"xx-small": 9, "x-small": 10, "small": 13, "medium": 16,
@@ -795,8 +776,8 @@ func parseFontSize(v string, parentPx float64) (float64, bool) {
 		}
 		return 0, false
 	}
-	if l := parseLength(v, parentPx); l.Set {
-		return l.cssPx(parentPx), true
+	if l := ParseLength(v, parentPx); l.Set {
+		return l.CSSPx(parentPx), true
 	}
 	return 0, false
 }

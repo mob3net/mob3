@@ -196,7 +196,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 						}
 					}
 				} else {
-					w := st.Width.resolveH(availW, st.FontSize)
+					w := st.Width.ResolveH(availW, st.FontSize)
 					per := (w + c.span - 1) / c.span
 					for k := 0; k < c.span && c.col+k < ncols; k++ {
 						if per > colW[c.col+k] {
@@ -239,7 +239,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 		if st.Width.U == UnitPercent {
 			w = int(math.Round(float64(availW) * st.Width.V / 100))
 		} else {
-			w = st.Width.resolveH(availW, st.FontSize)
+			w = st.Width.ResolveH(availW, st.FontSize)
 		}
 		if w > 0 {
 			if w > availW {
@@ -490,7 +490,7 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			// its vertically aligned content. Cell borders are suppressed
 			// above because the table draws the collapsed grid.
 			contentStart := start
-			if start < len(l.frags) && orig.Background.opaque() {
+			if start < len(l.frags) && opaque(orig.Background) {
 				if f := &l.frags[start]; f.Kind == fragFill && f.Color == orig.Background {
 					contentStart++
 				}
@@ -573,8 +573,8 @@ func (l *layouter) paddingH(n *Node) (int, int) {
 		return 0, 0
 	}
 	st := n.Style
-	pl := nonNeg(st.Padding[3].resolveH(l.width, st.FontSize))
-	pr := nonNeg(st.Padding[1].resolveH(l.width, st.FontSize))
+	pl := nonNeg(st.Padding[3].ResolveH(l.width, st.FontSize))
+	pr := nonNeg(st.Padding[1].ResolveH(l.width, st.FontSize))
 	bl := usedBorderH(st, 3, l.width)
 	br := usedBorderH(st, 1, l.width)
 	return pl + pr + bl + br, 0

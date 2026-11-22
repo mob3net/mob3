@@ -102,7 +102,7 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 	st := n.Style
 	boxH := l.forcedImageH
 	if boxH <= 0 && st.Height.Set && st.Height.U != UnitPercent {
-		boxH = st.Height.resolveV(w, st.FontSize)
+		boxH = st.Height.ResolveV(w, st.FontSize)
 	}
 	if boxH > 0 && st.ObjectFit != "" && n.Img != nil && !l.imagesOff {
 		return l.addFittedImage(n, st, x, y, w, boxH)
@@ -263,10 +263,10 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 	}
 	cw, ch := 0, 0
 	if st.Width.Set && !st.Width.IsAuto() {
-		cw = st.Width.resolveH(maxW, st.FontSize)
+		cw = st.Width.ResolveH(maxW, st.FontSize)
 	}
 	if st.Height.Set && st.Height.U != UnitPercent {
-		ch = st.Height.resolveV(maxW, st.FontSize)
+		ch = st.Height.ResolveV(maxW, st.FontSize)
 	}
 	if iw > 0 && ih > 0 {
 		switch {
@@ -417,7 +417,7 @@ func (l *layouter) inlineImageWidth(n *Node, fallback int) int {
 	}
 	basis := fallback
 	for i := len(chain) - 1; i >= 0; i-- {
-		if w := chain[i].Width.resolveH(basis, chain[i].FontSize); w > 0 {
+		if w := chain[i].Width.ResolveH(basis, chain[i].FontSize); w > 0 {
 			basis = w
 		}
 	}

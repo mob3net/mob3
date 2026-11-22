@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -18,7 +18,7 @@ func RGB(r, g, b uint8) Color { return Color{R: r, G: g, B: b, A: 255, Set: true
 // Transparent is a set color with zero alpha.
 func Transparent() Color { return Color{Set: true} }
 
-func (c Color) opaque() bool { return c.Set && c.A >= 128 }
+func (c Color) Opaque() bool { return c.Set && c.A >= 128 }
 
 var colorNames = map[string]Color{
 	"aliceblue": RGB(0xf0, 0xf8, 0xff), "antiquewhite": RGB(0xfa, 0xeb, 0xd7),
@@ -96,7 +96,7 @@ var colorNames = map[string]Color{
 	"yellowgreen": RGB(0x9a, 0xcd, 0x32),
 }
 
-func parseColor(v string, current Color) (Color, bool) {
+func ParseColor(v string, current Color) (Color, bool) {
 	v = strings.ToLower(strings.TrimSpace(v))
 	if v == "" {
 		return Color{}, false
@@ -147,9 +147,9 @@ func parseColor(v string, current Color) (Color, bool) {
 	if strings.HasPrefix(v, "rgb(") || strings.HasPrefix(v, "rgba(") {
 		inner := v[strings.IndexByte(v, '(')+1:]
 		inner = strings.TrimSuffix(inner, ")")
-		parts := splitTopLevel(inner, ',')
+		parts := SplitTopLevel(inner, ',')
 		if len(parts) < 3 {
-			parts = splitFields(inner)
+			parts = SplitFields(inner)
 		}
 		if len(parts) >= 3 {
 			ch := func(s string) (uint8, bool) {
@@ -159,13 +159,13 @@ func parseColor(v string, current Color) (Color, bool) {
 					if err != nil {
 						return 0, false
 					}
-					return uint8(math.Round(clamp(f, 0, 100) * 2.55)), true
+					return uint8(math.Round(Clamp(f, 0, 100) * 2.55)), true
 				}
 				f, err := strconv.ParseFloat(s, 64)
 				if err != nil {
 					return 0, false
 				}
-				return uint8(math.Round(clamp(f, 0, 255))), true
+				return uint8(math.Round(Clamp(f, 0, 255))), true
 			}
 			r, a := ch(parts[0])
 			g, b := ch(parts[1])
@@ -177,10 +177,10 @@ func parseColor(v string, current Color) (Color, bool) {
 					if strings.HasSuffix(s, "%") {
 						f, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64)
 						if err == nil {
-							alpha = uint8(math.Round(clamp(f, 0, 100) * 2.55))
+							alpha = uint8(math.Round(Clamp(f, 0, 100) * 2.55))
 						}
 					} else if f, err := strconv.ParseFloat(s, 64); err == nil {
-						alpha = uint8(math.Round(clamp(f, 0, 1) * 255))
+						alpha = uint8(math.Round(Clamp(f, 0, 1) * 255))
 					}
 				}
 				return Color{R: r, G: g, B: bl, A: alpha, Set: true}, true
@@ -191,7 +191,7 @@ func parseColor(v string, current Color) (Color, bool) {
 	if strings.HasPrefix(v, "hsl(") || strings.HasPrefix(v, "hsla(") {
 		inner := v[strings.IndexByte(v, '(')+1:]
 		inner = strings.TrimSuffix(inner, ")")
-		parts := splitTopLevel(inner, ',')
+		parts := SplitTopLevel(inner, ',')
 		if len(parts) >= 3 {
 			h, err1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 			s, err2 := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(parts[1]), "%"), 64)
@@ -205,7 +205,7 @@ func parseColor(v string, current Color) (Color, bool) {
 	return Color{}, false
 }
 
-func clamp(v, lo, hi float64) float64 {
+func Clamp(v, lo, hi float64) float64 {
 	if v < lo {
 		return lo
 	}

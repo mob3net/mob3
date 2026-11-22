@@ -724,39 +724,6 @@ func isCSSIdentChar(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '\\'
 }
 
-// splitTopLevel splits on sep, ignoring separators inside quotes, brackets and
-// parentheses.
-func splitTopLevel(s string, sep byte) []string {
-	var out []string
-	start := 0
-	depth := 0
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '"', '\'':
-			i = skipString(s, i) - 1
-		case '(':
-			depth++
-		case ')':
-			if depth > 0 {
-				depth--
-			}
-		case '[':
-			depth++
-		case ']':
-			if depth > 0 {
-				depth--
-			}
-		default:
-			if s[i] == sep && depth == 0 {
-				out = append(out, s[start:i])
-				start = i + 1
-			}
-		}
-	}
-	out = append(out, s[start:])
-	return out
-}
-
 func indexTopLevel(s string, sep byte) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {
@@ -782,41 +749,6 @@ func indexTopLevel(s string, sep byte) int {
 		}
 	}
 	return -1
-}
-
-// splitFields splits a CSS value on whitespace at the top level.
-func splitFields(s string) []string {
-	var out []string
-	var b strings.Builder
-	depth := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case '"', '\'':
-			j := skipString(s, i)
-			b.WriteString(s[i:j])
-			i = j - 1
-			continue
-		case '(':
-			depth++
-		case ')':
-			if depth > 0 {
-				depth--
-			}
-		}
-		if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') && depth == 0 {
-			if b.Len() > 0 {
-				out = append(out, b.String())
-				b.Reset()
-			}
-			continue
-		}
-		b.WriteByte(c)
-	}
-	if b.Len() > 0 {
-		out = append(out, b.String())
-	}
-	return out
 }
 
 // stripCSSComments removes /* ... */ comments outside strings, so a comment

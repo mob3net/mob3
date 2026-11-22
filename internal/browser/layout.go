@@ -359,10 +359,10 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	pageBG := RGB(255, 255, 255)
 	explicitBG := false
-	if body != nil && body.Style != nil && body.Style.Background.opaque() {
+	if body != nil && body.Style != nil && opaque(body.Style.Background) {
 		pageBG = body.Style.Background
 		explicitBG = true
-	} else if html != nil && html.Style != nil && html.Style.Background.opaque() {
+	} else if html != nil && html.Style != nil && opaque(html.Style.Background) {
 		pageBG = html.Style.Background
 		explicitBG = true
 	}
@@ -415,7 +415,7 @@ func resolveBorderH(l Length, basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
 	}
-	w := l.resolveH(basis, fontPx)
+	w := l.ResolveH(basis, fontPx)
 	if l.V > 0 && w < 1 {
 		w = 1
 	}
@@ -429,7 +429,7 @@ func resolveBorderV(l Length, basis int, fontPx float64) int {
 	if !l.Set {
 		return 0
 	}
-	w := l.resolveV(basis, fontPx)
+	w := l.ResolveV(basis, fontPx)
 	if l.V > 0 && w < 1 {
 		w = 1
 	}
@@ -466,22 +466,22 @@ func usedBorderV(st *Style, i, basis int) int {
 func (l *layouter) boxWidth(st *Style, basis int) int {
 	return usedBorderH(st, 3, basis) +
 		usedBorderH(st, 1, basis) +
-		nonNeg(st.Padding[3].resolveH(basis, st.FontSize)) +
-		nonNeg(st.Padding[1].resolveH(basis, st.FontSize))
+		nonNeg(st.Padding[3].ResolveH(basis, st.FontSize)) +
+		nonNeg(st.Padding[1].ResolveH(basis, st.FontSize))
 }
 
 // boxHeight returns the vertical border and padding of a box in rows.
 func (l *layouter) boxHeight(st *Style, basis int) int {
 	return usedBorderV(st, 0, basis) +
 		usedBorderV(st, 2, basis) +
-		nonNeg(st.Padding[0].resolveV(basis, st.FontSize)) +
-		nonNeg(st.Padding[2].resolveV(basis, st.FontSize))
+		nonNeg(st.Padding[0].ResolveV(basis, st.FontSize)) +
+		nonNeg(st.Padding[2].ResolveV(basis, st.FontSize))
 }
 
 // widthValue resolves a horizontal CSS length to a content width, applying
 // border-box sizing when requested.
 func (l *layouter) widthValue(st *Style, v Length, basis int) int {
-	w := v.resolveH(basis, st.FontSize)
+	w := v.ResolveH(basis, st.FontSize)
 	if st.BoxSizing == "border-box" {
 		w -= l.boxWidth(st, basis)
 		if w < 0 {
@@ -494,7 +494,7 @@ func (l *layouter) widthValue(st *Style, v Length, basis int) int {
 // heightValue resolves a vertical CSS length to a content height, applying
 // border-box sizing when requested.
 func (l *layouter) heightValue(st *Style, v Length, basis int) int {
-	h := v.resolveV(basis, st.FontSize)
+	h := v.ResolveV(basis, st.FontSize)
 	if st.BoxSizing == "border-box" {
 		h -= l.boxHeight(st, basis)
 		if h < 0 {
@@ -510,18 +510,18 @@ func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt
 	// containing block's width. Convert that width to a row basis so
 	// `padding-bottom: 56.25%` keeps the usual 16:9 box.
 	vBasis := int(math.Round(float64(availW) * cellW / cellH))
-	ml = st.Margin[3].resolveH(availW, f)
-	mr = st.Margin[1].resolveH(availW, f)
-	mt = st.Margin[0].resolveV(vBasis, f)
-	mb = st.Margin[2].resolveV(vBasis, f)
+	ml = st.Margin[3].ResolveH(availW, f)
+	mr = st.Margin[1].ResolveH(availW, f)
+	mt = st.Margin[0].ResolveV(vBasis, f)
+	mb = st.Margin[2].ResolveV(vBasis, f)
 	bl = usedBorderH(st, 3, availW)
 	br = usedBorderH(st, 1, availW)
 	bt = usedBorderV(st, 0, availW)
 	bb = usedBorderV(st, 2, availW)
-	pl = nonNeg(st.Padding[3].resolveH(availW, f))
-	pr = nonNeg(st.Padding[1].resolveH(availW, f))
-	pt = nonNeg(st.Padding[0].resolveV(vBasis, f))
-	pb = nonNeg(st.Padding[2].resolveV(vBasis, f))
+	pl = nonNeg(st.Padding[3].ResolveH(availW, f))
+	pr = nonNeg(st.Padding[1].ResolveH(availW, f))
+	pt = nonNeg(st.Padding[0].ResolveV(vBasis, f))
+	pb = nonNeg(st.Padding[2].ResolveV(vBasis, f))
 	return
 }
 
@@ -718,7 +718,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	}
 
 	bgIndex := -1
-	if st.Background.opaque() {
+	if opaque(st.Background) {
 		l.addFill(boxX, top, boxW, 1, st.Background)
 		bgIndex = len(l.frags) - 1
 	}
@@ -948,14 +948,14 @@ func (l *layouter) relativeOffset(st *Style, cb *cbRect) (int, int) {
 	}
 	dx, dy := 0, 0
 	if offsetSet(st.Left) {
-		dx = st.Left.resolveH(w, st.FontSize)
+		dx = st.Left.ResolveH(w, st.FontSize)
 	} else if offsetSet(st.Right) {
-		dx = -st.Right.resolveH(w, st.FontSize)
+		dx = -st.Right.ResolveH(w, st.FontSize)
 	}
 	if offsetSet(st.Top) {
-		dy = st.Top.resolveV(h, st.FontSize)
+		dy = st.Top.ResolveV(h, st.FontSize)
 	} else if offsetSet(st.Bottom) {
-		dy = -st.Bottom.resolveV(h, st.FontSize)
+		dy = -st.Bottom.ResolveV(h, st.FontSize)
 	}
 	return dx, dy
 }
@@ -980,7 +980,7 @@ func lengthHasPercent(v Length) bool {
 	return v.U == UnitPercent || (v.Calc && v.CalcPct != 0)
 }
 
-func lengthFuncHasPercent(f *lengthFunc) bool {
+func lengthFuncHasPercent(f *LengthFunc) bool {
 	if f == nil {
 		return false
 	}

@@ -132,7 +132,7 @@ func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 	if width < 1 {
 		c.maxW = 1
 	}
-	if indent := base.TextIndent.resolveH(width, base.FontSize); indent > 0 {
+	if indent := base.TextIndent.ResolveH(width, base.FontSize); indent > 0 {
 		c.items = append(c.items, inlineItem{kind: itemSpace, w: indent, style: base})
 		c.curW = indent
 	}
@@ -265,7 +265,7 @@ func inlineEdgeCells(st *Style, side, basis int) int {
 		case l.U == UnitPercent:
 			total += float64(basis) * l.V / 100
 		default:
-			total += l.cssPx(st.FontSize) / cellW
+			total += l.CSSPx(st.FontSize) / cellW
 		}
 	}
 	add(st.Margin[side])

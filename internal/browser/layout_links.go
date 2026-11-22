@@ -90,7 +90,7 @@ func (l *layouter) resolveStickies() []stickyBox {
 			cb.H = 1
 		}
 		sb.cbTop, sb.cbBottom = cb.Y, cb.Y+cb.H
-		sb.topRows = nonNeg(n.Style.Top.resolveV(cb.H, n.Style.FontSize))
+		sb.topRows = nonNeg(n.Style.Top.ResolveV(cb.H, n.Style.FontSize))
 		for i := range l.frags {
 			f := &l.frags[i]
 			if f.Sticky != group {

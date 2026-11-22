@@ -427,7 +427,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	var chrome []Rect
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if (!f.Fixed && f.Sticky == 0) || f.Kind != fragFill || !f.Color.opaque() {
+		if (!f.Fixed && f.Sticky == 0) || f.Kind != fragFill || !opaque(f.Color) {
 			continue
 		}
 		y := f.Y - scroll + topRow
@@ -523,7 +523,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				scale = 1
 			}
 			bg := textBackground(f)
-			if bg.opaque() {
+			if opaque(bg) {
 				g.Fill(f.X, y, f.W, scale, bg)
 			}
 			if f.Link != nil && f.Link == focus {
@@ -769,7 +769,7 @@ func over(c, bg Color) Color {
 // so the walk stops there; inline/inline-block backgrounds otherwise have no
 // box of their own and would be lost (common on buttons and nav links).
 func textBackground(f *Frag) Color {
-	if f.Style != nil && f.Style.Background.opaque() {
+	if f.Style != nil && opaque(f.Style.Background) {
 		return f.Style.Background
 	}
 	for n := f.Node; n != nil; n = n.Parent {
@@ -777,7 +777,7 @@ func textBackground(f *Frag) Color {
 		if st == nil {
 			continue
 		}
-		if st.Background.opaque() {
+		if opaque(st.Background) {
 			switch st.Display {
 			case "block", "flex", "list-item", "table", "table-row", "table-cell":
 				return Color{}

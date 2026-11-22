@@ -145,7 +145,7 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		case st.FlexGrow > 0:
 			target = maxW
 		case st.Width.Set && !st.Width.IsAuto():
-			target = st.Width.resolveH(maxW, st.FontSize)
+			target = st.Width.ResolveH(maxW, st.FontSize)
 		}
 		if target > w {
 			w = minInt(target, maxW)

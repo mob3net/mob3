@@ -54,7 +54,7 @@ func fallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bo
 	best := Color{}
 	bestArea := 0
 	for _, f := range frags {
-		if f.Kind != fragFill || !f.Color.opaque() {
+		if f.Kind != fragFill || !opaque(f.Color) {
 			continue
 		}
 		x0, x1 := maxInt(f.X, 0), minInt(f.X+f.W, width)

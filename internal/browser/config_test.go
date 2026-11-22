@@ -242,7 +242,7 @@ func TestConfigAppliesZoom(t *testing.T) {
 	if b.zoom != 1.5 {
 		t.Fatalf("zoom = %g, want 1.5", b.zoom)
 	}
-	if got := px(16).resolveH(0, 16); got != 3 {
+	if got := px(16).ResolveH(0, 16); got != 3 {
 		t.Fatalf("16px at 150%% = %d cells, want 3", got)
 	}
 	found := false

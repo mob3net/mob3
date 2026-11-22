@@ -196,7 +196,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		// A definite absolute width fixes the element's used width for
 		// intrinsic sizing too, so shrink-to-fit containers do not ignore
 		// explicitly sized children such as logos.
-		w := st.Width.resolveH(l.width, st.FontSize)
+		w := st.Width.ResolveH(l.width, st.FontSize)
 		if st.BoxSizing == "border-box" {
 			w -= pad
 			if w < 0 {
@@ -339,7 +339,7 @@ func (l *layouter) limitImageMeasure(st *Style, cw int) int {
 	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() || st.MaxWidth.Calc || lengthHasPercent(st.MaxWidth) {
 		return cw
 	}
-	mw := st.MaxWidth.resolveH(l.width, st.FontSize)
+	mw := st.MaxWidth.ResolveH(l.width, st.FontSize)
 	if mw > 0 && cw > mw {
 		return mw
 	}
