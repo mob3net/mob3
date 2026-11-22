@@ -794,6 +794,34 @@ func TestResolveLocalFile(t *testing.T) {
 	}
 }
 
+// TestResolveURLWithBaseSkipsLocalStat pins that a bare relative path is only
+// probed on disk when there is no page base, so a viewed page cannot use it as
+// a local-file existence oracle.
+func TestResolveURLWithBaseSkipsLocalStat(t *testing.T) {
+	dir := t.TempDir()
+	const name = "local-only-page.html"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("<p>x</p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	base := mustParse(t, "https://example.com/dir/")
+	u, err := ResolveURL(name, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme == "file" {
+		t.Fatalf("with a base, %q resolved to local file %s", name, u)
+	}
+	// The same bare path still opens a local file from the command line.
+	u, err = ResolveURL(name, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme != "file" {
+		t.Fatalf("without a base, %q => %s, want file:", name, u)
+	}
+}
+
 func mustParse(t *testing.T, s string) *url.URL {
 	t.Helper()
 	u, err := url.Parse(s)

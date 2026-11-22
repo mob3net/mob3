@@ -547,11 +547,16 @@ func resolveURL(input string, base *url.URL, searchURL string) (*url.URL, error)
 	if strings.Contains(s, "://") {
 		return url.Parse(s)
 	}
-	// A bare path that exists is treated as a local file.
-	if st, statErr := os.Stat(s); statErr == nil && !st.IsDir() {
-		abs, err := filepath.Abs(s)
-		if err == nil {
-			return &url.URL{Scheme: "file", Path: abs}, nil
+	// A bare path that exists is treated as a local file, but only at the
+	// command line or from an about: page. With a page base, a bare path is a
+	// URL reference, and probing the disk would leak whether a local file
+	// exists to the page being viewed.
+	if base == nil {
+		if st, statErr := os.Stat(s); statErr == nil && !st.IsDir() {
+			abs, err := filepath.Abs(s)
+			if err == nil {
+				return &url.URL{Scheme: "file", Path: abs}, nil
+			}
 		}
 	}
 	if strings.Contains(s, ":") && !strings.ContainsAny(s, " /") {
