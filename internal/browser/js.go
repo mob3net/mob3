@@ -362,7 +362,7 @@ func (b *Browser) startJS(page *Page) {
 	removeNoscript(page.Root)
 	// Record the styles already collected at load; anything added or changed
 	// from here on is component CSS injected by a script.
-	page.seedParsedStyles()
+	page.SeedParsedStyles()
 	j := newJSRuntime(b, page)
 	if b.jsPageBudget > 0 {
 		j.pageBudget = b.jsPageBudget

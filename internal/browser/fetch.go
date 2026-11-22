@@ -55,46 +55,6 @@ func imageConfigOK(cfg image.Config) bool {
 	return int64(cfg.Width)*int64(cfg.Height) <= maxImagePixels
 }
 
-// Page is a loaded document plus the assets needed to display it.
-type Page struct {
-	URL     *url.URL
-	Base    *url.URL
-	Root    *Node
-	Title   string
-	Author  []Rule
-	Scripts []Script
-	// ImportMap holds the document's <script type="importmap"> imports, so
-	// module scripts can resolve bare specifiers like "react".
-	ImportMap   map[string]string
-	RawHTML     string
-	Status      int
-	Blocked     bool
-	BlockReason string
-	// Local records that the document itself was fetched from a loopback,
-	// private or link-local address. Its subresources may then reach other
-	// local addresses; a public document may not.
-	Local bool
-	// Download marks a response that is not renderable (a binary or other
-	// non-HTML resource). The browser shows a curl hint instead of applying it.
-	Download     bool
-	DownloadName string
-	// PDF holds the extracted text when this page came from a PDF response.
-	PDF *PDFDocument
-	// parsedStyles records the inline <style> elements already represented in
-	// Author, so component CSS injected by scripts is parsed once.
-	parsedStyles map[*Node]string
-}
-
-// Script is one page script in document order. Src is a label for errors.
-type Script struct {
-	Code string
-	Src  string
-	Node *Node
-	// Module marks an ES module script. Module scripts are parsed and linked
-	// through the module loader instead of running as a classic script.
-	Module bool
-}
-
 // Loader fetches documents and their resources.
 // defaultUserAgent is the browser's identifying User-Agent.
 const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"

@@ -404,7 +404,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		runner.noJS = false
 		runner.jsMemLimit = jsMemLimit
 		runner.startJS(page)
-		page.collectDynamicStyles()
+		page.CollectDynamicStyles()
 		if !loader.noImages {
 			loader.loadImages(context.Background(), page.Root, page.Base)
 		}

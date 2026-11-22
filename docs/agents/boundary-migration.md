@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 4a in progress (JS host interface).**
+Status: **Phase 4a in progress (host contract + page model).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -61,6 +61,7 @@ network destination.
 | D25 | 2026-11-22 | Move `Grid`, `PaintLayout*`, `ImagePlacement` and SVG decoding into `internal/engine`; keep kitty/iTerm2 placement, PNG encoding and image scaling in the browser until Phase 5. ANSI/PNG remain in `internal/frontend`. | Paint is page content and crosses no trusted policy. Terminal placement is frontend work and needs the image/placement bridge, so it waits for the transport phase. |
 | D26 | 2026-11-22 | Move the PDF object lexer, text extractor and document assembly to `internal/engine`; keep `Loader.loadPDFPage` in the browser. JS/DOM cannot move yet: `jsRuntime` holds `*Browser` and reaches the loader, cookies, dialogs and forms directly. | PDF is a self-contained engine leaf. JS needs the session/host split first, so the next step is that split rather than a forced JS move. |
 | D27 | 2026-11-22 | `jsRuntime` no longer holds `*Browser`; it depends on a narrow `jsHost` interface (viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookies, fetch, request accounting, import queue). A `browserJSHost` adapter implements it. | This is the first session/host split step. The interface still lives in the browser and exposes brokered I/O, but JS can no longer reach arbitrary Browser fields. Next: move the contract to engine/protocol and broker the loader calls. |
+| D28 | 2026-11-22 | Move `JSHost` and `ImportTask` to `internal/engine`; move `Page`/`Script` and the page style collection there too. The browser adapter still implements the contract, and `js*.go` stays in the browser until its tests can move with it. | The engine now owns the session-facing contract and the document model. JS code itself still depends on browser test surfaces and the loader broker, so moving it now would break test ownership and expose host types. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -110,9 +111,9 @@ which part goes where.
 | `style*.go` | `internal/engine` | `Style`, sheets, selectors, cascade, media and UA moved in 3b1; primitives were 3b0. |
 | `style_units_compat.go` | browser bridge | Aliases and wrappers for the moved style primitives. |
 | `engine_compat.go` | browser bridge | DOM/style aliases, constructors, cascade accessors and layer/import helpers. |
-| `js_host.go` | browser bridge | `jsHost` contract and `browserJSHost` adapter; JS uses no Browser fields. |
+| `js_host.go` | `internal/engine/js_host.go` + browser adapter | Engine-owned host contract/import task; the adapter implements it. |
 | `style_app.go` | browser | Zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
-| `page_styles.go` | browser | `Page` inline-style collection after load. |
+| `page_styles.go` | `internal/engine/page.go` | `Page`/`Script` and inline-style collection after load. |
 | `layout*.go` | `internal/engine` | All layout files, including forms, images, tables, grid, flex and measurement. |
 | `layout_compat.go` | browser bridge | Layout aliases, builders, utilities and form predicates. |
 | `render.go` | `internal/engine/render.go` | Grid, paint, image placement and SVG decode. |
@@ -122,7 +123,7 @@ which part goes where.
 | `frontend_bridge.go` | browser bridge | Temporary wrappers for `Lines`, `PNG`, color modes and code helpers during the package move. |
 | `term_detect.go` | frontend | Terminal capability detection; `DetectColorMode` moved to `internal/frontend`. |
 | `png.go` | `internal/frontend/png.go` | Protocol frame to PNG. |
-| `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. |
+| `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. `Page`/`Script` now live in `internal/engine/page.go`. |
 | `cache.go` | host | Resource cache. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
@@ -502,6 +503,18 @@ is small relative to the sobek work they already do.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Full test suite | pass | pass | no change |
 
+### Phase 4a-2 deltas
+
+The host contract, `ImportTask` and `Page`/`Script` moved to the engine. Draw
+and layout are unchanged; JS still runs in the browser behind the contract.
+
+| Metric | Before 4a-2 | After 4a-2 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 839–880 µs, 519 599 B/op | unchanged | flat |
+| Content paint+blit | 96–100 µs, 0 B/op | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -570,3 +583,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 3b3 | Grid, paint, `PaintLayout*`, `ImagePlacement` and SVG decode moved to `internal/engine`; gfx/terminal placement and inline-SVG loading stay in `render_gfx.go`; paint compat aliases; all tests and hashes green | `go test ./...`, `go vet`, `-race` on paint/layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b4: JS/DOM and session |
 | 2026-11-22 | 3b4a | PDF object lexer, text extractor and document assembly moved to `internal/engine`; browser `pdf_compat.go` and `Loader.loadPDFPage` remain; tests and hashes green | `go test ./...`, `go vet`, `-race` on PDF/frame, dump/PNG hashes | Next: session/host split before JS |
 | 2026-11-22 | 4a | `jsRuntime` now holds `jsHost`, not `*Browser`; adapter covers viewport/layout/scroll/focus/hit-testing/dialogs/status/forms/cookies/fetch/requests/import queue; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/console/frame, dump/PNG hashes, draw benchmarks | Move the host contract and JS to engine |
+| 2026-11-22 | 4a-2 | `JSHost`/`ImportTask` moved to `internal/engine`; `Page`/`Script` and page style collection moved; browser adapter remains; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/page/frame, dump/PNG hashes | Move `js*.go` and its tests |

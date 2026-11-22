@@ -8,8 +8,8 @@ func TestCollectDynamicStyles(t *testing.T) {
 	root := ParseHTML(`<html><head><style>body{margin:0}</style></head>` +
 		`<body><div id="x">BOX</div></body></html>`)
 	page := &Page{Root: root, Author: ParseStylesheet(`body{margin:0}`)}
-	page.seedParsedStyles()
-	if page.collectDynamicStyles() {
+	page.SeedParsedStyles()
+	if page.CollectDynamicStyles() {
 		t.Fatal("static style was collected twice")
 	}
 	head := root.FindFirst("head")
@@ -20,7 +20,7 @@ func TestCollectDynamicStyles(t *testing.T) {
 	style := &Node{Type: ElementNode, Tag: "style", Parent: head, Children: []*Node{cssText}}
 	cssText.Parent = style
 	head.Children = append(head.Children, style)
-	if !page.collectDynamicStyles() {
+	if !page.CollectDynamicStyles() {
 		t.Fatal("new style was not collected")
 	}
 	textX := func() int {
@@ -36,11 +36,11 @@ func TestCollectDynamicStyles(t *testing.T) {
 	if got := textX(); got != 5 {
 		t.Fatalf("BOX at X=%d, want 5 after 40px padding", got)
 	}
-	if page.collectDynamicStyles() {
+	if page.CollectDynamicStyles() {
 		t.Fatal("unchanged style was collected twice")
 	}
 	cssText.Text = "#x{padding-left:80px}"
-	if !page.collectDynamicStyles() {
+	if !page.CollectDynamicStyles() {
 		t.Fatal("changed style was not collected")
 	}
 	if got := textX(); got != 10 {

@@ -6,49 +6,12 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"browser/internal/engine"
 )
 
-// jsHost is everything the JavaScript runtime is allowed to ask the session
-// and host to do. It deliberately has no Browser fields: the runtime can see
-// viewport state, layout, DOM hit testing, dialogs and brokered I/O through
-// this interface only.
-type jsHost interface {
-	Width() int
-	Height() int
-	CellW() int
-	CellH() int
-	Dark() bool
-
-	Layout() *Layout
-	Scroll() int
-	SetScroll(int)
-	ClampScroll()
-	InputFocus() *Node
-	SetInputFocus(*Node)
-	NodeAt(x, y int) *Node
-
-	Status() string
-	SetStatus(string)
-	LogJS(kind, msg string)
-	ShowAlert(msg string)
-	ShowConfirm(msg string) bool
-	ShowPrompt(msg, def string) (string, bool)
-	ShowUploadNotice()
-	QueueFormSubmit(form *Node)
-
-	AbortGen() uint64
-	ImportCh() chan<- jsImportTask
-
-	UserAgent() string
-	Interactive() bool
-	DocumentCookies(u *url.URL) []*http.Cookie
-	SetDocumentCookie(u *url.URL, c *http.Cookie)
-	FetchResource(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error)
-	CurrentPageGeneration() int
-	StartRequest(gen int, method, rawURL, kind string) (int, bool)
-	FinishRequest(id, gen, status, size int, elapsed time.Duration, err error)
-	HTTPClient() *http.Client
-}
+// jsHost is the engine-owned contract; the browser only implements it.
+type jsHost = engine.JSHost
 
 // browserJSHost is the in-process adapter from the runtime to the current
 // Browser. When the session moves to internal/engine, this stays on the

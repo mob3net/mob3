@@ -118,11 +118,11 @@ func TestInlineSVGBudget(t *testing.T) {
 func TestDynamicStyleRuleCap(t *testing.T) {
 	doc := ParseHTML(`<html><body><style>.a{color:red}</style></body></html>`)
 	p := &Page{Root: doc}
-	p.seedParsedStyles()
+	p.SeedParsedStyles()
 	style := doc.FindFirst("style")
 	style.Children[0].Text = `.a{color:red}.b{color:blue}`
 	p.Author = make([]Rule, maxAuthorRules-1)
-	if !p.collectDynamicStyles() {
+	if !p.CollectDynamicStyles() {
 		t.Fatal("dynamic style was not collected")
 	}
 	if len(p.Author) > maxAuthorRules {

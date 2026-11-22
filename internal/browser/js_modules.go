@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"context"
 	"errors"
 	"fmt"
@@ -100,14 +101,7 @@ func (m *jsModuleLoader) baseString() string {
 
 // jsImportTask is one dynamic import() loaded off the main goroutine. The
 // event loop completes it on the runtime's own goroutine.
-type jsImportTask struct {
-	j    *jsRuntime
-	ref  interface{}
-	spec string
-	pcap interface{}
-	rec  sobek.ModuleRecord
-	err  error
-}
+type jsImportTask = engine.ImportTask
 
 // importModule resolves and loads a dynamic import() target, then hands the
 // record back to the engine. Interactive browsing loads the graph in the
@@ -139,7 +133,7 @@ func (m *jsModuleLoader) canImportAsync() bool {
 // main goroutine, then queues the record for the event loop to finish.
 func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap interface{}) {
 	j := m.j
-	task := jsImportTask{j: j, ref: ref, spec: spec, pcap: pcap}
+	task := jsImportTask{Owner: j, Ref: ref, Spec: spec, Parent: pcap}
 	from := m.base
 	if rec, ok := ref.(sobek.ModuleRecord); ok {
 		if u, ok := m.urlFor(rec); ok {
@@ -149,11 +143,11 @@ func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap inte
 		}
 	}
 	if target, err := m.resolveSpecifier(from, spec); err != nil {
-		task.err = err
+		task.Err = err
 	} else if rec, err := m.loadURL(target, target.String(), 0); err != nil {
-		task.err = err
+		task.Err = err
 	} else {
-		task.rec = rec
+		task.Record = rec
 	}
 	select {
 	case j.host.ImportCh() <- task:
@@ -166,11 +160,11 @@ func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap inte
 // the runtime is only ever touched from its own goroutine.
 func (b *Browser) finishJSImport(task jsImportTask) {
 	j := b.js
-	if j == nil || j.stopped || task.j != j || j.stopScripts.Load() {
+	if j == nil || j.stopped || task.Owner != j || j.stopScripts.Load() {
 		return
 	}
 	if err := j.guard(func() error {
-		j.vm.FinishLoadingImportModule(task.ref, j.vm.ToValue(task.spec), task.pcap, task.rec, task.err)
+		j.vm.FinishLoadingImportModule(task.Ref, j.vm.ToValue(task.Spec), task.Parent, task.Record, task.Err)
 		// The continuation jobs were queued outside a script run; drain them.
 		_, err := j.vm.RunString("")
 		return err
