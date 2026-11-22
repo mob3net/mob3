@@ -1758,9 +1758,11 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 	defer func() {
 		b.dialog = nil
 		b.draw()
+		b.emitPendingFrame()
 	}()
 	for {
 		b.draw()
+		b.emitPendingFrame()
 		k, mouse, ok := b.nextDialogInput()
 		if !ok || k == "eof" {
 			return "", false

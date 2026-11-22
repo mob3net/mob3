@@ -254,6 +254,13 @@ type Browser struct {
 	sessionAbort <-chan struct{}
 	sessionQuit  bool
 	lastState    protocol.State
+	// emitFrames switches presentation to the front end: draw stashes the
+	// screen frame and sends it over the transport instead of writing stdout.
+	// Native image modes keep the engine-side writer until placements cross the
+	// seam.
+	emitFrames bool
+	frameReady bool
+	sessionOut protocol.EventSink
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.

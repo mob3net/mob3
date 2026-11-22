@@ -165,6 +165,31 @@ func TestSessionAbortIsOutOfBand(t *testing.T) {
 	}
 }
 
+func TestSessionEmitsScreenFrames(t *testing.T) {
+	b := NewBrowser(30, 8)
+	b.noJS = true
+	restore := quietStdout(t)
+	defer restore()
+	s := openTestSession(t, b)
+	defer s.Close()
+	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "j"}}); err != nil {
+		t.Fatal(err)
+	}
+	f, ok := waitEvent(t, s, func(body protocol.EventBody) bool {
+		_, ok := body.(protocol.Frame)
+		return ok
+	}).(protocol.Frame)
+	if !ok {
+		t.Fatalf("frame event has the wrong type")
+	}
+	if f.W != 30 || f.H != 8 {
+		t.Fatalf("frame = %dx%d, want 30x8", f.W, f.H)
+	}
+	if len(f.Cells) != f.W*f.H {
+		t.Fatalf("frame cells = %d, want %d", len(f.Cells), f.W*f.H)
+	}
+}
+
 func TestSessionAppActionReachesState(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.noJS = true

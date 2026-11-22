@@ -317,6 +317,13 @@ func (b *Browser) draw() {
 	}
 
 	b.drawChrome(g)
+	if b.emitFrames {
+		// The front end owns the terminal in this mode. The frame buffer is
+		// reused; the transport copies it before the next draw.
+		b.frameBuf = toProtocolFrameInto(&b.frameBuf, g, 0)
+		b.frameReady = true
+		return
+	}
 	b.flushGrid(g, placements)
 }
 

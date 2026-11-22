@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 5 in progress (interactive loop on the transport).**
+Status: **Phase 5 in progress (text presentation on the front end).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -74,6 +74,8 @@ network destination.
 | D38 | 2026-11-22 | Define `protocol.Handler` and `protocol.Transport`, and implement `protocol.InProc`: each session runs the handler on its own goroutine, and every command and event is encoded and decoded through the fixed codec before delivery. Abort is an out-of-band one-shot channel; an event that fails validation is replaced by `Crash`. | This is the first Phase 5 slice: the seam becomes executable before the browser loop moves onto it, and the codec is on the real path rather than only in tests. |
 | D39 | 2026-11-22 | Run the live interactive loop through `protocol.InProc`: the engine `Browser` handler owns its own goroutine and the page loop; the front end owns terminal raw mode, key reading, resize signals and the quit signal. `protocol.Quit` tells the front end to exit. Modal JS dialogs read commands from the session stream while the loop is blocked. `protocol.Aborter` lets `Session.Abort` count the request directly on the front-end goroutine, so a busy script still stops before the loop wakes. Presentation, chrome and ANSI output stay in the engine until the next slice. | This is the real lifecycle seam: commands, events, abort and shutdown run through the transport on every interactive session, while keeping the existing frame path byte-identical. Moving presentation next turns the engine into a pure frame producer. |
 | D40 | 2026-11-22 | `Loader` takes a fresh `host.Fetcher` snapshot per request instead of mutating one shared value. A test or CLI can still replace the loader's client, settings, cache and request log, because the snapshot is taken at call time. | The shared fetcher raced under concurrent navigations and would be unsafe once the engine services loads on its own goroutine; the snapshot removes the shared write without changing the Loader API. |
+| D41 | 2026-11-22 | Replace the handler's `chan<- Event` with `protocol.EventSink`. `Send` validates and detaches the event before returning, so the engine may immediately reuse its paint buffers. Frames use a validated copy; every other command and event keeps the wire codec. | The channel handoff left events referencing reusable engine memory, which was unsafe across the goroutine boundary. Measurement showed the wire codec costs ~320 µs per frame, so D15's measurement escape applies to the hot frame path; the semantic checks are unchanged. |
+| D42 | 2026-11-22 | Text-mode presentation moves to `frontend.Presenter`: the engine emits a full-screen `Frame`, the front end encodes ANSI, keeps the row diff and writes the terminal. Native image modes keep the engine-side writer until image placements cross the seam. `StateNativeImages` tells the front end which side owns the current frame. Chrome composition stays in the engine for now. | This removes stdout from the engine for the default graphics modes while preserving kitty/iTerm2 output exactly. Chrome ownership and placement encoding are the remaining presentation steps. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -145,8 +147,9 @@ which part goes where.
 | raw request path | `internal/host/fetch.go` | `Fetcher`, data URLs, size/encoding checks, cache and request accounting; Loader delegates. |
 | page assembly | `internal/engine/page_loader.go` | HTML parse, base/title, stylesheets, scripts and import map behind `PageFetcher`; image/SVG/about/PDF stay in the Loader. |
 | transport contract | `internal/protocol/transport.go` | `Handler`, `Transport` and the codec-validating in-process session. |
-| interactive session loop | `internal/browser/session.go` | `Serve`, command routing, timers, progress, usage and engine-side dialog input while the transport owns the front end. |
-| terminal loop | `internal/browser/cli.go` | Raw mode, key reading, resize and quit signals; sends commands and reacts to `Quit`. |
+| interactive session loop | `internal/browser/session.go` | `Serve`, command routing, timers, progress, usage, frame stashing and engine-side dialog input while the transport owns the front end. |
+| terminal loop | `internal/browser/cli.go` | Raw mode, key reading, resize and quit signals; sends commands, feeds frames to the presenter and reacts to `Quit`. |
+| text presentation | `internal/frontend/present.go` | ANSI encoding, row diff, scroll/native resets and terminal writes for engine frames. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -188,7 +191,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Engine cannot open sockets or read cookies |
-| 5 | Transport and lifecycle | 1–2 weeks | In progress (5b) | All paths run through the in-process transport |
+| 5 | Transport and lifecycle | 1–2 weeks | In progress (5c) | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
@@ -337,8 +340,13 @@ Next: 3b, the engine package.
 - [x] Out-of-band `Abort` so Esc can cancel a busy script. `Aborter` runs the
       counter on the front-end goroutine; keys also count, so a ready command
       cannot swallow it.
-- [ ] Move presentation: `drawChrome`, `flushGrid`, ANSI/PNG and native image
-      placement to the front end, with the engine emitting only `Frame`.
+- [x] Move text presentation: ANSI encoding, stdout and the row diff now live
+      in `frontend.Presenter`; the engine emits `Frame` events for text modes.
+- [ ] Move chrome composition (`drawChrome`) to the front end. The engine
+      still includes chrome in the frame while this is pending.
+- [ ] Move native image placement to the front end: encode `ImagePlacement`
+      into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
+      output out of the engine. Native modes still write from the engine.
 - [ ] Frame coalescing, backpressure and hostile-frame bounds.
       Invalid events already become `Crash`; queue depth is the only
       backpressure today.
@@ -454,6 +462,27 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5c deltas
+
+Text frames now cross the seam and the front end writes the terminal. The
+engine-side paint plus frame handoff is much cheaper than the old combined
+draw; the presenter pays the ANSI encoding and row diff that used to be in
+`flushGrid`. Totals are a wash, and idle CPU is unchanged.
+
+| Metric | Before 5c | After 5c | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint (old path) | 798–827 µs, 519.6 KB, 28 212 allocs | same benchmark retained | baseline |
+| Engine paint + frame handoff | new | 150–156 µs, 74.2 KB, 12 allocs | engine side |
+| Validated frame handoff (transport) | new | 18.7–19.3 µs, 73.9 KB, 3 allocs | replaces ~320 µs wire codec |
+| Frontend present, forced full frame | new | 669–697 µs, 451.8 KB, 28 119 allocs | ANSI + diff + write |
+| Combined text repaint | 800–834 µs, 519.6 KB, 28 212 allocs | 802–836 µs, 593.1 KB, 28 179 allocs | time flat, +73.5 KB for the detached frame |
+| Interactive idle CPU / RSS | 1 tick / 5 s, 33.7 MB | 0 ticks / 5 s, 31.4 MB | idle |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite and `-race` | pass | pass | no change |
+
+PTY checks: local page load and link navigation, resize, quit, JS alert,
+Esc abort, and `-graphics=blocks|kitty|iterm` all exited 0.
 
 ### Phase 5b deltas
 
@@ -775,3 +804,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4b-7 | HTML assembly and stylesheet/script/import-map collection moved to `internal/engine` behind `PageFetcher`; browser adapter brokers host fetches; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/engine/frame, dump/PNG hashes | Phase 5: transport/lifecycle |
 | 2026-11-22 | 5a | `protocol.Handler`/`Transport` and the codec-validating `InProc` session; abort channel, `Crash` substitution for invalid events, drain-on-close; round-trip/abort/close tests, a frontend frame seam test and a transport benchmark | `go test ./...`, `go vet`, `-race` on protocol/frontend, dump/PNG hashes | Wire the browser loop through the transport |
 | 2026-11-22 | 5b | Interactive loop moved onto `InProc`: engine `Serve` goroutine, command routing, front-end terminal loop, `Quit` event, `Aborter`, transport-aware dialogs, hover coalescing; `Loader` now snapshots `host.Fetcher` per request to remove the concurrent-fetch race | `go test ./...`, `go vet`, full `-race` browser suite, PTY quit/resize smoke, 5 s idle sample, dump/PNG hashes, draw/content benchmarks | Move presentation and chrome to the front end |
+| 2026-11-22 | 5c | `EventSink` with validated, detached frame handoff; `frontend.Presenter` owns ANSI, row diff and stdout for text modes; engine emits full-screen frames, `StateNativeImages` marks the engine-side native path; chrome and native placement still engine-side | `go test ./...`, `go vet`, full `-race`, frame/handoff/presenter benchmarks, PTY http/dialog/abort/graphics runs, idle sample, dump/PNG hashes | Move chrome composition and native image placement |

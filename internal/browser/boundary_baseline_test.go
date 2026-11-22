@@ -1,6 +1,8 @@
 package browser
 
 import (
+	"browser/internal/frontend"
+	"browser/internal/protocol"
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
@@ -170,5 +172,82 @@ func BenchmarkBoundaryContentFrame(b *testing.B) {
 		PaintLayout(content, ly, 0, 0, 33, nil, fg)
 		screen.Reset(fg, bg)
 		blitGrid(screen, content, 2)
+	}
+}
+
+// codecSink applies the same encode/decode validation as the in-process
+// transport without a goroutine, so the benchmark measures the frame boundary
+// itself.
+type codecSink struct {
+	buf  []byte
+	last protocol.Frame
+}
+
+func (s *codecSink) Send(ev protocol.Event) error {
+	if f, ok := ev.Body.(protocol.Frame); ok {
+		if err := f.Validate(protocol.DefaultLimits); err != nil {
+			return err
+		}
+		// Detach the frame the way the transport does before Send returns.
+		f.Cells = append([]protocol.Cell(nil), f.Cells...)
+		f.Runs = append([]protocol.ScaledRun(nil), f.Runs...)
+		f.Placements = append([]protocol.Placement(nil), f.Placements...)
+		s.last = f
+		return nil
+	}
+	var err error
+	s.buf, err = protocol.AppendEvent(s.buf[:0], ev, protocol.DefaultLimits)
+	if err != nil {
+		return err
+	}
+	_, _, err = protocol.DecodeEvent(s.buf, protocol.DefaultLimits)
+	return err
+}
+
+// BenchmarkBoundarySessionFrame measures a forced repaint plus the frame that
+// crosses the in-process seam. Presentation is excluded.
+func BenchmarkBoundarySessionFrame(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: root, Title: "bench"}
+	br.layout = ly
+	br.color = true
+	br.bigText = false
+	br.emitFrames = true
+	br.sessionOut = &codecSink{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.prev = nil
+		br.draw()
+		br.emitPendingFrame()
+	}
+}
+
+// BenchmarkBoundaryTextRepaint measures the complete text path: engine paint,
+// validated frame handoff and front-end ANSI presentation to a discard writer.
+func BenchmarkBoundaryTextRepaint(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: root, Title: "bench"}
+	br.layout = ly
+	br.color = true
+	br.bigText = false
+	br.emitFrames = true
+	sink := &codecSink{}
+	br.sessionOut = sink
+	p := frontend.NewPresenter(io.Discard, true)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.prev = nil
+		br.draw()
+		br.emitPendingFrame()
+		p.Reset()
+		if err := p.Present(sink.last, 0, false); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

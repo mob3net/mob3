@@ -1,0 +1,113 @@
+package frontend
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"browser/internal/protocol"
+)
+
+// Presenter writes engine frames to the terminal and keeps the row diff that
+// suppresses unchanged lines. It owns the ANSI output; the engine only sends
+// cell values.
+type Presenter struct {
+	out   io.Writer
+	color bool
+
+	prev       []string
+	lastScroll int
+	lastNative bool
+	nativeSet  bool
+}
+
+// NewPresenter creates a presenter for one terminal. color selects SGR output;
+// monochrome output keeps text attributes so links stay visible.
+func NewPresenter(out io.Writer, color bool) *Presenter {
+	return &Presenter{out: out, color: color}
+}
+
+// Reset forces the next frame to repaint every row. It is used by tests and by
+// callers that have written over the screen out of band.
+func (p *Presenter) Reset() { p.prev = nil }
+
+// Present writes one frame. scroll is the page scroll offset; native reports
+// that the engine is writing terminal-native image placements itself, so the
+// presenter must leave the screen alone. A scroll, native-mode or size change
+// forces a full repaint.
+func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
+	if p == nil || p.out == nil || f.W <= 0 || f.H <= 0 {
+		return nil
+	}
+	if !p.nativeSet {
+		p.lastNative = native
+		p.nativeSet = true
+		p.prev = nil
+	}
+	if native != p.lastNative {
+		p.lastNative = native
+		p.prev = nil
+	}
+	if native {
+		return nil
+	}
+	if scroll != p.lastScroll {
+		p.lastScroll = scroll
+		p.prev = nil
+	}
+	lines := EncodeFrame(f, p.color, !p.color)
+	if len(lines) != f.H {
+		return nil
+	}
+	needClear := p.prev == nil || len(p.prev) != len(lines)
+	if needClear {
+		p.prev = make([]string, len(lines))
+	}
+	var sb strings.Builder
+	if needClear {
+		sb.WriteString("\x1b[2J")
+	}
+	for i := range lines {
+		if !p.chromeRow(i, len(lines)) && p.prev[i] == lines[i] {
+			continue
+		}
+		fmt.Fprintf(&sb, "\x1b[%d;1H", i+1)
+		sb.WriteString(lines[i])
+		if !p.color {
+			// Monochrome lines are trimmed, so clear any longer previous cell
+			// run left on the row.
+			sb.WriteString("\x1b[K")
+		}
+		p.prev[i] = lines[i]
+	}
+	if sb.Len() == 0 {
+		return nil
+	}
+	_, err := io.WriteString(p.out, sb.String())
+	return err
+}
+
+// chromeRow mirrors the shell reservation while the engine still composes
+// chrome: the toolbar rows are always repainted, the URL row uses normal line
+// diffing so a terminal-native selection over it is not cleared, and the
+// footer row is always repainted.
+func (p *Presenter) chromeRow(i, height int) bool {
+	if height >= 2 && i == height-1 {
+		return true
+	}
+	rows := 0
+	switch {
+	case height < 3:
+	case height < 5:
+		rows = 1
+	default:
+		rows = 2
+	}
+	if i < 0 || i >= rows {
+		return false
+	}
+	if rows >= 2 && i == 1 {
+		return false
+	}
+	return true
+}

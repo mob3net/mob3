@@ -11,6 +11,13 @@ import (
 // already closed.
 var ErrSessionClosed = errors.New("protocol: session closed")
 
+// EventSink accepts engine events. Send encodes and validates the event before
+// returning, so the handler may immediately reuse the cells, runs and blobs
+// referenced by ev on its next frame.
+type EventSink interface {
+	Send(Event) error
+}
+
 // Handler is the engine side of one session. Serve runs on the session's own
 // goroutine and owns every DOM, layout, style and runtime value. It processes
 // commands from in and emits events on out until ctx is cancelled or in is
@@ -20,14 +27,14 @@ var ErrSessionClosed = errors.New("protocol: session closed")
 // script without closing the session. The handler must treat it as a one-shot
 // cancel request and keep serving afterwards.
 type Handler interface {
-	Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error
+	Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error
 }
 
 // HandlerFunc adapts a function to Handler.
-type HandlerFunc func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error
+type HandlerFunc func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error
 
 // Serve calls f.
-func (f HandlerFunc) Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+func (f HandlerFunc) Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 	return f(ctx, abort, in, out)
 }
 
@@ -75,18 +82,15 @@ func (t *InProc) Open(ctx context.Context, id SessionID, h Handler) (Session, er
 		ctx = context.Background()
 	}
 	s := &inProcSession{
-		id:         id,
-		lim:        t.Limits.normalized(),
-		abortCh:    make(chan struct{}, 1),
-		in:         make(chan Command, queueDepth(t.CommandQueue, defaultCommandQueue)),
-		handlerOut: make(chan Event, queueDepth(t.EventQueue, defaultEventQueue)),
-		events:     make(chan Event, queueDepth(t.EventQueue, defaultEventQueue)),
-		done:       make(chan struct{}),
-		serveDone:  make(chan struct{}),
+		id:        id,
+		lim:       t.Limits.normalized(),
+		abortCh:   make(chan struct{}, 1),
+		in:        make(chan Command, queueDepth(t.CommandQueue, defaultCommandQueue)),
+		events:    make(chan Event, queueDepth(t.EventQueue, defaultEventQueue)),
+		serveDone: make(chan struct{}),
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.aborter, _ = h.(Aborter)
-	go s.forward()
 	go s.serve(h)
 	return s, nil
 }
@@ -108,15 +112,15 @@ type inProcSession struct {
 	aborter Aborter
 	abortCh chan struct{}
 	in      chan Command
-	// handlerOut is the engine's event channel; forward decodes from it.
-	handlerOut chan Event
-	events     chan Event
+	events  chan Event
 
 	sendMu sync.Mutex
 	buf    []byte
+	// outBuf is owned by the handler goroutine; Send decodes a copy into
+	// events before returning.
+	outBuf []byte
 
 	closed    atomic.Bool
-	done      chan struct{}
 	serveDone chan struct{}
 }
 
@@ -176,64 +180,83 @@ func (s *inProcSession) Close() error {
 		}
 		s.cancel()
 		// A handler may be blocked publishing an event that nobody will read
-		// now. Drain both queues so it can observe the cancelled context and
+		// now. Drain the queue so it can observe the cancelled context and
 		// return instead of holding Close forever.
 		go func() {
 			for range s.events {
 			}
 		}()
-		go func() {
-			for range s.handlerOut {
-			}
-		}()
 	}
 	<-s.serveDone
-	<-s.done
 	return nil
 }
 
 func (s *inProcSession) serve(h Handler) {
 	defer close(s.serveDone)
-	err := h.Serve(s.ctx, s.abortCh, s.in, s.handlerOut)
-	if err != nil && s.ctx.Err() == nil {
+	defer close(s.events)
+	sink := inProcSink{s: s}
+	if err := h.Serve(s.ctx, s.abortCh, s.in, sink); err != nil && s.ctx.Err() == nil {
 		// A handler error is a contained engine failure. Report it before the
 		// event stream closes so the front end can show it.
-		select {
-		case s.handlerOut <- Event{Session: s.id, Body: Crash{Message: err.Error()}}:
-		case <-s.ctx.Done():
-		}
+		_ = sink.Send(Event{Body: Crash{Message: err.Error()}})
 	}
-	close(s.handlerOut)
 }
 
-// forward turns handler events into wire messages and then back into values.
-// A malformed event is replaced by Crash so no trusted side ever sees partial
-// or unsafe data from the engine.
-func (s *inProcSession) forward() {
-	defer close(s.done)
-	defer close(s.events)
-	var buf []byte
-	for {
-		select {
-		case ev, ok := <-s.handlerOut:
-			if !ok {
-				return
-			}
-			if ev.Session == 0 {
-				ev.Session = s.id
-			}
-			buf, _ = AppendEvent(buf[:0], ev, s.lim)
-			decoded, _, err := DecodeEvent(buf, s.lim)
-			if err != nil {
-				decoded = Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
-			}
-			select {
-			case s.events <- decoded:
-			case <-s.ctx.Done():
-				return
-			}
-		case <-s.ctx.Done():
-			return
+// copyFrame validates a frame and copies every mutable slice so the engine can
+// reuse its paint buffers immediately.
+func copyFrame(f Frame, lim Limits) (Frame, error) {
+	if err := f.Validate(lim); err != nil {
+		return Frame{}, err
+	}
+	out := Frame{Version: f.Version, W: f.W, H: f.H}
+	out.Cells = append([]Cell(nil), f.Cells...)
+	out.Runs = append([]ScaledRun(nil), f.Runs...)
+	if len(f.Placements) > 0 {
+		out.Placements = make([]Placement, len(f.Placements))
+		for i, p := range f.Placements {
+			p.Data = append([]byte(nil), p.Data...)
+			out.Placements[i] = p
 		}
+	}
+	return out, nil
+}
+
+// inProcSink is the handler-facing event port. Encoding and decoding happen
+// before Send returns, so the engine can reuse its frame buffers immediately.
+type inProcSink struct{ s *inProcSession }
+
+// Send validates and copies one event, then queues it for the front end. A
+// malformed event is replaced by Crash so no trusted side ever sees partial or
+// unsafe data from the engine.
+func (k inProcSink) Send(ev Event) error {
+	s := k.s
+	if ev.Session == 0 {
+		ev.Session = s.id
+	}
+	var err error
+	if f, ok := ev.Body.(Frame); ok {
+		// Frames are the hot path and can be large. A validated copy gives the
+		// same semantic checks as the codec without the wire round trip, and it
+		// still detaches the engine's reusable buffers before Send returns.
+		var copied Frame
+		if copied, err = copyFrame(f, s.lim); err == nil {
+			ev.Body = copied
+		}
+	} else {
+		s.outBuf, err = AppendEvent(s.outBuf[:0], ev, s.lim)
+		if err == nil {
+			var decoded Event
+			decoded, _, err = DecodeEvent(s.outBuf, s.lim)
+			ev = decoded
+		}
+	}
+	if err != nil {
+		ev = Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
+	}
+	select {
+	case s.events <- ev:
+		return nil
+	case <-s.ctx.Done():
+		return ErrSessionClosed
 	}
 }

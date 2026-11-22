@@ -16,7 +16,7 @@ import (
 // Presentation is still owned by the engine in this batch: draw writes the
 // terminal frame directly while the front end only drives input and lifecycle.
 // Moving the frame and chrome to the front end is the next Phase 5 slice.
-func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out chan<- protocol.Event) error {
+func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
 	var jsTimer, progressTimer *time.Timer
 	defer func() {
 		if jsTimer != nil {
@@ -32,10 +32,13 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 	defer usageTicker.Stop()
 
 	b.sessionCtx, b.sessionIn, b.sessionAbort = ctx, in, abort
+	b.sessionOut = out
 	b.sessionQuit = false
 	b.lastState = protocol.State{}
 	defer func() {
 		b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
+		b.sessionOut = nil
+		b.frameReady = false
 	}()
 	b.sampleUsage()
 	for {
@@ -45,18 +48,22 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 		if b.takeScavengePending() {
 			debug.FreeOSMemory()
 		}
+		b.syncPresentation()
 		if b.skipDraw {
 			b.skipDraw = false
 		} else {
 			b.draw()
 			// A redraw can change pixels without changing the shell state, so
-			// only cross the seam when the snapshot differs.
+			// only cross the seam when the snapshot differs. State precedes the
+			// frame so the presenter knows the scroll offset and native mode
+			// before it sees the pixels.
 			if st := b.stateMessage(); st != b.lastState {
 				b.lastState = st
-				if err := emitEvent(ctx, out, protocol.Event{Body: st}); err != nil {
+				if err := out.Send(protocol.Event{Body: st}); err != nil {
 					return err
 				}
 			}
+			b.emitPendingFrame()
 		}
 		var timerC <-chan time.Time
 		if d, ok := b.nextJSTimerDelay(); ok {
@@ -104,7 +111,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 				return err
 			}
 			if quit || b.sessionQuit {
-				return emitEvent(ctx, out, protocol.Event{Body: protocol.Quit{}})
+				return out.Send(protocol.Event{Body: protocol.Quit{}})
 			}
 		case res := <-b.loadCh:
 			b.finishLoad(res)
@@ -136,16 +143,6 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 				b.skipDraw = true
 			}
 		}
-	}
-}
-
-// emitEvent delivers one event without blocking session shutdown.
-func emitEvent(ctx context.Context, out chan<- protocol.Event, ev protocol.Event) error {
-	select {
-	case out <- ev:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }
 
@@ -262,3 +259,29 @@ func (b *Browser) protocolMouse(v protocol.Mouse) MouseEvent {
 // reads this atomic from inside a script, so a busy page stops even though the
 // session loop has not run yet.
 func (b *Browser) AbortSession() { b.abortGen.Add(1) }
+
+// syncPresentation follows a graphics-mode change. Text modes hand the screen
+// to the front end; native image modes keep the engine-side writer until image
+// placements cross the seam.
+func (b *Browser) syncPresentation() {
+	emit := b.gfx == nil
+	if emit == b.emitFrames {
+		return
+	}
+	b.emitFrames = emit
+	b.prev = nil
+	b.frameReady = false
+}
+
+// emitPendingFrame sends the frame the last draw stashed. The transport copies
+// it before returning, so the frame buffer can be reused immediately.
+func (b *Browser) emitPendingFrame() {
+	if !b.frameReady {
+		return
+	}
+	b.frameReady = false
+	if b.sessionOut == nil {
+		return
+	}
+	_ = b.sessionOut.Send(protocol.Event{Body: b.frameBuf})
+}

@@ -12,13 +12,13 @@ import (
 // handler emits a frame, the transport validates it through the codec, and the
 // front end encodes the decoded frame.
 func TestInProcFrameReachesFrontend(t *testing.T) {
-	h := protocol.HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out chan<- protocol.Event) error {
-		out <- protocol.Event{Body: protocol.Frame{
+	h := protocol.HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
+		_ = out.Send(protocol.Event{Body: protocol.Frame{
 			Version: 1,
 			W:       3,
 			H:       1,
 			Cells:   []protocol.Cell{{R: 'o'}, {R: 'k'}, {R: '!'}},
-		}}
+		}})
 		return nil
 	})
 	s, err := (&protocol.InProc{}).Open(context.Background(), 1, h)

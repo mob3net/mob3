@@ -13,7 +13,7 @@ and the migration order. Progress, decisions and measurements are tracked in
 
 | Package | Owns |
 | --- | --- |
-| `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport, limits and version. Standard library only; never imports another project package. |
+| `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/engine` | HTML/CSS parsing and style, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings, global visited history, download detection, and the request log. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
@@ -145,6 +145,8 @@ Standard Go layout:
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly stays in the browser for now. |
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, codec validation on every message. |
+| `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets and terminal writes. |
+| `internal/browser/session.go` | Interactive `Serve` loop, frame stashing, command routing and engine-side dialog input. |
 | `internal/browser/session.go` | Interactive `Serve` loop: command routing, load/image/import/timer/progress/usage events and engine-side dialog input while the transport owns the front end. |
 | `internal/browser/cli.go` | Front-end terminal loop for interactive runs: raw mode, key reading, resize and quit signals, command sends and `Quit` handling. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |

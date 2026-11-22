@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"browser/internal/frontend"
 	"browser/internal/protocol"
 )
 
@@ -276,6 +277,7 @@ func Run(args []string) int {
 			caps |= protocol.CapKittyText
 		}
 	}
+	presenter := frontend.NewPresenter(os.Stdout, b.color)
 	session, err := (&protocol.InProc{}).Open(context.Background(), 1, b)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: session: %v\n", err)
@@ -292,6 +294,8 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
 		return 1
 	}
+	scroll := 0
+	native := false
 	for {
 		select {
 		case k := <-keys:
@@ -327,8 +331,19 @@ func Run(args []string) int {
 			if !ok {
 				return 0
 			}
-			if _, quit := ev.Body.(protocol.Quit); quit {
+			switch v := ev.Body.(type) {
+			case protocol.Quit:
 				return 0
+			case protocol.State:
+				scroll = v.Scroll
+				native = v.Flags&protocol.StateNativeImages != 0
+			case protocol.Frame:
+				if !native {
+					if err := presenter.Present(v, scroll, native); err != nil {
+						fmt.Fprintf(os.Stderr, "mob3: present: %v\n", err)
+						return 1
+					}
+				}
 			}
 		case <-quitSig:
 			return 0

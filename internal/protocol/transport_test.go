@@ -12,12 +12,12 @@ import (
 func TestInProcTransportRoundTrip(t *testing.T) {
 	var seen Command
 	got := make(chan Command, 1)
-	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		select {
 		case c := <-in:
 			seen = c
 			got <- c
-			out <- Event{Body: State{URL: c.Body.(Navigate).URL, Title: "decoded"}}
+			_ = out.Send(Event{Body: State{URL: c.Body.(Navigate).URL, Title: "decoded"}})
 		case <-ctx.Done():
 		}
 		return nil
@@ -58,7 +58,7 @@ func TestInProcTransportRoundTrip(t *testing.T) {
 
 func TestInProcTransportRejectsInvalidCommand(t *testing.T) {
 	called := make(chan struct{}, 1)
-	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		<-ctx.Done()
 		called <- struct{}{}
 		return nil
@@ -77,7 +77,7 @@ func TestInProcTransportRejectsInvalidCommand(t *testing.T) {
 func TestInProcTransportAbort(t *testing.T) {
 	ready := make(chan struct{})
 	aborted := make(chan struct{}, 2)
-	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		close(ready)
 		for {
 			select {
@@ -104,14 +104,14 @@ func TestInProcTransportAbort(t *testing.T) {
 }
 
 func TestInProcTransportRejectsUnsafeEvent(t *testing.T) {
-	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		// A frame whose scaled run carries an escape sequence must never reach
 		// the front end as page content.
-		out <- Event{Body: Frame{
+		_ = out.Send(Event{Body: Frame{
 			W: 1, H: 1,
 			Cells: []Cell{{R: 'x'}},
 			Runs:  []ScaledRun{{X: 0, Y: 0, Cells: 1, Scale: 2, Text: "\x1b[31m"}},
-		}}
+		}})
 		return nil
 	})
 	s, err := (&InProc{}).Open(context.Background(), 3, h)
@@ -134,7 +134,7 @@ func TestInProcTransportRejectsUnsafeEvent(t *testing.T) {
 }
 
 func TestInProcTransportClose(t *testing.T) {
-	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		<-ctx.Done()
 		return nil
 	})
@@ -159,7 +159,7 @@ func TestInProcTransportClose(t *testing.T) {
 type abortCountingHandler struct{ aborts atomic.Int32 }
 
 func (h *abortCountingHandler) AbortSession() { h.aborts.Add(1) }
-func (h *abortCountingHandler) Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+func (h *abortCountingHandler) Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 	<-ctx.Done()
 	return nil
 }
@@ -174,5 +174,28 @@ func TestInProcAbortCallsHandlerDirectly(t *testing.T) {
 	s.Abort()
 	if got := h.aborts.Load(); got != 1 {
 		t.Fatalf("aborts = %d, want 1 before the loop wakes", got)
+	}
+}
+
+func TestInProcFrameIsDetached(t *testing.T) {
+	cells := []Cell{{R: 'a'}}
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
+		_ = out.Send(Event{Body: Frame{W: 1, H: 1, Cells: cells}})
+		cells[0].R = 'b'
+		_ = out.Send(Event{Body: Frame{W: 1, H: 1, Cells: cells}})
+		return nil
+	})
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	first := <-s.Events()
+	second := <-s.Events()
+	if got := first.Body.(Frame).Cells[0].R; got != 'a' {
+		t.Fatalf("first frame changed to %q after the engine reused its buffer", got)
+	}
+	if got := second.Body.(Frame).Cells[0].R; got != 'b' {
+		t.Fatalf("second frame = %q, want b", got)
 	}
 }

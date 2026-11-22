@@ -149,8 +149,11 @@ type Link struct {
 	Href  string
 }
 
-// Frame is the engine's complete picture of the content rectangle. Rows owned
-// by the chrome are never part of it.
+// Frame is the engine's complete picture of the cells the front end should
+// display. Until chrome composition moves to the front end, H covers the full
+// terminal screen, including the rows the shell composes; after that it is only
+// the content rectangle. Rows owned by the shell are always drawn above page
+// content.
 type Frame struct {
 	// Version changes whenever the link metadata for this frame changes.
 	Version    uint32
@@ -181,6 +184,9 @@ const (
 	StateImages
 	StateBigText
 	StateLoopStopped
+	// StateNativeImages reports that the engine is writing terminal-native
+	// image placements itself, so the front end must leave those frames alone.
+	StateNativeImages
 )
 
 // State is the small, trusted snapshot the chrome needs. The engine sends it

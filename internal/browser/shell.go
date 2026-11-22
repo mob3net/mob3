@@ -101,6 +101,9 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.loopStopped {
 		st.Flags |= protocol.StateLoopStopped
 	}
+	if b.gfx != nil {
+		st.Flags |= protocol.StateNativeImages
+	}
 	return st
 }
 
