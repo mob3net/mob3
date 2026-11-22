@@ -120,6 +120,11 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.u32(v.ID)
 		e.i32(v.Index)
 		e.bool(v.Cancel)
+	case ModalClose:
+		kind = CmdModalClose
+		e.u8(v.Kind)
+		e.bool(v.Copied)
+		e.i32(v.Chars)
 	case ClientError:
 		kind = CmdClientError
 		e.str(v.Message)
@@ -254,6 +259,11 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		kind = EvDownload
 		e.str(v.URL)
 		e.str(v.Name)
+		e.str(v.Command)
+	case Notice:
+		kind = EvNotice
+		e.str(v.Title)
+		e.str(v.Message)
 	case Quit:
 		kind = EvQuit
 	case AutomationResult:
@@ -349,6 +359,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
 	case CmdSelectResult:
 		body = SelectResult{ID: d.u32(), Index: d.i32(), Cancel: d.bool()}
+	case CmdModalClose:
+		body = ModalClose{Kind: d.u8(), Copied: d.bool(), Chars: d.i32()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
 	case CmdAutomation:
@@ -496,7 +508,9 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		}
 		body = FindResults{Query: query, Current: current, Total: total, Rects: rects}
 	case EvDownload:
-		body = Download{URL: d.str(), Name: d.str()}
+		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
+	case EvNotice:
+		body = Notice{Title: d.str(), Message: d.str()}
 	case EvQuit:
 		body = Quit{}
 	case EvAutomationResult:

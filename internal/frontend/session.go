@@ -63,6 +63,14 @@ type SessionLoop struct {
 	selectView   SelectView
 	selectBase   protocol.State
 
+	downloadActive bool
+	downloadView   DownloadView
+	downloadBase   protocol.State
+
+	noticeActive bool
+	noticeView   NoticeView
+	noticeBase   protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -162,6 +170,30 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.downloadActive {
+			l.downloadBase = v
+			if !v.KeysEngine {
+				l.closeDownload(false, 0)
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncDownload()
+			return false, nil
+		}
+		if l.noticeActive {
+			l.noticeBase = v
+			if !v.KeysEngine {
+				l.closeNotice()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncNotice()
+			return false, nil
+		}
 		if l.selectActive {
 			l.selectBase = v
 			if !v.KeysEngine {
@@ -223,6 +255,10 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
+	case protocol.Download:
+		l.startDownload(v)
+	case protocol.Notice:
+		l.startNotice(v)
 	case protocol.Select:
 		l.startSelect(v)
 	case protocol.Dialog:
@@ -257,6 +293,12 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+	if l.downloadActive {
+		return l.handleDownloadKey(k)
+	}
+	if l.noticeActive {
+		return l.handleNoticeKey(k)
+	}
 	if l.selectActive {
 		return l.handleSelectKey(k)
 	}
@@ -339,6 +381,148 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
 	return false, false
+}
+
+func (l *SessionLoop) startDownload(v protocol.Download) {
+	l.cancelQuit()
+	l.closePrompt()
+	l.closeFind()
+	l.closeMenu()
+	l.closeSelect()
+	l.closeNotice()
+	l.downloadActive = true
+	l.downloadView = DownloadView{Name: v.Name, Command: v.Command}
+	l.downloadBase = l.State.Page
+	l.syncDownload()
+}
+
+func (l *SessionLoop) syncDownload() {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetDownload(&l.downloadView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeDownload(copied bool, chars int) {
+	if !l.downloadActive {
+		return
+	}
+	l.downloadActive = false
+	l.State.Page = l.downloadBase
+	if l.Presenter != nil {
+		l.Presenter.SetDownload(nil)
+		l.Presenter.SetState(l.downloadBase)
+		_ = l.Presenter.Refresh()
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.ModalClose{
+		Kind: protocol.ModalDownload, Copied: copied, Chars: chars,
+	}})
+}
+
+func (l *SessionLoop) handleDownloadKey(k string) (handled, quit bool) {
+	switch k {
+	case "y", "Y":
+		chars := 0
+		copied := false
+		if l.State.Clipboard != nil {
+			chars = len([]rune(l.downloadView.Command))
+			if _, err := l.State.Clipboard.Write([]byte(OSC52(l.downloadView.Command))); err == nil {
+				copied = true
+			}
+		}
+		l.closeDownload(copied, chars)
+	case "esc", "enter", "q", "ctrl-c":
+		l.closeDownload(false, 0)
+	}
+	return true, false
+}
+
+func (l *SessionLoop) handleDownloadMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := downloadLayout(l.State.Page, &l.downloadView)
+	if layout.BoxW <= 0 {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < layout.BoxX || x >= layout.BoxX+layout.BoxW || y < layout.BoxY || y >= layout.BoxY+layout.BoxH {
+		l.closeDownload(false, 0)
+	}
+	return true
+}
+
+func (l *SessionLoop) startNotice(v protocol.Notice) {
+	l.cancelQuit()
+	l.closePrompt()
+	l.closeFind()
+	l.closeMenu()
+	l.closeSelect()
+	l.closeDownload(false, 0)
+	l.noticeActive = true
+	l.noticeView = NoticeView{Title: v.Title, Message: v.Message}
+	l.noticeBase = l.State.Page
+	l.syncNotice()
+}
+
+func (l *SessionLoop) syncNotice() {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetNotice(&l.noticeView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeNotice() {
+	if !l.noticeActive {
+		return
+	}
+	l.noticeActive = false
+	l.State.Page = l.noticeBase
+	if l.Presenter != nil {
+		l.Presenter.SetNotice(nil)
+		l.Presenter.SetState(l.noticeBase)
+		_ = l.Presenter.Refresh()
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.ModalClose{Kind: protocol.ModalNotice}})
+}
+
+func (l *SessionLoop) handleNoticeKey(k string) (handled, quit bool) {
+	switch k {
+	case "enter", "esc", "q", "ctrl-c":
+		l.closeNotice()
+	}
+	return true, false
+}
+
+func (l *SessionLoop) handleNoticeMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := noticeLayout(l.State.Page, &l.noticeView)
+	if layout.BoxW <= 0 {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < layout.BoxX || x >= layout.BoxX+layout.BoxW || y < layout.BoxY || y >= layout.BoxY+layout.BoxH {
+		l.closeNotice()
+	}
+	return true
 }
 
 func (l *SessionLoop) startSelect(v protocol.Select) {
@@ -446,6 +630,8 @@ func (l *SessionLoop) startDialog(v protocol.Dialog) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeDownload(false, 0)
+	l.closeNotice()
 	l.dialogActive = true
 	l.dialog = v
 	l.dialogBase = l.State.Page
@@ -916,6 +1102,12 @@ func (l *SessionLoop) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	if l.downloadActive {
+		return l.handleDownloadMouse(ev)
+	}
+	if l.noticeActive {
+		return l.handleNoticeMouse(ev)
+	}
 	if l.selectActive {
 		return l.handleSelectMouse(ev)
 	}

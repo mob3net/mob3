@@ -454,3 +454,46 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 		t.Fatalf("cancel commands = %#v", s.cmds)
 	}
 }
+
+func TestDownloadCopyAndNoticeClose(t *testing.T) {
+	s := &recordSession{}
+	var clip strings.Builder
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.State.Clipboard = &clip
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Download{
+		Name: "f.bin", Command: "curl -L -o 'f.bin' -- 'https://example.com/f.bin'",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.downloadActive {
+		t.Fatal("download did not open")
+	}
+	loop.handleDownloadKey("y")
+	if loop.downloadActive {
+		t.Fatal("download stayed open")
+	}
+	if !strings.Contains(clip.String(), "\x1b]52;c;") {
+		t.Fatalf("clipboard = %q", clip.String())
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+	mc, ok := s.cmds[0].Body.(protocol.ModalClose)
+	if !ok || mc.Kind != protocol.ModalDownload || !mc.Copied || mc.Chars == 0 {
+		t.Fatalf("modal close = %#v", s.cmds[0].Body)
+	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Notice{Title: "Notice", Message: "Body"}})
+	if !loop.noticeActive {
+		t.Fatal("notice did not open")
+	}
+	loop.handleNoticeKey("enter")
+	if loop.noticeActive {
+		t.Fatal("notice stayed open")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ModalClose{Kind: protocol.ModalNotice}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+}

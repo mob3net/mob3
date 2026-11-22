@@ -272,3 +272,36 @@ func TestFrontendSelectMatchesEngine(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendDownloadMatchesEngine(t *testing.T) {
+	b := NewBrowser(100, 30)
+	b.emitFrames = true
+	b.frontendChrome = true
+	b.url, _ = url.Parse("https://example.com/")
+	b.page = &Page{Title: "Example", Root: &Node{}}
+	b.download = &downloadDialog{
+		url: "https://example.com/f.bin", name: "f.bin",
+		command: "curl -L -o 'f.bin' -- 'https://example.com/f.bin'",
+	}
+	b.downloadFrontend = false
+	st := b.stateMessage()
+	st.FrontendChrome = true
+	contentH := b.height - b.headerRows() - 1
+	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	for i := range content.Cells {
+		content.Cells[i].R = ' '
+	}
+	full, ok := frontend.ComposeDownloadFrame(st, content, &frontend.DownloadView{
+		Name: "f.bin", Command: "curl -L -o 'f.bin' -- 'https://example.com/f.bin'",
+	})
+	if !ok {
+		t.Fatal("download frame was not composed")
+	}
+	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	b.drawChrome(g)
+	for i := range full.Cells {
+		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {
+			t.Fatalf("download cell %d = %+v, want %+v", i, got, want)
+		}
+	}
+}

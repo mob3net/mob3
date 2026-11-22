@@ -24,6 +24,8 @@ type Presenter struct {
 	state      protocol.State
 	dialog     *DialogView
 	selectView *SelectView
+	download   *DownloadView
+	notice     *NoticeView
 	lastFrame  protocol.Frame
 	hasFrame   bool
 }
@@ -77,6 +79,18 @@ func (p *Presenter) SetSelect(v *SelectView) {
 	p.prev = nil
 }
 
+// SetDownload installs or clears the download curl hint.
+func (p *Presenter) SetDownload(v *DownloadView) {
+	p.download = v
+	p.prev = nil
+}
+
+// SetNotice installs or clears the informational notice.
+func (p *Presenter) SetNotice(v *NoticeView) {
+	p.notice = v
+	p.prev = nil
+}
+
 func (p *Presenter) SetState(st protocol.State) {
 	if p.state.FrontendChrome != st.FrontendChrome ||
 		p.state.HeaderRows != st.HeaderRows ||
@@ -90,10 +104,25 @@ func (p *Presenter) SetState(st protocol.State) {
 // the front end changes a chrome-only value (such as a local quit prompt)
 // without receiving a new engine frame.
 func (p *Presenter) Refresh() error {
-	if p == nil || !p.hasFrame {
+	if p == nil {
 		return nil
 	}
-	return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
+	if p.hasFrame {
+		return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
+	}
+	if !p.state.FrontendChrome || p.state.Width <= 0 || p.state.HeaderRows <= 0 ||
+		p.state.Height <= p.state.HeaderRows+1 {
+		return nil
+	}
+	// A modal can arrive before the first page frame. Compose it over a blank
+	// content rectangle so the download/notice/dialog is still visible.
+	h := p.state.Height - p.state.HeaderRows - 1
+	f := protocol.Frame{W: p.state.Width, H: h, Cells: make([]protocol.Cell, p.state.Width*h)}
+	bg := rgb(255, 255, 255)
+	for i := range f.Cells {
+		f.Cells[i] = protocol.Cell{R: ' ', BG: bg}
+	}
+	return p.Present(f, p.state.Scroll, p.state.Flags&protocol.StateNativeImages != 0)
 }
 
 // Present writes one frame. scroll is the page scroll offset; native reports
@@ -151,6 +180,20 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 				}
 			} else if p.selectView != nil {
 				if full, ok := ComposeSelectFrame(p.state, f, p.selectView); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
+			} else if p.download != nil {
+				if full, ok := ComposeDownloadFrame(p.state, f, p.download); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
+			} else if p.notice != nil {
+				if full, ok := ComposeNoticeFrame(p.state, f, p.notice); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows

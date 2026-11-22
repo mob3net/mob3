@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"fmt"
 	"runtime/debug"
 	"time"
 
@@ -207,12 +208,34 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		b.applyFindCommand(v)
 	case protocol.SelectResult:
 		b.applySelectResult(v)
+	case protocol.ModalClose:
+		b.applyModalClose(v)
 	case protocol.ClientError:
 		b.logEngineError(v.Message)
 	case protocol.Shutdown:
 		return true, nil
 	}
 	return false, nil
+}
+
+func (b *Browser) applyModalClose(v protocol.ModalClose) {
+	switch v.Kind {
+	case protocol.ModalDownload:
+		if !b.downloadFrontend {
+			return
+		}
+		b.download = nil
+		b.downloadFrontend = false
+		if v.Copied {
+			b.status = fmt.Sprintf("Copied %d chars", v.Chars)
+		}
+	case protocol.ModalNotice:
+		if !b.noticeFrontend {
+			return
+		}
+		b.notice = nil
+		b.noticeFrontend = false
+	}
 }
 
 func (b *Browser) applySelectResult(v protocol.SelectResult) {

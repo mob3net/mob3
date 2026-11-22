@@ -51,6 +51,7 @@ const (
 	CmdClientError
 	CmdAutomation
 	CmdSelectResult
+	CmdModalClose
 )
 
 const (
@@ -68,6 +69,7 @@ const (
 	EvAutomationResult
 	EvChrome
 	EvSelect
+	EvNotice
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

@@ -271,13 +271,15 @@ type Browser struct {
 	chromeReady    bool
 	// placementCache keeps encoded image blobs stable across frames so native
 	// image output does not re-encode every picture on every repaint.
-	placementCache  map[placementKey]*placementEntry
-	placementBytes  int
-	nextPlacementID int
-	nextDialogID    uint32
-	nextSelectID    uint32
-	selectFrontend  bool
-	selectID        uint32
+	placementCache   map[placementKey]*placementEntry
+	placementBytes   int
+	nextPlacementID  int
+	nextDialogID     uint32
+	nextSelectID     uint32
+	selectFrontend   bool
+	selectID         uint32
+	downloadFrontend bool
+	noticeFrontend   bool
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.
@@ -626,6 +628,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.selectHits = nil
 	b.selectFrontend = false
 	b.selectID = 0
+	b.downloadFrontend = false
+	b.noticeFrontend = false
 	b.viewMenu = nil
 	b.viewMenuHits = nil
 	b.zoomMenu = nil
@@ -929,7 +933,8 @@ func (b *Browser) rebuild() {
 // Terminal-side graphics composite above the cell grid, so scaled text is
 // disabled while one is open and the layout is rebuilt without it.
 func (b *Browser) overlayOpen() bool {
-	return b.dialog != nil || b.download != nil || b.notice != nil ||
+	return b.dialog != nil || (b.download != nil && !b.downloadFrontend) ||
+		(b.notice != nil && !b.noticeFrontend) ||
 		(b.selectMenu != nil && !b.selectFrontend) || b.viewMenu != nil || b.zoomMenu != nil
 }
 
@@ -1356,7 +1361,15 @@ func (b *Browser) showUploadNotice() {
 
 func (b *Browser) showNotice(title, message string) {
 	b.download = nil
+	b.downloadFrontend = false
 	b.notice = &noticeDialog{title: title, message: message}
+	if b.sessionOut != nil {
+		b.noticeFrontend = true
+		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Notice{Title: title, Message: message}}); err != nil {
+			b.notice = nil
+			b.noticeFrontend = false
+		}
+	}
 }
 
 // showDownload opens the modal curl hint for a download link or a response
@@ -1390,7 +1403,17 @@ func (b *Browser) showDownload(target, name string) {
 	// as a curl option.
 	command := "curl -L -o " + shellQuote(name) + " -- " + shellQuote(target)
 	b.notice = nil
+	b.noticeFrontend = false
 	b.download = &downloadDialog{url: target, name: name, command: command}
+	if b.sessionOut != nil {
+		b.downloadFrontend = true
+		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Download{
+			URL: target, Name: name, Command: command,
+		}}); err != nil {
+			b.download = nil
+			b.downloadFrontend = false
+		}
+	}
 }
 
 // sanitizeDownloadName keeps a derived filename safe to print and use in the

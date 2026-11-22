@@ -286,11 +286,34 @@ func (FindResults) eventKind() Kind { return EvFindResults }
 
 // Download asks the front end to offer a download hint.
 type Download struct {
-	URL  string
-	Name string
+	URL     string
+	Name    string
+	Command string
 }
 
 func (Download) eventKind() Kind { return EvDownload }
+
+// Notice asks the front end to show a small informational modal.
+type Notice struct {
+	Title   string
+	Message string
+}
+
+func (Notice) eventKind() Kind { return EvNotice }
+
+// ModalClose answers a Download or Notice modal.
+type ModalClose struct {
+	Kind   uint8
+	Copied bool
+	Chars  int
+}
+
+func (ModalClose) commandKind() Kind { return CmdModalClose }
+
+const (
+	ModalDownload uint8 = 1
+	ModalNotice   uint8 = 2
+)
 
 // Quit tells the front end that the session wants the application to exit,
 // after a confirmed quit key or a shutdown command.

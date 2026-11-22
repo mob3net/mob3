@@ -421,3 +421,45 @@ func TestSelectTransportRoundTrip(t *testing.T) {
 		t.Fatal("select menu stayed open")
 	}
 }
+
+type modalSink struct {
+	download protocol.Download
+	notice   protocol.Notice
+}
+
+func (s *modalSink) Send(ev protocol.Event) error {
+	switch v := ev.Body.(type) {
+	case protocol.Download:
+		s.download = v
+	case protocol.Notice:
+		s.notice = v
+	}
+	return nil
+}
+
+func TestDownloadAndNoticeTransport(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.noDraw = true
+	sink := &modalSink{}
+	b.sessionOut = sink
+	b.showDownload("https://example.com/f.bin", "f.bin")
+	if sink.download.Command == "" || sink.download.Name != "f.bin" || !b.downloadFrontend {
+		t.Fatalf("download = %+v frontend=%v", sink.download, b.downloadFrontend)
+	}
+	if b.overlayOpen() {
+		t.Fatal("front-end download counted as an engine overlay")
+	}
+	b.applyModalClose(protocol.ModalClose{Kind: protocol.ModalDownload, Copied: true, Chars: 12})
+	if b.download != nil || b.downloadFrontend || b.status != "Copied 12 chars" {
+		t.Fatalf("download close = %+v %v %q", b.download, b.downloadFrontend, b.status)
+	}
+
+	b.showNotice("Notice", "Body text")
+	if sink.notice.Title != "Notice" || !b.noticeFrontend {
+		t.Fatalf("notice = %+v frontend=%v", sink.notice, b.noticeFrontend)
+	}
+	b.applyModalClose(protocol.ModalClose{Kind: protocol.ModalNotice})
+	if b.notice != nil || b.noticeFrontend {
+		t.Fatal("notice stayed open")
+	}
+}

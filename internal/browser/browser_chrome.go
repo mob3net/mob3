@@ -745,9 +745,9 @@ func (b *Browser) paintShellOverlays(g *Grid) {
 	switch {
 	case b.dialog != nil:
 		b.paintDialog(g)
-	case b.download != nil:
+	case b.download != nil && !b.downloadFrontend:
 		b.paintDownload(g)
-	case b.notice != nil:
+	case b.notice != nil && !b.noticeFrontend:
 		b.paintNotice(g)
 	case b.selectMenu != nil && !b.selectFrontend:
 		b.paintSelectMenu(g)

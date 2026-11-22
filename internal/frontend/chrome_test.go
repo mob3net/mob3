@@ -323,3 +323,40 @@ func TestSelectLayoutAndDraw(t *testing.T) {
 		}
 	}
 }
+
+func TestDownloadAndNoticeLayout(t *testing.T) {
+	st := chromeState()
+	d := &DownloadView{Name: "f.bin", Command: "curl -L -o 'f.bin' -- 'https://example.com/f.bin'"}
+	layout := downloadLayout(st, d)
+	if layout.BoxW <= 0 {
+		t.Fatal("download layout is empty")
+	}
+	c := newCanvas(st.Width, st.Height)
+	DrawDownload(c, st, d)
+	var text strings.Builder
+	for _, cell := range c.cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"Download f.bin", "curl -L", "copy curl command"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("download %q does not contain %q", text.String(), want)
+		}
+	}
+
+	n := &NoticeView{Title: "Notice", Message: "Body text"}
+	c = newCanvas(st.Width, st.Height)
+	DrawNotice(c, st, n)
+	text.Reset()
+	for _, cell := range c.cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"Notice", "Body text", "Enter / Esc"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("notice %q does not contain %q", text.String(), want)
+		}
+	}
+}
