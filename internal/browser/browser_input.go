@@ -992,13 +992,23 @@ const quitConfirmText = "Are you sure you want to quit? (y)"
 
 // HandleKey processes one key. It returns true when the browser should quit.
 func (b *Browser) HandleKey(k string) bool {
+	if ev, ok := ParseMouseToken(k); ok {
+		return b.HandleMouse(ev)
+	}
+	if handled, quit := b.handleShellKey(k); handled {
+		return quit
+	}
+	return b.handlePageKey(k)
+}
+
+// handleShellKey consumes keys owned by the trusted shell: quit confirmation,
+// downloads, notices, menus, the console, the prompt and the find bar. It
+// returns handled=false for keys that belong to the page.
+func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 	if b.quitPending {
 		b.quitPending = false
 		b.status = ""
-		return k == "y" || k == "Y" || k == "enter"
-	}
-	if ev, ok := ParseMouseToken(k); ok {
-		return b.HandleMouse(ev)
+		return true, k == "y" || k == "Y" || k == "enter"
 	}
 	if b.download != nil {
 		switch k {
@@ -1010,7 +1020,7 @@ func (b *Browser) HandleKey(k string) bool {
 			b.download = nil
 			b.status = ""
 		}
-		return false
+		return true, false
 	}
 	if b.notice != nil {
 		switch k {
@@ -1018,27 +1028,32 @@ func (b *Browser) HandleKey(k string) bool {
 			b.notice = nil
 			b.status = ""
 		}
-		return false
+		return true, false
 	}
 	if b.selectMenu != nil {
-		return b.handleSelectMenuKey(k)
+		return true, b.handleSelectMenuKey(k)
 	}
 	if b.viewMenu != nil {
-		return b.handleViewMenuKey(k)
+		return true, b.handleViewMenuKey(k)
 	}
 	if b.zoomMenu != nil {
-		return b.handleZoomMenuKey(k)
+		return true, b.handleZoomMenuKey(k)
 	}
 	if b.consoleOpen {
-		return b.handleConsoleKey(k)
+		return true, b.handleConsoleKey(k)
 	}
 	if b.prompt {
-		return b.handlePromptKey(k)
+		return true, b.handlePromptKey(k)
 	}
 	if b.findActive {
-		return b.handleFindKey(k)
+		return true, b.handleFindKey(k)
 	}
+	return false, false
+}
 
+// handlePageKey routes keys that belong to page content, forms, links and
+// viewport movement.
+func (b *Browser) handlePageKey(k string) bool {
 	if b.inputFocus != nil {
 		return b.handleInputKey(k)
 	}

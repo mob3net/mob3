@@ -1122,6 +1122,16 @@ func TestConsoleYTypesWhileEditingInput(t *testing.T) {
 	}
 }
 
+func TestConsoleKeepsDialogOverlay(t *testing.T) {
+	b := NewBrowser(100, 12)
+	b.consoleOpen = true
+	b.dialog = &jsDialog{kind: "alert", message: "blocked"}
+	drawQuiet(b)
+	if b.modalBox.W <= 0 {
+		t.Fatal("console draw did not paint the script dialog")
+	}
+}
+
 func TestConsoleFooterHintAdvertisesCopyKey(t *testing.T) {
 	b := NewBrowser(100, 12)
 	b.consoleOpen = true

@@ -389,33 +389,6 @@ func (b *Browser) searchTemplate() string {
 	return DefaultSearchURL
 }
 
-// headerRows returns the number of rows used by the top bar.
-func (b *Browser) headerRows() int {
-	if b.height < 3 {
-		return 0
-	}
-	if b.height < 5 {
-		return 1
-	}
-	return 2
-}
-
-// viewport returns the first and last content row (exclusive end).
-func (b *Browser) viewport() (int, int) {
-	if b.height < 3 {
-		return 0, b.height
-	}
-	return b.headerRows(), b.height - 1
-}
-
-func (b *Browser) viewportHeight() int {
-	top, bottom := b.viewport()
-	if bottom < top {
-		return 1
-	}
-	return bottom - top
-}
-
 // Navigate starts loading input in the background so the UI and Esc stay
 // responsive. Results are applied by finishLoad from the main loop.
 func (b *Browser) Navigate(input string, push bool) {

@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 1 complete; Phase 2 next.**
+Status: **Phase 2 complete; Phase 3 next.**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -53,6 +53,7 @@ network destination.
 | D17 | 2026-11-22 | The request log lives in the host; the front end displays it. | The engine does not need to see network policy records. |
 | D18 | 2026-11-22 | Wire v1 is a 24-byte binary header plus fixed-value bodies; `Cell` is 20 bytes; scaled text is a structured run; control runes and scaled-run text are rejected on decode. | No reflection, no JSON, a small hostile-input surface, and no escape sequence can cross the boundary. |
 | D19 | 2026-11-22 | Phase 1 leaves `Lines`/`LinesMono` and the gfx renderer physically in `render.go`; they are called only from the frontend path and move with the package split in Phase 3. | The functional gate is that the paint path has no ANSI writer, no `os` and no terminal state. Moving ~600 lines now would add risk without changing behavior. |
+| D20 | 2026-11-22 | Phase 2 lands shell state, key routing and the content rectangle at the value/API level; the frontend goroutine and the live `State`/`Dialog` event loop land in Phase 5. | Without a separate loop an "emitted" event is read synchronously by `draw`; the payload, ownership and tests are ready for the transport. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -112,7 +113,8 @@ which part goes where.
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | engine | Text extraction and page assembly. |
 | `config.go` | host + engine | Model and apply host; `about:config` form markup engine. |
 | `browser.go` | engine | Session state, navigation and load lifecycle; shell state moves to the frontend. |
-| `browser_chrome.go` | frontend | Toolbar, footer, status and overlays. |
+| `browser_chrome.go` | frontend | `drawChrome` composes toolbar, footer, status and app overlays; `flushGrid` only encodes. |
+| `shell.go` | frontend | Content rectangle, header reservation and the `protocol.State` snapshot. |
 | `browser_forms.go` | engine | Form state, validation and submission; prompt editing frontend. |
 | `browser_input.go` | frontend + engine | Key/mouse decoding, prompts and app keys frontend; hit testing and field editing engine. |
 | `browser_history.go` | engine + host | Per-session back/forward engine; global visited list host. |
@@ -141,14 +143,17 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | --- | --- | --- | --- | --- |
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
-| 2 | Chrome and state ownership | 2–3 weeks | Next | UI tests pass; engine has no terminal or chrome concepts |
-| 3 | Extract `internal/engine` | 3–4 weeks | Not started | Engine import gate passes; engine tests green |
+| 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
+| 3 | Extract `internal/engine` | 3–4 weeks | Next | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
 Phase 3 under D19.
+
+\*\* Phase 2 lands the shell state/key/content-rect ownership. The live event
+loop and dialog request/response transport land in Phase 5 under D20.
 
 ### Phase 0 — Contract and baseline
 
@@ -189,16 +194,20 @@ Phase 3 under D19.
 
 ### Phase 2 — Chrome and state ownership
 
-- [ ] Front end draws toolbar, footer, prompts, notices, dialogs, console,
-      view/zoom menus, find bar and hint overlay.
-- [ ] Engine emits a state event: URL, title, loading/progress,
-      scroll/max-scroll, mode flags, errors.
-- [ ] Front end computes the content rectangle; engine knows only that size.
-- [ ] Page keys are forwarded; app keys, prompts and quit are local.
-- [ ] JS dialogs become request/response messages.
-- [ ] Engine overlays are clipped to the content rect; everything that covers
-      chrome moves to the front end.
-- [ ] Automation still drives the same commands.
+- [x] Front end composes toolbar, footer, prompts, notices, dialogs, console,
+      view/zoom menus and the find bar in `drawChrome`; `flushGrid` is output
+      only.
+- [x] The `State` snapshot exists (`stateMessage`) with URL, title,
+      loading/progress, scroll/max-scroll, page kind and mode flags. Emission
+      waits for the Phase 5 loop (D20).
+- [x] The content rectangle is shell-owned (`contentRect`, `headerRows`,
+      `viewport`); the engine receives only its size.
+- [x] Page keys are forwarded; app keys, prompts, menus and quit are local
+      (`handleShellKey` / `handlePageKey`).
+- [ ] JS dialogs become request/response messages. Deferred to Phase 5 (D20).
+- [x] Engine overlays are clipped to the content grid; chrome and modals
+      compose above it.
+- [x] Automation still drives the same commands; full suite green.
 
 ### Phase 3 — Extract `internal/engine`
 
@@ -336,6 +345,19 @@ per repaint, which at 56 bytes per cell is about 196 KB. The new path reuses a
 content grid and a screen grid; the remaining draw allocations are ANSI line
 building.
 
+### Phase 2 deltas
+
+This phase is structural: it moves composition, geometry and key routing, but
+does not add work to the hot path. `stateMessage` is not called by `draw` until
+the Phase 5 transport.
+
+| Metric | Before Phase 2 | After Phase 2 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 821–824 µs, 519 539 B/op, 28 212 allocs | 774–820 µs, 519 550 B/op, 28 212 allocs | within noise |
+| Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
 ## 8. Open questions
 
 All Phase 0 questions are resolved in the decision log: D13 (transport path),
@@ -379,3 +401,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 0 | `internal/protocol` types, ports, binary codec, round-trip/truncation/limit tests, decoder fuzz targets, import-boundary test, codec benchmark; baseline hash/timing tests and measurements | `go test ./internal/protocol`, fuzz 8 s each, `go test ./internal/browser -run TestBoundary`, `go vet` | Phase 1: frame boundary |
 | 2026-11-22 | 0 | Codec hardening: 32-bit body-length guard, scaled-run scale cap, control-text rejection; full suite and race green | `go test ./...`, `go test -race ./internal/protocol`, fuzz 8 s each | Phase 1: frame boundary |
 | 2026-11-22 | 1 | Content-rect painting with reused screen/content grids; `Cell.Raw` replaced by structured runs; `Cell` 56→24 B; terminal detection moved to `term_detect.go`; `toProtocolFrame` mapping and round-trip test; content-blit equivalence, cell-size guard; draw and content-frame benchmarks | `go test ./...`, `go vet`, `go test -race` on the frame tests, baseline hashes | Phase 2: chrome and state ownership |
+| 2026-11-22 | 2 | Shell geometry and `State` snapshot in `shell.go`; `drawChrome` is composition-only and `flushGrid` is output-only; `paintShellOverlays` covers content and console; `handleShellKey`/`handlePageKey` split; tests for content rect, key routing, state flags and console modals | `go test ./...`, `go vet`, `-race` on shell/chrome/frame tests, baseline hashes, draw benchmarks | Phase 3: extract `internal/engine` |

@@ -1168,6 +1168,7 @@ func (b *Browser) drawConsole(w, h int) {
 	if h >= 2 {
 		if b.findActive && b.findScope == findScopeHTML {
 			b.drawFindBar(g, h-1, w)
+			b.paintShellOverlays(g)
 			b.flushGrid(g, nil)
 			return
 		}
@@ -1195,6 +1196,7 @@ func (b *Browser) drawConsole(w, h int) {
 			b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: w - iconW, y: h - 1, w: iconW, h: 1})
 		}
 	}
+	b.paintShellOverlays(g)
 	b.flushGrid(g, nil)
 }
 

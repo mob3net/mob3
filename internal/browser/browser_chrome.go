@@ -263,8 +263,9 @@ func (b *Browser) draw() {
 	// Deferred image batches keep their layout until the viewport can see them.
 	b.applyPendingImageLayout()
 	fg, bg := b.pageFG(), b.pageBG()
-	top, bottom := b.viewport()
-	contentH := bottom - top
+	cr := b.contentRect()
+	top := cr.Top
+	contentH := cr.Height
 	if contentH < 1 {
 		contentH = 1
 	}
@@ -315,6 +316,15 @@ func (b *Browser) draw() {
 		placements[i].Y += top
 	}
 
+	b.drawChrome(g)
+	b.flushGrid(g, placements)
+}
+
+// drawChrome composes the trusted shell: toolbar, footer and app overlays. It
+// runs after the content frame is blitted, so page content cannot reach these
+// rows and dialogs always paint above it.
+func (b *Browser) drawChrome(g *Grid) {
+	w, h := g.W, g.H
 	headerBG := RGB(0x1f, 0x29, 0x37)
 	footerBG := RGB(0xea, 0xee, 0xf2)
 	headerFG := RGB(0xf6, 0xf8, 0xfa)
@@ -644,12 +654,12 @@ func (b *Browser) draw() {
 			}
 		}
 	}
-
-	b.flushGrid(g, placements)
+	b.paintShellOverlays(g)
 }
 
-// flushGrid writes changed cells to the terminal.
-func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
+// paintShellOverlays draws the trusted shell's modal layer above both page
+// content and the console.
+func (b *Browser) paintShellOverlays(g *Grid) {
 	b.modalClose = Rect{}
 	b.modalBox = Rect{}
 	switch {
@@ -666,6 +676,10 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	case b.zoomMenu != nil:
 		b.paintZoomMenu(g)
 	}
+}
+
+// flushGrid writes changed cells to the terminal.
+func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	var lines []string
 	if b.color {
 		lines = g.Lines(true)
