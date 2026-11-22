@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 0 not started.**
+Status: **Phase 0 complete; Phase 1 next.**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -46,6 +46,12 @@ network destination.
 | D10 | 2026-11-22 | Parser fuzzing (HTML, stylesheet, PDF, image) is recommended but **not part of B**; only the protocol codec is fuzzed in B. | Separate follow-up; record if it is scheduled. |
 | D11 | 2026-11-22 | This file is tracked during the rewrite and deleted at the end. | The user asked for a progress tracker; durable rules move to `AGENTS.md`/`architecture.md` before deletion. |
 | D12 | 2026-11-22 | Work happens on `core-rewrite`; the Pages publish job is guarded to `refs/heads/main`, so this branch cannot publish the site. | Keeps in-progress docs off the live site. Pushes to `main` still publish; nothing needs restoring at the end. |
+| D13 | 2026-11-22 | `-dump`, `-png`, MCP and automation run through the in-process transport. | The seam is exercised by every path, not only tests. A direct engine call would leave the transport untested until C. |
+| D14 | 2026-11-22 | Keep the type name `Browser` during the move; rename it to `Session` at the end of Phase 3. | Avoids a 268-method rename while files are still crossing packages. |
+| D15 | 2026-11-22 | The in-process transport encodes and decodes every message by default. A direct struct fast path exists only if measurements demand it, and it must use the same validation. | Keeps the codec on the real path; a test-only codec is a fake seam. |
+| D16 | 2026-11-22 | The engine renders `about:` pages from host-supplied data; the host mints and validates the config token. | Keeps trusted state and policy on the host while reusing the HTML engine. |
+| D17 | 2026-11-22 | The request log lives in the host; the front end displays it. | The engine does not need to see network policy records. |
+| D18 | 2026-11-22 | Wire v1 is a 24-byte binary header plus fixed-value bodies; `Cell` is 20 bytes; scaled text is a structured run; control runes and scaled-run text are rejected on decode. | No reflection, no JSON, a small hostile-input surface, and no escape sequence can cross the boundary. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -83,6 +89,46 @@ During the migration the old `browser` package may import a moved package and
 alias exported types (`type Page = engine.Page`) so each batch lands with
 tests green. No new reach-through.
 
+### File ownership
+
+"Split" means the file is separated at the seam during Phase 3; the note names
+which part goes where.
+
+| Current file(s) | Side | Note |
+| --- | --- | --- |
+| `cmd/mob3/main.go` | app | Wiring only. |
+| `html.go` | engine | Tokenizer and tree builder. |
+| `style*.go` | engine | All style, selector, sheet, media and UA files. |
+| `layout*.go` | engine | All layout files, including forms, images, tables, grid, flex and measurement. |
+| `render.go` | engine + frontend | Grid, paint and image placement stay in the engine; `Lines`/`LinesMono`, ANSI, kitty/iTerm2 and capability detection move to the frontend. |
+| `png.go` | frontend | Cells to PNG. |
+| `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. |
+| `cache.go` | host | Resource cache. |
+| `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
+| `certs.go` | host | Trust store selection. |
+| `pdf_object.go`, `pdf_text.go`, `pdf.go` | engine | Text extraction and page assembly. |
+| `config.go` | host + engine | Model and apply host; `about:config` form markup engine. |
+| `browser.go` | engine | Session state, navigation and load lifecycle; shell state moves to the frontend. |
+| `browser_chrome.go` | frontend | Toolbar, footer, status and overlays. |
+| `browser_forms.go` | engine | Form state, validation and submission; prompt editing frontend. |
+| `browser_input.go` | frontend + engine | Key/mouse decoding, prompts and app keys frontend; hit testing and field editing engine. |
+| `browser_history.go` | engine + host | Per-session back/forward engine; global visited list host. |
+| `memory.go` | host + engine | Budget policy and process limit host; per-session enforcement engine. |
+| `browser_pdf.go` | engine | PDF footer state and download shortcut. |
+| `browser_images.go` | engine | Deferred batch scheduling; fetching host. |
+| `browser_selection.go` | engine + frontend | Selection state and text engine; clipboard and OSC 52 frontend. |
+| `automation.go` | app | Protocol client. |
+| `mcp.go` | app | Protocol client. |
+| `ui.go` | frontend + engine | Console/dialog drawing frontend; console data and JS state engine. |
+| `find.go` | engine + frontend | Search engine; find bar frontend. |
+| `hints.go` | engine + frontend | Hint computation engine; overlay drawing frontend. |
+| `reader.go` | engine | Article extraction. |
+| `dark.go` | engine | Palette remap. |
+| `js*.go` | engine | Runtime, DOM, events, compat, stubs, modules, web APIs, Intl. |
+| `term_unix.go`, `term_linux.go`, `term_darwin.go`, `term_stub.go` | frontend | Terminal modes, size and cell pixels. |
+| `signals_unix.go`, `signals_other.go` | frontend | Resize and quit signals. |
+| `cli.go` | app + frontend | Flags and wiring app; terminal event loop frontend. |
+
 ## 4. Phases
 
 Estimates are for one developer who knows the codebase, Linux first, ±40%.
@@ -90,8 +136,8 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 
 | Phase | Scope | Estimate | Status | Exit gate |
 | --- | --- | --- | --- | --- |
-| 0 | Contract, codec, dependency test, baseline | 1 week | Not started | Protocol compiles; baseline recorded |
-| 1 | Frame boundary and paint split | 1–2 weeks | Not started | `-dump`/`-png` byte-identical; engine has no ANSI writer |
+| 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
+| 1 | Frame boundary and paint split | 1–2 weeks | Next | `-dump`/`-png` byte-identical; engine has no ANSI writer |
 | 2 | Chrome and state ownership | 2–3 weeks | Not started | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Not started | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
@@ -100,21 +146,23 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 
 ### Phase 0 — Contract and baseline
 
-- [ ] Write the ownership table for every file (engine / host / frontend / app).
-- [ ] Create `internal/protocol` with `Frame`, `Cell`, `Placement`, `Meta`,
-      `Command`, `Event`, `State`, `Limits`, `SessionID`, `Version`.
-- [ ] Define the `Session` and `Broker` ports in `protocol`.
-- [ ] Implement a fixed binary codec; no reflection and no `gob`.
-- [ ] Round-trip test for every message; fuzz the decoder with size/count
+- [x] Write the ownership table for every file (engine / host / frontend / app).
+- [x] Create `internal/protocol` with `Frame`, `Cell`, `Placement`, `Command`,
+      `Event`, `State`, `Limits`, `SessionID`, `Version`.
+- [x] Define the `Session` and `Broker` ports in `protocol`.
+- [x] Implement a fixed binary codec; no reflection and no `gob`.
+- [x] Round-trip test for every message; fuzz the decoder with size/count
       bounds.
-- [ ] Add the dependency test (allowed graph above), initially scoped to the
+- [x] Add the dependency test (allowed graph above), initially scoped to the
       new packages.
-- [ ] Build the baseline corpus from synthetic pages: text-heavy, deep DOM,
-      table, grid, many links, images off, PDF, long script.
-- [ ] Record baseline: startup ms, RSS MB, `-dump` hash, `-png` hash, frame
-      paint/encode time, allocations per frame, idle frames.
+- [x] Build the baseline corpus from synthetic pages. The current page covers
+      text, table, grid, many links and images off; add deep-DOM, PDF and
+      long-script baselines with the phases that touch those paths.
+- [x] Record baseline: startup ms, RSS MB, `-dump` hash, `-png` hash, codec and
+      paint timing, allocations per frame.
+- [ ] Idle-frame count: measure in Phase 5, when the frame loop exists.
 - [x] Add the routing row and architecture link for this file.
-- [ ] Resolve the Phase 0 open questions in §8.
+- [x] Resolve the Phase 0 open questions in §8.
 
 ### Phase 1 — Frame boundary
 
@@ -231,39 +279,34 @@ max encoded image bytes, max message size, frame rate/backpressure.
 
 ## 7. Performance budget
 
-Fill the baseline in Phase 0; the gate columns are the working limits.
+Baseline recorded 2026-11-22 on linux/amd64, i7-1255U, Go 1.27. Absolute values
+are machine-specific; the gate is the delta on the same machine. The synthetic
+page is `boundaryBaselineHTML()` in
+`internal/browser/boundary_baseline_test.go`.
 
 | Metric | Baseline | Gate |
 | --- | --- | --- |
-| Startup | TBD | +2 ms max |
-| RSS | TBD | +2 MB max |
-| `-dump` output | TBD | byte-identical |
-| `-png` output | TBD | byte-identical |
-| Full-frame encode | TBD | no regression |
-| Full-frame paint | TBD | ≤5% regression |
-| Allocations per frame | TBD | zero in steady state |
-| Idle frames/s | TBD | 0 |
+| Startup (tiny `-dump`) | 4.7–4.9 ms | +2 ms max |
+| RSS (tiny `-dump`) | 17–19 MB | +2 MB max |
+| Synthetic `-dump` | 34–38 ms, 44–45 MB | no unreviewed increase |
+| `-dump` hash | `320723811c02b681c11db45eaa2860b72ef653697165b5f92bc8d55ad793a830` | byte-identical |
+| `-png` hash | `5a5adb26413007dc5a35abd99cd7144823fb46f2f0f946609901ec54f82256aa` | byte-identical |
+| Codec frame, 152×35, encode+decode | 320–328 µs, 106 668 B/op, 2 allocs | no regression |
+| Synthetic parse | 0.61–0.78 ms, 1.00 MB, 6 101 allocs | no regression |
+| Layout+paint+ANSI, 100×35 | 12.9–13.3 ms, 19.8 MB, 48 618 allocs | ≤5% regression |
+| Idle frames/s | pending Phase 5 | 0 |
 
-A later process split is expected to add a second Go runtime and IPC; those
+The codec benchmark is `BenchmarkCodecFrame` in `internal/protocol`; the parse
+and paint benchmarks are in `internal/browser/boundary_baseline_test.go`. A
+later process split is expected to add a second Go runtime and IPC; those
 numbers are recorded separately and are not B's budget.
 
 ## 8. Open questions
 
-Resolve in Phase 0 and record the answer in the decision log.
-
-1. Do `-dump`, `-png` and MCP run through the in-process transport, or call the
-   engine directly? (Current plan: through the transport, so the seam is
-   exercised by default.)
-2. Keep the type name `Browser` inside the engine, or rename to `Session` as
-   part of Phase 3?
-3. In-process transport: always encode/decode, or direct struct handoff with
-   the codec exercised only in tests? (Current plan: encode by default, with a
-   debug direct mode if benchmarks demand it.)
-4. Where are `about:` pages generated: engine from host data, or host HTML
-   parsed by the engine? (Current plan: engine renders, host supplies data and
-   validates the config token.)
-5. Does the request log live in the host or in the engine? (Current plan:
-   host; front end displays it.)
+All Phase 0 questions are resolved in the decision log: D13 (transport path),
+D14 (`Session` rename), D15 (encode by default), D16 (`about:` pages) and D17
+(request log). Add new questions here as they arise, and move each to §2 once
+decided.
 
 ## 9. Validation per batch
 
@@ -298,3 +341,5 @@ measurements, next step. Do not rewrite old entries.
 | Date | Phase | What landed | Validation | Next |
 | --- | --- | --- | --- | --- |
 | 2026-11-22 | — | Plan and decisions recorded; docs updated; Pages publish guarded to `main` | `git diff --check` | Phase 0 |
+| 2026-11-22 | 0 | `internal/protocol` types, ports, binary codec, round-trip/truncation/limit tests, decoder fuzz targets, import-boundary test, codec benchmark; baseline hash/timing tests and measurements | `go test ./internal/protocol`, fuzz 8 s each, `go test ./internal/browser -run TestBoundary`, `go vet` | Phase 1: frame boundary |
+| 2026-11-22 | 0 | Codec hardening: 32-bit body-length guard, scaled-run scale cap, control-text rejection; full suite and race green | `go test ./...`, `go test -race ./internal/protocol`, fuzz 8 s each | Phase 1: frame boundary |
