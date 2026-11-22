@@ -42,21 +42,24 @@ transport implementation, not another architecture change.
 ### Migration order
 
 Each batch lands with tests green; type aliases are temporary and removed at
-the end.
+the end. Steps 1, 2 and 6 are landed; step 3, the session half of step 4 and
+the Loader-orchestration half of step 5 remain; step 7 is Phase 6.
 
-1. `internal/protocol`, codec, dependency test and the output/benchmark
-   baseline.
-2. Frame boundary: content-rect `Frame`, structured scaled text instead of
-   raw escape cells, ANSI and native-image encoding in the front end.
-3. Chrome and shell state owned by the front end; engine state arrives as
-   events; the engine learns only the content rectangle.
-4. Move leaf subsystems, then the session type, into `internal/engine`.
-5. Split `Loader.Load` into host `Fetch` (status, headers, final URL, raw
-   bytes) and engine decompression/charset/parse; move automation and MCP to a
-   protocol client.
-6. Run every path, including `-dump`, `-png` and tests, through the in-process
-   transport; keep a socket transport for the later process split.
-7. Fuzz the codec, benchmark against the baseline, remove aliases.
+1. **Landed.** `internal/protocol`, codec, dependency test and the
+   output/benchmark baseline.
+2. **Landed.** Frame boundary: content-rect `Frame`, structured scaled text
+   instead of raw escape cells, ANSI and native-image encoding in the front
+   end.
+3. **Remaining.** Chrome and shell state owned by the front end; engine state
+   arrives as events; the engine learns only the content rectangle.
+4. **Partial.** Leaf subsystems moved into `internal/engine`; the session type
+   and `Browser` → `Session` split remain.
+5. **Partial.** Host `Fetch`, decompression/charset/parse and MCP are split;
+   Loader image/SVG/about/PDF orchestration moves with the engine session.
+6. **Landed.** Every path, including `-dump`, `-png` and MCP, runs through the
+   in-process transport; a stream transport exists for the later process split.
+7. **Phase 6.** Fuzz the codec, benchmark against the baseline, remove
+   aliases.
 
 ### Exit gates
 
@@ -69,7 +72,13 @@ the end.
   side.
 - Frame goldens cover layout and rendering, plus new frame-snapshot tests for
   the seam.
-- Dependencies are checked by a test, not by review.
+- Dependencies are checked by a test, not by review. During the migration the
+  test allows `app` to import `internal/browser` and leaves `internal/browser`
+  unrestricted; both exceptions end with the session split.
+- The engine cannot emit chrome. Header/footer, prompts, menus, console, find
+  bar, overlays and dialogs are composed by the front end from `State` or
+  overlay messages; back/forward history and the download/curl hint live on the
+  front end.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 
@@ -80,17 +89,21 @@ destination; the tracker lists what remains.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
-  and `internal/app` exist. `app` currently owns flags/validation/dispatch;
-  session setup still lives in `internal/browser`.
+  and `internal/app` exist. `app` owns flags, validation and dispatch, but
+  still calls `browser.Execute`; session construction lives in
+  `internal/browser`. `app → browser` is the temporary wiring exception.
 - `internal/browser/` still holds the session shell: the 289-method `Browser`,
-  chrome/overlay composition, session setup, loader/about/PDF/image
-  orchestration, MCP and automation, and most integration tests. Terminal
-  input/signals and the live event loop are in `internal/frontend`; flags and
-  dispatch are in `internal/app`.
+  chrome/overlay composition, dialogs, navigation/history, session setup,
+  Loader image/SVG/about/PDF orchestration, MCP and automation, and most
+  integration tests.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
-  placement and clipboard encoding. It does not yet own chrome, dialogs or
-  navigation state; the interactive loop is still `browser/cli.go`.
+  placement, clipboard encoding and the live session loop
+  (`frontend.SessionLoop`). It does not yet own chrome, dialogs or navigation
+  state.
+- `internal/browser` has no import rule during the migration; the dependency
+  test covers the five target packages. Both temporary exceptions end with the
+  session split.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
   global visited list or download history by design (D54): back/forward history
@@ -142,25 +155,27 @@ destination; the tracker lists what remains.
 | `frontend_bridge.go` | Temporary bridges to `internal/frontend`: grid-to-frame conversion for `Lines`/`LinesMono`/`PNG`, color modes and code helpers. Removed when the engine package makes the seam direct. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
 | `internal/frontend/png.go` | Protocol-frame-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
-| `frame_protocol.go` | Maps the painted content grid to `protocol.Frame` for the engine/frontend seam. The only place internal cell fields become wire values. |
-| `term_detect.go` | Terminal capability detection from the environment (`COLORTERM`, `TERM`, `TERM_PROGRAM`, multiplexer variables). Frontend-owned; the paint path receives capabilities instead of reading the environment. |
+| `frame_protocol.go` | Browser-side mapper from the painted content grid to `protocol.Frame`; the only place internal cell fields become wire values. Moves to the engine session with the split. |
 | `internal/host/cache.go` | Session LRU resource cache for raw bodies and decoded images. |
 | `internal/host/requests.go` | In-memory console request log, page generation, start/finish accounting and snapshots. |
 | `internal/host/settings.go` | User agent, search template and decoded-image caps, shared by navigation and image workers. |
 | `internal/host/certs.go` | `system`/`embedded` trust-store selection, the embedded Mozilla CA pool and the stable `CertTransport` wrapper. |
 | `internal/host/network.go` | Request metadata, local-network and mixed-content policy, dialers, pooled transport and HTTP client construction. |
-| `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly stays in the browser for now. |
+| `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly is engine-owned; the host returns raw bytes. |
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
-| `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets and terminal writes. |
-| `internal/protocol` `Chrome` message | Header/footer cell layer for content-only frames; overlay and console frames use the full-screen fallback. |
+| `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, chrome-layer stacking and terminal writes. |
+| `internal/frontend/session.go` | Live session loop: keys, abort, resize, events, chrome state, crash dedup and clipboard writes. |
+| `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
+| `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
+| `internal/protocol` `Chrome` message | Temporary display-list bridge: header/footer cell layer for content-only frames; overlay and console frames use the full-screen fallback. Removed when the front end composes chrome from `State`. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |
 | `internal/browser/automation_transport.go` | MCP protocol client and engine-side `automationHandler`; the automation library remains the handler implementation. |
-| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events and engine-side dialog input while the transport owns the front end. |
-| `internal/browser/cli.go` | Front-end terminal loop for interactive runs: raw mode, key reading, resize and quit signals, command sends and `Quit` handling. |
+| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and engine-side dialog input. Presentation is front-end-owned. |
+| `internal/browser/cli.go` | Session setup: loader/engine construction, terminal enter/leave, presenter and transport wiring, loop start, and the build-time `Version`. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
@@ -182,7 +197,7 @@ destination; the tracker lists what remains.
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
-| `automation.go` | Engine-side headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, history, JS evaluation and `RunCommand`. `automation_transport.go` exposes it through the MCP protocol client. |
+| `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, history, JS evaluation and `RunCommand`. Browser-side today; moves to the engine with the session. `automation_transport.go` exposes it through the MCP protocol client. |
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs, the `X` page view options window (fixed elements and background images) and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
@@ -190,10 +205,10 @@ destination; the tracker lists what remains.
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
-| `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`:
+| `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
 | `js_compat.go` | Browser aliases and constructor for the engine runtime. |
-| `js_life.go` | Browser JS lifecycle: `startJS`, stop, timer loop and dynamic-import completion. |
-| `js_host.go` | `browserJSHost`: the browser implementation of the engine contract. | viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
+| `js_life.go` | Browser JS lifecycle: `startJS`, stop, timer loop and dynamic-import completion; moves with the engine session. |
+| `js_host.go` | `browserJSHost`: the browser implementation of the engine contract; becomes the engine session adapter after the split. |
 | `internal/engine/js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. Measurement resolves from the laid-out fragments, and a script-created element gets its style computed on demand so `getComputedStyle`/`offsetWidth` see its rules before the next rebuild. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods and element-child views (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`, `firstElementChild`/`lastElementChild`, `children`), because frameworks that hydrate with `document` as the root container call them on the document itself. `<template>.content` is a real inert fragment, and a node whose tag has a registered custom element class is constructed with that class when first wrapped. |
 | `internal/engine/js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |
 | `internal/engine/js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
@@ -201,11 +216,11 @@ destination; the tracker lists what remains.
 | `internal/engine/js_modules.go` | ES modules: the module graph cache, specifier resolution against the importing module's URL, size/depth caps, `import.meta.url`, dynamic import finishing, and linking/evaluation under the script guard. After the page's own scripts finish, an interactive dynamic import fetches and parses its graph on a background goroutine and the event loop links and evaluates it, so a slow chunk cannot freeze drawing, input or image loading; the graph shares the page's record cache, so a dependency imported by several chunks is fetched and evaluated once. Page-load and headless imports stay synchronous. |
 | `internal/engine/js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `internal/engine/js_intl.go` | English-only `Intl` formatter subset. |
+| `internal/frontend/term_detect.go` | Terminal capability detection from the environment (`COLORTERM`, `TERM`, `TERM_PROGRAM`, multiplexer variables). The paint path receives capabilities instead of reading the environment. |
 | `internal/frontend/term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
 | `internal/frontend/term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
 | `internal/frontend/term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `internal/frontend/term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `internal/frontend/signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
-| `internal/app/app.go` | Flags, validation and dispatch into `browser.Execute`. |
-| `cli.go` | Session setup/dispatch and the build-time `Version`; terminal input and the live loop are frontend. |
+| `internal/app/app.go` | Flags, validation and dispatch into `browser.Execute`; direct engine/host/frontend wiring is the remaining app split. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |

@@ -8,7 +8,10 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Rewrite incomplete: the host broker is complete; semantic chrome/app extraction and Phase 6 remain.**
+Status: **Rewrite incomplete.** The protocol seam, host broker, engine content,
+terminal front end, live session loop and app dispatch are landed. Remaining:
+semantic chrome, dialog and navigation ownership, the `Browser` → `Session`
+split, direct app wiring, and Phase 6 cleanup.
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -72,7 +75,7 @@ network destination.
 | D36 | 2026-11-22 | Move the raw request path (`Fetcher`, data URLs, size/encoding checks, cache and request accounting) into `internal/host`. `Loader.fetchCtx/fetchRequest` are delegates that sync the host client/cache/settings/log before each call. Page assembly and parsing remain in the browser for the next slice. | Fetching is host policy and I/O; parsing is engine work. The delegate keeps test-injected clients working while the assembly split is prepared. |
 | D37 | 2026-11-22 | Move HTML page assembly and stylesheet/script/import-map collection into `internal/engine` behind `PageFetcher`; the browser adapter brokers each subresource through the host fetch path. Image/SVG loading, about/PDF/blocked orchestration stay in the Loader for now. | The engine now owns parsing and document assembly, and every subresource crosses a brokered interface. Remaining Loader code is orchestration/policy, not the engine. |
 | D38 | 2026-11-22 | Define `protocol.Handler` and `protocol.Transport`, and implement `protocol.InProc`: each session runs the handler on its own goroutine, and every command and event is encoded and decoded through the fixed codec before delivery. Abort is an out-of-band one-shot channel; an event that fails validation is replaced by `Crash`. | This is the first Phase 5 slice: the seam becomes executable before the browser loop moves onto it, and the codec is on the real path rather than only in tests. |
-| D39 | 2026-11-22 | Run the live interactive loop through `protocol.InProc`: the engine `Browser` handler owns its own goroutine and the page loop; the front end owns terminal raw mode, key reading, resize signals and the quit signal. `protocol.Quit` tells the front end to exit. Modal JS dialogs read commands from the session stream while the loop is blocked. `protocol.Aborter` lets `Session.Abort` count the request directly on the front-end goroutine, so a busy script still stops before the loop wakes. Presentation, chrome and ANSI output stay in the engine until the next slice. | This is the real lifecycle seam: commands, events, abort and shutdown run through the transport on every interactive session, while keeping the existing frame path byte-identical. Moving presentation next turns the engine into a pure frame producer. |
+| D39 | 2026-11-22 | Run the live interactive loop through `protocol.InProc`: the engine `Browser` handler owns its own goroutine and the page loop; the front end owns terminal raw mode, key reading, resize signals and the quit signal. `protocol.Quit` tells the front end to exit. Modal JS dialogs read commands from the session stream while the loop is blocked. `protocol.Aborter` lets `Session.Abort` count the request directly on the front-end goroutine, so a busy script still stops before the loop wakes. Presentation moved in D42; chrome remains engine-composed until the shell split. | This is the real lifecycle seam: commands, events, abort and shutdown run through the transport on every interactive session, while keeping the existing frame path byte-identical. D42 superseded the presentation part. |
 | D40 | 2026-11-22 | `Loader` takes a fresh `host.Fetcher` snapshot per request instead of mutating one shared value. A test or CLI can still replace the loader's client, settings, cache and request log, because the snapshot is taken at call time. | The shared fetcher raced under concurrent navigations and would be unsafe once the engine services loads on its own goroutine; the snapshot removes the shared write without changing the Loader API. |
 | D41 | 2026-11-22 | Replace the handler's `chan<- Event` with `protocol.EventSink`. `Send` validates and detaches the event before returning, so the engine may immediately reuse its paint buffers. Frames use a validated copy; every other command and event keeps the wire codec. | The channel handoff left events referencing reusable engine memory, which was unsafe across the goroutine boundary. Measurement showed the wire codec costs ~320 µs per frame, so D15's measurement escape applies to the hot frame path; the semantic checks are unchanged. |
 | D42 | 2026-11-22 | Text-mode presentation moves to `frontend.Presenter`: the engine emits a full-screen `Frame`, the front end encodes ANSI, keeps the row diff and writes the terminal. Native image modes keep the engine-side writer until image placements cross the seam. `StateNativeImages` tells the front end which side owns the current frame. Chrome composition stays in the engine for now. | This removes stdout from the engine for the default graphics modes while preserving kitty/iTerm2 output exactly. Chrome ownership and placement encoding are the remaining presentation steps. |
@@ -88,9 +91,9 @@ network destination.
 | D52 | 2026-11-22 | Add a stream transport behind the same codec and ports: `ReadCommand`/`ReadEvent`, `ServeStream` for the handler child and `DialStream` for the front end. `ServeStream` uses the same coalescing outbox and event validation. The serving reader applies `Abort` directly, so a busy script stops even when the command loop is blocked. | This is the transport swap the later process split needs. It is tested over `net.Pipe` and is unused by the in-process app until the child process lands. The serving side owns and closes its connection when the session ends. |
 | D53 | 2026-11-22 | Move JS `fetch`/XHR to `host.JSFetch` behind a `protocol.FetchRequest`/`FetchResponse`, and move `document.cookie` parsing to the browser adapter. The host owns same-origin/CORS, credentials, redirects, mixed content, private networks, size limits and the request log. The engine contract now exposes a cookie value list, a raw cookie setter and `JSFetch`, with no `*http.Client`. | This closes the largest remaining boundary violation: page scripts can no longer choose a destination or see host cookie types directly. The dependency test now rejects `net/http` (and subpackages) on the engine side. |
 | D54 | 2026-11-22 | Session back/forward history and `about:history` stay session-owned. The download popup and its `curl` hint stay front-end presentation. The host keeps no global visited list and no download history. | User decision: the proposed host-owned global history/download records would add state and memory without a user-visible benefit, and MOB³ persists nothing. This keeps B behavior-neutral and corrects D8's over-broad ownership claim. |
-| D55 | 2026-11-22 | Move the built-in page shell, shared CSS and cannot-display/load-error HTML to `internal/engine/pages.go`; the browser keeps thin wrappers. Help/history/config page bodies, the config token and view options remain session-side until the app split. | This is a behavior-neutral move of the render templates to the engine. The remaining about-page work depends on host-supplied data and the config token, which belongs with the app/host wiring. |
+| D55 | 2026-11-22 | Move the built-in page shell, shared CSS and cannot-display/load-error HTML to `internal/engine/pages.go`; the browser keeps thin wrappers. Help/history/config page bodies, the config token and view options remain session-side until the app split. The about-page part is superseded by D56. | This is a behavior-neutral move of the render templates to the engine. The remaining about-page work depended on host-supplied data and the config token, which D56 moved. |
 | D56 | 2026-11-22 | Move start/help/history/blocked and config page rendering to the engine, and move the one-shot config form token into `internal/host.ConfigToken`. The session still collects history/settings data and applies submitted values. | This completes the about-page ownership part of D16: templates live with the engine, and the token is minted/validated on the trusted side. The remaining session code is data collection and applying settings, which belongs with the app split. |
-| D57 | 2026-11-22 | Move terminal raw mode, size/cell-pixel probes, key/mouse decoding, capability detection and resize/quit signal wiring into `internal/frontend`. Mouse event/token types are front-end-owned with browser aliases. Clipboard OSC 52 encoding moved to the front end; the session emits `Clipboard` events when a presentation session exists and keeps the writer fallback for tests/automation. | These are terminal concerns, not page content. The interactive loop still lives in `browser`/`cli.go` until `internal/app` exists, but it now calls the front-end terminal API. |
+| D57 | 2026-11-22 | Move terminal raw mode, size/cell-pixel probes, key/mouse decoding, capability detection and resize/quit signal wiring into `internal/frontend`. Mouse event/token types are front-end-owned with browser aliases. Clipboard OSC 52 encoding moved to the front end; the session emits `Clipboard` events when a presentation session exists and keeps the writer fallback for tests/automation. The live-loop part is superseded by D58. | These are terminal concerns, not page content. The interactive loop moved to `frontend.SessionLoop` in D58; the terminal API stays front-end-owned. |
 | D58 | 2026-11-22 | Create `internal/app` and move flag parsing, validation and dispatch there. `browser.Execute(RunOptions)` keeps session setup until the session type moves. Move the live session event loop to `frontend.SessionLoop`; crash dedup, chrome state and clipboard handling now live there. | This gives the app a real wiring layer and removes the event loop from the browser CLI. The remaining app step is moving `Browser`/session construction and the session type itself. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
@@ -131,72 +134,28 @@ tests green. No new reach-through.
 
 ### File ownership
 
-"Split" means the file is separated at the seam during Phase 3; the note names
-which part goes where.
+The canonical target and current file tables are in
+[architecture.md](architecture.md#current-layout-during-migration). This table
+tracks only the files that still have to cross the seam and the temporary
+browser-side bridges. "Split" means one file becomes two declarations at the
+seam; the note names which part goes where.
 
-| Current file(s) | Side | Note |
+| Current file(s) | Final side | Remaining work |
 | --- | --- | --- |
-| `cmd/mob3/main.go` | app | Wiring only. |
-| `html.go` | `internal/engine/html.go` | Tokenizer, tree builder and Node. |
-| `style*.go` | `internal/engine` | `Style`, sheets, selectors, cascade, media and UA moved in 3b1; primitives were 3b0. |
-| `style_units_compat.go` | browser bridge | Aliases and wrappers for the moved style primitives. |
-| `engine_compat.go` | browser bridge | DOM/style aliases, constructors, cascade accessors and layer/import helpers. |
-| `js_host.go` | `internal/engine/js_host.go` + browser adapter | Engine-owned host contract/import task; the adapter implements it. |
-| `style_app.go` | browser | Zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
-| `page_styles.go` | `internal/engine/page.go` | `Page`/`Script` and inline-style collection after load. |
-| `layout*.go` | `internal/engine` | All layout files, including forms, images, tables, grid, flex and measurement. |
-| `layout_compat.go` | browser bridge | Layout aliases, builders, utilities and form predicates. |
-| `render.go` | `internal/engine/render.go` | Grid, paint, image placement and SVG decode. |
-| `render_gfx.go` | browser bridge | Kitty/iTerm2 placement, cache, PNG encode, image scaling and inline-SVG loading; moves to frontend in Phase 5. |
-| `paint_compat.go` | browser bridge | Grid/paint aliases and SVG decoder wrappers. |
-| `frame_protocol.go` | browser bridge | Maps the engine grid to `protocol.Frame`; moves with the transport seam. |
-| `frontend_bridge.go` | browser bridge | Temporary wrappers for `Lines`, `PNG`, color modes and code helpers during the package move. |
-| `term_detect.go`, `term_unix.go`, `term_linux.go`, `term_darwin.go`, `term_stub.go` | `internal/frontend` | Terminal capability detection, raw mode, size/cell pixels, key/mouse decoding. |
-| `png.go` | `internal/frontend/png.go` | Protocol frame to PNG. |
-| `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. `Page`/`Script` now live in `internal/engine/page.go`. |
-| `cache.go` | `internal/host/cache.go` | Session resource cache; browser shim preserves the Loader API. |
-| `cookie` section of `fetch.go` | `internal/host/cookies.go` | Cookie jar, HttpOnly/document.cookie policy and the storage-inspector view; browser shim. |
-| `requestRecord`/request-log section of `fetch.go` | `internal/host/requests.go` | Console request log and page-generation accounting; Loader delegates. |
-| Loader settings fields | `internal/host/settings.go` | User agent, search template and image pixel caps behind one lock. |
-| `certs.go` | `internal/host/certs.go` | Cert source selection, embedded CA pool and stable transport. |
-| network guard and transport construction | `internal/host/network.go` | Request metadata, local/mixed-content policy, dialers, `NewHTTPTransport` and `NewHTTPClient`. |
-| raw request path | `internal/host/fetch.go` | `Fetcher`, data URLs, size/encoding checks, cache and request accounting; Loader delegates. |
-| page assembly | `internal/engine/page_loader.go` | HTML parse, base/title, stylesheets, scripts and import map behind `PageFetcher`; image/SVG/about/PDF stay in the Loader. |
-| transport contract | `internal/protocol/transport.go` | `Handler`, `Transport` and the codec-validating in-process session. |
-| interactive session loop | `internal/browser/session.go` | `Serve`, command routing, timers, progress, usage, frame stashing and engine-side dialog input while the transport owns the front end. |
-| terminal loop | `internal/browser/cli.go` | Raw mode, key reading, resize and quit signals; sends commands, feeds frames to the presenter and reacts to `Quit`. |
-| text presentation | `internal/frontend/present.go` | ANSI encoding, row diff, scroll/native resets, text plus placement output. |
-| terminal graphics | `internal/frontend/gfx.go` | Graphics modes, capability detection, PNG decode/scale/crop and kitty/iTerm2 escape output. |
-| placement encoding | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded immutable PNG cache and image scaling for page decode. |
-| graphics compatibility | `internal/browser/render_gfx.go` | Mode/constructor aliases for the CLI and tests; SVG loading stays here. |
-| `internal/engine/pages.go` | Shared built-in page shell/CSS and cannot-display/load-error HTML. Help/history/config bodies and the config token remain session-side. |
-| `certs.go` | host | Trust store selection. |
-| `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
-| `config.go` | host + engine | Host `ConfigToken`; engine config form markup; browser still collects settings data and applies values. |
-| `browser.go` | engine | Session state, navigation and load lifecycle; shell state moves to the frontend. |
-| `browser_chrome.go` | frontend | `drawChrome` composes toolbar, footer, status and app overlays; `flushGrid` only encodes. |
-| `shell.go` | frontend | Content rectangle, header reservation and the `protocol.State` snapshot. |
-| `browser_forms.go` | engine | Form state, validation and submission; prompt editing frontend. |
-| `browser_input.go` | frontend + engine | Key/mouse decoding, prompts and app keys frontend; hit testing and field editing engine. |
-| `browser_history.go` | engine | Per-session back/forward state and memory-only page cache; no global visited list (D54). |
-| `memory.go` | host + engine | Budget policy and process limit host; per-session enforcement engine. |
-| `browser_pdf.go` | engine | PDF footer state and download shortcut. |
-| `browser_images.go` | engine | Deferred batch scheduling; fetching host. |
-| `browser_selection.go` | engine + frontend | Selection state and text engine; OSC 52 encoding is front-end, the session emits `Clipboard` or uses the test writer. |
-| `automation.go` | app | Protocol client. |
-| `mcp.go` | app | Protocol client. |
-| `ui.go` | frontend + engine | Console/dialog drawing frontend; console data and JS state engine. |
-| `find.go` | engine + frontend | Search engine; find bar frontend. |
-| `hints.go` | engine + frontend | Hint computation engine; overlay drawing frontend. |
-| `reader.go` | engine | Article extraction. |
-| `dark.go` | `internal/engine/dark.go` | Palette remap. |
-| `js*.go` | `internal/engine` | Runtime, DOM, events, compat, stubs, modules, web APIs, Intl. |
-| `js_compat.go` | browser bridge | Runtime/import-task aliases and constructor. |
-| `js_life.go` | browser | `startJS`, stop, timer loop, import completion; the session/shell orchestration. |
-| `js_host.go` | browser bridge | `browserJSHost` adapter for the engine contract. |
-| `term_unix.go`, `term_linux.go`, `term_darwin.go`, `term_stub.go` | frontend | Terminal modes, size and cell pixels. |
-| `signals_unix.go`, `signals_other.go` | frontend | Resize and quit signals. |
-| `cli.go` | app + frontend | Flags and wiring app; terminal event loop frontend. |
+| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup and `Version` until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
+| `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Chrome/overlay/console/find/menu/dialog drawing, prompts and shell keys are frontend. Page hit testing, field editing, search results and hint computation consume engine state. |
+| `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
+| `browser_forms.go`, `browser_selection.go`, `reader.go` | engine | Form state, selection and reader extraction are page content. |
+| `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
+| `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. Move image/SVG/about/PDF orchestration into the engine session. |
+| `placement.go` | engine | Image placement encoding and the bounded immutable PNG cache; it feeds the frame contract. |
+| `dump_transport.go`, `automation_transport.go` | app | One-shot dump/PNG handler and MCP client; no engine state. |
+| `automation.go` | engine | Headless automation is the engine-side implementation. |
+| `mcp.go` | app/frontend | MCP JSON-RPC client; consumes the transport, not engine internals. |
+| `config.go` | app + engine | Host token, engine form markup and the app/session apply path. |
+| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frontend_bridge.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go`, `pages.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps only inline-SVG loading until that moves; `pages.go` is a wrapper. |
+| `internal/engine/*`, `internal/host/*`, `internal/frontend/*`, `internal/protocol/*`, `dark.go`, `js*.go` | done | Already on their final side; responsibilities are in [architecture.md](architecture.md#current-layout-during-migration). |
 
 ## 4. Phases
 
@@ -207,18 +166,19 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | --- | --- | --- | --- | --- |
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done | `-dump`/`-png` byte-identical; paint path has no ANSI |
-| 2 | Chrome and state ownership | 2–3 weeks | Partial | Shell values and the live loop exist, but chrome, menus, prompts, dialogs and navigation state are still composed and handled in the browser/session side |
-| 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session and its 289 methods are still `internal/browser.Browser`, not `Session` |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR, CORS, config token and about-page rendering are split; engine cannot open sockets or parse cookies. |
+| 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, content-rect values, shell-loop split and chrome display-list layer exist; chrome, menus, prompts, dialogs and navigation state are still composed and handled in the browser/session side |
+| 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session split and `Browser` → `Session` rename remain |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR, CORS, config token and about-page rendering are split; engine cannot open sockets or parse cookies. Loader orchestration moves with 3c. |
 | 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership and the restart hook remain |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
 Phase 3 under D19.
 
-\*\* Phase 2 is partial: shell values, content-rect geometry and the live
-event loop exist, but chrome/overlay composition and navigation state are still
-session-side. Dialog request/response messages are still pending.
+\*\* Phase 2 is partial: the `State` snapshot, content-rect values and the
+live session loop exist. Chrome/overlay composition, shell key routing,
+dialogs and navigation state are still session-side. `protocol.Dialog` and
+`DialogResult` exist in the codec but are not wired to production code.
 
 ### Phase 0 — Contract and baseline
 
@@ -250,10 +210,12 @@ session-side. Dialog request/response messages are still pending.
 - [x] Move `Grid.Lines`/`LinesMono`, gfx and kitty/iTerm2 placement out of
       `render.go`; ANSI/PNG and native placement now live in `internal/frontend`.
 - [x] Move terminal capability detection out of `render.go` to
-      `term_detect.go`; the paint path no longer imports `os`.
+      `internal/frontend/term_detect.go`; the paint path no longer imports
+      `os`.
 - [x] Reuse two frame buffers. `BenchmarkBoundaryContentFrame` is 0 B/op;
       ANSI string building still allocates as before.
-- [x] Keep the existing row diff on the front-end side (`flushGrid`).
+- [x] Keep the row diff in the front end (`frontend.Presenter`); `flushGrid`
+      remains only for tests and automation.
 - [x] Frame tests: content-blit equivalence, protocol round-trip, cell-size
       guard, dump/PNG hashes.
 
@@ -262,14 +224,20 @@ session-side. Dialog request/response messages are still pending.
 - [~] Front end stacks a `Chrome` layer for normal frames, but the browser
       still composes toolbar/footer/overlay cells. Prompts, notices, dialogs,
       console, menus and the find bar are still drawn and owned session-side.
-- [x] The `State` snapshot exists (`stateMessage`) with URL, title,
-      loading/progress, scroll/max-scroll, page kind and mode flags. Emission
-      waits for the Phase 5 loop (D20).
-- [x] The content rectangle is shell-owned (`contentRect`, `headerRows`,
-      `viewport`); the engine receives only its size.
-- [x] Page keys are forwarded; app keys, prompts, menus and quit are local
-      (`handleShellKey` / `handlePageKey`).
-- [ ] JS dialogs become request/response messages. They still block inside the session and read commands directly (D20).
+- [x] The `State` snapshot exists (`stateMessage`), is emitted by `Serve`, and
+      is consumed by `frontend.SessionLoop`.
+- [~] The content rectangle exists (`contentRect`, `headerRows`, `viewport`),
+      but it still lives in the browser and the engine computes it from the
+      terminal size. Move the geometry to the front end.
+- [~] The shell/page key split exists inside the session
+      (`handleShellKey` / `handlePageKey`); every key still crosses the seam.
+      Move shell keys and prompts to the front end.
+- [ ] JS dialogs become request/response messages. They still block inside the
+      session and read commands directly (D20).
+- [ ] The chrome contract carries prompt, find, menu, console, hint, dialog,
+      download/notice, selection and image-progress state.
+- [ ] Back/forward history, scroll restore, `about:history` data and the
+      download/curl hint move to the front end (D54).
 - [x] Engine overlays are clipped to the content grid; chrome and modals
       compose above it.
 - [x] Automation still drives the same commands; full suite green.
@@ -287,9 +255,7 @@ session-side. Dialog request/response messages are still pending.
       PNG dimensions.
 - [x] Dump and PNG hashes unchanged.
 
-Next: 3b, the engine package.
-
-### Phase 4a — Session/host interfaces (partial)
+### Phase 4a — Session/host interfaces (done)
 
 - [x] `jsHost` interface and `browserJSHost` adapter; `jsRuntime` holds the
       interface, not `*Browser`.
@@ -301,9 +267,10 @@ Next: 3b, the engine package.
       remaining browser network types from it; `JSHost` now exposes a value
       broker, not `*http.Client`.
 - [x] Move `js*.go` to `internal/engine`; the adapter stays in the browser.
-- [~] Split `Loader` into the host package; raw fetch is host, while
-      `about:`/form/config and image/SVG orchestration still sit in the
-      browser.
+- [x] Split `Loader` so raw fetch, cache, cookies and policy are host-owned;
+      `about:`/form/config rendering is engine-owned. Image/SVG/PDF
+      orchestration remains in the Loader and moves with the engine session in
+      3c.
 
 ### Phase 3b — Extract `internal/engine` (partial)
 
@@ -311,10 +278,10 @@ Next: 3b, the engine package.
       `internal/engine`.
 - [x] Move calc/min/max/clamp parsing, viewport/rem/lh resolution and font-size
       parsing.
-- [x] Keep browser aliases (`style_units_compat.go`) and the
-      `resolveStyleUnits` method in the browser until `Style` moves.
-- [x] Engine import gate is active; engine imports only the standard library
-      today.
+- [x] Keep browser aliases (`style_units_compat.go`) during the move; the
+      style primitives now live in the engine.
+- [x] Engine import gate is active; the engine imports `protocol` and approved
+      vendored modules, with no `net/http`, `net` or `syscall`.
 - [x] Move `html.go` and `Node`.
 - [x] Move `Style`, sheets, selectors, media queries and the UA sheet.
 - [x] Move the engine tests; keep layout-dependent style tests in the browser.
@@ -322,15 +289,19 @@ Next: 3b, the engine package.
 - [x] Move paint and the content frame; keep native-image/terminal encoding in the browser until Phase 5.
 - [x] Move the PDF parser and document model (3b4a).
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
-- [ ] Move the session and rename `Browser` to `Session`; still `internal/browser`, 289 methods.
-- [ ] Remove the browser wrappers; ten `*_compat.go`/bridge files remain.
+- [ ] Split the session: page/content state to `engine.Session`, chrome and
+      navigation to the front end; rename `Browser` → `Session`. Still
+      `internal/browser`, 289 methods.
+- [ ] Remove the browser wrappers, aliases and adapters; the ownership table
+      lists them.
 
 ### Phase 3 — Extract `internal/engine`
 
 - [x] 3a: HTML, style, layout, paint, find, selection, hints, reader and dark
       moved, with aliases.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
-- [ ] 3c: move `Browser` and all its methods, then rename to `Session`.
+- [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
+      navigation to the front end), then rename to `Session`.
 - [ ] Move the remaining whole-app tests to seam tests in `app`.
 - [ ] Remove aliases and bridges.
 - [x] Engine import gate rejects `net/http`; the engine has no `net/http`
@@ -340,9 +311,9 @@ Next: 3b, the engine package.
 
 - [x] Split `Loader.Load` into host `Fetch` and engine decompression/charset/
       parse; page assembly is in `internal/engine/page_loader.go`.
-- [~] Cache, cookies, certs, settings, request log, network policy and raw
+- [x] Cache, cookies, certs, settings, request log, network policy and raw
       fetch moved to `internal/host`. Global visited history and download
-      detection/reporting have no host implementation yet.
+      history are deliberately not host state (D54).
 - [x] Page, subresource, image, script, module, MCP and JS `fetch`/XHR
       requests are brokered. The host builds the HTTP request, applies CORS,
       credentials, redirect, mixed-content and private-network policy, and logs
@@ -350,8 +321,9 @@ Next: 3b, the engine package.
 - [x] Host enforces redirect/size/private-network/mixed-content policy and
       CORS through `JSFetch` and its transport.
 - [x] Inline SVG and image decoding stay in the engine.
-- [ ] `about:` pages render in the engine from host-provided data; `pages.go`,
-      the config token and view options are still in `internal/browser`.
+- [x] `about:` pages render in the engine from host/session data; the config
+      token is `host.ConfigToken`. The session still collects history/settings
+      data and applies submitted values.
 - [x] Move MCP to a protocol client; the automation engine is its handler.
 - [x] Move `document.cookie` parsing to the host broker; the engine receives
       name/value pairs and hands raw writes to the adapter.
@@ -371,7 +343,8 @@ Next: 3b, the engine package.
 - [~] Split chrome presentation: normal frames are content-only and the front
       end stacks a `Chrome` layer; overlays and the console use the full-frame
       fallback. The engine still composes the chrome cells, so semantic chrome
-      ownership is still pending.
+      ownership is still pending. Moving chrome also requires the state
+      contract and shell-input move in Phase 2.
 - [x] Move native image placement to the front end: encode `ImagePlacement`
       into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
       output to `internal/frontend/gfx.go`. Frames carry placements in every
@@ -400,87 +373,77 @@ Next: 3b, the engine package.
 
 ### What remains to close the rewrite
 
-These are the remaining gates, in dependency order. The transport, frame
-contract, dump/PNG/MCP paths and native image output are already done.
+The host broker, codec/transport, dump/PNG/MCP paths, native image output,
+terminal input and the live session loop are done. The remaining work is the
+trusted-shell split, then Phase 6. Dependency order:
 
-**A. Host broker (the main correctness gap)**
+**A. Shell state and chrome contract**
 
-- [x] Move JS `fetch`/XHR request construction and CORS decision to
-      `host.JSFetch`; the engine passes `protocol.FetchRequest` values.
-- [x] Move `document.cookie` parsing to the host adapter; the engine receives
-      name/value pairs and passes raw writes through.
-- [x] Replace `*http.Client`, `*http.Cookie` and `net/http` in the engine
-      contract with broker types; the engine no longer imports `net/http`.
-- [x] Make the dependency test reject `net/http` and its subpackages on the
-      engine side.
-- [x] Global visited history and download reporting are **not** host state;
-      D54 keeps session history and the download/curl hint where they are.
-- [x] `about:` rendering and the config token are split: engine templates, host
-      token, session data collection/apply. **Workstream A is complete.**
+- [ ] Decide and implement the chrome snapshot: extend `protocol.State` or add
+      overlay messages for prompt, find, menus, console, hints, dialogs,
+      download/notice, selection and image progress.
+- [ ] Move shell key routing to the front end; send only page keys and
+      content-rect mouse events to the engine.
+- [ ] Move toolbar, footer, scrollbar, overlays, console, find bar and menus to
+      `internal/frontend`; delete `Browser.drawChrome`, `presentComposed`, the
+      `protocol.Chrome` cell layer and the full-screen console fallback.
+- [ ] Move content-rect geometry (`headerRows`, `viewport`, `contentRect`) to
+      the front end; the engine receives width/height only.
 
-**B. Shell, chrome and app split (the remaining architecture)**
+**B. Dialogs and navigation**
 
-- [ ] Create `internal/app`: `Run`, flags, wiring, the interactive event loop
-      and transport construction.
-- [ ] Move terminal raw mode, key/mouse decoding, resize/quit signals and the
-      CLI loop to `internal/frontend`.
-- [ ] Move the session state to its final side and rename
-      `Browser` → `Session`; the current type is still 289 methods in
-      `internal/browser`.
-- [ ] Make chrome semantic: the front end composes toolbar, footer, prompts,
-      menus, console, find bar and dialogs from `State`/overlay messages; the
-      engine stops sending chrome cells. The current `Chrome` event is a
-      display-list bridge and a compromised engine can still forge it.
-- [ ] Remove the full-screen overlay/console fallback only after the front end
-      owns their layout and input.
+- [ ] Wire `protocol.Dialog`/`DialogResult` so JS alerts, confirms and prompts
+      are front-end modals; delete `Browser.runDialog` command reads.
+- [ ] Move back/forward history, scroll restore, `about:history` data and the
+      download/curl hint to the front end; keep the page cache memory-only.
+- [ ] Remove back/forward from the engine `App` actions.
 
-**C. Phase 6 cleanup**
+**C. Session split and app wiring**
 
-- [ ] Remove the ten `*_compat.go`/bridge files and the dead aliases after the
-      app/session move.
-- [ ] Rewrite the stale "Current layout" and file-ownership rows in
-      `architecture.md`, update `AGENTS.md` §4 exceptions, and re-check
-      `README.md`/`limitations.md`.
-- [ ] Wire the 60 s codec fuzz into CI/nightly and record final baseline
+- [ ] Split `Browser`: page/content state → `engine.Session`; chrome,
+      navigation, prompts, menus, console and dialogs → front end.
+- [ ] Move Loader image/SVG/about/PDF orchestration into the engine session;
+      the host keeps fetch, cache, cookies, settings and policy.
+- [ ] Rename `Browser` → `Session` and remove `internal/browser`.
+- [ ] Move `browser.Execute`, `RunOptions` and mode dispatch into
+      `internal/app`; `app` constructs the host, engine session, frontend and
+      transport directly.
+- [ ] Tighten `protocol/deps_test.go`: `app` → `engine`, `host`, `frontend`,
+      `protocol`; no `browser` package.
+
+**D. Tests and Phase 6**
+
+- [ ] Move whole-app tests to seam tests in `app`; keep engine, layout and PDF
+      fixtures with their packages and update the documented paths.
+- [ ] Remove the browser-side shims, adapters and dead aliases.
+- [ ] Wire the 60 s codec fuzz into CI or nightly; record the Phase 6 benchmark
       deltas.
+- [ ] Update `AGENTS.md`, `architecture.md` and, only if user-visible behavior
+      changed, `README.md` and `docs/agents/limitations.md`.
 - [ ] Delete this tracker and its links.
 
-## 5. Protocol draft
+## 5. Protocol
 
-`internal/protocol` is canonical once created; this list is the starting
-inventory.
-
-**Front end → session:** `Init` (viewport, cell pixels, capabilities, flags),
-`Navigate`, `Resize`, `Scroll`, `Key`, `Mouse`, `Focus`, `Command`
-(back/forward/reload/zoom/dark/reader/find/hints/select/copy), `ClientError`,
-`Automation`, `Abort`, `Shutdown`.
-
-**Session → front end:** `Frame` (content cells + placements), `Chrome` (header/footer rows), `State`, `Quit`,
-`Links`, `FindResults`, `SelectionText`, `Dialog`, `Clipboard`,
-`NavigateRequest`, `Download`, `Console`, `Crash`.
-
-**Session → host (broker):** `Fetch`, `Cancel`, `GetCookie`, `SetCookie`,
-`Settings`, `LogRequest`, `ReportDownload`.
-
-**Host → front end:** `RequestLog`, `SettingsChanged`.
-
-Limits to define: max viewport cells, max metadata entries, max text bytes,
-max encoded image bytes, max message size, frame rate/backpressure.
+`internal/protocol` is canonical. The message inventory lives in
+`messages.go`, the frame and cell types in `types.go`, the ports in `ports.go`,
+the in-process transport in `transport.go`, and the stream transport in
+`stream.go`. Limits are `DefaultLimits`. Do not maintain a second inventory
+here; add a message with its codec round-trip, validation bound and transport
+test.
 
 ## 6. Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| `Browser` has 268 methods; Go cannot split its methods across packages | Move leaf subsystems first, then the whole shell in one batch; use type aliases between batches. |
-| `Loader.Load` returns a parsed `*Page` | Split network/parse early in Phase 4; update about pages, PDF detection, error pages and downloads together. |
-| Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options; required before any multi-session work. |
-| Automation/MCP are 2,000+ lines of direct state access | Rewrite as a protocol client; count it in Phase 4. |
-| Console reads runtime internals directly | Snapshot events with caps; no direct struct access from the front end. |
-| Test migration (21k lines) | Move tests with their files; build an `app` seam harness; keep layout fixtures on the engine side. |
-| Overlay composition | Decide modal ownership in Phase 2; clip engine overlays to the content rect. |
-| Silent visual drift | `-dump` and `-png` hashes plus frame goldens at every phase. |
-| Performance drift | Reusable buffers, no per-frame allocations, metadata only on layout changes, benchmarks at every phase. |
-| Scope creep | This file's non-goals are binding; new ideas go to `bin/todo.md`, not into B. |
+| `Browser` is a 289-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
+| Chrome state is spread across Browser fields | Define the `State`/overlay contract before moving input or drawing. Move shell key routing and chrome composition together so there is one source of truth. |
+| Loader mixes host fetch, engine assembly and session orchestration | Split orchestration with the session; keep the per-request host fetcher snapshot (D40). |
+| Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options during app wiring; required before any multi-session work. |
+| Test migration (20k lines in `internal/browser`) | Move tests with their files; keep fixture goldens with the engine; build an app seam harness for whole-app cases. |
+| Overlay composition | Move modal/chrome layout and input together; keep engine overlays clipped to the content rect until then. |
+| Silent visual drift | `-dump` and `-png` hashes plus frame goldens and PTY checks at every batch. |
+| Performance drift | Reusable buffers, no per-frame allocations, metadata only on layout changes, benchmark at every phase. |
+| Scope creep | The non-goals are binding; new ideas go to `bin/todo.md`, not into B. |
 
 ## 7. Performance budget
 
@@ -500,13 +463,14 @@ page is `boundaryBaselineHTML()` in
 | Synthetic parse | 0.61–0.78 ms, 1.00 MB, 6 101 allocs | no regression |
 | Layout+paint+ANSI, 100×35 | 12.4–13.3 ms, 19.93 MB, 56 858 allocs | ≤5% regression |
 | Full draw, forced repaint | 898–905 µs, 716 078 B/op, 28 213 allocs | no regression |
-| Idle frames/s | pending Phase 5 | 0 |
+| Idle frames/s | 0 (0 CPU ticks / 5 s) | 0 |
 
 The codec benchmark is `BenchmarkCodecFrame` in `internal/protocol`; the parse,
 paint, draw and content-frame benchmarks are in
 `internal/browser/boundary_baseline_test.go`. A later process split is expected
 to add a second Go runtime and IPC; those numbers are recorded separately and
-are not B's budget.
+are not B's budget. The per-phase sections below are historical; the Phase 6
+summary is still to be recorded after the shell split.
 
 ### Phase 1 deltas
 
@@ -919,10 +883,17 @@ work back.
 ## 10. Completion and deletion checklist
 
 - [ ] Every phase checked, every gate green.
+- [ ] Chrome, dialogs and navigation state are front-end-owned; the engine
+      cannot emit header, footer or dialog cells.
+- [ ] `Browser` is split and renamed; `internal/browser` is gone.
+- [ ] `app` constructs the session directly and the dependency test forbids a
+      `browser` package.
+- [ ] Whole-app tests and fixtures moved to their final packages.
 - [ ] Durable rules folded into `AGENTS.md` §4 and
       `docs/agents/architecture.md`; no rule exists only here.
 - [ ] Remove the routing row in `AGENTS.md` §1.
 - [ ] Remove the link in `architecture.md`.
+- [ ] 60 s fuzz runs in CI or nightly; final benchmark deltas recorded.
 - [ ] Delete this file with `git rm`.
 - [ ] One-line commit message records the completion.
 
@@ -969,4 +940,7 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5g | Replaced the direct event channel with a bounded coalescing outbox: newest frame/state wins, one-shot events keep order, Quit/Crash drop stale frames first. Added a coalescing regression test; PTY console/kitty smoke. | `go test ./...`, `go vet`, full `-race`, coalescing test, PTY smoke, dump/PNG hashes | Move chrome composition, then socket transport |
 | 2026-11-22 | 5h | Normal frames are content-only with a `Chrome` header/footer layer; front end stacks it, overlays and console keep full-screen fallback; presenter composition and chrome-change resets; PTY chrome/console/overlay/kitty checks. | `go test ./...`, `go vet`, full `-race`, composed-repaint benchmark, PTY checks, dump/PNG hashes | Semantic chrome ownership, then socket transport |
 | 2026-11-22 | 5i | Added the stream transport: `ReadCommand`/`ReadEvent`, `ServeStream` with coalescing outbox and direct abort handling, and `DialStream` client; tested navigation, abort, bad-frame repair and close over `net.Pipe`. Both codec fuzz targets ran 60 s with no findings. | `go test ./...`, `go vet`, full `-race`, stream transport tests, 60 s codec fuzz | Semantic chrome ownership, then Phase 6 cleanup |
+| 2026-11-22 | 5j–6b | Host broker closed: JS `fetch`/XHR and `document.cookie` use `host.JSFetch` and brokered cookie values; built-in/about pages render in the engine; the config token moved to `host.ConfigToken`; Phase 4 closed. | `go test ./...`, `go vet`, full `-race`, host/JS/page tests, dump/PNG hashes | Terminal front end, then app |
+| 2026-11-22 | 6c | Terminal raw mode, capability detection, key/mouse decoding, resize/quit signals and OSC 52 clipboard moved to `internal/frontend`; mouse types aliased; `Clipboard` events added. | `go test ./...`, `go vet`, full `-race`, frontend terminal tests, dump/PNG hashes | Create app and move the loop |
 | 2026-11-22 | 6d | Created `internal/app` for flags/validation/dispatch; `cmd/mob3` calls `app.Run`; moved the live session event loop and crash/chrome/clipboard handling to `frontend.SessionLoop`; browser `Execute(RunOptions)` retains session setup. CLI tests moved to app. | `go test ./...`, `go vet`, full `-race`, app/frontend tests, version/help smoke, dump/PNG hashes | Move session construction/type, then semantic chrome ownership |
+| 2026-11-22 | docs | Corrected and consolidated this tracker: status, phase checklists, file ownership, remaining work, protocol and risk sections now match the landed app/frontend split. No code change. | `go test ./...`, `go vet`, `gofmt`, `git diff --check` | Shell state/chrome contract, then the session split |

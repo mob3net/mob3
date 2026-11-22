@@ -51,8 +51,8 @@ func (b *Browser) contentRect() contentRect {
 }
 
 // stateMessage builds the trusted shell snapshot from page state. It is the
-// payload of the future State event; the front end never derives these values
-// from page text itself.
+// payload of the State event; the front end never derives these values from
+// page text itself.
 func (b *Browser) stateMessage() protocol.State {
 	st := protocol.State{
 		Status:    b.status,

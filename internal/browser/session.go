@@ -13,9 +13,9 @@ import (
 // deferred images and imports are serviced here, and the resulting shell state
 // leaves as events.
 //
-// Presentation is still owned by the engine in this batch: draw writes the
-// terminal frame directly while the front end only drives input and lifecycle.
-// Moving the frame and chrome to the front end is the next Phase 5 slice.
+// The front end owns text and native placement presentation; this loop emits
+// frames and state. The engine still composes the chrome cells and handles
+// shell dialogs until the chrome-ownership slice lands.
 func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
 	var jsTimer, progressTimer *time.Timer
 	defer func() {

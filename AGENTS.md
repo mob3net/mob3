@@ -194,10 +194,12 @@ published by the Pages build.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])` and
   exits with its status.
-- `internal/app/` — flag parsing, validation and dispatch into the session.
-- `internal/browser/` — package `browser` with the session/engine setup and
-  tests until the boundary migration completes. Nothing under `internal` is imported
-  from outside this module.
+- `internal/app/` — flag parsing, validation and dispatch into the session
+  (still `browser.Execute` during the migration).
+- `internal/browser/` — package `browser` with session construction, the
+  289-method `Browser`, chrome/dialogs/navigation and tests until the boundary
+  migration completes. Nothing under `internal` is imported from outside this
+  module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),
@@ -209,10 +211,13 @@ published by the Pages build.
   imports are `app` → the other four and each of them → `protocol`; the front
   end and the host never import `engine`, and `engine` never imports
   `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
-  The front end never names an engine type, and `internal/protocol` is
+  During the migration it also allows `app` to import `internal/browser` and
+  leaves `internal/browser` unrestricted; both exceptions end with the session
+  split. The front end never names an engine type, and `internal/protocol` is
   canonical for the message set. The engine no longer imports `net/http`:
-  JS `fetch`/XHR and cookie parsing use the host broker. The app/shell still
-  lives in `internal/browser`; the tracker records the remaining split.
+  JS `fetch`/XHR and cookie parsing use the host broker. Session construction,
+  chrome, dialogs and navigation still live in `internal/browser`; the terminal
+  loop is `frontend.SessionLoop`. The tracker records the remaining split.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package

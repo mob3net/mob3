@@ -10,7 +10,7 @@ import (
 )
 
 // LoopState is the presentation state the session loop updates as events
-// arrive. It is exported for tests and for a future app wiring layer.
+// arrive. It is exported for tests and for the app wiring layer.
 type LoopState struct {
 	Scroll    int
 	Native    bool
