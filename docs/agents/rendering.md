@@ -64,11 +64,13 @@ agreement, the non-negotiable constraints and the change protocol.
   badges stay at the intended edge.
   `z-index` orders positioned boxes at paint time: the nearest positioned
   ancestor's layer is inherited, and fragments sort by z-index within the
-  scrolling page, sticky and fixed phases. Hit testing uses the same layer, so
-  the overlay that paints on top also receives the click. This is a flat
-  approximation: nested stacking contexts, negative layers behind a parent's
-  background, and contexts created by `opacity`, `transform` or flex/grid
-  items are not modelled. Relative
+  scrolling page, sticky and fixed phases. Hit testing ranks a node by the
+  highest `z-index` among its positioned ancestors, so a `position:relative;
+  z-index:0` child inside a fixed `z-index:9999` modal is not masked by
+  lower-z positioned content in the page below; the fixed phase already paints
+  that modal on top. This is still a flat approximation: nested stacking
+  contexts, negative layers behind a parent's background, and contexts created
+  by `opacity`, `transform` or flex/grid items are not modelled. Relative
   offsets are applied to block boxes only (inline relative is ignored).
 - **Overlay links:** an empty anchor with an absolute or fixed box contributes
   an invisible `fragLink` rectangle, so card overlay links are clickable and

@@ -17,7 +17,8 @@ Works well:
   scripted measurements work before the next layout (used by slide-out menus).
 - Events: Event/CustomEvent/UI/Mouse/Keyboard/Focus/Input/Pointer/Error/
   Message/Progress constructors, `createEvent`, bubbling `dispatchEvent`,
-  `preventDefault`, `element.click()`.
+  `preventDefault`, `composedPath` on scripted and browser-generated events,
+  `element.click()`.
 - Network: `fetch`, `Headers`/`Request`/`Response`, `XMLHttpRequest`, cookies,
   same-origin and simple CORS cross-origin requests, `URL`/`URLSearchParams`.
 - Storage: in-memory `localStorage`/`sessionStorage` (`getItem`/`setItem`/

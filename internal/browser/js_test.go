@@ -1835,6 +1835,20 @@ func TestStopPropagationKeepsSiblingListeners(t *testing.T) {
 	}
 }
 
+func TestNativeEventComposedPath(t *testing.T) {
+	page := newJSPage(`<html><body><div id="anc"><button id="b">x</button></div></body></html>`,
+		`document.getElementById("b").addEventListener("click", function (e) {
+			var p = e.composedPath();
+			document.title = p[0].id + ":" + p.includes(document) + ":" + (p.length >= 4);
+		 });
+		 document.getElementById("b").click();`)
+	b := NewBrowser(40, 10)
+	b.startJS(page)
+	if page.Title != "b:true:true" {
+		t.Fatalf("composedPath = %q, want b:true:true", page.Title)
+	}
+}
+
 func TestStopImmediatePropagationSkipsSiblingListeners(t *testing.T) {
 	page := newJSPage(`<html><body><button id="b">x</button></body></html>`,
 		`var log = [];

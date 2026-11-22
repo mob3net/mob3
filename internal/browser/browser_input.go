@@ -566,15 +566,20 @@ func (b *Browser) nodeAt(x, y int) *Node {
 }
 
 // overlayLayer ranks positioned boxes above normal flow for hit testing.
+// A nested positioned box must not mask the high-z overlay that contains it:
+// a relative z-index:0 dialog child inside a fixed z-index:9999 modal still
+// paints with the modal, above ordinary positioned content.
 func overlayLayer(n *Node) int {
+	layer := 0
 	for p := n; p != nil; p = p.Parent {
-		if p.Style != nil && isPositionedStyle(p.Style) {
-			// Positioned content is an overlay; a higher z-index wins among
-			// overlapping overlays, and negative z falls behind normal flow.
-			return 2 + p.Style.ZIndex
+		if p.Style == nil || !isPositionedStyle(p.Style) {
+			continue
+		}
+		if l := 2 + p.Style.ZIndex; l > layer {
+			layer = l
 		}
 	}
-	return 0
+	return layer
 }
 
 func nodeDepth(n *Node) int {

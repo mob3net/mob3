@@ -584,6 +584,59 @@ func TestStickyDisabledKeepsNormalFlow(t *testing.T) {
 // TestZIndexPaintOrder checks that positioned boxes paint in z-index order
 // even when the higher layer comes first in the DOM, and that hit testing
 // follows the visible layer.
+// TestNestedZIndexHitTesting pins that a positioned child inside a
+// high-z fixed overlay cannot be masked by a lower-z positioned sibling in the
+// normal flow.
+func TestNestedZIndexHitTesting(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.under { position: relative; z-index: 2; }
+	.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; background: rgba(0,0,0,0.5); }
+	.content { position: relative; z-index: 0; margin: 2px; }
+	button { display: block; }
+	</style></head><body>
+	<div class="under">UNDER</div>
+	<div class="modal"><div class="content"><button id="close">CLOSE</button></div></div>
+	</body></html>`)
+	ly := BuildLayoutViewportDeadline(root, fixtureAuthorRules(root), 40, 10, false, time.Time{})
+	var btn, under *Node
+	for _, n := range root.FindAll(func(n *Node) bool { return n.Type == ElementNode }) {
+		switch n.Attr("id") {
+		case "close":
+			btn = n
+		}
+		if n.Attr("class") == "under" {
+			under = n
+		}
+	}
+	if btn == nil || under == nil {
+		t.Fatal("test nodes missing")
+	}
+	if overlayLayer(btn) <= overlayLayer(under) {
+		t.Fatalf("button layer %d, under layer %d", overlayLayer(btn), overlayLayer(under))
+	}
+	b := NewBrowser(40, 12)
+	b.page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
+	b.layout = ly
+	hit := false
+	for i := range ly.Frags {
+		f := &ly.Frags[i]
+		if f.Kind != fragText || f.Node == nil {
+			continue
+		}
+		if f.Node != btn && !isDescendant(f.Node, btn) {
+			continue
+		}
+		if n := b.nodeAt(f.X, f.Y); n == btn {
+			hit = true
+		}
+		break
+	}
+	if !hit {
+		t.Fatal("hit testing did not reach the button inside the overlay")
+	}
+}
+
 func TestZIndexPaintOrder(t *testing.T) {
 	root := ParseHTML(`<html><head><style>
 	body { margin: 0; }

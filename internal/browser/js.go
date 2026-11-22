@@ -1288,6 +1288,7 @@ func (j *jsRuntime) removeNodeListener(n *Node, typ string, fnVal sobek.Value) {
 type jsEvent struct {
 	typ       string
 	target    sobek.Value
+	path      []sobek.Value
 	prevented bool
 	// stopped stops propagation to ancestors; immediate also stops the
 	// remaining listeners on the element that is currently handling the event.
@@ -1317,6 +1318,16 @@ func (j *jsRuntime) eventObject(ev *jsEvent) *sobek.Object {
 		ev.immediate = true
 		return sobek.Undefined()
 	}))
+	_ = o.Set("composedPath", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
+		if len(ev.path) == 0 {
+			return j.vm.NewArray(ev.target)
+		}
+		items := make([]interface{}, len(ev.path))
+		for i, v := range ev.path {
+			items[i] = v
+		}
+		return j.vm.NewArray(items...)
+	}))
 	return o
 }
 
@@ -1344,6 +1355,12 @@ func (j *jsRuntime) fireNodeEvent(n *Node, typ string) bool {
 	}
 	j.eventErr = false
 	ev := &jsEvent{typ: typ, target: j.wrap(n)}
+	for p := n; p != nil; p = p.Parent {
+		if p.Type == ElementNode {
+			ev.path = append(ev.path, j.wrap(p))
+		}
+	}
+	ev.path = append(ev.path, j.docObj, j.winObj)
 	evObj := j.eventObject(ev)
 	for p := n; p != nil && !ev.stopped; p = p.Parent {
 		if p.Type != ElementNode {
@@ -1374,7 +1391,7 @@ func (j *jsRuntime) fireDocumentEvent(typ string) {
 	if j == nil || j.stopped {
 		return
 	}
-	ev := &jsEvent{typ: typ, target: j.docObj}
+	ev := &jsEvent{typ: typ, target: j.docObj, path: []sobek.Value{j.docObj, j.winObj}}
 	evObj := j.eventObject(ev)
 	j.callList(j.docListeners, typ, j.docObj, evObj, ev)
 	if !ev.stopped {
@@ -1386,7 +1403,7 @@ func (j *jsRuntime) fireWindowEvent(typ string) {
 	if j == nil || j.stopped {
 		return
 	}
-	ev := &jsEvent{typ: typ, target: j.winObj}
+	ev := &jsEvent{typ: typ, target: j.winObj, path: []sobek.Value{j.winObj}}
 	evObj := j.eventObject(ev)
 	j.callList(j.winListeners, typ, j.winObj, evObj, ev)
 	if typ == "load" && j.winOnLoad != nil {
