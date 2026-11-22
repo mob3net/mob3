@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 4b in progress (cache, cookies, request log, settings in the host).**
+Status: **Phase 4b in progress (cache, cookies, request log, settings, certs in the host).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -67,6 +67,7 @@ network destination.
 | D31 | 2026-11-22 | Move the session resource cache and the whole cookie jar (including HttpOnly/document.cookie policy) into `internal/host`; keep browser shims for the existing Loader and tests. | These are host-owned session state and the first pieces that can leave the browser without touching parsing or the draw path. HTTP/TLS, settings and the request log follow. |
 | D32 | 2026-11-22 | Move the console request log (`RequestLog`, `Record`, generation/start/finish/snapshot) into `internal/host`; Loader delegates. | The log is host-owned accounting and independent of parsing. HTTP/TLS, settings and cert transport follow. |
 | D33 | 2026-11-22 | Move user-agent, search template and image pixel caps into `host.Settings` with one mutex; Loader delegates through its existing methods. Flags and view options stay on the session for now. | Settings are host policy shared by navigation and image workers; the mutex removes the old ad-hoc locking. TLS/HTTP transport and certs follow. |
+| D34 | 2026-11-22 | Move the TLS trust-store selection, embedded CA pool and stable `CertTransport` into `internal/host`; keep `newHTTPTransport` and the dial guard in the browser until the network broker. | The cert store is host policy and independent of parsing. The transport construction still needs the browser’s local-network dial guard, so it remains for the next slice. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -133,6 +134,7 @@ which part goes where.
 | `cookie` section of `fetch.go` | `internal/host/cookies.go` | Cookie jar, HttpOnly/document.cookie policy and the storage-inspector view; browser shim. |
 | `requestRecord`/request-log section of `fetch.go` | `internal/host/requests.go` | Console request log and page-generation accounting; Loader delegates. |
 | Loader settings fields | `internal/host/settings.go` | User agent, search template and image pixel caps behind one lock. |
+| `certs.go` | `internal/host/certs.go` | Cert source selection, embedded CA pool and stable transport; browser keeps `newHTTPTransport`/dial guard. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -173,7 +175,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4b-3) | Engine cannot open sockets or read cookies |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4b-4) | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -586,6 +588,18 @@ No draw-path code changed.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Full test suite | pass | pass | no change |
 
+### Phase 4b-4 deltas
+
+The TLS trust store and stable transport wrapper moved to `internal/host`.
+No draw-path code changed.
+
+| Metric | Before 4b-4 | After 4b-4 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | unchanged | unchanged | flat |
+| Content paint+blit | unchanged | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -660,3 +674,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4b-1 | Session resource cache and cookie jar moved to `internal/host`; browser shims for Loader/tests; all tests and hashes green | `go test ./...`, `go vet`, `-race` on cookie/cache/frame, dump/PNG hashes | 4b-2: HTTP/TLS/settings |
 | 2026-11-22 | 4b-2 | Console request log moved to `internal/host`; Loader delegates; tests and hashes green | `go test ./...`, `go vet`, `-race` on request/cache/frame, dump/PNG hashes | 4b-3: HTTP/TLS/settings |
 | 2026-11-22 | 4b-3 | User agent, search template and image caps moved to `host.Settings`; Loader delegates and tests use accessors; all green | `go test ./...`, `go vet`, `-race` on config/image/frame, dump/PNG hashes | 4b-4: TLS/HTTP transport |
+| 2026-11-22 | 4b-4 | Cert source selection, embedded CA pool and `CertTransport` moved to `internal/host`; browser keeps transport construction/dial guard; all tests and hashes green | `go test ./...`, `go vet`, `-race` on cert/config/frame, dump/PNG hashes | 4b-5: HTTP client/dial guard |

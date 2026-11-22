@@ -338,7 +338,7 @@ func (l *Loader) imageCap() (int, int)         { return l.settings.ImageCaps() }
 // client's transport is a stable wrapper so that swap never races a request.
 func NewLoader() *Loader {
 	jar := newCookieJar()
-	tr := &certTransport{base: newHTTPTransport(nil)}
+	tr := newCertTransport(newHTTPTransport(nil))
 	l := &Loader{
 		cache:           newResourceCache(resourceCacheBudget(effectiveMemoryLimit())),
 		cookies:         jar,
