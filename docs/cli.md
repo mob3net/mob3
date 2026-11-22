@@ -189,9 +189,13 @@ the request returns.
 
 `-js-memory` sets the per-script/callback heap budget. Every script also runs
 under a 2-second CPU watchdog. `0` disables the heap watchdog but not the CPU
-timeout. `-no-js` disables both script fetching and execution; `<noscript>`
-content is then shown. Press `J` (or click the footer JavaScript label) to
-toggle this for the session and reload the current page.
+timeout. Each page's load-time scripts share an 8-second wall-clock budget and
+run at most 2,000 scripts; on either limit the running script is interrupted and
+the remaining ones are skipped with a console notice. Esc or Ctrl-C interrupts
+the script currently blocking the terminal. `-no-js` disables both script
+fetching and execution; `<noscript>` content is then shown. Press `J` (or click
+the footer JavaScript label) to toggle this for the session and reload the
+current page.
 
 `-cache` is a session-only LRU budget for CSS/JS response bodies and decoded
 images. Nothing is written to disk, and cache hits appear in the `!` console.

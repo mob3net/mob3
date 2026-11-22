@@ -24,6 +24,44 @@ func findByID(n *Node, id string) *Node {
 	return out
 }
 
+func TestParseDepthCap(t *testing.T) {
+	const n = 5000
+	doc := ParseHTML(strings.Repeat("<div>", n))
+	var walk func(*Node, int) (int, int)
+	walk = func(x *Node, depth int) (maxDepth, count int) {
+		maxDepth, count = depth, 0
+		if x.Type == ElementNode {
+			count = 1
+		}
+		for _, c := range x.Children {
+			d, k := walk(c, depth+1)
+			if d > maxDepth {
+				maxDepth = d
+			}
+			count += k
+		}
+		return maxDepth, count
+	}
+	depth, count := walk(doc, 0)
+	if depth > maxParseDepth+1 {
+		t.Fatalf("parsed depth %d exceeds cap %d", depth, maxParseDepth+1)
+	}
+	if count != n {
+		t.Fatalf("kept %d elements, want %d", count, n)
+	}
+}
+
+func TestParseClosedPDoesNotTruncateLaterStack(t *testing.T) {
+	doc := ParseHTML(`<div id="outer"><p>a</p><section id="s">b</section><div id="x">c</div></div>`)
+	x := findByID(doc, "x")
+	if x == nil || x.Parent == nil || x.Parent.Attr("id") != "outer" {
+		t.Fatalf("div#x parent = %v, want the outer div", x)
+	}
+	if s := findByID(doc, "s"); s == nil || s.TextContent() != "b" {
+		t.Fatalf("section = %v, want text b", s)
+	}
+}
+
 func TestParseNestedTablesPreserved(t *testing.T) {
 	doc := ParseHTML(`<table id="outer"><tr><td><table id="inner"><tr><td>x</td></tr></table></td></tr><tr><td>y</td></tr></table>`)
 	outer := findByID(doc, "outer")

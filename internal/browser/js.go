@@ -16,6 +16,19 @@ const (
 	jsTimeout      = 2 * time.Second
 	jsMaxTimers    = 512
 	jsMaxCallbacks = 200
+	// jsPageBudget caps the wall time spent running a page's load-time scripts,
+	// so many short scripts cannot add up to an indefinite freeze.
+	jsPageBudget = 8 * time.Second
+	// jsMaxScripts caps how many of a page's scripts execute. A 12 MB document
+	// can hold hundreds of thousands of tiny scripts, each with its own budget.
+	jsMaxScripts = 2000
+)
+
+// Stop reasons for a page's load-time script phase.
+const (
+	jsStopNone = iota
+	jsStopUser
+	jsStopBudget
 )
 
 // jsRuntime hosts one page's JavaScript world. Everything runs on the main
@@ -60,6 +73,19 @@ type jsRuntime struct {
 	pendingReplace    bool
 	pendingForm       *jsFormSubmission
 	dialogActive      atomic.Bool
+	// timeout is the per-call CPU watchdog. It is jsTimeout except in tests
+	// that need a shorter check.
+	timeout time.Duration
+	// pageBudget and loadDeadline enforce the page-wide load-time script
+	// budget. loadDeadline is a Unix nanosecond timestamp, zero outside that
+	// phase.
+	pageBudget   time.Duration
+	loadDeadline atomic.Int64
+	// stopScripts is set when the page budget expires or the user aborts, so
+	// startJS skips the remaining scripts instead of running each one until its
+	// own watchdog fires. stopReason records why for the console notice.
+	stopScripts atomic.Bool
+	stopReason  atomic.Int32
 	// ioActive marks a host-side fetch (a dynamic module import) running inside
 	// a script. The 2-second watchdog must not count network time against the
 	// script, the same way it ignores time spent in a modal dialog.
@@ -135,6 +161,8 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		b:              b,
 		vm:             sobek.New(),
 		page:           page,
+		timeout:        jsTimeout,
+		pageBudget:     jsPageBudget,
 		nodes:          make(map[*Node]*sobek.Object),
 		rev:            make(map[*sobek.Object]*Node),
 		templates:      make(map[*Node]*Node),
@@ -311,12 +339,32 @@ func (b *Browser) startJS(page *Page) {
 	// from here on is component CSS injected by a script.
 	page.seedParsedStyles()
 	j := newJSRuntime(b, page)
+	if b.jsPageBudget > 0 {
+		j.pageBudget = b.jsPageBudget
+	}
 	j.titleSet = func(s string) {
 		page.Title = s
 		b.status = ""
 	}
 	b.js = j
+	j.loadDeadline.Store(time.Now().Add(j.pageBudget).UnixNano())
+	executed := 0
 	for _, sc := range page.Scripts {
+		// The page-wide budget and a user abort stop the whole phase. Checking
+		// before each script means a document with many scripts never starts
+		// the next one once the limit is gone.
+		if j.deadlineExpired() {
+			j.stopScripts.Store(true)
+			j.stopReason.Store(jsStopBudget)
+		}
+		if j.stopScripts.Load() {
+			break
+		}
+		if executed >= jsMaxScripts {
+			b.logJS("warn", fmt.Sprintf("script limit reached (%d); skipped remaining scripts", jsMaxScripts))
+			break
+		}
+		executed++
 		if sc.Module {
 			// A module script has no document.currentScript and is evaluated as
 			// part of a linked module graph.
@@ -342,8 +390,17 @@ func (b *Browser) startJS(page *Page) {
 		}
 	}
 	j.currentScript = nil
-	j.fireDocumentEvent("DOMContentLoaded")
-	j.fireWindowEvent("load")
+	switch j.stopReason.Load() {
+	case jsStopUser:
+		b.logJS("warn", "JavaScript stopped by user")
+	case jsStopBudget:
+		b.logJS("warn", fmt.Sprintf("JavaScript time limit reached (%s)", j.pageBudget))
+	}
+	if !j.stopScripts.Load() {
+		j.fireDocumentEvent("DOMContentLoaded")
+		j.fireWindowEvent("load")
+	}
+	j.loadDeadline.Store(0)
 	j.loadDone = true
 }
 
@@ -690,6 +747,14 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 	if j == nil || j.stopped {
 		return nil
 	}
+	timeout := j.timeout
+	if timeout <= 0 {
+		timeout = jsTimeout
+	}
+	// abortGen snapshots the user's escape request at entry. Esc or Ctrl-C
+	// pressed from now on interrupts this call; a press from before it started
+	// does not leak into the next timer callback or page.
+	abortGen := j.b.abortGen.Load()
 	done := make(chan struct{})
 	// The watchdog re-arms itself while the host is blocked in a modal dialog
 	// or a synchronous fetch. Network and user time are not script CPU time,
@@ -703,12 +768,27 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		default:
 		}
 		if j.dialogActive.Load() || j.ioActive.Load() {
-			timer.Store(time.AfterFunc(jsTimeout, check))
+			j.pauseDeadline(timeout)
+			timer.Store(time.AfterFunc(timeout, check))
+			return
+		}
+		if j.b.abortGen.Load() != abortGen {
+			if j.loadDeadline.Load() != 0 {
+				j.stopScripts.Store(true)
+				j.stopReason.Store(jsStopUser)
+			}
+			j.vm.Interrupt("JavaScript stopped by user")
+			return
+		}
+		if j.deadlineExpired() {
+			j.stopScripts.Store(true)
+			j.stopReason.Store(jsStopBudget)
+			j.vm.Interrupt("JavaScript time limit exceeded")
 			return
 		}
 		j.vm.Interrupt("JavaScript timed out")
 	}
-	timer.Store(time.AfterFunc(jsTimeout, check))
+	timer.Store(time.AfterFunc(timeout, check))
 	var base runtime.MemStats
 	var memDone chan struct{}
 	if limit := j.b.jsMemLimit; limit > 0 {
@@ -750,6 +830,28 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		}
 	}()
 	return fn()
+}
+
+// pauseDeadline moves the page-wide deadline forward while the script waits on
+// user or network time, so a modal dialog left open does not consume the
+// script's CPU budget.
+func (j *jsRuntime) pauseDeadline(by time.Duration) {
+	for {
+		old := j.loadDeadline.Load()
+		if old == 0 {
+			return
+		}
+		if j.loadDeadline.CompareAndSwap(old, old+int64(by)) {
+			return
+		}
+	}
+}
+
+// deadlineExpired reports whether the page-wide load-time script budget is
+// spent. It is false outside that phase.
+func (j *jsRuntime) deadlineExpired() bool {
+	dl := j.loadDeadline.Load()
+	return dl != 0 && time.Now().UnixNano() >= dl
 }
 
 func (j *jsRuntime) runCode(name, src string) (v sobek.Value, err error) {

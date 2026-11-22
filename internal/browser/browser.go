@@ -143,8 +143,11 @@ type Browser struct {
 	pendingStatus string
 	noBigText     bool
 	jsMemLimit    int64
-	layoutBudget  LayoutBudget
-	js            *jsRuntime
+	// jsPageBudget caps one page's load-time script phase. It defaults to
+	// jsPageBudget and exists as a field so tests can shorten it.
+	jsPageBudget time.Duration
+	layoutBudget LayoutBudget
+	js           *jsRuntime
 
 	loadCh chan loadResult
 	// interactive marks the terminal UI, where a background dynamic import can
@@ -230,6 +233,10 @@ type Browser struct {
 
 	keys   <-chan string
 	dialog *jsDialog
+	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
+	// compares it with the value captured at entry, so a press interrupts the
+	// call in flight without leaking into later timer callbacks.
+	abortGen atomic.Uint64
 	// download holds the modal curl hint shown for download links and
 	// non-renderable responses.
 	download *downloadDialog
@@ -298,6 +305,7 @@ func NewBrowser(w, h int) *Browser {
 	b := &Browser{
 		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1, zoom: 1,
 		jsMemLimit:        defaultJSMemoryLimit,
+		jsPageBudget:      jsPageBudget,
 		layoutBudget:      DefaultLayoutBudget,
 		historyCacheBytes: defaultHistoryCacheBytes,
 		loadCh:            make(chan loadResult, 1),

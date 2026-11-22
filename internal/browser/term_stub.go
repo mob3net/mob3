@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
@@ -45,7 +46,7 @@ func terminalCellPixels(f *os.File) (w, h int, ok bool) {
 	return 0, 0, false
 }
 
-func readKeyEvents(f *os.File, ch chan<- string) {
+func readKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
 	r := bufio.NewReader(f)
 	for {
 		runes, _, err := r.ReadRune()
@@ -53,16 +54,26 @@ func readKeyEvents(f *os.File, ch chan<- string) {
 			ch <- "eof"
 			return
 		}
+		k := ""
 		if runes == 3 {
-			ch <- "ctrl-c"
+			k = "ctrl-c"
+		} else if runes == 27 {
+			k = "esc"
 		} else if runes == '\n' || runes == '\r' {
-			ch <- "enter"
+			k = "enter"
 		} else if runes == 127 {
-			ch <- "backspace"
+			k = "backspace"
 		} else if runes == 9 {
-			ch <- "tab"
+			k = "tab"
 		} else if utf8.ValidRune(runes) {
-			ch <- string(runes)
+			k = string(runes)
 		}
+		if k == "" {
+			continue
+		}
+		if abort != nil && (k == "esc" || k == "ctrl-c") {
+			abort.Add(1)
+		}
+		ch <- k
 	}
 }

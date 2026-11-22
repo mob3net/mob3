@@ -1720,7 +1720,11 @@ launch.</p>
 label toggles scripting for the rest of the session and reloads the page, so
 the no-script fallback is shown immediately. Start with <b>-no-js</b> to begin
 with scripting disabled. The current state stays visible in the footer;
-<b>JavaScript:Error</b> means a script failed.</p>
+<b>JavaScript:Error</b> means a script failed. A page's load-time scripts share
+an 8-second budget and a 2,000-script cap; the running script is interrupted and
+the rest are skipped with a notice in the <b>!</b> console when either is
+reached. Press <b>Esc</b> or <b>Ctrl-C</b> to interrupt a script that is blocking
+the terminal.</p>
 
 <h2>History and bookmarks</h2>
 <p>The <b>≡ History</b> button lists the session history; <b>#</b> links and

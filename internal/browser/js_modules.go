@@ -168,7 +168,7 @@ func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap inte
 // the runtime is only ever touched from its own goroutine.
 func (b *Browser) finishJSImport(task jsImportTask) {
 	j := b.js
-	if j == nil || j.stopped || task.j != j {
+	if j == nil || j.stopped || task.j != j || j.stopScripts.Load() {
 		return
 	}
 	if err := j.guard(func() error {

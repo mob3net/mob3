@@ -273,7 +273,7 @@ func Run(args []string) int {
 
 	keys := make(chan string, 32)
 	b.keys = keys
-	go readKeyEvents(stdin, keys)
+	go readKeyEvents(stdin, keys, &b.abortGen)
 
 	winch := make(chan os.Signal, 1)
 	quitSig := make(chan os.Signal, 1)

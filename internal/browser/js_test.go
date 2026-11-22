@@ -153,6 +153,72 @@ func TestJSStorageConstructor(t *testing.T) {
 	}
 }
 
+// scriptPage builds a page whose scripts each increment globalThis.count, for
+// exercising the per-page script and time budgets.
+func scriptPage(n int) *Page {
+	doc := ParseHTML(`<html><body><p id="out"></p></body></html>`)
+	u, _ := url.Parse("https://example.com/")
+	scripts := make([]Script, n)
+	for i := range scripts {
+		scripts[i] = Script{
+			Src:  "inline script",
+			Code: "globalThis.count = (globalThis.count || 0) + 1;",
+		}
+	}
+	return &Page{URL: u, Base: u, Root: doc, Title: "test", Scripts: scripts}
+}
+
+func TestJSScriptLimit(t *testing.T) {
+	page := scriptPage(jsMaxScripts + 5)
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	b.startJS(page)
+	n := int64(0)
+	if v := b.js.vm.Get("count"); v != nil {
+		n = v.ToInteger()
+	}
+	if n != jsMaxScripts {
+		t.Fatalf("executed %d scripts, want %d", n, jsMaxScripts)
+	}
+	if !strings.Contains(strings.Join(b.jsLog, "\n"), "script limit") {
+		t.Fatalf("missing script limit notice: %s", strings.Join(b.jsLog, "; "))
+	}
+}
+
+func TestJSPageBudgetSkipsScripts(t *testing.T) {
+	page := scriptPage(3)
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	b.jsPageBudget = time.Nanosecond
+	b.startJS(page)
+	if v := b.js.vm.Get("count"); v != nil && v.ToInteger() != 0 {
+		t.Fatalf("executed %d scripts after the budget expired, want 0", v.ToInteger())
+	}
+	if !strings.Contains(strings.Join(b.jsLog, "\n"), "time limit") {
+		t.Fatalf("missing time limit notice: %s", strings.Join(b.jsLog, "; "))
+	}
+}
+
+func TestJSUserAbortInterruptsScript(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.jsMemLimit = 0
+	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
+	j.timeout = 20 * time.Millisecond
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		b.abortGen.Add(1)
+	}()
+	if _, err := j.runCode("loop", "while (true) {}"); err == nil {
+		t.Fatal("aborted script returned no error")
+	} else if !strings.Contains(err.Error(), "stopped by user") {
+		t.Fatalf("abort error = %v, want a user-stop message", err)
+	}
+	// The escape request belonged to the previous call; a later call runs.
+	if _, err := j.runCode("after", "1 + 1"); err != nil {
+		t.Fatalf("script after an abort failed: %v", err)
+	}
+}
+
 func TestJSRuntimeFreezeShiftsTimers(t *testing.T) {
 	base := time.Now()
 	j := &jsRuntime{timers: map[int]*jsTimer{

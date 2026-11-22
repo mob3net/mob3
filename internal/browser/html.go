@@ -207,7 +207,15 @@ type htmlParser struct {
 	i     int
 	root  *Node
 	stack []*Node
+	// pOpen is the stack index of the open <p>, or -1. Tracking it keeps the
+	// implicit-close check O(1) instead of scanning the whole open stack for
+	// every block element.
+	pOpen int
 }
+
+// maxParseDepth caps how deep the open-element stack grows. Browsers cap DOM
+// depth the same way; it also bounds the per-tag stack scans below.
+const maxParseDepth = 512
 
 // ParseHTML parses an HTML document into a DOM tree. It is deliberately
 // forgiving: unknown tags become plain elements and unmatched end tags are
@@ -216,7 +224,7 @@ func ParseHTML(src string) *Node {
 	src = strings.ReplaceAll(src, "\r\n", "\n")
 	src = strings.ReplaceAll(src, "\r", "\n")
 	src = strings.ReplaceAll(src, "\x00", "")
-	p := &htmlParser{s: src}
+	p := &htmlParser{s: src, pOpen: -1}
 	p.root = &Node{Type: DocumentNode}
 	p.stack = []*Node{p.root}
 	for p.i < len(p.s) {
@@ -329,18 +337,31 @@ func (p *htmlParser) parseEndTag() {
 func (p *htmlParser) closeTag(tag string) {
 	for i := len(p.stack) - 1; i >= 1; i-- {
 		if p.stack[i].Tag == tag {
-			p.stack = p.stack[:i]
+			p.truncate(i)
 			return
 		}
 	}
 }
 
-func (p *htmlParser) closeIfOpen(tag string) {
-	for i := len(p.stack) - 1; i >= 1; i-- {
-		if p.stack[i].Tag == tag {
-			p.stack = p.stack[:i]
-			return
-		}
+// truncate pops the stack to n elements, keeping the p-open index in sync.
+func (p *htmlParser) truncate(n int) {
+	if n < 1 {
+		n = 1
+	}
+	if n >= len(p.stack) {
+		return
+	}
+	if p.pOpen >= n {
+		p.pOpen = -1
+	}
+	p.stack = p.stack[:n]
+}
+
+// closeP closes the nearest open <p>, if any. Nested <p> tags are impossible
+// because <p> itself is a block closer, so the tracked index needs no scan.
+func (p *htmlParser) closeP() {
+	if p.pOpen >= 1 {
+		p.truncate(p.pOpen)
 	}
 }
 
@@ -360,7 +381,7 @@ func (p *htmlParser) closeWhileTop(tags ...string) {
 		if !found {
 			return
 		}
-		p.stack = p.stack[:len(p.stack)-1]
+		p.truncate(len(p.stack) - 1)
 	}
 }
 
@@ -477,14 +498,17 @@ func (p *htmlParser) parseStartTag() {
 		p.closeWhileTop("option")
 	default:
 		if blockClosersP[tag] {
-			p.closeIfOpen("p")
+			p.closeP()
 		}
 	}
 
 	n := &Node{Type: ElementNode, Tag: tag, Attrs: attrs}
 	p.addChild(n)
-	if !voidElements[tag] && !selfClose {
+	if !voidElements[tag] && !selfClose && len(p.stack) < maxParseDepth {
 		p.stack = append(p.stack, n)
+		if tag == "p" {
+			p.pOpen = len(p.stack) - 1
+		}
 	}
 }
 

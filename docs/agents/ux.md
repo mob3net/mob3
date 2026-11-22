@@ -783,7 +783,10 @@ agreement, the non-negotiable constraints and the change protocol.
   navigations; unrelated tool calls do not advance timers.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and the `-js-memory` heap budget (256 MB by default; 0
-  disables). Timer count and per-tick callbacks are capped. Script
+  disables). A page's load-time scripts share an 8-second budget and run at most
+  2,000 scripts; the rest are skipped with a console notice. Esc or Ctrl-C
+  interrupts the script currently blocking the loop. Timer count and per-tick
+  callbacks are capped. Script
   errors turn the footer JavaScript label into red `JavaScript:Error` and are
   logged for the `!` console; they do not replace the left status text. Navigation via
   `location.href`,

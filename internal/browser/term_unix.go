@@ -7,11 +7,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
 // readKeyEvents decodes keystrokes into symbolic names and streams them on ch.
-func readKeyEvents(f *os.File, ch chan<- string) {
+// A bare Esc or Ctrl-C also bumps abort so a script blocking the main loop can
+// be interrupted even though its key has not been handled yet.
+func readKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
 	r := bufio.NewReaderSize(f, 256)
 	for {
 		k, err := readKey(r)
@@ -21,6 +24,9 @@ func readKeyEvents(f *os.File, ch chan<- string) {
 		}
 		if k == "" {
 			continue
+		}
+		if abort != nil && (k == "esc" || k == "ctrl-c") {
+			abort.Add(1)
 		}
 		ch <- k
 	}

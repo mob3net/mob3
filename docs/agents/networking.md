@@ -16,7 +16,10 @@ agreement, the non-negotiable constraints and the change protocol.
   and a best-effort heap-delta watchdog, 256 MB above its starting heap by
   default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
   the CPU timeout in place). Exceeding the budget interrupts the script with an
-  error.
+  error. Load-time scripts also share an 8-second page budget and a cap of 2,000
+  executed scripts: when either is reached, the running script is interrupted
+  and the remaining ones are skipped with a console notice. A bare Esc or Ctrl-C
+  interrupts the script currently blocking the main loop.
 - **Process memory limit:** `-mem-limit` is off by default (`0`), which leaves
   the Go runtime default in place, including `GOGC` and any `GOMEMLIMIT` from
   the environment. A positive value applies a soft heap limit with
