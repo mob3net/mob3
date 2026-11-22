@@ -186,17 +186,34 @@ published by the Pages build.
 
 - `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
   exits with its status.
-- `internal/browser/` — package `browser` with the engine, CLI loop and tests.
-  Nothing under `internal` is imported from outside this module.
-- **One package, files by subsystem.** Every file is in package `browser` and
-  shares one `Browser` struct, so subpackages would only force exported state.
-  Large subsystems get their own file; moving code between files is a pure
-  declaration move (keep doc comments, give each file only the imports it
-  uses). Files carved out of a base file share its prefix (`layout.go` →
-  `layout_grid.go`, `layout_flex.go`; `browser.go` → `browser_chrome.go`,
-  `browser_forms.go`), which matters when a bare name would be ambiguous
-  (`forms`, `images`). Standalone subsystems keep their own name (`ui.go`,
-  `config.go`, `find.go`, `reader.go`, `hints.go`).
+- `internal/browser/` — package `browser` with the engine, CLI loop and tests
+  until the boundary migration completes. Nothing under `internal` is imported
+  from outside this module.
+- **Target boundary.** The code splits into `internal/protocol` (wire types,
+  codec, ports and limits; standard library only), `internal/engine` (HTML,
+  CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),
+  `internal/host` (network, cookies, cache, certificates, settings, global
+  history, downloads), `internal/frontend` (terminal, input, chrome, ANSI
+  encoding, native images, dialogs) and `internal/app` (wiring). The allowed
+  imports are `app` → the other four and each of them → `protocol`; the front
+  end and the host never import `engine`, and `engine` never imports
+  `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
+  The front end never names an engine type, and `internal/protocol` is
+  canonical for the message set. Ownership, migration order and exit gates are
+  in
+  [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
+- **Files by subsystem within a package.** Every file belongs to one package
+  and one subsystem. Large subsystems get their own file; moving code between
+  files is a pure declaration move (keep doc comments, give each file only the
+  imports it uses). Files carved out of a base file share its prefix
+  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `browser.go` →
+  `browser_chrome.go`, `browser_forms.go`), which matters when a bare name
+  would be ambiguous (`forms`, `images`). Standalone subsystems keep their own
+  name (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
+- **During the migration** the old `browser` package may import a moved
+  package and alias its exported types (`type Page = engine.Page`) so each
+  batch lands with tests green. Do not add new reach-through between the two
+  sides: put new code on its final side.
 - Test files mirror their source names (`layout_grid_test.go`,
   `browser_input_test.go`, …), with shared helpers in the base file
   (`browser_test.go`, `layout_test.go`).

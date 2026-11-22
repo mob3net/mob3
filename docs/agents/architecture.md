@@ -3,6 +3,77 @@
 Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
+## Target boundary
+
+The single `browser` package is being split so page content (DOM, JS, layout,
+decoders) cannot reach the terminal, the network policy or the trusted UI. The
+wire seam is canonical in `internal/protocol`; this section records ownership
+and the migration order.
+
+| Package | Owns |
+| --- | --- |
+| `internal/protocol` | Message types, binary codec, `Session`/`Broker` ports, limits and version. Standard library only; never imports another project package. |
+| `internal/engine` | HTML/CSS parsing and style, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
+| `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings, global visited history, download detection, and the request log. |
+| `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
+| `internal/app` | Wiring: constructs one host, engine session and frontend, connects them over a transport, and runs the event loop. |
+
+Allowed imports:
+
+```
+app      -> engine, host, frontend, protocol
+frontend -> protocol
+engine   -> protocol
+host     -> protocol
+protocol -> standard library only
+```
+
+The split is a value boundary. Nothing in `protocol` holds a pointer to engine
+state: frames, events and commands are plain data, and a codec round-trip
+covers every message. Images cross as encoded bytes with size caps, never as
+`image.Image`. Terminal capability detection lives on the front end and cookie
+parsing on the host side.
+
+**Non-goals of this step:** no subprocess, no OS sandbox, no tabs, no
+per-site renderer, no behavior or visual change. A later process split is a
+transport implementation, not another architecture change.
+
+### Migration order
+
+Each batch lands with tests green; type aliases are temporary and removed at
+the end.
+
+1. `internal/protocol`, codec, dependency test and the output/benchmark
+   baseline.
+2. Frame boundary: content-rect `Frame`, structured scaled text instead of
+   raw escape cells, ANSI and native-image encoding in the front end.
+3. Chrome and shell state owned by the front end; engine state arrives as
+   events; the engine learns only the content rectangle.
+4. Move leaf subsystems, then the session type, into `internal/engine`.
+5. Split `Loader.Load` into host `Fetch` (status, headers, final URL, raw
+   bytes) and engine decompression/charset/parse; move automation and MCP to a
+   protocol client.
+6. Run every path, including `-dump`, `-png` and tests, through the in-process
+   transport; keep a socket transport for the later process split.
+7. Fuzz the codec, benchmark against the baseline, remove aliases.
+
+### Exit gates
+
+- `-dump` and `-png` are byte-identical to the baseline over the synthetic
+  page corpus.
+- `frontend` and `host` do not import `engine`; `engine` imports only
+  `protocol`, approved modules and the standard library, with no `net`,
+  `syscall` or `os` left. Current exceptions to remove: terminal capability
+  detection in `render.go` (`os.Getenv`) and `document.cookie` parsing in
+  `js_dom.go` (`net/http`).
+- Frame goldens cover layout and rendering, plus new frame-snapshot tests for
+  the seam.
+- Dependencies are checked by a test, not by review.
+- Startup, RSS and frame benchmarks stay inside the recorded budget and idle
+  produces no frames.
+
+## Current layout (during migration)
+
 Standard Go layout:
 
 - `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
