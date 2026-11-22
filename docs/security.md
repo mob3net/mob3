@@ -24,13 +24,13 @@ cache, log or download files. Closing MOB³ saves nothing.
 - History, cookies, `localStorage`/`sessionStorage`, the image cache and all
   JavaScript state live in memory only.
 - The download popup only shows a `curl` command; it writes nothing.
-- Disk reads are limited to an explicitly supplied `-bookmarks` file, an
-  explicitly supplied `-certs` PEM bundle, and `/proc/self/statm` for the Linux
-  memory footer. Page navigation never reads local files: `file:` URLs are
-  rejected and bare paths are never probed on disk.
+- The binary opens no application files for reading or writing: there are no
+  config, bookmark, certificate, cache, history or download files. It writes
+  nothing to disk and never probes or reads a page, bundle or path.
 - OS-level reads by Go's TLS, DNS and timezone libraries are not application
   storage. By default TLS roots come from the platform store; `-certs` can
-  switch to the CA bundle compiled into the binary or to a named PEM file.
+  switch to the CA bundle compiled into the binary. No PEM file is read.
+- The memory footer uses Go's runtime statistics; no `/proc` file is sampled.
 
 ## Cookies and storage
 
@@ -89,7 +89,7 @@ HTTPS verification uses the platform root store by default. If the platform
 provides no roots at all, the Mozilla NSS bundle compiled into the binary from
 `golang.org/x/crypto/x509roots/fallback` is used automatically.
 `-certs=embedded` selects that same bundle explicitly, replacing a stale
-platform store, and `-certs=FILE.pem` uses a bundle you supply. The embedded
+platform store. No certificate file is read. The embedded
 bundle keeps Mozilla's distrust-after dates, so a constrained root stops
 validating certificates issued after that date. Revocation is still not checked
 in any mode, and there is no certificate UI or warning flow.

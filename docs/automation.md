@@ -16,7 +16,7 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 - The virtual viewport is 30 rows by default; `-height N` sets it explicitly
   (about `N-3` page rows after chrome).
 - Images are disabled.
-- `-no-js`, `-layout-budget`, `-reader`, `-dark`, bookmarks and search settings
+- `-no-js`, `-layout-budget`, `-reader`, `-dark` and search settings
   are honored.
 - History, cookies and storage are in memory only.
 

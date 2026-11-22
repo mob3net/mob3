@@ -8,16 +8,12 @@ import (
 
 // TestBuiltinPagesShareShell checks that every generated app page uses the same
 // page shell and reading column. The blocked page keeps its warning and retry
-// action, and bookmarks use the shared muted style.
+// action.
 func TestBuiltinPagesShareShell(t *testing.T) {
 	u, _ := url.Parse("https://example.com/file.bin")
 	pages := map[string]string{
-		"help":            helpPageHTML(),
-		"history":         historyPageHTML([]string{"https://example.com/"}, 0),
-		"empty bookmarks": bookmarksPageHTML(nil),
-		"bookmarks": bookmarksPageHTML([]Bookmark{
-			{Title: "One", URL: "https://example.com/one", Folder: "Folder"},
-		}),
+		"help":           helpPageHTML(),
+		"history":        historyPageHTML([]string{"https://example.com/"}, 0),
 		"blocked":        blockedPageHTML("https://example.com/", "anti-bot challenge", 403),
 		"config":         configPageHTML(nil, false, "", "", 80, 24, 8, 16),
 		"cannot display": cannotDisplayPageHTML("image/png", u),
@@ -38,9 +34,6 @@ func TestBuiltinPagesShareShell(t *testing.T) {
 		!strings.Contains(pages["blocked"], `class="warn"`) ||
 		!strings.Contains(pages["blocked"], `class="try"`) {
 		t.Error("blocked page lost its warning or retry action")
-	}
-	if !strings.Contains(pages["bookmarks"], `class="muted"`) {
-		t.Error("bookmark URLs do not use the shared muted style")
 	}
 }
 

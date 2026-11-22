@@ -796,8 +796,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					target = "about:home"
 				}
 				b.Navigate(target, true)
-			case headerBookmarks:
-				b.Navigate("about:bookmarks", true)
 			case headerHistory:
 				b.Navigate("about:history", true)
 			case headerHelp:

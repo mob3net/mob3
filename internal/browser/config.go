@@ -104,7 +104,6 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
 		{Flag: "-dark", Value: onOff(b.dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
-		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
 		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.jsMemLimit>>20), cacheMB, int(b.historyCacheBytes>>20)), Editable: true},
 		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
@@ -114,7 +113,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
 		{Flag: "-ua", Value: ua, Note: "next request", Editable: true},
 		{Flag: "-search", Value: search, Note: "empty disables search", Editable: true},
-		{Flag: "-certs", Value: b.certSourceLabel(), Note: "system or embedded; PEM path at startup", Editable: true},
+		{Flag: "-certs", Value: b.certSourceLabel(), Note: "system or embedded", Editable: true},
 		{Flag: "-mcp", Value: get("-mcp", "off"), Note: "startup"},
 		{Flag: "-version", Value: get("-version", Version), Note: "read only"},
 	}
@@ -236,12 +235,9 @@ func (b *Browser) applyConfig(q url.Values) {
 			if len(v) > 0 {
 				val = v[0]
 			}
-			// Only the built-in sources are accepted here. A PEM path stays a
-			// start-up option so a page that navigates to about:config cannot
-			// make the browser read a local bundle.
-			if !isBuiltinCertSource(val) {
-				b.configNotice = "Certificate source not changed: about:config sets system or embedded; pass a PEM bundle to -certs at startup"
-			} else if err := b.loader.SetCertSource(val); err != nil {
+			// Only the built-in sources exist: the binary reads no certificate
+			// files, so about:config and -certs accept the same two values.
+			if err := b.loader.SetCertSource(val); err != nil {
 				b.configNotice = "Certificate source not changed: " + err.Error()
 			}
 		}

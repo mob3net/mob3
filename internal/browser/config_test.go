@@ -18,7 +18,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b.loader.searchURL = "https://search.example/?q=%s"
 	b.cliConfig = map[string]string{
 		"-dump": "off", "-width": "80", "-graphics": "auto",
-		"-bookmarks": "(none)", "-color": "off", "-no-color": "off",
+		"-color": "off", "-no-color": "off",
 		"-version": "dev",
 	}
 	page := b.configPage(mustParse(t, "about:config"), false)
@@ -28,7 +28,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	text := page.Root.TextContent()
 	for _, want := range []string{
 		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-bookmarks", "-home", "-layout-budget", "-text-scale", "-color", "-no-color",
+		"-home", "-layout-budget", "-text-scale", "-color", "-no-color",
 		"-ua", "-search", "-mcp", "-version", "startup",
 		"Viewport:", "80x7 characters", "640x112 pixels", "8x16 per cell",
 		"JS 64 MB", "cache 32 MB", "history 128 MB",

@@ -6,7 +6,7 @@ import (
 )
 
 // appPageCSS is the shared stylesheet for MOB³'s own pages: help, config,
-// history, bookmarks, the blocked page and the error pages. It gives them one
+// history, the blocked page and the error pages. It gives them one
 // centered reading column, heading scale, table, secondary-text and warning
 // style. Page-specific rules are appended by appPageHTML.
 const appPageCSS = `body { max-width: 900px; margin: 8px auto; }

@@ -3,12 +3,9 @@ package browser
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -37,15 +34,11 @@ import (
 // Keep THIRD_PARTY_NOTICES and docs/cli.md in sync when the module changes.
 
 // CertSourceSystem and CertSourceEmbedded name the built-in sources accepted
-// by -certs. Any other value names a PEM bundle on disk.
+// by -certs. No certificate file is read: the binary has no filesystem input.
 const (
 	CertSourceSystem   = "system"
 	CertSourceEmbedded = "embedded"
 )
-
-// maxCertBundleBytes caps a -certs bundle so a mistaken special file or a
-// hostile input cannot exhaust memory.
-const maxCertBundleBytes = 4 << 20
 
 // embeddedCACertPool builds the embedded trust store once per process from the
 // official bundle. Constraints the X.509 encoding cannot express (NSS
@@ -72,70 +65,6 @@ var embeddedCACertPool = sync.OnceValues(func() (*x509.CertPool, error) {
 	return pool, nil
 })
 
-// certPoolFromPEM builds a pool from every CERTIFICATE block in data. Blocks
-// of other types and certificates that fail to parse are skipped, so an
-// edited bundle with one bad entry still yields the rest; a bundle that holds
-// no usable certificate is an error rather than an empty pool.
-func certPoolFromPEM(data []byte) (*x509.CertPool, int, error) {
-	pool := x509.NewCertPool()
-	added := 0
-	rest := data
-	for {
-		var block *pem.Block
-		block, rest = pem.Decode(rest)
-		if block == nil {
-			break
-		}
-		if block.Type != "CERTIFICATE" {
-			continue
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			continue
-		}
-		pool.AddCert(cert)
-		added++
-	}
-	if added == 0 {
-		return nil, 0, errors.New("no certificates found")
-	}
-	return pool, added, nil
-}
-
-// certPoolFromFile reads a PEM bundle from disk. Only regular files are
-// accepted, matching the local-file policy, and the read is capped.
-func certPoolFromFile(path string) (*x509.CertPool, error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, errors.New("not a regular file")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxCertBundleBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxCertBundleBytes {
-		return nil, fmt.Errorf("bundle is larger than %d MiB", maxCertBundleBytes>>20)
-	}
-	pool, _, err := certPoolFromPEM(data)
-	return pool, err
-}
-
-// isBuiltinCertSource reports whether source names the platform store or the
-// embedded bundle, the only values about:config may set. An empty value means
-// the platform store.
-func isBuiltinCertSource(source string) bool {
-	s := strings.TrimSpace(source)
-	return s == "" || strings.EqualFold(s, CertSourceSystem) || strings.EqualFold(s, CertSourceEmbedded)
-}
-
 // resolveCertSource turns a -certs value into a label and a pool. A nil pool
 // means the platform store, which is what an unset TLS config asks for.
 func resolveCertSource(source string) (string, *x509.CertPool, error) {
@@ -150,16 +79,12 @@ func resolveCertSource(source string) (string, *x509.CertPool, error) {
 		}
 		return CertSourceEmbedded, pool, nil
 	}
-	pool, err := certPoolFromFile(s)
-	if err != nil {
-		return "", nil, fmt.Errorf("%s: %w", s, err)
-	}
-	return s, pool, nil
+	return "", nil, errors.New("certificate source must be system or embedded")
 }
 
 // SetCertSource selects the TLS trust store for every later request: "system"
-// (the default) uses the platform store, "embedded" uses the CA bundle
-// compiled into the binary, and any other value names a PEM bundle on disk.
+// (the default) uses the platform store, and "embedded" uses the CA bundle
+// compiled into the binary. Certificate files are not supported.
 // The selected source replaces the platform store rather than adding to it, so
 // trust decisions are the same on every machine. It may be called while
 // requests are in flight: in-flight requests finish on the old transport and

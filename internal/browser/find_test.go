@@ -147,19 +147,6 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 	if len(b.findMatches) == 0 {
 		t.Fatal("help page multi-word search found no matches")
 	}
-
-	loader.bookmarks = []Bookmark{{Title: "Example Site", URL: "https://example.com/"}}
-	marks, err := loader.Load("about:bookmarks", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b2 := NewBrowser(80, 20)
-	b2.page = marks
-	b2.layout = BuildLayout(marks.Root, marks.Author, 80)
-	typeFindQuery(t, b2, func() { b2.HandleKey("/") }, "Example")
-	if len(b2.findMatches) == 0 {
-		t.Fatal("bookmarks page search found no matches")
-	}
 }
 
 func TestFindHTMLConsole(t *testing.T) {

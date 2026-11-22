@@ -63,7 +63,7 @@ type Browser struct {
 	// Dark mode remaps the rendered page palette.
 	dark bool
 
-	// History and bookmarks.
+	// History.
 	history []historyEntry
 	histIdx int
 	histMu  sync.RWMutex
@@ -375,11 +375,6 @@ func (b *Browser) historySnapshot() ([]string, int) {
 		urls[i] = entry.URL
 	}
 	return urls, b.histIdx
-}
-
-// hasBookmarks reports whether a bookmark file was supplied to the browser.
-func (b *Browser) hasBookmarks() bool {
-	return b.loader != nil && (b.loader.bookmarksSet || len(b.loader.bookmarks) > 0)
 }
 
 // searchTemplate returns the configured search URL template.

@@ -13,8 +13,9 @@ agreement, the non-negotiable constraints and the change protocol.
   `linux/arm/v6`; distroless has no armv6 manifest. The runtime image installs
   no CA certificate package: with no platform roots, Go's fallback trust uses
   the Mozilla NSS bundle compiled into the binary, so image trust matches the
-  release instead of aging with the base image, and `-certs` can point at a
-  mounted PEM bundle for private roots. The build stage copies only
+  release instead of aging with the base image. Certificate files are not
+  read, so private roots require a build with the bundle embedded. The build
+  stage copies only
   `go.mod`, `go.sum`, `vendor/`, `cmd/` and `internal/`; do not use `COPY . .` or
   a `.dockerignore`. `make docker` builds `mob3`, and the image includes
   `LICENSE` and `THIRD_PARTY_NOTICES` under `/usr/share/doc/mob3`.

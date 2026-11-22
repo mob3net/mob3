@@ -123,18 +123,15 @@ published by the Pages build.
   This warning stays prominent in `README.md` and on the built-in start and
   help pages. Never present MOB³ as safe for passwords, accounts, payments or
   confidential data.
-- **No persistence.** The running browser must not create or update
-  configuration, history, cookie, cache, log or download files; closing MOB³
-  saves nothing, and the running browser writes no files at all. The download
-  popup only copies a `curl` command. History, cookies,
-  `localStorage`/`sessionStorage`, the image cache, the back/forward page cache
-  and all JS state live in memory only. The browser does not read local page
-  files at all: `file:` URLs are rejected and bare paths are never probed on
-  disk. Disk reads are limited to an explicitly passed `-bookmarks` file, an
-  explicitly passed `-certs` PEM bundle, plus `/proc/self/statm` for the Linux
-  memory footer; OS-level reads by Go's TLS, DNS and timezone libraries are not
-  application storage. Do not add automatic disk caching or restore-on-start
-  behavior.
+- **No filesystem I/O.** The binary must not read or write files: no
+  configuration, bookmark, certificate, cache, history, log or download files,
+  and no local page files (`file:` URLs are rejected and bare paths are never
+  probed). All content comes from the network, `about:` or `data:`, and every
+  cache and piece of state is memory-only; closing MOB³ saves nothing. The
+  download popup only copies a `curl` command. The memory footer uses Go's
+  runtime statistics, not `/proc`. OS-level reads by Go's TLS, DNS and timezone
+  libraries are the only filesystem access and are not application storage. Do
+  not add automatic disk caching or restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/grafana/sobek` JavaScript engine (maintained `goja` fork adding ES
   module records and dynamic imports), the pure-Go SVG renderer

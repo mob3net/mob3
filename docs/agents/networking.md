@@ -147,9 +147,8 @@ agreement, the non-negotiable constraints and the change protocol.
 - HTTPS uses Go’s TLS; there is no certificate UI or proxy configuration UI.
 - **TLS trust store:** `-certs` selects the roots used for HTTPS. `system`
   (the default) keeps the platform store Go reads; `embedded` uses the official
-  Mozilla NSS bundle from `golang.org/x/crypto/x509roots/fallback`; any other
-  value names a PEM bundle on disk (regular file only, 4 MiB cap, at least one
-  parseable certificate required, or the load fails). The module's `fallback`
+  Mozilla NSS bundle from `golang.org/x/crypto/x509roots/fallback`. Certificate
+  files are not read: any other value is rejected. The module's `fallback`
   package is imported too, so `x509.SetFallbackRoots` supplies the same roots
   when the platform has none at all; a present but stale store is not
   overridden. The embedded roots keep Mozilla's distrust-after constraints
@@ -158,8 +157,7 @@ agreement, the non-negotiable constraints and the change protocol.
   platform store instead of merging, so a machine whose CA package is stale or
   missing verifies modern sites like an updated one. Each source is labelled in
   `about:config`, where `system` and `embedded` can be switched for the
-  session; a PEM path is command-line-only, because a page can navigate to
-  `about:config` and must not be able to make the browser read a local bundle.
+  session.
   A switch applies to later requests and swaps the transport after closing the
   old idle connections; a rejected value keeps the previous store with the
   reason shown on the page. The bundle is refreshed by bumping the module and

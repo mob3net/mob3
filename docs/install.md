@@ -32,8 +32,8 @@ The binary is static, so it needs no runtime libraries. A system with no CA
 certificate package at all is handled automatically: the Mozilla NSS root
 bundle maintained by the Go project is compiled in and used when the platform
 has no roots. A system whose CA package is old but present should start with
-`-certs=embedded` to trust that same current bundle instead, or point `-certs`
-at your own PEM file. Both replace the platform store for the session. See
+`-certs=embedded` to trust that same current bundle instead; it replaces the
+platform store for the session. See
 [TLS certificate store](cli.md#tls-certificate-store).
 
 ## Docker
@@ -50,8 +50,8 @@ attach it to a TTY.
 The image installs no CA certificate package. HTTPS uses the Mozilla NSS bundle
 compiled into the binary, which Go's fallback trust applies when the container
 has no platform roots, so the trust set is the one that shipped with that
-release. Pass `-certs=/path/to/bundle.pem` to use a mounted bundle for private
-roots.
+release. Certificate files are not supported, so private roots require a build
+with the bundle embedded.
 
 ## MCP clients
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -23,7 +22,6 @@ const (
 	headerReload
 	headerStop
 	headerHome
-	headerBookmarks
 	headerHistory
 	headerURL
 	headerHelp
@@ -325,11 +323,10 @@ func (b *Browser) draw() {
 		}
 		homeLabel := " ⌂ "
 		historyLabel := " ≡ History "
-		bookmarksLabel := " ★ Bookmarks "
 		configLabel := " ⚙ "
 		if w < 80 {
 			backLabel = " ← "
-			helpLabel, historyLabel, bookmarksLabel = " ? ", " ≡ ", " ★ "
+			helpLabel, historyLabel = " ? ", " ≡ "
 		}
 		fieldBG := urlBG
 		if b.prompt {
@@ -386,7 +383,7 @@ func (b *Browser) draw() {
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
-			helpW, historyW, bookmarksW, configW := 0, 0, 0, 0
+			helpW, historyW, configW := 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
 				configW = stringWidth(configLabel)
@@ -394,13 +391,8 @@ func (b *Browser) draw() {
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
 			}
-			if w >= 18 && b.hasBookmarks() {
-				bookmarksW = stringWidth(bookmarksLabel)
-			}
-			for x+helpW+historyW+bookmarksW+configW > w {
+			for x+helpW+historyW+configW > w {
 				switch {
-				case bookmarksW > 0:
-					bookmarksW = 0
 				case historyW > 0:
 					historyW = 0
 				case helpW > 0:
@@ -412,19 +404,15 @@ func (b *Browser) draw() {
 			configX := w - configW
 			helpX := configX - helpW
 			histX := helpX - historyW
-			bookX := histX - bookmarksW
 			title := "MOB³"
 			if b.page != nil && b.page.Title != "" {
 				title = b.page.Title
 			}
-			if room := bookX - x; room > 0 {
+			if room := histX - x; room > 0 {
 				titleFG := RGB(0xff, 0xd7, 0x66)
 				titleStyle := &Style{Bold: true, Color: titleFG, FontSize: 16, LineHeight: 1}
 				tx, label := centeredLabel(x, room, title)
 				g.Text(tx, 0, label, titleStyle, titleFG)
-			}
-			if bookmarksW > 0 {
-				b.drawHeaderButton(g, bookX, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
 			}
 			if historyW > 0 {
 				b.drawHeaderButton(g, histX, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
@@ -460,7 +448,7 @@ func (b *Browser) draw() {
 			} else if w >= 12 {
 				x = b.drawHeaderButton(g, x, 0, homeLabel, headerHome, btnBG, headerFG, hs)
 			}
-			helpW, historyW, bookmarksW, configW := 0, 0, 0, 0
+			helpW, historyW, configW := 0, 0, 0
 			if w >= 6 {
 				helpW = stringWidth(helpLabel)
 				configW = stringWidth(configLabel)
@@ -468,13 +456,8 @@ func (b *Browser) draw() {
 			if w >= 12 {
 				historyW = stringWidth(historyLabel)
 			}
-			if w >= 18 && b.hasBookmarks() {
-				bookmarksW = stringWidth(bookmarksLabel)
-			}
-			for x+helpW+historyW+bookmarksW+configW > w {
+			for x+helpW+historyW+configW > w {
 				switch {
-				case bookmarksW > 0:
-					bookmarksW = 0
 				case historyW > 0:
 					historyW = 0
 				case helpW > 0:
@@ -483,11 +466,7 @@ func (b *Browser) draw() {
 					configW = 0
 				}
 			}
-			urlW := w - x - helpW - historyW - bookmarksW - configW
-			if urlW < 1 {
-				bookmarksW = 0
-				urlW = w - x - helpW - historyW - configW
-			}
+			urlW := w - x - helpW - historyW - configW
 			if urlW < 1 {
 				historyW = 0
 				urlW = w - x - helpW - configW
@@ -511,9 +490,6 @@ func (b *Browser) draw() {
 			drawField(x, 0, urlW)
 			if zoomLabel != "" {
 				b.drawHeaderButton(g, x+urlW, 0, zoomLabel, headerZoom, btnBG, headerFG, hs)
-			}
-			if bookmarksW > 0 {
-				b.drawHeaderButton(g, w-configW-helpW-historyW-bookmarksW, 0, bookmarksLabel, headerBookmarks, btnBG, headerFG, hs)
 			}
 			if historyW > 0 {
 				b.drawHeaderButton(g, w-configW-helpW-historyW, 0, historyLabel, headerHistory, btnBG, headerFG, hs)
@@ -1015,17 +991,9 @@ func (u procUsage) footer() string {
 	return fmt.Sprintf("MEM %dMB", (u.rss+(1<<19))>>20)
 }
 
-// processRSS returns the current resident set size, falling back to Go's total
-// OS memory when the platform has no /proc filesystem.
+// processRSS returns Go's total OS memory. MOB³ reads no proc files, so this
+// is the closest process-wide figure available without a filesystem read.
 func processRSS() uint64 {
-	if data, err := os.ReadFile("/proc/self/statm"); err == nil {
-		fields := strings.Fields(string(data))
-		if len(fields) >= 2 {
-			if pages, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
-				return pages * uint64(os.Getpagesize())
-			}
-		}
-	}
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	return stats.Sys

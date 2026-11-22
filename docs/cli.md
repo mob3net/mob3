@@ -28,7 +28,6 @@ falls back to dump mode and prints the rendered page.
 | `-reader` | off | Start in reader mode |
 | `-dark` | off | Start in dark mode |
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
-| `-bookmarks string` | none | Import a Netscape bookmark HTML file |
 | `-home string` | `about:home` | Startup and Home-button target |
 | `-mem-limit int` | 0 | Soft process memory limit in MB; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
@@ -38,7 +37,7 @@ falls back to dump mode and prints the rendered page.
 | `-no-color` | off | Disable ANSI colors in dump mode |
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
-| `-certs string` | `system` | TLS trust store: `system`, `embedded`, or a PEM bundle file |
+| `-certs string` | `system` | TLS trust store: `system` or `embedded` |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
@@ -150,7 +149,6 @@ it opens a window for choosing a preset with the mouse or arrow keys and
 | --- | --- |
 | `system` (default) | The operating system's root certificates, read by Go when a TLS connection needs them; if the system has no roots at all, the embedded bundle is used automatically |
 | `embedded` | The Mozilla NSS root set, compiled into the binary from `golang.org/x/crypto/x509roots/fallback` |
-| `FILE.pem` | A PEM bundle you name; only a regular file is read, capped at 4 MiB |
 
 The embedded bundle is the official one maintained by the Go project: it is
 parsed from Mozilla's NSS trust store and keeps Mozilla's distrust-after dates,
@@ -172,12 +170,10 @@ needed.
 
 The value can be switched between `system` and `embedded` for the session in
 `about:config`. It applies to every later request, and pooled connections made
-with the previous store are closed. A PEM path is a start-up option only:
-`about:config` is reachable from page navigation, and reading an arbitrary local
-bundle there would give a remote page a local-file read it should not have. An
-unreadable or empty bundle named at startup is an error and the run stops; a
-rejected value in `about:config` keeps the current store and shows the reason
-on the page.
+with the previous store are closed. Certificate files are not supported: the
+binary reads no local bundle. An unknown value at startup is an error and the
+run stops; a rejected value in `about:config` keeps the current store and shows
+the reason on the page.
 
 Trust-store choice is not a security boundary: revocation is not checked, and
 there is no certificate UI, pinning or warning flow beyond the connection error
@@ -208,16 +204,12 @@ response bodies and decoded images; nothing is written to disk, and cache hits
 appear in the `!` console. The history cache weighs suspended pages and evicts
 the least recently used ones.
 
-## Home, search and bookmarks
+## Home and search
 
 `-home` sets the page opened at startup and by the `⌂` toolbar button. The
 `-search` template receives the URL-escaped query in `%s`; the default uses the
 server-rendered DuckDuckGo HTML endpoint. An empty value disables search
 fallback, so only URL-like input navigates.
-
-`-bookmarks FILE` imports a Netscape bookmark export (Chrome, Firefox, Safari,
-Edge). The `★ Bookmarks` toolbar button appears only when a bookmark file was
-loaded. Bookmarks live in memory for the session.
 
 ## Automation
 

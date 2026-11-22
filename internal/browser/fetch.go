@@ -104,17 +104,13 @@ type Loader struct {
 	// transport is the stable RoundTripper whose base is replaced when the
 	// certificate source changes; client.Transport always points at it.
 	transport *certTransport
-	// certSource labels the active TLS trust store ("system", "embedded", or a
-	// bundle path) and certPool holds its roots. A nil pool means the platform
-	// store. See SetCertSource.
+	// certSource labels the active TLS trust store ("system" or "embedded")
+	// and certPool holds its roots. A nil pool means the platform store. See
+	// SetCertSource.
 	certSource string
 	certPool   *x509.CertPool
 	// historyFn supplies the in-memory session history for about:history.
 	historyFn func() ([]string, int)
-	bookmarks []Bookmark
-	// bookmarksSet records that -bookmarks was supplied, so the toolbar can
-	// hide its bookmark button when no bookmark file was requested.
-	bookmarksSet bool
 	// ignoreBlocks disables anti-bot/CAPTCHA detection when set, so the
 	// challenge page is loaded and its scripts run. -ignore-blocks sets it.
 	ignoreBlocks bool
@@ -891,8 +887,6 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 			urls, current = l.historyFn()
 		}
 		doc = historyPageHTML(urls, current)
-	case "bookmarks":
-		doc = bookmarksPageHTML(l.bookmarks)
 	default:
 		doc = startPageHTML
 		home = true
@@ -907,8 +901,6 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		title = "Help — MOB³"
 	case "history":
 		title = "History — MOB³"
-	case "bookmarks":
-		title = "Bookmarks — MOB³"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
 	page.Author = l.collectStylesheets(ctx, root, page.Base)
@@ -1876,7 +1868,7 @@ const helpPageBody = `<h1>MOB³ Help</h1>
 Nothing is written to disk.</p>
 
 <h2>Command line</h2>
-<p><b>mob3 [flags] [url|file]</b> opens the start page with no arguments.</p>
+<p><b>mob3 [flags] [url]</b> opens the start page with no arguments.</p>
 <table>
 <tr><th>Option</th><th>Description</th></tr>
 <tr><td><b>-dump</b></td><td>render the page to stdout and exit</td></tr>
@@ -1891,7 +1883,6 @@ Nothing is written to disk.</p>
 <tr><td><b>-reader</b></td><td>start in reader mode</td></tr>
 <tr><td><b>-dark</b></td><td>start in dark mode</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
-<tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
 <tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
 <tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
@@ -1901,7 +1892,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-no-color</b></td><td>disable ANSI colors in dump mode</td></tr>
 <tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
-<tr><td><b>-certs</b> string</td><td>TLS trust store: system, embedded, or a PEM bundle file (default "system")</td></tr>
+<tr><td><b>-certs</b> string</td><td>TLS trust store: system or embedded (default "system")</td></tr>
 <tr><td><b>-mcp</b></td><td>run the MCP automation server on stdin/stdout</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
@@ -1989,13 +1980,12 @@ the rest are skipped with a notice in the <b>!</b> console when either is
 reached. Press <b>Esc</b> or <b>Ctrl-C</b> to interrupt a script that is blocking
 the terminal.</p>
 
-<h2>History and bookmarks</h2>
+<h2>History</h2>
 <p>The <b>≡ History</b> button lists the session history; <b>#</b> links and
 scroll positions are kept. Up to ten visited pages stay in an in-memory
 back/forward cache, so <b>Back</b> and <b>Forward</b> restore a page, its
-JavaScript state and your scroll position without reloading it. The
-<b>★ Bookmarks</b> button appears with
-<b>-bookmarks file.html</b>. Nothing is saved after MOB³ exits. Script and
+JavaScript state and your scroll position without reloading it. Nothing is
+saved after MOB³ exits. Script and
 meta-refresh redirect chains stop after 20 hops with
 <b>Redirect loop stopped</b>, so a page that redirects to itself cannot loop
 forever.</p>

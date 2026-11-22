@@ -12,15 +12,13 @@ import (
 
 func TestHeaderHitRegions(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	u, _ := url.Parse("https://example.com/a")
 	b.url = u
 	drawQuiet(b)
 
-	if len(b.headerHits) != 10 {
+	if len(b.headerHits) != 9 {
 		t.Fatalf("header hits = %+v", b.headerHits)
 	}
-	bookW := stringWidth(" ★ ")
 	histW := stringWidth(" ≡ ")
 	helpW := stringWidth(" ? ")
 	cfgW := stringWidth(" ⚙ ")
@@ -30,7 +28,6 @@ func TestHeaderHitRegions(t *testing.T) {
 		{headerForward, 3, 0, 3, 1},
 		{headerReload, 6, 0, 3, 1},
 		{headerHome, 9, 0, 3, 1},
-		{headerBookmarks, b.width - cfgW - helpW - histW - bookW, 0, bookW, 1},
 		{headerHistory, b.width - cfgW - helpW - histW, 0, histW, 1},
 		{headerHelp, b.width - cfgW - helpW, 0, helpW, 1},
 		{headerConfig, b.width - cfgW, 0, cfgW, 1},
@@ -42,32 +39,11 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[7].x+b.headerHits[7].w != b.width {
+	if b.headerHits[6].x+b.headerHits[6].w != b.width {
 		t.Error("config is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
 		t.Errorf("viewport top = %d, want 2 for a two-row bar", top)
-	}
-}
-
-func TestBookmarksButtonHiddenWithoutFile(t *testing.T) {
-	b := NewBrowser(100, 10)
-	drawQuiet(b)
-	for _, hit := range b.headerHits {
-		if hit.kind == headerBookmarks {
-			t.Fatalf("bookmarks button shown without -bookmarks: %+v", b.headerHits)
-		}
-	}
-	b.loader.bookmarksSet = true
-	drawQuiet(b)
-	found := false
-	for _, hit := range b.headerHits {
-		if hit.kind == headerBookmarks {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("bookmarks button missing after -bookmarks: %+v", b.headerHits)
 	}
 }
 
@@ -101,15 +77,14 @@ func TestCenteredLabel(t *testing.T) {
 
 func TestHeaderNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
-	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	drawQuiet(b)
-	if len(b.headerHits) != 7 || b.headerHits[0].kind != headerHome ||
-		b.headerHits[1].kind != headerBookmarks || b.headerHits[2].kind != headerHistory ||
-		b.headerHits[3].kind != headerHelp || b.headerHits[4].kind != headerConfig ||
-		b.headerHits[5].kind != headerURL || b.headerHits[6].kind != headerZoom {
+	if len(b.headerHits) != 6 || b.headerHits[0].kind != headerHome ||
+		b.headerHits[1].kind != headerHistory ||
+		b.headerHits[2].kind != headerHelp || b.headerHits[3].kind != headerConfig ||
+		b.headerHits[4].kind != headerURL || b.headerHits[5].kind != headerZoom {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[4].x+b.headerHits[4].w != b.width {
+	if b.headerHits[3].x+b.headerHits[3].w != b.width {
 		t.Error("narrow config is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
@@ -310,7 +285,6 @@ func TestScrollRepaintsChrome(t *testing.T) {
 
 func TestHeaderClicks(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.loader.bookmarks = []Bookmark{{Title: "x", URL: "https://example.com/"}}
 	u, _ := url.Parse("https://example.com/a")
 	b.url = u
 	drawQuiet(b)
@@ -368,16 +342,6 @@ func TestHeaderClicks(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("history button did not navigate")
-	}
-
-	b.HandleMouse(MouseEvent{Button: 0, X: 49, Y: 1, Press: true})
-	select {
-	case target := <-targetCh:
-		if target != "about:bookmarks" {
-			t.Fatalf("bookmarks target = %q", target)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("bookmarks button did not navigate")
 	}
 
 	b.HandleMouse(MouseEvent{Button: 0, X: 58, Y: 1, Press: true})

@@ -23,7 +23,7 @@ func Run(args []string) int {
 	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
-	certs := fs.String("certs", "system", "TLS trust store: system, embedded, or a PEM bundle file")
+	certs := fs.String("certs", "system", "TLS trust store: system or embedded")
 	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
@@ -33,7 +33,6 @@ func Run(args []string) int {
 	reader := fs.Bool("reader", false, "start in reader mode")
 	dark := fs.Bool("dark", false, "start in dark mode")
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
-	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
 	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
@@ -41,12 +40,12 @@ func Run(args []string) int {
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url|file]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
 		fmt.Fprintf(os.Stderr, "License: AGPL-3.0-only\n")
 		fmt.Fprintf(os.Stderr, "Copyright (c) 2026 Milos Stojanovic\n\n")
 		fs.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n  %s https://example.com\n  %s -dump -width 120 page.html\n  %s -dump -no-color https://go.dev\n", os.Args[0], os.Args[0], os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExamples:\n  %s https://example.com\n  %s -dump -width 120 about:help\n  %s -dump -no-color https://go.dev\n", os.Args[0], os.Args[0], os.Args[0])
 	}
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -106,15 +105,6 @@ func Run(args []string) int {
 	loader.noImages = graphicsMode == GraphicsNone
 	loader.searchURL = *search
 	loader.ignoreBlocks = *ignoreBlocks
-	if *bookmarks != "" {
-		marks, err := loadBookmarksFile(*bookmarks)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mob3: cannot read bookmarks: %v\n", err)
-			return 1
-		}
-		loader.bookmarks = marks
-		loader.bookmarksSet = true
-	}
 	if *ua != "" {
 		loader.userAgent = *ua
 	}
@@ -197,10 +187,6 @@ func Run(args []string) int {
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
 	}
-	bookmarksValue := *bookmarks
-	if bookmarksValue == "" {
-		bookmarksValue = "(none)"
-	}
 	b.cliConfig = map[string]string{
 		"-dump":          onOff(*dump),
 		"-png":           onOff(*pngOut),
@@ -208,7 +194,6 @@ func Run(args []string) int {
 		"-height":        strconv.Itoa(*heightFlag),
 		"-pdf-page":      strings.TrimSpace(*pdfPage),
 		"-graphics":      *graphics,
-		"-bookmarks":     bookmarksValue,
 		"-mem-limit":     strconv.Itoa(*memLimit),
 		"-layout-budget": budget.Name,
 		"-zoom":          zoomPercentLabel(zoomFactor),

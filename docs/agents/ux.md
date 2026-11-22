@@ -5,10 +5,9 @@ agreement, the non-negotiable constraints and the change protocol.
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `→`, `⟳`, `⌂`, the page title, and `★ Bookmarks` / `≡ History` /
+  `→`, `⟳`, `⌂`, the page title, and `≡ History` /
   `? Help` / `⚙` pinned to the far right; forward, reload, home and config are
-  icon-only. The Bookmarks button is hidden unless `-bookmarks` supplied a
-  file. While a page is loading, the reload icon becomes `×` and clicking it
+  icon-only. While a page is loading, the reload icon becomes `×` and clicking it
   cancels the in-flight load exactly like `Esc` (status `Stopped loading`),
   then the reload icon returns. The URL row is a full-width field that becomes the editable
   `Open: …` prompt with a cursor marker while the prompt is open. A clickable
@@ -29,10 +28,8 @@ agreement, the non-negotiable constraints and the change protocol.
   mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. A rejected value keeps the current setting
-  and shows the reason above the table (an unreadable or empty `-certs`
-  bundle). `certs` accepts only `system` and `embedded` here: `about:config` is
-  reachable from page navigation, so a PEM path stays command-line-only and a
-  remote page cannot make the browser read a local bundle. Changes are never
+  and shows the reason above the table. `certs` accepts only `system` and
+  `embedded`: certificate files are not supported. Changes are never
   persisted. The form posts its values with a one-shot session token, so a
   link, script or typed `about:config?...` URL without that token applies
   nothing; use the form's Apply button. The page starts
@@ -68,22 +65,18 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
-- **History and bookmarks:** `about:history` lists the session's URLs as
+- **History:** `about:history` lists the session's URLs as
   clickable links, most recent first, marks the current entry, caps the list at
   the latest 50 and is generated on demand from in-memory history. `H` or the
-  toolbar History button opens it.
-  `about:bookmarks` lists bookmarks imported with `-bookmarks FILE` (Netscape
-  HTML export), grouped by flattened folder path. Both pages are memory-only;
-  nothing is persisted. The Bookmarks toolbar button only appears when the flag
-  supplied a file.
+  toolbar History button opens it. The page is memory-only; nothing is
+  persisted.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
-  Bookmarks/history/help use full labels at 80+ columns and icons below; the
-  bookmarks item is absent when no `-bookmarks` file was supplied; the
+  History/help use full labels at 80+ columns and icons below; the
   config gear (`⚙`) is always an icon. The full History label underlines its
   `H` to advertise the keyboard shortcut. Below 24 columns hide
   back/forward/reload so the URL field stays usable; home remains visible down
-  to 12 columns; below 18 hide bookmarks; below 12 hide history; below 6 hide
+  to 12 columns; below 12 hide history; below 6 hide
   help and config. Every toolbar item is clickable via per-frame button hit
   regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
@@ -154,8 +147,8 @@ agreement, the non-negotiable constraints and the change protocol.
   scrolling to and highlighting matching lines. Queries may contain spaces:
   whitespace runs collapse to one space, and phrases match across word
   fragments and wrapped lines, with every rectangle of a multi-line match
-  highlighted. It works on every rendered page, including `about:help` and
-  `about:bookmarks`. When the current match lies inside a link, the footer
+  highlighted. It works on every rendered page, including `about:help`.
+  When the current match lies inside a link, the footer
   appends `(f → <resolved URL>)` (or `(f follows this link)` for a bare or empty
   href) and `f` follows that link directly instead of opening link hints;
   clearing the search restores normal `f` hint mode. The
@@ -246,12 +239,12 @@ agreement, the non-negotiable constraints and the change protocol.
   fallback) and works with JavaScript disabled.
   `about:history` uses the centered `max-width:900px` column shared with
   `about:help`.
-- **Built-in page styling:** the generated help, config, history, bookmarks,
+- **Built-in page styling:** the generated help, config, history,
   blocked (“Site blocked”) and error pages share `appPageCSS`/`appPageHTML`:
   one centered 900px reading column, a 32px `h1`, and the same table, muted,
   warning and `pre` styles. Page-specific rules are appended (config form
-  controls, the blocked page's red heading and blue retry box, bookmark folder
-  spacing), and page-derived text is escaped by the shell. The start page keeps
+  controls, the blocked page's red heading and blue retry box), and
+  page-derived text is escaped by the shell. The start page keeps
   its reader-mode column and the PDF viewer keeps its content-sized page boxes.
 - **Help page:** `?` and the toolbar `?` navigate to the built-in
   `about:help` HTML page. Help lives as a normal rendered document (tables for
@@ -403,13 +396,13 @@ agreement, the non-negotiable constraints and the change protocol.
   while its mode is on (JavaScript counts as on while scripts are enabled); the
   console icon toggles the JS console and stays
   visible and clickable inside the console view. Status text is amber and bold for warnings (module script failures, layout truncation, blocked pages/HTTP
-  errors, blocked local navigation, unsupported protocols/JS links), red and
+  errors, unsupported protocols/JS links), red and
   bold for errors (`Error:`, invalid URL/form action, copy failure), and green
   for successful copy messages. The JavaScript error state clears when the JS
   console opens or a new page loads. The readout refreshes
   every two seconds.
-  Memory is `/proc/self/statm` RSS on Linux
-  with `runtime.MemStats.Sys` as the fallback. The readout is not repainted
+  Memory is `runtime.MemStats.Sys`, Go's total OS memory; no `/proc` file is
+  read. The readout is not repainted
   while the JS console is open, so terminal selection is not disturbed.
 - **History:** the session history stores each URL with its last scroll
   position. Fragment-only `#` links push a history entry and scroll in place;

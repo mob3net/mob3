@@ -180,7 +180,7 @@ uploads are unsupported.
 - Click in the prompt to move the caret.
 - Click the zoom badge at the right end of the URL row to open the zoom window
   and choose a preset.
-- Click `←`, `→`, `⟳`, `⌂`, History, Bookmarks, Help or `⚙` in the toolbar.
+- Click `←`, `→`, `⟳`, `⌂`, History, Help or `⚙` in the toolbar.
 - Right click a link to copy its URL (OSC 52); elsewhere it does nothing.
 - The mouse back/forward buttons navigate.
 - Click `Dark:on`/`Dark:off`, `Reader:on`/`Reader:off`,
