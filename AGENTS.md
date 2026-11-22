@@ -398,7 +398,9 @@ Standard Go layout:
   that offset while its containing block is scrolled, stops at the containing
   block's bottom, paints above in-flow content but below fixed chrome, and is
   treated as an overlay by hit testing. `bottom`/`left`/`right` sticky and
-  nested sticky boxes keep their block-flow position.
+  nested sticky boxes keep their block-flow position. The `X` → Sticky
+  elements switch rebuilds the page with sticky boxes in normal flow, so they
+  scroll with the content instead of following the offset.
 - **Cascade layers:** `@layer` blocks are parsed instead of dropped, so
   component CSS wrapped in layers still applies. Layer order follows
   declaration order across the document's stylesheets, including
@@ -932,10 +934,11 @@ Standard Go layout:
   `i` cycle graphics modes, `+`/`-` zoom the page in/out (25% to 200%, `0`
   resets to 100%), `X` open the page view options window (a switch
   list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
-  on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements and
-  Background images (hiding the bitmaps but keeping neutral placeholders), and
-  the list is built from one `viewOption` registry so later view toggles can
-  be added), `o`/`Ctrl-L` URL prompt (or `:` for a Vim-style command prompt where
+  on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements, Sticky
+  elements (off keeps sticky boxes in normal flow so they scroll with the page)
+  and Background images (hiding the bitmaps but keeping neutral placeholders),
+  and the list is built from one `viewOption` registry so later view toggles
+  can be added), `o`/`Ctrl-L` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
   destination confirmation, `u` show URL, `E` open the full warning or error

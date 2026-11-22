@@ -122,6 +122,9 @@ type Browser struct {
 
 	// hideFixed suppresses position:fixed boxes for the current page.
 	hideFixed bool
+	// noSticky lays position:sticky boxes out as normal flow, so they scroll
+	// with the page instead of following a top offset.
+	noSticky bool
 	// hideBackgrounds paints CSS background images as a neutral placeholder
 	// instead of their pixels; the images stay loaded and laid out.
 	hideBackgrounds bool
@@ -849,7 +852,7 @@ func (b *Browser) rebuild() {
 	}
 	b.bigText = b.scaledTextWanted()
 	imagesOff := b.loader != nil && b.loader.noImages
-	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
 	b.layout.BackgroundsOff = b.hideBackgrounds
 	b.updatePDFPageStarts()
 	if b.bigText && layoutTextOverlaps(b.layout) {
@@ -863,7 +866,7 @@ func (b *Browser) rebuild() {
 		if b.layoutBudget.Time > 0 {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
-		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, imagesOff, deadline, b.layoutBudget)
+		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
 		b.layout.BackgroundsOff = b.hideBackgrounds
 		b.updatePDFPageStarts()
 	}

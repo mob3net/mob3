@@ -207,7 +207,7 @@ func TestLayoutImagesOffUsesAltText(t *testing.T) {
 	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
 		img.Img = image.NewRGBA(image.Rect(0, 0, 160, 80))
 	}
-	ly := BuildLayoutBudgetDeadlineImages(doc, nil, 40, 0, false, false, false, true, time.Time{}, DefaultLayoutBudget)
+	ly := BuildLayoutBudgetDeadlineImages(doc, nil, 40, 0, false, false, false, false, true, time.Time{}, DefaultLayoutBudget)
 	found := false
 	for _, f := range ly.Frags {
 		if f.Kind == fragImage {

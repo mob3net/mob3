@@ -149,6 +149,9 @@ type layouter struct {
 	maxFrags  int
 	maxRows   int
 	hideFixed bool
+	// noSticky lays position:sticky boxes out as normal flow, so the page view
+	// option can turn stickiness off without hiding the elements.
+	noSticky bool
 	// stickyNodes records position:sticky boxes as they are laid out, so the
 	// groups can be resolved against their final containing blocks.
 	stickyNodes []*Node
@@ -252,25 +255,25 @@ func BuildLayoutBig(root *Node, author []Rule, width int, bigText bool) *Layout 
 // by style computation and layout. A zero deadline means no limit. When the
 // budget runs out the returned layout is partial and Truncated is set.
 func BuildLayoutDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, false, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, false, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutViewportDeadline is BuildLayoutDeadline with the terminal
 // viewport height, so position:fixed boxes can anchor to the visible area.
 func BuildLayoutViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, false, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, false, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkDeadline is BuildLayoutDeadline with the dark palette applied
 // to page, text, border and background colors after layout.
 func BuildLayoutDarkDeadline(root *Node, author []Rule, width int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, 0, bigText, true, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, 0, bigText, true, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutDarkViewportDeadline is BuildLayoutViewportDeadline with the dark
 // palette applied.
 func BuildLayoutDarkViewportDeadline(root *Node, author []Rule, width, viewportH int, bigText bool, deadline time.Time) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, true, false, false, deadline, DefaultLayoutBudget)
+	return buildLayout(root, author, width, viewportH, bigText, true, false, false, false, deadline, DefaultLayoutBudget)
 }
 
 // BuildLayoutBudgetDeadline is BuildLayoutViewportDeadline with explicit
@@ -282,17 +285,18 @@ func BuildLayoutBudgetDeadline(root *Node, author []Rule, width, viewportH int, 
 // BuildLayoutBudgetDeadlineOptions is BuildLayoutBudgetDeadline with additional
 // display switches. hideFixed removes position:fixed boxes from the result.
 func BuildLayoutBudgetDeadlineOptions(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed bool, deadline time.Time, budget LayoutBudget) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, false, deadline, budget)
+	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, false, false, deadline, budget)
 }
 
-// BuildLayoutBudgetDeadlineImages is BuildLayoutBudgetDeadlineOptions with an
-// imagesOff switch. When set, decoded images are laid out as their alt labels
-// without reloading the page, matching a load with images disabled.
-func BuildLayoutBudgetDeadlineImages(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
-	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, imagesOff, deadline, budget)
+// BuildLayoutBudgetDeadlineImages is BuildLayoutBudgetDeadlineOptions with
+// noSticky and imagesOff switches. noSticky lays position:sticky boxes out as
+// normal flow; imagesOff lays decoded images out as their alt labels without
+// reloading the page, matching a load with images disabled.
+func BuildLayoutBudgetDeadlineImages(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, noSticky, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
+	return buildLayout(root, author, width, viewportH, bigText, dark, hideFixed, noSticky, imagesOff, deadline, budget)
 }
 
-func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
+func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark, hideFixed, noSticky, imagesOff bool, deadline time.Time, budget LayoutBudget) *Layout {
 	if width < 1 {
 		width = 1
 	}
@@ -305,7 +309,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	engine.dark = dark
 	styles := engine.computeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
+	l := &layouter{styles: styles, width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -639,7 +643,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		l.paintZ = st.ZIndex
 	}
 	stickyGroup := 0
-	if st.Position == "sticky" && offsetSet(st.Top) && !l.nestedSticky(n) {
+	if !l.noSticky && st.Position == "sticky" && offsetSet(st.Top) && !l.nestedSticky(n) {
 		l.stickyNodes = append(l.stickyNodes, n)
 		stickyGroup = len(l.stickyNodes)
 	}

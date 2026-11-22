@@ -1363,6 +1363,21 @@ func viewOptions() []viewOption {
 			},
 		},
 		{
+			label: "Sticky elements",
+			on:    func(b *Browser) bool { return !b.noSticky },
+			set: func(b *Browser, on bool) {
+				// Off keeps the boxes in normal flow: they scroll with the page
+				// instead of following their top offset.
+				b.noSticky = !on
+				b.rebuild()
+				if on {
+					b.status = "Sticky elements enabled"
+				} else {
+					b.status = "Sticky elements disabled"
+				}
+			},
+		},
+		{
 			label: "Background images",
 			on:    func(b *Browser) bool { return !b.hideBackgrounds },
 			set: func(b *Browser, on bool) {

@@ -22,7 +22,7 @@ key, mouse and form reference for the running build.
 | `i` | Cycle graphics modes in place: full graphics, blocks, none (no reload) |
 | `+` / `-` | Zoom the page in / out (25% to 200%). Fixed pixel layout, spacing, images and large kitty headings grow; body text keeps its size and line height |
 | `0` | Reset zoom to 100% |
-| `X` | Open the view options window (Fixed elements, Background images); `Space`/`Enter` toggles the selected switch |
+| `X` | Open the view options window (Fixed elements, Sticky elements, Background images); `Space`/`Enter` toggles the selected switch |
 | `o` / `Ctrl-L` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |

@@ -1139,6 +1139,20 @@ func TestViewMenuTogglesFixedElements(t *testing.T) {
 	}
 }
 
+func TestViewMenuTogglesStickyElements(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.HandleKey("X")
+	b.HandleKey("down")
+	b.HandleKey(" ")
+	if !b.noSticky || b.status != "Sticky elements disabled" {
+		t.Fatalf("after Space: noSticky=%v status=%q", b.noSticky, b.status)
+	}
+	b.HandleKey("enter")
+	if b.noSticky || b.status != "Sticky elements enabled" {
+		t.Fatalf("after Enter: noSticky=%v status=%q", b.noSticky, b.status)
+	}
+}
+
 func TestViewMenuIsNotCtrlX(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.HandleKey("ctrl-x")
@@ -1170,8 +1184,8 @@ func TestViewMenuMouseTogglesRow(t *testing.T) {
 	b.HandleKey("X")
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintViewMenu(g)
-	if len(b.viewMenuHits) != 2 {
-		t.Fatalf("view menu hits = %d, want 2", len(b.viewMenuHits))
+	if len(b.viewMenuHits) != 3 {
+		t.Fatalf("view menu hits = %d, want 3", len(b.viewMenuHits))
 	}
 	r := b.viewMenuHits[0].rect
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
@@ -1431,10 +1445,10 @@ func TestViewMenuTogglesBackgrounds(t *testing.T) {
 	b.HandleKey("X")
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintViewMenu(g)
-	if len(b.viewMenuHits) != 2 {
-		t.Fatalf("view menu hits = %d, want 2", len(b.viewMenuHits))
+	if len(b.viewMenuHits) != 3 {
+		t.Fatalf("view menu hits = %d, want 3", len(b.viewMenuHits))
 	}
-	r := b.viewMenuHits[1].rect
+	r := b.viewMenuHits[2].rect
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
 	if !b.hideBackgrounds {
 		t.Fatal("clicking Background images did not hide them")

@@ -547,6 +547,40 @@ func TestStickyTopFollowsScroll(t *testing.T) {
 	}
 }
 
+// TestStickyDisabledKeepsNormalFlow checks the view option that turns
+// position:sticky off: the box stays at its in-flow position when the page
+// scrolls instead of following its top offset.
+func TestStickyDisabledKeepsNormalFlow(t *testing.T) {
+	root := ParseHTML(`<html><head><style>
+	body { margin: 0; }
+	.stick { position: sticky; top: 0; background: #dddddd; }
+	.tail p { margin: 0; }
+	</style></head><body>
+	<div class="wrap"><div class="stick">HEAD</div>
+	<div class="tail"><p>one</p><p>two</p><p>three</p><p>four</p></div></div>
+	</body></html>`)
+	ly := BuildLayoutBudgetDeadlineImages(root, fixtureAuthorRules(root), 40, 12,
+		false, false, false, true, false, time.Time{}, DefaultLayoutBudget)
+	if len(ly.stickies) != 0 {
+		t.Fatalf("sticky groups = %d, want none when disabled", len(ly.stickies))
+	}
+	idx := -1
+	for i := range ly.Frags {
+		if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "HEAD" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatal("sticky header text not found")
+	}
+	base := ly.Frags[idx].Y
+	ly.SetFixedScroll(2)
+	if got := ly.Frags[idx].Y; got != base {
+		t.Fatalf("disabled sticky Y at scroll 2 = %d, want %d", got, base)
+	}
+}
+
 // TestZIndexPaintOrder checks that positioned boxes paint in z-index order
 // even when the higher layer comes first in the DOM, and that hit testing
 // follows the visible layer.
