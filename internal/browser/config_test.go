@@ -28,13 +28,17 @@ func TestConfigPageShowsValues(t *testing.T) {
 	text := page.Root.TextContent()
 	for _, want := range []string{
 		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-bookmarks", "-home", "-js-memory", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
+		"-bookmarks", "-home", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
 		"-ua", "-search", "-mcp", "-version", "startup",
 		"Viewport:", "80x7 characters", "640x112 pixels", "8x16 per cell",
+		"JS ceiling",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
 		}
+	}
+	if strings.Contains(text, "-js-memory") {
+		t.Error("config page still lists the removed -js-memory option")
 	}
 	values := map[string]string{}
 	checked := map[string]bool{}
@@ -47,7 +51,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 		selects[n.Attr("name")] = inputValue(n)
 	}
 	want := map[string]string{
-		"no-js": "on", "home": "https://example.com/home", "js-memory": "64", "cache": "32",
+		"no-js": "on", "home": "https://example.com/home", "cache": "32",
 		"ua": "TestUA", "search": "https://search.example/?q=%s",
 	}
 	for k, v := range want {
@@ -87,7 +91,6 @@ func TestApplyConfig(t *testing.T) {
 		"no-js":         {"on"},
 		"ignore-blocks": {"on"},
 		"home":          {"https://example.com/start"},
-		"js-memory":     {"128"},
 		"cache":         {"16"},
 		"layout-budget": {"high"},
 		"text-scale":    {"off"},
@@ -103,9 +106,6 @@ func TestApplyConfig(t *testing.T) {
 	}
 	if b.home != "https://example.com/start" {
 		t.Fatalf("home = %q", b.home)
-	}
-	if b.jsMemLimit != 128<<20 {
-		t.Fatalf("js memory = %d", b.jsMemLimit)
 	}
 	if got := b.loader.cacheLimitMB(); got != 16 {
 		t.Fatalf("cache = %d MB, want 16", got)
@@ -129,7 +129,7 @@ func TestConfigNavigation(t *testing.T) {
 	b.setLoader(NewLoader())
 	oldHome, oldMem := b.home, b.jsMemLimit
 	// A typed query without the form token applies nothing.
-	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome&js-memory=32", true)
+	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome", true)
 	if b.page == nil || b.page.Title != "Config — MOB³" {
 		t.Fatalf("config page = %+v", b.page)
 	}
@@ -150,11 +150,8 @@ func TestConfigNavigation(t *testing.T) {
 		t.Fatalf("form token = %q, browser token = %q", token, b.configToken)
 	}
 	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		switch n.Attr("name") {
-		case "home":
+		if n.Attr("name") == "home" {
 			n.Value, n.ValueSet = "https://example.com/home", true
-		case "js-memory":
-			n.Value, n.ValueSet = "32", true
 		}
 	}
 	if started, reason := b.submitForm(form); !started {
@@ -163,14 +160,11 @@ func TestConfigNavigation(t *testing.T) {
 	if b.home != "https://example.com/home" {
 		t.Fatalf("home = %q", b.home)
 	}
-	if b.jsMemLimit != 32<<20 {
-		t.Fatalf("js memory = %d", b.jsMemLimit)
-	}
 	values := map[string]string{}
 	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		values[n.Attr("name")] = inputValue(n)
 	}
-	if values["home"] != "https://example.com/home" || values["js-memory"] != "32" {
+	if values["home"] != "https://example.com/home" {
 		t.Fatalf("config inputs = %+v", values)
 	}
 	if b.configToken == token {

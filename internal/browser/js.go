@@ -775,11 +775,6 @@ func (j *jsRuntime) navigatorObject() *sobek.Object {
 	return o
 }
 
-// defaultJSMemoryLimit is the fallback per-page heap ceiling above the
-// runtime's starting heap when no process limit is configured. -js-memory
-// overrides it; zero disables the memory watchdog.
-const defaultJSMemoryLimit = 256 << 20
-
 func (j *jsRuntime) guard(fn func() error) (err error) {
 	if j == nil || j.stopped {
 		return nil

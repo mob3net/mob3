@@ -36,10 +36,9 @@ func Run(args []string) int {
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	jsMemory := fs.Int("js-memory", 0, "JavaScript heap ceiling in MB above the page start; 0 disables (default: 25% of -mem-limit/GOMEMLIMIT, else 256)")
 	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
 	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
-	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB (0 leaves it unlimited and honors GOMEMLIMIT)")
+	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB; also sets the 25% JS, 12% image and 3% SVG budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
@@ -57,12 +56,6 @@ func Run(args []string) int {
 		}
 		return 2
 	}
-	jsMemoryExplicit := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "js-memory" {
-			jsMemoryExplicit = true
-		}
-	})
 	if *showVersion {
 		fmt.Println(Version)
 		return 0
@@ -132,16 +125,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)
 		return 2
 	}
-	var jsMemLimit int64
-	if jsMemoryExplicit {
-		if *jsMemory > 0 {
-			jsMemLimit = int64(*jsMemory) << 20
-		}
-	} else if base := effectiveMemoryLimit(); base > 0 {
-		jsMemLimit = jsHeapBudget(base)
-	} else {
-		jsMemLimit = defaultJSMemoryLimit
-	}
+	jsMemLimit := jsHeapBudget(effectiveMemoryLimit())
 	budget, ok := ParseLayoutBudget(*layoutBudget)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", *layoutBudget)
@@ -173,7 +157,6 @@ func Run(args []string) int {
 		a.b.noJS = *noJS
 		a.b.noPDF = *noPDF
 		a.b.jsMemLimit = jsMemLimit
-		a.b.jsMemExplicit = jsMemoryExplicit
 		a.b.memLimitBytes = int64(*memLimit) << 20
 		a.b.layoutBudget = budget
 		a.b.home = *home
@@ -244,7 +227,6 @@ func Run(args []string) int {
 	b.noJS = *noJS
 	b.noPDF = *noPDF
 	b.jsMemLimit = jsMemLimit
-	b.jsMemExplicit = jsMemoryExplicit
 	b.layoutBudget = budget
 	b.setHistoryCacheLimitMB(*historyCache)
 	b.memLimitBytes = int64(*memLimit) << 20

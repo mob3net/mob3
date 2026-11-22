@@ -1956,10 +1956,9 @@ Nothing is written to disk.</p>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
-<tr><td><b>-js-memory</b> int</td><td>JavaScript heap ceiling in MB above the page start, 0 disables (default: 25% of -mem-limit/GOMEMLIMIT, else 256)</td></tr>
 <tr><td><b>-cache</b> int</td><td>in-memory resource cache limit in MB, 0 disables (default 32)</td></tr>
 <tr><td><b>-history-cache</b> int</td><td>in-memory back/forward history cache limit in MB, 0 disables (default 128)</td></tr>
-<tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
+<tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB; also sets the 25% JS, 12% image and 3% SVG budgets, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
 <tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
 <tr><td><b>-zoom</b> string</td><td>layout zoom percent from 25 to 200, with or without % (default "100"); + and - step the presets</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>

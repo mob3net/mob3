@@ -148,9 +148,6 @@ type Browser struct {
 	pendingStatus string
 	noBigText     bool
 	jsMemLimit    int64
-	// jsMemExplicit records that -js-memory or about:config set the page
-	// ceiling directly, so a -mem-limit change does not overwrite it.
-	jsMemExplicit bool
 	// jsPageBudget caps one page's load-time script phase. It defaults to
 	// jsPageBudget and exists as a field so tests can shorten it.
 	jsPageBudget time.Duration

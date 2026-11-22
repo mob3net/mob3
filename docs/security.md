@@ -136,11 +136,10 @@ not a sandbox.
 ## JavaScript safety limits
 
 Each script and callback runs under a 2-second sobek interrupt watchdog and a
-per-page absolute heap ceiling (`-js-memory`; default 25% of
-`-mem-limit`/`GOMEMLIMIT`, else 256 MB). One sampler per active runtime checks
-the ceiling every 75 ms and interrupts only a call that is running, so a page
-cannot reset its budget on every timer callback. A page's load-time scripts also
-share an 8-second budget and a 2,000-script cap, and Esc or Ctrl-C interrupts the
-script currently blocking the loop. Timer counts and per-tick callbacks are
-capped. These limits protect against runaway scripts, not against malicious
-pages in general.
+per-page absolute heap ceiling (25% of `-mem-limit`/`GOMEMLIMIT`, else 256 MB).
+One sampler per active runtime checks the ceiling every 75 ms and interrupts only
+a call that is running, so a page cannot reset its budget on every timer
+callback. A page's load-time scripts also share an 8-second budget and a
+2,000-script cap, and Esc or Ctrl-C interrupts the script currently blocking the
+loop. Timer counts and per-tick callbacks are capped. These limits protect
+against runaway scripts, not against malicious pages in general.

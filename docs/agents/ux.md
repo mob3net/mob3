@@ -25,7 +25,7 @@ agreement, the non-negotiable constraints and the change protocol.
   prominence.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home, js-memory, cache, history-cache,
+  session (no-js, ignore-blocks, home, cache, history-cache,
   mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. A rejected value keeps the current setting
@@ -794,8 +794,8 @@ agreement, the non-negotiable constraints and the change protocol.
   navigations; unrelated tool calls do not advance timers.
 - **JavaScript safety:** every script and callback runs under a 2-second goja
   interrupt watchdog and a per-page absolute heap ceiling checked by one sampler
-  (25% of `-mem-limit`/`GOMEMLIMIT`, else 256 MB; `-js-memory` overrides, 0
-  disables the memory check). A page's load-time scripts share an 8-second budget
+  (25% of `-mem-limit`/`GOMEMLIMIT`, else 256 MB; raise `-mem-limit` to raise
+  it). A page's load-time scripts share an 8-second budget
   and run at most 2,000 scripts; the rest are skipped with a console notice. Esc
   or Ctrl-C interrupts the script currently blocking the loop. Timer count and
   per-tick callbacks are capped. Script

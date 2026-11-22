@@ -91,11 +91,9 @@ func (b *Browser) setMemoryLimitMB(mb int) {
 		debug.SetMemoryLimit(b.memLimitBytes)
 	}
 	base := effectiveMemoryLimit()
-	if !b.jsMemExplicit {
-		b.jsMemLimit = jsHeapBudget(base)
-		if b.js != nil {
-			b.js.setMemLimit(b.jsMemLimit)
-		}
+	b.jsMemLimit = jsHeapBudget(base)
+	if b.js != nil {
+		b.js.setMemLimit(b.jsMemLimit)
 	}
 	if b.loader != nil {
 		b.loader.setMemoryBudget(base)

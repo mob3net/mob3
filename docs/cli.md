@@ -29,7 +29,6 @@ falls back to dump mode and prints the rendered page.
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
 | `-bookmarks string` | none | Import a Netscape bookmark HTML file |
 | `-home string` | `about:home` | Startup and Home-button target |
-| `-js-memory int` | derived | JavaScript heap ceiling in MB above the page start; `0` disables the memory check; default 25% of `-mem-limit`/`GOMEMLIMIT`, else 256 |
 | `-cache int` | 32 | In-memory resource cache limit in MB; `0` disables it |
 | `-history-cache int` | 128 | Back/forward history cache limit in MB of estimated page size; `0` disables it |
 | `-mem-limit int` | 0 | Soft process memory limit in MB for the Go heap; `0` leaves it unlimited and honors `GOMEMLIMIT` |
@@ -187,21 +186,21 @@ the request returns.
 
 ## JavaScript and cache limits
 
-`-js-memory` sets each page's absolute heap ceiling above the heap at runtime
-creation. One sampler per active runtime checks it every 75 ms and interrupts the
-running call; a page that retains allocations cannot reset the budget on each
-callback. When no explicit value is given, the ceiling is 25% of
-`-mem-limit`/`GOMEMLIMIT` (for example 256 MB at a 1 GB limit), or 256 MB when
-the process is unlimited. Every script also runs under a 2-second CPU watchdog.
-`0` disables the memory check but not the CPU timeout. Each page's load-time
-scripts share an 8-second wall-clock budget and run at most 2,000 scripts; on
-either limit the running script is interrupted and the remaining ones are
-skipped with a console notice. Esc or Ctrl-C interrupts the script currently
-blocking the terminal. Decoded image bytes in flight and inline-SVG rasters are
-bounded by percentages of the same memory limit and by absolute fallbacks.
-`-no-js` disables both script fetching and execution; `<noscript>` content is
-then shown. Press `J` (or click the footer JavaScript label) to toggle this for
-the session and reload the current page.
+Each page has an absolute heap ceiling above the heap at runtime creation. One
+sampler per active runtime checks it every 75 ms and interrupts the running call;
+a page that retains allocations cannot reset the budget on each callback. The
+ceiling is 25% of `-mem-limit`/`GOMEMLIMIT` (for example 256 MB at a 1 GB limit),
+or 256 MB when the process is unlimited; raise `-mem-limit` to raise it. Every
+script also runs under a 2-second CPU watchdog. There is no separate per-page
+flag and no way to disable the memory check while keeping JavaScript on. Each
+page's load-time scripts share an 8-second wall-clock budget and run at most
+2,000 scripts; on either limit the running script is interrupted and the
+remaining ones are skipped with a console notice. Esc or Ctrl-C interrupts the
+script currently blocking the terminal. Decoded image bytes in flight and
+inline-SVG rasters are bounded by percentages of the same memory limit and by
+absolute fallbacks. `-no-js` disables both script fetching and execution;
+`<noscript>` content is then shown. Press `J` (or click the footer JavaScript
+label) to toggle this for the session and reload the current page.
 
 `-cache` is a session-only LRU budget for CSS/JS response bodies and decoded
 images. Nothing is written to disk, and cache hits appear in the `!` console.

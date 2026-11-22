@@ -18,9 +18,9 @@ agreement, the non-negotiable constraints and the change protocol.
   75 ms. The ceiling is measured above the heap when the runtime was created;
   exceeding it interrupts the call that is running, so a page that retains
   allocations cannot reset the budget on every callback. It is 25% of
-  `-mem-limit`/`GOMEMLIMIT` when one is set, otherwise 256 MB; `-js-memory` sets
-  it explicitly in MB (0 disables the memory check, leaving the CPU timeout in
-  place). A runtime frozen in the back/forward cache stops its sampler.
+  `-mem-limit`/`GOMEMLIMIT` when one is set, otherwise 256 MB. There is no
+  separate JS memory flag; raise `-mem-limit` to raise the ceiling. A runtime
+  frozen in the back/forward cache stops its sampler.
   Load-time scripts also share an 8-second page budget and a cap of 2,000
   executed scripts: when either is reached, the running script is interrupted
   and the remaining ones are skipped with a console notice. A bare Esc or Ctrl-C

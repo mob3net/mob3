@@ -1105,8 +1105,8 @@ func TestNoJSDisablesRuntime(t *testing.T) {
 
 func TestJSMemoryLimitDefault(t *testing.T) {
 	b := NewBrowser(40, 10)
-	if b.jsMemLimit != defaultJSMemoryLimit {
-		t.Fatalf("jsMemLimit = %d, want %d", b.jsMemLimit, int64(defaultJSMemoryLimit))
+	if want := jsHeapBudget(effectiveMemoryLimit()); b.jsMemLimit != want {
+		t.Fatalf("jsMemLimit = %d, want %d", b.jsMemLimit, want)
 	}
 }
 
