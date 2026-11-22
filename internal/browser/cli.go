@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"browser/internal/protocol"
 )
 
 // Run executes the MOB³ command line and returns a process exit code.
@@ -248,118 +251,84 @@ func Run(args []string) int {
 	defer cleanup()
 
 	keys := make(chan string, 32)
-	b.keys = keys
-	go readKeyEvents(stdin, keys, &b.abortGen)
+	go readKeyEvents(stdin, keys, nil)
 
 	winch := make(chan os.Signal, 1)
 	quitSig := make(chan os.Signal, 1)
 	startSignalHandlers(winch, quitSig)
 	defer stopSignalHandlers(winch, quitSig)
 
-	// JS timers drive their own one-shot deadlines. An idle page with no
-	// pending timers must not wake up and repaint on a fixed tick.
-	var jsTimer *time.Timer
-	defer func() {
-		if jsTimer != nil {
-			jsTimer.Stop()
+	// The engine runs on its own goroutine behind the transport. The front end
+	// owns the terminal: it reads keys and resizes, sends commands, and reacts
+	// to quit events.
+	caps := protocol.Capabilities(0)
+	if b.color {
+		caps |= protocol.CapColor
+	}
+	if b.gfx != nil {
+		switch b.gfx.Mode() {
+		case GraphicsKitty:
+			caps |= protocol.CapKittyGraphics
+		case GraphicsITerm:
+			caps |= protocol.CapITermGraphics
 		}
-	}()
-	var progressTimer *time.Timer
-	defer func() {
-		if progressTimer != nil {
-			progressTimer.Stop()
+		if b.gfx.TextSizing() {
+			caps |= protocol.CapKittyText
 		}
-	}()
-	usageTicker := time.NewTicker(2 * time.Second)
-	defer usageTicker.Stop()
-
-	b.sampleUsage()
-	b.Navigate(start, true)
+	}
+	session, err := (&protocol.InProc{}).Open(context.Background(), 1, b)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: session: %v\n", err)
+		return 1
+	}
+	defer session.Close()
+	if err := session.Send(protocol.Command{Body: protocol.Init{
+		Width: w, Height: h, CellW: cellW, CellH: cellH, Zoom: zoomFactor, Caps: caps,
+	}}); err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: session init: %v\n", err)
+		return 1
+	}
+	if err := session.Send(protocol.Command{Body: protocol.Navigate{URL: start, Push: true}}); err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
+		return 1
+	}
 	for {
-		// A heavy page evicted from the history cache asks for one scavenge so
-		// its memory leaves the process instead of waiting for the background
-		// scavenger. This runs between frames, never inside a load.
-		if b.takeScavengePending() {
-			debug.FreeOSMemory()
-		}
-		if b.skipDraw {
-			b.skipDraw = false
-		} else {
-			b.draw()
-		}
-		var timerC <-chan time.Time
-		if d, ok := b.nextJSTimerDelay(); ok {
-			if jsTimer == nil {
-				jsTimer = time.NewTimer(d)
-			} else {
-				if !jsTimer.Stop() {
-					select {
-					case <-jsTimer.C:
-					default:
-					}
-				}
-				jsTimer.Reset(d)
-			}
-			timerC = jsTimer.C
-		}
-		var progressC <-chan time.Time
-		if b.progressActive() {
-			if progressTimer == nil {
-				progressTimer = time.NewTimer(progressTickInterval)
-			} else {
-				if !progressTimer.Stop() {
-					select {
-					case <-progressTimer.C:
-					default:
-					}
-				}
-				progressTimer.Reset(progressTickInterval)
-			}
-			progressC = progressTimer.C
-		}
 		select {
 		case k := <-keys:
 			if k == "eof" {
 				return 0
 			}
-			if b.HandleKey(k) {
-				return 0
+			if k == "esc" || k == "ctrl-c" {
+				// Abort is out of band so a busy script stops even when the
+				// command queue is full. The key still follows for the normal
+				// shell handling.
+				session.Abort()
+			}
+			if err := session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
+				if errors.Is(err, protocol.ErrSessionClosed) {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "mob3: session key: %v\n", err)
+				return 1
 			}
 		case <-winch:
 			if nw, nh, ok := terminalSize(os.Stdout); ok {
-				b.resize(nw, nh)
+				if err := session.Send(protocol.Command{Body: protocol.Resize{
+					Width: nw, Height: nh, CellW: cellW, CellH: cellH,
+				}}); err != nil {
+					if errors.Is(err, protocol.ErrSessionClosed) {
+						continue
+					}
+					fmt.Fprintf(os.Stderr, "mob3: session resize: %v\n", err)
+					return 1
+				}
 			}
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case batch := <-b.imageCh:
-			if !b.applyDeferredImageBatch(batch) {
-				b.skipDraw = true
+		case ev, ok := <-session.Events():
+			if !ok {
+				return 0
 			}
-		case task := <-b.importCh:
-			b.finishJSImport(task)
-			if b.js != nil && b.js.ConsumeDirty() {
-				b.rebuild()
-			}
-			b.consumePendingJS()
-		case <-timerC:
-			// The loop body repaints once per event. Skip that repaint unless a
-			// JS timer rebuilt the page: an idle page must not repaint at every
-			// timer wakeup (this also re-sends graphics protocol image
-			// placements and rewrites the chrome every frame).
-			if !b.runJSTimers() {
-				b.skipDraw = true
-			}
-		case <-progressC:
-			if !b.tickProgress() {
-				b.skipDraw = true
-			}
-		case <-usageTicker.C:
-			// Refresh the memory readout only when the displayed value changed;
-			// an unchanged readout does not justify a full repaint.
-			before := b.usage.footer()
-			b.sampleUsage()
-			if b.consoleOpen || b.usage.footer() == before {
-				b.skipDraw = true
+			if _, quit := ev.Body.(protocol.Quit); quit {
+				return 0
 			}
 		case <-quitSig:
 			return 0

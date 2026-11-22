@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"browser/internal/engine"
+	"browser/internal/protocol"
 	"time"
 )
 
@@ -245,6 +246,14 @@ type Browser struct {
 
 	keys   <-chan string
 	dialog *jsDialog
+	// sessionCtx, sessionIn and sessionAbort are set while Serve owns the
+	// event loop. A modal dialog then reads keys from the command stream
+	// instead of a direct terminal channel.
+	sessionCtx   context.Context
+	sessionIn    <-chan protocol.Command
+	sessionAbort <-chan struct{}
+	sessionQuit  bool
+	lastState    protocol.State
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.
@@ -1128,7 +1137,7 @@ func (b *Browser) setPageHover(n *Node) {
 	// pointer movement does not rebuild the page for every cell. Automation
 	// and tests without an event loop need the result synchronously.
 	if b.pageHasHover || dirty {
-		if b.keys != nil {
+		if b.keys != nil || b.sessionIn != nil {
 			b.hoverRebuildPending = true
 			b.hoverRebuildAt = time.Now().Add(hoverRebuildDelay)
 		} else {

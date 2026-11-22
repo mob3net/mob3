@@ -60,6 +60,7 @@ const (
 	EvSelection
 	EvFindResults
 	EvDownload
+	EvQuit
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

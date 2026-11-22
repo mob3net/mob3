@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -152,5 +153,26 @@ func TestInProcTransportClose(t *testing.T) {
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close = %v", err)
+	}
+}
+
+type abortCountingHandler struct{ aborts atomic.Int32 }
+
+func (h *abortCountingHandler) AbortSession() { h.aborts.Add(1) }
+func (h *abortCountingHandler) Serve(ctx context.Context, abort <-chan struct{}, in <-chan Command, out chan<- Event) error {
+	<-ctx.Done()
+	return nil
+}
+
+func TestInProcAbortCallsHandlerDirectly(t *testing.T) {
+	h := &abortCountingHandler{}
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.Abort()
+	if got := h.aborts.Load(); got != 1 {
+		t.Fatalf("aborts = %d, want 1 before the loop wakes", got)
 	}
 }

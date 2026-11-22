@@ -1,0 +1,264 @@
+package browser
+
+import (
+	"context"
+	"runtime/debug"
+	"time"
+
+	"browser/internal/protocol"
+)
+
+// Serve runs the interactive session on its own goroutine. Commands arrive from
+// the trusted front end through the transport; page loads, JavaScript timers,
+// deferred images and imports are serviced here, and the resulting shell state
+// leaves as events.
+//
+// Presentation is still owned by the engine in this batch: draw writes the
+// terminal frame directly while the front end only drives input and lifecycle.
+// Moving the frame and chrome to the front end is the next Phase 5 slice.
+func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out chan<- protocol.Event) error {
+	var jsTimer, progressTimer *time.Timer
+	defer func() {
+		if jsTimer != nil {
+			jsTimer.Stop()
+		}
+		if progressTimer != nil {
+			progressTimer.Stop()
+		}
+		b.cancelLoadNow()
+		b.stopJS()
+	}()
+	usageTicker := time.NewTicker(2 * time.Second)
+	defer usageTicker.Stop()
+
+	b.sessionCtx, b.sessionIn, b.sessionAbort = ctx, in, abort
+	b.sessionQuit = false
+	b.lastState = protocol.State{}
+	defer func() {
+		b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
+	}()
+	b.sampleUsage()
+	for {
+		// A heavy page evicted from the history cache asks for one scavenge so
+		// its memory leaves the process instead of waiting for the background
+		// scavenger. This runs between frames, never inside a load.
+		if b.takeScavengePending() {
+			debug.FreeOSMemory()
+		}
+		if b.skipDraw {
+			b.skipDraw = false
+		} else {
+			b.draw()
+			// A redraw can change pixels without changing the shell state, so
+			// only cross the seam when the snapshot differs.
+			if st := b.stateMessage(); st != b.lastState {
+				b.lastState = st
+				if err := emitEvent(ctx, out, protocol.Event{Body: st}); err != nil {
+					return err
+				}
+			}
+		}
+		var timerC <-chan time.Time
+		if d, ok := b.nextJSTimerDelay(); ok {
+			if jsTimer == nil {
+				jsTimer = time.NewTimer(d)
+			} else {
+				if !jsTimer.Stop() {
+					select {
+					case <-jsTimer.C:
+					default:
+					}
+				}
+				jsTimer.Reset(d)
+			}
+			timerC = jsTimer.C
+		}
+		var progressC <-chan time.Time
+		if b.progressActive() {
+			if progressTimer == nil {
+				progressTimer = time.NewTimer(progressTickInterval)
+			} else {
+				if !progressTimer.Stop() {
+					select {
+					case <-progressTimer.C:
+					default:
+					}
+				}
+				progressTimer.Reset(progressTickInterval)
+			}
+			progressC = progressTimer.C
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-abort:
+			// AbortSession already counted the request on the front-end
+			// goroutine. This is only a wakeup so the loop can redraw and let
+			// the following key command run.
+		case cmd, ok := <-in:
+			if !ok {
+				return nil
+			}
+			quit, err := b.handleCommand(cmd)
+			if err != nil {
+				return err
+			}
+			if quit || b.sessionQuit {
+				return emitEvent(ctx, out, protocol.Event{Body: protocol.Quit{}})
+			}
+		case res := <-b.loadCh:
+			b.finishLoad(res)
+		case batch := <-b.imageCh:
+			if !b.applyDeferredImageBatch(batch) {
+				b.skipDraw = true
+			}
+		case task := <-b.importCh:
+			b.finishJSImport(task)
+			if b.js != nil && b.js.ConsumeDirty() {
+				b.rebuild()
+			}
+			b.consumePendingJS()
+		case <-timerC:
+			// Repaint only when a timer rebuilt the page; an idle page must not
+			// repaint at every timer wakeup.
+			if !b.runJSTimers() {
+				b.skipDraw = true
+			}
+		case <-progressC:
+			if !b.tickProgress() {
+				b.skipDraw = true
+			}
+		case <-usageTicker.C:
+			// Refresh the memory readout only when the displayed value changed.
+			before := b.usage.footer()
+			b.sampleUsage()
+			if b.consoleOpen || b.usage.footer() == before {
+				b.skipDraw = true
+			}
+		}
+	}
+}
+
+// emitEvent delivers one event without blocking session shutdown.
+func emitEvent(ctx context.Context, out chan<- protocol.Event, ev protocol.Event) error {
+	select {
+	case out <- ev:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// handleCommand applies one front-end command. It reports whether the session
+// should exit.
+func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
+	switch v := cmd.Body.(type) {
+	case protocol.Init:
+		if v.CellW > 0 {
+			b.cellW = v.CellW
+		}
+		if v.CellH > 0 {
+			b.cellH = v.CellH
+		}
+		if v.Zoom > 0 {
+			b.zoom = v.Zoom
+			setLayoutZoom(v.Zoom)
+		}
+		b.color = v.Caps&protocol.CapColor != 0
+		b.resize(v.Width, v.Height)
+	case protocol.Navigate:
+		b.Navigate(v.URL, v.Push)
+	case protocol.Resize:
+		b.resize(v.Width, v.Height)
+		if v.CellW > 0 {
+			b.cellW = v.CellW
+		}
+		if v.CellH > 0 {
+			b.cellH = v.CellH
+		}
+		b.applyImageCap()
+	case protocol.Key:
+		// Esc and Ctrl-C also arrive as keys; count them here as well so a
+		// reader cannot lose the abort when both messages are ready and the
+		// select picks the command first.
+		if v.Token == "esc" || v.Token == "ctrl-c" {
+			b.abortGen.Add(1)
+		}
+		return b.HandleKey(v.Token), nil
+	case protocol.Mouse:
+		return b.HandleMouse(b.protocolMouse(v)), nil
+	case protocol.Scroll:
+		switch {
+		case v.Top:
+			b.scrollBy(-b.scroll)
+		case v.Bottom:
+			b.scrollBy(b.maxScroll() - b.scroll)
+		case v.HasTo:
+			b.scrollBy(v.To - b.scroll)
+		default:
+			b.scrollBy(v.Delta)
+		}
+	case protocol.App:
+		return b.handleAppAction(v)
+	case protocol.Abort:
+		b.abortGen.Add(1)
+	case protocol.Shutdown:
+		return true, nil
+	}
+	return false, nil
+}
+
+// handleAppAction applies an application-level action from the front end.
+func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
+	switch a.Action {
+	case protocol.AppBack:
+		b.back()
+	case protocol.AppForward:
+		b.forward()
+	case protocol.AppReload:
+		b.reload()
+	case protocol.AppStop:
+		b.stopLoading()
+	case protocol.AppToggleDark:
+		b.toggleDark()
+	case protocol.AppToggleReader:
+		b.toggleReader()
+	case protocol.AppToggleImages:
+		b.cycleGraphics()
+	case protocol.AppToggleFixed:
+		b.hideFixed = !b.hideFixed
+		b.rebuild()
+	case protocol.AppToggleSticky:
+		b.noSticky = !b.noSticky
+		b.rebuild()
+	case protocol.AppToggleBackgrounds:
+		b.hideBackgrounds = !b.hideBackgrounds
+		b.rebuild()
+	case protocol.AppZoomIn:
+		b.zoomBy(1)
+	case protocol.AppZoomOut:
+		b.zoomBy(-1)
+	case protocol.AppZoomReset:
+		b.resetZoom()
+	}
+	return false, nil
+}
+
+// protocolMouse translates a content-rectangle pointer event into the terminal
+// cell coordinates the engine hit test uses.
+func (b *Browser) protocolMouse(v protocol.Mouse) MouseEvent {
+	return MouseEvent{
+		Button: v.Button,
+		X:      v.X + 1,
+		Y:      b.contentRect().Top + v.Y + 1,
+		Press:  v.Press,
+		Motion: v.Motion,
+		Wheel:  v.Wheel,
+		Shift:  v.Shift,
+	}
+}
+
+// AbortSession counts an out-of-band abort from the front end. The JS runtime
+// reads this atomic from inside a script, so a busy page stops even though the
+// session loop has not run yet.
+func (b *Browser) AbortSession() { b.abortGen.Add(1) }

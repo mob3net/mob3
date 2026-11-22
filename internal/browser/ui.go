@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/grafana/sobek"
+
+	"browser/internal/protocol"
 )
 
 // Console sections, ordered as they are stacked in the console view.
@@ -1749,7 +1751,7 @@ func (b *Browser) showPrompt(msg, def string) (string, bool) {
 
 // runDialog blocks the JS caller while the modal owns the keyboard.
 func (b *Browser) runDialog(d *jsDialog) (string, bool) {
-	if b.keys == nil {
+	if b.keys == nil && b.sessionIn == nil {
 		return d.text, d.kind == "alert"
 	}
 	b.dialog = d
@@ -1759,12 +1761,12 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 	}()
 	for {
 		b.draw()
-		k, ok := <-b.keys
+		k, mouse, ok := b.nextDialogInput()
 		if !ok || k == "eof" {
 			return "", false
 		}
-		if ev, isMouse := ParseMouseToken(k); isMouse {
-			switch b.modalMouseAction(ev) {
+		if mouse != nil {
+			switch b.modalMouseAction(*mouse) {
 			case "close", "outside":
 				return "", d.kind == "alert"
 			}
@@ -1788,6 +1790,57 @@ func (b *Browser) runDialog(d *jsDialog) (string, bool) {
 			d.text, d.cursor = text, cur
 			if done {
 				return d.text, ok
+			}
+		}
+	}
+}
+
+// nextDialogInput returns the next key token or mouse event while a modal owns
+// the keyboard. A transport session consumes commands so the engine loop can
+// stay blocked in the dialog; tests and automation keep the direct channel.
+func (b *Browser) nextDialogInput() (string, *MouseEvent, bool) {
+	if b.keys != nil {
+		k, ok := <-b.keys
+		if !ok {
+			return "", nil, false
+		}
+		if ev, isMouse := ParseMouseToken(k); isMouse {
+			return "", &ev, true
+		}
+		return k, nil, true
+	}
+	for {
+		select {
+		case <-b.sessionCtx.Done():
+			return "", nil, false
+		case <-b.sessionAbort:
+			// AbortSession counted it; wake the dialog loop only.
+		case cmd, ok := <-b.sessionIn:
+			if !ok {
+				return "", nil, false
+			}
+			switch v := cmd.Body.(type) {
+			case protocol.Key:
+				if ev, isMouse := ParseMouseToken(v.Token); isMouse {
+					return "", &ev, true
+				}
+				return v.Token, nil, true
+			case protocol.Mouse:
+				ev := b.protocolMouse(v)
+				return "", &ev, true
+			case protocol.Resize:
+				b.resize(v.Width, v.Height)
+				if v.CellW > 0 {
+					b.cellW = v.CellW
+				}
+				if v.CellH > 0 {
+					b.cellH = v.CellH
+				}
+				b.applyImageCap()
+				b.draw()
+			case protocol.Shutdown:
+				b.sessionQuit = true
+				return "", nil, false
 			}
 		}
 	}

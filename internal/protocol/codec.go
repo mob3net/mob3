@@ -205,6 +205,8 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		kind = EvDownload
 		e.str(v.URL)
 		e.str(v.Name)
+	case Quit:
+		kind = EvQuit
 	default:
 		return dst[:start], fmt.Errorf("%w: unknown event body %T", ErrInvalid, ev.Body)
 	}
@@ -377,6 +379,8 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = FindResults{Query: query, Current: current, Total: total, Rects: rects}
 	case EvDownload:
 		body = Download{URL: d.str(), Name: d.str()}
+	case EvQuit:
+		body = Quit{}
 	default:
 		return Event{}, nil, fmt.Errorf("%w: unknown event kind %d", ErrInvalid, h.kind)
 	}

@@ -31,6 +31,13 @@ func (f HandlerFunc) Serve(ctx context.Context, abort <-chan struct{}, in <-chan
 	return f(ctx, abort, in, out)
 }
 
+// Aborter is an optional handler capability. Abort must take effect without
+// waiting for the command loop, because the loop is exactly where a busy script
+// is running; the transport calls this from the front-end goroutine.
+type Aborter interface {
+	AbortSession()
+}
+
 // Transport opens sessions. The front end only sees the Session handle; the
 // engine handler runs behind it, either in this process or over a pipe or
 // socket later.
@@ -78,6 +85,7 @@ func (t *InProc) Open(ctx context.Context, id SessionID, h Handler) (Session, er
 		serveDone:  make(chan struct{}),
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.aborter, _ = h.(Aborter)
 	go s.forward()
 	go s.serve(h)
 	return s, nil
@@ -97,6 +105,7 @@ type inProcSession struct {
 	// cancel releases the handler and the forwarding goroutine.
 	cancel func()
 
+	aborter Aborter
 	abortCh chan struct{}
 	in      chan Command
 	// handlerOut is the engine's event channel; forward decodes from it.
@@ -141,9 +150,14 @@ func (s *inProcSession) Send(c Command) error {
 
 func (s *inProcSession) Events() <-chan Event { return s.events }
 
-// Abort requests that the handler stop a running script. Repeated requests
-// coalesce; it never blocks the front end.
+// Abort requests that the handler stop a running script. An Aborter takes
+// effect immediately on the front-end goroutine; the channel remains a wakeup
+// for a dialog or any handler that does not implement it. Repeated requests
+// coalesce and it never blocks the front end.
 func (s *inProcSession) Abort() {
+	if s.aborter != nil {
+		s.aborter.AbortSession()
+	}
 	select {
 	case s.abortCh <- struct{}{}:
 	default:
@@ -155,6 +169,11 @@ func (s *inProcSession) Abort() {
 // already asked the session to go away.
 func (s *inProcSession) Close() error {
 	if s.closed.CompareAndSwap(false, true) {
+		// Ask a busy handler to stop before cancelling the context, so a long
+		// script cannot hold Close open until it returns on its own.
+		if s.aborter != nil {
+			s.aborter.AbortSession()
+		}
 		s.cancel()
 		// A handler may be blocked publishing an event that nobody will read
 		// now. Drain both queues so it can observe the cancelled context and

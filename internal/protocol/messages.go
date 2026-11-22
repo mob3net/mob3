@@ -262,3 +262,9 @@ type Download struct {
 }
 
 func (Download) eventKind() Kind { return EvDownload }
+
+// Quit tells the front end that the session wants the application to exit,
+// after a confirmed quit key or a shutdown command.
+type Quit struct{}
+
+func (Quit) eventKind() Kind { return EvQuit }

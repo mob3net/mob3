@@ -98,7 +98,6 @@ type Loader struct {
 	cache *resourceCache
 	// requests is the in-memory console request log.
 	requests *host.RequestLog
-	fetcher  *host.Fetcher
 }
 
 // setUserAgent replaces the User-Agent used by later requests.
@@ -126,7 +125,6 @@ func NewLoader() *Loader {
 		requests:        host.NewRequestLog(),
 		certSource:      CertSourceSystem,
 	}
-	l.fetcher = &host.Fetcher{Client: l.client, Cache: l.cache.ResourceCache, Settings: l.settings, Requests: l.requests}
 	l.imageBudget = newByteLimiter(imageByteBudget(0))
 	l.setMemoryBudget(effectiveMemoryLimit())
 	return l
@@ -425,23 +423,24 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	return page, nil
 }
 
-// fetchCtx and fetchRequest are the raw host fetch path.
-func (l *Loader) syncFetcher() {
-	if l.fetcher == nil {
-		l.fetcher = &host.Fetcher{}
+// newFetcher snapshots the loader's current host dependencies. A fresh value
+// per request lets concurrent navigations and subresources fetch without
+// mutating shared state.
+func (l *Loader) newFetcher() *host.Fetcher {
+	return &host.Fetcher{
+		Client:   l.client,
+		Cache:    l.cache.ResourceCache,
+		Settings: l.settings,
+		Requests: l.requests,
 	}
-	l.fetcher.Client = l.client
-	l.fetcher.Cache = l.cache.ResourceCache
-	l.fetcher.Settings = l.settings
-	l.fetcher.Requests = l.requests
 }
+
+// fetchCtx and fetchRequest are the raw host fetch path.
 func (l *Loader) fetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
-	l.syncFetcher()
-	return l.fetcher.FetchCtx(ctx, u)
+	return l.newFetcher().FetchCtx(ctx, u)
 }
 func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string) (data []byte, ctype string, final *url.URL, status int, err error) {
-	l.syncFetcher()
-	return l.fetcher.FetchRequest(ctx, method, u, body, contentType)
+	return l.newFetcher().FetchRequest(ctx, method, u, body, contentType)
 }
 
 // jsMIMEEssences lists the response types a classic script may execute as.
@@ -1419,5 +1418,5 @@ func (l *Loader) imageCapW() int { w, _ := l.imageCap(); return w }
 func (l *Loader) imageCapH() int { _, h := l.imageCap(); return h }
 
 func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, err error) {
-	l.fetcher.RecordBlocked(gen, method, u, kind, err)
+	l.newFetcher().RecordBlocked(gen, method, u, kind, err)
 }

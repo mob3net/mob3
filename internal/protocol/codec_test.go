@@ -54,6 +54,7 @@ func testEvents() []Event {
 		{Session: 8, Seq: 8, Body: Selection{Text: "selected"}},
 		{Session: 9, Seq: 9, Body: FindResults{Query: "q", Current: 2, Total: 3, Rects: []Rect{{X: 1, Y: 2, W: 3, H: 1}}}},
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin"}},
+		{Session: 11, Seq: 11, Body: Quit{}},
 	}
 }
 

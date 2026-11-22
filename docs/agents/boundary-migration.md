@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 5 in progress (in-process transport landed).**
+Status: **Phase 5 in progress (interactive loop on the transport).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -72,6 +72,8 @@ network destination.
 | D36 | 2026-11-22 | Move the raw request path (`Fetcher`, data URLs, size/encoding checks, cache and request accounting) into `internal/host`. `Loader.fetchCtx/fetchRequest` are delegates that sync the host client/cache/settings/log before each call. Page assembly and parsing remain in the browser for the next slice. | Fetching is host policy and I/O; parsing is engine work. The delegate keeps test-injected clients working while the assembly split is prepared. |
 | D37 | 2026-11-22 | Move HTML page assembly and stylesheet/script/import-map collection into `internal/engine` behind `PageFetcher`; the browser adapter brokers each subresource through the host fetch path. Image/SVG loading, about/PDF/blocked orchestration stay in the Loader for now. | The engine now owns parsing and document assembly, and every subresource crosses a brokered interface. Remaining Loader code is orchestration/policy, not the engine. |
 | D38 | 2026-11-22 | Define `protocol.Handler` and `protocol.Transport`, and implement `protocol.InProc`: each session runs the handler on its own goroutine, and every command and event is encoded and decoded through the fixed codec before delivery. Abort is an out-of-band one-shot channel; an event that fails validation is replaced by `Crash`. | This is the first Phase 5 slice: the seam becomes executable before the browser loop moves onto it, and the codec is on the real path rather than only in tests. |
+| D39 | 2026-11-22 | Run the live interactive loop through `protocol.InProc`: the engine `Browser` handler owns its own goroutine and the page loop; the front end owns terminal raw mode, key reading, resize signals and the quit signal. `protocol.Quit` tells the front end to exit. Modal JS dialogs read commands from the session stream while the loop is blocked. `protocol.Aborter` lets `Session.Abort` count the request directly on the front-end goroutine, so a busy script still stops before the loop wakes. Presentation, chrome and ANSI output stay in the engine until the next slice. | This is the real lifecycle seam: commands, events, abort and shutdown run through the transport on every interactive session, while keeping the existing frame path byte-identical. Moving presentation next turns the engine into a pure frame producer. |
+| D40 | 2026-11-22 | `Loader` takes a fresh `host.Fetcher` snapshot per request instead of mutating one shared value. A test or CLI can still replace the loader's client, settings, cache and request log, because the snapshot is taken at call time. | The shared fetcher raced under concurrent navigations and would be unsafe once the engine services loads on its own goroutine; the snapshot removes the shared write without changing the Loader API. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -143,6 +145,8 @@ which part goes where.
 | raw request path | `internal/host/fetch.go` | `Fetcher`, data URLs, size/encoding checks, cache and request accounting; Loader delegates. |
 | page assembly | `internal/engine/page_loader.go` | HTML parse, base/title, stylesheets, scripts and import map behind `PageFetcher`; image/SVG/about/PDF stay in the Loader. |
 | transport contract | `internal/protocol/transport.go` | `Handler`, `Transport` and the codec-validating in-process session. |
+| interactive session loop | `internal/browser/session.go` | `Serve`, command routing, timers, progress, usage and engine-side dialog input while the transport owns the front end. |
+| terminal loop | `internal/browser/cli.go` | Raw mode, key reading, resize and quit signals; sends commands and reacts to `Quit`. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -184,7 +188,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Engine cannot open sockets or read cookies |
-| 5 | Transport and lifecycle | 1–2 weeks | In progress (5a) | All paths run through the in-process transport |
+| 5 | Transport and lifecycle | 1–2 weeks | In progress (5b) | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
@@ -326,10 +330,15 @@ Next: 3b, the engine package.
 ### Phase 5 — Transport and lifecycle
 
 - [x] Define `Transport`; implement the in-process transport.
-- [ ] Run every path through it, including `-dump`, `-png`, tests and MCP.
-- [ ] Engine runs on its own goroutine with its timer loop; front end owns the
+- [ ] Run every path through it. The interactive session does; `-dump`,
+      `-png`, MCP and automation still call the engine directly.
+- [x] Engine runs on its own goroutine with its timer loop; front end owns the
       terminal loop.
-- [ ] Out-of-band `Abort` so Esc can cancel a busy script.
+- [x] Out-of-band `Abort` so Esc can cancel a busy script. `Aborter` runs the
+      counter on the front-end goroutine; keys also count, so a ready command
+      cannot swallow it.
+- [ ] Move presentation: `drawChrome`, `flushGrid`, ANSI/PNG and native image
+      placement to the front end, with the engine emitting only `Frame`.
 - [ ] Frame coalescing, backpressure and hostile-frame bounds.
       Invalid events already become `Crash`; queue depth is the only
       backpressure today.
@@ -358,7 +367,7 @@ inventory.
 (back/forward/reload/zoom/dark/reader/find/hints/select/copy), `Automation`,
 `Abort`, `Shutdown`.
 
-**Session → front end:** `Frame` (content cells + placements), `State`,
+**Session → front end:** `Frame` (content cells + placements), `State`, `Quit`,
 `Links`, `FindResults`, `SelectionText`, `Dialog`, `Clipboard`,
 `NavigateRequest`, `Download`, `Console`, `Crash`.
 
@@ -445,6 +454,31 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5b deltas
+
+The interactive loop now runs through the transport, with the engine on its own
+goroutine. Draw and content-frame work are unchanged; each key and each state
+event pays the ~1.1 µs codec round trip measured in 5a. Idle CPU stays at zero
+wakes apart from the existing 2 s usage tick.
+
+| Metric | Before 5b | After 5b | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 840–865 µs, 519 610 B/op | 804–811 µs, 519 590 B/op | flat |
+| Content paint+blit, 100×33 | 85–105 µs, 0 B/op | 82–91 µs, 0 B/op | flat |
+| Startup, tiny `-dump` | 4.5–5.0 ms | 3.9–5.2 ms | flat |
+| Interactive idle CPU / RSS | not measured | 1 tick / 5 s (~0.2%), 33.7 MB RSS | idle, no frame loop |
+| Key/state transport round trip | 1.12–1.17 µs | 1.12–1.17 µs | unchanged |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite and `-race` | pass | pass | no change |
+
+Interactive PTY checks: startup, local page load, link navigation, resize,
+quit confirmation, a JS alert dismissed with Enter, and Esc stopping an
+infinite script all keep the session responsive; each exited with status 0.
+
+The engine still writes the terminal frame itself; the next slice moves
+`drawChrome`, `flushGrid`, ANSI/PNG and native image placement to the front end
+and emits `Frame` events instead of writing stdout.
 
 ### Phase 5a deltas
 
@@ -740,3 +774,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4b-6 | Raw `Fetcher` moved to `internal/host` (data URLs, limits, encoding, cache, request log); Loader delegates; page assembly still browser; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/network/frame, dump/PNG hashes | Split page assembly/parse into engine |
 | 2026-11-22 | 4b-7 | HTML assembly and stylesheet/script/import-map collection moved to `internal/engine` behind `PageFetcher`; browser adapter brokers host fetches; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/engine/frame, dump/PNG hashes | Phase 5: transport/lifecycle |
 | 2026-11-22 | 5a | `protocol.Handler`/`Transport` and the codec-validating `InProc` session; abort channel, `Crash` substitution for invalid events, drain-on-close; round-trip/abort/close tests, a frontend frame seam test and a transport benchmark | `go test ./...`, `go vet`, `-race` on protocol/frontend, dump/PNG hashes | Wire the browser loop through the transport |
+| 2026-11-22 | 5b | Interactive loop moved onto `InProc`: engine `Serve` goroutine, command routing, front-end terminal loop, `Quit` event, `Aborter`, transport-aware dialogs, hover coalescing; `Loader` now snapshots `host.Fetcher` per request to remove the concurrent-fetch race | `go test ./...`, `go vet`, full `-race` browser suite, PTY quit/resize smoke, 5 s idle sample, dump/PNG hashes, draw/content benchmarks | Move presentation and chrome to the front end |
