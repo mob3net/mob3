@@ -8,7 +8,8 @@ agreement, the non-negotiable constraints and the change protocol.
 The single `browser` package is being split so page content (DOM, JS, layout,
 decoders) cannot reach the terminal, the network policy or the trusted UI. The
 wire seam is canonical in `internal/protocol`; this section records ownership
-and the migration order.
+and the migration order. Progress, decisions and measurements are tracked in
+[boundary-migration.md](boundary-migration.md).
 
 | Package | Owns |
 | --- | --- |

@@ -59,7 +59,8 @@ agreement, the non-negotiable constraints and the change protocol.
   the client-side header search.
   `.github/workflows/pages.yml` rebuilds and force-pushes the branch on `main`
   pushes touching the README, `docs/`, page files or workflow, and on manual
-  dispatch.
+  dispatch. The publish job is guarded to `refs/heads/main`, so a rewrite branch
+  never publishes the site, even when dispatched by hand.
   **SEO and link previews** live in the same template and build script. Each
   page emits a canonical URL, a `<meta name="description">`, Open Graph and
   Twitter `summary_large_image` tags, a 1200×630 `og:image`, and JSON-LD

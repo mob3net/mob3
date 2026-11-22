@@ -2,8 +2,10 @@
 #
 # The site lives on the generated `gh-pages` branch. This workflow rebuilds it
 # whenever the README, the page template or the build script changes on `main`,
-# and can be run by hand from the Actions tab. The branch is output only: edit
-# README.md and the files under .github/pages/ instead.
+# and can be run by hand from the Actions tab on `main`. Publishing is limited
+# to `main`: rewrite branches, including the boundary migration, never publish.
+# The branch is output only: edit README.md and the files under
+# .github/pages/ instead.
 
 name: GitHub Pages
 
@@ -27,6 +29,9 @@ concurrency:
 jobs:
   publish:
     name: Publish site
+    # Only main publishes. A manual dispatch from a rewrite branch must not
+    # overwrite the live site with in-progress docs.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
