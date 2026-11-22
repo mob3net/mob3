@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type Declaration struct {
 func ParseDeclarations(s string) []Declaration {
 	s = stripCSSComments(s)
 	var out []Declaration
-	for _, chunk := range splitTopLevel(s, ';') {
+	for _, chunk := range SplitTopLevel(s, ';') {
 		chunk = strings.TrimSpace(chunk)
 		if chunk == "" {
 			continue
@@ -94,8 +94,8 @@ func scanCSSStatement(src string, i int) int {
 
 // cssImport is one @import rule: a URL and an optional media condition.
 type cssImport struct {
-	href  string
-	media string
+	Href  string
+	Media string
 }
 
 // cssImports extracts top-level @import rules without parsing the rest of the
@@ -149,7 +149,7 @@ func cssImports(src string) []cssImport {
 				if n == ' ' || n == '\t' || n == '\n' || n == '\r' || n == '"' || n == '\'' || n == 'u' || n == 'U' {
 					end := scanCSSStatement(src, j)
 					if href, media := parseImportSpec(src[j:end]); href != "" {
-						out = append(out, cssImport{href: href, media: media})
+						out = append(out, cssImport{Href: href, Media: media})
 					}
 					i = end
 					if i < len(src) && src[i] == ';' {
@@ -285,7 +285,7 @@ func declareCSSLayers(src string, reg *layerRegistry) {
 			k := scanCSSStatement(src, j)
 			prelude := strings.TrimSpace(src[j:k])
 			if k < len(src) && src[k] == ';' {
-				for _, part := range splitTopLevel(prelude, ',') {
+				for _, part := range SplitTopLevel(prelude, ',') {
 					if name := strings.TrimSpace(part); name != "" {
 						reg.declare(name)
 					}
@@ -355,7 +355,7 @@ func addStyleRules(st *parseState, rules *[]Rule, selText, body, media string, d
 }
 
 func addDeclRules(st *parseState, rules *[]Rule, selText string, decls []Declaration, media string) {
-	for _, part := range splitTopLevel(selText, ',') {
+	for _, part := range SplitTopLevel(selText, ',') {
 		if maxCSSRules > 0 && st.rules >= maxCSSRules {
 			return
 		}
@@ -382,8 +382,8 @@ func addDeclRules(st *parseState, rules *[]Rule, selText string, decls []Declara
 // list: "&" is replaced by the parent, a leading combinator is appended, and
 // any other selector becomes a descendant.
 func composeNestedSelector(parents, children string) string {
-	plist := splitTopLevel(parents, ',')
-	clist := splitTopLevel(children, ',')
+	plist := SplitTopLevel(parents, ',')
+	clist := SplitTopLevel(children, ',')
 	if len(plist)*len(clist) > 256 {
 		return ""
 	}
@@ -542,7 +542,7 @@ func parseRules(src string, st *parseState, media string) []Rule {
 			if src[j] == ';' {
 				if name == "layer" {
 					// @layer a, b; declares names without adding rules.
-					for _, part := range splitTopLevel(strings.TrimSpace(src[preludeStart:j]), ',') {
+					for _, part := range SplitTopLevel(strings.TrimSpace(src[preludeStart:j]), ',') {
 						if n := layerFullName(st.name, strings.TrimSpace(part)); n != "" {
 							st.layers.declare(n)
 						}
@@ -685,22 +685,6 @@ func scanBlock(s string, open int) (body string, next int, ok bool) {
 	return "", len(s), false
 }
 
-func skipString(s string, i int) int {
-	q := s[i]
-	i++
-	for i < len(s) {
-		if s[i] == '\\' {
-			i += 2
-			continue
-		}
-		if s[i] == q {
-			return i + 1
-		}
-		i++
-	}
-	return len(s)
-}
-
 func skipWSComments(s string, i *int) {
 	for *i < len(s) {
 		c := s[*i]
@@ -782,51 +766,26 @@ func stripCSSComments(s string) string {
 
 // seedParsedStyles records the inline styles already collected at load, so the
 // first dynamic-style scan does not parse their rules a second time.
-func (p *Page) seedParsedStyles() {
-	if p == nil || p.Root == nil {
-		return
-	}
-	p.parsedStyles = make(map[*Node]string)
-	for _, n := range p.Root.FindAll(func(n *Node) bool { return n.Tag == "style" }) {
-		p.parsedStyles[n] = n.TextContent()
-	}
+
+// LayerRegistry holds @layer ranks for one document.
+type LayerRegistry = layerRegistry
+
+// NewLayerRegistry creates an empty layer registry.
+func NewLayerRegistry() *LayerRegistry { return newLayerRegistry() }
+
+// CSSImports returns the @import targets in a sheet.
+func CSSImports(src string) []cssImport { return cssImports(src) }
+
+// DeclareCSSLayers registers layer names in declaration order.
+func DeclareCSSLayers(src string, reg *LayerRegistry) { declareCSSLayers(src, reg) }
+
+// ParseStylesheetWithLayers parses a sheet after its layers are declared.
+func ParseStylesheetWithLayers(ctx context.Context, src string, layers *LayerRegistry) []Rule {
+	return parseStylesheetWithLayers(ctx, src, layers)
 }
 
-// collectDynamicStyles appends rules from <style> elements added or changed
-// since the last scan. Component CSS injected by scripts after load lands here;
-// the rules are ordered after every existing author rule so they cascade as
-// later stylesheets. It reports whether any rules were added.
-func (p *Page) collectDynamicStyles() bool {
-	if p == nil || p.Root == nil || p.parsedStyles == nil {
-		return false
-	}
-	order := 0
-	for i := range p.Author {
-		if p.Author[i].Order >= order {
-			order = p.Author[i].Order + 1
-		}
-	}
-	changed := false
-	for _, n := range p.Root.FindAll(func(n *Node) bool { return n.Tag == "style" }) {
-		text := n.TextContent()
-		if prev, ok := p.parsedStyles[n]; ok && prev == text {
-			continue
-		}
-		p.parsedStyles[n] = text
-		room := maxAuthorRules - len(p.Author)
-		if room <= 0 {
-			break
-		}
-		rules := ParseStylesheet(text)
-		if len(rules) > room {
-			rules = rules[:room]
-		}
-		for i := range rules {
-			rules[i].Order = order
-			order++
-			p.Author = append(p.Author, rules[i])
-		}
-		changed = true
-	}
-	return changed
-}
+// MaxAuthorRules bounds the accumulated document stylesheet.
+var MaxAuthorRules = maxAuthorRules
+
+// CSSImport is one parsed @import target.
+type CSSImport = cssImport

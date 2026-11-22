@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"testing"
@@ -9,8 +9,8 @@ func TestNonFiniteLengthsAreIgnored(t *testing.T) {
 	// carousel computing a slide width while the layout reports zero). Invalid
 	// values must behave like an unset declaration, not become geometry.
 	for _, in := range []string{"NaN", "NaNpx", "NaNeM", "Infinitypx", "-Infinity%", "Inf", "calc(1px / 0)"} {
-		if l := parseLength(in, 16); l.Set {
-			t.Errorf("parseLength(%q) = %+v, want an unset length", in, l)
+		if l := ParseLength(in, 16); l.Set {
+			t.Errorf("ParseLength(%q) = %+v, want an unset length", in, l)
 		}
 	}
 
@@ -94,26 +94,26 @@ func TestCalcLengths(t *testing.T) {
 		{"calc(60% + 8px)", 50, 31},
 	}
 	for _, tc := range cases {
-		l := parseLength(tc.value, 16)
+		l := ParseLength(tc.value, 16)
 		if !l.Set || !l.Calc {
-			t.Fatalf("parseLength(%q) = %+v, want a calc length", tc.value, l)
+			t.Fatalf("ParseLength(%q) = %+v, want a calc length", tc.value, l)
 		}
 		if got := l.ResolveH(tc.basis, 16); got != tc.want {
 			t.Errorf("%q at %d columns = %d, want %d", tc.value, tc.basis, got, tc.want)
 		}
 	}
 	for _, bad := range []string{"calc(var(--gap) + 1px)"} {
-		if l := parseLength(bad, 16); l.Set {
-			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
+		if l := ParseLength(bad, 16); l.Set {
+			t.Errorf("ParseLength(%q) = %+v, want unsupported", bad, l)
 		}
 	}
 
 	// Viewport units inside calc() resolve once the layout viewport is known.
-	vw := parseLength("calc(100vw - 40px)", 16)
+	vw := ParseLength("calc(100vw - 40px)", 16)
 	if !vw.Set || !vw.Calc {
 		t.Fatalf("calc(100vw - 40px) = %+v, want a calc length", vw)
 	}
-	resolveViewportLength(&vw, 1000, 800)
+	ResolveViewportLength(&vw, 1000, 800)
 	if got := vw.ResolveH(0, 16); got != 120 {
 		t.Errorf("calc(100vw - 40px) at a 1000px viewport = %d cells, want 120", got)
 	}
@@ -136,9 +136,9 @@ func TestLengthFunctions(t *testing.T) {
 		{"max(2em, 1ch)", 0, 4},
 	}
 	for _, tc := range cases {
-		l := parseLength(tc.value, 16)
+		l := ParseLength(tc.value, 16)
 		if !l.Set || l.Func == nil {
-			t.Fatalf("parseLength(%q) = %+v, want a length function", tc.value, l)
+			t.Fatalf("ParseLength(%q) = %+v, want a length function", tc.value, l)
 		}
 		if got := l.ResolveH(tc.basis, 16); got != tc.want {
 			t.Errorf("%q at %d columns = %d, want %d", tc.value, tc.basis, got, tc.want)
@@ -146,11 +146,11 @@ func TestLengthFunctions(t *testing.T) {
 	}
 
 	// Viewport units inside a function resolve after the cascade.
-	vp := parseLength("min(100vw, 1200px)", 16)
+	vp := ParseLength("min(100vw, 1200px)", 16)
 	if !vp.Set || vp.Func == nil {
 		t.Fatalf("min(100vw, 1200px) = %+v, want a length function", vp)
 	}
-	resolveViewportLength(&vp, 1000, 800)
+	ResolveViewportLength(&vp, 1000, 800)
 	if got := vp.ResolveH(0, 16); got != 125 {
 		t.Errorf("min(100vw, 1200px) at a 1000px viewport = %d cells, want 125", got)
 	}
@@ -159,84 +159,8 @@ func TestLengthFunctions(t *testing.T) {
 		"min()", "clamp(1px, 2px)", "min(1px, 2)", "min(auto, 1px)",
 		"max(1px,)", "min(1px, var(--x))", "clamp(1px, 2px, 3px, 4px)",
 	} {
-		if l := parseLength(bad, 16); l.Set {
-			t.Errorf("parseLength(%q) = %+v, want unsupported", bad, l)
+		if l := ParseLength(bad, 16); l.Set {
+			t.Errorf("ParseLength(%q) = %+v, want unsupported", bad, l)
 		}
-	}
-}
-
-func TestRemUsesRootFontSize(t *testing.T) {
-	doc := ParseHTML(`<html><head><style>
-		html { font-size: 14px; }
-		body { margin: 0; }
-		.box { width: 10rem; margin-left: 1.5rem; padding-left: 1rem; }
-	</style></head><body><div class="box">text</div></body></html>`)
-	rules := ParseStylesheet(`html { font-size: 14px } body { margin: 0 }
-		.box { width: 10rem; margin-left: 1.5rem; padding-left: 1rem }`)
-	ly := BuildLayout(doc, rules, 80)
-	box, _ := findSelectorNode(doc, ".box")
-	st := ly.Styles[box]
-	// 1rem is the root's 14px: 10rem = 140px = 18 cells, 1.5rem = 21px = 3 cells.
-	if got := st.Width.ResolveH(80, st.FontSize); got != 18 {
-		t.Fatalf("width:10rem = %d cells, want 18 (root font 14px)", got)
-	}
-	if got := st.Margin[3].ResolveH(80, st.FontSize); got != 3 {
-		t.Fatalf("margin-left:1.5rem = %d cells, want 3", got)
-	}
-	if got := st.Padding[3].ResolveH(80, st.FontSize); got != 2 {
-		t.Fatalf("padding-left:1rem = %d cells, want 2", got)
-	}
-}
-
-func TestZoomCellRatio(t *testing.T) {
-	defer setLayoutZoom(1)
-
-	setLayoutZoom(1)
-	if got := px(80).ResolveH(0, 16); got != 10 {
-		t.Fatalf("zoom 1: 80px = %d cells, want 10", got)
-	}
-	if got := px(16).ResolveV(0, 16); got != 1 {
-		t.Fatalf("zoom 1: 16px = %d rows, want 1", got)
-	}
-	if got := cssWidthPx(100); got != 800 {
-		t.Fatalf("zoom 1: 100 columns = %d CSS px, want 800", got)
-	}
-
-	setLayoutZoom(2)
-	if got := px(80).ResolveH(0, 16); got != 20 {
-		t.Fatalf("zoom 2: 80px = %d cells, want 20", got)
-	}
-	if got := px(16).ResolveV(0, 16); got != 2 {
-		t.Fatalf("zoom 2: 16px = %d rows, want 2", got)
-	}
-	// The CSS viewport shrinks, so responsive rules see a narrower screen.
-	if got := cssWidthPx(100); got != 400 {
-		t.Fatalf("zoom 2: 100 columns = %d CSS px, want 400", got)
-	}
-	// Percentages stay relative to their container, so they do not zoom.
-	if got := pct(50).ResolveH(100, 16); got != 50 {
-		t.Fatalf("zoom 2: 50%% of 100 = %d cells, want 50", got)
-	}
-
-	// Text metrics keep their normal cell size.
-	if got := (&Style{FontSize: 16, LineHeight: 1}).LineHeightCells(); got != 1 {
-		t.Fatalf("body line height at zoom 2 = %d rows, want 1", got)
-	}
-	if got := (&Style{FontSize: 32, LineHeight: 1}).LineHeightCells(); got != 2 {
-		t.Fatalf("32px line height at zoom 2 = %d rows, want 2", got)
-	}
-	// Scaled headings grow with the zoom.
-	big := &Style{FontSize: 32}
-	if got := bigTextScale(big, 1); got != 2 {
-		t.Fatalf("32px scale at zoom 1 = %d, want 2", got)
-	}
-	if got := bigTextScale(big, 2); got != 4 {
-		t.Fatalf("32px scale at zoom 2 = %d, want 4", got)
-	}
-	if got := bigTextScale(&Style{FontSize: 96}, 2); got != maxTextScale {
-		t.Fatalf("large heading scale = %d, want cap %d", got, maxTextScale)
-	}
-	if got := bigTextScale(&Style{FontSize: 16}, 2); got != 1 {
-		t.Fatalf("body text scale = %d, want 1", got)
 	}
 }

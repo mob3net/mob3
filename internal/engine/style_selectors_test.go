@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"testing"
@@ -56,16 +56,16 @@ func TestEscapedSelectorIdentifiers(t *testing.T) {
 	doc := ParseHTML(`<div><p class="md:flex" id="first">a</p><p class="xl:grid" id="second">b</p><p class="2col" id="third">c</p><span id="a:b">d</span></div>`)
 	rules := ParseStylesheet(`.md\:flex{display:flex}.xl\:grid{display:grid}.2col{color:#00ff00}.\32 col{padding:2px}#a\:b{color:#ff0000}`)
 	styles := newStyleEngine(rules, 100).computeAll(doc)
-	if got := styles[findElementByID(doc, "first")].Display; got != "flex" {
+	if got := styles[findByID(doc, "first")].Display; got != "flex" {
 		t.Fatalf("escaped variant class display = %q", got)
 	}
-	if got := styles[findElementByID(doc, "second")].Display; got != "grid" {
+	if got := styles[findByID(doc, "second")].Display; got != "grid" {
 		t.Fatalf("second escaped variant class display = %q", got)
 	}
-	if got := styles[findElementByID(doc, "a:b")].Color; got != RGB(0xff, 0, 0) {
+	if got := styles[findByID(doc, "a:b")].Color; got != RGB(0xff, 0, 0) {
 		t.Fatalf("escaped id color = %+v", got)
 	}
-	if got := styles[findElementByID(doc, "third")].Color; got != RGB(0x00, 0xff, 0x00) {
+	if got := styles[findByID(doc, "third")].Color; got != RGB(0x00, 0xff, 0x00) {
 		t.Fatalf("digit class color = %+v", got)
 	}
 }

@@ -305,10 +305,10 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	engine := newStyleEngineDeadline(author, cssWidthPx(width), deadline)
 	if viewportH > 0 {
-		engine.viewportH = float64(viewportH) * cellH
+		engine.SetViewportHeight(float64(viewportH) * cellH)
 	}
-	engine.dark = dark
-	styles := engine.computeAll(root)
+	engine.SetDark(dark)
+	styles := engine.ComputeAll(root)
 	l := &layouter{styles: styles, width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
@@ -316,7 +316,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	} else {
 		l.fixedCB = l.rootCB
 	}
-	if engine.expired {
+	if engine.Expired() {
 		l.truncated = true
 	}
 	html := root.FindFirst("html")

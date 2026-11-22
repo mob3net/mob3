@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strings"
@@ -12,7 +12,7 @@ func mediaMatches(query string, viewportPx int, dark bool) bool {
 	if query == "" {
 		return true
 	}
-	for _, part := range splitTopLevel(query, ',') {
+	for _, part := range SplitTopLevel(query, ',') {
 		if mediaQueryMatches(strings.TrimSpace(part), viewportPx, dark) {
 			return true
 		}
@@ -131,8 +131,18 @@ func mediaFeatureMatches(f string, vw int, dark bool) bool {
 }
 
 func mediaPx(v string) int {
-	if l := parseLength(v, 16); l.Set {
+	if l := ParseLength(v, 16); l.Set {
 		return int(l.CSSPx(16))
 	}
 	return 0
+}
+
+// MediaMatches evaluates a media query against the viewport and dark mode.
+func MediaMatches(query string, viewportPx int, dark bool) bool {
+	return mediaMatches(query, viewportPx, dark)
+}
+
+// MediaFeatureMatches evaluates one media feature.
+func MediaFeatureMatches(feature string, viewportPx int, dark bool) bool {
+	return mediaFeatureMatches(feature, viewportPx, dark)
 }

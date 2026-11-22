@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -26,6 +26,9 @@ type styleEngine struct {
 	beforeIndex  *ruleIndex
 	afterIndex   *ruleIndex
 }
+
+// StyleEngine is the exported name of the cascade engine.
+type StyleEngine = styleEngine
 
 // ruleIndex buckets rules by the most specific key of their rightmost
 // compound. A rule lives in exactly one bucket, and every element queries all
@@ -385,3 +388,31 @@ func (e *styleEngine) computeNode(n *Node) *Style {
 	}
 	return n.Style
 }
+
+// NewStyleEngine builds the cascade engine for one layout pass.
+func NewStyleEngine(author []Rule, viewportPx int) *StyleEngine {
+	return newStyleEngine(author, viewportPx)
+}
+
+// NewStyleEngineDeadline is NewStyleEngine with a cooperative deadline.
+func NewStyleEngineDeadline(author []Rule, viewportPx int, deadline time.Time) *StyleEngine {
+	return newStyleEngineDeadline(author, viewportPx, deadline)
+}
+
+// DefaultStyle returns the style an element starts from.
+func DefaultStyle() *Style { return defaultStyle() }
+
+// SetViewportHeight sets the CSS-pixel viewport height for this pass.
+func (e *StyleEngine) SetViewportHeight(h float64) { e.viewportH = h }
+
+// SetDark selects the dark color-scheme media query.
+func (e *StyleEngine) SetDark(dark bool) { e.dark = dark }
+
+// ComputeAll computes styles for the whole tree.
+func (e *StyleEngine) ComputeAll(root *Node) map[*Node]*Style { return e.computeAll(root) }
+
+// ComputeNode computes one element on demand.
+func (e *StyleEngine) ComputeNode(n *Node) *Style { return e.computeNode(n) }
+
+// Expired reports whether the style/layout deadline was reached.
+func (e *StyleEngine) Expired() bool { return e.expired }

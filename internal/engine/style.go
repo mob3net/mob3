@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -6,6 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 )
+
+// MaxTextScale is the largest kitty text scale.
+const MaxTextScale = maxTextScale
 
 const (
 	// baseCellW/baseCellH are the normal CSS pixels per terminal cell. Text
@@ -18,39 +21,6 @@ const (
 	// accepts for the s parameter.
 	maxTextScale = 7
 )
-
-// parseZoomPercent parses a zoom percentage from a flag or about:config field.
-// A trailing % is allowed; the value must be between 25 and 200.
-func parseZoomPercent(s string) (float64, bool) {
-	s = strings.TrimSpace(s)
-	s = strings.TrimSpace(strings.TrimSuffix(s, "%"))
-	if s == "" {
-		return 0, false
-	}
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 25 || v > 200 {
-		return 0, false
-	}
-	return v, true
-}
-
-// zoomPercentLabel formats a zoom factor for the config page.
-func zoomPercentLabel(z float64) string {
-	if z <= 0 {
-		z = 1
-	}
-	return strconv.FormatFloat(math.Round(z*100), 'f', 0, 64) + "%"
-}
-
-// cssWidthPx converts terminal columns to CSS pixels at the current zoom.
-func cssWidthPx(cols int) int {
-	return int(math.Round(float64(cols) * cellW))
-}
-
-// cssHeightPx converts terminal rows to CSS pixels at the current zoom.
-func cssHeightPx(rows int) int {
-	return int(math.Round(float64(rows) * cellH))
-}
 
 // Style is a computed style. Lengths remain unresolved so percentages can be
 // resolved against the containing block during layout.
@@ -134,7 +104,7 @@ type Style struct {
 }
 
 func parseObjectPosition(v string, st *Style) {
-	fields := splitFields(strings.ToLower(strings.TrimSpace(v)))
+	fields := SplitFields(strings.ToLower(strings.TrimSpace(v)))
 	if len(fields) == 0 {
 		return
 	}
@@ -305,10 +275,10 @@ func setPair(dst *[4]Length, start, end int, fields []string, fontPx float64) {
 	if len(fields) == 0 {
 		return
 	}
-	first := parseLength(fields[0], fontPx)
+	first := ParseLength(fields[0], fontPx)
 	second := first
 	if len(fields) > 1 {
-		second = parseLength(fields[1], fontPx)
+		second = ParseLength(fields[1], fontPx)
 	}
 	dst[start], dst[end] = first, second
 }
@@ -319,7 +289,7 @@ func setSides(dst *[4]Length, fields []string, fontPx float64) {
 	}
 	ls := make([]Length, len(fields))
 	for i, f := range fields {
-		ls[i] = parseLength(f, fontPx)
+		ls[i] = ParseLength(f, fontPx)
 	}
 	switch len(ls) {
 	case 1:
@@ -364,7 +334,7 @@ func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, f
 
 func applyDecl(st *Style, prop, val string, parent *Style) {
 	prop = strings.TrimSpace(prop)
-	if lengthProperty(prop) && nonFiniteLength(val) {
+	if LengthProperty(prop) && NonFiniteLength(val) {
 		// An invalid scripted length (NaN/Infinity) is dropped like a browser
 		// would, leaving any earlier declaration in place.
 		return
@@ -435,11 +405,11 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "visibility":
 		st.Hidden = lower == "hidden" || lower == "collapse"
 	case "color":
-		if c, ok := parseColor(val, st.Color); ok {
+		if c, ok := ParseColor(val, st.Color); ok {
 			st.Color = c
 		}
 	case "background-color":
-		if c, ok := parseColor(val, st.Background); ok {
+		if c, ok := ParseColor(val, st.Background); ok {
 			st.Background = c
 		}
 	case "background-image":
@@ -451,7 +421,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		default:
 			// A percentage pair such as `100% 100%` stretches the bitmap over
 			// the box; other sizes are approximated as cover.
-			f := splitFields(lower)
+			f := SplitFields(lower)
 			if len(f) >= 1 && (strings.HasPrefix(f[0], "100%") || f[0] == "auto") && (len(f) < 2 || strings.HasPrefix(f[1], "100%") || f[1] == "auto") {
 				if strings.HasPrefix(f[0], "100%") {
 					st.BackgroundSize = "stretch"
@@ -463,7 +433,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.BackgroundPosX, st.BackgroundPosY = x, y
 		}
 	case "background":
-		if f := splitFields(val); len(f) > 0 {
+		if f := SplitFields(val); len(f) > 0 {
 			if lower == "none" {
 				st.Background = Color{}
 				st.BackgroundImage = ""
@@ -479,14 +449,14 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 				st.BackgroundSize = "contain"
 			}
 			for i := len(f) - 1; i >= 0; i-- {
-				if c, ok := parseColor(f[i], st.Color); ok && !strings.Contains(strings.ToLower(f[i]), "url(") {
+				if c, ok := ParseColor(f[i], st.Color); ok && !strings.Contains(strings.ToLower(f[i]), "url(") {
 					st.Background = c
 					break
 				}
 			}
 		}
 	case "font-size":
-		if sz, ok := parseFontSize(val, parentSize(parent)); ok {
+		if sz, ok := ParseFontSize(val, parentSize(parent)); ok {
 			if sz < 1 {
 				sz = 1
 			}
@@ -506,7 +476,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "font-style":
 		st.Italic = lower == "italic" || lower == "oblique"
 	case "font":
-		fields := splitFields(val)
+		fields := SplitFields(val)
 		for _, f := range fields {
 			fl := strings.ToLower(f)
 			switch {
@@ -529,12 +499,12 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 				lh = sizePart[j+1:]
 				sizePart = sizePart[:j]
 			}
-			if sz, ok := parseFontSize(sizePart, parentSize(parent)); ok {
+			if sz, ok := ParseFontSize(sizePart, parentSize(parent)); ok {
 				st.FontSize = sz
 				if lh != "" {
-					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil && finiteNumber(f) {
+					if f, err := strconv.ParseFloat(strings.TrimSpace(lh), 64); err == nil && FiniteNumber(f) {
 						st.LineHeight = math.Max(0.5, f)
-					} else if l := parseLength(lh, st.FontSize); l.Set {
+					} else if l := ParseLength(lh, st.FontSize); l.Set {
 						st.LineHeight = math.Max(0.5, l.CSSPx(st.FontSize)/st.FontSize)
 					}
 				}
@@ -550,7 +520,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.LineHeight = math.Max(0.5, f)
 			return
 		}
-		if l := parseLength(val, st.FontSize); l.Set {
+		if l := ParseLength(val, st.FontSize); l.Set {
 			if l.U == UnitPercent {
 				st.LineHeight = l.V / 100
 			} else {
@@ -571,7 +541,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.VerticalAlign = lower
 		}
 	case "text-indent":
-		st.TextIndent = parseLength(val, st.FontSize)
+		st.TextIndent = ParseLength(val, st.FontSize)
 	case "text-transform":
 		switch lower {
 		case "uppercase", "lowercase", "capitalize", "none":
@@ -582,7 +552,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		st.Content = text
 		st.ContentSet = ok
 	case "text-decoration", "text-decoration-line":
-		f := splitFields(lower)
+		f := SplitFields(lower)
 		none := false
 		underline, strike := false, false
 		for _, x := range f {
@@ -610,49 +580,49 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.WhiteSpace = "normal"
 		}
 	case "margin":
-		setSides(&st.Margin, splitFields(val), st.FontSize)
+		setSides(&st.Margin, SplitFields(val), st.FontSize)
 	case "margin-top":
-		st.Margin[0] = parseLength(val, st.FontSize)
+		st.Margin[0] = ParseLength(val, st.FontSize)
 	case "margin-right":
-		st.Margin[1] = parseLength(val, st.FontSize)
+		st.Margin[1] = ParseLength(val, st.FontSize)
 	case "margin-bottom":
-		st.Margin[2] = parseLength(val, st.FontSize)
+		st.Margin[2] = ParseLength(val, st.FontSize)
 	case "margin-left":
-		st.Margin[3] = parseLength(val, st.FontSize)
+		st.Margin[3] = ParseLength(val, st.FontSize)
 	case "margin-inline":
-		setPair(&st.Margin, 3, 1, splitFields(val), st.FontSize)
+		setPair(&st.Margin, 3, 1, SplitFields(val), st.FontSize)
 	case "margin-block":
-		setPair(&st.Margin, 0, 2, splitFields(val), st.FontSize)
+		setPair(&st.Margin, 0, 2, SplitFields(val), st.FontSize)
 	case "margin-inline-start":
-		st.Margin[3] = parseLength(val, st.FontSize)
+		st.Margin[3] = ParseLength(val, st.FontSize)
 	case "margin-inline-end":
-		st.Margin[1] = parseLength(val, st.FontSize)
+		st.Margin[1] = ParseLength(val, st.FontSize)
 	case "margin-block-start":
-		st.Margin[0] = parseLength(val, st.FontSize)
+		st.Margin[0] = ParseLength(val, st.FontSize)
 	case "margin-block-end":
-		st.Margin[2] = parseLength(val, st.FontSize)
+		st.Margin[2] = ParseLength(val, st.FontSize)
 	case "padding":
-		setSides(&st.Padding, splitFields(val), st.FontSize)
+		setSides(&st.Padding, SplitFields(val), st.FontSize)
 	case "padding-top":
-		st.Padding[0] = parseLength(val, st.FontSize)
+		st.Padding[0] = ParseLength(val, st.FontSize)
 	case "padding-right":
-		st.Padding[1] = parseLength(val, st.FontSize)
+		st.Padding[1] = ParseLength(val, st.FontSize)
 	case "padding-bottom":
-		st.Padding[2] = parseLength(val, st.FontSize)
+		st.Padding[2] = ParseLength(val, st.FontSize)
 	case "padding-left":
-		st.Padding[3] = parseLength(val, st.FontSize)
+		st.Padding[3] = ParseLength(val, st.FontSize)
 	case "padding-inline":
-		setPair(&st.Padding, 3, 1, splitFields(val), st.FontSize)
+		setPair(&st.Padding, 3, 1, SplitFields(val), st.FontSize)
 	case "padding-block":
-		setPair(&st.Padding, 0, 2, splitFields(val), st.FontSize)
+		setPair(&st.Padding, 0, 2, SplitFields(val), st.FontSize)
 	case "padding-inline-start":
-		st.Padding[3] = parseLength(val, st.FontSize)
+		st.Padding[3] = ParseLength(val, st.FontSize)
 	case "padding-inline-end":
-		st.Padding[1] = parseLength(val, st.FontSize)
+		st.Padding[1] = ParseLength(val, st.FontSize)
 	case "padding-block-start":
-		st.Padding[0] = parseLength(val, st.FontSize)
+		st.Padding[0] = ParseLength(val, st.FontSize)
 	case "padding-block-end":
-		st.Padding[2] = parseLength(val, st.FontSize)
+		st.Padding[2] = ParseLength(val, st.FontSize)
 	case "border":
 		applyBorderShorthand(st, val, []int{0, 1, 2, 3})
 	case "border-top":
@@ -664,7 +634,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "border-left":
 		applyBorderShorthand(st, val, []int{3})
 	case "border-width":
-		applyBorderWidth(st, splitFields(val), []int{0, 1, 2, 3})
+		applyBorderWidth(st, SplitFields(val), []int{0, 1, 2, 3})
 	case "border-top-width":
 		applyBorderWidth(st, []string{val}, []int{0})
 	case "border-right-width":
@@ -674,7 +644,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "border-left-width":
 		applyBorderWidth(st, []string{val}, []int{3})
 	case "border-color":
-		applyBorderColor(st, splitFields(val), []int{0, 1, 2, 3})
+		applyBorderColor(st, SplitFields(val), []int{0, 1, 2, 3})
 	case "border-top-color":
 		applyBorderColor(st, []string{val}, []int{0})
 	case "border-right-color":
@@ -684,7 +654,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "border-left-color":
 		applyBorderColor(st, []string{val}, []int{3})
 	case "border-style":
-		applyBorderStyleFields(st, splitFields(lower), []int{0, 1, 2, 3})
+		applyBorderStyleFields(st, SplitFields(lower), []int{0, 1, 2, 3})
 	case "border-top-style":
 		applyBorderStyleFields(st, []string{lower}, []int{0})
 	case "border-right-style":
@@ -697,37 +667,37 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		if lower == "auto" || lower == "fit-content" || lower == "max-content" || lower == "min-content" {
 			st.Width = Length{}
 		} else {
-			st.Width = parseLength(val, st.FontSize)
+			st.Width = ParseLength(val, st.FontSize)
 		}
 	case "height":
 		if lower == "auto" {
 			st.Height = Length{}
 		} else {
-			st.Height = parseLength(val, st.FontSize)
+			st.Height = ParseLength(val, st.FontSize)
 		}
 	case "min-width":
 		if lower == "auto" {
 			st.MinWidth = Length{}
 		} else {
-			st.MinWidth = parseLength(val, st.FontSize)
+			st.MinWidth = ParseLength(val, st.FontSize)
 		}
 	case "max-width":
 		if lower == "none" || lower == "auto" {
 			st.MaxWidth = Length{}
 		} else {
-			st.MaxWidth = parseLength(val, st.FontSize)
+			st.MaxWidth = ParseLength(val, st.FontSize)
 		}
 	case "min-height":
 		if lower == "auto" {
 			st.MinHeight = Length{}
 		} else {
-			st.MinHeight = parseLength(val, st.FontSize)
+			st.MinHeight = ParseLength(val, st.FontSize)
 		}
 	case "max-height":
 		if lower == "none" || lower == "auto" {
 			st.MaxHeight = Length{}
 		} else {
-			st.MaxHeight = parseLength(val, st.FontSize)
+			st.MaxHeight = ParseLength(val, st.FontSize)
 		}
 	case "box-sizing":
 		switch lower {
@@ -744,7 +714,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			}
 		}
 	case "list-style", "list-style-type":
-		for _, f := range splitFields(lower) {
+		for _, f := range SplitFields(lower) {
 			switch f {
 			case "disc", "circle", "square", "decimal", "decimal-leading-zero",
 				"lower-alpha", "upper-alpha", "lower-latin", "upper-latin",
@@ -795,7 +765,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.Order = n
 		}
 	case "flex-flow":
-		for _, f := range splitFields(lower) {
+		for _, f := range SplitFields(lower) {
 			switch f {
 			case "column", "column-reverse":
 				st.FlexDir = "column"
@@ -806,45 +776,45 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			}
 		}
 	case "flex-grow":
-		if f, err := strconv.ParseFloat(lower, 64); err == nil && finiteNumber(f) && f > 0 {
+		if f, err := strconv.ParseFloat(lower, 64); err == nil && FiniteNumber(f) && f > 0 {
 			st.FlexGrow = f
 		}
 	case "flex":
-		fields := splitFields(lower)
+		fields := SplitFields(lower)
 		if len(fields) > 0 {
-			if f, err := strconv.ParseFloat(fields[0], 64); err == nil && finiteNumber(f) {
+			if f, err := strconv.ParseFloat(fields[0], 64); err == nil && FiniteNumber(f) {
 				if f > 0 {
 					st.FlexGrow = f
 				}
 				if len(fields) >= 3 {
-					if s, err := strconv.ParseFloat(fields[1], 64); err == nil && finiteNumber(s) {
+					if s, err := strconv.ParseFloat(fields[1], 64); err == nil && FiniteNumber(s) {
 						st.FlexShrink = s
 					}
-					if l := parseLength(fields[2], st.FontSize); l.Set {
+					if l := ParseLength(fields[2], st.FontSize); l.Set {
 						st.FlexBasis = l
 						st.FlexBasisSet = true
 					}
 				}
-			} else if l := parseLength(fields[0], st.FontSize); l.Set {
+			} else if l := ParseLength(fields[0], st.FontSize); l.Set {
 				st.FlexBasis = l
 				st.FlexBasisSet = true
 			}
 		}
 	case "flex-basis":
-		if l := parseLength(val, st.FontSize); l.Set {
+		if l := ParseLength(val, st.FontSize); l.Set {
 			st.FlexBasis = l
 			st.FlexBasisSet = true
 		}
 	case "flex-shrink":
-		if f, err := strconv.ParseFloat(lower, 64); err == nil && finiteNumber(f) && f >= 0 {
+		if f, err := strconv.ParseFloat(lower, 64); err == nil && FiniteNumber(f) && f >= 0 {
 			st.FlexShrink = f
 		}
 	case "gap", "column-gap":
-		if l := parseLength(val, st.FontSize); l.Set {
+		if l := ParseLength(val, st.FontSize); l.Set {
 			st.Gap = l
 		}
 	case "row-gap", "grid-row-gap":
-		if l := parseLength(val, st.FontSize); l.Set {
+		if l := ParseLength(val, st.FontSize); l.Set {
 			st.RowGap = l
 		}
 	case "grid-template-columns":
@@ -855,7 +825,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		// Numeric grid-area is the row/column shorthand: `1/2` is row 1,
 		// column 2, and `1/1/2/3` adds the end lines. A name is an entry in
 		// grid-template-areas instead.
-		parts := splitTopLevel(val, '/')
+		parts := SplitTopLevel(val, '/')
 		if len(parts) == 0 {
 			break
 		}
@@ -906,14 +876,14 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.JustifySelf = gridJustifyKeyword(lower)
 		}
 	case "place-items":
-		fields := splitFields(lower)
+		fields := SplitFields(lower)
 		if len(fields) == 1 {
 			st.JustifyItems = gridJustifyKeyword(fields[0])
 		} else if len(fields) >= 2 {
 			st.JustifyItems = gridJustifyKeyword(fields[1])
 		}
 	case "place-self":
-		fields := splitFields(lower)
+		fields := SplitFields(lower)
 		if len(fields) == 1 {
 			st.JustifySelf = gridJustifyKeyword(fields[0])
 		} else if len(fields) >= 2 {
@@ -971,7 +941,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "aspect-ratio":
 		parseAspectRatio(val, st)
 	case "top", "right", "bottom", "left":
-		l := parseLength(val, st.FontSize)
+		l := ParseLength(val, st.FontSize)
 		switch prop {
 		case "top":
 			st.Top = l
@@ -999,7 +969,7 @@ func applyBorderShorthand(st *Style, val string, sides []int) {
 	color := Color{}
 	none := false
 	styled := false
-	for _, f := range splitFields(val) {
+	for _, f := range SplitFields(val) {
 		fl := strings.ToLower(f)
 		if isBorderStyle(fl) {
 			styled = true
@@ -1008,19 +978,19 @@ func applyBorderShorthand(st *Style, val string, sides []int) {
 			}
 			continue
 		}
-		if c, ok := parseColor(f, st.BorderColor); ok {
+		if c, ok := ParseColor(f, st.BorderColor); ok {
 			color = c
 			continue
 		}
 		switch fl {
 		case "thin":
-			w = px(1)
+			w = PX(1)
 		case "medium":
-			w = px(3)
+			w = PX(3)
 		case "thick":
-			w = px(5)
+			w = PX(5)
 		default:
-			if l := parseLength(f, st.FontSize); l.Set {
+			if l := ParseLength(f, st.FontSize); l.Set {
 				w = l
 			}
 		}
@@ -1080,7 +1050,7 @@ func applyBorderStyleFields(st *Style, fields []string, sides []int) {
 func applyBorderColor(st *Style, fields []string, sides []int) {
 	var colors [4]Color
 	for i, f := range fields {
-		if c, ok := parseColor(f, st.BorderColor); ok {
+		if c, ok := ParseColor(f, st.BorderColor); ok {
 			if i < 4 {
 				colors[i] = c
 			}
@@ -1106,17 +1076,17 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 		return
 	}
 	if v := n.Attr("bgcolor"); v != "" {
-		if c, ok := parseColor(v, st.Background); ok {
+		if c, ok := ParseColor(v, st.Background); ok {
 			st.Background = c
 		}
 	}
 	if v := n.Attr("color"); v != "" && (n.Tag == "font" || n.Tag == "body" || n.Tag == "table" || n.Tag == "tr" || n.Tag == "td" || n.Tag == "th") {
-		if c, ok := parseColor(v, st.Color); ok {
+		if c, ok := ParseColor(v, st.Color); ok {
 			st.Color = c
 		}
 	}
 	if v := n.Attr("text"); v != "" && n.Tag == "body" {
-		if c, ok := parseColor(v, st.Color); ok {
+		if c, ok := ParseColor(v, st.Color); ok {
 			st.Color = c
 		}
 	}
@@ -1132,7 +1102,7 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 	if v := n.Attr("width"); v != "" {
 		switch n.Tag {
 		case "img", "table", "td", "th", "hr":
-			if l := parseLength(v, st.FontSize); l.Set {
+			if l := ParseLength(v, st.FontSize); l.Set {
 				st.Width = l
 			}
 		}
@@ -1140,7 +1110,7 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 	if v := n.Attr("height"); v != "" {
 		switch n.Tag {
 		case "img", "table", "td", "th":
-			if l := parseLength(v, st.FontSize); l.Set {
+			if l := ParseLength(v, st.FontSize); l.Set {
 				st.Height = l
 			}
 		}
@@ -1170,7 +1140,7 @@ func expandVars(value string, vars map[string]string, depth int) (string, bool) 
 			return "", false
 		}
 		inner := value[idx+4 : end]
-		parts := splitTopLevel(inner, ',')
+		parts := SplitTopLevel(inner, ',')
 		name := strings.TrimSpace(parts[0])
 		repl, ok := vars[name]
 		if !ok {
@@ -1229,7 +1199,7 @@ func clipHidesContent(clip string) bool {
 		return false
 	}
 	inner := strings.TrimSpace(clip[5 : len(clip)-1])
-	parts := splitTopLevel(inner, ',')
+	parts := SplitTopLevel(inner, ',')
 	if len(parts) != 4 {
 		return false
 	}
@@ -1238,7 +1208,7 @@ func clipHidesContent(clip string) bool {
 		if part == "auto" {
 			return false
 		}
-		l := parseLength(part, 16)
+		l := ParseLength(part, 16)
 		if !l.Set || l.CSSPx(16) > 1 {
 			return false
 		}
@@ -1276,7 +1246,7 @@ func backgroundURL(val string) string {
 // parseBackgroundPosition resolves background-position keywords/percentages to
 // fractions of the box. One value sets x and centers y, as in CSS.
 func parseBackgroundPosition(v string) (float64, float64, bool) {
-	fields := splitFields(v)
+	fields := SplitFields(v)
 	if len(fields) == 0 {
 		return 0, 0, false
 	}
@@ -1440,4 +1410,18 @@ func gridJustifyKeyword(v string) string {
 		return "stretch"
 	}
 	return ""
+}
+
+// BigTextScale is the kitty text scale for a style at the given zoom.
+func BigTextScale(st *Style, zoom float64) int { return bigTextScale(st, zoom) }
+
+// IsPrivateUseRune reports whether r is in a private-use block.
+func IsPrivateUseRune(r rune) bool { return isPrivateUseRune(r) }
+
+// ApplyDecl applies one declaration to a style.
+func ApplyDecl(st *Style, prop, val string, parent *Style) { applyDecl(st, prop, val, parent) }
+
+// ApplyDecls applies a declaration list with the cascade rules.
+func ApplyDecls(st *Style, decls []Declaration, parent *Style, important bool, fontBase float64) {
+	applyDecls(st, decls, parent, important, fontBase)
 }

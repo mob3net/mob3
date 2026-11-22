@@ -325,7 +325,7 @@ func TestReaderHeadingsStayLeftAligned(t *testing.T) {
 
 func TestReaderHeadingLinksAreNotUnderlined(t *testing.T) {
 	doc := ParseHTML(`<article><a href="/story"><h2>Story title</h2></a><p>Body</p></article>`)
-	styles := newStyleEngine(readerRules, 800).computeAll(doc)
+	styles := newStyleEngine(readerRules, 800).ComputeAll(doc)
 	h2 := doc.FindFirst("h2")
 	if h2 == nil {
 		t.Fatal("missing heading")

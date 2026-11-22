@@ -1316,7 +1316,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 				if ref == nil {
 					continue
 				}
-				u, err := ref.Parse(imp.href)
+				u, err := ref.Parse(imp.Href)
 				if err != nil {
 					continue
 				}
@@ -1330,7 +1330,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 				if err != nil || status < 200 || status >= 400 || final == nil {
 					continue
 				}
-				addSheet(string(data), final, depth+1, combineMedia(media, imp.media))
+				addSheet(string(data), final, depth+1, combineMedia(media, imp.Media))
 			}
 		}
 		sheets = append(sheets, sheetEntry{src: src, media: media})

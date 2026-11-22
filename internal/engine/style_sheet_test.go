@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"context"
@@ -144,13 +144,13 @@ p { content: "@import nope.css"; }
 	if len(got) != 3 {
 		t.Fatalf("imports = %+v, want 3", got)
 	}
-	if got[0].href != "a.css" || got[0].media != "" {
+	if got[0].Href != "a.css" || got[0].Media != "" {
 		t.Fatalf("first import = %+v", got[0])
 	}
-	if got[1].href != "b.css" || got[1].media != "screen and (max-width: 600px)" {
+	if got[1].Href != "b.css" || got[1].Media != "screen and (max-width: 600px)" {
 		t.Fatalf("second import = %+v", got[1])
 	}
-	if got[2].href != "c.css" || got[2].media != "print" {
+	if got[2].Href != "c.css" || got[2].Media != "print" {
 		t.Fatalf("third import = %+v", got[2])
 	}
 }
@@ -162,8 +162,8 @@ func TestImportURLWithSemicolons(t *testing.T) {
 	if len(imports) != 1 {
 		t.Fatalf("imports = %+v, want 1", imports)
 	}
-	if imports[0].href != "https://fonts.example/css2?family=Open+Sans:ital,wght@0,300;0,400;0,700&display=swap" {
-		t.Fatalf("import href = %q", imports[0].href)
+	if imports[0].Href != "https://fonts.example/css2?family=Open+Sans:ital,wght@0,300;0,400;0,700&display=swap" {
+		t.Fatalf("import href = %q", imports[0].Href)
 	}
 	rules := ParseStylesheet(src)
 	if len(rules) != 1 {
@@ -183,8 +183,8 @@ func TestNestedRulesExpandAgainstParent(t *testing.T) {
 	`)
 	styles := newStyleEngine(rules, 100).computeAll(doc)
 	card := doc.FindFirst("div")
-	link := findElementByID(doc, "a")
-	span := findElementByID(doc, "s")
+	link := findByID(doc, "a")
+	span := findByID(doc, "s")
 	if got := styles[card].Color; got != RGB(0x11, 0x11, 0x11) {
 		t.Fatalf("card color = %+v", got)
 	}
@@ -237,7 +237,7 @@ func TestCSSImportsScalesWithLargeSheets(t *testing.T) {
 	start := time.Now()
 	imports := cssImports(src)
 	elapsed := time.Since(start)
-	if len(imports) != 1 || imports[0].href != "extra.css" || imports[0].media != "screen" {
+	if len(imports) != 1 || imports[0].Href != "extra.css" || imports[0].Media != "screen" {
 		t.Fatalf("imports = %+v", imports)
 	}
 	if elapsed > 2*time.Second {
@@ -340,52 +340,5 @@ func TestUnsupportedPseudoInvalidatesSelector(t *testing.T) {
 	}
 	if sel, err := ParseSelector(".card:not(:disabled)"); err != nil || sel == nil {
 		t.Fatalf("supported :not(:disabled) rejected: %v", err)
-	}
-}
-
-// TestCollectDynamicStyles covers CSS injected after load: static styles are
-// not re-parsed, a new <style> applies on the next layout, and a changed style
-// is collected again with the later rule winning the cascade.
-func TestCollectDynamicStyles(t *testing.T) {
-	root := ParseHTML(`<html><head><style>body{margin:0}</style></head>` +
-		`<body><div id="x">BOX</div></body></html>`)
-	page := &Page{Root: root, Author: ParseStylesheet(`body{margin:0}`)}
-	page.seedParsedStyles()
-	if page.collectDynamicStyles() {
-		t.Fatal("static style was collected twice")
-	}
-	head := root.FindFirst("head")
-	if head == nil {
-		t.Fatal("head not found")
-	}
-	cssText := &Node{Type: TextNode, Text: "#x{padding-left:40px}"}
-	style := &Node{Type: ElementNode, Tag: "style", Parent: head, Children: []*Node{cssText}}
-	cssText.Parent = style
-	head.Children = append(head.Children, style)
-	if !page.collectDynamicStyles() {
-		t.Fatal("new style was not collected")
-	}
-	textX := func() int {
-		ly := BuildLayout(root, page.Author, 40)
-		for i := range ly.Frags {
-			if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
-				return f.X
-			}
-		}
-		t.Fatal("BOX text not found")
-		return -1
-	}
-	if got := textX(); got != 5 {
-		t.Fatalf("BOX at X=%d, want 5 after 40px padding", got)
-	}
-	if page.collectDynamicStyles() {
-		t.Fatal("unchanged style was collected twice")
-	}
-	cssText.Text = "#x{padding-left:80px}"
-	if !page.collectDynamicStyles() {
-		t.Fatal("changed style was not collected")
-	}
-	if got := textX(); got != 10 {
-		t.Fatalf("BOX at X=%d, want 10 after the later 80px rule", got)
 	}
 }

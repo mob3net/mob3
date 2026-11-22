@@ -1,4 +1,4 @@
-package browser
+package engine
 
 // UA stylesheet: base document styling expressed in the same CSS subset the
 // engine understands.

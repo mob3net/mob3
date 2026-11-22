@@ -6,7 +6,7 @@ import (
 
 func TestMeasureSkipsOutOfFlowChildren(t *testing.T) {
 	doc := ParseHTML(`<html><body><div id="box"><span style="position:absolute;width:100px">very wide absolute label</span></div></body></html>`)
-	styles := newStyleEngine(nil, 0).computeAll(doc)
+	styles := newStyleEngine(nil, 0).ComputeAll(doc)
 	l := &layouter{styles: styles, width: 40}
 	box := doc.FindFirst("div")
 	maxW, minW := l.measure(box)

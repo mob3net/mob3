@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strconv"
@@ -300,7 +300,7 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 			} else if name == "is" || name == "where" {
 				var best [3]int
 				found := false
-				for _, alt := range splitTopLevel(arg, ',') {
+				for _, alt := range SplitTopLevel(arg, ',') {
 					alt = strings.TrimSpace(alt)
 					inner, ispec, n, ok := parseCompound(alt)
 					// ":is()" with no argument list is an invalid selector;
@@ -748,3 +748,9 @@ func matchNth(arg string, i int) bool {
 	}
 	return false
 }
+
+// RulesUseHover reports whether any rule in the slice uses :hover.
+func RulesUseHover(rules []Rule) bool { return rulesUseHover(rules) }
+
+// ElementIndex returns the element's one-based index and sibling count.
+func ElementIndex(n *Node) (int, int) { return elementIndex(n) }

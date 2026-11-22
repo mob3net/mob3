@@ -44,11 +44,6 @@ const (
 	UnitVMax
 )
 
-const (
-	baseCellW = 8.0
-	baseCellH = 16.0
-)
-
 var (
 	cellW      = baseCellW
 	cellH      = baseCellH

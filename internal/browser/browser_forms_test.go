@@ -842,7 +842,7 @@ func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
 	})
-	if got := findByID(page.Root, "out"); got != nil {
+	if got := findElementByID(page.Root, "out"); got != nil {
 		if got.TextContent() != "hidden" {
 			t.Fatalf("click handler did not run, text = %q", got.TextContent())
 		}

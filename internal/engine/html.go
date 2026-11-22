@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"image"
@@ -216,6 +216,8 @@ type htmlParser struct {
 // maxParseDepth caps how deep the open-element stack grows. Browsers cap DOM
 // depth the same way; it also bounds the per-tag stack scans below.
 const maxParseDepth = 512
+
+const MaxParseDepth = maxParseDepth
 
 // ParseHTML parses an HTML document into a DOM tree. It is deliberately
 // forgiving: unknown tags become plain elements and unmatched end tags are

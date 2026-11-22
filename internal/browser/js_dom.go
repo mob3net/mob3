@@ -1491,7 +1491,7 @@ func (j *jsRuntime) nodeStyle(n *Node) *Style {
 		return n.Style
 	}
 	if j.b != nil && j.b.layout != nil && j.b.layout.engine != nil {
-		return j.b.layout.engine.computeNode(n)
+		return j.b.layout.engine.ComputeNode(n)
 	}
 	return nil
 }
