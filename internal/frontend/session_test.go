@@ -278,3 +278,40 @@ func TestPromptMouseMovesCaret(t *testing.T) {
 		t.Fatalf("cursor = %d", loop.promptCursor)
 	}
 }
+
+func TestFindKeysSendQueriesAndResults(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if handled, _ := loop.handleShellKey("/"); !handled || !loop.findActive {
+		t.Fatalf("slash handled=%v active=%v", handled, loop.findActive)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Query: ""}) {
+		t.Fatalf("open commands = %#v", s.cmds)
+	}
+	s.cmds = nil
+	loop.handleFindKey("a")
+	loop.handleFindKey("b")
+	if len(s.cmds) != 2 || s.cmds[0].Body != (protocol.Find{Query: "a"}) || s.cmds[1].Body != (protocol.Find{Query: "ab"}) {
+		t.Fatalf("query commands = %#v", s.cmds)
+	}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.FindResults{Query: "ab", Current: 1, Total: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if loop.findCurrent != 1 || loop.findTotal != 2 {
+		t.Fatalf("results = %d/%d", loop.findCurrent, loop.findTotal)
+	}
+	s.cmds = nil
+	if handled, quit := loop.handleFindKey("down"); !handled || quit {
+		t.Fatalf("down handled=%v quit=%v", handled, quit)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Query: "ab", Next: true}) {
+		t.Fatalf("next command = %#v", s.cmds)
+	}
+	if handled, quit := loop.handleFindKey("enter"); !handled || quit || loop.findActive {
+		t.Fatalf("enter handled=%v quit=%v active=%v", handled, quit, loop.findActive)
+	}
+	if !strings.Contains(loop.State.Page.FooterLeft, "Find 1/2: ab") {
+		t.Fatalf("footer = %q", loop.State.Page.FooterLeft)
+	}
+}

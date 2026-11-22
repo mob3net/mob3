@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -308,6 +309,11 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 	// Footer.
 	f := newCanvas(w, 1)
 	f.fill(0, 0, w, 1, colFooterBG)
+	if st.FindActive {
+		drawFindBar(f, st)
+		out.Footer = f.cells
+		return out
+	}
 	consoleIcon := ">_"
 	consoleW := stringWidth(consoleIcon)
 	showConsole := w >= 6
@@ -390,6 +396,54 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 	}
 	out.Footer = f.cells
 	return out
+}
+
+func drawFindBar(f *chromeCanvas, st protocol.State) {
+	bg := rgb(0x27, 0x44, 0x63)
+	fg := rgb(0xff, 0xff, 0xff)
+	f.fill(0, 0, f.w, 1, bg)
+	prefix := " Find: "
+	f.text(0, 0, prefix, fg, protocol.AttrBold)
+	x := stringWidth(prefix)
+	count := " 0/0 "
+	if st.FindText != "" && st.FindTotal > 0 {
+		cur := st.FindCurrent
+		if cur < 1 {
+			cur = 1
+		}
+		count = fmt.Sprintf(" %d/%d ", cur, st.FindTotal)
+	}
+	countW := stringWidth(count)
+	contentW := f.w - x - countW
+	if contentW < 1 {
+		count = ""
+		countW = 0
+		contentW = f.w - x
+	}
+	if contentW < 1 {
+		return
+	}
+	runes, start, end, cur := promptWindow(st.FindText, st.FindCursor, contentW, false)
+	xx := x
+	for i := start; i < end; i++ {
+		if i == cur {
+			if xx < f.w {
+				f.put(xx, 0, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
+				f.cells[xx].BG = rgb(0xf8, 0xfa, 0xfc)
+			}
+			xx++
+			continue
+		}
+		f.put(xx, 0, runes[i], fg, protocol.AttrBold)
+		xx += runeWidth(runes[i])
+	}
+	if cur == len(runes) && cur >= start && xx < f.w {
+		f.put(xx, 0, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
+		f.cells[xx].BG = rgb(0xf8, 0xfa, 0xfc)
+	}
+	if countW > 0 {
+		f.text(f.w-countW, 0, count, fg, protocol.AttrBold)
+	}
 }
 
 func footerStyle(level protocol.FooterLevel) (protocol.Color, uint8) {

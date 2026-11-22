@@ -2,6 +2,8 @@ package browser
 
 import (
 	"strings"
+
+	"browser/internal/protocol"
 	"testing"
 )
 
@@ -264,5 +266,33 @@ func TestFindStatusPersistsWhileScrolling(t *testing.T) {
 	}
 	if b.status == want {
 		t.Fatalf("Esc kept the find status %q", b.status)
+	}
+}
+
+func TestApplyFindCommand(t *testing.T) {
+	root := ParseHTML(`<html><body><p>Alpha beta</p><p>alpha gamma</p></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.page = &Page{URL: u, Base: u, Root: root}
+	b.layout = BuildLayout(root, nil, 60)
+	b.emitFrames = true
+	b.frontendChrome = true
+
+	b.applyFindCommand(protocol.Find{Query: "alpha"})
+	if b.findText != "alpha" || len(b.findMatches) != 2 {
+		t.Fatalf("query = %q matches = %d", b.findText, len(b.findMatches))
+	}
+	first := b.findIdx
+	b.applyFindCommand(protocol.Find{Query: "alpha", Next: true})
+	if b.findIdx == first {
+		t.Fatal("next did not move the match")
+	}
+	b.applyFindCommand(protocol.Find{Query: "alpha", Prev: true})
+	if b.findIdx != first {
+		t.Fatalf("prev = %d, want %d", b.findIdx, first)
+	}
+	b.applyFindCommand(protocol.Find{Close: true})
+	if b.findText != "" || len(b.findMatches) != 0 {
+		t.Fatalf("close left find state: %q %d", b.findText, len(b.findMatches))
 	}
 }

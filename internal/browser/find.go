@@ -2,6 +2,8 @@ package browser
 
 import (
 	"fmt"
+
+	"browser/internal/protocol"
 	"unicode"
 )
 
@@ -637,4 +639,43 @@ func (b *Browser) paintFindHTML(g *Grid, start, bodyY, rows int) {
 			b.fillFindCells(g, 1+r.x, bodyY+rel, r.w, i == b.findIdx)
 		}
 	}
+}
+
+// applyFindCommand updates the page find from a front-end query command. The
+// front end owns the bar and caret; the engine owns match computation,
+// scrolling and highlights.
+func (b *Browser) applyFindCommand(v protocol.Find) {
+	if v.Close {
+		b.clearFind()
+		b.sendFindResults()
+		return
+	}
+	b.findScope = findScopePage
+	if v.Query != b.findText {
+		b.findText = v.Query
+		b.findCursor = len(v.Query)
+		b.refreshFind()
+	}
+	if v.Next {
+		b.findNext(1)
+	} else if v.Prev {
+		b.findNext(-1)
+	}
+	b.sendFindResults()
+}
+
+func (b *Browser) sendFindResults() {
+	if b.sessionOut == nil {
+		return
+	}
+	cur := 0
+	if len(b.findMatches) > 0 {
+		cur = b.findIdx + 1
+		if cur < 1 {
+			cur = 1
+		}
+	}
+	_ = b.sessionOut.Send(protocol.Event{Body: protocol.FindResults{
+		Query: b.findText, Current: cur, Total: len(b.findMatches),
+	}})
 }

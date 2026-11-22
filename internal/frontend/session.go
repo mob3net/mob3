@@ -43,6 +43,13 @@ type SessionLoop struct {
 	quitBase    protocol.State
 	scrollDrag  bool
 
+	findActive  bool
+	findText    string
+	findCursor  int
+	findCurrent int
+	findTotal   int
+	findBase    protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -142,6 +149,18 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.findActive {
+			l.findBase = v
+			if v.KeysEngine {
+				l.closeFind()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncFind()
+			return false, nil
+		}
 		if l.promptActive {
 			l.promptBase = v
 			if v.KeysEngine {
@@ -166,6 +185,11 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		l.State.Native = v.Flags&protocol.StateNativeImages != 0
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
+		}
+	case protocol.FindResults:
+		if l.findActive {
+			l.findCurrent, l.findTotal = v.Current, v.Total
+			l.syncFind()
 		}
 	case protocol.Chrome:
 		if l.Presenter != nil {
@@ -195,6 +219,9 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	if l.promptActive {
 		return l.handlePromptKey(k)
 	}
+	if l.findActive {
+		return l.handleFindKey(k)
+	}
 	if l.quitPending {
 		switch k {
 		case "y", "Y", "enter":
@@ -218,6 +245,9 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	case "ctrl-c":
 		l.Session.Abort()
 		l.startQuit()
+		return true, false
+	case "/":
+		l.startFind()
 		return true, false
 	case "o", "ctrl-l":
 		l.startPrompt(false)
@@ -257,6 +287,101 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
 	return false, false
+}
+
+func (l *SessionLoop) startFind() {
+	if l.findActive {
+		return
+	}
+	l.findActive = true
+	l.findBase = l.State.Page
+	l.findText = ""
+	l.findCursor = 0
+	l.findCurrent, l.findTotal = 0, 0
+	l.syncFind()
+	_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: ""}})
+}
+
+func (l *SessionLoop) syncFind() {
+	st := l.State.Page
+	st.FindActive = true
+	st.FindText = l.findText
+	st.FindCursor = l.findCursor
+	st.FindCurrent = l.findCurrent
+	st.FindTotal = l.findTotal
+	st.KeysEngine = true
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeFind() {
+	if !l.findActive {
+		return
+	}
+	l.findActive = false
+	st := l.findBase
+	if status := l.findStatus(); status != "" {
+		st.FooterLeft = " " + status
+		st.FooterLevel = protocol.FooterNormal
+		st.FooterStatusHit = false
+	}
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) findStatus() string {
+	if l.findText == "" {
+		return ""
+	}
+	if l.findTotal == 0 {
+		return "Find: no matches"
+	}
+	cur := l.findCurrent
+	if cur < 1 {
+		cur = 1
+	}
+	return fmt.Sprintf("Find %d/%d: %s", cur, l.findTotal, l.findText)
+}
+
+func (l *SessionLoop) handleFindKey(k string) (handled, quit bool) {
+	if k == "ctrl-c" {
+		l.Session.Abort()
+	}
+	switch k {
+	case "esc", "enter":
+		l.closeFind()
+		return true, false
+	case "down":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: l.findText, Next: true}})
+		return true, false
+	case "up":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: l.findText, Prev: true}})
+		return true, false
+	case "tab", "backtab":
+		l.closeFind()
+		return true, false
+	}
+	if k == "ctrl-a" {
+		k = "home"
+	}
+	text, cur, _ := editLineKey(l.findText, l.findCursor, k, editConfig{maxRunes: 512})
+	changed := text != l.findText
+	l.findText = text
+	if cur > len(text) {
+		cur = len(text)
+	}
+	l.findCursor = cur
+	if changed {
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: text}})
+	}
+	l.syncFind()
+	return true, false
 }
 
 func (l *SessionLoop) startPrompt(vim bool) {
@@ -395,6 +520,10 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 	}
 	if l.promptActive {
 		return l.handlePromptMouse(ev)
+	}
+	if l.findActive && ev.Y == l.State.Page.Height {
+		// The find bar replaces the footer; it has no clickable labels.
+		return true
 	}
 	st := l.State.Page
 	if !st.FrontendChrome || st.KeysEngine || st.PromptActive || st.Width <= 0 || st.Height <= 0 {

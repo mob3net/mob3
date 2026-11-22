@@ -281,6 +281,9 @@ type State struct {
 	PromptSelectAll           bool
 	ZoomLabel                 string
 	FindActive                bool
+	FindText                  string
+	FindCursor                int
+	FindCurrent, FindTotal    int
 	QuitPending               bool
 	// KeysEngine is true while the engine owns key interpretation: a prompt,
 	// find bar, console, menu, dialog, form field, link hint or page input is

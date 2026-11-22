@@ -210,3 +210,24 @@ func TestDrawScrollBarFrame(t *testing.T) {
 		t.Fatalf("thumb=%v track=%v", foundThumb, foundTrack)
 	}
 }
+
+func TestFindBarLayout(t *testing.T) {
+	st := chromeState()
+	st.FindActive = true
+	st.FindText = "alpha"
+	st.FindCursor = 5
+	st.FindCurrent = 1
+	st.FindTotal = 2
+	layout := LayoutChrome(st)
+	var footer strings.Builder
+	for _, c := range layout.Footer {
+		if c.R != 0 {
+			footer.WriteRune(c.R)
+		}
+	}
+	for _, want := range []string{"Find:", "alpha", "1/2"} {
+		if !strings.Contains(footer.String(), want) {
+			t.Errorf("find bar %q does not contain %q", footer.String(), want)
+		}
+	}
+}

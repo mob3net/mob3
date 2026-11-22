@@ -100,9 +100,9 @@ destination; the tracker lists what remains.
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
   (`frontend.SessionLoop`), normal header/footer composition, header/footer
-  and scrollbar mouse input, base shell keys, local quit confirmation and the
-  URL/vim prompt. It does not yet own find, menus, dialogs, the console or
-  navigation state.
+  and scrollbar mouse input, base shell keys, local quit confirmation, the
+  URL/vim prompt and the page find bar. It does not yet own menus, dialogs, the
+  console (including its HTML find) or navigation state.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -168,7 +168,7 @@ destination; the tracker lists what remains.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, page find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. The scrollbar painter is in `present.go`. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
@@ -194,7 +194,7 @@ destination; the tracker lists what remains.
 | `browser_chrome.go` | Session-side fallback composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, the fallback scrollbar and memory readout remain here. |
 | `shell.go` | Shell-owned geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
-| `browser_input.go` | Engine key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing for direct callers, mouse escape decoding and `MouseEvent`. Base shell keys, quit and the interactive prompt are front-end-owned; form fields, find, menus, console and dialogs still use the shared line editor. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
+| `browser_input.go` | Engine key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing for direct callers, mouse escape decoding and `MouseEvent`. Base shell keys, quit, the interactive prompt and page find are front-end-owned; form fields, console find, menus and dialogs still use the shared line editor. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
 | `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim, scavenge request after a heavy eviction), back/forward/reload, and meta-refresh targets. |
 | `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`), the percentage-derived JS/image/SVG budgets, the weighted decoded-image byte limiter, and the one-shot scavenge request consumed between frames. |
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
