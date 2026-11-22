@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/host"
 	"bytes"
 	"context"
 	"crypto/x509"
@@ -110,26 +111,8 @@ type Loader struct {
 	svgCount        int
 	// cache holds raw subresources and decoded images for this session.
 	cache *resourceCache
-
-	reqMu    sync.Mutex
-	reqGen   int
-	reqNext  int
-	requests []requestRecord
-}
-
-// requestRecord is one network request shown in the JS console's request pane.
-type requestRecord struct {
-	ID      int
-	Gen     int
-	Method  string
-	URL     string
-	Kind    string
-	Status  int
-	Size    int
-	Elapsed time.Duration
-	Err     string
-	Done    bool
-	Cached  bool
+	// requests is the in-memory console request log.
+	requests *host.RequestLog
 }
 
 type requestMetaKey struct{}
@@ -351,88 +334,6 @@ func requestMetaFrom(ctx context.Context) requestMeta {
 	return m
 }
 
-// beginPage clears the request list and starts a new page generation.
-func (l *Loader) beginPage() int {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	l.reqGen++
-	l.requests = nil
-	return l.reqGen
-}
-
-func (l *Loader) currentPageGeneration() int {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	return l.reqGen
-}
-
-func (l *Loader) startRequest(gen int, method, rawURL, kind string) (int, bool) {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	if gen != l.reqGen {
-		return 0, false
-	}
-	l.reqNext++
-	id := l.reqNext
-	l.requests = append(l.requests, requestRecord{
-		ID: id, Gen: gen, Method: method, URL: rawURL, Kind: kind,
-	})
-	if len(l.requests) > 512 {
-		l.requests = append([]requestRecord(nil), l.requests[len(l.requests)-512:]...)
-	}
-	return id, true
-}
-
-func (l *Loader) recordCacheHit(gen int, method, rawURL, kind string, size int) {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	if gen != l.reqGen {
-		return
-	}
-	l.reqNext++
-	l.requests = append(l.requests, requestRecord{
-		ID: l.reqNext, Gen: gen, Method: method, URL: rawURL, Kind: kind,
-		Status: 200, Size: size, Done: true, Cached: true,
-	})
-	if len(l.requests) > 512 {
-		l.requests = append([]requestRecord(nil), l.requests[len(l.requests)-512:]...)
-	}
-}
-
-func (l *Loader) finishRequest(id, gen int, status, size int, elapsed time.Duration, err error) {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	if gen != l.reqGen {
-		return
-	}
-	for i := range l.requests {
-		if l.requests[i].ID == id {
-			l.requests[i].Status = status
-			l.requests[i].Size = size
-			l.requests[i].Elapsed = elapsed
-			l.requests[i].Done = true
-			if err != nil {
-				l.requests[i].Err = err.Error()
-			}
-			return
-		}
-	}
-}
-
-func (l *Loader) requestSnapshot() []requestRecord {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	out := make([]requestRecord, len(l.requests))
-	copy(out, l.requests)
-	return out
-}
-
-func (l *Loader) requestCount() int {
-	l.reqMu.Lock()
-	defer l.reqMu.Unlock()
-	return len(l.requests)
-}
-
 // setUserAgent replaces the User-Agent used by later requests. It is safe to
 // call while a navigation or image worker is running.
 func (l *Loader) setUserAgent(ua string) {
@@ -498,6 +399,7 @@ func NewLoader() *Loader {
 		userAgent:  defaultUserAgent,
 		searchURL:  DefaultSearchURL,
 		transport:  tr,
+		requests:   host.NewRequestLog(),
 		certSource: CertSourceSystem,
 	}
 	l.imageBudget = newByteLimiter(imageByteBudget(0))
@@ -2175,3 +2077,19 @@ const startPageHTML = `<!DOCTYPE html>
 </form>
 <p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
 </article></body></html>`
+
+func (l *Loader) beginPage() int             { return l.requests.BeginPage() }
+func (l *Loader) currentPageGeneration() int { return l.requests.CurrentPageGeneration() }
+func (l *Loader) startRequest(gen int, method, rawURL, kind string) (int, bool) {
+	return l.requests.Start(gen, method, rawURL, kind)
+}
+func (l *Loader) recordCacheHit(gen int, method, rawURL, kind string, size int) {
+	l.requests.RecordCacheHit(gen, method, rawURL, kind, size)
+}
+func (l *Loader) finishRequest(id, gen, status, size int, elapsed time.Duration, err error) {
+	l.requests.Finish(id, gen, status, size, elapsed, err)
+}
+func (l *Loader) requestSnapshot() []host.Record { return l.requests.Snapshot() }
+func (l *Loader) requestCount() int              { return l.requests.Count() }
+
+type requestRecord = host.Record

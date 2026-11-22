@@ -872,10 +872,10 @@ func TestAutomationDiagnostics(t *testing.T) {
 		t.Fatal("unknown source selector was accepted")
 	}
 
-	a.b.loader.requests = []requestRecord{
+	a.b.loader.requests.SetRecords([]requestRecord{
 		{ID: 1, Method: "GET", URL: "https://example.com/first.css", Kind: "css", Status: 200, Size: 100, Done: true},
 		{ID: 2, Method: "GET", URL: "https://example.com/second.js", Kind: "js", Status: 404, Size: 0, Done: true},
-	}
+	})
 	reqs := a.Requests(0)
 	for _, want := range []string{"Requests: 2", "first.css", "second.js", "404", "Cache:"} {
 		if !strings.Contains(reqs, want) {
