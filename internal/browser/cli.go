@@ -100,7 +100,7 @@ func Run(args []string) int {
 	if *pngOut {
 		*dump = true
 	}
-	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
+	interactive := !*dump && frontend.IsTTY(os.Stdin) && frontend.IsTTY(os.Stdout)
 	graphicsMode := ParseGraphicsMode(*graphics)
 	loader := NewLoader()
 	loader.noScripts = *noJS
@@ -173,12 +173,12 @@ func Run(args []string) int {
 	// image-heavy pages do not delay the first paint.
 	loader.deferImages = true
 	stdin := os.Stdin
-	state, err := makeRaw(stdin)
+	state, err := frontend.MakeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
 		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget, zoomFactor)
 	}
-	w, h, ok := terminalSize(os.Stdout)
+	w, h, ok := frontend.TerminalSize(os.Stdout)
 	if !ok {
 		w, h = 100, 30
 	}
@@ -222,7 +222,7 @@ func Run(args []string) int {
 	case "off", "none", "false":
 		b.noBigText = true
 	}
-	cellW, cellH, ok := terminalCellPixels(os.Stdout)
+	cellW, cellH, ok := frontend.TerminalCellPixels(os.Stdout)
 	if !ok || cellW <= 0 {
 		cellW = 8
 	}
@@ -241,7 +241,7 @@ func Run(args []string) int {
 	}
 	presenter.SetGraphics(presenterMode, cellW, cellH)
 
-	kittyKeys := kittyKeyboardEnabled()
+	kittyKeys := frontend.KittyKeyboardEnabled()
 	var startSeq strings.Builder
 	startSeq.WriteString("\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J\x1b[?1000h\x1b[?1003h\x1b[?1006h")
 	if kittyKeys {
@@ -261,17 +261,17 @@ func Run(args []string) int {
 		presenter.ClearGraphics(&sb)
 		sb.WriteString("\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l")
 		_, _ = os.Stdout.WriteString(sb.String())
-		restoreTerm(stdin, state)
+		frontend.RestoreTerm(stdin, state)
 	}
 	defer cleanup()
 
 	keys := make(chan string, 32)
-	go readKeyEvents(stdin, keys, nil)
+	go frontend.ReadKeyEvents(stdin, keys, nil)
 
 	winch := make(chan os.Signal, 1)
 	quitSig := make(chan os.Signal, 1)
-	startSignalHandlers(winch, quitSig)
-	defer stopSignalHandlers(winch, quitSig)
+	frontend.StartSignalHandlers(winch, quitSig)
+	defer frontend.StopSignalHandlers(winch, quitSig)
 
 	// The engine runs on its own goroutine behind the transport. The front end
 	// owns the terminal: it reads keys and resizes, sends commands, and reacts
@@ -307,7 +307,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
 		return 1
 	}
-	feState := &frontEndState{}
+	feState := &frontEndState{clipboard: os.Stdout}
 	reportCrash := func(msg string) {
 		fmt.Fprintf(os.Stderr, "mob3: page engine: %s\n", msg)
 		_ = session.Send(protocol.Command{Body: protocol.ClientError{Message: msg}})
@@ -332,7 +332,7 @@ func Run(args []string) int {
 				return 1
 			}
 		case <-winch:
-			if nw, nh, ok := terminalSize(os.Stdout); ok {
+			if nw, nh, ok := frontend.TerminalSize(os.Stdout); ok {
 				if err := session.Send(protocol.Command{Body: protocol.Resize{
 					Width: nw, Height: nh, CellW: cellW, CellH: cellH,
 				}}); err != nil {
@@ -372,6 +372,7 @@ type frontEndState struct {
 	scroll    int
 	native    bool
 	lastCrash string
+	clipboard interface{ Write([]byte) (int, error) }
 }
 
 // applySessionEvent updates the front-end presentation state and draws frames.
@@ -403,6 +404,10 @@ func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *fro
 		st.native = v.Flags&protocol.StateNativeImages != 0
 	case protocol.Chrome:
 		presenter.SetChrome(v)
+	case protocol.Clipboard:
+		if st.clipboard != nil {
+			_, _ = st.clipboard.Write([]byte(frontend.OSC52(v.Text)))
+		}
 	case protocol.Frame:
 		if err := presenter.Present(v, st.scroll, st.native); err != nil {
 			return false, err

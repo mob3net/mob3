@@ -188,13 +188,13 @@ func dumpLimits(width int, pngOut bool) protocol.Limits {
 // the frames to stdout. It preserves the byte-for-byte -dump and -png output.
 func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMemLimit int64, budget LayoutBudget, zoom float64) int {
 	if width <= 0 {
-		if w, _, ok := terminalSize(os.Stdout); ok {
+		if w, _, ok := frontend.TerminalSize(os.Stdout); ok {
 			width = w
 		} else {
 			width = 100
 		}
 	}
-	color := !noColor && (forceColor || isTTY(os.Stdout))
+	color := !noColor && (forceColor || frontend.IsTTY(os.Stdout))
 	h := &dumpHandler{o: dumpOptions{
 		loader: loader, target: target, width: width, viewportH: viewportH,
 		noJS: noJS, reader: reader, dark: dark, pngOut: pngOut,

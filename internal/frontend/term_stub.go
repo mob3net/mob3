@@ -1,6 +1,6 @@
 //go:build !linux && !darwin
 
-package browser
+package frontend
 
 import (
 	"bufio"
@@ -11,9 +11,9 @@ import (
 	"unicode/utf8"
 )
 
-type termState struct{}
+type TermState struct{}
 
-func isTTY(f *os.File) bool {
+func IsTTY(f *os.File) bool {
 	st, err := f.Stat()
 	if err != nil {
 		return false
@@ -21,13 +21,13 @@ func isTTY(f *os.File) bool {
 	return st.Mode()&os.ModeCharDevice != 0
 }
 
-func makeRaw(f *os.File) (*termState, error) {
+func MakeRaw(f *os.File) (*TermState, error) {
 	return nil, errors.New("interactive mode is only supported on Linux and macOS; use -dump")
 }
 
-func restoreTerm(f *os.File, st *termState) {}
+func RestoreTerm(f *os.File, st *TermState) {}
 
-func terminalSize(f *os.File) (w, h int, ok bool) {
+func TerminalSize(f *os.File) (w, h int, ok bool) {
 	w, h = 80, 24
 	if s := os.Getenv("COLUMNS"); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 {
@@ -42,11 +42,11 @@ func terminalSize(f *os.File) (w, h int, ok bool) {
 	return w, h, false
 }
 
-func terminalCellPixels(f *os.File) (w, h int, ok bool) {
+func TerminalCellPixels(f *os.File) (w, h int, ok bool) {
 	return 0, 0, false
 }
 
-func readKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
+func ReadKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
 	r := bufio.NewReader(f)
 	for {
 		runes, _, err := r.ReadRune()

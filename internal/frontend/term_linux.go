@@ -1,6 +1,6 @@
 //go:build linux
 
-package browser
+package frontend
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-type termState struct {
+type TermState struct {
 	term syscall.Termios
 }
 
@@ -25,13 +25,13 @@ func ioctl(fd uintptr, req uintptr, arg unsafe.Pointer) error {
 }
 
 // isTTY reports whether f refers to a terminal.
-func isTTY(f *os.File) bool {
+func IsTTY(f *os.File) bool {
 	var t syscall.Termios
 	return ioctl(f.Fd(), syscall.TCGETS, unsafe.Pointer(&t)) == nil
 }
 
 // makeRaw puts the terminal into raw mode and returns the old state.
-func makeRaw(f *os.File) (*termState, error) {
+func MakeRaw(f *os.File) (*TermState, error) {
 	var t syscall.Termios
 	if err := ioctl(f.Fd(), syscall.TCGETS, unsafe.Pointer(&t)); err != nil {
 		return nil, err
@@ -48,10 +48,10 @@ func makeRaw(f *os.File) (*termState, error) {
 	if err := ioctl(f.Fd(), syscall.TCSETS, unsafe.Pointer(&t)); err != nil {
 		return nil, err
 	}
-	return &termState{term: old}, nil
+	return &TermState{term: old}, nil
 }
 
-func restoreTerm(f *os.File, st *termState) {
+func RestoreTerm(f *os.File, st *TermState) {
 	if st == nil {
 		return
 	}
@@ -59,7 +59,7 @@ func restoreTerm(f *os.File, st *termState) {
 }
 
 // terminalSize returns the current terminal size in cells.
-func terminalSize(f *os.File) (w, h int, ok bool) {
+func TerminalSize(f *os.File) (w, h int, ok bool) {
 	var ws winsize
 	if err := ioctl(f.Fd(), syscall.TIOCGWINSZ, unsafe.Pointer(&ws)); err != nil {
 		return 0, 0, false
@@ -72,7 +72,7 @@ func terminalSize(f *os.File) (w, h int, ok bool) {
 
 // terminalCellPixels returns the approximate pixel size of one terminal cell,
 // when the terminal reports pixel dimensions.
-func terminalCellPixels(f *os.File) (w, h int, ok bool) {
+func TerminalCellPixels(f *os.File) (w, h int, ok bool) {
 	var ws winsize
 	if err := ioctl(f.Fd(), syscall.TIOCGWINSZ, unsafe.Pointer(&ws)); err != nil {
 		return 0, 0, false

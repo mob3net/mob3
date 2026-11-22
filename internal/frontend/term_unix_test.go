@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package browser
+package frontend
 
 import (
 	"bufio"
@@ -170,7 +170,7 @@ func TestKittyKeyboardDetection(t *testing.T) {
 			k, v, _ := strings.Cut(tc.extra, "=")
 			t.Setenv(k, v)
 		}
-		if got := kittyKeyboardEnabled(); got != tc.want {
+		if got := KittyKeyboardEnabled(); got != tc.want {
 			t.Errorf("%s: enabled = %v, want %v", tc.name, got, tc.want)
 		}
 	}

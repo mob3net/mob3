@@ -1,10 +1,12 @@
 package browser
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
+
+	"browser/internal/frontend"
+	"browser/internal/protocol"
 	"unicode/utf8"
 )
 
@@ -133,14 +135,21 @@ func (b *Browser) copyText(text string) bool {
 		text = text[:cut]
 		truncated = true
 	}
-	payload := base64.StdEncoding.EncodeToString([]byte(text))
-	w := b.clipboardWriter
-	if w == nil {
-		w = os.Stdout
-	}
-	if _, err := fmt.Fprintf(w, "\x1b]52;c;%s\x07", payload); err != nil {
-		b.status = "Copy failed"
-		return false
+	if b.sessionOut != nil {
+		// The front end owns terminal escapes and the clipboard.
+		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Clipboard{Text: text}}); err != nil {
+			b.status = "Copy failed"
+			return false
+		}
+	} else {
+		w := b.clipboardWriter
+		if w == nil {
+			w = os.Stdout
+		}
+		if _, err := fmt.Fprint(w, frontend.OSC52(text)); err != nil {
+			b.status = "Copy failed"
+			return false
+		}
 	}
 	n := utf8.RuneCountInString(text)
 	if truncated {

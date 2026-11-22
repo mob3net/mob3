@@ -86,9 +86,10 @@ destination; the tracker lists what remains.
   and the interactive event loop, loader/about/PDF/image orchestration, MCP
   and automation, and most integration tests. It imports all four boundary
   packages.
-- The front end currently owns ANSI/PNG output, presentation and native image
-  placement, but not terminal raw mode/input, chrome, dialogs, clipboard or
-  navigation state.
+- The front end owns terminal raw mode, capability detection, key/mouse
+  decoding, resize/quit signals, ANSI/PNG output, presentation, native image
+  placement and clipboard encoding. It does not yet own chrome, dialogs or
+  navigation state; the interactive loop is still `browser/cli.go`.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
   global visited list or download history by design (D54): back/forward history
@@ -199,10 +200,10 @@ destination; the tracker lists what remains.
 | `internal/engine/js_modules.go` | ES modules: the module graph cache, specifier resolution against the importing module's URL, size/depth caps, `import.meta.url`, dynamic import finishing, and linking/evaluation under the script guard. After the page's own scripts finish, an interactive dynamic import fetches and parses its graph on a background goroutine and the event loop links and evaluates it, so a slow chunk cannot freeze drawing, input or image loading; the graph shares the page's record cache, so a dependency imported by several chunks is fetched and evaluated once. Page-load and headless imports stay synchronous. |
 | `internal/engine/js_web.go` | `URL`/`URLSearchParams`, promise-based `fetch` with `Headers`/`Request`/`Response`, and `XMLHttpRequest`; requests are same-origin or simple CORS cross-origin responses. |
 | `internal/engine/js_intl.go` | English-only `Intl` formatter subset. |
-| `term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
-| `term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
-| `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
-| `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
-| `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
+| `internal/frontend/term_unix.go` | Shared Linux/macOS key and escape-sequence decoding: legacy sequences, `alt-<key>` ESC prefixes, modified arrows/keys (`ctrl-left`, `alt-delete`, …), and kitty keyboard protocol keys with press/repeat/release filtering for both `CSI u` and legacy-encoded functional keys (`CSI 1;mods:event A`). |
+| `internal/frontend/term_linux.go` | Linux termios raw mode, window size and cell pixels via ioctl. |
+| `internal/frontend/term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
+| `internal/frontend/term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
+| `internal/frontend/signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
 | `cli.go` | App + front-end entry: flags, dump/PNG/MCP wiring, interactive terminal raw mode and command loop, and the build-time `Version`; default `dev`. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |

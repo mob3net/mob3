@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package browser
+package frontend
 
 import (
 	"bufio"
@@ -14,7 +14,7 @@ import (
 // readKeyEvents decodes keystrokes into symbolic names and streams them on ch.
 // A bare Esc or Ctrl-C also bumps abort so a script blocking the main loop can
 // be interrupted even though its key has not been handled yet.
-func readKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
+func ReadKeyEvents(f *os.File, ch chan<- string, abort *atomic.Uint64) {
 	r := bufio.NewReaderSize(f, 256)
 	for {
 		k, err := readKey(r)
@@ -370,8 +370,8 @@ func readEscape(r *bufio.Reader) string {
 		return decodeKittyKey(params)
 	case 'M', 'm':
 		if strings.HasPrefix(params, "<") {
-			if ev, ok := parseSGRMouse(params, final == 'm'); ok {
-				return mouseToken(ev)
+			if ev, ok := ParseSGRMouse(params, final == 'm'); ok {
+				return MouseToken(ev)
 			}
 			return ""
 		}
@@ -385,8 +385,8 @@ func readEscape(r *bufio.Reader) string {
 				}
 				buf[i] = c
 			}
-			if ev, ok := parseX10Mouse(buf[0], buf[1], buf[2]); ok {
-				return mouseToken(ev)
+			if ev, ok := ParseX10Mouse(buf[0], buf[1], buf[2]); ok {
+				return MouseToken(ev)
 			}
 		}
 	}

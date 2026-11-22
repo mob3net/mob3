@@ -1,6 +1,6 @@
 //go:build unix
 
-package browser
+package frontend
 
 import (
 	"os"
@@ -8,12 +8,12 @@ import (
 	"syscall"
 )
 
-func startSignalHandlers(resize, quit chan<- os.Signal) {
+func StartSignalHandlers(resize, quit chan<- os.Signal) {
 	signal.Notify(resize, syscall.SIGWINCH)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
 }
 
-func stopSignalHandlers(resize, quit chan<- os.Signal) {
+func StopSignalHandlers(resize, quit chan<- os.Signal) {
 	signal.Stop(resize)
 	signal.Stop(quit)
 }

@@ -90,6 +90,7 @@ network destination.
 | D54 | 2026-11-22 | Session back/forward history and `about:history` stay session-owned. The download popup and its `curl` hint stay front-end presentation. The host keeps no global visited list and no download history. | User decision: the proposed host-owned global history/download records would add state and memory without a user-visible benefit, and MOB³ persists nothing. This keeps B behavior-neutral and corrects D8's over-broad ownership claim. |
 | D55 | 2026-11-22 | Move the built-in page shell, shared CSS and cannot-display/load-error HTML to `internal/engine/pages.go`; the browser keeps thin wrappers. Help/history/config page bodies, the config token and view options remain session-side until the app split. | This is a behavior-neutral move of the render templates to the engine. The remaining about-page work depends on host-supplied data and the config token, which belongs with the app/host wiring. |
 | D56 | 2026-11-22 | Move start/help/history/blocked and config page rendering to the engine, and move the one-shot config form token into `internal/host.ConfigToken`. The session still collects history/settings data and applies submitted values. | This completes the about-page ownership part of D16: templates live with the engine, and the token is minted/validated on the trusted side. The remaining session code is data collection and applying settings, which belongs with the app split. |
+| D57 | 2026-11-22 | Move terminal raw mode, size/cell-pixel probes, key/mouse decoding, capability detection and resize/quit signal wiring into `internal/frontend`. Mouse event/token types are front-end-owned with browser aliases. Clipboard OSC 52 encoding moved to the front end; the session emits `Clipboard` events when a presentation session exists and keeps the writer fallback for tests/automation. | These are terminal concerns, not page content. The interactive loop still lives in `browser`/`cli.go` until `internal/app` exists, but it now calls the front-end terminal API. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -149,7 +150,7 @@ which part goes where.
 | `paint_compat.go` | browser bridge | Grid/paint aliases and SVG decoder wrappers. |
 | `frame_protocol.go` | browser bridge | Maps the engine grid to `protocol.Frame`; moves with the transport seam. |
 | `frontend_bridge.go` | browser bridge | Temporary wrappers for `Lines`, `PNG`, color modes and code helpers during the package move. |
-| `term_detect.go` | frontend | Terminal capability detection; `DetectColorMode` moved to `internal/frontend`. |
+| `term_detect.go`, `term_unix.go`, `term_linux.go`, `term_darwin.go`, `term_stub.go` | `internal/frontend` | Terminal capability detection, raw mode, size/cell pixels, key/mouse decoding. |
 | `png.go` | `internal/frontend/png.go` | Protocol frame to PNG. |
 | `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. `Page`/`Script` now live in `internal/engine/page.go`. |
 | `cache.go` | `internal/host/cache.go` | Session resource cache; browser shim preserves the Loader API. |
@@ -180,7 +181,7 @@ which part goes where.
 | `memory.go` | host + engine | Budget policy and process limit host; per-session enforcement engine. |
 | `browser_pdf.go` | engine | PDF footer state and download shortcut. |
 | `browser_images.go` | engine | Deferred batch scheduling; fetching host. |
-| `browser_selection.go` | engine + frontend | Selection state and text engine; clipboard and OSC 52 frontend. |
+| `browser_selection.go` | engine + frontend | Selection state and text engine; OSC 52 encoding is front-end, the session emits `Clipboard` or uses the test writer. |
 | `automation.go` | app | Protocol client. |
 | `mcp.go` | app | Protocol client. |
 | `ui.go` | frontend + engine | Console/dialog drawing frontend; console data and JS state engine. |
@@ -967,4 +968,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5g | Replaced the direct event channel with a bounded coalescing outbox: newest frame/state wins, one-shot events keep order, Quit/Crash drop stale frames first. Added a coalescing regression test; PTY console/kitty smoke. | `go test ./...`, `go vet`, full `-race`, coalescing test, PTY smoke, dump/PNG hashes | Move chrome composition, then socket transport |
 | 2026-11-22 | 5h | Normal frames are content-only with a `Chrome` header/footer layer; front end stacks it, overlays and console keep full-screen fallback; presenter composition and chrome-change resets; PTY chrome/console/overlay/kitty checks. | `go test ./...`, `go vet`, full `-race`, composed-repaint benchmark, PTY checks, dump/PNG hashes | Semantic chrome ownership, then socket transport |
 | 2026-11-22 | 5i | Added the stream transport: `ReadCommand`/`ReadEvent`, `ServeStream` with coalescing outbox and direct abort handling, and `DialStream` client; tested navigation, abort, bad-frame repair and close over `net.Pipe`. Both codec fuzz targets ran 60 s with no findings. | `go test ./...`, `go vet`, full `-race`, stream transport tests, 60 s codec fuzz | Semantic chrome ownership, then Phase 6 cleanup |
-| 2026-11-22 | 6b | Start/help/history/blocked and config page HTML moved to the engine; `host.ConfigToken` now mints/validates the one-shot form token; browser keeps thin wrappers and data collection. Full suite and config/page tests green. | `go test ./...`, `go vet`, full `-race`, config/page tests, dump/PNG hashes | Workstream 1 complete; start `internal/app` and terminal/chrome ownership |
+| 2026-11-22 | 6c | Terminal raw mode, capability detection, key/mouse decoding and resize/quit signals moved to `internal/frontend`; mouse types aliased; OSC 52 clipboard encoding moved front-end with a `Clipboard` event. Full suite and frontend terminal tests green. | `go test ./...`, `go vet`, full `-race`, terminal/frontend tests, dump/PNG hashes | Create `internal/app`, then semantic chrome ownership |

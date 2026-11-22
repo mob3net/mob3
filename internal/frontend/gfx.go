@@ -7,7 +7,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"os"
 	"strings"
 
 	"browser/internal/protocol"
@@ -502,28 +501,3 @@ func scaleImage(src image.Image, w, h int) *image.NRGBA {
 
 // inMultiplexer reports whether a terminal multiplexer sits between MOB³ and
 // the terminal. Escapes may be consumed unless explicit passthrough is set.
-func inMultiplexer() bool {
-	term := strings.ToLower(os.Getenv("TERM"))
-	return os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != "" ||
-		strings.HasPrefix(term, "screen") || strings.HasPrefix(term, "tmux")
-}
-
-func kittyTerminal() bool {
-	term := strings.ToLower(os.Getenv("TERM"))
-	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	if strings.Contains(term, "kitty") || os.Getenv("KITTY_WINDOW_ID") != "" {
-		return true
-	}
-	if strings.Contains(program, "wezterm") || os.Getenv("WEZTERM_PANE") != "" {
-		return true
-	}
-	if strings.Contains(program, "ghostty") || os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
-		return true
-	}
-	return false
-}
-
-func itermTerminal() bool {
-	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
-	return strings.Contains(program, "iterm") || strings.EqualFold(os.Getenv("LC_TERMINAL"), "iTerm2")
-}

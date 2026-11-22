@@ -1,4 +1,4 @@
-package browser
+package frontend
 
 // Terminal capability detection. This file is frontend-owned: the engine's
 // paint path takes capabilities as input and never reads the environment.
@@ -32,7 +32,7 @@ func kittyTerminal() bool {
 // kittyKeyboardEnabled reports whether the terminal is expected to implement
 // the kitty keyboard protocol. Multiplexers are excluded because their
 // forwarding of the push/pop sequences is inconsistent.
-func kittyKeyboardEnabled() bool {
+func KittyKeyboardEnabled() bool {
 	if inMultiplexer() || os.Getenv("STY") != "" {
 		return false
 	}
