@@ -1547,10 +1547,20 @@ func isSVG(ctype string, data []byte) bool {
 
 // decodeSVG rasterizes an SVG into an RGBA image, bounded in size.
 func decodeSVG(data []byte) (image.Image, error) {
-	return recoverImage(func() (image.Image, error) { return renderSVG(data) })
+	return decodeSVGWithin(data, 0)
+}
+
+// decodeSVGWithin is decodeSVG with a cap on the rasterized pixel count. It
+// scales the raster down rather than failing when the budget is smaller.
+func decodeSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
+	return recoverImage(func() (image.Image, error) { return renderSVGWithin(data, maxPixels) })
 }
 
 func renderSVG(data []byte) (image.Image, error) {
+	return renderSVGWithin(data, 0)
+}
+
+func renderSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
 	if len(data) == 0 {
 		return nil, errBadSVG
 	}
@@ -1571,6 +1581,9 @@ func renderSVG(data []byte) (image.Image, error) {
 			scale = s
 		}
 	}
+	if maxPixels > 0 && w*h*scale*scale > float64(maxPixels) {
+		scale *= math.Sqrt(float64(maxPixels) / (w * h * scale * scale))
+	}
 	w = float64(maxInt(1, int(w*scale)))
 	h = float64(maxInt(1, int(h*scale)))
 	rgba := image.NewRGBA(image.Rect(0, 0, int(w), int(h)))
@@ -1582,12 +1595,22 @@ func renderSVG(data []byte) (image.Image, error) {
 	return rgba, nil
 }
 
+func (l *Loader) resetSVGBudget() {
+	l.svgMu.Lock()
+	l.svgPixels = 0
+	l.svgCount = 0
+	l.svgMu.Unlock()
+}
+
 // loadInlineSVGs rasterizes inline <svg> elements into their Node.Img field so
-// layout can treat them as images.
+// layout can treat them as images. The per-page pixel and count budgets keep a
+// document with many icons from retaining gigabytes of rasters.
 func (l *Loader) loadInlineSVGs(root *Node) {
 	if l.noImages {
 		return
 	}
+	l.svgMu.Lock()
+	defer l.svgMu.Unlock()
 	nodes := root.FindAll(func(n *Node) bool { return n.Tag == "svg" })
 	for _, n := range nodes {
 		if n.Img != nil || n.ImgFailed {
@@ -1596,13 +1619,20 @@ func (l *Loader) loadInlineSVGs(root *Node) {
 		if strings.EqualFold(strings.TrimSpace(n.Attr("aria-hidden")), "true") {
 			continue
 		}
-		img, err := decodeSVG([]byte(serializeSVG(n)))
+		remaining := l.svgBudgetPixels - l.svgPixels
+		if remaining < 1 || l.svgCount >= maxInlineSVGCount {
+			n.ImgFailed = true
+			continue
+		}
+		img, err := decodeSVGWithin([]byte(serializeSVG(n)), remaining)
 		if err != nil {
 			n.ImgFailed = true
 			continue
 		}
 		n.Img = img
 		n.ImgSrc = "inline-svg"
+		l.svgPixels += int64(img.Bounds().Dx()) * int64(img.Bounds().Dy())
+		l.svgCount++
 	}
 }
 

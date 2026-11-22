@@ -13,23 +13,30 @@ agreement, the non-negotiable constraints and the change protocol.
   regular files are accepted (no `/dev/*`/FIFOs), and data URIs are rejected
   when the encoded or decoded size exceeds the cap. Images are rejected before
   decoding when they exceed 25 megapixels, to avoid decompression bombs.
-- **JS memory budget:** each guarded script/callback has a 2-second CPU timeout
-  and a best-effort heap-delta watchdog, 256 MB above its starting heap by
-  default. `-js-memory` sets the budget in MB (0 disables the watchdog, leaving
-  the CPU timeout in place). Exceeding the budget interrupts the script with an
-  error. Load-time scripts also share an 8-second page budget and a cap of 2,000
+- **JS memory budget:** each guarded script/callback has a 2-second CPU timeout,
+  and one sampler per active page runtime checks an absolute heap ceiling every
+  75 ms. The ceiling is measured above the heap when the runtime was created;
+  exceeding it interrupts the call that is running, so a page that retains
+  allocations cannot reset the budget on every callback. It is 25% of
+  `-mem-limit`/`GOMEMLIMIT` when one is set, otherwise 256 MB; `-js-memory` sets
+  it explicitly in MB (0 disables the memory check, leaving the CPU timeout in
+  place). A runtime frozen in the back/forward cache stops its sampler.
+  Load-time scripts also share an 8-second page budget and a cap of 2,000
   executed scripts: when either is reached, the running script is interrupted
   and the remaining ones are skipped with a console notice. A bare Esc or Ctrl-C
   interrupts the script currently blocking the main loop.
 - **Process memory limit:** `-mem-limit` is off by default (`0`), which leaves
-  the Go runtime default in place, including `GOGC` and any `GOMEMLIMIT` from
-  the environment. A positive value applies a soft heap limit with
-  `debug.SetMemoryLimit`, so the runtime collects harder as the heap approaches
-  it instead of letting the previous peak become the new floor. It is advice,
-  not an allocation cap: it must stay above the working set (a heavy page plus
-  the history cache) or the collector runs continuously. A limit set later
-  (including from `about:config`) replaces `GOMEMLIMIT`. The flag is
-  process-wide and applies to dump and MCP runs too.
+  memory unlimited and honors any `GOMEMLIMIT` from the environment. A positive
+  value applies a soft heap limit with `debug.SetMemoryLimit`, so the runtime
+  collects harder as the heap approaches it instead of letting the previous peak
+  become the new floor. It is advice, not an allocation cap: it must stay above
+  the working set (a heavy page plus the history cache) or the collector runs
+  continuously. The image and inline-SVG budgets are percentages of this limit
+  when one is set (12% of bytes for images in flight, 3% for inline-SVG pixels),
+  with 128 MB and 8 M pixel fallbacks when the process is unlimited. Clearing it
+  restores the startup limit (including
+  `GOMEMLIMIT`) rather than overwriting it. The flag is process-wide and applies
+  to dump and MCP runs too.
 - **Scavenge after eviction:** when the history cache evicts a page holding at
   least a quarter of its budget, the browser requests exactly one
   `debug.FreeOSMemory()` (a collection plus scavenge) and runs it between

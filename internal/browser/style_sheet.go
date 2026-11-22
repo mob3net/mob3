@@ -212,6 +212,9 @@ var (
 	maxCSSRules     = 50000
 	maxCSSRuleBody  = 256 << 10
 	maxCSSParseTime = time.Second
+	// maxAuthorRules bounds the accumulated document stylesheet, including
+	// rules a script keeps injecting through new or rewritten <style> tags.
+	maxAuthorRules = 100000
 )
 
 type parseState struct {
@@ -878,7 +881,14 @@ func (p *Page) collectDynamicStyles() bool {
 			continue
 		}
 		p.parsedStyles[n] = text
+		room := maxAuthorRules - len(p.Author)
+		if room <= 0 {
+			break
+		}
 		rules := ParseStylesheet(text)
+		if len(rules) > room {
+			rules = rules[:room]
+		}
 		for i := range rules {
 			rules[i].Order = order
 			order++

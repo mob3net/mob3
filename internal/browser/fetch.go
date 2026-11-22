@@ -142,6 +142,13 @@ type Loader struct {
 	// is downscaled once at load instead of staying in memory until paint.
 	// Zero disables the cap.
 	maxImageW, maxImageH int
+	// imageBudget bounds decoded image bytes in flight; svgBudgetPixels and
+	// the counters bound inline SVG rasterization for the current page.
+	imageBudget     *byteLimiter
+	svgMu           sync.Mutex
+	svgBudgetPixels int64
+	svgPixels       int64
+	svgCount        int
 	// cache holds raw subresources and decoded images for this session.
 	cache *resourceCache
 
@@ -473,7 +480,7 @@ func (l *Loader) requestCount() int {
 func NewLoader() *Loader {
 	jar := newCookieJar()
 	tr := &certTransport{base: newHTTPTransport(nil)}
-	return &Loader{
+	l := &Loader{
 		cache:           newResourceCache(defaultResourceCacheLimit),
 		cookies:         jar,
 		noImages:        true,
@@ -494,6 +501,9 @@ func NewLoader() *Loader {
 		transport:  tr,
 		certSource: CertSourceSystem,
 	}
+	l.imageBudget = newByteLimiter(imageByteBudget(0))
+	l.setMemoryBudget(effectiveMemoryLimit())
+	return l
 }
 
 // ResolveURL turns user input into an absolute URL without search fallback.
@@ -597,6 +607,7 @@ func (l *Loader) LoadRequestBypass(ctx context.Context, method, input string, bo
 }
 
 func (l *Loader) loadRequest(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL, ignoreBlocks bool) (*Page, error) {
+	l.resetSVGBudget()
 	u, err := ResolveInput(input, base, l.searchURL)
 	if err != nil {
 		return nil, err
@@ -1709,6 +1720,45 @@ func decodeMedia(ctx context.Context, ctype string, data []byte) (image.Image, e
 	return safeDecodeImage(data)
 }
 
+// imageDecodeWeight estimates the RGBA bytes a decode will hold so the budget
+// can admit several small images but only one or two large ones.
+func imageDecodeWeight(ctype string, data []byte) int64 {
+	if isSVG(ctype, data) {
+		return int64(maxSVGDim) * int64(maxSVGDim) * 4
+	}
+	cfg, err := safeDecodeConfig(data)
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return 1 << 20
+	}
+	n := int64(cfg.Width) * int64(cfg.Height) * 4
+	max := int64(maxImagePixels) * 4
+	if n > max {
+		n = max
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// decodeAndFit decodes one image under the in-flight byte budget and scales it
+// to the terminal box before releasing the reservation.
+func (l *Loader) decodeAndFit(ctx context.Context, ctype string, data []byte) (image.Image, error) {
+	weight := imageDecodeWeight(ctype, data)
+	if l.imageBudget != nil {
+		admitted, ok := l.imageBudget.acquire(ctx, weight)
+		if !ok {
+			return nil, ctx.Err()
+		}
+		defer l.imageBudget.release(admitted)
+	}
+	img, err := decodeMedia(ctx, ctype, data)
+	if err != nil {
+		return nil, err
+	}
+	return l.fitImage(img), nil
+}
+
 // fetchImageResult downloads and decodes one image, using the session cache.
 func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
 	u, err := applyMixedContent(ctx, u)
@@ -1726,11 +1776,10 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile boo
 	if err != nil || status < 200 || status >= 400 {
 		return nil, false
 	}
-	img, err := decodeMedia(ctx, ctype, data)
+	img, err := l.decodeAndFit(ctx, ctype, data)
 	if err != nil {
 		return nil, false
 	}
-	img = l.fitImage(img)
 	l.cache.putImage(key, img, len(data), !meta.blockLocal)
 	return img, true
 }
@@ -1871,12 +1920,11 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				node.ImgFailed = true
 				return
 			}
-			img, err := decodeMedia(ctx, ctype, data)
+			img, err := l.decodeAndFit(ctx, ctype, data)
 			if err != nil {
 				node.ImgFailed = true
 				return
 			}
-			img = l.fitImage(img)
 			node.Img = img
 			l.cache.putImage(key, img, len(data), !meta.blockLocal)
 		}(n, u)
@@ -1908,10 +1956,10 @@ Nothing is written to disk.</p>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-bookmarks</b> string</td><td>import a Netscape bookmark HTML file</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
-<tr><td><b>-js-memory</b> int</td><td>JavaScript heap limit in MB, 0 disables (default 256)</td></tr>
+<tr><td><b>-js-memory</b> int</td><td>JavaScript heap ceiling in MB above the page start, 0 disables (default: 25% of -mem-limit/GOMEMLIMIT, else 256)</td></tr>
 <tr><td><b>-cache</b> int</td><td>in-memory resource cache limit in MB, 0 disables (default 32)</td></tr>
 <tr><td><b>-history-cache</b> int</td><td>in-memory back/forward history cache limit in MB, 0 disables (default 128)</td></tr>
-<tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB, 0 uses the Go default (default 0)</td></tr>
+<tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
 <tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
 <tr><td><b>-zoom</b> string</td><td>layout zoom percent from 25 to 200, with or without % (default "100"); + and - step the presets</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>

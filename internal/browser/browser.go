@@ -148,6 +148,9 @@ type Browser struct {
 	pendingStatus string
 	noBigText     bool
 	jsMemLimit    int64
+	// jsMemExplicit records that -js-memory or about:config set the page
+	// ceiling directly, so a -mem-limit change does not overwrite it.
+	jsMemExplicit bool
 	// jsPageBudget caps one page's load-time script phase. It defaults to
 	// jsPageBudget and exists as a field so tests can shorten it.
 	jsPageBudget time.Duration
@@ -309,7 +312,7 @@ func NewBrowser(w, h int) *Browser {
 	}
 	b := &Browser{
 		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1, zoom: 1,
-		jsMemLimit:        defaultJSMemoryLimit,
+		jsMemLimit:        jsHeapBudget(effectiveMemoryLimit()),
 		jsPageBudget:      jsPageBudget,
 		layoutBudget:      DefaultLayoutBudget,
 		historyCacheBytes: defaultHistoryCacheBytes,
@@ -330,6 +333,7 @@ func (b *Browser) setLoader(l *Loader) {
 	b.loader = l
 	if l != nil {
 		l.historyFn = b.historySnapshot
+		l.setMemoryBudget(effectiveMemoryLimit())
 		if b.width > 0 {
 			l.imageViewportPx = cssWidthPx(b.width)
 		}

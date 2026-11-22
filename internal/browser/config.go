@@ -104,10 +104,10 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-bookmarks", Value: get("-bookmarks", "(none)"), Note: "startup"},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
-		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables", Editable: true},
+		{Flag: "-js-memory", Value: strconv.Itoa(int(b.jsMemLimit >> 20)), Note: "MB; 0 disables; default from -mem-limit", Editable: true},
 		{Flag: "-cache", Value: strconv.Itoa(cacheMB), Note: "MB; 0 disables", Editable: true},
 		{Flag: "-history-cache", Value: strconv.Itoa(int(b.historyCacheBytes >> 20)), Note: "MB; 0 disables", Editable: true},
-		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: "MB; 0 = Go default", Editable: true},
+		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: "MB; 0 = unlimited/Go default", Editable: true},
 		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
 		{Flag: "-zoom", Value: zoomPercentLabel(b.zoom), Note: "percent, 25-200; + - step", Editable: true},
 		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
@@ -197,7 +197,19 @@ func (b *Browser) applyConfig(q url.Values) {
 	}
 	if v, ok := q["js-memory"]; ok && len(v) > 0 {
 		if mb, err := strconv.Atoi(strings.TrimSpace(v[0])); err == nil && mb >= 0 {
-			b.jsMemLimit = int64(mb) << 20
+			limit := int64(mb) << 20
+			// The config form always submits this field. Only a value that
+			// differs from the displayed ceiling pins it; rounding to whole
+			// MB must not turn a derived value into an explicit one.
+			if b.jsMemExplicit || limit != b.jsMemLimit {
+				if b.jsMemExplicit || limit>>20 != b.jsMemLimit>>20 {
+					b.jsMemExplicit = true
+				}
+				b.jsMemLimit = limit
+				if b.js != nil {
+					b.js.setMemLimit(b.jsMemLimit)
+				}
+			}
 		}
 	}
 	if v, ok := q["cache"]; ok && len(v) > 0 {

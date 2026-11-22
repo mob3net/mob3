@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -73,6 +74,17 @@ type jsRuntime struct {
 	pendingReplace    bool
 	pendingForm       *jsFormSubmission
 	dialogActive      atomic.Bool
+	// inFlight counts guarded calls. The memory sampler only interrupts while
+	// one is running, so an idle tick cannot poison the next invocation.
+	inFlight atomic.Int32
+	// memBase is the heap size when the runtime was created, and memLimit the
+	// absolute ceiling above it. memMu guards the sampler lifecycle; one
+	// sampler serves the whole runtime instead of one goroutine per call.
+	memBase  uint64
+	memLimit atomic.Int64
+	memMu    sync.Mutex
+	memStop  chan struct{}
+	memWake  chan struct{}
 	// timeout is the per-call CPU watchdog. It is jsTimeout except in tests
 	// that need a shorter check.
 	timeout time.Duration
@@ -324,7 +336,20 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	// Every runtime gets the module hooks, so a classic script can use
 	// dynamic import() even when the page has no module script of its own.
 	j.modules = newJSModuleLoader(j)
+	j.memBase = heapAlloc()
+	j.memLimit.Store(b.jsMemLimit)
+	if b.jsMemLimit > 0 {
+		j.startMemSampler()
+	}
 	return j
+}
+
+// heapAlloc returns the current live heap size. It is called once per runtime,
+// not once per script or timer callback.
+func heapAlloc() uint64 {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	return ms.HeapAlloc
 }
 
 // startJS creates a fresh runtime and runs the page's scripts in order.
@@ -429,6 +454,7 @@ func (b *Browser) stopJS() {
 func (j *jsRuntime) stop() {
 	j.stopped = true
 	j.timers = nil
+	j.stopMemSampler()
 }
 
 // freeze detaches a cached runtime from the event loop; its timers do not run
@@ -438,6 +464,7 @@ func (j *jsRuntime) freeze() {
 		return
 	}
 	j.frozenAt = time.Now()
+	j.stopMemSampler()
 }
 
 // resume reattaches a frozen runtime and shifts pending timers by the time the
@@ -449,6 +476,9 @@ func (j *jsRuntime) resume() {
 	}
 	paused := time.Since(j.frozenAt)
 	j.frozenAt = time.Time{}
+	if j.memLimit.Load() > 0 {
+		j.startMemSampler()
+	}
 	if paused <= 0 {
 		return
 	}
@@ -745,14 +775,20 @@ func (j *jsRuntime) navigatorObject() *sobek.Object {
 	return o
 }
 
-// defaultJSMemoryLimit is the default heap-delta budget for one script or
-// callback. The -js-memory flag overrides it; zero disables the check.
+// defaultJSMemoryLimit is the fallback per-page heap ceiling above the
+// runtime's starting heap when no process limit is configured. -js-memory
+// overrides it; zero disables the memory watchdog.
 const defaultJSMemoryLimit = 256 << 20
 
 func (j *jsRuntime) guard(fn func() error) (err error) {
 	if j == nil || j.stopped {
 		return nil
 	}
+	// A sampler or a previous aborted call may have left an interrupt behind;
+	// the next call must start clean.
+	j.vm.ClearInterrupt()
+	j.inFlight.Add(1)
+	j.wakeMemSampler()
 	timeout := j.timeout
 	if timeout <= 0 {
 		timeout = jsTimeout
@@ -795,37 +831,8 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		j.vm.Interrupt("JavaScript timed out")
 	}
 	timer.Store(time.AfterFunc(timeout, check))
-	var base runtime.MemStats
-	var memDone chan struct{}
-	if limit := j.b.jsMemLimit; limit > 0 {
-		runtime.ReadMemStats(&base)
-		memDone = make(chan struct{})
-		go func() {
-			t := time.NewTicker(25 * time.Millisecond)
-			defer t.Stop()
-			for {
-				select {
-				case <-memDone:
-					return
-				case <-t.C:
-					if j.dialogActive.Load() {
-						continue
-					}
-					var ms runtime.MemStats
-					runtime.ReadMemStats(&ms)
-					if ms.HeapAlloc > base.HeapAlloc+uint64(limit) {
-						j.vm.Interrupt("JavaScript memory limit exceeded")
-						return
-					}
-				}
-			}
-		}()
-	}
 	defer func() {
 		close(done)
-		if memDone != nil {
-			close(memDone)
-		}
 		if t := timer.Load(); t != nil {
 			t.Stop()
 		}
@@ -835,7 +842,101 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 			err = fmt.Errorf("%v", r)
 		}
 	}()
+	// Drop inFlight before clearing the interrupt, so the sampler cannot
+	// interrupt a call that has already finished.
+	defer j.inFlight.Add(-1)
 	return fn()
+}
+
+// setMemLimit updates the runtime's absolute heap ceiling and starts or stops
+// the shared sampler.
+func (j *jsRuntime) setMemLimit(limit int64) {
+	if j == nil {
+		return
+	}
+	j.memLimit.Store(limit)
+	if limit > 0 {
+		j.startMemSampler()
+	} else {
+		j.stopMemSampler()
+	}
+}
+
+func (j *jsRuntime) startMemSampler() {
+	j.memMu.Lock()
+	if j.stopped || j.memStop != nil || j.memLimit.Load() <= 0 {
+		j.memMu.Unlock()
+		return
+	}
+	stop := make(chan struct{})
+	wake := make(chan struct{}, 1)
+	j.memStop = stop
+	j.memWake = wake
+	j.memMu.Unlock()
+	go j.sampleMemory(stop, wake)
+}
+
+func (j *jsRuntime) stopMemSampler() {
+	j.memMu.Lock()
+	if j.memStop != nil {
+		close(j.memStop)
+		j.memStop = nil
+		j.memWake = nil
+	}
+	j.memMu.Unlock()
+}
+
+// wakeMemSampler starts a sampling burst when a guarded call begins, so an
+// idle page does not keep waking for memory reads.
+func (j *jsRuntime) wakeMemSampler() {
+	j.memMu.Lock()
+	wake := j.memWake
+	j.memMu.Unlock()
+	if wake == nil {
+		return
+	}
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+}
+
+// sampleMemory is the single memory watchdog for a runtime. It sleeps while
+// the page is idle and reads the heap at a modest interval only while a call
+// is running.
+func (j *jsRuntime) sampleMemory(stop <-chan struct{}, wake <-chan struct{}) {
+	for {
+		select {
+		case <-stop:
+			return
+		case <-wake:
+		}
+		ticker := time.NewTicker(75 * time.Millisecond)
+		for {
+			select {
+			case <-stop:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if j.inFlight.Load() == 0 {
+					ticker.Stop()
+					break
+				}
+				if j.dialogActive.Load() {
+					continue
+				}
+				limit := j.memLimit.Load()
+				if limit <= 0 {
+					continue
+				}
+				var ms runtime.MemStats
+				runtime.ReadMemStats(&ms)
+				if ms.HeapAlloc > j.memBase+uint64(limit) {
+					j.vm.Interrupt("JavaScript memory limit exceeded")
+				}
+			}
+		}
+	}
 }
 
 // pauseDeadline moves the page-wide deadline forward while the script waits on
