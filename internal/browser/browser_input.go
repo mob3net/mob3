@@ -1121,6 +1121,8 @@ func (b *Browser) HandleKey(k string) bool {
 		b.cycleGraphics()
 	case "X":
 		b.openViewMenu()
+	case "Z":
+		b.openZoomMenu()
 	case "u":
 		if b.url != nil {
 			b.status = b.url.String()

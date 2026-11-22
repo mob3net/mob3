@@ -977,6 +977,22 @@ func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	}
 }
 
+// TestShiftZOpensZoomMenu checks the keyboard shortcut for the zoom window.
+func TestShiftZOpensZoomMenu(t *testing.T) {
+	b := NewBrowser(80, 10)
+	b.HandleKey("Z")
+	if b.zoomMenu == nil {
+		t.Fatal("Z did not open the zoom window")
+	}
+	if b.zoom != 1 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	}
+	b.HandleKey("esc")
+	if b.zoomMenu != nil {
+		t.Fatal("esc did not close the zoom window")
+	}
+}
+
 func TestZoomMenuKeyboard(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.openZoomMenu()

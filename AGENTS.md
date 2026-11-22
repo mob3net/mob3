@@ -932,7 +932,8 @@ Standard Go layout:
   are the portable pair; arrow keys do not navigate), `r` reload, `R` toggle
   reader mode, `D` toggle dark mode, `J` toggle JavaScript and reload,
   `i` cycle graphics modes, `+`/`-` zoom the page in/out (25% to 200%, `0`
-  resets to 100%), `X` open the page view options window (a switch
+  resets to 100%), `Z` opens the zoom window (also via the URL row's clickable
+  zoom badge), `X` open the page view options window (a switch
   list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
   on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements, Sticky
   elements (off keeps sticky boxes in normal flow so they scroll with the page)

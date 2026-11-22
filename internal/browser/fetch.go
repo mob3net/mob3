@@ -1664,7 +1664,8 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
 <tr><td><b>+</b> / <b>-</b></td><td>zoom the page in / out (25% to 200%); fixed pixel layout, spacing, images and large kitty headings grow, body text keeps its size</td></tr>
-<tr><td><b>0</b></td><td>reset zoom to 100% (the badge at the right end of the URL row opens a window for choosing any preset with the mouse)</td></tr>
+<tr><td><b>0</b></td><td>reset zoom to 100%</td></tr>
+<tr><td><b>Z</b></td><td>open the zoom window to choose a preset with the mouse or arrow keys (the badge at the right end of the URL row does the same with the mouse)</td></tr>
 <tr><td><b>X</b></td><td>open the view options window (Fixed elements, Sticky elements, Background images) and toggle the selected switch</td></tr>
 <tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
