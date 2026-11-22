@@ -374,3 +374,27 @@ func TestApplyHintsStylesMatchingLetters(t *testing.T) {
 		t.Fatalf("hint cell = %+v", c)
 	}
 }
+
+func TestBuildConsoleFrame(t *testing.T) {
+	v := &protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: 0,
+		Tabs:  []string{" JS logs (1) ", " Requests (0) ", " Storage ", " HTML ", " Tools "},
+		Lines: []string{"[log] hello"}, Input: "1+1", Cursor: 3, Edit: true,
+		Footer: " Click/Tab/h/l: switch section · Esc: close ",
+	}
+	f := BuildConsoleFrame(v)
+	if f.W != 80 || f.H != 24 || len(f.Cells) != 80*24 {
+		t.Fatalf("frame = %dx%d", f.W, f.H)
+	}
+	var text strings.Builder
+	for _, cell := range f.Cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"JS logs", "Requests", "[log] hello", "1+1", "Click/Tab"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("console %q does not contain %q", text.String(), want)
+		}
+	}
+}

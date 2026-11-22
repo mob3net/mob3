@@ -268,6 +268,26 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		kind = EvNotice
 		e.str(v.Title)
 		e.str(v.Message)
+	case ConsoleView:
+		kind = EvConsoleView
+		e.i32(v.Width)
+		e.i32(v.Height)
+		e.i32(v.Pane)
+		e.count(len(v.Tabs))
+		for _, t := range v.Tabs {
+			e.str(t)
+		}
+		e.count(len(v.Lines))
+		for _, l := range v.Lines {
+			e.str(l)
+		}
+		e.str(v.Summary)
+		e.str(v.Input)
+		e.i32(v.Cursor)
+		e.bool(v.Edit)
+		e.str(v.Hint)
+		e.str(v.Footer)
+		e.bool(v.Quit)
 	case Hints:
 		kind = EvHints
 		e.bool(v.Ask)
@@ -538,6 +558,26 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
 	case EvNotice:
 		body = Notice{Title: d.str(), Message: d.str()}
+	case EvConsoleView:
+		v := ConsoleView{Width: d.i32(), Height: d.i32(), Pane: d.i32()}
+		n := d.count(lim.MaxCells)
+		v.Tabs = make([]string, n)
+		for i := range v.Tabs {
+			v.Tabs[i] = d.str()
+		}
+		n = d.count(lim.MaxCells)
+		v.Lines = make([]string, n)
+		for i := range v.Lines {
+			v.Lines[i] = d.str()
+		}
+		v.Summary = d.str()
+		v.Input = d.str()
+		v.Cursor = d.i32()
+		v.Edit = d.bool()
+		v.Hint = d.str()
+		v.Footer = d.str()
+		v.Quit = d.bool()
+		body = v
 	case EvHints:
 		ask := d.bool()
 		prefix := d.str()

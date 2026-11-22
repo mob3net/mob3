@@ -16,19 +16,21 @@ type Presenter struct {
 	color bool
 	gfx   *GFX
 
-	prev       []string
-	lastScroll int
-	lastNative bool
-	nativeSet  bool
-	chrome     protocol.Chrome
-	state      protocol.State
-	dialog     *DialogView
-	selectView *SelectView
-	download   *DownloadView
-	notice     *NoticeView
-	hint       *HintView
-	lastFrame  protocol.Frame
-	hasFrame   bool
+	prev          []string
+	lastScroll    int
+	lastNative    bool
+	nativeSet     bool
+	chrome        protocol.Chrome
+	state         protocol.State
+	dialog        *DialogView
+	selectView    *SelectView
+	download      *DownloadView
+	notice        *NoticeView
+	hint          *HintView
+	console       *protocol.ConsoleView
+	consoleActive bool
+	lastFrame     protocol.Frame
+	hasFrame      bool
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -114,6 +116,9 @@ func (p *Presenter) Refresh() error {
 	if p == nil {
 		return nil
 	}
+	if p.consoleActive && p.console != nil {
+		return p.PresentConsole(p.console)
+	}
 	if p.hasFrame {
 		return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
 	}
@@ -139,6 +144,11 @@ func (p *Presenter) Refresh() error {
 func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	if p == nil || p.out == nil || f.W <= 0 || f.H <= 0 {
 		return nil
+	}
+	if p.consoleActive {
+		p.consoleActive = false
+		p.console = nil
+		p.prev = nil
 	}
 	if !p.nativeSet {
 		p.lastNative = native

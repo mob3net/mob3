@@ -1095,6 +1095,88 @@ func paneStart(total, scroll, rows int) int {
 	return start
 }
 
+// consoleEngineFallback keeps the engine drawing the console while a console
+// HTML find or an engine-owned modal needs its cell overlay.
+func (b *Browser) consoleEngineFallback() bool {
+	return b.findActive || b.viewMenu != nil || b.zoomMenu != nil ||
+		(b.selectMenu != nil && !b.selectFrontend) ||
+		(b.download != nil && !b.downloadFrontend) ||
+		(b.notice != nil && !b.noticeFrontend)
+}
+
+func visibleConsoleLines(items []string, scroll, rows, width int) []string {
+	if rows < 1 {
+		return nil
+	}
+	start := paneStart(len(items), scroll, rows)
+	out := make([]string, 0, rows)
+	for i := 0; i < rows && start+i < len(items); i++ {
+		out = append(out, truncateWidth(items[start+i], width))
+	}
+	return out
+}
+
+// emitConsoleView sends the text model of the console to the front end.
+func (b *Browser) emitConsoleView() {
+	w, h := b.width, b.height
+	if w < 1 {
+		w = 1
+	}
+	if h < 1 {
+		h = 1
+	}
+	l := newConsoleLayout(h, b.consolePane)
+	titles := b.consoleTabTitles()
+	v := protocol.ConsoleView{
+		Width: w, Height: h, Pane: b.consolePane,
+		Tabs: append([]string(nil), titles[:]...),
+	}
+	if l.bodyY >= 0 && l.bodyRows > 0 {
+		switch b.consolePane {
+		case consoleRequests:
+			reqRows := l.bodyRows
+			if reqRows > 1 {
+				reqRows--
+			}
+			v.Lines = visibleConsoleLines(b.requestLinesWidth(w-2), b.reqScroll, reqRows, w-2)
+			v.Summary = truncateWidth(b.requestCacheSummary(), w-2)
+		case consoleStorage:
+			v.Lines = visibleConsoleLines(b.storageLinesWidth(w-2), b.storageScroll, l.bodyRows, w-2)
+		case consoleHTML:
+			v.Lines = visibleConsoleLines(b.htmlLines(w-2), b.htmlScroll, l.bodyRows, w-2)
+		case consoleLogs, consoleTools:
+			logRows := l.bodyRows
+			if l.inputY >= 0 {
+				logRows = l.inputY - l.bodyY
+			}
+			if b.consolePane == consoleTools {
+				v.Lines = visibleConsoleLines(b.toolLines(w-2), b.toolScroll, logRows, w-2)
+			} else {
+				v.Lines = visibleConsoleLines(b.consoleLines(w-2), b.consoleScroll, logRows, w-2)
+			}
+			v.Input = b.consoleText
+			v.Cursor = b.consoleCursor
+			v.Edit = b.consoleEdit
+			if b.consoleText == "" && !b.consoleEdit {
+				v.Hint = "JavaScript input"
+				if b.consolePane == consoleTools {
+					v.Hint = "Tools: help · form · links · requests · logs · source · snapshot"
+				}
+			}
+		}
+	}
+	if h >= 2 {
+		v.Footer = " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · y: copy all · q: quit · Esc: close "
+		if b.quitPending {
+			v.Footer = " " + quitConfirmText
+			v.Quit = true
+		}
+	}
+	_ = b.sessionOut.Send(protocol.Event{Body: v})
+	b.frameReady = false
+	b.chromeReady = false
+}
+
 func (b *Browser) drawConsole(w, h int) {
 	fg := RGB(0xdd, 0xe6, 0xee)
 	bg := RGB(0x0f, 0x14, 0x1a)

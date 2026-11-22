@@ -72,6 +72,7 @@ const (
 	EvSelect
 	EvNotice
 	EvHints
+	EvConsoleView
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

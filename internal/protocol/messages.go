@@ -192,6 +192,24 @@ type SelectResult struct {
 
 func (SelectResult) commandKind() Kind { return CmdSelectResult }
 
+// ConsoleView is the visible console screen: tabs, the active pane's visible
+// lines, optional request summary, input row and footer.
+type ConsoleView struct {
+	Width, Height int
+	Pane          int
+	Tabs          []string
+	Lines         []string
+	Summary       string
+	Input         string
+	Cursor        int
+	Edit          bool
+	Hint          string
+	Footer        string
+	Quit          bool
+}
+
+func (ConsoleView) eventKind() Kind { return EvConsoleView }
+
 // HintChar is one highlighted letter in a hint overlay.
 type HintChar struct {
 	R    rune

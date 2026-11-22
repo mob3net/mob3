@@ -342,20 +342,19 @@ func TestClientErrorLogsOnce(t *testing.T) {
 	}
 }
 
-func TestConsoleDrawEmitsFrame(t *testing.T) {
+func TestConsoleDrawEmitsView(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.noJS = true
 	b.emitFrames = true
 	b.consoleOpen = true
-	capture := &frameCapture{}
+	capture := &consoleSink{}
 	b.sessionOut = capture
 	b.draw()
-	b.emitPendingFrame()
-	if capture.frame.W != 40 || capture.frame.H != 10 || len(capture.frame.Cells) != 400 {
-		t.Fatalf("console frame = %dx%d, cells %d", capture.frame.W, capture.frame.H, len(capture.frame.Cells))
+	if !capture.got || capture.view.Width != 40 || capture.view.Height != 10 {
+		t.Fatalf("console view = %+v", capture.view)
 	}
-	if err := capture.frame.Validate(protocol.DefaultLimits); err != nil {
-		t.Fatalf("console frame is invalid: %v", err)
+	if len(capture.view.Tabs) != 5 {
+		t.Fatalf("console tabs = %d", len(capture.view.Tabs))
 	}
 }
 
@@ -484,5 +483,36 @@ func TestHintTransportRoundTrip(t *testing.T) {
 	b.applyHintResult(protocol.HintResult{Target: sink.hints.Items[0].Target})
 	if b.linkHints || b.hintsFrontend || b.focus != 0 {
 		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.linkHints, b.hintsFrontend, b.focus)
+	}
+}
+
+type consoleSink struct {
+	view protocol.ConsoleView
+	got  bool
+}
+
+func (s *consoleSink) Send(ev protocol.Event) error {
+	if v, ok := ev.Body.(protocol.ConsoleView); ok {
+		s.view, s.got = v, true
+	}
+	return nil
+}
+
+func TestConsoleViewTransport(t *testing.T) {
+	b := NewBrowser(80, 24)
+	sink := &consoleSink{}
+	b.sessionOut = sink
+	b.toggleConsole()
+	if !sink.got || sink.view.Width != 80 || len(sink.view.Tabs) != 5 || !b.consoleOpen {
+		t.Fatalf("console view = %+v open=%v", sink.view, b.consoleOpen)
+	}
+	if sink.view.Pane != 0 || sink.view.Hint == "" {
+		t.Fatalf("pane=%d hint=%q", sink.view.Pane, sink.view.Hint)
+	}
+	b.consolePane = consoleRequests
+	sink.got = false
+	b.draw()
+	if !sink.got || sink.view.Pane != consoleRequests {
+		t.Fatalf("request view = %+v", sink.view)
 	}
 }

@@ -271,6 +271,10 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
+	case protocol.ConsoleView:
+		if l.Presenter != nil {
+			_ = l.Presenter.PresentConsole(&v)
+		}
 	case protocol.Hints:
 		l.startHints(v)
 	case protocol.Download:

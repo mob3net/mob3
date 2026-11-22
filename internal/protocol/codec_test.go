@@ -74,6 +74,11 @@ func testEvents() []Event {
 			Target: 2, Label: "d", X: 1, Y: 2, W: 3, H: 1,
 			Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
 		}}}},
+		{Session: 14, Seq: 14, Body: ConsoleView{
+			Width: 80, Height: 24, Pane: 0, Tabs: []string{" JS logs (1) ", " Requests (0) "},
+			Lines: []string{"[log] hi"}, Input: "1+1", Cursor: 3, Edit: true,
+			Hint: "JavaScript input", Footer: " help ", Quit: false,
+		}},
 		{Session: 11, Seq: 11, Body: Quit{}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
 		{Session: 13, Seq: 13, Body: Chrome{Show: true, Width: 3, HeaderRows: 1, Header: []Cell{{R: 'H'}, {R: 'i'}, {R: '!'}}, Footer: []Cell{{R: 'F'}, {R: 'o'}, {R: 'o'}}}},

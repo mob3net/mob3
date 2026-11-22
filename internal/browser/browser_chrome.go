@@ -252,6 +252,10 @@ func (b *Browser) draw() {
 		h = 1
 	}
 	if b.consoleOpen {
+		if b.sessionOut != nil && !b.consoleEngineFallback() {
+			b.emitConsoleView()
+			return
+		}
 		b.drawConsole(w, h)
 		return
 	}
