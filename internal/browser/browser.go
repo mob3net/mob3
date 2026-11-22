@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"browser/internal/engine"
+	"browser/internal/host"
 	"browser/internal/protocol"
 	"time"
 )
@@ -96,7 +97,7 @@ type Browser struct {
 	// form. A config submission applies only when it presents this token, so
 	// page content cannot rewrite session settings by navigating to
 	// about:config with a query.
-	configToken string
+	configToken *host.ConfigToken
 
 	prompt          bool
 	promptText      string
@@ -350,6 +351,7 @@ func NewBrowser(w, h int) *Browser {
 		importCh:          make(chan jsImportTask, 16),
 		imageCh:           make(chan imageBatch, 1),
 		home:              "about:home",
+		configToken:       host.NewConfigToken(),
 	}
 	b.setLoader(b.loader)
 	setLayoutZoom(b.zoom)

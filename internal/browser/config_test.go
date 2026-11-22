@@ -142,8 +142,8 @@ func TestConfigNavigation(t *testing.T) {
 		t.Fatalf("config form = %v, want method post", form)
 	}
 	token := configInputValue(b.page, configTokenParam)
-	if token == "" || token != b.configToken {
-		t.Fatalf("form token = %q, browser token = %q", token, b.configToken)
+	if token == "" || token != b.configToken.Current() {
+		t.Fatalf("form token = %q, browser token = %q", token, b.configToken.Current())
 	}
 	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		if n.Attr("name") == "home" {
@@ -163,7 +163,7 @@ func TestConfigNavigation(t *testing.T) {
 	if values["home"] != "https://example.com/home" {
 		t.Fatalf("config inputs = %+v", values)
 	}
-	if b.configToken == token {
+	if b.configToken.Current() == token {
 		t.Fatal("config token was not rotated after use")
 	}
 

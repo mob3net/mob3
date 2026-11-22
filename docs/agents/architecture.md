@@ -90,9 +90,9 @@ destination; the tracker lists what remains.
   placement, but not terminal raw mode/input, chrome, dialogs, clipboard or
   navigation state.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
-  certificates, the request log and JS fetch/XHR. There is no global visited
-  list or download history by design (D54): back/forward history is session
-  state and the download/curl hint is presentation.
+  certificates, the request log, JS fetch/XHR and the config token. There is no
+  global visited list or download history by design (D54): back/forward history
+  is session state and the download/curl hint is presentation.
 - The engine contains the DOM/JS/style/layout/paint/PDF work. Its JS
   `fetch`/XHR and cookie surface now use the host broker and the engine no
   longer imports `net/http`.
@@ -163,12 +163,12 @@ destination; the tracker lists what remains.
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
-| `internal/engine/pages.go` | Shared built-in page shell/CSS and cannot-display/load-error HTML. Help/history/config bodies, the config token and view options are still session-side. |
+| `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |
 | `internal/host/certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default) or `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`). Certificate files are not read. The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `internal/engine/pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
-| `config.go` | Browser-side runtime config model, `about:config` form and apply path. Host-side config/token ownership is still pending. |
+| `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
 | `browser_chrome.go` | Session-side composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, scrollbar and memory readout remain here. |
 | `shell.go` | Shell-owned geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. |
