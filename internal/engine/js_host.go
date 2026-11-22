@@ -2,12 +2,19 @@ package engine
 
 import (
 	"context"
-	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/grafana/sobek"
+
+	"browser/internal/protocol"
 )
+
+// Cookie is one document-visible cookie value. The host owns parsing and the
+// HttpOnly policy; the engine only serializes these values for document.cookie.
+type Cookie struct {
+	Name  string
+	Value string
+}
 
 // ImportTask is one dynamic import() graph loaded off the main goroutine.
 // The runtime fields stay opaque to the engine contract.
@@ -54,15 +61,11 @@ type JSHost interface {
 	Interactive() bool
 	RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context
 	CheckRequest(ctx context.Context, u *url.URL) error
-	MapRequestError(err error) error
 	DecodeBody(data []byte, contentType string) string
 	IsJavaScriptMIME(contentType string) bool
 	MIMEEssence(contentType string) string
-	DocumentCookies(u *url.URL) []*http.Cookie
-	SetDocumentCookie(u *url.URL, c *http.Cookie)
+	DocumentCookies(u *url.URL) []Cookie
+	SetDocumentCookie(u *url.URL, raw string)
 	FetchResource(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error)
-	CurrentPageGeneration() int
-	StartRequest(gen int, method, rawURL, kind string) (int, bool)
-	FinishRequest(id, gen, status, size int, elapsed time.Duration, err error)
-	HTTPClient() *http.Client
+	JSFetch(ctx context.Context, req protocol.FetchRequest) (protocol.FetchResponse, error)
 }

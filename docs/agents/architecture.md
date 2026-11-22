@@ -32,8 +32,8 @@ protocol -> standard library only
 The split is a value boundary. Nothing in `protocol` holds a pointer to engine
 state: frames, events and commands are plain data, and a codec round-trip
 covers every message. Images cross as encoded bytes with size caps, never as
-`image.Image`. Terminal capability detection is front-end-owned; cookie
-parsing is **not** on the host yet (`js_dom.go` still parses `document.cookie`).
+`image.Image`. Terminal capability detection is front-end-owned and cookie
+parsing is host-side; JS `fetch`/XHR go through the host broker.
 
 **Non-goals of this step:** no subprocess, no OS sandbox, no tabs, no
 per-site renderer, no behavior or visual change. A later process split is a
@@ -63,12 +63,10 @@ the end.
 - `-dump` and `-png` are byte-identical to the baseline over the synthetic
   page corpus.
 - `frontend` and `host` do not import `engine`; `engine` imports only
-  `protocol`, approved modules and the standard library, with no `net`,
-  `syscall` or `os` left. Current violations to remove: `js_web.go` builds
-  `net/http` requests and calls a host `http.Client` for `fetch`/XHR,
-  `js_host.go` exposes `*http.Client`/`*http.Cookie`, and `js_dom.go` parses
-  cookies with `net/http`. The dependency test currently checks the exact
-  `net` import only, so `net/http` passes silently.
+  `protocol`, approved modules and the standard library, with no `net/http`,
+  `syscall` or `os` left. `net/url` is a pure value package and remains.
+  The dependency test rejects `net/http` and its subpackages on the engine
+  side.
 - Frame goldens cover layout and rendering, plus new frame-snapshot tests for
   the seam.
 - Dependencies are checked by a test, not by review.
@@ -94,8 +92,9 @@ destination; the tracker lists what remains.
 - The host currently owns HTTP transport policy, raw fetch, cache, cookies,
   settings, certificates and the request log; it does **not** yet own global
   visited history, download reporting, JS fetch/XHR, or cookie parsing.
-- The engine contains the DOM/JS/style/layout/paint/PDF work, but its JS layer
-  still imports `net/http` and sends requests through `JSHost.HTTPClient()`.
+- The engine contains the DOM/JS/style/layout/paint/PDF work. Its JS
+  `fetch`/XHR and cookie surface now use the host broker and the engine no
+  longer imports `net/http`.
 - **Files by subsystem within a package** remains the rule. Moving code
   between files is a pure declaration move (keep doc comments, give each file
   only the imports it uses). Files carved out of a base file share its prefix

@@ -35,7 +35,7 @@ var importBoundary = map[string]importRule{
 	},
 	"internal/engine": {
 		allowProject: map[string]bool{"internal/protocol": true},
-		forbidStd:    map[string]bool{"net": true, "syscall": true},
+		forbidStd:    map[string]bool{"net": true, "net/http": true, "syscall": true},
 		forbidOS:     true,
 	},
 	"internal/host": {
@@ -112,8 +112,10 @@ func checkImport(rule importRule, module, imp string) error {
 			return fmt.Errorf("protocol must remain standard-library only")
 		}
 	}
-	if rule.forbidStd[imp] {
-		return fmt.Errorf("%q is forbidden on this side of the boundary", imp)
+	for forbidden := range rule.forbidStd {
+		if imp == forbidden || (strings.Contains(forbidden, "/") && strings.HasPrefix(imp, forbidden+"/")) {
+			return fmt.Errorf("%q is forbidden on this side of the boundary", imp)
+		}
 	}
 	if rule.forbidOS && imp == "os" {
 		return fmt.Errorf("os belongs on the trusted side; move terminal or file access out")

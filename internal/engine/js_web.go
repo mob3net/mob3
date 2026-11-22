@@ -1,18 +1,16 @@
 package engine
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/grafana/sobek"
+
+	"browser/internal/protocol"
 )
 
 // newURL implements a subset of the WHATWG URL object.
@@ -334,7 +332,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 	input := call.Argument(0)
 	init := jsObject(call.Argument(1))
 	target := ""
-	method := http.MethodGet
+	method := "GET"
 	body := ""
 	headers := map[string][]string{}
 	if ro := jsObject(input); ro != nil {
@@ -390,7 +388,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 	reqHeaders := make(map[string]string, len(headers))
 	for k, vs := range headers {
 		if len(vs) > 0 {
-			reqHeaders[http.CanonicalHeaderKey(k)] = strings.Join(vs, ", ")
+			reqHeaders[canonicalHeaderKey(k)] = strings.Join(vs, ", ")
 		}
 	}
 	status, data, ctype, respHeaders, final, err := j.HTTPXHR("fetch", method, u, []byte(body), reqHeaders)
@@ -403,7 +401,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 	}
 	_ = resolve(j.responseValue(&fetchResponse{
 		status:     status,
-		text:       http.StatusText(status),
+		text:       statusText(status),
 		url:        finalURL,
 		ctype:      ctype,
 		headers:    respHeaders,
@@ -418,7 +416,7 @@ type fetchResponse struct {
 	text       string
 	url        string
 	ctype      string
-	headers    http.Header
+	headers    map[string][]string
 	data       []byte
 	redirected bool
 }
@@ -499,7 +497,7 @@ func (j *jsRuntime) rejectedPromise(v interface{}) sobek.Value {
 	return j.vm.ToValue(p)
 }
 
-func (j *jsRuntime) headersValue(h http.Header) *sobek.Object {
+func (j *jsRuntime) headersValue(h map[string][]string) *sobek.Object {
 	m := make(map[string][]string, len(h))
 	for k, vs := range h {
 		m[strings.ToLower(k)] = append([]string(nil), vs...)
@@ -634,7 +632,7 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 	input := call.Argument(0)
 	init := jsObject(call.Argument(1))
 	target := input.String()
-	method := http.MethodGet
+	method := "GET"
 	body := ""
 	headers := map[string][]string{}
 	if ro := jsObject(input); ro != nil {
@@ -707,11 +705,11 @@ func (j *jsRuntime) newResponseObject(call sobek.FunctionCall) sobek.Value {
 	if sobek.IsUndefined(call.Argument(0)) || sobek.IsNull(call.Argument(0)) {
 		data = nil
 	}
-	h := make(http.Header)
+	h := make(map[string][]string, len(headers))
 	for k, vs := range headers {
-		h[http.CanonicalHeaderKey(k)] = vs
+		h[canonicalHeaderKey(k)] = vs
 	}
-	ctype := h.Get("Content-Type")
+	ctype := headerGet(h, "Content-Type")
 	return j.responseValue(&fetchResponse{
 		status:  status,
 		text:    statusText,
@@ -726,7 +724,7 @@ type xhrState struct {
 	method       string
 	url          *url.URL
 	reqHeaders   map[string]string
-	resHeaders   http.Header
+	resHeaders   map[string][]string
 	status       int
 	statusText   string
 	readyState   int
@@ -783,7 +781,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 	j.method(o, "open", func(call sobek.FunctionCall) sobek.Value {
 		st.method = strings.ToUpper(call.Argument(0).String())
 		if st.method == "" {
-			st.method = http.MethodGet
+			st.method = "GET"
 		}
 		target := call.Argument(1).String()
 		base := j.page.Base
@@ -815,7 +813,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 		if st.resHeaders == nil {
 			return sobek.Null()
 		}
-		v := st.resHeaders.Get(call.Argument(0).String())
+		v := headerGet(st.resHeaders, call.Argument(0).String())
 		if v == "" {
 			return sobek.Null()
 		}
@@ -892,7 +890,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 			return sobek.Undefined()
 		}
 		st.status = status
-		st.statusText = http.StatusText(status)
+		st.statusText = statusText(status)
 		st.ctype = ctype
 		st.resHeaders = headers
 		st.text = j.host.DecodeBody(data, ctype)
@@ -950,133 +948,135 @@ func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	}
 }
 
-func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers http.Header, final *url.URL, err error) {
+func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers map[string][]string, final *url.URL, err error) {
 	if len(body) > maxResourceSize {
-		return 0, nil, "", nil, nil, errBadSVG
+		return 0, nil, "", nil, nil, errors.New("request body too large")
 	}
-	gen := j.host.CurrentPageGeneration()
-	reqID, _ := j.host.StartRequest(gen, method, u.String(), kind)
-	start := time.Now()
-	defer func() {
-		if reqID != 0 {
-			j.host.FinishRequest(reqID, gen, status, len(data), time.Since(start), err)
-		}
-	}()
-	origin := j.page.URL
-	if origin == nil {
+	if j.page == nil || j.page.URL == nil || u == nil {
 		return 0, nil, "", nil, nil, errors.New("cross-origin request blocked")
 	}
-	crossOrigin := !sameOrigin(u, origin)
-	if crossOrigin && !isSimpleCORSRequest(method, reqHeaders) {
-		return 0, nil, "", nil, nil, errors.New("cross-origin request requires CORS preflight (unsupported)")
+	purpose := protocol.FetchXHR
+	if kind == "fetch" {
+		purpose = protocol.FetchFetch
 	}
-	var reader io.Reader
-	if len(body) > 0 {
-		reader = bytes.NewReader(body)
-	}
-	reqCtx := j.host.RequestContext(kind, origin, j.page != nil && j.page.Local, u)
-	if err := j.host.CheckRequest(reqCtx, u); err != nil {
-		j.host.LogJS("warn", err.Error())
-		return 0, nil, "", nil, nil, err
-	}
-	req, err := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
-	if err != nil {
-		return 0, nil, "", nil, nil, err
-	}
-	req.Header.Set("User-Agent", j.host.UserAgent())
-	req.Header.Set("Accept", "*/*")
-	if crossOrigin {
-		req.Header.Set("Origin", urlOrigin(origin))
+	req := protocol.FetchRequest{
+		URL:         u.String(),
+		Method:      method,
+		Body:        body,
+		Purpose:     purpose,
+		Origin:      j.page.URL.String(),
+		Credentials: true,
+		Kind:        kind,
+		PageLocal:   j.page.Local,
 	}
 	for k, v := range reqHeaders {
-		req.Header.Set(k, v)
+		req.Headers = append(req.Headers, protocol.Header{Name: k, Value: v})
 	}
-	client := *j.host.HTTPClient()
-	if crossOrigin {
-		// Default fetch/XHR credentials are same-origin; do not leak the
-		// target's cookies into a CORS request.
-		client.Jar = nil
-	}
-	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return errors.New("too many redirects")
-		}
-		if origin.Scheme == "https" && next.URL.Scheme == "http" {
-			return errors.New("blocked mixed content")
-		}
-		if !crossOrigin && !sameOrigin(next.URL, origin) {
-			return errors.New("cross-origin redirect blocked")
-		}
-		return nil
-	}
+	ctx := j.host.RequestContext(kind, j.page.URL, j.page.Local, u)
 	// A synchronous fetch blocks the runtime: keep the script watchdog from
 	// charging network time to the page and aborting a module mid-evaluation.
 	j.ioActive.Store(true)
-	resp, err := client.Do(req)
+	resp, err := j.host.JSFetch(ctx, req)
+	j.ioActive.Store(false)
 	if err != nil {
-		j.ioActive.Store(false)
-		return 0, nil, "", nil, nil, j.host.MapRequestError(err)
+		return 0, nil, "", nil, nil, err
 	}
-	defer j.ioActive.Store(false)
-	defer resp.Body.Close()
-	if crossOrigin && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
-		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("cross-origin response blocked by CORS")
+	headerMap := make(map[string][]string, len(resp.Headers))
+	for _, h := range resp.Headers {
+		key := canonicalHeaderKey(h.Name)
+		headerMap[key] = append(headerMap[key], h.Value)
 	}
-	data, err = io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))
-	if err != nil {
-		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, err
+	if resp.FinalURL != "" {
+		if parsed, e := url.Parse(resp.FinalURL); e == nil {
+			final = parsed
+		}
 	}
-	if len(data) > maxResourceSize {
-		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("resource too large")
+	if final == nil {
+		final = u
 	}
-	return resp.StatusCode, data, resp.Header.Get("Content-Type"), resp.Header, resp.Request.URL, nil
+	return resp.Status, resp.Body, resp.ContentType, headerMap, final, nil
 }
 
-// urlOrigin returns the serialized scheme and host used by CORS.
-func urlOrigin(u *url.URL) string {
-	if u == nil {
+func canonicalHeaderKey(s string) string {
+	b := []byte(strings.TrimSpace(s))
+	upper := true
+	for i, c := range b {
+		switch {
+		case c >= 'a' && c <= 'z':
+			if upper {
+				b[i] = c - ('a' - 'A')
+			}
+		case c == '-':
+			upper = true
+			continue
+		}
+		upper = false
+	}
+	return string(b)
+}
+
+func headerGet(h map[string][]string, key string) string {
+	vs := h[canonicalHeaderKey(key)]
+	if len(vs) == 0 {
 		return ""
 	}
-	scheme := strings.ToLower(u.Scheme)
-	host := strings.ToLower(u.Host)
-	if (scheme == "http" && strings.HasSuffix(host, ":80")) ||
-		(scheme == "https" && strings.HasSuffix(host, ":443")) {
-		host = host[:strings.LastIndex(host, ":")]
-	}
-	return scheme + "://" + host
+	return strings.Join(vs, ", ")
 }
 
-func corsAllowed(header string, origin *url.URL) bool {
-	allowed := strings.TrimSpace(header)
-	if allowed == "*" {
-		return true
+func statusText(code int) string {
+	switch code {
+	case 200:
+		return "OK"
+	case 201:
+		return "Created"
+	case 202:
+		return "Accepted"
+	case 204:
+		return "No Content"
+	case 301:
+		return "Moved Permanently"
+	case 302:
+		return "Found"
+	case 303:
+		return "See Other"
+	case 304:
+		return "Not Modified"
+	case 307:
+		return "Temporary Redirect"
+	case 308:
+		return "Permanent Redirect"
+	case 400:
+		return "Bad Request"
+	case 401:
+		return "Unauthorized"
+	case 403:
+		return "Forbidden"
+	case 404:
+		return "Not Found"
+	case 405:
+		return "Method Not Allowed"
+	case 408:
+		return "Request Timeout"
+	case 409:
+		return "Conflict"
+	case 410:
+		return "Gone"
+	case 413:
+		return "Payload Too Large"
+	case 418:
+		return "I'm a teapot"
+	case 429:
+		return "Too Many Requests"
+	case 500:
+		return "Internal Server Error"
+	case 501:
+		return "Not Implemented"
+	case 502:
+		return "Bad Gateway"
+	case 503:
+		return "Service Unavailable"
+	case 504:
+		return "Gateway Timeout"
 	}
-	return allowed != "" && strings.EqualFold(strings.TrimRight(allowed, "/"), strings.TrimRight(urlOrigin(origin), "/"))
-}
-
-func isSimpleCORSRequest(method string, headers map[string]string) bool {
-	switch strings.ToUpper(method) {
-	case http.MethodGet, http.MethodHead, http.MethodPost:
-	default:
-		return false
-	}
-	simple := map[string]bool{
-		"accept": true, "accept-language": true, "content-language": true,
-		"content-type": true, "range": true,
-	}
-	for k, v := range headers {
-		lk := strings.ToLower(strings.TrimSpace(k))
-		if !simple[lk] {
-			return false
-		}
-		if lk == "content-type" {
-			media := strings.ToLower(strings.TrimSpace(strings.Split(v, ";")[0]))
-			switch media {
-			case "application/x-www-form-urlencoded", "multipart/form-data", "text/plain":
-			default:
-				return false
-			}
-		}
-	}
-	return true
+	return ""
 }

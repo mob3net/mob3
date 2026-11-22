@@ -5,9 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"time"
+	"strings"
 
 	"browser/internal/engine"
+	"browser/internal/protocol"
 )
 
 // jsHost is the engine-owned contract; the browser only implements it.
@@ -62,14 +63,23 @@ func (h browserJSHost) UserAgent() string {
 	}
 	return h.b.loader.requestUserAgent()
 }
-func (h browserJSHost) DocumentCookies(u *url.URL) []*http.Cookie {
+func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
 	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
 		return nil
 	}
-	return h.b.loader.cookies.documentCookies(u)
+	cookies := h.b.loader.cookies.documentCookies(u)
+	out := make([]engine.Cookie, 0, len(cookies))
+	for _, c := range cookies {
+		out = append(out, engine.Cookie{Name: c.Name, Value: c.Value})
+	}
+	return out
 }
-func (h browserJSHost) SetDocumentCookie(u *url.URL, c *http.Cookie) {
+func (h browserJSHost) SetDocumentCookie(u *url.URL, raw string) {
 	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
+		return
+	}
+	c, err := http.ParseSetCookie(strings.TrimSpace(raw))
+	if err != nil || c.Name == "" {
 		return
 	}
 	h.b.loader.cookies.setDocumentCookie(u, c)
@@ -80,28 +90,11 @@ func (h browserJSHost) FetchResource(ctx context.Context, u *url.URL) ([]byte, s
 	}
 	return h.b.loader.fetchCtx(ctx, u)
 }
-func (h browserJSHost) CurrentPageGeneration() int {
+func (h browserJSHost) JSFetch(ctx context.Context, req protocol.FetchRequest) (protocol.FetchResponse, error) {
 	if h.b.loader == nil {
-		return 0
+		return protocol.FetchResponse{}, errors.New("loader unavailable")
 	}
-	return h.b.loader.currentPageGeneration()
-}
-func (h browserJSHost) StartRequest(gen int, method, rawURL, kind string) (int, bool) {
-	if h.b.loader == nil {
-		return 0, false
-	}
-	return h.b.loader.startRequest(gen, method, rawURL, kind)
-}
-func (h browserJSHost) FinishRequest(id, gen, status, size int, elapsed time.Duration, err error) {
-	if h.b.loader != nil {
-		h.b.loader.finishRequest(id, gen, status, size, elapsed, err)
-	}
-}
-func (h browserJSHost) HTTPClient() *http.Client {
-	if h.b.loader == nil {
-		return nil
-	}
-	return h.b.loader.client
+	return h.b.loader.newFetcher().JSFetch(ctx, req)
 }
 
 func (h browserJSHost) RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context {
@@ -131,13 +124,4 @@ func (h browserJSHost) CheckRequest(ctx context.Context, u *url.URL) error {
 		return errMixedContentBlocked
 	}
 	return nil
-}
-func (h browserJSHost) MapRequestError(err error) error {
-	if isLocalNetworkError(err) {
-		return errLocalNetworkBlocked
-	}
-	if isMixedContentError(err) {
-		return errMixedContentBlocked
-	}
-	return err
 }

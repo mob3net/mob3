@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -1855,11 +1854,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		if raw == "" || j.page == nil || j.page.URL == nil || j.host == nil {
 			return
 		}
-		c, err := http.ParseSetCookie(raw)
-		if err != nil || c.Name == "" {
-			return
-		}
-		j.host.SetDocumentCookie(j.page.URL, c)
+		j.host.SetDocumentCookie(j.page.URL, raw)
 	})
 	j.method(o, "write", func(call sobek.FunctionCall) sobek.Value {
 		var b strings.Builder

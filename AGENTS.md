@@ -207,10 +207,10 @@ published by the Pages build.
   end and the host never import `engine`, and `engine` never imports
   `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
   The front end never names an engine type, and `internal/protocol` is
-  canonical for the message set. Current temporary violations are recorded in
-  the migration tracker: the engine still imports `net/http` for JS
-  `fetch`/XHR and cookie parsing, and the app/shell still lives in
-  `internal/browser`. Ownership, migration order and exit gates are in
+  canonical for the message set. The engine no longer imports `net/http`:
+  JS `fetch`/XHR and cookie parsing use the host broker. The app/shell still
+  lives in `internal/browser`; the tracker records the remaining split.
+  Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package
   and one subsystem. Large subsystems get their own file; moving code between

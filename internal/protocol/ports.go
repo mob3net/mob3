@@ -49,6 +49,11 @@ type FetchRequest struct {
 	Purpose     FetchPurpose
 	Origin      string
 	Credentials bool
+	// Kind is the request-log label ("fetch", "xhr", "js", …).
+	Kind string
+	// PageLocal records whether the initiating document may reach local
+	// addresses. The host applies the same private-network policy as page loads.
+	PageLocal bool
 }
 
 // FetchResponse is the host's answer. The engine owns decompression, charset

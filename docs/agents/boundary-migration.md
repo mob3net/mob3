@@ -86,6 +86,7 @@ network destination.
 | D50 | 2026-11-22 | `InProc` delivers events through a bounded outbox. A newer `Frame` or `State` replaces the pending one, one-shot events keep their order, and `Quit`/`Crash` discard stale coalescible events first. The handler blocks only when the outbox is full of one-shot events. | A slow presenter must not stall the engine’s timers and loads on frames it will never show. Coalescing keeps the newest picture and state, while `Quit` and `Crash` are never delayed behind stale frames. |
 | D51 | 2026-11-22 | Add `protocol.Chrome`: normal page frames are content-only and are accompanied by the header/footer cell rows, which the front end stacks. Overlays and the console keep the existing full-screen frame with `Chrome.Show=false`. The engine still composes the chrome cells for now; semantic chrome ownership is the next slice. | This makes the normal frame contract content-only and moves ANSI stacking to the front end without losing overlays. It is a display-list bridge, not the final trust boundary: the engine can still choose chrome cells until the front end composes them from `State`. |
 | D52 | 2026-11-22 | Add a stream transport behind the same codec and ports: `ReadCommand`/`ReadEvent`, `ServeStream` for the handler child and `DialStream` for the front end. `ServeStream` uses the same coalescing outbox and event validation. The serving reader applies `Abort` directly, so a busy script stops even when the command loop is blocked. | This is the transport swap the later process split needs. It is tested over `net.Pipe` and is unused by the in-process app until the child process lands. The serving side owns and closes its connection when the session ends. |
+| D53 | 2026-11-22 | Move JS `fetch`/XHR to `host.JSFetch` behind a `protocol.FetchRequest`/`FetchResponse`, and move `document.cookie` parsing to the browser adapter. The host owns same-origin/CORS, credentials, redirects, mixed content, private networks, size limits and the request log. The engine contract now exposes a cookie value list, a raw cookie setter and `JSFetch`, with no `*http.Client`. | This closes the largest remaining boundary violation: page scripts can no longer choose a destination or see host cookie types directly. The dependency test now rejects `net/http` (and subpackages) on the engine side. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -116,8 +117,8 @@ moved.
 
 Known exceptions to remove during the migration:
 
-- `render.go` uses `os.Getenv` for terminal capability detection (Phase 1/2).
-- `js_dom.go` uses `net/http.ParseSetCookie` for `document.cookie` (Phase 4).
+- None for `net/http`: JS `fetch`/XHR and `document.cookie` now go through the
+  host broker. Terminal capability detection is front-end-owned.
 
 During the migration the old `browser` package may import a moved package and
 alias exported types (`type Page = engine.Page`) so each batch lands with
@@ -203,7 +204,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 1 | Frame boundary and paint split | 1–2 weeks | Done | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Partial | Shell values and the live loop exist, but chrome, menus, prompts, dialogs and navigation state are still composed and handled in the browser/session side |
 | 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session and its 289 methods are still `internal/browser.Browser`, not `Session` |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | Partial | Transport/cache/cookies/settings/raw fetch moved; JS fetch/XHR still builds and sends `net/http` requests inside the engine, and cookie parsing is still engine-side |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | Partial | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR moved to the host. Remaining: `about:`/config ownership and the host-history/download decision. |
 | 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership and the restart hook remain |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -291,8 +292,9 @@ Next: 3b, the engine package.
       form submission and upload notice are methods.
 - [x] Cookie reads/writes, resource fetch, request accounting, UA, HTTP client
       and the import queue are brokered through the adapter.
-- [ ] Move the host contract to `internal/engine`/`protocol` and remove the
-      remaining browser types from it (`net/http` is still exposed).
+- [x] Move the host contract to `internal/engine`/`protocol` and remove the
+      remaining browser network types from it; `JSHost` now exposes a value
+      broker, not `*http.Client`.
 - [x] Move `js*.go` to `internal/engine`; the adapter stays in the browser.
 - [~] Split `Loader` into the host package; raw fetch is host, while
       `about:`/form/config and image/SVG orchestration still sit in the
@@ -326,8 +328,8 @@ Next: 3b, the engine package.
 - [ ] 3c: move `Browser` and all its methods, then rename to `Session`.
 - [ ] Move the remaining whole-app tests to seam tests in `app`.
 - [ ] Remove aliases and bridges.
-- [ ] Engine import gate passes with `net/http` rejected: the current gate only
-      rejects the exact `net` import, so engine `net/http` passes silently.
+- [x] Engine import gate rejects `net/http`; the engine has no `net/http`
+      import. (`net/url` remains, as a pure value package.)
 
 ### Phase 4 — Extract `internal/host`
 
@@ -336,17 +338,18 @@ Next: 3b, the engine package.
 - [~] Cache, cookies, certs, settings, request log, network policy and raw
       fetch moved to `internal/host`. Global visited history and download
       detection/reporting have no host implementation yet.
-- [~] Page, subresource, image, script, module and MCP requests are brokered.
-      JS `fetch`/XHR are not: `js_web.go` builds `http.Request` and calls
-      `client.Do` through `JSHost.HTTPClient()`.
-- [~] Host enforces redirect/size/private-network/mixed-content policy through
-      its transport; CORS is still decided in the engine fetch path.
+- [x] Page, subresource, image, script, module, MCP and JS `fetch`/XHR
+      requests are brokered. The host builds the HTTP request, applies CORS,
+      credentials, redirect, mixed-content and private-network policy, and logs
+      it.
+- [x] Host enforces redirect/size/private-network/mixed-content policy and
+      CORS through `JSFetch` and its transport.
 - [x] Inline SVG and image decoding stay in the engine.
 - [ ] `about:` pages render in the engine from host-provided data; `pages.go`,
       the config token and view options are still in `internal/browser`.
 - [x] Move MCP to a protocol client; the automation engine is its handler.
-- [ ] Move `document.cookie` parsing to the host broker; `js_dom.go` still uses
-      `net/http.ParseSetCookie`.
+- [x] Move `document.cookie` parsing to the host broker; the engine receives
+      name/value pairs and hands raw writes to the adapter.
 
 ### Phase 5 — Transport and lifecycle
 
@@ -397,15 +400,14 @@ contract, dump/PNG/MCP paths and native image output are already done.
 
 **A. Host broker (the main correctness gap)**
 
-- [ ] Move JS `fetch`/XHR request construction and CORS decision out of
-      `internal/engine/js_web.go`; the engine must call a brokered host fetch
-      with protocol/host value types, not `JSHost.HTTPClient()`.
-- [ ] Move `document.cookie` parsing out of `internal/engine/js_dom.go`; the
-      host already owns the jar and HttpOnly policy.
-- [ ] Replace `*http.Client`, `*http.Cookie` and `net/http` in the engine
-      contract with broker types; remove the `net/http` imports.
-- [ ] Make the dependency test reject `net/http` (and any `net/...`) on the
-      engine side, not just the exact `net` import.
+- [x] Move JS `fetch`/XHR request construction and CORS decision to
+      `host.JSFetch`; the engine passes `protocol.FetchRequest` values.
+- [x] Move `document.cookie` parsing to the host adapter; the engine receives
+      name/value pairs and passes raw writes through.
+- [x] Replace `*http.Client`, `*http.Cookie` and `net/http` in the engine
+      contract with broker types; the engine no longer imports `net/http`.
+- [x] Make the dependency test reject `net/http` and its subpackages on the
+      engine side.
 - [ ] Move global visited history and download detection/reporting to
       `internal/host`; both are still session/browser code.
 - [ ] Decide and finish `about:` page ownership: engine renders, host supplies
@@ -962,3 +964,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5g | Replaced the direct event channel with a bounded coalescing outbox: newest frame/state wins, one-shot events keep order, Quit/Crash drop stale frames first. Added a coalescing regression test; PTY console/kitty smoke. | `go test ./...`, `go vet`, full `-race`, coalescing test, PTY smoke, dump/PNG hashes | Move chrome composition, then socket transport |
 | 2026-11-22 | 5h | Normal frames are content-only with a `Chrome` header/footer layer; front end stacks it, overlays and console keep full-screen fallback; presenter composition and chrome-change resets; PTY chrome/console/overlay/kitty checks. | `go test ./...`, `go vet`, full `-race`, composed-repaint benchmark, PTY checks, dump/PNG hashes | Semantic chrome ownership, then socket transport |
 | 2026-11-22 | 5i | Added the stream transport: `ReadCommand`/`ReadEvent`, `ServeStream` with coalescing outbox and direct abort handling, and `DialStream` client; tested navigation, abort, bad-frame repair and close over `net.Pipe`. Both codec fuzz targets ran 60 s with no findings. | `go test ./...`, `go vet`, full `-race`, stream transport tests, 60 s codec fuzz | Semantic chrome ownership, then Phase 6 cleanup |
+| 2026-11-22 | 6a | JS `fetch`/XHR moved to host `JSFetch` with CORS/credentials/redirect/private-network policy; `document.cookie` parsing moved to the adapter; engine `net/http` imports removed and the import gate now rejects `net/http`. Browser JS/fetch tests and full suite green. | `go test ./...`, `go vet`, full `-race`, JS/fetch/XHR tests, import gate | Move global history/download reporting and about pages, then the app/chrome split |
