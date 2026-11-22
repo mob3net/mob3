@@ -118,6 +118,13 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 	case ClientError:
 		kind = CmdClientError
 		e.str(v.Message)
+	case Automation:
+		kind = CmdAutomation
+		e.u8(uint8(v.Op))
+		e.str(v.URL)
+		e.i32(v.Scale)
+		e.str(v.Name)
+		e.blob(v.Args, lim.MaxTextBytes)
 	default:
 		return dst[:start], fmt.Errorf("%w: unknown command body %T", ErrInvalid, c.Body)
 	}
@@ -210,6 +217,12 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.str(v.Name)
 	case Quit:
 		kind = EvQuit
+	case AutomationResult:
+		kind = EvAutomationResult
+		e.u8(uint8(v.Op))
+		e.str(v.Text)
+		e.blob(v.Data, lim.MaxImageBytes)
+		e.str(v.Err)
 	default:
 		return dst[:start], fmt.Errorf("%w: unknown event body %T", ErrInvalid, ev.Body)
 	}
@@ -281,6 +294,14 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
+	case CmdAutomation:
+		body = Automation{
+			Op:    AutomationOp(d.u8()),
+			URL:   d.str(),
+			Scale: d.i32(),
+			Name:  d.str(),
+			Args:  d.blob(lim.MaxTextBytes),
+		}
 	default:
 		return Command{}, nil, fmt.Errorf("%w: unknown command kind %d", ErrInvalid, h.kind)
 	}
@@ -386,6 +407,13 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Download{URL: d.str(), Name: d.str()}
 	case EvQuit:
 		body = Quit{}
+	case EvAutomationResult:
+		body = AutomationResult{
+			Op:   AutomationOp(d.u8()),
+			Text: d.str(),
+			Data: d.blob(lim.MaxImageBytes),
+			Err:  d.str(),
+		}
 	default:
 		return Event{}, nil, fmt.Errorf("%w: unknown event kind %d", ErrInvalid, h.kind)
 	}

@@ -37,6 +37,7 @@ func testCommands() []Command {
 		{Session: 10, Seq: 10, Body: Shutdown{}},
 		{Session: 11, Seq: 11, Body: DialogResult{ID: 77, OK: true, Text: "yes"}},
 		{Session: 12, Seq: 12, Body: ClientError{Message: "invalid engine event: test"}},
+		{Session: 13, Seq: 13, Body: Automation{Op: AutomationRunCommand, Name: "snapshot", Args: []byte(`{"x":1}`)}},
 	}
 }
 
@@ -56,6 +57,7 @@ func testEvents() []Event {
 		{Session: 9, Seq: 9, Body: FindResults{Query: "q", Current: 2, Total: 3, Rects: []Rect{{X: 1, Y: 2, W: 3, H: 1}}}},
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin"}},
 		{Session: 11, Seq: 11, Body: Quit{}},
+		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
 	}
 }
 

@@ -138,25 +138,31 @@ func Run(args []string) int {
 		if h <= 0 {
 			h = 30
 		}
-		a := NewAutomation(w, h)
-		defer a.Close()
-		a.b.zoom = zoomFactor
+		auto := NewAutomation(w, h)
+		auto.b.zoom = zoomFactor
 		setLayoutZoom(zoomFactor)
-		a.b.setLoader(loader)
+		auto.b.setLoader(loader)
 		loader.noImages = true
-		a.b.noJS = *noJS
-		a.b.noPDF = *noPDF
-		a.b.jsMemLimit = jsMemLimit
-		a.b.memLimitBytes = int64(*memLimit) << 20
-		a.b.layoutBudget = budget
-		a.b.home = *home
-		a.b.reader = *reader
-		a.b.dark = *dark
+		auto.b.noJS = *noJS
+		auto.b.noPDF = *noPDF
+		auto.b.jsMemLimit = jsMemLimit
+		auto.b.memLimitBytes = int64(*memLimit) << 20
+		auto.b.layoutBudget = budget
+		auto.b.home = *home
+		auto.b.reader = *reader
+		auto.b.dark = *dark
+		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %v\n", err)
+			return 1
+		}
+		defer session.Close()
+		client := &automationClient{s: session}
 		ctx := context.Background()
-		if err := a.Navigate(ctx, start); err != nil {
+		if err := client.Navigate(ctx, start); err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %v\n", err)
 		}
-		return RunMCP(a, os.Stdin, os.Stdout, os.Stderr)
+		return RunMCP(client, os.Stdin, os.Stdout, os.Stderr)
 	}
 
 	if !interactive {

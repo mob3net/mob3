@@ -58,11 +58,11 @@ type mcpToolResult struct {
 }
 
 type mcpServer struct {
-	a *Automation
+	a automationRunner
 }
 
 // RunMCP serves MCP requests from in and writes responses to out.
-func RunMCP(a *Automation, in io.Reader, out, errOut io.Writer) int {
+func RunMCP(a automationRunner, in io.Reader, out, errOut io.Writer) int {
 	s := &mcpServer{a: a}
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 64*1024), 8<<20)

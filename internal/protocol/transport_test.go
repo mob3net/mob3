@@ -177,29 +177,50 @@ func TestInProcAbortCallsHandlerDirectly(t *testing.T) {
 	}
 }
 
-func TestInProcFrameIsDetached(t *testing.T) {
+func TestCopyFrameDetaches(t *testing.T) {
 	cells := []Cell{{R: 'a'}}
+	f := Frame{W: 1, H: 1, Cells: cells}
+	copied, err := copyFrame(f, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cells[0].R = 'b'
+	if got := copied.Cells[0].R; got != 'a' {
+		t.Fatalf("copied frame changed to %q after the engine reused its buffer", got)
+	}
+}
+
+func TestInProcCoalescesStaleFrames(t *testing.T) {
+	const n = 20
+	done := make(chan struct{})
 	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
-		_ = out.Send(Event{Body: Frame{W: 1, H: 1, Cells: cells}})
-		cells[0].R = 'b'
-		_ = out.Send(Event{Body: Frame{W: 1, H: 1, Cells: cells}})
+		for i := 0; i < n; i++ {
+			_ = out.Send(Event{Body: Frame{W: 1, H: 1, Cells: []Cell{{R: rune('a' + i)}}}})
+		}
+		close(done)
 		return nil
 	})
-	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	s, err := (&InProc{EventQueue: 2}).Open(context.Background(), 1, h)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	first := <-s.Events()
-	second := <-s.Events()
-	if got := first.Body.(Frame).Cells[0].R; got != 'a' {
-		t.Fatalf("first frame changed to %q after the engine reused its buffer", got)
+	<-done
+	frames := 0
+	last := rune(0)
+	for ev := range s.Events() {
+		if f, ok := ev.Body.(Frame); ok {
+			frames++
+			last = f.Cells[0].R
+		}
 	}
-	if got := second.Body.(Frame).Cells[0].R; got != 'b' {
-		t.Fatalf("second frame = %q, want b", got)
+	if frames == 0 || frames >= n {
+		t.Fatalf("frames delivered = %d, want at least one and fewer than %d", frames, n)
+	}
+	if last != rune('a'+n-1) {
+		t.Fatalf("last frame = %q, want %q", last, rune('a'+n-1))
 	}
 }
-
 func TestInProcRepairsInvalidFrame(t *testing.T) {
 	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
 		_ = out.Send(Event{Body: Frame{

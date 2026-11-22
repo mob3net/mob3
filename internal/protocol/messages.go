@@ -277,3 +277,36 @@ type ClientError struct {
 }
 
 func (ClientError) commandKind() Kind { return CmdClientError }
+
+// AutomationOp selects one MCP operation.
+type AutomationOp uint8
+
+const (
+	AutomationNavigate AutomationOp = iota + 1
+	AutomationSnapshot
+	AutomationScreenshot
+	AutomationRunCommand
+)
+
+// Automation asks the engine to run one MCP operation. Args is the JSON
+// argument object for AutomationRunCommand; the engine validates it.
+type Automation struct {
+	Op    AutomationOp
+	URL   string
+	Scale int
+	Name  string
+	Args  []byte
+}
+
+func (Automation) commandKind() Kind { return CmdAutomation }
+
+// AutomationResult answers one Automation command. Exactly one of Text or Data
+// is meaningful for a successful operation; Err carries a handled failure.
+type AutomationResult struct {
+	Op   AutomationOp
+	Text string
+	Data []byte
+	Err  string
+}
+
+func (AutomationResult) eventKind() Kind { return EvAutomationResult }

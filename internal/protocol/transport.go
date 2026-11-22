@@ -193,13 +193,15 @@ func (s *inProcSession) Close() error {
 
 func (s *inProcSession) serve(h Handler) {
 	defer close(s.serveDone)
-	defer close(s.events)
-	sink := inProcSink{s: s}
-	if err := h.Serve(s.ctx, s.abortCh, s.in, sink); err != nil && s.ctx.Err() == nil {
+	out := newOutbox(s.ctx, s.events, cap(s.events))
+	sink := inProcSink{s: s, out: out}
+	err := h.Serve(s.ctx, s.abortCh, s.in, sink)
+	if err != nil && s.ctx.Err() == nil {
 		// A handler error is a contained engine failure. Report it before the
 		// event stream closes so the front end can show it.
 		_ = sink.Send(Event{Body: Crash{Message: err.Error()}})
 	}
+	out.finish()
 }
 
 // copyFrame validates a frame and copies every mutable slice so the engine can
@@ -222,7 +224,10 @@ func copyFrame(f Frame, lim Limits) (Frame, error) {
 
 // inProcSink is the handler-facing event port. Encoding and decoding happen
 // before Send returns, so the engine can reuse its frame buffers immediately.
-type inProcSink struct{ s *inProcSession }
+type inProcSink struct {
+	s   *inProcSession
+	out *outbox
+}
 
 // Send validates and copies one event, then queues it for the front end. A
 // malformed frame is reported as Crash and, when possible, repaired into a
@@ -244,7 +249,7 @@ func (k inProcSink) Send(ev Event) error {
 		} else if repaired, ok := repairFrame(f, s.lim); ok {
 			// Report first, then send the sanitized frame. The front end resets
 			// its row diff on Crash, so the repaired frame is a full repaint.
-			if qerr := s.enqueue(Event{Body: Crash{Message: "invalid engine event: " + err.Error()}}); qerr != nil {
+			if qerr := k.out.send(Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}); qerr != nil {
 				return qerr
 			}
 			ev.Body = repaired
@@ -261,18 +266,149 @@ func (k inProcSink) Send(ev Event) error {
 	if err != nil {
 		ev = Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
 	}
-	return s.enqueue(ev)
+	return k.out.send(ev)
 }
 
-// enqueue delivers one event to the front end with backpressure and shutdown.
-func (s *inProcSession) enqueue(ev Event) error {
-	if ev.Session == 0 {
-		ev.Session = s.id
+// outbox decouples the handler from a slow front end. Frames and states
+// coalesce so the engine does not stall producing stale pictures; one-shot
+// events are preserved in order. A bounded queue applies backpressure when the
+// front end stops reading entirely.
+type outbox struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	q      []Event
+	max    int
+	closed bool
+	ctx    context.Context
+	out    chan<- Event
+	done   chan struct{}
+}
+
+func newOutbox(ctx context.Context, out chan<- Event, max int) *outbox {
+	if max < 1 {
+		max = 1
 	}
-	select {
-	case s.events <- ev:
-		return nil
-	case <-s.ctx.Done():
+	o := &outbox{max: max, ctx: ctx, out: out, done: make(chan struct{})}
+	o.cond = sync.NewCond(&o.mu)
+	go o.run()
+	return o
+}
+
+func isCoalescible(ev Event) bool {
+	switch ev.Body.(type) {
+	case Frame, State:
+		return true
+	}
+	return false
+}
+
+// send queues one event. A newer Frame or State replaces the pending one of
+// the same kind, so a slow presenter sees the latest picture and shell state.
+func (o *outbox) send(ev Event) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed {
 		return ErrSessionClosed
 	}
+	if isCoalescible(ev) {
+		o.dropKind(ev.Body)
+	}
+	if _, ok := ev.Body.(Quit); ok {
+		o.dropAllCoalescible()
+	}
+	if _, ok := ev.Body.(Crash); ok {
+		o.dropAllCoalescible()
+	}
+	for len(o.q) >= o.max {
+		if !o.dropCoalescible() {
+			o.cond.Wait()
+		}
+		if o.closed {
+			return ErrSessionClosed
+		}
+	}
+	o.q = append(o.q, ev)
+	o.cond.Broadcast()
+	return nil
+}
+
+func (o *outbox) dropKind(body EventBody) {
+	for i, ev := range o.q {
+		switch body.(type) {
+		case Frame:
+			if _, ok := ev.Body.(Frame); ok {
+				o.q = append(o.q[:i], o.q[i+1:]...)
+				return
+			}
+		case State:
+			if _, ok := ev.Body.(State); ok {
+				o.q = append(o.q[:i], o.q[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+// dropAllCoalescible removes stale frames and states so a Quit or Crash is not
+// delayed behind pictures the front end no longer needs.
+func (o *outbox) dropAllCoalescible() {
+	for o.dropCoalescible() {
+	}
+}
+
+// dropCoalescible removes the oldest frame first, then the oldest state. It
+// reports false when the queue holds only one-shot events.
+func (o *outbox) dropCoalescible() bool {
+	for i, ev := range o.q {
+		if _, ok := ev.Body.(Frame); ok {
+			o.q = append(o.q[:i], o.q[i+1:]...)
+			return true
+		}
+	}
+	for i, ev := range o.q {
+		if _, ok := ev.Body.(State); ok {
+			o.q = append(o.q[:i], o.q[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (o *outbox) run() {
+	defer close(o.done)
+	defer close(o.out)
+	for {
+		o.mu.Lock()
+		for len(o.q) == 0 && !o.closed {
+			o.cond.Wait()
+		}
+		if len(o.q) == 0 {
+			o.mu.Unlock()
+			return
+		}
+		ev := o.q[0]
+		o.q[0] = Event{}
+		o.q = o.q[1:]
+		o.cond.Broadcast()
+		o.mu.Unlock()
+		select {
+		case o.out <- ev:
+		case <-o.ctx.Done():
+			o.mu.Lock()
+			o.q = nil
+			o.closed = true
+			o.mu.Unlock()
+			return
+		}
+	}
+}
+
+// finish stops accepting events and waits for the queue to drain. On shutdown
+// the context is cancelled first, so this cannot hang a closing session.
+func (o *outbox) finish() {
+	o.mu.Lock()
+	o.closed = true
+	o.cond.Broadcast()
+	o.mu.Unlock()
+	<-o.done
 }
