@@ -15,7 +15,7 @@ and the migration order. Progress, decisions and measurements are tracked in
 | --- | --- |
 | `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/engine` | HTML/CSS parsing and style, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
-| `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings, global visited history, download detection, and the request log. |
+| `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings and the request log. Session back/forward history and the download/curl hint stay with the session and front end. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
 | `internal/app` | Wiring: constructs one host, engine session and frontend, connects them over a transport, and runs the event loop. |
 
@@ -89,9 +89,10 @@ destination; the tracker lists what remains.
 - The front end currently owns ANSI/PNG output, presentation and native image
   placement, but not terminal raw mode/input, chrome, dialogs, clipboard or
   navigation state.
-- The host currently owns HTTP transport policy, raw fetch, cache, cookies,
-  settings, certificates and the request log; it does **not** yet own global
-  visited history, download reporting, JS fetch/XHR, or cookie parsing.
+- The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
+  certificates, the request log and JS fetch/XHR. There is no global visited
+  list or download history by design (D54): back/forward history is session
+  state and the download/curl hint is presentation.
 - The engine contains the DOM/JS/style/layout/paint/PDF work. Its JS
   `fetch`/XHR and cookie surface now use the host broker and the engine no
   longer imports `net/http`.
@@ -162,7 +163,7 @@ destination; the tracker lists what remains.
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
-| `pages.go` | Built-in page HTML/CSS (home/help/config/history/error/blocked) and the shared shell stylesheet. Still session-side; target is engine rendering from host data. |
+| `internal/engine/pages.go` | Shared built-in page shell/CSS and cannot-display/load-error HTML. Help/history/config bodies, the config token and view options are still session-side. |
 | `internal/host/certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default) or `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`). Certificate files are not read. The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `internal/engine/pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |

@@ -200,9 +200,11 @@ published by the Pages build.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),
-  `internal/host` (network, cookies, cache, certificates, settings, global
-  history, downloads), `internal/frontend` (terminal, input, chrome, ANSI
-  encoding, native images, dialogs) and `internal/app` (wiring). The allowed
+  `internal/host` (network, cookies, cache, certificates, settings, request
+  log), `internal/frontend` (terminal, input, chrome, ANSI encoding, native
+  images, dialogs) and `internal/app` (wiring). Session back/forward history
+  and the download/curl hint stay with the session/front end; MOB³ keeps no
+  global visited list or download history. The allowed
   imports are `app` → the other four and each of them → `protocol`; the front
   end and the host never import `engine`, and `engine` never imports
   `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.

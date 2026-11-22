@@ -41,7 +41,7 @@ network destination.
 | D5 | 2026-11-22 | This step is B only: **no subprocess, no sandbox, no tabs, no per-site renderer, no behavior or visual change.** | Keep the efficiency profile and land in batches. |
 | D6 | 2026-11-22 | The kernel sandbox (Landlock/pledge/AppContainer) is deferred and will be applied to the engine child when the process split happens. | The audit's application-level fixes are already in the log; a single-process sandbox would also sandbox the trusted UI. Landlock is not present in the tree today. Do not describe MOB³ as sandboxed. |
 | D7 | 2026-11-22 | Tabs are deferred, but the protocol carries a `SessionID` from day one. | Nearly free now; avoids a protocol break when tabs arrive. |
-| D8 | 2026-11-22 | Ownership: engine = DOM/JS/CSS/layout/paint/PDF/images/find/selection/hints/reader; host = HTTP/TLS/certs/cookies/cache/settings/global history/downloads/request log; front end = terminal/input/chrome/ANSI/native images/PNG/clipboard. | See the package table in [architecture.md](architecture.md#target-boundary). |
+| D8 | 2026-11-22 | Ownership: engine = DOM/JS/CSS/layout/paint/PDF/images/find/selection/hints/reader; host = HTTP/TLS/certs/cookies/cache/settings/request log; front end = terminal/input/chrome/ANSI/native images/PNG/clipboard. The history/downloads part is superseded by D54. | See the package table in [architecture.md](architecture.md#target-boundary). |
 | D9 | 2026-11-22 | No new dependencies. The codec is fixed binary, not JSON or reflection-based encoding. | Vendored, single binary, and cheap on the frame path. |
 | D10 | 2026-11-22 | Parser fuzzing (HTML, stylesheet, PDF, image) is recommended but **not part of B**; only the protocol codec is fuzzed in B. | Separate follow-up; record if it is scheduled. |
 | D11 | 2026-11-22 | This file is tracked during the rewrite and deleted at the end. | The user asked for a progress tracker; durable rules move to `AGENTS.md`/`architecture.md` before deletion. |
@@ -87,6 +87,8 @@ network destination.
 | D51 | 2026-11-22 | Add `protocol.Chrome`: normal page frames are content-only and are accompanied by the header/footer cell rows, which the front end stacks. Overlays and the console keep the existing full-screen frame with `Chrome.Show=false`. The engine still composes the chrome cells for now; semantic chrome ownership is the next slice. | This makes the normal frame contract content-only and moves ANSI stacking to the front end without losing overlays. It is a display-list bridge, not the final trust boundary: the engine can still choose chrome cells until the front end composes them from `State`. |
 | D52 | 2026-11-22 | Add a stream transport behind the same codec and ports: `ReadCommand`/`ReadEvent`, `ServeStream` for the handler child and `DialStream` for the front end. `ServeStream` uses the same coalescing outbox and event validation. The serving reader applies `Abort` directly, so a busy script stops even when the command loop is blocked. | This is the transport swap the later process split needs. It is tested over `net.Pipe` and is unused by the in-process app until the child process lands. The serving side owns and closes its connection when the session ends. |
 | D53 | 2026-11-22 | Move JS `fetch`/XHR to `host.JSFetch` behind a `protocol.FetchRequest`/`FetchResponse`, and move `document.cookie` parsing to the browser adapter. The host owns same-origin/CORS, credentials, redirects, mixed content, private networks, size limits and the request log. The engine contract now exposes a cookie value list, a raw cookie setter and `JSFetch`, with no `*http.Client`. | This closes the largest remaining boundary violation: page scripts can no longer choose a destination or see host cookie types directly. The dependency test now rejects `net/http` (and subpackages) on the engine side. |
+| D54 | 2026-11-22 | Session back/forward history and `about:history` stay session-owned. The download popup and its `curl` hint stay front-end presentation. The host keeps no global visited list and no download history. | User decision: the proposed host-owned global history/download records would add state and memory without a user-visible benefit, and MOB³ persists nothing. This keeps B behavior-neutral and corrects D8's over-broad ownership claim. |
+| D55 | 2026-11-22 | Move the built-in page shell, shared CSS and cannot-display/load-error HTML to `internal/engine/pages.go`; the browser keeps thin wrappers. Help/history/config page bodies, the config token and view options remain session-side until the app split. | This is a behavior-neutral move of the render templates to the engine. The remaining about-page work depends on host-supplied data and the config token, which belongs with the app/host wiring. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -97,7 +99,7 @@ it with a new one and mark the old one "superseded by Dn".
 | --- | --- |
 | `internal/protocol` | Message types, codec, `Session`/`Broker` ports, limits, version. Standard library only. |
 | `internal/engine` | HTML/CSS, style, layout, paint into a content-rect frame, sobek and the DOM, PDF text, image/SVG decoding, find, selection, hints, reader, dark palette. |
-| `internal/host` | HTTP/S, TLS/certificates, cookie jar, resource cache, settings, global history, downloads, request log. |
+| `internal/host` | HTTP/S, TLS/certificates, cookie jar, resource cache, settings, request log. Session history and the download hint stay session/front-end (D54). |
 | `internal/frontend` | Terminal raw mode and input, chrome, dialogs, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
 | `internal/app` | Wiring and the event loop. |
 
@@ -164,7 +166,7 @@ which part goes where.
 | terminal graphics | `internal/frontend/gfx.go` | Graphics modes, capability detection, PNG decode/scale/crop and kitty/iTerm2 escape output. |
 | placement encoding | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded immutable PNG cache and image scaling for page decode. |
 | graphics compatibility | `internal/browser/render_gfx.go` | Mode/constructor aliases for the CLI and tests; SVG loading stays here. |
-| `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
+| `internal/engine/pages.go` | Shared built-in page shell/CSS and cannot-display/load-error HTML. Help/history/config bodies and the config token remain session-side. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
 | `config.go` | host + engine | Model and apply host; `about:config` form markup engine. |
@@ -173,7 +175,7 @@ which part goes where.
 | `shell.go` | frontend | Content rectangle, header reservation and the `protocol.State` snapshot. |
 | `browser_forms.go` | engine | Form state, validation and submission; prompt editing frontend. |
 | `browser_input.go` | frontend + engine | Key/mouse decoding, prompts and app keys frontend; hit testing and field editing engine. |
-| `browser_history.go` | engine + host | Per-session back/forward engine; global visited list host. |
+| `browser_history.go` | engine | Per-session back/forward state and memory-only page cache; no global visited list (D54). |
 | `memory.go` | host + engine | Budget policy and process limit host; per-session enforcement engine. |
 | `browser_pdf.go` | engine | PDF footer state and download shortcut. |
 | `browser_images.go` | engine | Deferred batch scheduling; fetching host. |
@@ -204,7 +206,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 1 | Frame boundary and paint split | 1–2 weeks | Done | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Partial | Shell values and the live loop exist, but chrome, menus, prompts, dialogs and navigation state are still composed and handled in the browser/session side |
 | 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session and its 289 methods are still `internal/browser.Browser`, not `Session` |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | Partial | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR moved to the host. Remaining: `about:`/config ownership and the host-history/download decision. |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | Partial | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR moved to the host; history/download scope fixed by D54. Remaining: `about:`/config ownership. |
 | 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership and the restart hook remain |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -408,8 +410,8 @@ contract, dump/PNG/MCP paths and native image output are already done.
       contract with broker types; the engine no longer imports `net/http`.
 - [x] Make the dependency test reject `net/http` and its subpackages on the
       engine side.
-- [ ] Move global visited history and download detection/reporting to
-      `internal/host`; both are still session/browser code.
+- [x] Global visited history and download reporting are **not** host state;
+      D54 keeps session history and the download/curl hint where they are.
 - [ ] Decide and finish `about:` page ownership: engine renders, host supplies
       data and validates the config token.
 
@@ -964,4 +966,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5g | Replaced the direct event channel with a bounded coalescing outbox: newest frame/state wins, one-shot events keep order, Quit/Crash drop stale frames first. Added a coalescing regression test; PTY console/kitty smoke. | `go test ./...`, `go vet`, full `-race`, coalescing test, PTY smoke, dump/PNG hashes | Move chrome composition, then socket transport |
 | 2026-11-22 | 5h | Normal frames are content-only with a `Chrome` header/footer layer; front end stacks it, overlays and console keep full-screen fallback; presenter composition and chrome-change resets; PTY chrome/console/overlay/kitty checks. | `go test ./...`, `go vet`, full `-race`, composed-repaint benchmark, PTY checks, dump/PNG hashes | Semantic chrome ownership, then socket transport |
 | 2026-11-22 | 5i | Added the stream transport: `ReadCommand`/`ReadEvent`, `ServeStream` with coalescing outbox and direct abort handling, and `DialStream` client; tested navigation, abort, bad-frame repair and close over `net.Pipe`. Both codec fuzz targets ran 60 s with no findings. | `go test ./...`, `go vet`, full `-race`, stream transport tests, 60 s codec fuzz | Semantic chrome ownership, then Phase 6 cleanup |
-| 2026-11-22 | 6a | JS `fetch`/XHR moved to host `JSFetch` with CORS/credentials/redirect/private-network policy; `document.cookie` parsing moved to the adapter; engine `net/http` imports removed and the import gate now rejects `net/http`. Browser JS/fetch tests and full suite green. | `go test ./...`, `go vet`, full `-race`, JS/fetch/XHR tests, import gate | Move global history/download reporting and about pages, then the app/chrome split |
+| 2026-11-22 | 6a | JS `fetch`/XHR moved to host `JSFetch` with CORS/credentials/redirect/private-network policy; `document.cookie` parsing moved to the adapter; engine `net/http` imports removed and the import gate now rejects `net/http`. D54 fixes history/download ownership; D55 moves the shared page shell/error templates to the engine. Browser JS/fetch tests and full suite green. | `go test ./...`, `go vet`, full `-race`, JS/fetch/XHR and page tests, import gate | Move help/history/config bodies and token, then the app/chrome split |
