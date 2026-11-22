@@ -103,10 +103,10 @@ func Run(args []string) int {
 	loader.noScripts = *noJS
 	loader.noPDF = *noPDF
 	loader.noImages = graphicsMode == GraphicsNone
-	loader.searchURL = *search
+	loader.setSearchURL(*search)
 	loader.ignoreBlocks = *ignoreBlocks
 	if *ua != "" {
-		loader.userAgent = *ua
+		loader.setUserAgent(*ua)
 	}
 	if err := loader.SetCertSource(*certs); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)

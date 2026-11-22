@@ -550,9 +550,12 @@ agreement, the non-negotiable constraints and the change protocol.
   path or the attribute filename ends in `.pdf`, the link is fetched so the
   text viewer can show it, and the attribute value is kept as the fallback
   filename if the response turns out not to be a PDF. The popup presents a
-  ready-to-copy `curl -L -o 'name' 'url'` command shown as plain text, using
+  ready-to-copy `curl -L -o 'name' -- 'url'` command shown as plain text, using
   the link's `download` attribute value when non-empty and otherwise the URL's
-  last path segment as the filename; `y` copies the command with OSC 52 and
+  last path segment as the filename; a filename starting with `-` is prefixed
+  with `./`. `file:` download targets are rejected, and `--` keeps a
+  `-`-prefixed target from reading as a curl option. `y` copies the command with
+  OSC 52 and
   closes the popup, while `Esc`/`Enter`/`q` close it without copying. Nothing is
   written to disk; the user runs the command in their own terminal.
   `Content-Disposition` is not inspected, so attachment HTML pages still render

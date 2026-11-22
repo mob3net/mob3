@@ -241,6 +241,8 @@ Inputs:
 - Only visible links are listed. Link numbers are stable layout indices, so a
   filtered list may skip numbers.
 - `Inputs` positions are zero-based page-viewport cells, matching `click`.
+- Password input values are never printed: a non-empty password shows
+  `value="[redacted]"`, an empty one shows `value=""`.
 - Page text is the viewport, not the whole document. Use `scroll`.
 
 ### `links`

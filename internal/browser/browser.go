@@ -364,7 +364,7 @@ func (b *Browser) applyImageCap() {
 	if b.loader == nil {
 		return
 	}
-	b.loader.maxImageW, b.loader.maxImageH = b.imageCapPx()
+	b.loader.setImageCap(b.imageCapPx())
 }
 
 func (b *Browser) historySnapshot() ([]string, int) {
@@ -380,7 +380,7 @@ func (b *Browser) historySnapshot() ([]string, int) {
 // searchTemplate returns the configured search URL template.
 func (b *Browser) searchTemplate() string {
 	if b.loader != nil {
-		return b.loader.searchURL
+		return b.loader.searchTemplate()
 	}
 	return DefaultSearchURL
 }
@@ -1346,6 +1346,10 @@ func (b *Browser) showNotice(title, message string) {
 // showDownload opens the modal curl hint for a download link or a response
 // the browser cannot render. name, when empty, is derived from the URL path.
 func (b *Browser) showDownload(target, name string) {
+	if u, err := url.Parse(target); err == nil && strings.EqualFold(u.Scheme, "file") {
+		b.showNotice("Download blocked", "Local file downloads are not supported.")
+		return
+	}
 	if name == "" {
 		if u, err := url.Parse(target); err == nil {
 			name = u.Path
@@ -1358,7 +1362,17 @@ func (b *Browser) showDownload(target, name string) {
 		}
 	}
 	name = sanitizeDownloadName(name)
-	command := "curl -L -o " + shellQuote(name) + " " + shellQuote(target)
+	if name == "" {
+		name = "download"
+	}
+	if strings.HasPrefix(name, "-") {
+		// Keep a name that starts with a dash from reading as an option even
+		// if curl changes how -o consumes its argument.
+		name = "./" + name
+	}
+	// The -- terminator keeps a URL that starts with a dash from being parsed
+	// as a curl option.
+	command := "curl -L -o " + shellQuote(name) + " -- " + shellQuote(target)
 	b.notice = nil
 	b.download = &downloadDialog{url: target, name: name, command: command}
 }

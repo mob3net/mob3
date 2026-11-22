@@ -43,6 +43,10 @@ const (
 // DuckDuckGo's html endpoint is server-rendered, unlike the JS-only main page.
 const DefaultSearchURL = "https://html.duckduckgo.com/html/?q=%s"
 
+// errResourceTooLarge reports a response body over maxResourceSize. Reading
+// the extra byte distinguishes an exact-limit body from a truncated one.
+var errResourceTooLarge = errors.New("response exceeds the 12 MiB limit")
+
 // imageConfigOK rejects decompression bombs before decoding pixel data.
 func imageConfigOK(cfg image.Config) bool {
 	if cfg.Width <= 0 || cfg.Height <= 0 {
@@ -96,11 +100,14 @@ type Script struct {
 const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
 
 type Loader struct {
-	client    *http.Client
-	cookies   *cookieJar
-	userAgent string
-	searchURL string
-	noScripts bool
+	client *http.Client
+	// settingsMu guards userAgent, searchURL and the image pixel cap.
+	// about:config changes them while navigation and image workers read them.
+	settingsMu sync.RWMutex
+	cookies    *cookieJar
+	userAgent  string
+	searchURL  string
+	noScripts  bool
 	// transport is the stable RoundTripper whose base is replaced when the
 	// certificate source changes; client.Transport always points at it.
 	transport *certTransport
@@ -468,6 +475,46 @@ func (l *Loader) requestCount() int {
 	return len(l.requests)
 }
 
+// setUserAgent replaces the User-Agent used by later requests. It is safe to
+// call while a navigation or image worker is running.
+func (l *Loader) setUserAgent(ua string) {
+	l.settingsMu.Lock()
+	l.userAgent = ua
+	l.settingsMu.Unlock()
+}
+
+func (l *Loader) requestUserAgent() string {
+	l.settingsMu.RLock()
+	defer l.settingsMu.RUnlock()
+	return l.userAgent
+}
+
+// setSearchURL replaces the search fallback template for later navigations.
+func (l *Loader) setSearchURL(template string) {
+	l.settingsMu.Lock()
+	l.searchURL = template
+	l.settingsMu.Unlock()
+}
+
+func (l *Loader) searchTemplate() string {
+	l.settingsMu.RLock()
+	defer l.settingsMu.RUnlock()
+	return l.searchURL
+}
+
+// setImageCap updates the decoded-image pixel cap used by image workers.
+func (l *Loader) setImageCap(w, h int) {
+	l.settingsMu.Lock()
+	l.maxImageW, l.maxImageH = w, h
+	l.settingsMu.Unlock()
+}
+
+func (l *Loader) imageCap() (int, int) {
+	l.settingsMu.RLock()
+	defer l.settingsMu.RUnlock()
+	return l.maxImageW, l.maxImageH
+}
+
 // NewLoader creates a loader with cookie support and a sane timeout. The
 // platform trust store is used until SetCertSource selects another one; the
 // client's transport is a stable wrapper so that swap never races a request.
@@ -598,7 +645,7 @@ func (l *Loader) LoadRequestBypass(ctx context.Context, method, input string, bo
 
 func (l *Loader) loadRequest(ctx context.Context, method, input string, body []byte, contentType string, base *url.URL, ignoreBlocks bool) (*Page, error) {
 	l.resetSVGBudget()
-	u, err := ResolveInput(input, base, l.searchURL)
+	u, err := ResolveInput(input, base, l.searchTemplate())
 	if err != nil {
 		return nil, err
 	}
@@ -1010,7 +1057,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 			}
 			req.Header.Set("Content-Type", contentType)
 		}
-		req.Header.Set("User-Agent", l.userAgent)
+		req.Header.Set("User-Agent", l.requestUserAgent())
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
 		req.Header.Set("Accept-Language", "en")
 		client := l.client
@@ -1045,9 +1092,12 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 			// bytes and produce meaningless output, so report it instead.
 			return nil, "", u, resp.StatusCode, errors.New("unsupported Content-Encoding: " + enc)
 		}
-		b, e := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize))
+		b, e := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))
 		if e != nil {
 			return nil, "", u, resp.StatusCode, e
+		}
+		if len(b) > maxResourceSize {
+			return nil, "", u, resp.StatusCode, errResourceTooLarge
 		}
 		ctype := resp.Header.Get("Content-Type")
 		if cacheable && resp.StatusCode == 200 && cacheControlAllows(resp.Header.Get("Cache-Control")) {
@@ -1572,7 +1622,8 @@ func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
 // pixel cap, preserving aspect ratio. Images already inside the cap are
 // returned unchanged, so only oversized photos pay for a resample.
 func (l *Loader) fitImage(img image.Image) image.Image {
-	if img == nil || (l.maxImageW <= 0 && l.maxImageH <= 0) {
+	maxW, maxH := l.imageCap()
+	if img == nil || (maxW <= 0 && maxH <= 0) {
 		return img
 	}
 	b := img.Bounds()
@@ -1581,14 +1632,14 @@ func (l *Loader) fitImage(img image.Image) image.Image {
 		return img
 	}
 	nw, nh := w, h
-	if l.maxImageW > 0 && nw > l.maxImageW {
-		f := float64(l.maxImageW) / float64(nw)
-		nw = l.maxImageW
+	if maxW > 0 && nw > maxW {
+		f := float64(maxW) / float64(nw)
+		nw = maxW
 		nh = int(math.Round(float64(nh) * f))
 	}
-	if l.maxImageH > 0 && nh > l.maxImageH {
-		f := float64(l.maxImageH) / float64(nh)
-		nh = l.maxImageH
+	if maxH > 0 && nh > maxH {
+		f := float64(maxH) / float64(nh)
+		nh = maxH
 		nw = int(math.Round(float64(nw) * f))
 	}
 	if nw < 1 {

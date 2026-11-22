@@ -818,7 +818,7 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 	if b.download == nil {
 		t.Fatal("non-PDF download did not open the curl popup")
 	}
-	want := "curl -L -o 'sample.zip' 'https://filesamples.com/files/sample.zip'"
+	want := "curl -L -o 'sample.zip' -- 'https://filesamples.com/files/sample.zip'"
 	if b.download.command != want {
 		t.Fatalf("command = %q, want %q", b.download.command, want)
 	}
@@ -911,9 +911,29 @@ func TestDownloadAttributeNameWins(t *testing.T) {
 	if b.download == nil {
 		t.Fatal("download link did not open the popup")
 	}
-	want := "curl -L -o 'chosen.zip' 'https://example.com/files/x.bin'"
+	want := "curl -L -o 'chosen.zip' -- 'https://example.com/files/x.bin'"
 	if b.download.command != want {
 		t.Fatalf("command = %q, want %q", b.download.command, want)
+	}
+}
+
+func TestDownloadCommandNeutralizesOptionsAndLocalFiles(t *testing.T) {
+	b := NewBrowser(60, 15)
+	b.showDownload("-o/tmp/x", "-K/tmp/cfg")
+	if b.download == nil {
+		t.Fatal("dash-prefixed target did not open the popup")
+	}
+	want := "curl -L -o './-K_tmp_cfg' -- '-o/tmp/x'"
+	if b.download.command != want {
+		t.Fatalf("command = %q, want %q", b.download.command, want)
+	}
+
+	b.showDownload("file:///etc/passwd", "passwd")
+	if b.download != nil {
+		t.Fatal("local file download was accepted")
+	}
+	if b.notice == nil || !strings.Contains(b.notice.message, "Local file downloads") {
+		t.Fatalf("notice = %+v", b.notice)
 	}
 }
 

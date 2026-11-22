@@ -62,6 +62,26 @@ func TestAutomationNavigateAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestAutomationMasksPasswordValue(t *testing.T) {
+	root := ParseHTML(`<form>
+		<input type="password" name="pw" value="hunter2">
+		<input type="password" name="empty">
+		<input type="text" name="user" value="alice">
+	</form>`)
+	form := root.FindFirst("form")
+	lines, _ := controlLines(root, form, "", 10)
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "hunter2") {
+		t.Fatalf("password leaked:\n%s", joined)
+	}
+	if !strings.Contains(joined, `name="pw"`) || !strings.Contains(joined, "[redacted]") {
+		t.Fatalf("password field not marked redacted:\n%s", joined)
+	}
+	if !strings.Contains(joined, `value="alice"`) {
+		t.Fatalf("text value was masked too:\n%s", joined)
+	}
+}
+
 func TestAutomationClickLinkAndBack(t *testing.T) {
 	a := newTestAutomation(t, map[string]string{
 		"/":     `<html><body><a href="/next">Next page</a></body></html>`,

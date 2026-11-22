@@ -885,6 +885,14 @@ func controlLine(root, n *Node) string {
 		parts = append(parts, "options="+quotedList(values))
 	case n.Tag == "textarea":
 		parts = append(parts, "value="+strconv.Quote(clipText(collapseWhitespace(inputValue(n)), 80)))
+	case typ == "password":
+		// Never expose a password through the automation surface. Presence is
+		// still useful, so an empty field stays visibly empty.
+		value := `""`
+		if inputValue(n) != "" {
+			value = `"[redacted]"`
+		}
+		parts = append(parts, "value="+value)
 	case n.Tag == "button":
 		label := collapseWhitespace(n.TextContent())
 		if label == "" {

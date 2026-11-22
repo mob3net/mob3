@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -563,6 +564,22 @@ func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 	}
 }
 
+func TestOversizedResponseRejected(t *testing.T) {
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/html")
+		body := strings.NewReader(strings.Repeat("x", maxResourceSize+1))
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(body), Request: req,
+		}, nil
+	})}
+	if _, err := loader.Load("https://example.com/big", nil); !errors.Is(err, errResourceTooLarge) {
+		t.Fatalf("error = %v, want errResourceTooLarge", err)
+	}
+}
+
 func TestBlockedGeneric(t *testing.T) {
 	loader := NewLoader()
 	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -743,6 +760,33 @@ func TestResolveInputSearch(t *testing.T) {
 	if _, err := ResolveInput("golang tutorial", nil, ""); err == nil {
 		t.Error("disabled search should fail on a query")
 	}
+}
+
+// TestLoaderSettingsConcurrent exercises the settings that about:config can
+// change while navigation and image workers read them.
+func TestLoaderSettingsConcurrent(t *testing.T) {
+	l := NewLoader()
+	im := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			l.setUserAgent("agent")
+			l.setSearchURL("https://search.example/?q=%s")
+			l.setImageCap(32, 32)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			_ = l.requestUserAgent()
+			_ = l.searchTemplate()
+			_, _ = l.imageCap()
+			_ = l.fitImage(im)
+		}
+	}()
+	wg.Wait()
 }
 
 func TestResolveRejectsLocalFiles(t *testing.T) {

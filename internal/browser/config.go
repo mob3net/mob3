@@ -84,8 +84,8 @@ func (b *Browser) configItems() []configItem {
 	}
 	ua, search, ignore := defaultUserAgent, DefaultSearchURL, false
 	if b.loader != nil {
-		ua = b.loader.userAgent
-		search = b.loader.searchURL
+		ua = b.loader.requestUserAgent()
+		search = b.loader.searchTemplate()
 		ignore = b.loader.ignoreBlocks
 	}
 	cacheMB := int64(0)
@@ -224,10 +224,10 @@ func (b *Browser) applyConfig(q url.Values) {
 		if ua == "" {
 			ua = defaultUserAgent
 		}
-		b.loader.userAgent = ua
+		b.loader.setUserAgent(ua)
 	}
 	if v, ok := q["search"]; ok && len(v) > 0 && b.loader != nil {
-		b.loader.searchURL = strings.TrimSpace(v[0])
+		b.loader.setSearchURL(strings.TrimSpace(v[0]))
 	}
 	if v, ok := q["certs"]; (ok && len(v) > 0) || (form && b.loader != nil) {
 		if b.loader != nil {

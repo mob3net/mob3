@@ -9,10 +9,11 @@ agreement, the non-negotiable constraints and the change protocol.
   and `document.cookie`. HttpOnly cookies are hidden from JavaScript through a
   separate visible jar, and a script may neither replace nor delete a
   server-set HttpOnly cookie. The SameSite attribute is stored but not enforced.
-- Page/resource cap: 12 MB. Local files are read with a `LimitReader`, only
-  regular files are accepted (no `/dev/*`/FIFOs), and data URIs are rejected
-  when the encoded or decoded size exceeds the cap. Images are rejected before
-  decoding when they exceed 25 megapixels, to avoid decompression bombs.
+- Page/resource cap: 12 MB. The body is read with a `LimitReader` of cap+1 so
+  an oversized response is rejected rather than silently truncated, and data
+  URIs are rejected when the encoded or decoded size exceeds the cap. Images
+  are rejected before decoding when they exceed 25 megapixels, to avoid
+  decompression bombs.
 - **JS memory budget:** each guarded script/callback has a 2-second CPU timeout,
   and one sampler per active page runtime checks an absolute heap ceiling every
   75 ms. The ceiling is measured above the heap when the runtime was created;

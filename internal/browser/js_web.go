@@ -991,7 +991,7 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if err != nil {
 		return 0, nil, "", nil, nil, err
 	}
-	req.Header.Set("User-Agent", j.b.loader.userAgent)
+	req.Header.Set("User-Agent", j.b.loader.requestUserAgent())
 	req.Header.Set("Accept", "*/*")
 	if crossOrigin {
 		req.Header.Set("Origin", urlOrigin(origin))
@@ -1038,9 +1038,12 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if crossOrigin && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
 		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("cross-origin response blocked by CORS")
 	}
-	data, err = io.ReadAll(io.LimitReader(resp.Body, maxResourceSize))
+	data, err = io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))
 	if err != nil {
 		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, err
+	}
+	if len(data) > maxResourceSize {
+		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errResourceTooLarge
 	}
 	return resp.StatusCode, data, resp.Header.Get("Content-Type"), resp.Header, resp.Request.URL, nil
 }

@@ -756,8 +756,8 @@ func prefixHash(h string) string {
 func (j *jsRuntime) navigatorObject() *sobek.Object {
 	o := j.vm.NewObject()
 	ua := defaultUserAgent
-	if j.b.loader != nil && j.b.loader.userAgent != "" {
-		ua = j.b.loader.userAgent
+	if j.b.loader != nil && j.b.loader.requestUserAgent() != "" {
+		ua = j.b.loader.requestUserAgent()
 	}
 	_ = o.Set("userAgent", ua)
 	_ = o.Set("appName", "MOB3")
