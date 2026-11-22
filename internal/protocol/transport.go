@@ -225,8 +225,9 @@ func copyFrame(f Frame, lim Limits) (Frame, error) {
 type inProcSink struct{ s *inProcSession }
 
 // Send validates and copies one event, then queues it for the front end. A
-// malformed event is replaced by Crash so no trusted side ever sees partial or
-// unsafe data from the engine.
+// malformed frame is reported as Crash and, when possible, repaired into a
+// drawable frame so the front end can still repaint and reach the console. A
+// malformed non-frame event is replaced by Crash.
 func (k inProcSink) Send(ev Event) error {
 	s := k.s
 	if ev.Session == 0 {
@@ -240,6 +241,14 @@ func (k inProcSink) Send(ev Event) error {
 		var copied Frame
 		if copied, err = copyFrame(f, s.lim); err == nil {
 			ev.Body = copied
+		} else if repaired, ok := repairFrame(f, s.lim); ok {
+			// Report first, then send the sanitized frame. The front end resets
+			// its row diff on Crash, so the repaired frame is a full repaint.
+			if qerr := s.enqueue(Event{Body: Crash{Message: "invalid engine event: " + err.Error()}}); qerr != nil {
+				return qerr
+			}
+			ev.Body = repaired
+			err = nil
 		}
 	} else {
 		s.outBuf, err = AppendEvent(s.outBuf[:0], ev, s.lim)
@@ -251,6 +260,14 @@ func (k inProcSink) Send(ev Event) error {
 	}
 	if err != nil {
 		ev = Event{Session: s.id, Body: Crash{Message: "invalid engine event: " + err.Error()}}
+	}
+	return s.enqueue(ev)
+}
+
+// enqueue delivers one event to the front end with backpressure and shutdown.
+func (s *inProcSession) enqueue(ev Event) error {
+	if ev.Session == 0 {
+		ev.Session = s.id
 	}
 	select {
 	case s.events <- ev:

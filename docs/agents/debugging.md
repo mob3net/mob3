@@ -55,6 +55,12 @@ with shell redirection:
 bin/mob3 "$URL" 2>/tmp/mob3.err
 ```
 
+A crash line is written once and the front end forces a full repaint on the
+following frame, so the screen recovers. If a frame cannot be repaired at all,
+`!` still opens the console (the key path is independent of page output), and
+`q` then `y` still quits. A repaired frame drops only the offending placement,
+glyph or scaled run, so toolbar, footer and console remain drawable.
+
 ## Zoom probe
 
 Zoom is a layout oracle, not just a convenience: it changes the CSS pixels per

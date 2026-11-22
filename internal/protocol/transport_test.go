@@ -199,3 +199,55 @@ func TestInProcFrameIsDetached(t *testing.T) {
 		t.Fatalf("second frame = %q, want b", got)
 	}
 }
+
+func TestInProcRepairsInvalidFrame(t *testing.T) {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
+		_ = out.Send(Event{Body: Frame{
+			W: 2, H: 1,
+			Cells:      []Cell{{R: 'a'}, {R: 'b'}},
+			Runs:       []ScaledRun{{X: 0, Y: 0, Cells: 2, Scale: 2, Text: "\x1b[31m"}},
+			Placements: []Placement{{Key: "x", X: 5, Y: 0, W: 2, H: 1, TotalRows: 1, Format: PlacementPNG, Data: []byte{1}}},
+		}})
+		return nil
+	})
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	first := <-s.Events()
+	if _, ok := first.Body.(Crash); !ok {
+		t.Fatalf("first event = %T, want Crash", first.Body)
+	}
+	second := <-s.Events()
+	f, ok := second.Body.(Frame)
+	if !ok {
+		t.Fatalf("second event = %T, want repaired Frame", second.Body)
+	}
+	if err := f.Validate(DefaultLimits); err != nil {
+		t.Fatalf("repaired frame is invalid: %v", err)
+	}
+	if len(f.Placements) != 0 {
+		t.Fatalf("invalid placement survived repair: %+v", f.Placements)
+	}
+	if len(f.Runs) != 0 || f.Cells[0].Run != 0 || f.Cells[1].Run != 0 {
+		t.Fatalf("invalid run survived repair: %+v cells=%+v", f.Runs, f.Cells)
+	}
+}
+
+func TestInProcDropsUnrepairableFrame(t *testing.T) {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
+		_ = out.Send(Event{Body: Frame{W: 2, H: 2, Cells: []Cell{{R: 'a'}}}})
+		return nil
+	})
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ev := <-s.Events()
+	if _, ok := ev.Body.(Crash); !ok {
+		t.Fatalf("event = %T, want Crash", ev.Body)
+	}
+}

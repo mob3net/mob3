@@ -383,3 +383,23 @@ func TestClientErrorLogsOnce(t *testing.T) {
 		t.Fatalf("status = %q, want an engine-error hint", b.status)
 	}
 }
+
+func TestApplySessionEventCrashForcesFullRepaint(t *testing.T) {
+	var out bytes.Buffer
+	p := frontend.NewPresenter(&out, true)
+	st := &frontEndState{}
+	f := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'a'}, {R: 'b'}, {R: 'c'}, {R: 'd'}}}
+	if _, err := applySessionEvent(p, protocol.Event{Body: f}, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if _, err := applySessionEvent(p, protocol.Event{Body: protocol.Crash{Message: "boom"}}, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applySessionEvent(p, protocol.Event{Body: f}, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\x1b[2J") {
+		t.Fatalf("frame after Crash did not clear the screen: %q", out.String())
+	}
+}

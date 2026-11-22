@@ -502,9 +502,13 @@ func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *fro
 		if msg == "" || msg == st.lastCrash {
 			break
 		}
+		// The crash line was written over the alternate screen. Force the next
+		// frame to repaint every row so the terminal is usable again and the
+		// console and footer can be reached.
+		presenter.Reset()
 		st.lastCrash = msg
 		if report != nil {
-			report(msg)
+			report(clipCrashMessage(msg))
 		}
 	case protocol.State:
 		st.scroll = v.Scroll
@@ -516,4 +520,18 @@ func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *fro
 		st.lastCrash = ""
 	}
 	return false, nil
+}
+
+// clipCrashMessage keeps the stderr report to roughly one terminal row. The
+// full text still goes to the in-app console through ClientError.
+func clipCrashMessage(msg string) string {
+	const max = 200
+	if len(msg) <= max {
+		return msg
+	}
+	runes := []rune(msg)
+	if len(runes) <= max {
+		return msg
+	}
+	return string(runes[:max]) + "…"
 }
