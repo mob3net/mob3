@@ -1187,7 +1187,7 @@ func (b *Browser) drawConsole(w, h int) {
 		if b.findActive && b.findScope == findScopeHTML {
 			b.drawFindBar(g, h-1, w)
 			b.paintShellOverlays(g)
-			b.flushGrid(g, nil)
+			b.presentGrid(g, nil)
 			return
 		}
 		icon := ">_"
@@ -1215,7 +1215,7 @@ func (b *Browser) drawConsole(w, h int) {
 		}
 	}
 	b.paintShellOverlays(g)
-	b.flushGrid(g, nil)
+	b.presentGrid(g, nil)
 }
 
 // noticeDialog is a small informational modal, such as the unsupported

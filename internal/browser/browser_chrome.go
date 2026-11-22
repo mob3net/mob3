@@ -317,9 +317,17 @@ func (b *Browser) draw() {
 	}
 
 	b.drawChrome(g)
+	b.presentGrid(g, placements)
+}
+
+// presentGrid hands one composed screen to the front end, or writes it
+// directly when no presentation session is active (tests and automation).
+// Every screen path, including the console, must use this so the front-end row
+// diff never goes stale.
+func (b *Browser) presentGrid(g *Grid, placements []ImagePlacement) {
 	if b.emitFrames {
-		// The front end owns the terminal in this mode. The frame buffer is
-		// reused; the transport copies it before the next draw.
+		// The frame buffer is reused; the transport copies it before the next
+		// draw.
 		b.frameBuf = toProtocolFrameInto(&b.frameBuf, g, 0)
 		b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements, g.W, g.H)
 		b.frameReady = true

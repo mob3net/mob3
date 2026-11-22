@@ -403,3 +403,40 @@ func TestApplySessionEventCrashForcesFullRepaint(t *testing.T) {
 		t.Fatalf("frame after Crash did not clear the screen: %q", out.String())
 	}
 }
+
+func TestConsoleDrawEmitsFrame(t *testing.T) {
+	b := NewBrowser(40, 10)
+	b.noJS = true
+	b.emitFrames = true
+	b.consoleOpen = true
+	capture := &frameCapture{}
+	b.sessionOut = capture
+	b.draw()
+	b.emitPendingFrame()
+	if capture.frame.W != 40 || capture.frame.H != 10 || len(capture.frame.Cells) != 400 {
+		t.Fatalf("console frame = %dx%d, cells %d", capture.frame.W, capture.frame.H, len(capture.frame.Cells))
+	}
+	if err := capture.frame.Validate(protocol.DefaultLimits); err != nil {
+		t.Fatalf("console frame is invalid: %v", err)
+	}
+}
+
+func TestPresenterRepaintsAfterConsoleFrame(t *testing.T) {
+	var out bytes.Buffer
+	p := frontend.NewPresenter(&out, true)
+	st := &frontEndState{}
+	page := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'a'}, {R: 'b'}, {R: 'p'}, {R: 'q'}}}
+	console := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'x'}, {R: 'y'}, {R: 'c'}, {R: 'd'}}}
+	for _, f := range []protocol.Frame{page, console} {
+		if _, err := applySessionEvent(p, protocol.Event{Body: f}, st, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out.Reset()
+	if _, err := applySessionEvent(p, protocol.Event{Body: page}, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "p") {
+		t.Fatalf("page was not repainted after the console: %q", out.String())
+	}
+}
