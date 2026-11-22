@@ -32,8 +32,8 @@ protocol -> standard library only
 The split is a value boundary. Nothing in `protocol` holds a pointer to engine
 state: frames, events and commands are plain data, and a codec round-trip
 covers every message. Images cross as encoded bytes with size caps, never as
-`image.Image`. Terminal capability detection lives on the front end and cookie
-parsing on the host side.
+`image.Image`. Terminal capability detection is front-end-owned; cookie
+parsing is **not** on the host yet (`js_dom.go` still parses `document.cookie`).
 
 **Non-goals of this step:** no subprocess, no OS sandbox, no tabs, no
 per-site renderer, no behavior or visual change. A later process split is a
@@ -64,9 +64,11 @@ the end.
   page corpus.
 - `frontend` and `host` do not import `engine`; `engine` imports only
   `protocol`, approved modules and the standard library, with no `net`,
-  `syscall` or `os` left. Current exceptions to remove: terminal capability
-  detection in `render.go` (`os.Getenv`) and `document.cookie` parsing in
-  `js_dom.go` (`net/http`).
+  `syscall` or `os` left. Current violations to remove: `js_web.go` builds
+  `net/http` requests and calls a host `http.Client` for `fetch`/XHR,
+  `js_host.go` exposes `*http.Client`/`*http.Cookie`, and `js_dom.go` parses
+  cookies with `net/http`. The dependency test currently checks the exact
+  `net` import only, so `net/http` passes silently.
 - Frame goldens cover layout and rendering, plus new frame-snapshot tests for
   the seam.
 - Dependencies are checked by a test, not by review.
@@ -75,29 +77,32 @@ the end.
 
 ## Current layout (during migration)
 
-Standard Go layout:
+This is the **actual** state, not the target. The target above is still the
+destination; the tracker lists what remains.
 
-- `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
-  exits with its status.
-- `internal/browser/` — package `browser` with the engine, CLI loop and tests.
-  No `internal` package is imported from outside this module. Keep the folder
-  consolidated by subsystem rather than one file per small feature; platform
-  code stays in its `term_*`/`signals_*` files.
-- **One package, files by subsystem.** Every file under `internal/browser/`
-  belongs to package `browser`; `Browser`'s methods share one struct, so
-  splitting into subpackages would force exported state or accessor layers for
-  no benefit. Large subsystems therefore get their own file (see the table
-  below), and moving code between those files is a pure declaration move with
-  no behavior change: keep whole declaration blocks with their doc comments,
-  give each new file only the imports it actually uses, and let the compiler
-  and tests confirm nothing changed. Naming follows ownership: files carved
-  out of a base file share that file's prefix, so `layout.go` produces
-  `layout_grid.go`, `layout_flex.go` and `layout_table.go`, and `browser.go`
-  produces `browser_chrome.go`, `browser_forms.go` and `browser_history.go`.
-  Prefixing matters once a bare name would be ambiguous: `forms` and `images`
-  exist in both families, so the prefix says which one a file belongs to.
-  Standalone subsystems that are their own base file keep their own name
-  (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
+- `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])`.
+- `internal/protocol`, `internal/engine`, `internal/host` and
+  `internal/frontend` exist. `internal/app` **does not exist yet**.
+- `internal/browser/` still holds the app/session shell: the 289-method
+  `Browser`, chrome/overlay composition, terminal raw mode and input, flags
+  and the interactive event loop, loader/about/PDF/image orchestration, MCP
+  and automation, and most integration tests. It imports all four boundary
+  packages.
+- The front end currently owns ANSI/PNG output, presentation and native image
+  placement, but not terminal raw mode/input, chrome, dialogs, clipboard or
+  navigation state.
+- The host currently owns HTTP transport policy, raw fetch, cache, cookies,
+  settings, certificates and the request log; it does **not** yet own global
+  visited history, download reporting, JS fetch/XHR, or cookie parsing.
+- The engine contains the DOM/JS/style/layout/paint/PDF work, but its JS layer
+  still imports `net/http` and sends requests through `JSHost.HTTPClient()`.
+- **Files by subsystem within a package** remains the rule. Moving code
+  between files is a pure declaration move (keep doc comments, give each file
+  only the imports it uses). Files carved out of a base file share its prefix
+  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `browser.go` →
+  `browser_chrome.go`, `browser_forms.go`), which matters when a bare name
+  would be ambiguous (`forms`, `images`). Standalone subsystems keep their own
+  name (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
 
 | File | Decision / responsibility |
 | --- | --- |
@@ -130,7 +135,7 @@ Standard Go layout:
 | `internal/engine/layout_links.go` | Link rectangles, overlay anchors, and fixed/sticky scroll re-anchoring (sticky groups clamp against their containing block). |
 | `internal/engine/layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
 | `internal/engine/render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, z-index paint ordering, image-placement collection, `PaintLayout*`, SVG decoding via the vendored renderer. |
-| `render_gfx.go` | Browser-side native image layer: kitty/iTerm2 placement protocols, placement cache, PNG encoding, image downscaling and inline-SVG loading. Moves to the frontend in Phase 5. |
+| `render_gfx.go` | Browser bridge: graphics-mode aliases/constructors plus inline-SVG loading. Kitty/iTerm2 output moved to `internal/frontend/gfx.go`; placement encoding is in `placement.go`. |
 | `paint_compat.go` | Browser aliases and wrappers for the engine grid/paint API and SVG decoders. Temporary. |
 | `frontend_bridge.go` | Temporary bridges to `internal/frontend`: grid-to-frame conversion for `Lines`/`LinesMono`/`PNG`, color modes and code helpers. Removed when the engine package makes the seam direct. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
@@ -155,17 +160,17 @@ Standard Go layout:
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events and engine-side dialog input while the transport owns the front end. |
 | `internal/browser/cli.go` | Front-end terminal loop for interactive runs: raw mode, key reading, resize and quit signals, command sends and `Quit` handling. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | HTTP(S)/data loading, redirects, gzip, charset decoding, stylesheet discovery, module script collection and import map parsing, image loading, request log and the local-network/mixed-content guards. The cookie jar moved to `internal/host/cookies.go`. |
+| `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
-| `pages.go` | The shell and shared stylesheet (`appPageCSS`) for MOB³'s own pages: one centered 900px reading column, a 32px `h1`, and table, muted, warning and `pre` styles, with page-specific CSS appended by `appPageHTML`. Help, config, history, the blocked page and the cannot-display and load-error pages use it; the start page keeps the reader column and PDF pages keep their content-sized boxes. |
+| `pages.go` | Built-in page HTML/CSS (home/help/config/history/error/blocked) and the shared shell stylesheet. Still session-side; target is engine rendering from host data. |
 | `internal/host/certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default) or `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`). Certificate files are not read. The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `internal/engine/pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
-| `config.go` | Runtime config model, `about:config` form page, and applying edited values without persistence. |
+| `config.go` | Browser-side runtime config model, `about:config` form and apply path. Host-side config/token ownership is still pending. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
-| `browser_chrome.go` | Frame composition: `draw` paints the content rect and blits it, `drawChrome` composes toolbar, footer, dialogs and menus, and `flushGrid` only encodes/writes. Also status classification, footer mode labels and graphics-mode cycling, selection/cursor/control-focus overlays, scrollbar rendering, and the resident-memory readout. |
+| `browser_chrome.go` | Session-side composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, scrollbar and memory readout remain here. |
 | `shell.go` | Shell-owned geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
 | `browser_input.go` | Key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing, mouse escape decoding and `MouseEvent`. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
@@ -175,8 +180,8 @@ Standard Go layout:
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
-| `automation.go` | Headless `Automation` session for scripted clients: serialized navigation, text snapshot, click by link/selector/coordinates, typing, key presses, scrolling, history, JS evaluation and session close. `RunCommand` is the shared named-command dispatcher used by protocol front ends. Uses a virtual text viewport and sets `Browser.noDraw` so nothing is written to the terminal. |
-| `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout. Implements `initialize`, `ping`, `tools/list` and `tools/call`; tool calls delegate to `Automation.RunCommand`. Stdout is protocol-only, diagnostics go to stderr, and tool failures use `isError` content. |
+| `automation.go` | Engine-side headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, history, JS evaluation and `RunCommand`. `automation_transport.go` exposes it through the MCP protocol client. |
+| `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | JS console view, alert/confirm/prompt dialogs, the `X` page view options window (fixed elements and background images) and their rendering. |
 | `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
 | `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, following the chosen link, and the F destination-confirmation step. |
@@ -199,5 +204,5 @@ Standard Go layout:
 | `term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
-| `cli.go` | `Run`: flags, dump mode, interactive event loop, and the build-time `Version` string reported by `-version`; default `dev`. |
+| `cli.go` | App + front-end entry: flags, dump/PNG/MCP wiring, interactive terminal raw mode and command loop, and the build-time `Version`; default `dev`. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |
