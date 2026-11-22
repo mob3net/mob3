@@ -232,7 +232,7 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 
 func TestNavigateSearchesQuery(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.loader.searchURL = "https://www.bing.com/search?q=%s"
+	b.loader.setSearchURL("https://www.bing.com/search?q=%s")
 	ch := make(chan string, 1)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		ch <- target

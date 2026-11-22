@@ -14,8 +14,8 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b.noJS = true
 	b.jsMemLimit = 64 << 20
 	b.noBigText = true
-	b.loader.userAgent = "TestUA"
-	b.loader.searchURL = "https://search.example/?q=%s"
+	b.loader.setUserAgent("TestUA")
+	b.loader.setSearchURL("https://search.example/?q=%s")
 	b.cliConfig = map[string]string{
 		"-dump": "off", "-width": "80", "-graphics": "auto",
 		"-color": "off", "-no-color": "off",
@@ -112,11 +112,11 @@ func TestApplyConfig(t *testing.T) {
 	if b.layoutBudget.Name != "high" {
 		t.Fatalf("layout budget = %q, want high", b.layoutBudget.Name)
 	}
-	if b.loader.userAgent != "TestUA" {
-		t.Fatalf("ua = %q", b.loader.userAgent)
+	if b.loader.requestUserAgent() != "TestUA" {
+		t.Fatalf("ua = %q", b.loader.requestUserAgent())
 	}
-	if b.loader.searchURL != "" {
-		t.Fatalf("search = %q", b.loader.searchURL)
+	if b.loader.searchTemplate() != "" {
+		t.Fatalf("search = %q", b.loader.searchTemplate())
 	}
 }
 

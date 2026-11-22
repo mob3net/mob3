@@ -59,14 +59,10 @@ func imageConfigOK(cfg image.Config) bool {
 const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
 
 type Loader struct {
-	client *http.Client
-	// settingsMu guards userAgent, searchURL and the image pixel cap.
-	// about:config changes them while navigation and image workers read them.
-	settingsMu sync.RWMutex
-	cookies    *cookieJar
-	userAgent  string
-	searchURL  string
-	noScripts  bool
+	client    *http.Client
+	cookies   *cookieJar
+	settings  *host.Settings
+	noScripts bool
 	// transport is the stable RoundTripper whose base is replaced when the
 	// certificate source changes; client.Transport always points at it.
 	transport *certTransport
@@ -97,11 +93,6 @@ type Loader struct {
 	// imageViewportPx is the CSS-pixel viewport width used to choose srcset and
 	// picture candidates. It is 800 when no browser width is available.
 	imageViewportPx int
-	// maxImageW and maxImageH cap a decoded image's pixel dimensions. The
-	// browser sets them from the terminal viewport so a full-resolution photo
-	// is downscaled once at load instead of staying in memory until paint.
-	// Zero disables the cap.
-	maxImageW, maxImageH int
 	// imageBudget bounds decoded image bytes in flight; svgBudgetPixels and
 	// the counters bound inline SVG rasterization for the current page.
 	imageBudget     *byteLimiter
@@ -334,45 +325,13 @@ func requestMetaFrom(ctx context.Context) requestMeta {
 	return m
 }
 
-// setUserAgent replaces the User-Agent used by later requests. It is safe to
-// call while a navigation or image worker is running.
-func (l *Loader) setUserAgent(ua string) {
-	l.settingsMu.Lock()
-	l.userAgent = ua
-	l.settingsMu.Unlock()
-}
-
-func (l *Loader) requestUserAgent() string {
-	l.settingsMu.RLock()
-	defer l.settingsMu.RUnlock()
-	return l.userAgent
-}
-
-// setSearchURL replaces the search fallback template for later navigations.
-func (l *Loader) setSearchURL(template string) {
-	l.settingsMu.Lock()
-	l.searchURL = template
-	l.settingsMu.Unlock()
-}
-
-func (l *Loader) searchTemplate() string {
-	l.settingsMu.RLock()
-	defer l.settingsMu.RUnlock()
-	return l.searchURL
-}
-
-// setImageCap updates the decoded-image pixel cap used by image workers.
-func (l *Loader) setImageCap(w, h int) {
-	l.settingsMu.Lock()
-	l.maxImageW, l.maxImageH = w, h
-	l.settingsMu.Unlock()
-}
-
-func (l *Loader) imageCap() (int, int) {
-	l.settingsMu.RLock()
-	defer l.settingsMu.RUnlock()
-	return l.maxImageW, l.maxImageH
-}
+// setUserAgent replaces the User-Agent used by later requests.
+func (l *Loader) setUserAgent(ua string)       { l.settings.SetUserAgent(ua) }
+func (l *Loader) requestUserAgent() string     { return l.settings.UserAgent() }
+func (l *Loader) setSearchURL(template string) { l.settings.SetSearchURL(template) }
+func (l *Loader) searchTemplate() string       { return l.settings.SearchURL() }
+func (l *Loader) setImageCap(w, h int)         { l.settings.SetImageCaps(w, h) }
+func (l *Loader) imageCap() (int, int)         { return l.settings.ImageCaps() }
 
 // NewLoader creates a loader with cookie support and a sane timeout. The
 // platform trust store is used until SetCertSource selects another one; the
@@ -396,8 +355,7 @@ func NewLoader() *Loader {
 				return nil
 			},
 		},
-		userAgent:  defaultUserAgent,
-		searchURL:  DefaultSearchURL,
+		settings:   host.NewSettings(defaultUserAgent, DefaultSearchURL),
 		transport:  tr,
 		requests:   host.NewRequestLog(),
 		certSource: CertSourceSystem,
@@ -2093,3 +2051,6 @@ func (l *Loader) requestSnapshot() []host.Record { return l.requests.Snapshot() 
 func (l *Loader) requestCount() int              { return l.requests.Count() }
 
 type requestRecord = host.Record
+
+func (l *Loader) imageCapW() int { w, _ := l.imageCap(); return w }
+func (l *Loader) imageCapH() int { _, h := l.imageCap(); return h }

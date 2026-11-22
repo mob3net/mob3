@@ -666,7 +666,7 @@ func TestBranding(t *testing.T) {
 	if hist := historyPageHTML(nil, -1); !strings.Contains(hist, "max-width: 900px") || !strings.Contains(hist, "margin: 8px auto") {
 		t.Error("history page is not a narrow reading column")
 	}
-	ua := NewLoader().userAgent
+	ua := NewLoader().requestUserAgent()
 	if ua != "MOB3/1.0 (+terminal; +https://mob3.net)" {
 		t.Errorf("User-Agent = %q", ua)
 	}

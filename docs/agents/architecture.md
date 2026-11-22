@@ -139,6 +139,7 @@ Standard Go layout:
 | `term_detect.go` | Terminal capability detection from the environment (`COLORTERM`, `TERM`, `TERM_PROGRAM`, multiplexer variables). Frontend-owned; the paint path receives capabilities instead of reading the environment. |
 | `internal/host/cache.go` | Session LRU resource cache for raw bodies and decoded images. |
 | `internal/host/requests.go` | In-memory console request log, page generation, start/finish accounting and snapshots. |
+| `internal/host/settings.go` | User agent, search template and decoded-image caps, shared by navigation and image workers. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | HTTP(S)/data loading, redirects, gzip, charset decoding, stylesheet discovery, module script collection and import map parsing, image loading, request log and the local-network/mixed-content guards. The cookie jar moved to `internal/host/cookies.go`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |

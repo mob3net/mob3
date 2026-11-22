@@ -905,7 +905,7 @@ func TestHomeSearchFormUsesURLResolution(t *testing.T) {
 		b := NewBrowser(80, 20)
 		b.page = page
 		b.url = u
-		b.loader.searchURL = "https://search.example/?q=%s"
+		b.loader.setSearchURL("https://search.example/?q=%s")
 		input := page.Root.FindFirst("input")
 		if input == nil || input.Attr("name") != "q" {
 			t.Fatal("home page has no search input")
