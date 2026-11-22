@@ -71,3 +71,6 @@ func resolveLengthREM(l *Length, rootPx float64) {
 func resolveViewportLength(l *Length, vw, vh float64) {
 	engine.ResolveViewportLength(l, vw, vh)
 }
+
+// SetLayoutZoom sets the shared layout zoom; exported for app-level tests.
+func SetLayoutZoom(z float64) { setLayoutZoom(z) }

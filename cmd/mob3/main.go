@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"browser/internal/browser"
+	"browser/internal/app"
 )
 
 func main() {
-	os.Exit(browser.Run(os.Args[1:]))
+	os.Exit(app.Run(os.Args[1:]))
 }

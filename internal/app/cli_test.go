@@ -1,4 +1,4 @@
-package browser
+package app
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"browser/internal/browser"
 )
 
 // dataPage returns an in-memory HTML document for dump tests. The product no
@@ -35,9 +37,9 @@ func runCaptured(t *testing.T, args []string) (int, []byte) {
 }
 
 func TestRunVersion(t *testing.T) {
-	old := Version
-	Version = "v9.9.9"
-	defer func() { Version = old }()
+	old := browser.Version
+	browser.Version = "v9.9.9"
+	defer func() { browser.Version = old }()
 
 	code, out := runCaptured(t, []string{"-version"})
 	if code != 0 {
@@ -49,9 +51,9 @@ func TestRunVersion(t *testing.T) {
 }
 
 func TestRunHelpShowsVersionLicenseCopyrightAndGraphicsAlias(t *testing.T) {
-	old := Version
-	Version = "v9.9.9"
-	defer func() { Version = old }()
+	old := browser.Version
+	browser.Version = "v9.9.9"
+	defer func() { browser.Version = old }()
 
 	oldErr := os.Stderr
 	r, w, err := os.Pipe()
@@ -130,8 +132,8 @@ func TestRunPNGHeight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := img.Bounds().Dy(); got > 5*pngCellH {
-		t.Fatalf("PNG height = %d, want at most %d", got, 5*pngCellH)
+	if got := img.Bounds().Dy(); got > 5*16 {
+		t.Fatalf("PNG height = %d, want at most %d", got, 5*16)
 	}
 }
 
@@ -194,7 +196,7 @@ func TestRunRejectsLocalFile(t *testing.T) {
 }
 
 func TestRunZoomFlag(t *testing.T) {
-	defer setLayoutZoom(1)
+	defer browser.SetLayoutZoom(1)
 	src := `<html><body style="margin:0"><p style="margin:0 0 0 64px">indent</p></body></html>`
 	page := dataPage(src)
 	indentOf := func(out []byte) int {

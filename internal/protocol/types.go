@@ -12,6 +12,7 @@ package protocol
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -366,6 +367,17 @@ func (f Frame) Validate(lim Limits) error {
 		}
 	}
 	return nil
+}
+
+// StripControls removes terminal control characters from untrusted text so a
+// status, console or crash line cannot carry an escape sequence.
+func StripControls(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 32 || (r >= 0x7f && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // SafeRune reports whether a rune may be painted as page text. Control

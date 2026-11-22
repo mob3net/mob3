@@ -78,14 +78,15 @@ the end.
 This is the **actual** state, not the target. The target above is still the
 destination; the tracker lists what remains.
 
-- `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])`.
-- `internal/protocol`, `internal/engine`, `internal/host` and
-  `internal/frontend` exist. `internal/app` **does not exist yet**.
-- `internal/browser/` still holds the app/session shell: the 289-method
-  `Browser`, chrome/overlay composition, terminal raw mode and input, flags
-  and the interactive event loop, loader/about/PDF/image orchestration, MCP
-  and automation, and most integration tests. It imports all four boundary
-  packages.
+- `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
+- `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
+  and `internal/app` exist. `app` currently owns flags/validation/dispatch;
+  session setup still lives in `internal/browser`.
+- `internal/browser/` still holds the session shell: the 289-method `Browser`,
+  chrome/overlay composition, session setup, loader/about/PDF/image
+  orchestration, MCP and automation, and most integration tests. Terminal
+  input/signals and the live event loop are in `internal/frontend`; flags and
+  dispatch are in `internal/app`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement and clipboard encoding. It does not yet own chrome, dialogs or
@@ -205,5 +206,6 @@ destination; the tracker lists what remains.
 | `internal/frontend/term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `internal/frontend/term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `internal/frontend/signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
-| `cli.go` | App + front-end entry: flags, dump/PNG/MCP wiring, interactive terminal raw mode and command loop, and the build-time `Version`; default `dev`. |
+| `internal/app/app.go` | Flags, validation and dispatch into `browser.Execute`. |
+| `cli.go` | Session setup/dispatch and the build-time `Version`; terminal input and the live loop are frontend. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |

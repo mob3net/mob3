@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"browser/internal/protocol"
 	"bytes"
 	"errors"
 	"fmt"
@@ -793,12 +794,7 @@ func textBackground(f *Frag) Color {
 // in an OSC 66 escape. Ordinary Grid.Text drops them via zero rune width, but
 // scaled text is written raw inside the escape sequence.
 func StripTerminalControls(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r < 32 || (r >= 0x7f && r < 0xa0) {
-			return -1
-		}
-		return r
-	}, s)
+	return protocol.StripControls(s)
 }
 
 // readableFG keeps text legible when author CSS leaves a near-invisible

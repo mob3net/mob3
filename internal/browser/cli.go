@@ -2,8 +2,6 @@ package browser
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -14,127 +12,72 @@ import (
 	"browser/internal/protocol"
 )
 
-// Run executes the MOB³ command line and returns a process exit code.
-func Run(args []string) int {
-	fs := flag.NewFlagSet("mob3", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	dump := fs.Bool("dump", false, "render the page to stdout and exit")
-	pngOut := fs.Bool("png", false, "write a PNG screenshot of the page to stdout (implies -dump)")
-	widthFlag := fs.Int("width", 0, "layout width in columns (default: terminal width or 100)")
-	heightFlag := fs.Int("height", 0, "layout viewport height in rows and output limit (0 = full page)")
-	pdfPage := fs.String("pdf-page", "auto", "PDF page for dump/PNG: auto, all, or a page number")
-	noColor := fs.Bool("no-color", false, "disable ANSI colors in dump mode")
-	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
-	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
-	certs := fs.String("certs", "system", "TLS trust store: system or embedded")
-	search := fs.String("search", DefaultSearchURL, "search URL template with %s; empty disables search fallback")
-	showVersion := fs.Bool("version", false, "print the version and exit")
-	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
-	fs.StringVar(graphics, "g", "none", "alias for -graphics")
-	noJS := fs.Bool("no-js", false, "disable page JavaScript")
-	noPDF := fs.Bool("no-pdf", false, "disable the built-in PDF text viewer")
-	reader := fs.Bool("reader", false, "start in reader mode")
-	dark := fs.Bool("dark", false, "start in dark mode")
-	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
-	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
-	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
-	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
-	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
-	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url]\n\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
-		fmt.Fprintf(os.Stderr, "License: AGPL-3.0-only\n")
-		fmt.Fprintf(os.Stderr, "Copyright (c) 2026 Milos Stojanovic\n\n")
-		fs.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n  %s https://example.com\n  %s -dump -width 120 about:help\n  %s -dump -no-color https://go.dev\n", os.Args[0], os.Args[0], os.Args[0])
-	}
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		return 2
-	}
-	if *showVersion {
-		fmt.Println(Version)
-		return 0
-	}
-	if *heightFlag < 0 {
-		fmt.Fprintln(os.Stderr, "mob3: -height must be 0 or positive")
-		return 2
-	}
-	// The soft heap limit is process-wide, so every run mode gets it. Zero
-	// leaves the Go runtime default (including a GOMEMLIMIT from the
-	// environment) untouched.
-	if *memLimit < 0 {
-		fmt.Fprintln(os.Stderr, "mob3: -mem-limit must be 0 or positive")
-		return 2
-	}
-	if *memLimit > 0 {
-		debug.SetMemoryLimit(int64(*memLimit) << 20)
-	}
-	// 0 keeps every page for a dump and page 1 for a PNG; -1 means all pages.
-	pdfPageSel := 0
-	switch strings.ToLower(strings.TrimSpace(*pdfPage)) {
-	case "", "auto":
-	case "all":
-		pdfPageSel = -1
-	default:
-		n, err := strconv.Atoi(strings.TrimSpace(*pdfPage))
-		if err != nil || n < 1 {
-			fmt.Fprintln(os.Stderr, "mob3: -pdf-page must be auto, all, or a page number")
-			return 2
-		}
-		pdfPageSel = n
-	}
+// RunOptions is the parsed command line handed to Execute by internal/app.
+type RunOptions struct {
+	Dump, PNG     bool
+	Width, Height int
+	PDFPage       int
+	PDFPageLabel  string
+	NoColor       bool
+	Color         bool
+	UA, Certs     string
+	Search        string
+	Graphics      string
+	NoJS, NoPDF   bool
+	Reader, Dark  bool
+	IgnoreBlocks  bool
+	Home          string
+	TextScale     string
+	MemLimit      int
+	LayoutBudget  string
+	Zoom          string
+	MCP           bool
+	Target        string
+}
 
-	start := *home
-	if strings.TrimSpace(start) == "" {
-		start = "about:home"
+// Execute runs one MOB³ invocation after the command line has been parsed.
+func Execute(o RunOptions) int {
+	if o.MemLimit > 0 {
+		debug.SetMemoryLimit(int64(o.MemLimit) << 20)
 	}
-	if fs.NArg() > 0 {
-		start = fs.Arg(0)
+	if o.PNG {
+		o.Dump = true
 	}
-
-	if *pngOut {
-		*dump = true
-	}
-	interactive := !*dump && frontend.IsTTY(os.Stdin) && frontend.IsTTY(os.Stdout)
-	graphicsMode := ParseGraphicsMode(*graphics)
+	interactive := !o.Dump && frontend.IsTTY(os.Stdin) && frontend.IsTTY(os.Stdout)
+	graphicsMode := ParseGraphicsMode(o.Graphics)
 	loader := NewLoader()
-	loader.noScripts = *noJS
-	loader.noPDF = *noPDF
+	loader.noScripts = o.NoJS
+	loader.noPDF = o.NoPDF
 	loader.noImages = graphicsMode == GraphicsNone
-	loader.setSearchURL(*search)
-	loader.ignoreBlocks = *ignoreBlocks
-	if *ua != "" {
-		loader.setUserAgent(*ua)
+	loader.setSearchURL(o.Search)
+	loader.ignoreBlocks = o.IgnoreBlocks
+	if o.UA != "" {
+		loader.setUserAgent(o.UA)
 	}
-	if err := loader.SetCertSource(*certs); err != nil {
+	if err := loader.SetCertSource(o.Certs); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)
 		return 2
 	}
 	jsMemLimit := jsHeapBudget(effectiveMemoryLimit())
-	budget, ok := ParseLayoutBudget(*layoutBudget)
+	budget, ok := ParseLayoutBudget(o.LayoutBudget)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", *layoutBudget)
+		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", o.LayoutBudget)
 		return 2
 	}
-	zoomPct, ok := parseZoomPercent(*zoomFlag)
+	zoomPct, ok := parseZoomPercent(o.Zoom)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "mob3: invalid -zoom %q (use a percentage from 25 to 200)\n", *zoomFlag)
+		fmt.Fprintf(os.Stderr, "mob3: invalid -zoom %q (use a percentage from 25 to 200)\n", o.Zoom)
 		return 2
 	}
 	zoomFactor := zoomPct / 100
 	SetColorMode(DetectColorMode())
 
-	if *mcpMode {
-		w := *widthFlag
+	if o.MCP {
+		w := o.Width
 		if w <= 0 {
 			w = 100
 		}
-		h := *heightFlag
+		h := o.Height
 		if h <= 0 {
 			h = 30
 		}
@@ -143,14 +86,14 @@ func Run(args []string) int {
 		setLayoutZoom(zoomFactor)
 		auto.b.setLoader(loader)
 		loader.noImages = true
-		auto.b.noJS = *noJS
-		auto.b.noPDF = *noPDF
+		auto.b.noJS = o.NoJS
+		auto.b.noPDF = o.NoPDF
 		auto.b.jsMemLimit = jsMemLimit
-		auto.b.memLimitBytes = int64(*memLimit) << 20
+		auto.b.memLimitBytes = int64(o.MemLimit) << 20
 		auto.b.layoutBudget = budget
-		auto.b.home = *home
-		auto.b.reader = *reader
-		auto.b.dark = *dark
+		auto.b.home = o.Home
+		auto.b.reader = o.Reader
+		auto.b.dark = o.Dark
 		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %v\n", err)
@@ -159,14 +102,14 @@ func Run(args []string) int {
 		defer session.Close()
 		client := &automationClient{s: session}
 		ctx := context.Background()
-		if err := client.Navigate(ctx, start); err != nil {
+		if err := client.Navigate(ctx, o.Target); err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %v\n", err)
 		}
 		return RunMCP(client, os.Stdin, os.Stdout, os.Stderr)
 	}
 
 	if !interactive {
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget, zoomFactor)
+		return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color, o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, jsMemLimit, budget, zoomFactor)
 	}
 
 	// Interactive pages show text first and fetch images in the background so
@@ -176,49 +119,49 @@ func Run(args []string) int {
 	state, err := frontend.MakeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return dumpPage(loader, start, *widthFlag, *heightFlag, *noColor, *forceColor, *noJS, *reader, *dark, *pngOut, pdfPageSel, jsMemLimit, budget, zoomFactor)
+		return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color, o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, jsMemLimit, budget, zoomFactor)
 	}
 	w, h, ok := frontend.TerminalSize(os.Stdout)
 	if !ok {
 		w, h = 100, 30
 	}
-	if *widthFlag > 0 {
-		w = *widthFlag
+	if o.Width > 0 {
+		w = o.Width
 	}
 	b := NewBrowser(w, h)
 	b.zoom = zoomFactor
 	setLayoutZoom(zoomFactor)
 	b.interactive = true
 	b.setLoader(loader)
-	b.reader = *reader
-	b.dark = *dark
-	b.home = *home
+	b.reader = o.Reader
+	b.dark = o.Dark
+	b.home = o.Home
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
 	}
 	b.cliConfig = map[string]string{
-		"-dump":          onOff(*dump),
-		"-png":           onOff(*pngOut),
+		"-dump":          onOff(o.Dump),
+		"-png":           onOff(o.PNG),
 		"-width":         strconv.Itoa(w),
-		"-height":        strconv.Itoa(*heightFlag),
-		"-pdf-page":      strings.TrimSpace(*pdfPage),
-		"-graphics":      *graphics,
-		"-mem-limit":     strconv.Itoa(*memLimit),
+		"-height":        strconv.Itoa(o.Height),
+		"-pdf-page":      o.PDFPageLabel,
+		"-graphics":      o.Graphics,
+		"-mem-limit":     strconv.Itoa(o.MemLimit),
 		"-layout-budget": budget.Name,
 		"-zoom":          zoomPercentLabel(zoomFactor),
-		"-color":         onOff(*forceColor),
-		"-no-color":      onOff(*noColor),
+		"-color":         onOff(o.Color),
+		"-no-color":      onOff(o.NoColor),
 		"-certs":         loader.certSource,
-		"-mcp":           onOff(*mcpMode),
+		"-mcp":           onOff(o.MCP),
 		"-version":       Version,
 	}
-	b.color = !*noColor
-	b.noJS = *noJS
-	b.noPDF = *noPDF
+	b.color = !o.NoColor
+	b.noJS = o.NoJS
+	b.noPDF = o.NoPDF
 	b.jsMemLimit = jsMemLimit
 	b.layoutBudget = budget
-	b.memLimitBytes = int64(*memLimit) << 20
-	switch strings.ToLower(strings.TrimSpace(*textScale)) {
+	b.memLimitBytes = int64(o.MemLimit) << 20
+	switch strings.ToLower(strings.TrimSpace(o.TextScale)) {
 	case "off", "none", "false":
 		b.noBigText = true
 	}
@@ -303,130 +246,24 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: session init: %v\n", err)
 		return 1
 	}
-	if err := session.Send(protocol.Command{Body: protocol.Navigate{URL: start, Push: true}}); err != nil {
+	if err := session.Send(protocol.Command{Body: protocol.Navigate{URL: o.Target, Push: true}}); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
 		return 1
 	}
-	feState := &frontEndState{clipboard: os.Stdout}
-	reportCrash := func(msg string) {
-		fmt.Fprintf(os.Stderr, "mob3: page engine: %s\n", msg)
-		_ = session.Send(protocol.Command{Body: protocol.ClientError{Message: msg}})
+	loop := &frontend.SessionLoop{
+		Session: session, Presenter: presenter, Keys: keys, Resize: winch, Quit: quitSig,
+		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
+		CellW:        cellW, CellH: cellH, Stderr: os.Stderr,
 	}
-	for {
-		select {
-		case k := <-keys:
-			if k == "eof" {
-				return 0
-			}
-			if k == "esc" || k == "ctrl-c" {
-				// Abort is out of band so a busy script stops even when the
-				// command queue is full. The key still follows for the normal
-				// shell handling.
-				session.Abort()
-			}
-			if err := session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
-				if errors.Is(err, protocol.ErrSessionClosed) {
-					continue
-				}
-				fmt.Fprintf(os.Stderr, "mob3: session key: %v\n", err)
-				return 1
-			}
-		case <-winch:
-			if nw, nh, ok := frontend.TerminalSize(os.Stdout); ok {
-				if err := session.Send(protocol.Command{Body: protocol.Resize{
-					Width: nw, Height: nh, CellW: cellW, CellH: cellH,
-				}}); err != nil {
-					if errors.Is(err, protocol.ErrSessionClosed) {
-						continue
-					}
-					fmt.Fprintf(os.Stderr, "mob3: session resize: %v\n", err)
-					return 1
-				}
-			}
-		case ev, ok := <-session.Events():
-			if !ok {
-				return 0
-			}
-			quit, err := applySessionEvent(presenter, ev, feState, reportCrash)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "mob3: present: %v\n", err)
-				return 1
-			}
-			if quit {
-				return 0
-			}
-		case <-quitSig:
-			return 0
-		}
+	loop.State.Clipboard = os.Stdout
+	if err := loop.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: %v\n", err)
+		return 1
 	}
+	return 0
 }
 
 // Version is the MOB³ release version reported by -version. It is set at
 // build time with -ldflags "-X browser/internal/browser.Version=v1.2.3" and
 // remains "dev" for local builds that do not pass a version.
 var Version = "dev"
-
-// frontEndState is presentation state the event handler updates as it sees
-// session events.
-type frontEndState struct {
-	scroll    int
-	native    bool
-	lastCrash string
-	clipboard interface{ Write([]byte) (int, error) }
-}
-
-// applySessionEvent updates the front-end presentation state and draws frames.
-// It reports whether the session asked the application to exit. Identical
-// consecutive crashes are reported once; a successfully presented frame
-// re-arms reporting.
-func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *frontEndState, report func(string)) (bool, error) {
-	if st == nil {
-		st = &frontEndState{}
-	}
-	switch v := ev.Body.(type) {
-	case protocol.Quit:
-		return true, nil
-	case protocol.Crash:
-		msg := stripTerminalControls(v.Message)
-		if msg == "" || msg == st.lastCrash {
-			break
-		}
-		// The crash line was written over the alternate screen. Force the next
-		// frame to repaint every row so the terminal is usable again and the
-		// console and footer can be reached.
-		presenter.Reset()
-		st.lastCrash = msg
-		if report != nil {
-			report(clipCrashMessage(msg))
-		}
-	case protocol.State:
-		st.scroll = v.Scroll
-		st.native = v.Flags&protocol.StateNativeImages != 0
-	case protocol.Chrome:
-		presenter.SetChrome(v)
-	case protocol.Clipboard:
-		if st.clipboard != nil {
-			_, _ = st.clipboard.Write([]byte(frontend.OSC52(v.Text)))
-		}
-	case protocol.Frame:
-		if err := presenter.Present(v, st.scroll, st.native); err != nil {
-			return false, err
-		}
-		st.lastCrash = ""
-	}
-	return false, nil
-}
-
-// clipCrashMessage keeps the stderr report to roughly one terminal row. The
-// full text still goes to the in-app console through ClientError.
-func clipCrashMessage(msg string) string {
-	const max = 200
-	if len(msg) <= max {
-		return msg
-	}
-	runes := []rune(msg)
-	if len(runes) <= max {
-		return msg
-	}
-	return string(runes[:max]) + "…"
-}

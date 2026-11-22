@@ -192,10 +192,11 @@ published by the Pages build.
 
 ## 4. Repository layout
 
-- `cmd/mob3/main.go` — thin entry point; calls `browser.Run(os.Args[1:])` and
+- `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])` and
   exits with its status.
-- `internal/browser/` — package `browser` with the engine, CLI loop and tests
-  until the boundary migration completes. Nothing under `internal` is imported
+- `internal/app/` — flag parsing, validation and dispatch into the session.
+- `internal/browser/` — package `browser` with the session/engine setup and
+  tests until the boundary migration completes. Nothing under `internal` is imported
   from outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
