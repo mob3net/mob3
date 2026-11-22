@@ -9,7 +9,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"time"
 
 	"browser/internal/frontend"
 	"browser/internal/protocol"
@@ -354,123 +353,6 @@ func Run(args []string) int {
 			return 0
 		}
 	}
-}
-
-func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMemLimit int64, budget LayoutBudget, zoom float64) int {
-	if width <= 0 {
-		if w, _, ok := terminalSize(os.Stdout); ok {
-			width = w
-		} else {
-			width = 100
-		}
-	}
-	setLayoutZoom(zoom)
-	loader.imageViewportPx = cssWidthPx(width)
-	// A PNG has no browsing context, so it shows one page: page 1 unless the
-	// caller selected another. Dumps keep every page.
-	if pdfPage == 0 && pngOut {
-		pdfPage = 1
-	}
-	if pdfPage < 0 {
-		pdfPage = 0
-	}
-	loader.pdfPage = pdfPage
-	page, err := loader.Load(target, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: %s\n", stripTerminalControls(err.Error()))
-		return 1
-	}
-	if page.PDF != nil && pdfPage > 0 && page.PDF.TotalPages > 0 && len(page.PDF.Pages) == 0 {
-		fmt.Fprintf(os.Stderr, "mob3: -pdf-page %d is out of range (document has %d pages)\n", pdfPage, page.PDF.TotalPages)
-		return 1
-	}
-	if !noJS {
-		runner := NewBrowser(width, 3)
-		// NewBrowser resets the package-wide cell ratio; restore the run's zoom
-		// before scripts run so script-visible viewport sizes match the dump.
-		runner.zoom = zoom
-		setLayoutZoom(zoom)
-		runner.noJS = false
-		runner.jsMemLimit = jsMemLimit
-		runner.startJS(page)
-		page.CollectDynamicStyles()
-		if !loader.noImages {
-			loader.loadImages(context.Background(), page.Root, page.Base)
-		}
-	}
-	setLayoutZoom(zoom)
-	root, author := page.Root, page.Author
-	if reader && page.PDF == nil {
-		if extracted, ok := extractReaderPage(page.Root, page.Title); ok {
-			root, author = extracted, readerRules
-		}
-	}
-	deadline := time.Time{}
-	if budget.Time > 0 {
-		deadline = time.Now().Add(budget.Time)
-	}
-	layout := BuildLayoutBudgetDeadline(root, author, width, viewportH, false, dark, deadline, budget)
-	// CSS background images are only known after the style pass, so a dump
-	// loads them in a second image pass and rebuilds the layout once.
-	if !loader.noImages {
-		if loader.loadImages(context.Background(), root, page.Base) {
-			if budget.Time > 0 {
-				deadline = time.Now().Add(budget.Time)
-			}
-			layout = BuildLayoutBudgetDeadline(root, author, width, viewportH, false, dark, deadline, budget)
-		}
-	}
-	full := layout.Height
-	height := full
-	if viewportH > 0 && height > viewportH {
-		height = viewportH
-	}
-	if height < 1 {
-		height = 1
-	}
-	rowCap := 20000
-	if pngOut {
-		rowCap = 2000
-	}
-	if (viewportH == 0 || viewportH >= rowCap) && full > rowCap {
-		if pngOut && page.PDF != nil {
-			fmt.Fprintf(os.Stderr, "mob3: PNG truncated to %d rows; use -pdf-page=N to export one page\n", rowCap)
-		} else if pngOut {
-			fmt.Fprintf(os.Stderr, "mob3: PNG truncated to %d rows\n", rowCap)
-		} else {
-			fmt.Fprintf(os.Stderr, "mob3: output truncated to %d rows\n", rowCap)
-		}
-	}
-	if height > rowCap {
-		height = rowCap
-	}
-	pageFG := RGB(0x1f, 0x23, 0x28)
-	if layout.Body != nil && layout.Body.Style != nil && layout.Body.Style.Color.Set {
-		pageFG = layout.Body.Style.Color
-	}
-	pageBG := layout.PageBG
-	if !pageBG.Set {
-		pageBG = RGB(255, 255, 255)
-	}
-	g := NewGrid(width, height, pageFG, pageBG)
-	PaintLayout(g, layout, 0, 0, height, nil, pageFG)
-	if pngOut {
-		data, err := gridPNG(g, 1)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mob3: png: %v\n", err)
-			return 1
-		}
-		if _, err := os.Stdout.Write(data); err != nil {
-			return 1
-		}
-		return 0
-	}
-	color := !noColor && (forceColor || isTTY(os.Stdout))
-	lines := gridLines(g, color)
-	for _, line := range lines {
-		fmt.Println(line)
-	}
-	return 0
 }
 
 // Version is the MOB³ release version reported by -version. It is set at

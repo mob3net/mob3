@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 5 in progress (native image placement on the front end).**
+Status: **Phase 5 in progress (dump/PNG on the transport).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -81,6 +81,7 @@ network destination.
 | D45 | 2026-11-22 | A `Crash` is reported once per distinct consecutive message: the front end sanitizes it, writes it to stderr once, and sends a `ClientError` command back to the engine. The engine adds `[engine] ...` to the `!` console and sets `Error: page engine — see ! console` in the footer. A successfully presented frame re-arms reporting. | A contained failure must be discoverable without a log file and without flooding the alternate screen on every repaint. The console is engine-owned until chrome moves, so a small command carries the sanitized message back rather than the front end drawing its own overlay. |
 | D46 | 2026-11-22 | If a frame fails validation, `InProc` sends `Crash` and then a best-effort repaired frame: invalid placements are dropped, unsafe glyphs become spaces, bad scaled runs are removed and the result is re-validated. The front end resets its row diff on `Crash`, so the repaired frame is a full repaint. Stderr keeps one short line; the full message goes to the console. | A contained frame error must not leave the alternate screen unusable. Repairing only the recoverable parts preserves the boundary (the result still passes `Validate`) while keeping the toolbar, footer and `!` console reachable. |
 | D47 | 2026-11-22 | Every composed screen goes through `presentGrid`, including the console and its find bar. Direct `flushGrid` output remains only for non-session tests and automation. | The console used to write stdout itself while page frames went through the presenter, leaving the presenter's row cache stale; closing the console then diffed against the old page and left a black screen. One presentation path keeps the cache truthful. |
+| D48 | 2026-11-22 | `-dump` and `-png` run through `protocol.InProc` with a one-shot `dumpHandler`. The handler paints the page once; tall text dumps are split into 512-row frames after painting (preserving fixed/sticky placement and image crops), and PNG uses one frame up to the existing 2000-row cap. The front end writes the output. | This satisfies D13 for the non-interactive render paths without changing a byte of output, and exercises the transport from CLI tests. MCP and automation still call the engine directly. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -341,8 +342,8 @@ Next: 3b, the engine package.
 ### Phase 5 — Transport and lifecycle
 
 - [x] Define `Transport`; implement the in-process transport.
-- [ ] Run every path through it. The interactive session does; `-dump`,
-      `-png`, MCP and automation still call the engine directly.
+- [ ] Run every path through it. The interactive session, `-dump` and `-png`
+      do; MCP and automation still call the engine directly.
 - [x] Engine runs on its own goroutine with its timer loop; front end owns the
       terminal loop.
 - [x] Out-of-band `Abort` so Esc can cancel a busy script. `Aborter` runs the
@@ -471,6 +472,19 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5e deltas
+
+Dump and PNG now cross the transport. The pipeline is unchanged; tall text
+dumps are split after the single full paint so output is byte-identical.
+
+| Metric | Before 5e | After 5e | Delta |
+| --- | --- | --- | --- |
+| Tiny `-dump about:home` | 3.9–5.2 ms | 3.9–5.7 ms | flat |
+| Synthetic `-dump` | 25–36 ms | 23–29 ms | flat/faster |
+| Synthetic `-png` | 30–32 ms | 27–37 ms | noisy |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite and `-race` | pass | pass | no change |
 
 ### Phase 5d deltas
 
@@ -838,3 +852,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5d-fix3 | Crash reporting is discoverable: front end deduplicates identical repeats, prints once to stderr, and sends `ClientError`; engine logs `[engine]` in the `!` console and sets a footer error; a good frame re-arms reporting. Added protocol command, codec round trip and dedup tests. | `go test ./...`, `go vet`, full `-race`, protocol/session/dedup tests | Move chrome composition |
 | 2026-11-22 | 5d-fix4 | Invalid frames now produce `Crash` plus a repaired, re-validated frame; the front end resets the row diff so the next frame clears stderr damage; stderr is clipped to roughly one row. Added repair and unrepairable-frame tests. | `go test ./...`, `go vet`, full `-race`, transport repair tests | Move chrome composition |
 | 2026-11-22 | 5d-fix5 | Console and console find-bar frames now go through `presentGrid`; closing the console repaints instead of leaving a black screen. Added console-frame and presenter-repaint tests; PTY checks with and without kitty placements. | `go test ./...`, `go vet`, full `-race`, console/kitty PTY runs | Move chrome composition |
+| 2026-11-22 | 5e | `-dump` and `-png` moved onto `InProc` with a one-shot dump handler; tall text is split after painting and PNG uses one frame; warnings are Console events. Output hashes unchanged. | `go test ./...`, `go vet`, full `-race`, dump/PNG hashes, tall dump/PNG checks, timing samples | MCP/automation on the transport, then chrome composition |
