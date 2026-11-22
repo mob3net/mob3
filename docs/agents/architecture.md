@@ -142,6 +142,7 @@ Standard Go layout:
 | `internal/host/settings.go` | User agent, search template and decoded-image caps, shared by navigation and image workers. |
 | `internal/host/certs.go` | `system`/`embedded` trust-store selection, the embedded Mozilla CA pool and the stable `CertTransport` wrapper. |
 | `internal/host/network.go` | Request metadata, local-network and mixed-content policy, dialers, pooled transport and HTTP client construction. |
+| `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly stays in the browser for now. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | HTTP(S)/data loading, redirects, gzip, charset decoding, stylesheet discovery, module script collection and import map parsing, image loading, request log and the local-network/mixed-content guards. The cookie jar moved to `internal/host/cookies.go`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |

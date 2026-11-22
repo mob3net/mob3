@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,11 +12,9 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"math"
 	"mime"
 	"net/http"
-	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
@@ -41,7 +38,7 @@ const DefaultSearchURL = "https://html.duckduckgo.com/html/?q=%s"
 
 // errResourceTooLarge reports a response body over maxResourceSize. Reading
 // the extra byte distinguishes an exact-limit body from a truncated one.
-var errResourceTooLarge = errors.New("response exceeds the 12 MiB limit")
+var errResourceTooLarge = host.ErrResourceTooLarge
 
 // imageConfigOK rejects decompression bombs before decoding pixel data.
 func imageConfigOK(cfg image.Config) bool {
@@ -101,6 +98,7 @@ type Loader struct {
 	cache *resourceCache
 	// requests is the in-memory console request log.
 	requests *host.RequestLog
+	fetcher  *host.Fetcher
 }
 
 // setUserAgent replaces the User-Agent used by later requests.
@@ -128,6 +126,7 @@ func NewLoader() *Loader {
 		requests:        host.NewRequestLog(),
 		certSource:      CertSourceSystem,
 	}
+	l.fetcher = &host.Fetcher{Client: l.client, Cache: l.cache.ResourceCache, Settings: l.settings, Requests: l.requests}
 	l.imageBudget = newByteLimiter(imageByteBudget(0))
 	l.setMemoryBudget(effectiveMemoryLimit())
 	return l
@@ -546,152 +545,23 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	return page, nil
 }
 
+// fetchCtx and fetchRequest are the raw host fetch path.
+func (l *Loader) syncFetcher() {
+	if l.fetcher == nil {
+		l.fetcher = &host.Fetcher{}
+	}
+	l.fetcher.Client = l.client
+	l.fetcher.Cache = l.cache.ResourceCache
+	l.fetcher.Settings = l.settings
+	l.fetcher.Requests = l.requests
+}
 func (l *Loader) fetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
-	return l.fetchRequest(ctx, http.MethodGet, u, nil, "")
+	l.syncFetcher()
+	return l.fetcher.FetchCtx(ctx, u)
 }
-
-// recordBlocked adds a blocked request to the console request log.
-func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, err error) {
-	if kind == "" || u == nil {
-		return
-	}
-	reqID, _ := l.startRequest(gen, method, u.String(), kind)
-	l.finishRequest(reqID, gen, 0, 0, 0, err)
-}
-
 func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string) (data []byte, ctype string, final *url.URL, status int, err error) {
-	if err := ctx.Err(); err != nil {
-		return nil, "", u, 0, err
-	}
-	if space := pageSpaceFrom(ctx); space != nil {
-		// The document request records whether its own connection was local,
-		// so an intranet page is not treated like a public one.
-		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-			GotConn: func(info httptrace.GotConnInfo) {
-				if info.Conn != nil && remoteAddrLocal(info.Conn.RemoteAddr()) {
-					space.Local.Store(true)
-				}
-			},
-		})
-	}
-	if method == "" {
-		method = http.MethodGet
-	}
-	if len(body) > maxResourceSize {
-		return nil, "", u, 0, errors.New("request body too large")
-	}
-	meta := requestMetaFrom(ctx)
-	gen := meta.Gen
-	if gen == 0 {
-		gen = l.currentPageGeneration()
-	}
-	if meta.BlockLocal && isLocalURL(u) {
-		// A public document may not address a literal local host. Names that
-		// only resolve locally are caught by localNetworkControl at dial time.
-		l.recordBlocked(gen, method, u, meta.Kind, errLocalNetworkBlocked)
-		return nil, "", u, 0, errLocalNetworkBlocked
-	}
-	if u, err = applyMixedContent(ctx, u); err != nil {
-		l.recordBlocked(gen, method, u, meta.Kind, err)
-		return nil, "", u, 0, err
-	}
-	cacheable := method == http.MethodGet && len(body) == 0 &&
-		(u.Scheme == "http" || u.Scheme == "https") &&
-		(meta.Kind == "css" || meta.Kind == "js")
-	if cacheable {
-		if cached, ct, final, cachedLocal, ok := l.cache.getBytes(u.String()); ok && !(meta.BlockLocal && cachedLocal) {
-			l.recordCacheHit(gen, method, u.String(), meta.Kind, len(cached))
-			finalURL := u
-			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
-				finalURL = parsed
-			}
-			return cached, ct, finalURL, 200, nil
-		}
-	}
-	var reqID int
-	start := time.Now()
-	if meta.Kind != "" {
-		reqID, _ = l.startRequest(gen, method, u.String(), meta.Kind)
-	}
-	defer func() {
-		if reqID != 0 {
-			l.finishRequest(reqID, gen, status, len(data), time.Since(start), err)
-		}
-	}()
-	switch u.Scheme {
-	case "file":
-		return nil, "", u, 0, errors.New("local files are not supported")
-	case "data":
-		b, ct, e := parseDataURI(u.String())
-		return b, ct, u, 200, e
-	case "http", "https":
-		var reader io.Reader
-		if len(body) > 0 {
-			reader = bytes.NewReader(body)
-		}
-		reqCtx := withRequestTarget(ctx, u)
-		req, e := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
-		if e != nil {
-			return nil, "", u, 0, e
-		}
-		if len(body) > 0 {
-			req.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(body)), nil
-			}
-			if contentType == "" {
-				contentType = "application/x-www-form-urlencoded"
-			}
-			req.Header.Set("Content-Type", contentType)
-		}
-		req.Header.Set("User-Agent", l.requestUserAgent())
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
-		req.Header.Set("Accept-Language", "en")
-		client := l.client
-		if meta.PageSecure && meta.Kind != "" && meta.Kind != "doc" {
-			// A secure subresource may not redirect back down to HTTP.
-			c := *l.client
-			c.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return errors.New("too many redirects")
-				}
-				if next.URL.Scheme == "http" {
-					return errMixedContentBlocked
-				}
-				return nil
-			}
-			client = &c
-		}
-		resp, e := client.Do(req)
-		if e != nil {
-			if isLocalNetworkError(e) {
-				e = errLocalNetworkBlocked
-			}
-			if isMixedContentError(e) {
-				e = errMixedContentBlocked
-			}
-			return nil, "", u, 0, e
-		}
-		defer resp.Body.Close()
-		if enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))); enc != "" && enc != "identity" && !resp.Uncompressed {
-			// Go's transport decodes gzip transparently and removes the header.
-			// Anything still marked (brotli, zstd, …) would be parsed as raw
-			// bytes and produce meaningless output, so report it instead.
-			return nil, "", u, resp.StatusCode, errors.New("unsupported Content-Encoding: " + enc)
-		}
-		b, e := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))
-		if e != nil {
-			return nil, "", u, resp.StatusCode, e
-		}
-		if len(b) > maxResourceSize {
-			return nil, "", u, resp.StatusCode, errResourceTooLarge
-		}
-		ctype := resp.Header.Get("Content-Type")
-		if cacheable && resp.StatusCode == 200 && cacheControlAllows(resp.Header.Get("Cache-Control")) {
-			l.cache.putBytes(u.String(), b, ctype, resp.Request.URL.String(), !meta.BlockLocal)
-		}
-		return b, ctype, resp.Request.URL, resp.StatusCode, nil
-	}
-	return nil, "", u, 0, errors.New("unsupported URL scheme: " + u.Scheme)
+	l.syncFetcher()
+	return l.fetcher.FetchRequest(ctx, method, u, body, contentType)
 }
 
 // jsMIMEEssences lists the response types a classic script may execute as.
@@ -738,44 +608,6 @@ func mimeEssence(contentType string) string {
 func isJavaScriptMIME(contentType string) bool {
 	essence := mimeEssence(contentType)
 	return essence == "" || jsMIMEEssences[essence]
-}
-
-func parseDataURI(s string) ([]byte, string, error) {
-	if len(s) > maxResourceSize+maxResourceSize/2 {
-		return nil, "", errors.New("data URI too large")
-	}
-	rest := strings.TrimPrefix(s, "data:")
-	comma := strings.IndexByte(rest, ',')
-	if comma < 0 {
-		return nil, "", errors.New("bad data URI")
-	}
-	meta := rest[:comma]
-	payload := rest[comma+1:]
-	ctype := meta
-	if i := strings.IndexByte(ctype, ';'); i >= 0 {
-		ctype = ctype[:i]
-	}
-	if ctype == "" {
-		ctype = "text/plain"
-	}
-	if strings.Contains(strings.ToLower(meta), ";base64") {
-		b, err := base64.StdEncoding.DecodeString(payload)
-		if err != nil {
-			return nil, "", err
-		}
-		if len(b) > maxResourceSize {
-			return nil, "", errors.New("data URI too large")
-		}
-		return b, ctype, nil
-	}
-	b, err := url.PathUnescape(payload)
-	if err != nil {
-		return nil, "", err
-	}
-	if len(b) > maxResourceSize {
-		return nil, "", errors.New("data URI too large")
-	}
-	return []byte(b), ctype, nil
 }
 
 func decodeBody(data []byte, ctype string) string {
@@ -1822,3 +1654,7 @@ type requestRecord = host.Record
 
 func (l *Loader) imageCapW() int { w, _ := l.imageCap(); return w }
 func (l *Loader) imageCapH() int { _, h := l.imageCap(); return h }
+
+func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, err error) {
+	l.fetcher.RecordBlocked(gen, method, u, kind, err)
+}

@@ -1,0 +1,221 @@
+package host
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptrace"
+	"net/url"
+	"strings"
+	"time"
+)
+
+const maxResourceSize = 12 << 20
+
+var ErrResourceTooLarge = errors.New("resource too large")
+
+// FetchResponse is one raw HTTP/data response.
+type FetchResponse struct {
+	Data        []byte
+	ContentType string
+	FinalURL    *url.URL
+	Status      int
+}
+
+// Fetcher performs raw host requests with policy, cache and request logging.
+type Fetcher struct {
+	Client   *http.Client
+	Cache    *ResourceCache
+	Settings *Settings
+	Requests *RequestLog
+}
+
+func (f *Fetcher) FetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
+	return f.FetchRequest(ctx, http.MethodGet, u, nil, "")
+}
+
+// recordBlocked adds a blocked request to the console request log.
+func (f *Fetcher) RecordBlocked(gen int, method string, u *url.URL, kind string, err error) {
+	if kind == "" || u == nil {
+		return
+	}
+	reqID, _ := f.Requests.Start(gen, method, u.String(), kind)
+	f.Requests.Finish(reqID, gen, 0, 0, 0, err)
+}
+
+func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string) (data []byte, ctype string, final *url.URL, status int, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", u, 0, err
+	}
+	if space := PageSpaceFrom(ctx); space != nil {
+		// The document request records whether its own connection was local,
+		// so an intranet page is not treated like a public one.
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) {
+				if info.Conn != nil && RemoteAddrLocal(info.Conn.RemoteAddr()) {
+					space.Local.Store(true)
+				}
+			},
+		})
+	}
+	if method == "" {
+		method = http.MethodGet
+	}
+	if len(body) > maxResourceSize {
+		return nil, "", u, 0, errors.New("request body too large")
+	}
+	meta := RequestMetaFrom(ctx)
+	gen := meta.Gen
+	if gen == 0 {
+		gen = f.Requests.CurrentPageGeneration()
+	}
+	if meta.BlockLocal && IsLocalURL(u) {
+		// A public document may not address a literal local host. Names that
+		// only resolve locally are caught by localNetworkControl at dial time.
+		f.RecordBlocked(gen, method, u, meta.Kind, ErrLocalNetworkBlocked)
+		return nil, "", u, 0, ErrLocalNetworkBlocked
+	}
+	if u, err = ApplyMixedContent(ctx, u); err != nil {
+		f.RecordBlocked(gen, method, u, meta.Kind, err)
+		return nil, "", u, 0, err
+	}
+	cacheable := method == http.MethodGet && len(body) == 0 &&
+		(u.Scheme == "http" || u.Scheme == "https") &&
+		(meta.Kind == "css" || meta.Kind == "js")
+	if cacheable {
+		if cached, ct, final, cachedLocal, ok := f.Cache.GetBytes(u.String()); ok && !(meta.BlockLocal && cachedLocal) {
+			f.Requests.RecordCacheHit(gen, method, u.String(), meta.Kind, len(cached))
+			finalURL := u
+			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
+				finalURL = parsed
+			}
+			return cached, ct, finalURL, 200, nil
+		}
+	}
+	var reqID int
+	start := time.Now()
+	if meta.Kind != "" {
+		reqID, _ = f.Requests.Start(gen, method, u.String(), meta.Kind)
+	}
+	defer func() {
+		if reqID != 0 {
+			f.Requests.Finish(reqID, gen, status, len(data), time.Since(start), err)
+		}
+	}()
+	switch u.Scheme {
+	case "file":
+		return nil, "", u, 0, errors.New("local files are not supported")
+	case "data":
+		b, ct, e := ParseDataURI(u.String())
+		return b, ct, u, 200, e
+	case "http", "https":
+		var reader io.Reader
+		if len(body) > 0 {
+			reader = bytes.NewReader(body)
+		}
+		reqCtx := WithRequestTarget(ctx, u)
+		req, e := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
+		if e != nil {
+			return nil, "", u, 0, e
+		}
+		if len(body) > 0 {
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(body)), nil
+			}
+			if contentType == "" {
+				contentType = "application/x-www-form-urlencoded"
+			}
+			req.Header.Set("Content-Type", contentType)
+		}
+		req.Header.Set("User-Agent", f.Settings.UserAgent())
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
+		req.Header.Set("Accept-Language", "en")
+		client := f.Client
+		if meta.PageSecure && meta.Kind != "" && meta.Kind != "doc" {
+			// A secure subresource may not redirect back down to HTTP.
+			c := *f.Client
+			c.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("too many redirects")
+				}
+				if next.URL.Scheme == "http" {
+					return ErrMixedContentBlocked
+				}
+				return nil
+			}
+			client = &c
+		}
+		resp, e := client.Do(req)
+		if e != nil {
+			if IsLocalNetworkError(e) {
+				e = ErrLocalNetworkBlocked
+			}
+			if IsMixedContentError(e) {
+				e = ErrMixedContentBlocked
+			}
+			return nil, "", u, 0, e
+		}
+		defer resp.Body.Close()
+		if enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))); enc != "" && enc != "identity" && !resp.Uncompressed {
+			// Go's transport decodes gzip transparently and removes the header.
+			// Anything still marked (brotli, zstd, …) would be parsed as raw
+			// bytes and produce meaningless output, so report it instead.
+			return nil, "", u, resp.StatusCode, errors.New("unsupported Content-Encoding: " + enc)
+		}
+		b, e := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))
+		if e != nil {
+			return nil, "", u, resp.StatusCode, e
+		}
+		if len(b) > maxResourceSize {
+			return nil, "", u, resp.StatusCode, ErrResourceTooLarge
+		}
+		ctype := resp.Header.Get("Content-Type")
+		if cacheable && resp.StatusCode == 200 && CacheControlAllows(resp.Header.Get("Cache-Control")) {
+			f.Cache.PutBytes(u.String(), b, ctype, resp.Request.URL.String(), !meta.BlockLocal)
+		}
+		return b, ctype, resp.Request.URL, resp.StatusCode, nil
+	}
+	return nil, "", u, 0, errors.New("unsupported URL scheme: " + u.Scheme)
+}
+
+// ParseDataURI decodes a data: URL.
+func ParseDataURI(s string) ([]byte, string, error) {
+	if len(s) > maxResourceSize+maxResourceSize/2 {
+		return nil, "", errors.New("data URI too large")
+	}
+	rest := strings.TrimPrefix(s, "data:")
+	comma := strings.IndexByte(rest, ',')
+	if comma < 0 {
+		return nil, "", errors.New("bad data URI")
+	}
+	meta := rest[:comma]
+	payload := rest[comma+1:]
+	ctype := meta
+	if i := strings.IndexByte(ctype, ';'); i >= 0 {
+		ctype = ctype[:i]
+	}
+	if ctype == "" {
+		ctype = "text/plain"
+	}
+	if strings.Contains(strings.ToLower(meta), ";base64") {
+		b, err := base64.StdEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, "", err
+		}
+		if len(b) > maxResourceSize {
+			return nil, "", errors.New("data URI too large")
+		}
+		return b, ctype, nil
+	}
+	b, err := url.PathUnescape(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(b) > maxResourceSize {
+		return nil, "", errors.New("data URI too large")
+	}
+	return []byte(b), ctype, nil
+}

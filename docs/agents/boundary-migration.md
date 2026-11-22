@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 4b in progress (cache, cookies, request log, settings, TLS/HTTP in the host).**
+Status: **Phase 4b in progress (raw Fetch in the host).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -69,6 +69,7 @@ network destination.
 | D33 | 2026-11-22 | Move user-agent, search template and image pixel caps into `host.Settings` with one mutex; Loader delegates through its existing methods. Flags and view options stay on the session for now. | Settings are host policy shared by navigation and image workers; the mutex removes the old ad-hoc locking. TLS/HTTP transport and certs follow. |
 | D34 | 2026-11-22 | Move the TLS trust-store selection, embedded CA pool and stable `CertTransport` into `internal/host`; keep `newHTTPTransport` and the dial guard in the browser until the network broker. | The cert store is host policy and independent of parsing. The transport construction still needs the browser’s local-network dial guard, so it remains for the next slice. |
 | D35 | 2026-11-22 | Move request metadata, local-network/mixed-content guards, dialers, `NewHTTPTransport` and `NewHTTPClient` into `internal/host`; browser keeps thin wrappers for fetch/tests. | These are host network policy and policy enforcement; the engine only needs brokered requests. The remaining load/parse split is the next step. |
+| D36 | 2026-11-22 | Move the raw request path (`Fetcher`, data URLs, size/encoding checks, cache and request accounting) into `internal/host`. `Loader.fetchCtx/fetchRequest` are delegates that sync the host client/cache/settings/log before each call. Page assembly and parsing remain in the browser for the next slice. | Fetching is host policy and I/O; parsing is engine work. The delegate keeps test-injected clients working while the assembly split is prepared. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -137,6 +138,7 @@ which part goes where.
 | Loader settings fields | `internal/host/settings.go` | User agent, search template and image pixel caps behind one lock. |
 | `certs.go` | `internal/host/certs.go` | Cert source selection, embedded CA pool and stable transport. |
 | network guard and transport construction | `internal/host/network.go` | Request metadata, local/mixed-content policy, dialers, `NewHTTPTransport` and `NewHTTPClient`. |
+| raw request path | `internal/host/fetch.go` | `Fetcher`, data URLs, size/encoding checks, cache and request accounting; Loader delegates. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -177,7 +179,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4b-5) | Engine cannot open sockets or read cookies |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4b-6) | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -614,6 +616,18 @@ Request policy, dialers and transport/client construction moved to
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Full test suite | pass | pass | no change |
 
+### Phase 4b-6 deltas
+
+The raw HTTP/data request path moved to `internal/host`; page parsing and
+assembly remain in the browser. No draw-path change.
+
+| Metric | Before 4b-6 | After 4b-6 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | unchanged | unchanged | flat |
+| Content paint+blit | unchanged | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -690,3 +704,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4b-3 | User agent, search template and image caps moved to `host.Settings`; Loader delegates and tests use accessors; all green | `go test ./...`, `go vet`, `-race` on config/image/frame, dump/PNG hashes | 4b-4: TLS/HTTP transport |
 | 2026-11-22 | 4b-4 | Cert source selection, embedded CA pool and `CertTransport` moved to `internal/host`; browser keeps transport construction/dial guard; all tests and hashes green | `go test ./...`, `go vet`, `-race` on cert/config/frame, dump/PNG hashes | 4b-5: HTTP client/dial guard |
 | 2026-11-22 | 4b-5 | Request metadata, local/mixed-content guards, dialers, `NewHTTPTransport`/`NewHTTPClient` moved to `internal/host`; browser wrappers; all tests and hashes green | `go test ./...`, `go vet`, `-race` on network/cert/frame, dump/PNG hashes | 4b-6: split Loader into raw Fetch + engine parse |
+| 2026-11-22 | 4b-6 | Raw `Fetcher` moved to `internal/host` (data URLs, limits, encoding, cache, request log); Loader delegates; page assembly still browser; all tests and hashes green | `go test ./...`, `go vet`, `-race` on fetch/network/frame, dump/PNG hashes | Split page assembly/parse into engine |
