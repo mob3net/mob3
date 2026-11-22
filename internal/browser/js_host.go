@@ -124,10 +124,10 @@ func (h browserJSHost) MIMEEssence(contentType string) string {
 
 func (h browserJSHost) CheckRequest(ctx context.Context, u *url.URL) error {
 	meta := requestMetaFrom(ctx)
-	if meta.blockLocal && isLocalURL(u) {
+	if meta.BlockLocal && isLocalURL(u) {
 		return errLocalNetworkBlocked
 	}
-	if meta.pageSecure && u.Scheme == "http" {
+	if meta.PageSecure && u.Scheme == "http" {
 		return errMixedContentBlocked
 	}
 	return nil

@@ -1,10 +1,8 @@
 package browser
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"net/http"
-	"time"
 
 	"browser/internal/host"
 )
@@ -46,23 +44,7 @@ const (
 	CertSourceEmbedded = host.CertSourceEmbedded
 )
 
-func newHTTPTransport(pool *x509.CertPool) *http.Transport {
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           localNetworkDialContext,
-		MaxIdleConns:          16,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   15 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
-		// A custom TLS config disables the automatic HTTP/2 setup, so ask for
-		// it explicitly and keep it on for both trust stores.
-		ForceAttemptHTTP2: true,
-	}
-	if pool != nil {
-		tr.TLSClientConfig = &tls.Config{RootCAs: pool}
-	}
-	return tr
-}
+func newHTTPTransport(pool *x509.CertPool) *http.Transport { return host.NewHTTPTransport(pool) }
 
 var embeddedCACertPool = host.EmbeddedCACertPool
 

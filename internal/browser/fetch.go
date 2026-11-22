@@ -16,15 +16,12 @@ import (
 	"io"
 	"math"
 	"mime"
-	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"syscall"
 	"time"
 
 	_ "golang.org/x/image/bmp"
@@ -106,225 +103,6 @@ type Loader struct {
 	requests *host.RequestLog
 }
 
-type requestMetaKey struct{}
-
-type requestMeta struct {
-	gen  int
-	kind string
-	// pageURL is the document that initiated the request. blockLocal marks a
-	// request from a public document that may therefore not reach loopback,
-	// private or link-local addresses. targetURL lets the dial guard tell a
-	// direct connection from one made through an HTTP proxy. pageSecure marks
-	// an HTTPS document, whose HTTP subresources are upgraded or blocked.
-	pageURL    string
-	targetURL  string
-	blockLocal bool
-	pageSecure bool
-}
-
-// pageSpace records whether the document's own connection landed on a local
-// address, so an intranet page keeps access to its other local hosts while a
-// public page does not gain it.
-type pageSpace struct {
-	local atomic.Bool
-}
-
-type pageSpaceKey struct{}
-
-func withPageSpace(ctx context.Context, space *pageSpace) context.Context {
-	return context.WithValue(ctx, pageSpaceKey{}, space)
-}
-
-func pageSpaceFrom(ctx context.Context) *pageSpace {
-	space, _ := ctx.Value(pageSpaceKey{}).(*pageSpace)
-	return space
-}
-
-// withRequestPage records the initiating document and whether it may reach
-// local-network addresses.
-func withRequestPage(ctx context.Context, page *url.URL, pageLocal bool) context.Context {
-	m := requestMetaFrom(ctx)
-	if page != nil {
-		m.pageURL = page.String()
-		m.blockLocal = (page.Scheme == "http" || page.Scheme == "https") && !pageLocal
-		m.pageSecure = page.Scheme == "https"
-	}
-	return context.WithValue(ctx, requestMetaKey{}, m)
-}
-
-// withRequestTarget records the URL a request will contact, so the dial guard
-// can skip a connection that goes to an HTTP proxy instead of the target.
-func withRequestTarget(ctx context.Context, target *url.URL) context.Context {
-	if target == nil {
-		return ctx
-	}
-	m := requestMetaFrom(ctx)
-	m.targetURL = target.String()
-	return context.WithValue(ctx, requestMetaKey{}, m)
-}
-
-// requestUsesProxy reports whether the environment routes this URL through an
-// HTTP proxy. The proxy resolves the target, so the local-network guard cannot
-// inspect it and must not mistake the proxy address for the target.
-func requestUsesProxy(raw string) bool {
-	if raw == "" {
-		return false
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return false
-	}
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return false
-	}
-	proxy, err := http.ProxyFromEnvironment(req)
-	return err == nil && proxy != nil
-}
-
-// errLocalNetworkBlocked is returned when a public document tries to reach a
-// loopback, private or link-local address.
-var errLocalNetworkBlocked = errors.New("blocked local-network request")
-
-// errMixedContentBlocked is returned when an HTTPS document requests a
-// blockable HTTP subresource, or a redirect tries to downgrade one.
-var errMixedContentBlocked = errors.New("blocked mixed content: HTTP subresource on an HTTPS page")
-
-// applyMixedContent upgrades an HTTP image requested by an HTTPS document to
-// HTTPS, and rejects every other HTTP subresource. Upgraded images are not
-// retried over HTTP if the HTTPS request fails.
-func applyMixedContent(ctx context.Context, u *url.URL) (*url.URL, error) {
-	meta := requestMetaFrom(ctx)
-	if u == nil || !meta.pageSecure || u.Scheme != "http" {
-		return u, nil
-	}
-	if meta.kind == "img" && net.ParseIP(u.Hostname()) == nil {
-		up := *u
-		up.Scheme = "https"
-		return &up, nil
-	}
-	return u, errMixedContentBlocked
-}
-
-func isMixedContentError(err error) bool {
-	return errors.Is(err, errMixedContentBlocked)
-}
-
-// isLocalHost reports whether a URL host is a loopback, private, link-local or
-// local name. Hosts that only resolve locally are caught after DNS resolution
-// by localNetworkControl.
-func isLocalHost(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if host == "" {
-		return false
-	}
-	if i := strings.IndexByte(host, '%'); i >= 0 { // IPv6 zone
-		host = host[:i]
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return isLocalIP(ip)
-	}
-	return host == "localhost" || strings.HasSuffix(host, ".localhost") ||
-		host == "local" || strings.HasSuffix(host, ".local")
-}
-
-func isLocalIP(ip net.IP) bool {
-	if ip == nil {
-		return false
-	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
-		return true
-	}
-	if ip4 := ip.To4(); ip4 != nil {
-		switch {
-		case ip4[0] == 100 && ip4[1]&0xc0 == 0x40: // 100.64.0.0/10 CGNAT
-			return true
-		case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0: // 192.0.0.0/24
-			return true
-		case ip4[0] == 198 && ip4[1]&0xfe == 18: // 198.18.0.0/15
-			return true
-		case ip4[0] >= 240: // 240.0.0.0/4 reserved
-			return true
-		}
-	}
-	return false
-}
-
-func isLocalURL(u *url.URL) bool {
-	if u == nil || (u.Scheme != "http" && u.Scheme != "https") {
-		return false
-	}
-	return isLocalHost(u.Hostname())
-}
-
-// localNetworkControl runs after DNS resolution and before the connect, so a
-// public name that resolves to a local address is still caught.
-func localNetworkControl(network, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil
-	}
-	if isLocalHost(host) {
-		return errLocalNetworkBlocked
-	}
-	return nil
-}
-
-var (
-	plainDialer = &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	guardedDialer = &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		Control:   localNetworkControl,
-	}
-)
-
-// localNetworkDialContext picks the guarded dialer for requests a public
-// document initiated. The transport passes the request context through, so
-// the request metadata survives into the dial.
-func localNetworkDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	m := requestMetaFrom(ctx)
-	if m.blockLocal && !requestUsesProxy(m.targetURL) {
-		return guardedDialer.DialContext(ctx, network, addr)
-	}
-	return plainDialer.DialContext(ctx, network, addr)
-}
-
-func isLocalNetworkError(err error) bool {
-	return errors.Is(err, errLocalNetworkBlocked)
-}
-
-// remoteAddrLocal reports whether a completed connection's peer is local.
-func remoteAddrLocal(addr net.Addr) bool {
-	if addr == nil {
-		return false
-	}
-	host, _, err := net.SplitHostPort(addr.String())
-	if err != nil {
-		return false
-	}
-	return isLocalHost(host)
-}
-
-func withRequestMeta(ctx context.Context, gen int, kind string) context.Context {
-	return context.WithValue(ctx, requestMetaKey{}, requestMeta{gen: gen, kind: kind})
-}
-
-func withRequestKind(ctx context.Context, kind string) context.Context {
-	m, _ := ctx.Value(requestMetaKey{}).(requestMeta)
-	m.kind = kind
-	return context.WithValue(ctx, requestMetaKey{}, m)
-}
-
-func requestMetaFrom(ctx context.Context) requestMeta {
-	m, _ := ctx.Value(requestMetaKey{}).(requestMeta)
-	return m
-}
-
 // setUserAgent replaces the User-Agent used by later requests.
 func (l *Loader) setUserAgent(ua string)       { l.settings.SetUserAgent(ua) }
 func (l *Loader) requestUserAgent() string     { return l.settings.UserAgent() }
@@ -344,21 +122,11 @@ func NewLoader() *Loader {
 		cookies:         jar,
 		noImages:        true,
 		imageViewportPx: 800,
-		client: &http.Client{
-			Jar:       jar,
-			Transport: tr,
-			Timeout:   45 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return errors.New("too many redirects")
-				}
-				return nil
-			},
-		},
-		settings:   host.NewSettings(defaultUserAgent, DefaultSearchURL),
-		transport:  tr,
-		requests:   host.NewRequestLog(),
-		certSource: CertSourceSystem,
+		client:          host.NewHTTPClient(jar, tr),
+		settings:        host.NewSettings(defaultUserAgent, DefaultSearchURL),
+		transport:       tr,
+		requests:        host.NewRequestLog(),
+		certSource:      CertSourceSystem,
 	}
 	l.imageBudget = newByteLimiter(imageByteBudget(0))
 	l.setMemoryBudget(effectiveMemoryLimit())
@@ -481,7 +249,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		return nil, err
 	}
 	pageLocal := isLocalHost(finalURL.Hostname()) ||
-		(space.local.Load() && !requestUsesProxy(finalURL.String()))
+		(space.Local.Load() && !requestUsesProxy(finalURL.String()))
 	// Every subresource fetch inherits this context, so the guard knows
 	// whether the document itself came from a local address.
 	ctx = withRequestPage(ctx, finalURL, pageLocal)
@@ -801,7 +569,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 			GotConn: func(info httptrace.GotConnInfo) {
 				if info.Conn != nil && remoteAddrLocal(info.Conn.RemoteAddr()) {
-					space.local.Store(true)
+					space.Local.Store(true)
 				}
 			},
 		})
@@ -813,26 +581,26 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		return nil, "", u, 0, errors.New("request body too large")
 	}
 	meta := requestMetaFrom(ctx)
-	gen := meta.gen
+	gen := meta.Gen
 	if gen == 0 {
 		gen = l.currentPageGeneration()
 	}
-	if meta.blockLocal && isLocalURL(u) {
+	if meta.BlockLocal && isLocalURL(u) {
 		// A public document may not address a literal local host. Names that
 		// only resolve locally are caught by localNetworkControl at dial time.
-		l.recordBlocked(gen, method, u, meta.kind, errLocalNetworkBlocked)
+		l.recordBlocked(gen, method, u, meta.Kind, errLocalNetworkBlocked)
 		return nil, "", u, 0, errLocalNetworkBlocked
 	}
 	if u, err = applyMixedContent(ctx, u); err != nil {
-		l.recordBlocked(gen, method, u, meta.kind, err)
+		l.recordBlocked(gen, method, u, meta.Kind, err)
 		return nil, "", u, 0, err
 	}
 	cacheable := method == http.MethodGet && len(body) == 0 &&
 		(u.Scheme == "http" || u.Scheme == "https") &&
-		(meta.kind == "css" || meta.kind == "js")
+		(meta.Kind == "css" || meta.Kind == "js")
 	if cacheable {
-		if cached, ct, final, cachedLocal, ok := l.cache.getBytes(u.String()); ok && !(meta.blockLocal && cachedLocal) {
-			l.recordCacheHit(gen, method, u.String(), meta.kind, len(cached))
+		if cached, ct, final, cachedLocal, ok := l.cache.getBytes(u.String()); ok && !(meta.BlockLocal && cachedLocal) {
+			l.recordCacheHit(gen, method, u.String(), meta.Kind, len(cached))
 			finalURL := u
 			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
 				finalURL = parsed
@@ -842,8 +610,8 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	}
 	var reqID int
 	start := time.Now()
-	if meta.kind != "" {
-		reqID, _ = l.startRequest(gen, method, u.String(), meta.kind)
+	if meta.Kind != "" {
+		reqID, _ = l.startRequest(gen, method, u.String(), meta.Kind)
 	}
 	defer func() {
 		if reqID != 0 {
@@ -879,7 +647,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
 		req.Header.Set("Accept-Language", "en")
 		client := l.client
-		if meta.pageSecure && meta.kind != "" && meta.kind != "doc" {
+		if meta.PageSecure && meta.Kind != "" && meta.Kind != "doc" {
 			// A secure subresource may not redirect back down to HTTP.
 			c := *l.client
 			c.CheckRedirect = func(next *http.Request, via []*http.Request) error {
@@ -919,7 +687,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 		}
 		ctype := resp.Header.Get("Content-Type")
 		if cacheable && resp.StatusCode == 200 && cacheControlAllows(resp.Header.Get("Cache-Control")) {
-			l.cache.putBytes(u.String(), b, ctype, resp.Request.URL.String(), !meta.blockLocal)
+			l.cache.putBytes(u.String(), b, ctype, resp.Request.URL.String(), !meta.BlockLocal)
 		}
 		return b, ctype, resp.Request.URL, resp.StatusCode, nil
 	}
@@ -1566,7 +1334,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, gen int) (ima
 	}
 	key := u.String()
 	meta := requestMetaFrom(ctx)
-	if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.blockLocal && cachedLocal) {
+	if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.BlockLocal && cachedLocal) {
 		l.recordCacheHit(gen, "GET", key, "img", rawSize)
 		return cached, true
 	}
@@ -1578,7 +1346,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, gen int) (ima
 	if err != nil {
 		return nil, false
 	}
-	l.cache.putImage(key, img, len(data), !meta.blockLocal)
+	l.cache.putImage(key, img, len(data), !meta.BlockLocal)
 	return img, true
 }
 
@@ -1592,7 +1360,7 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask) <-cha
 		return out
 	}
 	ctx = withRequestKind(ctx, "img")
-	gen := requestMetaFrom(ctx).gen
+	gen := requestMetaFrom(ctx).Gen
 	if gen == 0 {
 		gen = l.currentPageGeneration()
 	}
@@ -1663,7 +1431,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 		return false
 	}
 	meta := requestMetaFrom(ctx)
-	gen := meta.gen
+	gen := meta.Gen
 	if gen == 0 {
 		gen = l.currentPageGeneration()
 	}
@@ -1694,7 +1462,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 			continue
 		}
 		key := u.String()
-		if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.blockLocal && cachedLocal) {
+		if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.BlockLocal && cachedLocal) {
 			l.recordCacheHit(gen, "GET", key, "img", rawSize)
 			n.Img = cached
 			continue
@@ -1724,7 +1492,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 				return
 			}
 			node.Img = img
-			l.cache.putImage(key, img, len(data), !meta.blockLocal)
+			l.cache.putImage(key, img, len(data), !meta.BlockLocal)
 		}(n, u)
 	}
 	wg.Wait()
