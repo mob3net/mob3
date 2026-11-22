@@ -472,13 +472,6 @@ func (b *Browser) ensureFocusVisible() {
 
 // isRangeInput reports an interactive range slider.
 
-func isFileInput(n *Node) bool {
-	if n == nil || n.Type != ElementNode || n.Tag != "input" || isDisabledControl(n) {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(n.Attr("type")), "file")
-}
-
 func isSubmitControl(n *Node) bool {
 	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
 		return false
@@ -594,15 +587,6 @@ func (b *Browser) fireSelectChange(sel *Node) {
 		b.js.fireNodeEvent(sel, "change")
 	}
 	b.rebuild()
-}
-
-func nearestForm(n *Node) *Node {
-	for p := n; p != nil; p = p.Parent {
-		if p.Tag == "form" {
-			return p
-		}
-	}
-	return nil
 }
 
 func (b *Browser) clearInputFocus() {

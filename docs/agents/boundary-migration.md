@@ -62,6 +62,7 @@ network destination.
 | D26 | 2026-11-22 | Move the PDF object lexer, text extractor and document assembly to `internal/engine`; keep `Loader.loadPDFPage` in the browser. JS/DOM cannot move yet: `jsRuntime` holds `*Browser` and reaches the loader, cookies, dialogs and forms directly. | PDF is a self-contained engine leaf. JS needs the session/host split first, so the next step is that split rather than a forced JS move. |
 | D27 | 2026-11-22 | `jsRuntime` no longer holds `*Browser`; it depends on a narrow `jsHost` interface (viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookies, fetch, request accounting, import queue). A `browserJSHost` adapter implements it. | This is the first session/host split step. The interface still lives in the browser and exposes brokered I/O, but JS can no longer reach arbitrary Browser fields. Next: move the contract to engine/protocol and broker the loader calls. |
 | D28 | 2026-11-22 | Move `JSHost` and `ImportTask` to `internal/engine`; move `Page`/`Script` and the page style collection there too. The browser adapter still implements the contract, and `js*.go` stays in the browser until its tests can move with it. | The engine now owns the session-facing contract and the document model. JS code itself still depends on browser test surfaces and the loader broker, so moving it now would break test ownership and expose host types. |
+| D29 | 2026-11-22 | Extend `JSHost` with request-context/decode/MIME brokering, and move `NearestForm`/`IsFileInput` into the engine. Do not move `js*.go` yet. | `js.go` still mixes runtime code with Browser lifecycle (`startJS`, timer loop, import completion) and its tests read unexported runtime state. That split must happen before the files move, or the tests and event loop move with them. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -515,6 +516,18 @@ and layout are unchanged; JS still runs in the browser behind the contract.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Full test suite | pass | pass | no change |
 
+### Phase 4a-3 deltas
+
+The broker surface gained request context, body decoding and JS MIME checks;
+form predicates moved to the engine. This is not on the draw path.
+
+| Metric | Before 4a-3 | After 4a-3 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | unchanged | unchanged | flat |
+| Content paint+blit | unchanged | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -584,3 +597,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 3b4a | PDF object lexer, text extractor and document assembly moved to `internal/engine`; browser `pdf_compat.go` and `Loader.loadPDFPage` remain; tests and hashes green | `go test ./...`, `go vet`, `-race` on PDF/frame, dump/PNG hashes | Next: session/host split before JS |
 | 2026-11-22 | 4a | `jsRuntime` now holds `jsHost`, not `*Browser`; adapter covers viewport/layout/scroll/focus/hit-testing/dialogs/status/forms/cookies/fetch/requests/import queue; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/console/frame, dump/PNG hashes, draw benchmarks | Move the host contract and JS to engine |
 | 2026-11-22 | 4a-2 | `JSHost`/`ImportTask` moved to `internal/engine`; `Page`/`Script` and page style collection moved; browser adapter remains; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/page/frame, dump/PNG hashes | Move `js*.go` and its tests |
+| 2026-11-22 | 4a-3 | `JSHost` gained request-context/decode/MIME brokering; `NearestForm`/`IsFileInput` moved to the engine; JS file move deferred after finding the lifecycle/test coupling | `go test ./...`, `go vet`, `-race` on JS/form/frame, dump/PNG hashes | Split the JS event loop and tests before moving `js*.go` |

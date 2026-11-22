@@ -52,6 +52,10 @@ type JSHost interface {
 
 	UserAgent() string
 	Interactive() bool
+	RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context
+	DecodeBody(data []byte, contentType string) string
+	IsJavaScriptMIME(contentType string) bool
+	MIMEEssence(contentType string) string
 	DocumentCookies(u *url.URL) []*http.Cookie
 	SetDocumentCookie(u *url.URL, c *http.Cookie)
 	FetchResource(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error)

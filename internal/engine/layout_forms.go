@@ -831,3 +831,19 @@ func IsRangeInput(n *Node) bool {
 		strings.EqualFold(strings.TrimSpace(n.Attr("type")), "range") &&
 		!IsDisabledControl(n)
 }
+
+func NearestForm(n *Node) *Node {
+	for p := n; p != nil; p = p.Parent {
+		if p.Tag == "form" {
+			return p
+		}
+	}
+	return nil
+}
+
+func IsFileInput(n *Node) bool {
+	if n == nil || n.Type != ElementNode || n.Tag != "input" || IsDisabledControl(n) {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(n.Attr("type")), "file")
+}

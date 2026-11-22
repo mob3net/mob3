@@ -103,3 +103,21 @@ func (h browserJSHost) HTTPClient() *http.Client {
 	}
 	return h.b.loader.client
 }
+
+func (h browserJSHost) RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context {
+	ctx := withRequestKind(context.Background(), kind)
+	ctx = withRequestPage(ctx, page, pageLocal)
+	if target != nil {
+		ctx = withRequestTarget(ctx, target)
+	}
+	return ctx
+}
+func (h browserJSHost) DecodeBody(data []byte, contentType string) string {
+	return decodeBody(data, contentType)
+}
+func (h browserJSHost) IsJavaScriptMIME(contentType string) bool {
+	return isJavaScriptMIME(contentType)
+}
+func (h browserJSHost) MIMEEssence(contentType string) string {
+	return mimeEssence(contentType)
+}

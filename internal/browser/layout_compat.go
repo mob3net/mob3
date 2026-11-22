@@ -136,3 +136,6 @@ func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int
 func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 	return engine.MeasureInlineText(s, whiteSpace, sc)
 }
+
+func nearestForm(n *Node) *Node { return engine.NearestForm(n) }
+func isFileInput(n *Node) bool  { return engine.IsFileInput(n) }
