@@ -20,8 +20,8 @@
 #
 # macOS signing is optional and only runs when the corresponding repository
 # secrets are configured. Without them the archives are published unsigned.
-# See AGENTS.md for the secret names and README.md for the user-facing install
-# instructions.
+# See docs/agents/build-release.md for the secret names and README.md for the
+# user-facing install instructions.
 
 name: Release binaries
 

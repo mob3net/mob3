@@ -56,7 +56,7 @@ idle CPU, run the browser inside a pseudo terminal
 and compare fields 14+15 of `/proc/<pid>/stat` (utime + stime) over a window: an
 idle page must not consume measurable CPU. Per-phase parse, layout and live-heap
 attribution comes from a temporary `zz_*_test.go` benchmark following the
-debugging recipe in `AGENTS.md`; delete it afterwards.
+debugging recipe in `docs/agents/debugging.md`; delete it afterwards.
 
 ## Documentation
 
@@ -67,6 +67,9 @@ debugging recipe in `AGENTS.md`; delete it afterwards.
   `docs/cli.md` and `docs/keys.md` must stay in sync.
 - `docs/automation.md` documents the MCP tools. Tool names come from
   `mcpToolDefinitions()` in `internal/browser/mcp.go`.
+- `AGENTS.md` is the agent entry point; domain-specific engine, UI, network,
+  build and JS decisions live under `docs/agents/` and are not published by the
+  site build.
 - The GitHub Pages site is generated from `README.md` and `docs/*.md` by
   `.github/pages/build.sh`, using pinned `marked`.
 
@@ -101,7 +104,8 @@ screenshot changes.
 | `vendor/` | Committed Go dependencies |
 | `bin/` | Local build output (ignored) |
 
-Key engine files are listed in `AGENTS.md`. The MCP and automation split is:
+Key engine files are listed in `docs/agents/architecture.md`. The MCP and
+automation split is:
 
 - `automation.go` — headless browser commands and text snapshots
 - `mcp.go` — MCP/JSON-RPC framing; delegates to `Automation.RunCommand`
@@ -120,5 +124,5 @@ Key engine files are listed in `AGENTS.md`. The MCP and automation split is:
 
 Read `CONTRIBUTING.md` before opening a pull request. Contributions require the
 broad license-grant CLA so the project can remain available under AGPL-3.0-only
-or a commercial license. Keep the working agreement and engine decisions in
-`AGENTS.md` current whenever behaviour changes.
+or a commercial license. Keep the working agreement in `AGENTS.md` and the
+engine decisions under `docs/agents/` current whenever behaviour changes.
