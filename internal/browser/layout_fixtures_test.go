@@ -1,7 +1,10 @@
 package browser
 
 import (
+	"bytes"
 	"flag"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +119,25 @@ func TestLayoutImportedCSSGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	pageFile := filepath.Join(dir, "page.html")
-	page, err := NewLoader().Load("file://"+pageFile, nil)
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		rel := filepath.FromSlash(strings.TrimPrefix(req.URL.Path, "/"))
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			return nil, err
+		}
+		h := make(http.Header)
+		if strings.HasSuffix(rel, ".css") {
+			h.Set("Content-Type", "text/css")
+		} else {
+			h.Set("Content-Type", "text/html")
+		}
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(bytes.NewReader(data)), Request: req,
+		}, nil
+	})}
+	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

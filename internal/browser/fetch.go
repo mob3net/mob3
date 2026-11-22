@@ -20,8 +20,6 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptrace"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -523,6 +521,9 @@ func resolveURL(input string, base *url.URL, searchURL string) (*url.URL, error)
 		return nil, errors.New("empty URL")
 	}
 	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "file:") {
+		return nil, errors.New("local files are not supported")
+	}
 	if strings.HasPrefix(lower, "about:") || strings.HasPrefix(lower, "data:") {
 		return url.Parse(s)
 	}
@@ -546,18 +547,6 @@ func resolveURL(input string, base *url.URL, searchURL string) (*url.URL, error)
 	}
 	if strings.Contains(s, "://") {
 		return url.Parse(s)
-	}
-	// A bare path that exists is treated as a local file, but only at the
-	// command line or from an about: page. With a page base, a bare path is a
-	// URL reference, and probing the disk would leak whether a local file
-	// exists to the page being viewed.
-	if base == nil {
-		if st, statErr := os.Stat(s); statErr == nil && !st.IsDir() {
-			abs, err := filepath.Abs(s)
-			if err == nil {
-				return &url.URL{Scheme: "file", Path: abs}, nil
-			}
-		}
 	}
 	if strings.Contains(s, ":") && !strings.ContainsAny(s, " /") {
 		// host:port, most likely a local development server
@@ -624,10 +613,9 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		return l.loadAbout(ctx, u)
 	}
 	ctx = withRequestMeta(ctx, l.currentPageGeneration(), "doc")
-	allowFile := u.Scheme == "file"
 	space := &pageSpace{}
 	ctx = withPageSpace(ctx, space)
-	data, ctype, finalURL, status, err := l.fetchRequest(ctx, method, u, body, contentType, allowFile)
+	data, ctype, finalURL, status, err := l.fetchRequest(ctx, method, u, body, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -662,7 +650,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 			// The generated page carries its own stylesheet. Collect it like any
 			// other document, or the blocked page falls back to bare
 			// user-agent styles: full-width text and no warning box.
-			page.Author = l.collectStylesheets(ctx, root, page.Base, false)
+			page.Author = l.collectStylesheets(ctx, root, page.Base)
 			return page, nil
 		}
 	}
@@ -708,14 +696,14 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	if page.Title == "" {
 		page.Title = finalURL.String()
 	}
-	page.Author = l.collectStylesheets(ctx, root, page.Base, allowFile)
+	page.Author = l.collectStylesheets(ctx, root, page.Base)
 	if !l.noScripts {
-		page.Scripts = l.collectScripts(ctx, root, page.Base, allowFile)
+		page.Scripts = l.collectScripts(ctx, root, page.Base)
 		page.ImportMap = collectImportMap(root)
 	}
 	l.loadInlineSVGs(root)
 	if !l.deferImages {
-		l.loadImages(ctx, root, page.Base, allowFile)
+		l.loadImages(ctx, root, page.Base)
 	}
 	return page, nil
 }
@@ -812,7 +800,7 @@ func collectImportMap(root *Node) map[string]string {
 // collectScripts gathers inline and external JavaScript in document order.
 // ES module scripts are collected too and marked as modules; every other
 // script type is skipped.
-func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Script {
+func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL) []Script {
 	ctx = withRequestKind(ctx, "js")
 	nodes := root.FindAll(func(n *Node) bool {
 		if n.Tag != "script" {
@@ -856,7 +844,7 @@ func (l *Loader) collectScripts(ctx context.Context, root *Node, base *url.URL, 
 		if err != nil {
 			continue
 		}
-		data, ctype, _, status, err := l.fetchCtx(ctx, u, allowFile)
+		data, ctype, _, status, err := l.fetchCtx(ctx, u)
 		if err != nil || status < 200 || status >= 400 {
 			continue
 		}
@@ -923,7 +911,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 		title = "Bookmarks — MOB³"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
-	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
+	page.Author = l.collectStylesheets(ctx, root, page.Base)
 	if home {
 		// The start page uses the reader-mode stylesheet exactly, so it gets the
 		// same narrow article column and typography as an extracted article.
@@ -933,8 +921,8 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	return page, nil
 }
 
-func (l *Loader) fetchCtx(ctx context.Context, u *url.URL, allowFile bool) (data []byte, ctype string, final *url.URL, status int, err error) {
-	return l.fetchRequest(ctx, http.MethodGet, u, nil, "", allowFile)
+func (l *Loader) fetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
+	return l.fetchRequest(ctx, http.MethodGet, u, nil, "")
 }
 
 // recordBlocked adds a blocked request to the console request log.
@@ -946,7 +934,7 @@ func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, 
 	l.finishRequest(reqID, gen, 0, 0, 0, err)
 }
 
-func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string, allowFile bool) (data []byte, ctype string, final *url.URL, status int, err error) {
+func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string) (data []byte, ctype string, final *url.URL, status int, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, "", u, 0, err
 	}
@@ -1007,39 +995,7 @@ func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, bo
 	}()
 	switch u.Scheme {
 	case "file":
-		if !allowFile {
-			return nil, "", u, 0, errors.New("local file access is blocked from remote pages")
-		}
-		p := u.Path
-		if p == "" {
-			p = u.Opaque
-		}
-		if unescaped, e := url.PathUnescape(p); e == nil {
-			p = unescaped
-		}
-		f, e := os.Open(p)
-		if e != nil {
-			return nil, "", u, 0, e
-		}
-		defer f.Close()
-		st, e := f.Stat()
-		if e != nil {
-			return nil, "", u, 0, e
-		}
-		if !st.Mode().IsRegular() {
-			return nil, "", u, 0, errors.New("only regular local files can be read")
-		}
-		if e := ctx.Err(); e != nil {
-			return nil, "", u, 0, e
-		}
-		b, e := io.ReadAll(io.LimitReader(f, maxResourceSize))
-		if e != nil {
-			return nil, "", u, 0, e
-		}
-		if e := ctx.Err(); e != nil {
-			return nil, "", u, 0, e
-		}
-		return b, mimeByExt(p), u, 200, nil
+		return nil, "", u, 0, errors.New("local files are not supported")
 	case "data":
 		b, ct, e := parseDataURI(u.String())
 		return b, ct, u, 200, e
@@ -1149,35 +1105,11 @@ func mimeEssence(contentType string) string {
 }
 
 // isJavaScriptMIME reports whether a script response may execute. An empty
-// (missing) type is allowed so local and data resources without metadata keep
-// working; any explicit non-JavaScript type is rejected.
+// (missing) type is allowed so data resources without metadata keep working;
+// any explicit non-JavaScript type is rejected.
 func isJavaScriptMIME(contentType string) bool {
 	essence := mimeEssence(contentType)
 	return essence == "" || jsMIMEEssences[essence]
-}
-
-func mimeByExt(p string) string {
-	switch strings.ToLower(filepath.Ext(p)) {
-	case ".html", ".htm", ".xhtml":
-		return "text/html"
-	case ".css":
-		return "text/css"
-	case ".js", ".mjs":
-		return "text/javascript"
-	case ".txt":
-		return "text/plain"
-	case ".png":
-		return "image/png"
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".bmp":
-		return "image/bmp"
-	}
-	return "application/octet-stream"
 }
 
 func parseDataURI(s string) ([]byte, string, error) {
@@ -1302,7 +1234,7 @@ func lookupCharset(label string) (*charmap.Charmap, bool) {
 	return cm, ok
 }
 
-func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.URL, allowFile bool) []Rule {
+func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.URL) []Rule {
 	ctx = withRequestKind(ctx, "css")
 	var out []Rule
 	order := 0
@@ -1352,7 +1284,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 				}
 				seen[key] = true
 				imported++
-				data, _, final, status, err := l.fetchCtx(ctx, u, allowFile)
+				data, _, final, status, err := l.fetchCtx(ctx, u)
 				if err != nil || status < 200 || status >= 400 || final == nil {
 					continue
 				}
@@ -1390,7 +1322,7 @@ func (l *Loader) collectStylesheets(ctx context.Context, root *Node, base *url.U
 			continue
 		}
 		seen[key] = true
-		data, _, final, status, err := l.fetchCtx(ctx, u, allowFile)
+		data, _, final, status, err := l.fetchCtx(ctx, u)
 		if err != nil || status < 200 || status >= 400 {
 			continue
 		}
@@ -1765,7 +1697,7 @@ func (l *Loader) decodeAndFit(ctx context.Context, ctype string, data []byte) (i
 }
 
 // fetchImageResult downloads and decodes one image, using the session cache.
-func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile bool, gen int) (image.Image, bool) {
+func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, gen int) (image.Image, bool) {
 	u, err := applyMixedContent(ctx, u)
 	if err != nil {
 		l.recordBlocked(gen, "GET", u, "img", err)
@@ -1777,7 +1709,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile boo
 		l.recordCacheHit(gen, "GET", key, "img", rawSize)
 		return cached, true
 	}
-	data, ctype, _, status, err := l.fetchCtx(ctx, u, allowFile)
+	data, ctype, _, status, err := l.fetchCtx(ctx, u)
 	if err != nil || status < 200 || status >= 400 {
 		return nil, false
 	}
@@ -1792,7 +1724,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, allowFile boo
 // imageResultStream fetches the queued images concurrently and streams decoded
 // results as they finish. It never writes to the DOM, so it can run off the
 // main loop; the caller applies results when it owns the event loop.
-func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask, allowFile bool) <-chan imageLoadResult {
+func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask) <-chan imageLoadResult {
 	out := make(chan imageLoadResult)
 	if len(tasks) == 0 {
 		close(out)
@@ -1832,7 +1764,7 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask, allow
 						}
 						continue
 					}
-					img, ok := l.fetchImageResult(ctx, t.url, allowFile, gen)
+					img, ok := l.fetchImageResult(ctx, t.url, gen)
 					select {
 					case out <- imageLoadResult{Node: t.node, Src: t.src, Img: img, Failed: !ok}:
 					case <-ctx.Done():
@@ -1847,15 +1779,15 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask, allow
 }
 
 // loadImageTaskResults collects the stream for callers that want one batch.
-func (l *Loader) loadImageTaskResults(ctx context.Context, tasks []imageTask, allowFile bool) []imageLoadResult {
+func (l *Loader) loadImageTaskResults(ctx context.Context, tasks []imageTask) []imageLoadResult {
 	var results []imageLoadResult
-	for r := range l.imageResultStream(ctx, tasks, allowFile) {
+	for r := range l.imageResultStream(ctx, tasks) {
 		results = append(results, r)
 	}
 	return results
 }
 
-func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allowFile bool) bool {
+func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool {
 	if l.noImages {
 		return false
 	}
@@ -1920,7 +1852,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL, allo
 				node.ImgFailed = true
 				return
 			}
-			data, ctype, _, status, err := l.fetchCtx(ctx, u, allowFile)
+			data, ctype, _, status, err := l.fetchCtx(ctx, u)
 			if err != nil || status < 200 || status >= 400 {
 				node.ImgFailed = true
 				return

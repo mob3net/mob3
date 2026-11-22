@@ -252,7 +252,7 @@ func TestCollectScriptsMarksModulesAndSkipsNoModule(t *testing.T) {
 		`<script type="module">import "./dep.js"</script>` +
 		`<script>var classic = 1</script>` +
 		`</head></html>`)
-	scripts := NewLoader().collectScripts(context.Background(), root, u, false)
+	scripts := NewLoader().collectScripts(context.Background(), root, u)
 	if len(scripts) != 2 {
 		t.Fatalf("collected %d scripts, want 2", len(scripts))
 	}

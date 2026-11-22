@@ -112,9 +112,8 @@ func (b *Browser) startDeferredImageLoad() {
 	b.imageCancel = cancel
 	b.deferredImages = true
 	seq := b.loadSeq
-	allowFile := b.page.URL != nil && b.page.URL.Scheme == "file"
 	go func() {
-		stream := b.loader.imageResultStream(ctx, tasks, allowFile)
+		stream := b.loader.imageResultStream(ctx, tasks)
 		var pending []imageLoadResult
 		send := func(done bool) bool {
 			select {
@@ -281,7 +280,6 @@ func (b *Browser) refreshImages() bool {
 	if b == nil || b.loader == nil || b.loader.noImages || b.page == nil || b.page.Root == nil {
 		return false
 	}
-	allowFile := b.page.URL != nil && b.page.URL.Scheme == "file"
 	ctx := withRequestPage(context.Background(), b.page.URL, b.page.Local)
-	return b.loader.loadImages(ctx, b.page.Root, b.page.Base, allowFile)
+	return b.loader.loadImages(ctx, b.page.Root, b.page.Base)
 }

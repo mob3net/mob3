@@ -485,14 +485,6 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		})
 		return
 	}
-	if u.Scheme == "file" && b.url != nil {
-		switch b.url.Scheme {
-		case "http", "https", "data":
-			b.status = "Blocked local file navigation from a remote page"
-			b.draw()
-			return
-		}
-	}
 	b.clearInputFocus()
 	b.suspendCurrentPage()
 	b.cancelLoadNow()

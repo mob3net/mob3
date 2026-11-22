@@ -214,9 +214,9 @@ inside it.
 
 ### `navigate`
 
-Resolves input like the URL prompt: URLs, local paths, `about:` pages, or a
-search query through `-search`. Waits for the page, meta refreshes and scripted
-redirects.
+Resolves input like the URL prompt: URLs, `about:` pages, or a search query
+through `-search`. Local files are not supported; `file:` URLs are rejected.
+Waits for the page, meta refreshes and scripted redirects.
 
 ### `snapshot`
 

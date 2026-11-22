@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"image/png"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+// dataPage returns an in-memory HTML document for dump tests. The product no
+// longer reads local files, so fixtures are passed as data: URLs.
+func dataPage(html string) string {
+	return "data:text/html;charset=utf-8," + url.PathEscape(html)
+}
 
 // runCaptured runs Run while capturing stdout.
 func runCaptured(t *testing.T, args []string) (int, []byte) {
@@ -70,12 +77,8 @@ func TestRunHelpShowsVersionLicenseCopyrightAndGraphicsAlias(t *testing.T) {
 }
 
 func TestRunGraphicsAlias(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(path, []byte(`<html><body><p>alias</p></body></html>`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-g", "none", path})
+	src := `<html><body><p>alias</p></body></html>`
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-g", "none", dataPage(src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -85,34 +88,25 @@ func TestRunGraphicsAlias(t *testing.T) {
 }
 
 func TestRunDump(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "page.html")
-	src := `<html><body><p>hello from file</p></body></html>`
-	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, out := runCaptured(t, []string{"-dump", "-no-color", path})
+	src := `<html><body><p>hello from data</p></body></html>`
+	code, out := runCaptured(t, []string{"-dump", "-no-color", dataPage(src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if !bytes.Contains(out, []byte("hello from file")) {
+	if !bytes.Contains(out, []byte("hello from data")) {
 		t.Fatalf("dump output = %q", out)
 	}
 }
 
 func TestRunDumpHeightLimit(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "page.html")
 	var sb strings.Builder
 	for i := 1; i <= 20; i++ {
 		sb.WriteString("<p>line")
 		sb.WriteString(strconv.Itoa(i))
 		sb.WriteString("</p>")
 	}
-	if err := os.WriteFile(path, []byte("<html><body>"+sb.String()+"</body></html>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-height", "5", path})
+	src := "<html><body>" + sb.String() + "</body></html>"
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-height", "5", dataPage(src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -128,12 +122,8 @@ func TestRunDumpHeightLimit(t *testing.T) {
 }
 
 func TestRunPNGHeight(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(path, []byte("<html><body><p>png height</p></body></html>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, out := runCaptured(t, []string{"-png", "-width", "20", "-height", "5", path})
+	src := `<html><body><p>png height</p></body></html>`
+	code, out := runCaptured(t, []string{"-png", "-width", "20", "-height", "5", dataPage(src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -147,8 +137,6 @@ func TestRunPNGHeight(t *testing.T) {
 }
 
 func TestRunDumpReader(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "article.html")
 	src := `<html><body>
 		<nav>Site navigation</nav>
 		<article><h1>Reader article</h1>
@@ -156,10 +144,7 @@ func TestRunDumpReader(t *testing.T) {
 		<img src="/pic.png" alt="A picture">
 		</article>
 	</body></html>`
-	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-reader", path})
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-reader", dataPage(src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -175,17 +160,12 @@ func TestRunDumpReader(t *testing.T) {
 }
 
 func TestRunDumpDarkChangesPalette(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "page.html")
 	src := `<html><body><p>Dark palette text</p></body></html>`
-	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	lightCode, light := runCaptured(t, []string{"-dump", "-color", path})
+	lightCode, light := runCaptured(t, []string{"-dump", "-color", dataPage(src)})
 	if lightCode != 0 {
 		t.Fatalf("light exit code = %d", lightCode)
 	}
-	darkCode, dark := runCaptured(t, []string{"-dump", "-color", "-dark", path})
+	darkCode, dark := runCaptured(t, []string{"-dump", "-color", "-dark", dataPage(src)})
 	if darkCode != 0 {
 		t.Fatalf("dark exit code = %d", darkCode)
 	}
@@ -227,8 +207,8 @@ func TestRunHome(t *testing.T) {
 	}
 }
 
-func TestRunMissingFile(t *testing.T) {
-	code, _ := runCaptured(t, []string{"-dump", filepath.Join(t.TempDir(), "missing.html")})
+func TestRunRejectsLocalFile(t *testing.T) {
+	code, _ := runCaptured(t, []string{"-dump", "file:///etc/passwd"})
 	if code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
@@ -236,11 +216,8 @@ func TestRunMissingFile(t *testing.T) {
 
 func TestRunZoomFlag(t *testing.T) {
 	defer setLayoutZoom(1)
-	path := filepath.Join(t.TempDir(), "zoom.html")
 	src := `<html><body style="margin:0"><p style="margin:0 0 0 64px">indent</p></body></html>`
-	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	page := dataPage(src)
 	indentOf := func(out []byte) int {
 		for _, line := range strings.Split(string(out), "\n") {
 			if i := strings.Index(line, "indent"); i >= 0 {
@@ -249,11 +226,11 @@ func TestRunZoomFlag(t *testing.T) {
 		}
 		return -1
 	}
-	code, baseOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", path})
+	code, baseOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", page})
 	if code != 0 {
 		t.Fatalf("dump exit code = %d", code)
 	}
-	code, zoomOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-zoom", "200", path})
+	code, zoomOut := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-zoom", "200", page})
 	if code != 0 {
 		t.Fatalf("zoomed dump exit code = %d", code)
 	}
@@ -266,7 +243,7 @@ func TestRunZoomFlag(t *testing.T) {
 		t.Fatalf("indent = %d at 100%% and %d at 200%%, want 8 and 16", baseIndent, zoomIndent)
 	}
 
-	code, _ = runCaptured(t, []string{"-dump", "-no-color", "-zoom", "10", path})
+	code, _ = runCaptured(t, []string{"-dump", "-no-color", "-zoom", "10", page})
 	if code != 2 {
 		t.Fatalf("invalid -zoom exit code = %d, want 2", code)
 	}

@@ -28,9 +28,8 @@ const (
 // Records are cached per resolved URL, so a dependency shared by several
 // modules is fetched, parsed and evaluated once.
 type jsModuleLoader struct {
-	j         *jsRuntime
-	base      *url.URL
-	allowFile bool
+	j    *jsRuntime
+	base *url.URL
 	// mu guards the maps below. Interactive dynamic imports fetch and parse
 	// their graph on a background goroutine while the main thread links and
 	// evaluates other modules.
@@ -66,7 +65,6 @@ func newJSModuleLoader(j *jsRuntime) *jsModuleLoader {
 		}
 		m.imports = j.page.ImportMap
 	}
-	m.allowFile = m.base != nil && strings.EqualFold(m.base.Scheme, "file")
 	m.install()
 	return m
 }
@@ -468,7 +466,7 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 		pageURL = m.j.page.URL
 	}
 	ctx = withRequestPage(ctx, pageURL, m.j.page != nil && m.j.page.Local)
-	data, ctype, _, status, err := m.j.b.loader.fetchCtx(ctx, u, m.allowFile)
+	data, ctype, _, status, err := m.j.b.loader.fetchCtx(ctx, u)
 	if err != nil {
 		return "", err
 	}

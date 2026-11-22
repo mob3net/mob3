@@ -90,8 +90,8 @@ page, err := loader.Load(url, nil)
 ly := BuildLayout(page.Root, page.Author, width)
 ```
 
-For local files, parse the saved HTML and pass the same author rules the loader
-would collect. Important: **pass `page.Author`**, not `nil`; `nil` hides the
+For a saved HTML file, parse it in the test and pass the same author rules the
+loader would collect. Important: **pass `page.Author`**, not `nil`; `nil` hides the
 real CSS cascade and produces misleading results.
 
 Log selectively:

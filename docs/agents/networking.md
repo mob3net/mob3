@@ -79,10 +79,9 @@ agreement, the non-negotiable constraints and the change protocol.
   blocked. IP-literal image hosts are blocked rather than upgraded. Top-level
   navigation and documents loaded over `http` are unaffected. Blocked requests
   show as `ERR` in the console request list.
-- **Local files:** `file:` resources (stylesheets, scripts, images) are fetched
-  only when the document itself was loaded from `file:`. Remote (http/https/
-  data) documents cannot load file resources, navigate the viewport to `file:`
-  URLs, or XHR local files. Local documents retain access to local resources.
+- **Local files:** `file:` URLs are rejected and bare paths are never probed on
+  disk. Documents come from `http`, `https`, `about:` or `data:` only, so no
+  document can load a local stylesheet, script, image or module.
 - **PDF responses:** `application/pdf` (and the rare `application/x-pdf` /
   `application/acrobat`) opens in the text viewer. When the media type is
   missing or a generic binary type, the first 1 KB is sniffed for the `%PDF-`
@@ -125,7 +124,7 @@ agreement, the non-negotiable constraints and the change protocol.
   `-mem-limit`/`GOMEMLIMIT`, or 32 MiB when the process is unlimited, with a
   2 MiB per-entry cap. Only successful GET CSS/JS responses and decoded images
   are stored; page
-  documents, POST, `data:` and `file:` reads are not cached, and
+  documents, POST and `data:` reads are not cached, and
   `Cache-Control: no-store` responses are skipped. Hits avoid network requests;
   nothing is written to disk. The limit is editable in `about:config`. The
   separate back/forward page cache is described under History.

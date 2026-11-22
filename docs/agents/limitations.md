@@ -32,8 +32,9 @@ agreement, the non-negotiable constraints and the change protocol.
   not started. `Intl` is an
   English-only subset without full CLDR locale data. `document.write` is
   supported for document fragments. JS history navigation is stubbed. Plain
-  same-origin `location` redirects and meta refresh work; remote pages cannot
-  navigate to `file:`. Canvas is a feature-detection stub with no pixels or
+  same-origin `location` redirects and meta refresh work; local files are not
+  supported, so `file:` URLs are rejected. Canvas is a feature-detection stub
+  with no pixels or
   WebGL, `MutationObserver` never reports mutations, `TreeWalker` and the custom
   elements registry are absent, and `MessageChannel` delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their

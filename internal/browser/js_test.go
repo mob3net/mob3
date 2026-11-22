@@ -1,11 +1,10 @@
 package browser
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1517,17 +1516,28 @@ func TestJSRequestLog(t *testing.T) {
 }
 
 func TestExternalScriptCollected(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "page.html"),
-		[]byte(`<html><body><p id="out">before</p><script src="app.js"></script></body></html>`), 0o644); err != nil {
-		t.Fatal(err)
+	files := map[string]string{
+		"https://fixture.test/page.html": `<html><body><p id="out">before</p><script src="app.js"></script></body></html>`,
+		"https://fixture.test/app.js":    `document.getElementById("out").textContent = "external";`,
 	}
-	if err := os.WriteFile(filepath.Join(dir, "app.js"),
-		[]byte(`document.getElementById("out").textContent = "external";`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	u := mustParse(t, "file://"+filepath.Join(dir, "page.html"))
-	page, err := NewLoader().Load(u.String(), nil)
+	loader := NewLoader()
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, ok := files[req.URL.String()]
+		if !ok {
+			return nil, errors.New("unexpected request " + req.URL.String())
+		}
+		h := make(http.Header)
+		if strings.HasSuffix(req.URL.Path, ".js") {
+			h.Set("Content-Type", "text/javascript")
+		} else {
+			h.Set("Content-Type", "text/html")
+		}
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader(body)), Request: req,
+		}, nil
+	})}
+	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ func TestFetchCachesSubresources(t *testing.T) {
 	u := mustParse(t, "https://example.com/style.css")
 	ctx := withRequestKind(context.Background(), "css")
 	for i := 0; i < 2; i++ {
-		data, ctype, _, status, err := l.fetchCtx(ctx, u, false)
+		data, ctype, _, status, err := l.fetchCtx(ctx, u)
 		if err != nil || status != 200 || string(data) != tr.body || ctype != "text/css" {
 			t.Fatalf("fetch %d = %q %q %d %v", i, data, ctype, status, err)
 		}
@@ -72,7 +72,7 @@ func TestFetchCachesSubresources(t *testing.T) {
 	l2.setCacheLimitMB(1)
 	ctx = withRequestKind(context.Background(), "css")
 	for i := 0; i < 2; i++ {
-		if _, _, _, _, err := l2.fetchCtx(ctx, u, false); err != nil {
+		if _, _, _, _, err := l2.fetchCtx(ctx, u); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -528,40 +528,12 @@ func TestNoscriptStylesRemovedWithJS(t *testing.T) {
 	}
 }
 
-func TestDeviceFilesRejected(t *testing.T) {
-	if _, err := os.Stat("/dev/zero"); err != nil {
-		t.Skip("/dev/zero not available")
-	}
+func TestLocalFilesRejected(t *testing.T) {
 	if _, err := NewLoader().Load("file:///dev/zero", nil); err == nil {
-		t.Fatal("device file was read as a page")
+		t.Fatal("local file was read as a page")
 	}
-}
-
-func TestLocalPageCanLoadLocalFiles(t *testing.T) {
-	dir := t.TempDir()
-	imgPath := filepath.Join(dir, "p.png")
-	f, err := os.Create(imgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
-		f.Close()
-		t.Fatal(err)
-	}
-	f.Close()
-	htmlPath := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png"></body></html>`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	loader := NewLoader()
-	loader.noImages = false
-	page, err := loader.Load("file://"+htmlPath, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	img := page.Root.FindFirst("img")
-	if img == nil || img.Img == nil {
-		t.Fatal("local page could not load its local image")
+	if _, err := ResolveURL("file:///etc/passwd", nil); err == nil {
+		t.Fatal("file: URL was accepted")
 	}
 }
 
@@ -626,9 +598,6 @@ func TestBMPDecodeRegistered(t *testing.T) {
 	if b := img.Bounds(); b.Dx() != 2 || b.Dy() != 2 {
 		t.Fatalf("bounds = %v", b)
 	}
-	if got := mimeByExt("photo.bmp"); got != "image/bmp" {
-		t.Fatalf("mimeByExt = %q", got)
-	}
 }
 
 func TestWebPDecodeRegistered(t *testing.T) {
@@ -646,9 +615,6 @@ func TestWebPDecodeRegistered(t *testing.T) {
 	}
 	if b := img.Bounds(); b.Dx() != 2 || b.Dy() != 2 {
 		t.Fatalf("bounds = %v", b)
-	}
-	if got := mimeByExt("photo.webp"); got != "image/webp" {
-		t.Fatalf("mimeByExt = %q", got)
 	}
 }
 
@@ -779,25 +745,17 @@ func TestResolveInputSearch(t *testing.T) {
 	}
 }
 
-func TestResolveLocalFile(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(p, []byte("<p>x</p>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	u, err := ResolveURL(p, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.Scheme != "file" || u.Path != p {
-		t.Fatalf("got %+v", u)
+func TestResolveRejectsLocalFiles(t *testing.T) {
+	for _, in := range []string{"file:///etc/passwd", "FILE:///tmp/x", "file:/tmp/x"} {
+		if u, err := ResolveURL(in, nil); err == nil {
+			t.Errorf("%s resolved to %s, want rejection", in, u)
+		}
 	}
 }
 
-// TestResolveURLWithBaseSkipsLocalStat pins that a bare relative path is only
-// probed on disk when there is no page base, so a viewed page cannot use it as
-// a local-file existence oracle.
-func TestResolveURLWithBaseSkipsLocalStat(t *testing.T) {
+// TestResolveDoesNotProbeBarePaths pins that a bare path is never stat'ed on
+// disk, even when a file with that name exists in the working directory.
+func TestResolveDoesNotProbeBarePaths(t *testing.T) {
 	dir := t.TempDir()
 	const name = "local-only-page.html"
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("<p>x</p>"), 0o644); err != nil {
@@ -805,20 +763,14 @@ func TestResolveURLWithBaseSkipsLocalStat(t *testing.T) {
 	}
 	t.Chdir(dir)
 	base := mustParse(t, "https://example.com/dir/")
-	u, err := ResolveURL(name, base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.Scheme == "file" {
-		t.Fatalf("with a base, %q resolved to local file %s", name, u)
-	}
-	// The same bare path still opens a local file from the command line.
-	u, err = ResolveURL(name, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.Scheme != "file" {
-		t.Fatalf("without a base, %q => %s, want file:", name, u)
+	for _, b := range []*url.URL{base, nil} {
+		u, err := ResolveURL(name, b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u.Scheme == "file" {
+			t.Fatalf("bare path resolved to local file %s", u)
+		}
 	}
 }
 
@@ -831,28 +783,18 @@ func mustParse(t *testing.T, s string) *url.URL {
 	return u
 }
 
-func TestLoadLocalPageWithImage(t *testing.T) {
-	dir := t.TempDir()
-	imgPath := filepath.Join(dir, "p.png")
-	f, err := os.Create(imgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestLoadDataPageWithImage(t *testing.T) {
 	im := image.NewRGBA(image.Rect(0, 0, 16, 16))
 	for y := 0; y < 16; y++ {
 		for x := 0; x < 16; x++ {
 			im.Set(x, y, color.RGBA{255, 0, 0, 255})
 		}
 	}
-	if err := png.Encode(f, im); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	htmlPath := filepath.Join(dir, "p.html")
-	os.WriteFile(htmlPath, []byte(`<html><head><title>T</title></head><body><p>hi</p><img src="p.png"></body></html>`), 0o644)
+	imgURL := dataImageURL(t, im)
+	htmlSrc := `<html><head><title>T</title></head><body><p>hi</p><img src="` + imgURL + `"></body></html>`
 	loader := NewLoader()
 	loader.noImages = false
-	page, err := loader.Load("file://"+htmlPath, nil)
+	page, err := loader.Load("data:text/html,"+url.PathEscape(htmlSrc), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -876,23 +818,10 @@ func TestLoadLocalPageWithImage(t *testing.T) {
 }
 
 func TestImagesDisabledByDefault(t *testing.T) {
-	dir := t.TempDir()
-	imgPath := filepath.Join(dir, "p.png")
-	f, err := os.Create(imgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
-		f.Close()
-		t.Fatal(err)
-	}
-	f.Close()
-	htmlPath := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png" alt="logo"></body></html>`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	imgURL := dataImageURL(t, image.NewRGBA(image.Rect(0, 0, 4, 4)))
+	src := `<html><body><img src="` + imgURL + `" alt="logo"></body></html>`
 	loader := NewLoader()
-	page, err := loader.Load("file://"+htmlPath, nil)
+	page, err := loader.Load("data:text/html,"+url.PathEscape(src), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,13 +846,8 @@ func TestImagesDisabledByDefault(t *testing.T) {
 }
 
 func TestPageKeepsRawHTML(t *testing.T) {
-	dir := t.TempDir()
-	htmlPath := filepath.Join(dir, "page.html")
 	source := "<!DOCTYPE html>\n<html><body><p>raw source</p></body></html>"
-	if err := os.WriteFile(htmlPath, []byte(source), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	page, err := NewLoader().Load("file://"+htmlPath, nil)
+	page, err := NewLoader().Load("data:text/html,"+url.PathEscape(source), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1039,7 +963,7 @@ func TestLocalNetworkGuardBlocksPublicSubresource(t *testing.T) {
 	page := mustURL(t, "https://example.com/")
 	ctx := withRequestKind(context.Background(), "img")
 	ctx = withRequestPage(ctx, page, false)
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x"), false); !errors.Is(err, errLocalNetworkBlocked) {
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); !errors.Is(err, errLocalNetworkBlocked) {
 		t.Fatalf("fetch error = %v, want local-network block", err)
 	}
 	if reached {
@@ -1065,11 +989,11 @@ func TestLocalNetworkGuardAllowsLocalPageAndNavigation(t *testing.T) {
 	localPage := mustURL(t, "http://127.0.0.1:3000/")
 	ctx := withRequestKind(context.Background(), "img")
 	ctx = withRequestPage(ctx, localPage, true)
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x"), false); err != nil {
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); err != nil {
 		t.Fatalf("local page subresource was blocked: %v", err)
 	}
 	// A top-level navigation carries no page meta and stays allowed.
-	if _, _, _, _, err := l.fetchCtx(context.Background(), mustURL(t, "http://127.0.0.1:8080/"), false); err != nil {
+	if _, _, _, _, err := l.fetchCtx(context.Background(), mustURL(t, "http://127.0.0.1:8080/")); err != nil {
 		t.Fatalf("top-level navigation was blocked: %v", err)
 	}
 }
@@ -1180,7 +1104,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	})
 	public := withRequestKind(context.Background(), "css")
 	public = withRequestPage(public, mustURL(t, "https://example.com/"), false)
-	data, _, _, _, err := l.fetchCtx(public, u, false)
+	data, _, _, _, err := l.fetchCtx(public, u)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1196,7 +1120,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	local = withRequestPage(local, mustURL(t, "http://127.0.0.1:3000/"), true)
 	l.cache.putBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
 	reached = false
-	data, _, _, _, err = l.fetchCtx(local, u, false)
+	data, _, _, _, err = l.fetchCtx(local, u)
 	if err != nil || string(data) != "local-secret" || reached {
 		t.Fatalf("local page cache hit = %q, %v (request made: %v)", data, err, reached)
 	}
@@ -1212,7 +1136,7 @@ func TestMixedContentBlocksActiveSubresources(t *testing.T) {
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	for _, kind := range []string{"js", "css"} {
 		ctx := withRequestKind(secure, kind)
-		if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://example.com/x"), false); !errors.Is(err, errMixedContentBlocked) {
+		if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://example.com/x")); !errors.Is(err, errMixedContentBlocked) {
 			t.Fatalf("%s mixed content error = %v, want blocked", kind, err)
 		}
 	}
@@ -1235,14 +1159,14 @@ func TestMixedContentUpgradesImages(t *testing.T) {
 	})
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	ctx := withRequestKind(secure, "img")
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/a.png"), false); err != nil {
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/a.png")); err != nil {
 		t.Fatalf("image upgrade failed: %v", err)
 	}
 	if got != "https://cdn.example/a.png" {
 		t.Fatalf("image URL = %q, want the HTTPS upgrade", got)
 	}
 	// An IP-literal image cannot be upgraded and is blocked instead.
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://93.184.216.34/a.png"), false); !errors.Is(err, errMixedContentBlocked) {
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://93.184.216.34/a.png")); !errors.Is(err, errMixedContentBlocked) {
 		t.Fatalf("IP-literal image error = %v, want blocked", err)
 	}
 }
@@ -1259,7 +1183,7 @@ func TestMixedContentAllowsInsecureDocument(t *testing.T) {
 	})
 	page := withRequestPage(context.Background(), mustURL(t, "http://example.com/"), false)
 	ctx := withRequestKind(page, "js")
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/x.js"), false); err != nil {
+	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/x.js")); err != nil {
 		t.Fatalf("HTTP page subresource was blocked: %v", err)
 	}
 }
@@ -1276,7 +1200,7 @@ func TestMixedContentBlocksDowngradeRedirect(t *testing.T) {
 	})
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	ctx := withRequestKind(secure, "js")
-	_, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "https://example.com/start.js"), false)
+	_, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "https://example.com/start.js"))
 	if !errors.Is(err, errMixedContentBlocked) {
 		t.Fatalf("downgrade redirect error = %v, want blocked", err)
 	}
@@ -1471,6 +1395,16 @@ func mustURL(t *testing.T, raw string) *url.URL {
 	return u
 }
 
+// dataImageURL encodes an image as a data: URL so tests never touch the disk.
+func dataImageURL(t *testing.T, im image.Image) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, im); err != nil {
+		t.Fatal(err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
 type brTransport struct{}
 
 func (brTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -1493,26 +1427,13 @@ func TestUnsupportedContentEncoding(t *testing.T) {
 }
 
 func TestDeferredImagesLoadLater(t *testing.T) {
-	dir := t.TempDir()
-	imgPath := filepath.Join(dir, "p.png")
-	f, err := os.Create(imgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
-		f.Close()
-		t.Fatal(err)
-	}
-	f.Close()
-	htmlPath := filepath.Join(dir, "page.html")
-	if err := os.WriteFile(htmlPath, []byte(`<html><body><img src="p.png" alt="pic"></body></html>`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	imgURL := dataImageURL(t, image.NewRGBA(image.Rect(0, 0, 4, 4)))
+	src := `<html><body><img src="` + imgURL + `" alt="pic"></body></html>`
 
 	loader := NewLoader()
 	loader.noImages = false
 	loader.deferImages = true
-	page, err := loader.Load("file://"+htmlPath, nil)
+	page, err := loader.Load("data:text/html,"+url.PathEscape(src), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1528,7 +1449,7 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatalf("image tasks = %d, want 1", len(tasks))
 	}
-	results := loader.loadImageTaskResults(context.Background(), tasks, true)
+	results := loader.loadImageTaskResults(context.Background(), tasks)
 	if len(results) != 1 || results[0].Img == nil || results[0].Failed {
 		t.Fatalf("background results = %+v", results)
 	}
@@ -1561,17 +1482,29 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 }
 
 func TestLoaderResolvesCSSImports(t *testing.T) {
-	dir := t.TempDir()
-	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	files := map[string]string{
+		"https://fixture.test/page.html": `<html><head><link rel="stylesheet" href="a.css"></head><body><p class="a">a</p><p class="b">b</p></body></html>`,
+		"https://fixture.test/a.css":     `@import "b.css"; .a{color:#ff0000}`,
+		"https://fixture.test/b.css":     `.b{color:#0000ff}`,
 	}
-	write("b.css", `.b{color:#0000ff}`)
-	write("a.css", `@import "b.css"; .a{color:#ff0000}`)
-	write("page.html", `<html><head><link rel="stylesheet" href="a.css"></head><body><p class="a">a</p><p class="b">b</p></body></html>`)
 	loader := NewLoader()
-	page, err := loader.Load("file://"+filepath.Join(dir, "page.html"), nil)
+	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, ok := files[req.URL.String()]
+		if !ok {
+			return nil, errors.New("unexpected request " + req.URL.String())
+		}
+		h := make(http.Header)
+		if strings.HasSuffix(req.URL.Path, ".css") {
+			h.Set("Content-Type", "text/css")
+		} else {
+			h.Set("Content-Type", "text/html")
+		}
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader(body)), Request: req,
+		}, nil
+	})}
+	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

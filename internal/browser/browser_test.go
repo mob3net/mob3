@@ -261,7 +261,7 @@ func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 	if called {
 		t.Fatal("remote page navigation to file:// was allowed")
 	}
-	if !strings.Contains(b.status, "Blocked local file") {
+	if !strings.Contains(b.status, "local files are not supported") {
 		t.Fatalf("status = %q", b.status)
 	}
 }

@@ -128,12 +128,13 @@ published by the Pages build.
   saves nothing, and the running browser writes no files at all. The download
   popup only copies a `curl` command. History, cookies,
   `localStorage`/`sessionStorage`, the image cache, the back/forward page cache
-  and all JS state live in memory only. Disk reads are limited to explicit
-  local `file:` pages and their local resources, an explicitly passed
-  `-bookmarks` file, an explicitly passed `-certs` PEM bundle, plus
-  `/proc/self/statm` for the Linux memory footer; OS-level reads by Go's TLS,
-  DNS and timezone libraries are not application storage. Do not add automatic
-  disk caching or restore-on-start behavior.
+  and all JS state live in memory only. The browser does not read local page
+  files at all: `file:` URLs are rejected and bare paths are never probed on
+  disk. Disk reads are limited to an explicitly passed `-bookmarks` file, an
+  explicitly passed `-certs` PEM bundle, plus `/proc/self/statm` for the Linux
+  memory footer; OS-level reads by Go's TLS, DNS and timezone libraries are not
+  application storage. Do not add automatic disk caching or restore-on-start
+  behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/grafana/sobek` JavaScript engine (maintained `goja` fork adding ES
   module records and dynamic imports), the pure-Go SVG renderer

@@ -24,9 +24,10 @@ cache, log or download files. Closing MOB³ saves nothing.
 - History, cookies, `localStorage`/`sessionStorage`, the image cache and all
   JavaScript state live in memory only.
 - The download popup only shows a `curl` command; it writes nothing.
-- Disk reads are limited to explicit local `file:` pages and their resources,
-  an explicitly supplied `-bookmarks` file, an explicitly supplied `-certs`
-  PEM bundle, and `/proc/self/statm` for the Linux memory footer.
+- Disk reads are limited to an explicitly supplied `-bookmarks` file, an
+  explicitly supplied `-certs` PEM bundle, and `/proc/self/statm` for the Linux
+  memory footer. Page navigation never reads local files: `file:` URLs are
+  rejected and bare paths are never probed on disk.
 - OS-level reads by Go's TLS, DNS and timezone libraries are not application
   storage. By default TLS roots come from the platform store; `-certs` can
   switch to the CA bundle compiled into the binary or to a named PEM file.
@@ -72,9 +73,10 @@ complete most browser checks, and it is not a security boundary.
 
 ## Local files and downloads
 
-Remote pages cannot navigate the viewport to `file:` URLs or load local file
-resources. Local documents can load local stylesheets, scripts and images.
-Only regular files are read; devices and FIFOs are rejected.
+Local file pages are not supported. `file:` URLs are rejected, bare paths are
+never probed on disk, and every document comes from `http`, `https`, `about:`
+or `data:`. Remote pages therefore cannot use the viewport, a stylesheet, a
+script, an image or XHR to read a local file.
 
 MOB³ never saves downloads. A download link opens a popup with a
 ready-to-copy `curl` command without fetching the file, except for a `.pdf`

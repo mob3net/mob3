@@ -222,7 +222,7 @@ func TestImageDownscaledOnLoad(t *testing.T) {
 	loader := NewLoader()
 	loader.noImages = false
 	loader.maxImageW, loader.maxImageH = 100, 100
-	if !loader.loadImages(context.Background(), root, u, false) {
+	if !loader.loadImages(context.Background(), root, u) {
 		t.Fatal("image was not loaded")
 	}
 	img := root.FindFirst("img")

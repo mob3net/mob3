@@ -108,5 +108,6 @@ removes it.
 
 ## First run
 
-No configuration is written. The first run opens `about:home` unless a URL or
-`file:` path is supplied. Use `-home URL` to choose a different start page.
+No configuration is written. The first run opens `about:home` unless a URL is
+supplied. Use `-home URL` to choose a different start page. Local file pages are
+not supported.

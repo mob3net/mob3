@@ -116,7 +116,7 @@ func (l *Loader) loadPDFPage(ctx context.Context, data []byte, finalURL *url.URL
 		page.Title = "PDF document"
 	}
 	doc.Title = page.Title
-	page.Author = l.collectStylesheets(ctx, root, page.Base, false)
+	page.Author = l.collectStylesheets(ctx, root, page.Base)
 	return page
 }
 
