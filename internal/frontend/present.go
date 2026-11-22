@@ -20,6 +20,7 @@ type Presenter struct {
 	lastScroll int
 	lastNative bool
 	nativeSet  bool
+	chrome     protocol.Chrome
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -45,6 +46,15 @@ func (p *Presenter) ClearGraphics(sb *strings.Builder) {
 // Reset forces the next frame to repaint every row. It is used by tests and by
 // callers that have written over the screen out of band.
 func (p *Presenter) Reset() { p.prev = nil }
+
+// SetChrome stores the shell layer that accompanies content-only frames. A
+// change in composition or geometry forces a full repaint.
+func (p *Presenter) SetChrome(c protocol.Chrome) {
+	if p.chrome.Show != c.Show || p.chrome.Width != c.Width || p.chrome.HeaderRows != c.HeaderRows {
+		p.prev = nil
+	}
+	p.chrome = c
+}
 
 // Present writes one frame. scroll is the page scroll offset; native reports
 // that the engine is writing terminal-native image placements itself, so the
@@ -72,6 +82,33 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	if len(lines) != f.H {
 		return nil
 	}
+	placements := f.Placements
+	headerRows := 0
+	if p.chrome.Show && p.chrome.Width == f.W {
+		header := protocol.Frame{W: p.chrome.Width, H: p.chrome.HeaderRows, Cells: p.chrome.Header}
+		footer := protocol.Frame{W: p.chrome.Width, H: 1, Cells: p.chrome.Footer}
+		hline := EncodeFrame(header, p.color, !p.color)
+		fline := EncodeFrame(footer, p.color, !p.color)
+		if len(hline) != p.chrome.HeaderRows || len(fline) != 1 {
+			// Malformed chrome is not worth rendering; fall back to the frame.
+			p.chrome = protocol.Chrome{}
+		} else {
+			composed := make([]string, 0, len(hline)+len(lines)+1)
+			composed = append(composed, hline...)
+			composed = append(composed, lines...)
+			composed = append(composed, fline...)
+			lines = composed
+			headerRows = p.chrome.HeaderRows
+			if headerRows > 0 && len(placements) > 0 {
+				shifted := make([]protocol.Placement, len(placements))
+				copy(shifted, placements)
+				for i := range shifted {
+					shifted[i].Y += headerRows
+				}
+				placements = shifted
+			}
+		}
+	}
 	needClear := p.prev == nil || len(p.prev) != len(lines)
 	if needClear {
 		p.prev = make([]string, len(lines))
@@ -91,7 +128,7 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		}
 	}
 	for i := range lines {
-		if !p.chromeRow(i, len(lines)) && p.prev[i] == lines[i] {
+		if !p.chromeRow(i, len(lines), headerRows) && p.prev[i] == lines[i] {
 			continue
 		}
 		fmt.Fprintf(&sb, "\x1b[%d;1H", i+1)
@@ -104,7 +141,7 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		p.prev[i] = lines[i]
 	}
 	if native && p.gfx != nil {
-		p.gfx.PlaceAll(&sb, f.Placements)
+		p.gfx.PlaceAll(&sb, placements)
 	}
 	if sb.Len() == 0 {
 		return nil
@@ -117,17 +154,19 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 // chrome: the toolbar rows are always repainted, the URL row uses normal line
 // diffing so a terminal-native selection over it is not cleared, and the
 // footer row is always repainted.
-func (p *Presenter) chromeRow(i, height int) bool {
+func (p *Presenter) chromeRow(i, height, headerRows int) bool {
 	if height >= 2 && i == height-1 {
 		return true
 	}
-	rows := 0
-	switch {
-	case height < 3:
-	case height < 5:
-		rows = 1
-	default:
-		rows = 2
+	rows := headerRows
+	if rows == 0 {
+		switch {
+		case height < 3:
+		case height < 5:
+			rows = 1
+		default:
+			rows = 2
+		}
 	}
 	if i < 0 || i >= rows {
 		return false

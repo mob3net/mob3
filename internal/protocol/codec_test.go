@@ -58,6 +58,7 @@ func testEvents() []Event {
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin"}},
 		{Session: 11, Seq: 11, Body: Quit{}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
+		{Session: 13, Seq: 13, Body: Chrome{Show: true, Width: 3, HeaderRows: 1, Header: []Cell{{R: 'H'}, {R: 'i'}, {R: '!'}}, Footer: []Cell{{R: 'F'}, {R: 'o'}, {R: 'o'}}}},
 	}
 }
 

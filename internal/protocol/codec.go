@@ -223,6 +223,22 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.str(v.Text)
 		e.blob(v.Data, lim.MaxImageBytes)
 		e.str(v.Err)
+	case Chrome:
+		if err := v.Validate(lim); err != nil {
+			return dst, err
+		}
+		kind = EvChrome
+		e.bool(v.Show)
+		e.i32(v.Width)
+		e.i32(v.HeaderRows)
+		e.count(len(v.Header))
+		for _, c := range v.Header {
+			e.cell(c)
+		}
+		e.count(len(v.Footer))
+		for _, c := range v.Footer {
+			e.cell(c)
+		}
 	default:
 		return dst[:start], fmt.Errorf("%w: unknown event body %T", ErrInvalid, ev.Body)
 	}
@@ -414,6 +430,33 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			Data: d.blob(lim.MaxImageBytes),
 			Err:  d.str(),
 		}
+	case EvChrome:
+		show := d.bool()
+		w := d.i32()
+		rows := d.i32()
+		nc := d.count(lim.MaxCells)
+		if d.err == nil && !d.need(nc*minCellSize) {
+			break
+		}
+		header := make([]Cell, nc)
+		for i := range header {
+			header[i] = d.cell()
+		}
+		nf := d.count(lim.MaxCells)
+		if d.err == nil && !d.need(nf*minCellSize) {
+			break
+		}
+		footer := make([]Cell, nf)
+		for i := range footer {
+			footer[i] = d.cell()
+		}
+		c := Chrome{Show: show, Width: w, HeaderRows: rows, Header: header, Footer: footer}
+		if d.err == nil {
+			if err := c.Validate(lim); err != nil {
+				return Event{}, nil, err
+			}
+		}
+		body = c
 	default:
 		return Event{}, nil, fmt.Errorf("%w: unknown event kind %d", ErrInvalid, h.kind)
 	}

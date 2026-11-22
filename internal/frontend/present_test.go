@@ -118,3 +118,29 @@ func BenchmarkPresenterFrame(b *testing.B) {
 		}
 	}
 }
+
+func TestPresenterComposesChromeAndContent(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	p.SetChrome(protocol.Chrome{
+		Show: true, Width: 4, HeaderRows: 1,
+		Header: []protocol.Cell{{R: 'H'}, {R: 'd'}, {R: 'r'}, {R: '!'}},
+		Footer: []protocol.Cell{{R: 'F'}, {R: 'o'}, {R: 'o'}, {R: 't'}},
+	})
+	f := protocol.Frame{W: 4, H: 2, Cells: []protocol.Cell{
+		{R: 'a'}, {R: 'b'}, {R: 'c'}, {R: 'd'},
+		{R: 'e'}, {R: 'f'}, {R: 'g'}, {R: 'h'},
+	}}
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"Hdr!", "abcd", "efgh", "Foot"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("composed output missing %q: %q", want, got)
+		}
+	}
+	if strings.Count(got, "\x1b[2J") == 0 {
+		t.Fatal("composed output did not clear the screen")
+	}
+}

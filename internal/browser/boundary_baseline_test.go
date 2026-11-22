@@ -180,11 +180,16 @@ func BenchmarkBoundaryContentFrame(b *testing.B) {
 // transport without a goroutine, so the benchmark measures the frame boundary
 // itself.
 type codecSink struct {
-	buf  []byte
-	last protocol.Frame
+	buf        []byte
+	last       protocol.Frame
+	lastChrome protocol.Chrome
 }
 
 func (s *codecSink) Send(ev protocol.Event) error {
+	if c, ok := ev.Body.(protocol.Chrome); ok {
+		s.lastChrome = c
+		return nil
+	}
 	if f, ok := ev.Body.(protocol.Frame); ok {
 		if err := f.Validate(protocol.DefaultLimits); err != nil {
 			return err
@@ -271,5 +276,34 @@ func BenchmarkBoundarySessionFrameImage(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		br.draw()
 		br.emitPendingFrame()
+	}
+}
+
+// BenchmarkBoundaryComposedRepaint measures the split presentation path: a
+// content-only frame plus a chrome layer, composed by the front end.
+func BenchmarkBoundaryComposedRepaint(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: root, Title: "bench"}
+	br.layout = ly
+	br.color = true
+	br.bigText = false
+	br.emitFrames = true
+	br.frontendChrome = true
+	sink := &codecSink{}
+	br.sessionOut = sink
+	p := frontend.NewPresenter(io.Discard, true)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.prev = nil
+		br.draw()
+		br.emitPendingFrame()
+		p.SetChrome(sink.lastChrome)
+		p.Reset()
+		if err := p.Present(sink.last, 0, false); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

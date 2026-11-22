@@ -36,11 +36,14 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 	b.sessionQuit = false
 	b.lastState = protocol.State{}
 	b.emitFrames = true
+	b.frontendChrome = true
 	defer func() {
 		b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
 		b.sessionOut = nil
 		b.frameReady = false
+		b.chromeReady = false
 		b.emitFrames = false
+		b.frontendChrome = false
 	}()
 	b.sampleUsage()
 	for {
@@ -266,12 +269,18 @@ func (b *Browser) AbortSession() { b.abortGen.Add(1) }
 // emitPendingFrame sends the frame the last draw stashed. The transport copies
 // it before returning, so the frame buffer can be reused immediately.
 func (b *Browser) emitPendingFrame() {
+	if b.sessionOut == nil {
+		b.chromeReady = false
+		b.frameReady = false
+		return
+	}
+	if b.chromeReady {
+		b.chromeReady = false
+		_ = b.sessionOut.Send(protocol.Event{Body: b.chromeBuf})
+	}
 	if !b.frameReady {
 		return
 	}
 	b.frameReady = false
-	if b.sessionOut == nil {
-		return
-	}
 	_ = b.sessionOut.Send(protocol.Event{Body: b.frameBuf})
 }

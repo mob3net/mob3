@@ -401,6 +401,8 @@ func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *fro
 	case protocol.State:
 		st.scroll = v.Scroll
 		st.native = v.Flags&protocol.StateNativeImages != 0
+	case protocol.Chrome:
+		presenter.SetChrome(v)
 	case protocol.Frame:
 		if err := presenter.Present(v, st.scroll, st.native); err != nil {
 			return false, err

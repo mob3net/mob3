@@ -64,6 +64,7 @@ const (
 	EvDownload
 	EvQuit
 	EvAutomationResult
+	EvChrome
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.
@@ -153,11 +154,10 @@ type Link struct {
 	Href  string
 }
 
-// Frame is the engine's complete picture of the cells the front end should
-// display. Until chrome composition moves to the front end, H covers the full
-// terminal screen, including the rows the shell composes; after that it is only
-// the content rectangle. Rows owned by the shell are always drawn above page
-// content.
+// Frame is the engine's picture of the cells the front end should display.
+// When a Chrome event with Show=true accompanies it, H is the content rectangle
+// and the front end stacks the chrome header and footer above and below it.
+// Otherwise the frame is a full-screen fallback for an overlay or the console.
 type Frame struct {
 	// Version changes whenever the link metadata for this frame changes.
 	Version    uint32
@@ -192,6 +192,56 @@ const (
 	// image placements itself, so the front end must leave those frames alone.
 	StateNativeImages
 )
+
+// Chrome is the shell layer for a content-only frame. Header holds the rows
+// above the content; Footer holds the bottom row. Show=false means the engine
+// sent a full-screen frame (an overlay or console is open) and the front end
+// must present it unchanged.
+type Chrome struct {
+	Show       bool
+	Width      int
+	HeaderRows int
+	Header     []Cell
+	Footer     []Cell
+}
+
+// Validate checks a chrome layer against the same cell and size limits as a
+// frame.
+func (c Chrome) Validate(lim Limits) error {
+	lim = lim.normalized()
+	if !c.Show {
+		return nil
+	}
+	if c.Width <= 0 || c.Width > lim.MaxFrameWidth {
+		return fmt.Errorf("protocol: chrome width %d out of range", c.Width)
+	}
+	if c.HeaderRows < 0 || c.HeaderRows > lim.MaxFrameHeight {
+		return fmt.Errorf("protocol: chrome header rows %d out of range", c.HeaderRows)
+	}
+	if len(c.Header) != c.Width*c.HeaderRows {
+		return fmt.Errorf("protocol: chrome has %d header cells, want %d", len(c.Header), c.Width*c.HeaderRows)
+	}
+	if len(c.Footer) != c.Width {
+		return fmt.Errorf("protocol: chrome has %d footer cells, want %d", len(c.Footer), c.Width)
+	}
+	for i, cell := range c.Header {
+		if !SafeRune(cell.R) {
+			return fmt.Errorf("protocol: chrome header cell %d has unsafe rune %U", i, cell.R)
+		}
+		if cell.Run != 0 {
+			return fmt.Errorf("protocol: chrome header cell %d has a scaled run", i)
+		}
+	}
+	for i, cell := range c.Footer {
+		if !SafeRune(cell.R) {
+			return fmt.Errorf("protocol: chrome footer cell %d has unsafe rune %U", i, cell.R)
+		}
+		if cell.Run != 0 {
+			return fmt.Errorf("protocol: chrome footer cell %d has a scaled run", i)
+		}
+	}
+	return nil
+}
 
 // State is the small, trusted snapshot the chrome needs. The engine sends it
 // when something changes; it is never derived from page text without the front

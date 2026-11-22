@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"unicode"
+
+	"browser/internal/protocol"
 )
 
 // scrollBarInfo records the page scrollbar track/thumb for mouse hit testing.
@@ -312,28 +314,60 @@ func (b *Browser) draw() {
 		r.Y += top
 		g.Runs = append(g.Runs, r)
 	}
-	for i := range placements {
-		placements[i].Y += top
-	}
-
 	b.drawChrome(g)
+	if b.emitFrames && b.frontendChrome && b.height >= 3 && !b.overlayOpen() && !b.consoleOpen {
+		b.presentComposed(cg, g, top, contentH, placements)
+		return
+	}
 	b.presentGrid(g, placements)
 }
 
-// presentGrid hands one composed screen to the front end, or writes it
-// directly when no presentation session is active (tests and automation).
-// Every screen path, including the console, must use this so the front-end row
-// diff never goes stale.
+// presentGrid hands one full screen to the front end, or writes it directly
+// when no presentation session is active (tests and automation). Every screen
+// path, including the console, must use this so the front-end row diff never
+// goes stale.
 func (b *Browser) presentGrid(g *Grid, placements []ImagePlacement) {
+	top := b.contentRect().Top
+	for i := range placements {
+		placements[i].Y += top
+	}
 	if b.emitFrames {
 		// The frame buffer is reused; the transport copies it before the next
 		// draw.
+		b.chromeBuf = protocol.Chrome{Show: false}
+		b.chromeReady = true
 		b.frameBuf = toProtocolFrameInto(&b.frameBuf, g, 0)
 		b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements, g.W, g.H)
 		b.frameReady = true
 		return
 	}
 	b.flushGrid(g, placements)
+}
+
+// presentComposed sends a content-only frame plus the chrome rows the shell
+// composed above and below it. The front end stacks them, so a normal page
+// frame no longer carries chrome cells.
+func (b *Browser) presentComposed(content, screen *Grid, top, contentH int, placements []ImagePlacement) {
+	if top < 0 || contentH < 1 || screen.H < top+contentH+1 {
+		b.presentGrid(screen, placements)
+		return
+	}
+	header := b.chromeBuf.Header[:0]
+	for _, c := range screen.Cells[:top*screen.W] {
+		header = append(header, protoCell(c))
+	}
+	footer := b.chromeBuf.Footer[:0]
+	for _, c := range screen.Cells[(screen.H-1)*screen.W:] {
+		footer = append(footer, protoCell(c))
+	}
+	b.chromeBuf = protocol.Chrome{
+		Show: true, Width: screen.W, HeaderRows: top,
+		Header: header, Footer: footer,
+	}
+	b.chromeReady = true
+	b.frameBuf = toProtocolFrameInto(&b.frameBuf, content, 0)
+	b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
+	b.frameReady = true
 }
 
 // drawChrome composes the trusted shell: toolbar, footer and app overlays. It

@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 5 in progress (coalesced event delivery).**
+Status: **Phase 5 in progress (chrome layer split).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -84,6 +84,7 @@ network destination.
 | D48 | 2026-11-22 | `-dump` and `-png` run through `protocol.InProc` with a one-shot `dumpHandler`. The handler paints the page once; tall text dumps are split into 512-row frames after painting (preserving fixed/sticky placement and image crops), and PNG uses one frame up to the existing 2000-row cap. The front end writes the output. | This satisfies D13 for the non-interactive render paths without changing a byte of output, and exercises the transport from CLI tests. MCP and automation still call the engine directly. |
 | D49 | 2026-11-22 | MCP runs through `protocol.InProc`: an `automationHandler` owns the `Automation` engine on its goroutine, and `automationClient` implements the `RunMCP` surface using `Automation`/`AutomationResult` commands. The command carries an operation, a URL or tool name, and bounded JSON arguments; results carry text or PNG bytes. | This completes the production MCP path without rewriting the 2,000-line automation engine. In a later child split the handler moves with the engine and the client stays in the front end. The automation library remains the engine-side implementation and its tests still call it directly. |
 | D50 | 2026-11-22 | `InProc` delivers events through a bounded outbox. A newer `Frame` or `State` replaces the pending one, one-shot events keep their order, and `Quit`/`Crash` discard stale coalescible events first. The handler blocks only when the outbox is full of one-shot events. | A slow presenter must not stall the engine’s timers and loads on frames it will never show. Coalescing keeps the newest picture and state, while `Quit` and `Crash` are never delayed behind stale frames. |
+| D51 | 2026-11-22 | Add `protocol.Chrome`: normal page frames are content-only and are accompanied by the header/footer cell rows, which the front end stacks. Overlays and the console keep the existing full-screen frame with `Chrome.Show=false`. The engine still composes the chrome cells for now; semantic chrome ownership is the next slice. | This makes the normal frame contract content-only and moves ANSI stacking to the front end without losing overlays. It is a display-list bridge, not the final trust boundary: the engine can still choose chrome cells until the front end composes them from `State`. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -353,8 +354,10 @@ Next: 3b, the engine package.
       cannot swallow it.
 - [x] Move text presentation: ANSI encoding, stdout and the row diff now live
       in `frontend.Presenter`; the engine emits `Frame` events for text modes.
-- [ ] Move chrome composition (`drawChrome`) to the front end. The engine
-      still includes chrome in the frame while this is pending.
+- [~] Split chrome presentation: normal frames are content-only and the front
+      end stacks a `Chrome` layer; overlays and the console use the full-frame
+      fallback. The engine still composes the chrome cells, so semantic chrome
+      ownership is still pending.
 - [x] Move native image placement to the front end: encode `ImagePlacement`
       into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
       output to `internal/frontend/gfx.go`. Frames carry placements in every
@@ -387,7 +390,7 @@ inventory.
 (back/forward/reload/zoom/dark/reader/find/hints/select/copy), `ClientError`,
 `Automation`, `Abort`, `Shutdown`.
 
-**Session → front end:** `Frame` (content cells + placements), `State`, `Quit`,
+**Session → front end:** `Frame` (content cells + placements), `Chrome` (header/footer rows), `State`, `Quit`,
 `Links`, `FindResults`, `SelectionText`, `Dialog`, `Clipboard`,
 `NavigateRequest`, `Download`, `Console`, `Crash`.
 
@@ -474,6 +477,23 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5h deltas
+
+Normal page frames no longer carry chrome rows; a small `Chrome` event carries
+the header/footer cells and the front end stacks them. Overlays and the console
+still use the full-screen fallback.
+
+| Metric | Before 5h | After 5h | Delta |
+| --- | --- | --- | --- |
+| Full text repaint | 841–864 µs, 593.2 KB | 860–875 µs, 585.6 KB | flat |
+| Composed text repaint | new | 860–875 µs, 585.6 KB | new path |
+| Engine paint + frame handoff | 147–151 µs, 74.2 KB | unchanged | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite and `-race` | pass | pass | no change |
+
+PTY checks: about/help, console open/close, view-menu overlay fallback, kitty
+image page and quit all behave as before.
 
 ### Phase 5f deltas
 
@@ -870,3 +890,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5e | `-dump` and `-png` moved onto `InProc` with a one-shot dump handler; tall text is split after painting and PNG uses one frame; warnings are Console events. Output hashes unchanged. | `go test ./...`, `go vet`, full `-race`, dump/PNG hashes, tall dump/PNG checks, timing samples | MCP/automation on the transport, then chrome composition |
 | 2026-11-22 | 5f | MCP moved onto `InProc`: `automationHandler` owns the Automation engine, `automationClient` implements the MCP surface; added `Automation`/`AutomationResult` protocol messages with bounded JSON args and PNG results; CLI `-mcp` now opens a session and runs the client. | `go test ./...`, `go vet`, full `-race`, MCP transport round trip, binary `-mcp` navigate/snapshot smoke | Move chrome composition |
 | 2026-11-22 | 5g | Replaced the direct event channel with a bounded coalescing outbox: newest frame/state wins, one-shot events keep order, Quit/Crash drop stale frames first. Added a coalescing regression test; PTY console/kitty smoke. | `go test ./...`, `go vet`, full `-race`, coalescing test, PTY smoke, dump/PNG hashes | Move chrome composition, then socket transport |
+| 2026-11-22 | 5h | Normal frames are content-only with a `Chrome` header/footer layer; front end stacks it, overlays and console keep full-screen fallback; presenter composition and chrome-change resets; PTY chrome/console/overlay/kitty checks. | `go test ./...`, `go vet`, full `-race`, composed-repaint benchmark, PTY checks, dump/PNG hashes | Semantic chrome ownership, then socket transport |

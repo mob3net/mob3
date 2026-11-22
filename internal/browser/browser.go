@@ -261,6 +261,11 @@ type Browser struct {
 	emitFrames bool
 	frameReady bool
 	sessionOut protocol.EventSink
+	// frontendChrome lets the engine send a content-only frame plus the chrome
+	// rows it composed; full-screen frames remain for overlays and the console.
+	frontendChrome bool
+	chromeBuf      protocol.Chrome
+	chromeReady    bool
 	// placementCache keeps encoded image blobs stable across frames so native
 	// image output does not re-encode every picture on every repaint.
 	placementCache  map[placementKey]*placementEntry
