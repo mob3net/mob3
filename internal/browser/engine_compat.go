@@ -74,3 +74,5 @@ func applyDecl(st *Style, prop, val string, parent *Style) { engine.ApplyDecl(st
 func applyDecls(st *Style, decls []Declaration, parent *Style, important bool, fontBase float64) {
 	engine.ApplyDecls(st, decls, parent, important, fontBase)
 }
+
+func readableFG(fg, bg Color) Color { return engine.ReadableFG(fg, bg) }

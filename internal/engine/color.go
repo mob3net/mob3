@@ -241,3 +241,28 @@ func hslToRGB(h, s, l float64) (uint8, uint8, uint8) {
 	m := l - c/2
 	return uint8(math.Round((r + m) * 255)), uint8(math.Round((g + m) * 255)), uint8(math.Round((b + m) * 255))
 }
+
+// Opaque reports whether a color is set and mostly opaque.
+func Opaque(c Color) bool { return c.Opaque() }
+
+// ReadableFG keeps text legible against its background.
+func ReadableFG(fg, bg Color) Color {
+	if !fg.Set || !bg.Set {
+		return fg
+	}
+	lum := func(c Color) int {
+		return (299*int(c.R) + 587*int(c.G) + 114*int(c.B)) / 1000
+	}
+	lf, lb := lum(fg), lum(bg)
+	diff := lf - lb
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff >= 72 {
+		return fg
+	}
+	if lb >= 128 {
+		return RGB(0x1f, 0x23, 0x28)
+	}
+	return RGB(0xff, 0xff, 0xff)
+}

@@ -1,8 +1,8 @@
-package browser
+package engine
 
 // deferAbsolute records an out-of-flow element. Its subtree is laid out after
 // normal flow, when containing-block heights are known.
-func (l *layouter) deferAbsolute(n *Node, staticX, staticY int) {
+func (l *Layouter) deferAbsolute(n *Node, staticX, staticY int) {
 	if n == nil || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
 		return
 	}
@@ -28,7 +28,7 @@ func (l *layouter) deferAbsolute(n *Node, staticX, staticY int) {
 // finalizeAbsolute lays out the recorded absolute boxes and appends their
 // fragments above the in-flow content. Boxes discovered while laying out an
 // absolute subtree are appended to the queue and processed in tree order.
-func (l *layouter) finalizeAbsolute() {
+func (l *Layouter) finalizeAbsolute() {
 	for i := 0; i < len(l.abs); i++ {
 		l.layoutAbsolute(l.abs[i])
 	}
@@ -37,7 +37,7 @@ func (l *layouter) finalizeAbsolute() {
 // layoutAbsolute places one absolute box against its containing block,
 // resolving left/right/top/bottom, percentage offsets, shrink-to-fit widths
 // and top+bottom height stretching.
-func (l *layouter) layoutAbsolute(a *absBox) {
+func (l *Layouter) layoutAbsolute(a *absBox) {
 	if l.outOfTime() {
 		return
 	}
@@ -55,13 +55,13 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	}
 	cbW := cb.w
 	if cbW < 1 {
-		cbW = l.width
+		cbW = l.Width
 	}
 	cbH := 0
 	if cb.knownH {
 		cbH = cb.h
 	}
-	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, cbW)
+	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.BoxMetrics(st, cbW)
 
 	hasL, hasR := offsetSet(st.Left), offsetSet(st.Right)
 	hasT, hasB := offsetSet(st.Top), offsetSet(st.Bottom)
@@ -165,7 +165,7 @@ func (l *layouter) layoutAbsolute(a *absBox) {
 	copy(frags, l.frags[start:])
 	l.frags = l.frags[:start]
 	if n.Tag == "a" && n.HasAttr("href") && rect.W > 0 && rect.H > 0 && noContentFrags(frags) {
-		frags = append(frags, Frag{Kind: fragLink, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Node: n})
+		frags = append(frags, Frag{Kind: FragLink, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Node: n})
 	}
 	l.cb = prevCB
 	l.curFixed = prevFixed

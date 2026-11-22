@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"image"
@@ -19,7 +19,7 @@ func svgLabel(n *Node) (label string, visible bool) {
 			return label, true
 		}
 	}
-	if label := strings.TrimSpace(visibleText(n)); label != "" {
+	if label := strings.TrimSpace(VisibleText(n)); label != "" {
 		return label, true
 	}
 	if strings.TrimSpace(n.Attr("aria-label")) != "" {
@@ -43,7 +43,7 @@ func imageFallbackLabel(n *Node) (label string, visible bool) {
 // blockSVG lays out an SVG that became a block box, such as a flex or grid
 // item. It paints the rasterized image, or the accessibility fallback when
 // rasterization did not happen (images off or a decoder failure).
-func (l *layouter) blockSVG(n *Node, x, y, w int) int {
+func (l *Layouter) blockSVG(n *Node, x, y, w int) int {
 	if n.Img != nil && !l.imagesOff {
 		return l.blockImage(n, x, y, w)
 	}
@@ -52,7 +52,7 @@ func (l *layouter) blockSVG(n *Node, x, y, w int) int {
 		return 0
 	}
 	if w > 0 {
-		label = truncateWidth(label, w)
+		label = TruncateWidth(label, w)
 	}
 	l.addText(x, y, label, n.Style, n)
 	return 1
@@ -79,15 +79,18 @@ func (c *inlineCtx) addImage(n *Node, st *Style) {
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: w, h: h, style: st, node: n,
 		paint: func(x, y int) {
-			c.l.frags = append(c.l.frags, Frag{Kind: fragImage, X: x, Y: y, W: w2, H: h2, Img: n.Img, Node: n})
+			c.l.frags = append(c.l.frags, Frag{Kind: FragImage, X: x, Y: y, W: w2, H: h2, Img: n.Img, Node: n})
 		},
 	})
 }
 
 const maxImageRows = 16
 
-func (l *layouter) imageCapWidth() int {
-	w := l.width * 2 / 5
+// MaxImageRows caps an image box height in cells.
+const MaxImageRows = maxImageRows
+
+func (l *Layouter) imageCapWidth() int {
+	w := l.Width * 2 / 5
 	if w < 1 {
 		w = 1
 	}
@@ -98,7 +101,7 @@ func (l *layouter) imageCapWidth() int {
 // ratio and applying the terminal-friendly display cap.
 // blockImage lays out an image that is itself a block or absolutely / fixed
 // positioned box. Normal inline images go through inlineCtx.addImage instead.
-func (l *layouter) blockImage(n *Node, x, y, w int) int {
+func (l *Layouter) blockImage(n *Node, x, y, w int) int {
 	st := n.Style
 	boxH := l.forcedImageH
 	if boxH <= 0 && st.Height.Set && st.Height.U != UnitPercent {
@@ -131,12 +134,12 @@ func (l *layouter) blockImage(n *Node, x, y, w int) int {
 		return altH
 	}
 	iw, ih := imageSize(n, st, w, l.imageCapWidth())
-	l.frags = append(l.frags, Frag{Kind: fragImage, X: x, Y: y, W: iw, H: ih, Img: n.Img, Node: n})
+	l.frags = append(l.frags, Frag{Kind: FragImage, X: x, Y: y, W: iw, H: ih, Img: n.Img, Node: n})
 	return ih
 }
 
 // addFittedImage draws an image into a definite CSS box using object-fit.
-func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int {
+func (l *Layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int {
 	b := n.Img.Bounds()
 	iw, ih := b.Dx(), b.Dy()
 	if iw <= 0 || ih <= 0 || boxW <= 0 || boxH <= 0 {
@@ -167,7 +170,7 @@ func (l *layouter) addFittedImage(n *Node, st *Style, x, y, boxW, boxH int) int 
 		if fh < 1 {
 			fh = 1
 		}
-		l.frags = append(l.frags, Frag{Kind: fragImage, X: fx, Y: fy, W: fw, H: fh, Img: n.Img, Crop: crop, Node: n})
+		l.frags = append(l.frags, Frag{Kind: FragImage, X: fx, Y: fy, W: fw, H: fh, Img: n.Img, Crop: crop, Node: n})
 	}
 	switch fit {
 	case "contain", "scale-down":
@@ -249,7 +252,7 @@ func imageAltLabel(alt string, max int) string {
 	if max < 8 {
 		return "▣"
 	}
-	return truncateWidth("[image: "+alt+"]", max)
+	return TruncateWidth("[image: "+alt+"]", max)
 }
 
 // imageSize returns the terminal-cell size of an image, from its intrinsic
@@ -392,7 +395,7 @@ func clampUnit(v float64) float64 {
 // width:100% image would otherwise be measured against the terminal line and
 // hit the image display cap. Ancestors are resolved outermost first so a
 // chain such as holder{width:100%} inside outer{width:2rem} narrows to 2rem.
-func (l *layouter) inlineImageWidth(n *Node, fallback int) int {
+func (l *Layouter) inlineImageWidth(n *Node, fallback int) int {
 	var chain []*Style
 	for p := n.Parent; p != nil; p = p.Parent {
 		if p.Type != ElementNode || p.Style == nil {
@@ -426,3 +429,6 @@ func (l *layouter) inlineImageWidth(n *Node, fallback int) int {
 	}
 	return basis
 }
+
+// ImageSize resolves an image box for layout.
+func ImageSize(n *Node, st *Style, maxW, capW int) (w, h int) { return imageSize(n, st, maxW, capW) }

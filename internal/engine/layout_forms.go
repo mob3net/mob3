@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -10,13 +10,13 @@ import (
 // Form controls use single-cell Unicode glyphs so a checkbox plus its label
 // reads like a form rather than a run of ASCII brackets.
 const (
-	glyphCheckboxOn  = "☑"
-	glyphCheckboxOff = "☐"
-	glyphRadioOn     = "◉"
-	glyphRadioOff    = "○"
+	GlyphCheckboxOn  = "☑"
+	GlyphCheckboxOff = "☐"
+	GlyphRadioOn     = "◉"
+	GlyphRadioOff    = "○"
 )
 
-func isFormControl(n *Node) bool {
+func IsFormControl(n *Node) bool {
 	if n == nil || n.Type != ElementNode {
 		return false
 	}
@@ -27,9 +27,9 @@ func isFormControl(n *Node) bool {
 	return false
 }
 
-// isDisabledControl reports a control that is disabled itself or belongs to a
+// IsDisabledControl reports a control that is disabled itself or belongs to a
 // disabled fieldset.
-func isDisabledControl(n *Node) bool {
+func IsDisabledControl(n *Node) bool {
 	if n == nil {
 		return false
 	}
@@ -47,8 +47,8 @@ func isDisabledControl(n *Node) bool {
 	return false
 }
 
-// isReadOnlyControl reports a text-like control that is not editable.
-func isReadOnlyControl(n *Node) bool {
+// IsReadOnlyControl reports a text-like control that is not editable.
+func IsReadOnlyControl(n *Node) bool {
 	if n == nil {
 		return false
 	}
@@ -66,8 +66,8 @@ func isReadOnlyControl(n *Node) bool {
 	return false
 }
 
-// maxLength returns the maxlength limit in runes, or 0 when unrestricted.
-func maxLength(n *Node) int {
+// MaxLength returns the maxlength limit in runes, or 0 when unrestricted.
+func MaxLength(n *Node) int {
 	if n == nil {
 		return 0
 	}
@@ -83,10 +83,10 @@ func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
 		return
 	}
 	maxW := c.lineMaxW()
-	if w := stringWidth(label); w > maxW && maxW > 0 {
-		label = truncateWidth(label, maxW)
+	if w := StringWidth(label); w > maxW && maxW > 0 {
+		label = TruncateWidth(label, maxW)
 	}
-	w := stringWidth(label)
+	w := StringWidth(label)
 	if w < 1 {
 		w = 1
 	}
@@ -124,19 +124,19 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		c.addMultiSelect(n, st)
 		return
 	}
-	label := formLabel(n)
+	label := FormLabel(n)
 	if label == "" {
 		return
 	}
 	maxW := c.lineMaxW()
-	if w := stringWidth(label); w > maxW && maxW > 0 {
-		label = truncateWidth(label, maxW)
+	if w := StringWidth(label); w > maxW && maxW > 0 {
+		label = TruncateWidth(label, maxW)
 	}
-	w := stringWidth(label)
+	w := StringWidth(label)
 	if w < 1 {
 		w = 1
 	}
-	editable := isTextInput(n)
+	editable := IsTextInput(n)
 	// A text-like control stretches its widget to an explicit CSS width, or to
 	// the width allocated by a flex row (used by the home search box).
 	if editable {
@@ -148,15 +148,15 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 			target = st.Width.ResolveH(maxW, st.FontSize)
 		}
 		if target > w {
-			w = minInt(target, maxW)
+			w = MinInt(target, maxW)
 			if strings.HasSuffix(label, "]") {
-				pad := w - stringWidth(label)
+				pad := w - StringWidth(label)
 				label = label[:len(label)-1] + strings.Repeat(" ", pad) + "]"
 			}
 		}
 	}
-	disabled := isDisabledControl(n)
-	readOnly := isReadOnlyControl(n)
+	disabled := IsDisabledControl(n)
+	readOnly := IsReadOnlyControl(n)
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: w, h: 1, style: st, node: n,
 		paint: func(x, y int) {
@@ -172,7 +172,7 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 			case readOnly:
 				bg = RGB(0xf1, 0xf3, 0xf5)
 				fg = RGB(0x57, 0x60, 0x6a)
-			case n.InputFocused && isRangeInput(n):
+			case n.InputFocused && IsRangeInput(n):
 				bg = RGB(0x2f, 0x6f, 0xbf)
 				fg = RGB(0xff, 0xff, 0xff)
 			case editable:
@@ -185,9 +185,9 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 				}
 			}
 			if !disabled && !readOnly && strings.EqualFold(n.Attr("type"), "color") {
-				if swatch, ok := parseColor(inputValue(n), Color{}); ok && swatch.Set && swatch.A > 0 {
+				if swatch, ok := ParseColor(InputValue(n), Color{}); ok && swatch.Set && swatch.A > 0 {
 					bg = swatch
-					fg = readableFG(RGB(0x1f, 0x23, 0x28), bg)
+					fg = ReadableFG(RGB(0x1f, 0x23, 0x28), bg)
 					if n.InputFocused {
 						cl.Bold = true
 					}
@@ -198,7 +198,7 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 			paintStyle = &cl
 			c.l.addFill(x, y, w, 1, bg)
 			c.l.addText(x, y, label, paintStyle, n)
-			if col, ok := inputCursorOffset(n, label); ok {
+			if col, ok := InputCursorOffset(n, label); ok {
 				c.l.setInputCursor(x+2+col, y)
 			}
 		},
@@ -209,7 +209,7 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 // Every option occupies its own row and keeps the option node, so a click can
 // toggle precisely that option rather than cycling the whole control.
 func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
-	opts := selectOptions(n)
+	opts := SelectOptions(n)
 	if len(opts) == 0 {
 		c.addLabel("[ multi-select ]", st, n)
 		return
@@ -217,12 +217,12 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 	labels := make([]string, len(opts))
 	boxW := 0
 	for i, opt := range opts {
-		mark := glyphCheckboxOff + " "
+		mark := GlyphCheckboxOff + " "
 		if opt.HasAttr("selected") {
-			mark = glyphCheckboxOn + " "
+			mark = GlyphCheckboxOn + " "
 		}
-		labels[i] = mark + optionLabel(opt)
-		if w := stringWidth(labels[i]); w > boxW {
+		labels[i] = mark + OptionLabel(opt)
+		if w := StringWidth(labels[i]); w > boxW {
 			boxW = w
 		}
 	}
@@ -239,7 +239,7 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 		boxW = 1
 	}
 	for i := range labels {
-		labels[i] = truncateWidth(labels[i], boxW)
+		labels[i] = TruncateWidth(labels[i], boxW)
 	}
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: boxW, h: len(opts), style: st, node: n,
@@ -265,19 +265,19 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 // uses the same bracketed style as a text input; the extra rows make the
 // control visibly taller than a single-line field.
 func (c *inlineCtx) addTextarea(n *Node, st *Style) {
-	label := formLabel(n)
+	label := FormLabel(n)
 	if label == "" {
 		return
 	}
-	boxW := stringWidth(label)
+	boxW := StringWidth(label)
 	if c.maxW > 0 && boxW > c.maxW {
 		boxW = c.maxW
 	}
 	if boxW < 8 {
 		boxW = 8
 	}
-	rows, cursorRow, cursorCol, hasCursor := textareaLayoutFor(n, boxW)
-	editable := isTextInput(n)
+	rows, cursorRow, cursorCol, hasCursor := TextareaLayoutFor(n, boxW)
+	editable := IsTextInput(n)
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: boxW, h: len(rows), style: st, node: n,
 		paint: func(x, y int) {
@@ -307,9 +307,9 @@ func (c *inlineCtx) addTextarea(n *Node, st *Style) {
 	})
 }
 
-// textareaLayoutFor formats the visible rows of a textarea and the focused
+// TextareaLayoutFor formats the visible rows of a textarea and the focused
 // caret cell within the box.
-func textareaLayoutFor(n *Node, boxW int) (rows []string, cursorRow, cursorCol int, hasCursor bool) {
+func TextareaLayoutFor(n *Node, boxW int) (rows []string, cursorRow, cursorCol int, hasCursor bool) {
 	inner := boxW - 3
 	if inner < 1 {
 		inner = 1
@@ -336,7 +336,7 @@ func textareaLayoutFor(n *Node, boxW int) (rows []string, cursorRow, cursorCol i
 	}
 	out := make([]string, h)
 	for i, line := range lines {
-		out[i] = "[ " + padWidth(truncateWidth(line, inner), inner) + "]"
+		out[i] = "[ " + PadWidth(TruncateWidth(line, inner), inner) + "]"
 	}
 	if cursorCol >= inner {
 		cursorCol = inner - 1
@@ -357,7 +357,7 @@ func textareaLines(n *Node, width int) []string {
 
 // textareaLinesCursor is textareaLines plus the caret's row and cell column.
 func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol int, hasCursor bool) {
-	txt := inputValue(n)
+	txt := InputValue(n)
 	cur := n.InputCursor
 	hasCursor = n.InputFocused
 	if txt == "" && !n.InputFocused {
@@ -369,15 +369,15 @@ func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol
 		width = 1
 	}
 	// The widget never shows more than 12 rows; stop scanning beyond that.
-	txt = truncateWidth(txt, width*12+12)
+	txt = TruncateWidth(txt, width*12+12)
 	if hasCursor {
 		if cur > len(txt) {
 			hasCursor = false
 		} else {
-			cur = len(expandTabs(txt[:cur]))
+			cur = len(ExpandTabs(txt[:cur]))
 		}
 	}
-	txt = expandTabs(txt)
+	txt = ExpandTabs(txt)
 	var b strings.Builder
 	w := 0
 	row := 0
@@ -401,7 +401,7 @@ func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol
 			flush()
 			continue
 		}
-		rw := runeWidth(r)
+		rw := RuneWidth(r)
 		if rw == 0 {
 			b.WriteRune(r)
 			continue
@@ -456,17 +456,17 @@ func textareaRows(n *Node) int {
 	return rows
 }
 
-// selectOptions returns every option below a select, including those nested in
+// SelectOptions returns every option below a select, including those nested in
 // optgroup elements.
-func selectOptions(n *Node) []*Node {
+func SelectOptions(n *Node) []*Node {
 	if n == nil {
 		return nil
 	}
 	return n.FindAll(func(x *Node) bool { return x.Tag == "option" })
 }
 
-// optionLabel is the visible text of an option, falling back to its value.
-func optionLabel(opt *Node) string {
+// OptionLabel is the visible text of an option, falling back to its value.
+func OptionLabel(opt *Node) string {
 	if opt == nil {
 		return ""
 	}
@@ -477,9 +477,9 @@ func optionLabel(opt *Node) string {
 	return label
 }
 
-// optionValue is the value submitted for an option. Options without a value
+// OptionValue is the value submitted for an option. Options without a value
 // use their visible text, matching HTML.
-func optionValue(opt *Node) string {
+func OptionValue(opt *Node) string {
 	if opt == nil {
 		return ""
 	}
@@ -489,21 +489,21 @@ func optionValue(opt *Node) string {
 	return strings.TrimSpace(opt.TextContent())
 }
 
-// selectedOptionValues returns the submitted values of a multi-select in
+// SelectedOptionValues returns the submitted values of a multi-select in
 // document order.
-func selectedOptionValues(n *Node) []string {
+func SelectedOptionValues(n *Node) []string {
 	var values []string
-	for _, opt := range selectOptions(n) {
-		if opt.HasAttr("selected") && !isDisabledControl(opt) {
-			values = append(values, optionValue(opt))
+	for _, opt := range SelectOptions(n) {
+		if opt.HasAttr("selected") && !IsDisabledControl(opt) {
+			values = append(values, OptionValue(opt))
 		}
 	}
 	return values
 }
 
-// rangeParams resolves the min/max/step/value of a range input using the HTML
+// RangeParams resolves the min/max/step/value of a range input using the HTML
 // defaults.
-func rangeParams(n *Node) (min, max, step, value float64) {
+func RangeParams(n *Node) (min, max, step, value float64) {
 	min, max, step, value = 0, 100, 1, 0
 	if v, err := strconv.ParseFloat(strings.TrimSpace(n.Attr("min")), 64); err == nil {
 		min = v
@@ -534,7 +534,7 @@ func rangeParams(n *Node) (min, max, step, value float64) {
 	return min, max, step, value
 }
 
-func formatRangeNumber(v float64) string {
+func FormatRangeNumber(v float64) string {
 	if math.Abs(v-math.Round(v)) < 1e-9 {
 		return strconv.FormatInt(int64(math.Round(v)), 10)
 	}
@@ -542,13 +542,13 @@ func formatRangeNumber(v float64) string {
 }
 
 func rangeValueString(n *Node) string {
-	_, _, _, value := rangeParams(n)
-	return formatRangeNumber(value)
+	_, _, _, value := RangeParams(n)
+	return FormatRangeNumber(value)
 }
 
 // rangeLabel draws a compact slider with the current value.
 func rangeLabel(n *Node) string {
-	min, max, _, value := rangeParams(n)
+	min, max, _, value := RangeParams(n)
 	const barW = 16
 	pos := 0
 	if max > min {
@@ -571,8 +571,8 @@ func rangeLabel(n *Node) string {
 	return "[ - " + bar.String() + " " + rangeValueString(n) + " + ]"
 }
 
-// inputValue returns the current editable value of a form control.
-func inputValue(n *Node) string {
+// InputValue returns the current editable value of a form control.
+func InputValue(n *Node) string {
 	if n == nil {
 		return ""
 	}
@@ -581,11 +581,11 @@ func inputValue(n *Node) string {
 	}
 	if n.Tag == "select" {
 		var first string
-		for _, opt := range selectOptions(n) {
-			if isDisabledControl(opt) {
+		for _, opt := range SelectOptions(n) {
+			if IsDisabledControl(opt) {
 				continue
 			}
-			val := optionValue(opt)
+			val := OptionValue(opt)
 			if first == "" {
 				first = val
 			}
@@ -619,7 +619,7 @@ const inputDisplayCells = 40
 // cell column of the caret within that text. A focused value scrolls so the
 // caret stays visible; unfocused values simply truncate at the right edge.
 func inputTextDisplay(n *Node, typ string) (string, int, bool) {
-	val := inputValue(n)
+	val := InputValue(n)
 	if !n.InputFocused {
 		if val == "" {
 			val = n.Attr("placeholder")
@@ -630,8 +630,8 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 		if val == "" {
 			val = strings.Repeat(" ", 10)
 		}
-		if w := stringWidth(val); w > inputDisplayCells {
-			val = truncateWidth(val, inputDisplayCells)
+		if w := StringWidth(val); w > inputDisplayCells {
+			val = TruncateWidth(val, inputDisplayCells)
 		}
 		return val, 0, false
 	}
@@ -657,7 +657,7 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 	start := curRune
 	used := 0
 	for start > 0 {
-		rw := runeWidth(runes[start-1])
+		rw := RuneWidth(runes[start-1])
 		if used+rw > limit {
 			break
 		}
@@ -666,11 +666,11 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 	}
 	used = 0
 	for i := start; i < curRune; i++ {
-		used += runeWidth(runes[i])
+		used += RuneWidth(runes[i])
 	}
 	end := curRune
 	for end < len(runes) {
-		rw := runeWidth(runes[end])
+		rw := RuneWidth(runes[end])
 		if used+rw > limit {
 			break
 		}
@@ -678,7 +678,7 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 		end++
 	}
 	display := string(runes[start:end])
-	cursorCol := stringWidth(string(runes[start:curRune]))
+	cursorCol := StringWidth(string(runes[start:curRune]))
 	if start > 0 {
 		display = "…" + display
 		cursorCol++
@@ -686,8 +686,8 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 	return display, cursorCol, true
 }
 
-// inputCursorOffset returns the caret column within a formatted input label.
-func inputCursorOffset(n *Node, label string) (int, bool) {
+// InputCursorOffset returns the caret column within a formatted input label.
+func InputCursorOffset(n *Node, label string) (int, bool) {
 	if n == nil || n.Tag != "input" || !n.InputFocused {
 		return 0, false
 	}
@@ -700,7 +700,7 @@ func inputCursorOffset(n *Node, label string) (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	if max := stringWidth(label) - 4; col > max {
+	if max := StringWidth(label) - 4; col > max {
 		col = max
 	}
 	if col < 0 {
@@ -709,24 +709,24 @@ func inputCursorOffset(n *Node, label string) (int, bool) {
 	return col, true
 }
 
-func formLabel(n *Node) string {
+func FormLabel(n *Node) string {
 	switch n.Tag {
 	case "input":
 		typ := strings.ToLower(n.Attr("type"))
-		val := inputValue(n)
+		val := InputValue(n)
 		switch typ {
 		case "hidden":
 			return ""
 		case "checkbox":
 			if n.HasAttr("checked") {
-				return glyphCheckboxOn
+				return GlyphCheckboxOn
 			}
-			return glyphCheckboxOff
+			return GlyphCheckboxOff
 		case "radio":
 			if n.HasAttr("checked") {
-				return glyphRadioOn
+				return GlyphRadioOn
 			}
-			return glyphRadioOff
+			return GlyphRadioOff
 		case "submit", "button", "reset":
 			if val == "" {
 				if typ == "reset" {
@@ -745,7 +745,7 @@ func formLabel(n *Node) string {
 		case "password":
 			display, _, _ := inputTextDisplay(n, typ)
 			minW := 16
-			if w := stringWidth(display); w < minW {
+			if w := StringWidth(display); w < minW {
 				display += strings.Repeat(" ", minW-w)
 			}
 			return "[ " + display + " ]"
@@ -755,15 +755,15 @@ func formLabel(n *Node) string {
 			if typ == "search" {
 				minW = 30
 			}
-			if w := stringWidth(display); w < minW {
+			if w := StringWidth(display); w < minW {
 				display += strings.Repeat(" ", minW-w)
 			}
 			return "[ " + display + " ]"
 		}
 	case "select":
 		var chosen string
-		for _, opt := range selectOptions(n) {
-			if isDisabledControl(opt) {
+		for _, opt := range SelectOptions(n) {
+			if IsDisabledControl(opt) {
 				continue
 			}
 			if chosen == "" {
@@ -779,7 +779,7 @@ func formLabel(n *Node) string {
 		}
 		return "[ " + chosen + " ▾ ]"
 	case "textarea":
-		txt := truncateWidth(inputValue(n), 80)
+		txt := TruncateWidth(InputValue(n), 80)
 		if txt == "" && !n.InputFocused {
 			txt = n.Attr("placeholder")
 		}
@@ -789,19 +789,45 @@ func formLabel(n *Node) string {
 		if txt == "" {
 			txt = strings.Repeat(" ", 10)
 		}
-		if w := stringWidth(txt); w < 30 {
+		if w := StringWidth(txt); w < 30 {
 			txt += strings.Repeat(" ", 30-w)
 		}
-		if w := stringWidth(txt); w > 40 {
-			txt = truncateWidth(txt, 40)
+		if w := StringWidth(txt); w > 40 {
+			txt = TruncateWidth(txt, 40)
 		}
 		return "[ " + txt + " ]"
 	case "button":
-		txt := strings.TrimSpace(visibleText(n))
+		txt := strings.TrimSpace(VisibleText(n))
 		if txt == "" {
 			txt = "Button"
 		}
 		return "[ " + txt + " ]"
 	}
 	return ""
+}
+
+// IsTextInput is used by form layout.
+func IsTextInput(n *Node) bool {
+	if n == nil || n.Type != ElementNode || IsDisabledControl(n) || IsReadOnlyControl(n) {
+		return false
+	}
+	if n.Tag == "textarea" {
+		return true
+	}
+	if n.Tag != "input" {
+		return false
+	}
+	switch strings.ToLower(n.Attr("type")) {
+	case "", "text", "search", "email", "url", "tel", "number", "password",
+		"date", "datetime-local", "month", "week", "time", "color":
+		return true
+	}
+	return false
+}
+
+// IsRangeInput is used by form layout.
+func IsRangeInput(n *Node) bool {
+	return n != nil && n.Type == ElementNode && n.Tag == "input" &&
+		strings.EqualFold(strings.TrimSpace(n.Attr("type")), "range") &&
+		!IsDisabledControl(n)
 }

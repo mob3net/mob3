@@ -1,11 +1,11 @@
-package browser
+package engine
 
 import "math"
 
 // applyDarkLayout remaps the computed palette after layout. Light backgrounds
 // become dark, dark foregrounds become light, and hues are preserved so links
 // and status colors remain recognisable.
-func applyDarkLayout(ly *Layout) {
+func ApplyDarkLayout(ly *Layout) {
 	if ly == nil {
 		return
 	}
@@ -27,9 +27,9 @@ func applyDarkLayout(ly *Layout) {
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
 		switch f.Kind {
-		case fragText:
+		case FragText:
 			darkStyle(f.Style)
-		case fragFill:
+		case FragFill:
 			f.Color = darkBackground(f.Color, bgCache)
 		}
 	}
@@ -39,7 +39,7 @@ func applyDarkLayout(ly *Layout) {
 // isDarkColor reports whether a resolved page background already belongs to a
 // dark palette. It keeps author-supplied dark themes intact when dark mode is
 // enabled.
-func isDarkColor(c Color) bool {
+func IsDarkColor(c Color) bool {
 	if !c.Set || c.A == 0 {
 		return false
 	}
@@ -155,3 +155,9 @@ func clampByte(v float64) uint8 {
 	}
 	return uint8(math.Round(v))
 }
+
+// DarkForeground maps one foreground color into the dark palette.
+func DarkForeground(c Color, cache map[Color]Color) Color { return darkForeground(c, cache) }
+
+// DarkBackground maps one background color into the dark palette.
+func DarkBackground(c Color, cache map[Color]Color) Color { return darkBackground(c, cache) }

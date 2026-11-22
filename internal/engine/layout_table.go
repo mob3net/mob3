@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -71,7 +71,7 @@ func distributeSpan(cols []int, col, span, target int) {
 	}
 }
 
-func (l *layouter) table(n *Node, x, y, availW int) int {
+func (l *Layouter) table(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -490,8 +490,8 @@ func (l *layouter) table(n *Node, x, y, availW int) int {
 			// its vertically aligned content. Cell borders are suppressed
 			// above because the table draws the collapsed grid.
 			contentStart := start
-			if start < len(l.frags) && opaque(orig.Background) {
-				if f := &l.frags[start]; f.Kind == fragFill && f.Color == orig.Background {
+			if start < len(l.frags) && Opaque(orig.Background) {
+				if f := &l.frags[start]; f.Kind == FragFill && f.Color == orig.Background {
 					contentStart++
 				}
 			}
@@ -568,14 +568,14 @@ func childByTag(n *Node, tag string) *Node {
 	return nil
 }
 
-func (l *layouter) paddingH(n *Node) (int, int) {
+func (l *Layouter) paddingH(n *Node) (int, int) {
 	if n == nil || n.Style == nil {
 		return 0, 0
 	}
 	st := n.Style
-	pl := nonNeg(st.Padding[3].ResolveH(l.width, st.FontSize))
-	pr := nonNeg(st.Padding[1].ResolveH(l.width, st.FontSize))
-	bl := usedBorderH(st, 3, l.width)
-	br := usedBorderH(st, 1, l.width)
+	pl := nonNeg(st.Padding[3].ResolveH(l.Width, st.FontSize))
+	pr := nonNeg(st.Padding[1].ResolveH(l.Width, st.FontSize))
+	bl := usedBorderH(st, 3, l.Width)
+	br := usedBorderH(st, 1, l.Width)
 	return pl + pr + bl + br, 0
 }

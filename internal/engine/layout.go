@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"image"
@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-type fragKind int
+type FragKind int
 
 const (
-	fragFill fragKind = iota
-	fragText
-	fragImage
-	// fragLink is an invisible box for an empty anchor, so overlay links that
+	FragFill FragKind = iota
+	FragText
+	FragImage
+	// FragLink is an invisible box for an empty anchor, so overlay links that
 	// cover a whole card remain clickable and focusable.
-	fragLink
+	FragLink
 )
 
 // Rect is a terminal-cell rectangle.
@@ -35,7 +35,7 @@ type LinkInfo struct {
 // Frag is a paint primitive produced by layout, in document coordinates
 // (row 0 is the top of the page).
 type Frag struct {
-	Kind  fragKind
+	Kind  FragKind
 	X, Y  int
 	W, H  int
 	Color Color
@@ -135,10 +135,10 @@ func ParseLayoutBudget(name string) (LayoutBudget, bool) {
 	return LayoutBudget{}, false
 }
 
-type layouter struct {
-	styles    map[*Node]*Style
+type Layouter struct {
+	Styles    map[*Node]*Style
 	cbs       map[*Node]*cbRect
-	width     int
+	Width     int
 	frags     []Frag
 	boxes     map[*Node]Rect
 	bigText   bool
@@ -220,15 +220,15 @@ type floatBox struct {
 
 // outOfTime reports whether the layout pass has exceeded its deadline. The
 // flag is sticky so recursive callers unwind instead of starting new work.
-func (l *layouter) overFragLimit() bool {
+func (l *Layouter) overFragLimit() bool {
 	return l.maxFrags > 0 && len(l.frags) >= l.maxFrags
 }
 
-func (l *layouter) overRowLimit(y int) bool {
+func (l *Layouter) overRowLimit(y int) bool {
 	return l.maxRows > 0 && y > l.maxRows
 }
 
-func (l *layouter) outOfTime() bool {
+func (l *Layouter) outOfTime() bool {
 	if l.expired {
 		return true
 	}
@@ -303,13 +303,13 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	if budget.Time <= 0 {
 		deadline = time.Time{}
 	}
-	engine := newStyleEngineDeadline(author, cssWidthPx(width), deadline)
+	engine := newStyleEngineDeadline(author, CSSWidthPx(width), deadline)
 	if viewportH > 0 {
 		engine.SetViewportHeight(float64(viewportH) * cellH)
 	}
 	engine.SetDark(dark)
 	styles := engine.ComputeAll(root)
-	l := &layouter{styles: styles, width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
+	l := &Layouter{Styles: styles, Width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -333,7 +333,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		if f.Y+f.H > inFlowHeight {
 			inFlowHeight = f.Y + f.H
 		}
-		if f.Kind == fragText && f.Y+1 > inFlowHeight {
+		if f.Kind == FragText && f.Y+1 > inFlowHeight {
 			inFlowHeight = f.Y + 1
 		}
 	}
@@ -349,7 +349,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		if f.Y+f.H > height {
 			height = f.Y + f.H
 		}
-		if f.Kind == fragText && f.Y+1 > height {
+		if f.Kind == FragText && f.Y+1 > height {
 			height = f.Y + 1
 		}
 	}
@@ -359,10 +359,10 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	pageBG := RGB(255, 255, 255)
 	explicitBG := false
-	if body != nil && body.Style != nil && opaque(body.Style.Background) {
+	if body != nil && body.Style != nil && Opaque(body.Style.Background) {
 		pageBG = body.Style.Background
 		explicitBG = true
-	} else if html != nil && html.Style != nil && opaque(html.Style.Background) {
+	} else if html != nil && html.Style != nil && Opaque(html.Style.Background) {
 		pageBG = html.Style.Background
 		explicitBG = true
 	}
@@ -370,7 +370,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		// Sites sometimes paint their background on a full-page wrapper or
 		// use a gradient the engine cannot parse. Use the largest opaque fill
 		// covering most of the first viewport as the page background.
-		if c, ok := fallbackPageBackground(l.frags, width, viewportH, height); ok {
+		if c, ok := FallbackPageBackground(l.frags, width, viewportH, height); ok {
 			pageBG = c
 		}
 	}
@@ -385,13 +385,13 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	// A page that already renders a dark background is using its own dark
 	// theme (or responded to prefers-color-scheme); keep its palette. The
 	// post-layout remap remains the fallback for light pages.
-	if dark && !isDarkColor(out.PageBG) {
-		applyDarkLayout(out)
+	if dark && !IsDarkColor(out.PageBG) {
+		ApplyDarkLayout(out)
 	}
 	return out
 }
 
-func (l *layouter) addFill(x, y, w, h int, c Color) {
+func (l *Layouter) addFill(x, y, w, h int, c Color) {
 	if l.outOfTime() {
 		return
 	}
@@ -402,11 +402,11 @@ func (l *layouter) addFill(x, y, w, h int, c Color) {
 		l.truncated = true
 		return
 	}
-	l.frags = append(l.frags, Frag{Kind: fragFill, X: x, Y: y, W: w, H: h, Color: c})
+	l.frags = append(l.frags, Frag{Kind: FragFill, X: x, Y: y, W: w, H: h, Color: c})
 }
 
 // setInputCursor records the focused form caret cell in document coordinates.
-func (l *layouter) setInputCursor(x, y int) {
+func (l *Layouter) setInputCursor(x, y int) {
 	l.cursor = Rect{X: x, Y: y, W: 1, H: 1}
 	l.hasCursor = true
 }
@@ -463,7 +463,7 @@ func usedBorderV(st *Style, i, basis int) int {
 }
 
 // boxWidth returns the horizontal border and padding of a box in cells.
-func (l *layouter) boxWidth(st *Style, basis int) int {
+func (l *Layouter) boxWidth(st *Style, basis int) int {
 	return usedBorderH(st, 3, basis) +
 		usedBorderH(st, 1, basis) +
 		nonNeg(st.Padding[3].ResolveH(basis, st.FontSize)) +
@@ -471,7 +471,7 @@ func (l *layouter) boxWidth(st *Style, basis int) int {
 }
 
 // boxHeight returns the vertical border and padding of a box in rows.
-func (l *layouter) boxHeight(st *Style, basis int) int {
+func (l *Layouter) boxHeight(st *Style, basis int) int {
 	return usedBorderV(st, 0, basis) +
 		usedBorderV(st, 2, basis) +
 		nonNeg(st.Padding[0].ResolveV(basis, st.FontSize)) +
@@ -480,7 +480,7 @@ func (l *layouter) boxHeight(st *Style, basis int) int {
 
 // widthValue resolves a horizontal CSS length to a content width, applying
 // border-box sizing when requested.
-func (l *layouter) widthValue(st *Style, v Length, basis int) int {
+func (l *Layouter) widthValue(st *Style, v Length, basis int) int {
 	w := v.ResolveH(basis, st.FontSize)
 	if st.BoxSizing == "border-box" {
 		w -= l.boxWidth(st, basis)
@@ -493,7 +493,7 @@ func (l *layouter) widthValue(st *Style, v Length, basis int) int {
 
 // heightValue resolves a vertical CSS length to a content height, applying
 // border-box sizing when requested.
-func (l *layouter) heightValue(st *Style, v Length, basis int) int {
+func (l *Layouter) heightValue(st *Style, v Length, basis int) int {
 	h := v.ResolveV(basis, st.FontSize)
 	if st.BoxSizing == "border-box" {
 		h -= l.boxHeight(st, basis)
@@ -504,7 +504,7 @@ func (l *layouter) heightValue(st *Style, v Length, basis int) int {
 	return h
 }
 
-func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb int) {
+func (l *Layouter) BoxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb int) {
 	f := st.FontSize
 	// CSS resolves percentage margins and padding vertically against the
 	// containing block's width. Convert that width to a row basis so
@@ -525,7 +525,7 @@ func (l *layouter) boxMetrics(st *Style, availW int) (ml, mr, mt, mb, bl, br, bt
 	return
 }
 
-func (l *layouter) isBlock(n *Node) bool {
+func (l *Layouter) isBlock(n *Node) bool {
 	if n == nil || n.Type != ElementNode || n.Style == nil {
 		return false
 	}
@@ -538,7 +538,7 @@ func (l *layouter) isBlock(n *Node) bool {
 	// Controls are rendered as inline form widgets even when a stylesheet
 	// gives them display:block/flex; the block path does not paint their
 	// value/widget.
-	if isFormControl(n) {
+	if IsFormControl(n) {
 		return false
 	}
 	switch n.Style.Display {
@@ -552,7 +552,7 @@ func (l *layouter) isBlock(n *Node) bool {
 // descendant. Browsers split such an inline box around the block; treating the
 // inline wrapper as a block keeps the descendant's grid/flex children out of
 // the surrounding inline flow.
-func (l *layouter) hasBlockDescendant(n *Node) bool {
+func (l *Layouter) hasBlockDescendant(n *Node) bool {
 	if n == nil {
 		return false
 	}
@@ -579,7 +579,7 @@ func (l *layouter) hasBlockDescendant(n *Node) bool {
 // out as a block so its block/grid/flex descendants keep their own layout.
 // An inline-block with an explicit width behaves like a block container; an
 // inline-block without one stays an atomic inline box (menu items, buttons).
-func (l *layouter) inlineWrapperIsBlock(n *Node) bool {
+func (l *Layouter) inlineWrapperIsBlock(n *Node) bool {
 	if n == nil || n.Style == nil {
 		return false
 	}
@@ -594,12 +594,12 @@ func (l *layouter) inlineWrapperIsBlock(n *Node) bool {
 
 // block lays out node n as a block at (x,y) and returns its outer height,
 // including vertical margins.
-func (l *layouter) block(n *Node, x, y, availW int) int {
+func (l *Layouter) block(n *Node, x, y, availW int) int {
 	// A form control blockified by a column flex container or grid item keeps
 	// the inline widget path. The block path would render its children as
 	// plain text and drop the widget value/glyph and the Node-tagged fragment
 	// that focus, link hints and activation look for.
-	if isFormControl(n) {
+	if IsFormControl(n) {
 		return l.inlineFlow([]*Node{n}, x, y, availW, n.Style)
 	}
 	h, _ := l.blockLayout(n, x, y, availW, 0, false)
@@ -609,7 +609,7 @@ func (l *layouter) block(n *Node, x, y, availW int) int {
 // blockLayout is block with the border-box rectangle reported. forceContentH,
 // when positive, stretches the content box to at least that height (used by
 // absolutely positioned boxes with both top and bottom offsets).
-func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthResolved bool) (int, Rect) {
+func (l *Layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthResolved bool) (int, Rect) {
 	return l.blockLayoutPct(n, x, y, availW, forceContentH, widthResolved, availW)
 }
 
@@ -617,7 +617,7 @@ func (l *layouter) blockLayout(n *Node, x, y, availW, forceContentH int, widthRe
 // A flex or grid item's used width is the slot the line assigned it, but its
 // percentage margins, padding, borders and min/max sizes resolve against the
 // container's content box, as in CSS.
-func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widthResolved bool, pctW int) (int, Rect) {
+func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widthResolved bool, pctW int) (int, Rect) {
 	if l.outOfTime() {
 		return 0, Rect{}
 	}
@@ -639,7 +639,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	fragStart := len(l.frags)
 	absStart := len(l.abs)
 	prevPaintZ := l.paintZ
-	if st.ZIndex != 0 && isPositionedStyle(st) {
+	if st.ZIndex != 0 && IsPositionedStyle(st) {
 		l.paintZ = st.ZIndex
 	}
 	stickyGroup := 0
@@ -647,14 +647,14 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		l.stickyNodes = append(l.stickyNodes, n)
 		stickyGroup = len(l.stickyNodes)
 	}
-	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.boxMetrics(st, pctW)
+	ml, mr, mt, mb, bl, br, bt, bb, pl, pr, pt, pb := l.BoxMetrics(st, pctW)
 	contentW := availW - ml - mr - bl - br - pl - pr
 	if !widthResolved {
 		if st.Width.Set && !st.Width.IsAuto() {
 			w := l.widthValue(st, st.Width, pctW)
 			if w >= 0 {
 				// A percentage or calc() width resolves against the containing
-				// block, so only let it shrink the box: a padded width:100%
+				// block, so only let it shrink the box: a padded Width:100%
 				// box keeps its content inside the parent. An absolute width
 				// (a fixed desktop canvas, a wide sidebar) is used as declared
 				// even when it is wider than the parent, so the box overflows
@@ -718,7 +718,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	}
 
 	bgIndex := -1
-	if opaque(st.Background) {
+	if Opaque(st.Background) {
 		l.addFill(boxX, top, boxW, 1, st.Background)
 		bgIndex = len(l.frags) - 1
 	}
@@ -727,7 +727,7 @@ func (l *layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	// block's total height is known.
 	bgImgIndex := -1
 	if !l.imagesOff && n.Tag != "img" && n.Tag != "svg" && pixelsBackground(n, st) && n.Img != nil {
-		l.frags = append(l.frags, Frag{Kind: fragImage, X: boxX, Y: top, W: boxW, H: 1, Img: n.Img, Node: n, Background: true})
+		l.frags = append(l.frags, Frag{Kind: FragImage, X: boxX, Y: top, W: boxW, H: 1, Img: n.Img, Node: n, Background: true})
 		bgImgIndex = len(l.frags) - 1
 	}
 	clipStart := len(l.frags)
@@ -938,8 +938,8 @@ func offsetSet(l Length) bool {
 // relativeOffset resolves top/left/right/bottom for a relatively positioned
 // box into a visual translation. Left wins over right and top over bottom,
 // matching CSS for left-to-right text.
-func (l *layouter) relativeOffset(st *Style, cb *cbRect) (int, int) {
-	w, h := l.width, 0
+func (l *Layouter) relativeOffset(st *Style, cb *cbRect) (int, int) {
+	w, h := l.Width, 0
 	if cb != nil {
 		w = cb.w
 		if cb.knownH {
@@ -999,8 +999,8 @@ func lengthFuncHasPercent(f *LengthFunc) bool {
 	return false
 }
 
-// isPositionedStyle reports whether a style takes part in z-index stacking.
-func isPositionedStyle(st *Style) bool {
+// IsPositionedStyle reports whether a style takes part in z-index stacking.
+func IsPositionedStyle(st *Style) bool {
 	if st == nil {
 		return false
 	}
@@ -1012,9 +1012,9 @@ func isPositionedStyle(st *Style) bool {
 }
 
 // inheritedZ returns the z-index of the nearest positioned ancestor.
-func (l *layouter) inheritedZ(n *Node) int {
+func (l *Layouter) inheritedZ(n *Node) int {
 	for p := n.Parent; p != nil; p = p.Parent {
-		if p.Style != nil && isPositionedStyle(p.Style) && p.Style.ZIndex != 0 {
+		if p.Style != nil && IsPositionedStyle(p.Style) && p.Style.ZIndex != 0 {
 			return p.Style.ZIndex
 		}
 	}
@@ -1067,4 +1067,39 @@ func (ly *Layout) buildPaintOrder() {
 		return fa.Z < fb.Z
 	})
 	ly.paintOrder = order
+}
+
+// ComputeNode computes the style of a script-created node on demand.
+func (ly *Layout) ComputeNode(n *Node) *Style {
+	if ly == nil || ly.engine == nil {
+		return nil
+	}
+	return ly.engine.ComputeNode(n)
+}
+
+// ScrollAnchored reports whether fixed/sticky fragments were applied.
+func (ly *Layout) ScrollAnchored() bool { return ly != nil && ly.fixedApplied }
+
+// FixedScrollOffset returns the scroll the fixed fragments were applied at.
+func (ly *Layout) FixedScrollOffset() int {
+	if ly == nil {
+		return 0
+	}
+	return ly.fixedScroll
+}
+
+// PaintOrder returns the z-index paint sequence, empty for tree order.
+func (ly *Layout) PaintOrder() []int {
+	if ly == nil {
+		return nil
+	}
+	return ly.paintOrder
+}
+
+// StickyCount reports how many sticky groups were resolved.
+func (ly *Layout) StickyCount() int {
+	if ly == nil {
+		return 0
+	}
+	return len(ly.stickies)
 }

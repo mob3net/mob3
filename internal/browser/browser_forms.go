@@ -470,30 +470,7 @@ func (b *Browser) ensureFocusVisible() {
 	b.clampScroll()
 }
 
-func isTextInput(n *Node) bool {
-	if n == nil || n.Type != ElementNode || isDisabledControl(n) || isReadOnlyControl(n) {
-		return false
-	}
-	if n.Tag == "textarea" {
-		return true
-	}
-	if n.Tag != "input" {
-		return false
-	}
-	switch strings.ToLower(n.Attr("type")) {
-	case "", "text", "search", "email", "url", "tel", "number", "password",
-		"date", "datetime-local", "month", "week", "time", "color":
-		return true
-	}
-	return false
-}
-
 // isRangeInput reports an interactive range slider.
-func isRangeInput(n *Node) bool {
-	return n != nil && n.Type == ElementNode && n.Tag == "input" &&
-		strings.EqualFold(strings.TrimSpace(n.Attr("type")), "range") &&
-		!isDisabledControl(n)
-}
 
 func isFileInput(n *Node) bool {
 	if n == nil || n.Type != ElementNode || n.Tag != "input" || isDisabledControl(n) {

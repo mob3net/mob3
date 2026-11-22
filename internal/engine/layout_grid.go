@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strconv"
@@ -9,9 +9,9 @@ import (
 // explicit item widths, flex-grow, shrink-to-fit items and column gaps; it does
 // not implement wrapping, alignment or order.
 type gridTrack struct {
-	fixed int
-	flex  float64
-	auto  bool
+	Fixed int
+	Flex  float64
+	Auto  bool
 }
 
 func splitGridParts(s string) []string {
@@ -117,13 +117,13 @@ func parseMinMaxTrack(part string, avail int, font float64) (gridTrack, bool) {
 	inner := part[len(prefix) : len(part)-1]
 	best := 0
 	found := false
-	for _, f := range splitTopLevel(inner, ',') {
+	for _, f := range SplitTopLevel(inner, ',') {
 		f = strings.TrimSpace(f)
 		fl := strings.ToLower(f)
 		if f == "" || fl == "auto" || strings.HasSuffix(fl, "fr") {
 			continue
 		}
-		l := parseLength(f, font)
+		l := ParseLength(f, font)
 		if !l.Set || l.Auto {
 			continue
 		}
@@ -134,9 +134,9 @@ func parseMinMaxTrack(part string, avail int, font float64) (gridTrack, bool) {
 		}
 	}
 	if !found {
-		return gridTrack{auto: true}, true
+		return gridTrack{Auto: true}, true
 	}
-	return gridTrack{fixed: best}, true
+	return gridTrack{Fixed: best}, true
 }
 
 func parseGridTracks(raw string, avail int, font float64) []gridTrack {
@@ -169,7 +169,7 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		lower := strings.ToLower(part)
 		if strings.HasPrefix(lower, "repeat(") && strings.HasSuffix(part, ")") {
 			inner := part[len("repeat(") : len(part)-1]
-			fields := splitTopLevel(inner, ',')
+			fields := SplitTopLevel(inner, ',')
 			if len(fields) < 2 {
 				continue
 			}
@@ -193,7 +193,7 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		}
 		if strings.HasPrefix(lower, "minmax(") && strings.HasSuffix(part, ")") {
 			inner := part[len("minmax(") : len(part)-1]
-			fields := splitTopLevel(inner, ',')
+			fields := SplitTopLevel(inner, ',')
 			if len(fields) == 2 {
 				part = strings.TrimSpace(fields[1])
 				lower = strings.ToLower(part)
@@ -202,17 +202,17 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		switch {
 		case strings.HasSuffix(lower, "fr"):
 			if f, err := strconv.ParseFloat(strings.TrimSuffix(lower, "fr"), 64); err == nil && f > 0 {
-				out = append(out, gridTrack{flex: f})
+				out = append(out, gridTrack{Flex: f})
 			} else {
-				out = append(out, gridTrack{flex: 1})
+				out = append(out, gridTrack{Flex: 1})
 			}
 		case lower == "auto" || strings.Contains(lower, "content") || strings.HasPrefix(lower, "fit-content"):
-			out = append(out, gridTrack{auto: true})
+			out = append(out, gridTrack{Auto: true})
 		default:
-			if l := parseLength(part, font); l.Set {
-				out = append(out, gridTrack{fixed: l.ResolveH(avail, font)})
+			if l := ParseLength(part, font); l.Set {
+				out = append(out, gridTrack{Fixed: l.ResolveH(avail, font)})
 			} else {
-				out = append(out, gridTrack{auto: true})
+				out = append(out, gridTrack{Auto: true})
 			}
 		}
 	}
@@ -233,9 +233,9 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 	flexTotal := 0.0
 	autoCount := 0
 	for i, t := range tracks {
-		if t.flex > 0 {
-			flexTotal += t.flex
-		} else if t.auto {
+		if t.Flex > 0 {
+			flexTotal += t.Flex
+		} else if t.Auto {
 			autoCount++
 			w := 1
 			if i < len(content) && content[i] > w {
@@ -243,8 +243,8 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 			}
 			widths[i] = w
 		} else {
-			widths[i] = t.fixed
-			fixedTotal += t.fixed
+			widths[i] = t.Fixed
+			fixedTotal += t.Fixed
 		}
 	}
 	remaining := avail - gap*(len(tracks)-1) - fixedTotal
@@ -253,7 +253,7 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 	}
 	autoTotal := 0
 	for i, t := range tracks {
-		if t.auto {
+		if t.Auto {
 			autoTotal += widths[i]
 		}
 	}
@@ -264,7 +264,7 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 		shrinkAutoTracks(tracks, widths, minContent, autoTotal-remaining)
 		autoTotal = 0
 		for i, t := range tracks {
-			if t.auto {
+			if t.Auto {
 				autoTotal += widths[i]
 			}
 		}
@@ -275,14 +275,14 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 	}
 	if flexTotal > 0 {
 		for i, t := range tracks {
-			if t.flex > 0 {
-				widths[i] = int(float64(remaining) * t.flex / flexTotal)
+			if t.Flex > 0 {
+				widths[i] = int(float64(remaining) * t.Flex / flexTotal)
 			}
 		}
 	} else if autoCount > 0 && remaining > 0 {
 		each := remaining / autoCount
 		for i, t := range tracks {
-			if t.auto {
+			if t.Auto {
 				widths[i] += each
 			}
 		}
@@ -321,7 +321,7 @@ func shrinkAutoTracks(tracks []gridTrack, widths, mins []int, deficit int) {
 	for deficit > 0 {
 		slack := 0
 		for i, t := range tracks {
-			if !t.auto {
+			if !t.Auto {
 				continue
 			}
 			floor := 1
@@ -335,10 +335,10 @@ func shrinkAutoTracks(tracks []gridTrack, widths, mins []int, deficit int) {
 		if slack <= 0 {
 			return
 		}
-		take := maxInt(1, minInt(deficit, slack))
+		take := MaxInt(1, MinInt(deficit, slack))
 		removed := 0
 		for i, t := range tracks {
-			if !t.auto {
+			if !t.Auto {
 				continue
 			}
 			floor := 1
@@ -368,7 +368,7 @@ func shrinkAutoTracks(tracks []gridTrack, widths, mins []int, deficit int) {
 // gridTrackContent measures the max-content and min-content width each column
 // needs from the items placed in it. Spanned items spread their deficit over
 // the columns they cover, like table column sizing.
-func (l *layouter) gridTrackContent(cells []gridCell, cols int) (content, minContent []int) {
+func (l *Layouter) gridTrackContent(cells []gridCell, cols int) (content, minContent []int) {
 	content = make([]int, cols)
 	minContent = make([]int, cols)
 	for _, c := range cells {
@@ -425,7 +425,7 @@ func gridPlacementNamed(raw string, cols int, lines map[string][]int) (start, sp
 	if raw == "" {
 		return -1, 1, false
 	}
-	parts := splitTopLevel(raw, '/')
+	parts := SplitTopLevel(raw, '/')
 	first := strings.TrimSpace(parts[0])
 	if strings.HasPrefix(first, "span ") {
 		if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(first, "span "))); err == nil && n > 0 {
@@ -546,7 +546,7 @@ func parseGridAreas(raw string) map[string]gridAreaSpan {
 	return out
 }
 
-func (l *layouter) grid(n *Node, x, y, availW int) int {
+func (l *Layouter) grid(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -566,7 +566,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		// max-width child is aligned instead of falling back to block flow and
 		// sticking to the left edge.
 		if st.JustifyItems == "center" || st.JustifyItems == "end" {
-			tracks = []gridTrack{{flex: 1}}
+			tracks = []gridTrack{{Flex: 1}}
 		} else {
 			return l.flow(n, x, y, availW)
 		}
@@ -591,11 +591,11 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			continue
 		}
 		a, ok := areas[child.Style.GridArea]
-		if !ok || a.span != 1 || a.start < 0 || a.start >= len(tracks) || !tracks[a.start].auto {
+		if !ok || a.span != 1 || a.start < 0 || a.start >= len(tracks) || !tracks[a.start].Auto {
 			continue
 		}
 		pref, _ := l.measure(child)
-		need := minInt(maxInt(2, pref), availW)
+		need := MinInt(MaxInt(2, pref), availW)
 		if need <= widths[a.start] {
 			continue
 		}
@@ -603,15 +603,15 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 		widths[a.start] = need
 		flexLeft := 0.0
 		for i := range tracks {
-			if tracks[i].flex > 0 {
-				flexLeft += tracks[i].flex
+			if tracks[i].Flex > 0 {
+				flexLeft += tracks[i].Flex
 			}
 		}
 		for i := range tracks {
-			if extra <= 0 || flexLeft <= 0 || tracks[i].flex <= 0 || widths[i] <= 1 {
+			if extra <= 0 || flexLeft <= 0 || tracks[i].Flex <= 0 || widths[i] <= 1 {
 				continue
 			}
-			take := int(float64(extra) * tracks[i].flex / flexLeft)
+			take := int(float64(extra) * tracks[i].Flex / flexLeft)
 			if take > widths[i]-1 {
 				take = widths[i] - 1
 			}
@@ -620,7 +620,7 @@ func (l *layouter) grid(n *Node, x, y, availW int) int {
 			}
 			widths[i] -= take
 			extra -= take
-			flexLeft -= tracks[i].flex
+			flexLeft -= tracks[i].Flex
 		}
 	}
 	if len(widths) > 4 {
@@ -726,7 +726,7 @@ func gridRowPlacement(raw string) (start, span int, set bool) {
 	if raw == "" || raw == "auto" {
 		return 0, 1, false
 	}
-	parts := splitTopLevel(raw, '/')
+	parts := SplitTopLevel(raw, '/')
 	first := strings.TrimSpace(parts[0])
 	if first == "" || first == "auto" || strings.HasPrefix(first, "span ") {
 		return 0, 1, false
@@ -817,7 +817,7 @@ func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridA
 
 // alignGridItemX applies justify-items/justify-self to one placed grid item.
 // Vertical alignment and auto-flow remain approximated.
-func (l *layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart, absStart int) {
+func (l *Layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart, absStart int) {
 	align := ""
 	if item != nil && item.Style != nil {
 		align = item.Style.JustifySelf
@@ -832,7 +832,7 @@ func (l *layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart
 	if !ok || item.Style == nil {
 		return
 	}
-	ml, mr, _, _, _, _, _, _, _, _, _, _ := l.boxMetrics(item.Style, cellW)
+	ml, mr, _, _, _, _, _, _, _, _, _, _ := l.BoxMetrics(item.Style, cellW)
 	leftover := cellW - ml - mr - box.W
 	if leftover <= 0 {
 		return
@@ -864,4 +864,22 @@ func (l *layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart
 		}
 	}
 	walk(item)
+}
+
+// GridTrack is one parsed grid track.
+type GridTrack = gridTrack
+
+// ParseGridTracks parses a grid-template value into tracks.
+func ParseGridTracks(raw string, avail int, font float64) []GridTrack {
+	return parseGridTracks(raw, avail, font)
+}
+
+// ResolveGridTracks distributes an available width over tracks.
+func ResolveGridTracks(tracks []GridTrack, avail, gap int, content, minContent []int) []int {
+	return resolveGridTracks(tracks, avail, gap, content, minContent)
+}
+
+// GridPlacement parses a numeric grid placement.
+func GridPlacement(raw string, cols int) (start, span int, explicit bool) {
+	return gridPlacement(raw, cols)
 }

@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strings"
@@ -23,7 +23,7 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 					lineMax += sc
 					continue
 				}
-				rw := runeWidth(r) * sc
+				rw := RuneWidth(r) * sc
 				lineMax += rw
 				word += rw
 			}
@@ -54,7 +54,7 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 			lineMax += sc
 			pendingSpace = false
 		}
-		rw := runeWidth(r) * sc
+		rw := RuneWidth(r) * sc
 		lineMax += rw
 		word += rw
 		content = true
@@ -91,7 +91,7 @@ func flowChildren(n *Node) []*Node {
 	return out
 }
 
-func (l *layouter) measure(n *Node) (maxW, minW int) {
+func (l *Layouter) measure(n *Node) (maxW, minW int) {
 	if n == nil {
 		return 0, 0
 	}
@@ -99,8 +99,8 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		if n.Style == nil {
 			return 0, 0
 		}
-		s := expandTabs(n.Text)
-		s = applyTextTransform(s, n.Style.TextTransform)
+		s := ExpandTabs(n.Text)
+		s = ApplyTextTransform(s, n.Style.TextTransform)
 		sc := l.scale(n.Style)
 		maxW, minW = measureInlineText(s, n.Style.WhiteSpace, sc)
 		return maxW, minW
@@ -139,7 +139,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		if !visible || label == "" {
 			return 0, 0
 		}
-		w := stringWidth(label)
+		w := StringWidth(label)
 		return w, w
 	}
 	if n.Tag == "img" || n.Tag == "svg" {
@@ -151,7 +151,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		if st.Width.Set && !st.Width.IsAuto() && lengthHasPercent(st.Width) {
 			copied := *st
 			copied.Width = Length{}
-			cw, _ := imageSize(n, &copied, l.width, l.imageCapWidth())
+			cw, _ := imageSize(n, &copied, l.Width, l.imageCapWidth())
 			cw = l.limitImageMeasure(st, cw)
 			if cw < 1 {
 				cw = 1
@@ -160,7 +160,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			// imposing its intrinsic width as a minimum.
 			return cw, 1
 		}
-		cw, _ := imageSize(n, st, l.width, l.imageCapWidth())
+		cw, _ := imageSize(n, st, l.Width, l.imageCapWidth())
 		cw = l.limitImageMeasure(st, cw)
 		if cw < 1 {
 			cw = 1
@@ -168,14 +168,14 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		return cw, cw
 	}
 	if n.Tag == "select" && n.HasAttr("multiple") {
-		opts := selectOptions(n)
+		opts := SelectOptions(n)
 		w := 10
 		for _, opt := range opts {
-			mark := glyphCheckboxOff + " "
+			mark := GlyphCheckboxOff + " "
 			if opt.HasAttr("selected") {
-				mark = glyphCheckboxOn + " "
+				mark = GlyphCheckboxOn + " "
 			}
-			if ow := stringWidth(mark + optionLabel(opt)); ow > w {
+			if ow := StringWidth(mark + OptionLabel(opt)); ow > w {
 				w = ow
 			}
 		}
@@ -185,7 +185,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		if n.Tag == "input" && strings.EqualFold(n.Attr("type"), "hidden") {
 			return 0, 0
 		}
-		w := stringWidth(formLabel(n))
+		w := StringWidth(FormLabel(n))
 		if w < 1 {
 			w = 1
 		}
@@ -196,7 +196,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 		// A definite absolute width fixes the element's used width for
 		// intrinsic sizing too, so shrink-to-fit containers do not ignore
 		// explicitly sized children such as logos.
-		w := st.Width.ResolveH(l.width, st.FontSize)
+		w := st.Width.ResolveH(l.Width, st.FontSize)
 		if st.BoxSizing == "border-box" {
 			w -= pad
 			if w < 0 {
@@ -241,7 +241,7 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			if c.Type == ElementNode && c.Style != nil && c.Style.Float != "" {
 				// Floats share a line until the width runs out, so their
 				// max-content contribution is the sum of their widths.
-				ml, mr, _, _, _, _, _, _, _, _, _, _ := l.boxMetrics(c.Style, l.width)
+				ml, mr, _, _, _, _, _, _, _, _, _, _ := l.BoxMetrics(c.Style, l.Width)
 				floatSum += mw + ml + mr
 				if mi > minW {
 					minW = mi
@@ -296,8 +296,8 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 			continue
 		}
 		if c.Type == TextNode && c.Style != nil {
-			s := expandTabs(c.Text)
-			s = applyTextTransform(s, c.Style.TextTransform)
+			s := ExpandTabs(c.Text)
+			s = ApplyTextTransform(s, c.Style.TextTransform)
 			sc := l.scale(c.Style)
 			partMax, partMin := measureInlineText(s, c.Style.WhiteSpace, sc)
 			total += partMax
@@ -335,13 +335,21 @@ func (l *layouter) measure(n *Node) (maxW, minW int) {
 // measurement. Without it a floated thumbnail with `width:100%` and
 // `max-width:110px` measured at its source size, so the float stayed 220px
 // wide and pushed the text beside it into a narrow column.
-func (l *layouter) limitImageMeasure(st *Style, cw int) int {
+func (l *Layouter) limitImageMeasure(st *Style, cw int) int {
 	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() || st.MaxWidth.Calc || lengthHasPercent(st.MaxWidth) {
 		return cw
 	}
-	mw := st.MaxWidth.ResolveH(l.width, st.FontSize)
+	mw := st.MaxWidth.ResolveH(l.Width, st.FontSize)
 	if mw > 0 && cw > mw {
 		return mw
 	}
 	return cw
+}
+
+// Measure is the exported intrinsic measurement entry point.
+func (l *Layouter) Measure(n *Node) (maxW, minW int) { return l.measure(n) }
+
+// MeasureInlineText measures an inline text run.
+func MeasureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
+	return measureInlineText(s, whiteSpace, sc)
 }

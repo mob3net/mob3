@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strings"
@@ -8,7 +8,7 @@ import (
 // visibleText concatenates rendered text below n, skipping hidden elements.
 // Form controls (notably buttons) use this instead of TextContent so CSS or
 // script text cannot leak into their labels.
-func visibleText(n *Node) string {
+func VisibleText(n *Node) string {
 	var b strings.Builder
 	var walk func(*Node)
 	walk = func(x *Node) {
@@ -39,7 +39,7 @@ func visibleText(n *Node) string {
 // fallbackPageBackground finds a full-page wrapper background when html/body
 // do not provide an opaque color. A fill must cover at least 60% of the first
 // viewport (or the whole short document) to count.
-func fallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bool) {
+func FallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bool) {
 	if width < 1 {
 		return Color{}, false
 	}
@@ -54,11 +54,11 @@ func fallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bo
 	best := Color{}
 	bestArea := 0
 	for _, f := range frags {
-		if f.Kind != fragFill || !opaque(f.Color) {
+		if f.Kind != FragFill || !Opaque(f.Color) {
 			continue
 		}
-		x0, x1 := maxInt(f.X, 0), minInt(f.X+f.W, width)
-		y0, y1 := maxInt(f.Y, 0), minInt(f.Y+f.H, h)
+		x0, x1 := MaxInt(f.X, 0), MinInt(f.X+f.W, width)
+		y0, y1 := MaxInt(f.Y, 0), MinInt(f.Y+f.H, h)
 		if x1 <= x0 || y1 <= y0 {
 			continue
 		}
@@ -73,14 +73,14 @@ func fallbackPageBackground(frags []Frag, width, viewportH, docH int) (Color, bo
 	return best, true
 }
 
-func maxInt(a, b int) int {
+func MaxInt(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
 }
 
-func minInt(a, b int) int {
+func MinInt(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -88,20 +88,20 @@ func minInt(a, b int) int {
 }
 
 // runeWidth returns the number of terminal cells a rune occupies.
-func runeWidth(r rune) int {
+func RuneWidth(r rune) int {
 	if r == 0 || r < 32 || (r >= 0x7f && r < 0xa0) {
 		return 0
 	}
 	if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r) {
 		return 0
 	}
-	if isWideRune(r) {
+	if IsWideRune(r) {
 		return 2
 	}
 	return 1
 }
 
-func isWideRune(r rune) bool {
+func IsWideRune(r rune) bool {
 	switch {
 	case r >= 0x1100 && r <= 0x115f,
 		r >= 0x2329 && r <= 0x232a,
@@ -124,22 +124,22 @@ func isWideRune(r rune) bool {
 	return false
 }
 
-func stringWidth(s string) int {
+func StringWidth(s string) int {
 	w := 0
 	for _, r := range s {
-		w += runeWidth(r)
+		w += RuneWidth(r)
 	}
 	return w
 }
 
 // truncateWidth cuts s to at most max cells.
-func truncateWidth(s string, max int) string {
+func TruncateWidth(s string, max int) string {
 	if max <= 0 {
 		return ""
 	}
 	w := 0
 	for i, r := range s {
-		rw := runeWidth(r)
+		rw := RuneWidth(r)
 		if w+rw > max {
 			return s[:i]
 		}
@@ -149,26 +149,26 @@ func truncateWidth(s string, max int) string {
 }
 
 // padWidth pads s with spaces to exactly w cells.
-func padWidth(s string, w int) string {
-	sw := stringWidth(s)
+func PadWidth(s string, w int) string {
+	sw := StringWidth(s)
 	if sw >= w {
-		return truncateWidth(s, w)
+		return TruncateWidth(s, w)
 	}
 	return s + strings.Repeat(" ", w-sw)
 }
 
 // fitWidth truncates s with an ellipsis and pads it to exactly w cells.
-func fitWidth(s string, w int) string {
+func FitWidth(s string, w int) string {
 	if w <= 0 {
 		return ""
 	}
-	if stringWidth(s) <= w {
-		return padWidth(s, w)
+	if StringWidth(s) <= w {
+		return PadWidth(s, w)
 	}
-	return padWidth(truncateWidth(s, w-1)+"…", w)
+	return PadWidth(TruncateWidth(s, w-1)+"…", w)
 }
 
-func applyTextTransform(s, mode string) string {
+func ApplyTextTransform(s, mode string) string {
 	switch mode {
 	case "uppercase":
 		return strings.ToUpper(s)
@@ -192,7 +192,7 @@ func applyTextTransform(s, mode string) string {
 }
 
 // expandTabs converts tabs to spaces using a 4-cell tab width.
-func expandTabs(s string) string {
+func ExpandTabs(s string) string {
 	if !strings.ContainsRune(s, '\t') {
 		return s
 	}
@@ -209,7 +209,7 @@ func expandTabs(s string) string {
 			col = 0
 		default:
 			b.WriteRune(r)
-			col += runeWidth(r)
+			col += RuneWidth(r)
 		}
 	}
 	return b.String()

@@ -604,8 +604,8 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	// content while scrolled), and viewport-anchored (fixed) chrome last.
 	// A page with z-index uses the precomputed order, which sorts within each
 	// phase.
-	if len(ly.paintOrder) > 0 {
-		for _, i := range ly.paintOrder {
+	if len(ly.PaintOrder()) > 0 {
+		for _, i := range ly.PaintOrder() {
 			paintOne(&ly.Frags[i])
 		}
 		return
@@ -813,27 +813,6 @@ func stripTerminalControls(s string) string {
 // roughly 4.6:1 contrast, so the page's own text colour stays legible without
 // forcing the contrast fallback to flip it.
 var backgroundPlaceholderBG = RGB(0x76, 0x76, 0x76)
-
-func readableFG(fg, bg Color) Color {
-	if !fg.Set || !bg.Set {
-		return fg
-	}
-	lum := func(c Color) int {
-		return (299*int(c.R) + 587*int(c.G) + 114*int(c.B)) / 1000
-	}
-	lf, lb := lum(fg), lum(bg)
-	diff := lf - lb
-	if diff < 0 {
-		diff = -diff
-	}
-	if diff >= 72 {
-		return fg
-	}
-	if lb >= 128 {
-		return RGB(0x1f, 0x23, 0x28)
-	}
-	return RGB(0xff, 0xff, 0xff)
-}
 
 type GraphicsMode int
 

@@ -212,7 +212,7 @@ func TestGridJoinedTrackValues(t *testing.T) {
 	if len(tracks) != 2 {
 		t.Fatalf("tracks = %d (%+v), want 2", len(tracks), tracks)
 	}
-	if tracks[0].fixed == 0 || tracks[1].flex == 0 {
+	if tracks[0].Fixed == 0 || tracks[1].Flex == 0 {
 		t.Fatalf("tracks = %+v, want a fixed column and a 1fr column", tracks)
 	}
 }
@@ -224,10 +224,10 @@ func TestGridMaxTrackExpression(t *testing.T) {
 	if len(tracks) != 2 {
 		t.Fatalf("tracks = %d (%+v), want 2", len(tracks), tracks)
 	}
-	if tracks[0].flex == 0 {
+	if tracks[0].Flex == 0 {
 		t.Fatalf("first track = %+v, want 1fr", tracks[0])
 	}
-	if tracks[1].fixed < 43 {
+	if tracks[1].Fixed < 43 {
 		t.Fatalf("rail track = %+v, want at least the 340px (43 cell) minimum", tracks[1])
 	}
 }

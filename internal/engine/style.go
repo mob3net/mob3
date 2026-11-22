@@ -1425,3 +1425,9 @@ func ApplyDecl(st *Style, prop, val string, parent *Style) { applyDecl(st, prop,
 func ApplyDecls(st *Style, decls []Declaration, parent *Style, important bool, fontBase float64) {
 	applyDecls(st, decls, parent, important, fontBase)
 }
+
+// CSSWidthPx converts terminal columns to CSS pixels at the current zoom.
+func CSSWidthPx(cols int) int { return int(math.Round(float64(cols) * cellW)) }
+
+// CSSHeightPx converts terminal rows to CSS pixels at the current zoom.
+func CSSHeightPx(rows int) int { return int(math.Round(float64(rows) * cellH)) }

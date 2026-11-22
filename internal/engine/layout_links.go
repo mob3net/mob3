@@ -1,4 +1,4 @@
-package browser
+package engine
 
 // SetFixedScroll repositions viewport-anchored fragments for the current
 // scroll offset: fixed fragments are shifted into document coordinates, and
@@ -64,7 +64,7 @@ func (s *stickyBox) shift(scroll int) int {
 
 // resolveStickies turns the recorded sticky nodes into groups using the final
 // box geometry. Elements without a top offset keep their normal flow position.
-func (l *layouter) resolveStickies() []stickyBox {
+func (l *Layouter) resolveStickies() []stickyBox {
 	if len(l.stickyNodes) == 0 {
 		return nil
 	}
@@ -79,7 +79,7 @@ func (l *layouter) resolveStickies() []stickyBox {
 		}
 		group := gi + 1
 		sb := stickyBox{boxY: r.Y, boxH: r.H}
-		cb := Rect{Y: 0, W: l.width, H: l.rootCB.h}
+		cb := Rect{Y: 0, W: l.Width, H: l.rootCB.h}
 		for p := n.Parent; p != nil; p = p.Parent {
 			if pr, ok := l.boxes[p]; ok {
 				cb = pr
@@ -108,7 +108,7 @@ func (l *layouter) resolveStickies() []stickyBox {
 // nestedSticky reports whether an ancestor is already sticky. Nested sticky
 // boxes are approximated as normal flow so two groups cannot fight over the
 // same fragments.
-func (l *layouter) nestedSticky(n *Node) bool {
+func (l *Layouter) nestedSticky(n *Node) bool {
 	for p := n.Parent; p != nil; p = p.Parent {
 		if p.Style != nil && p.Style.Position == "sticky" {
 			return true
@@ -132,7 +132,7 @@ func (ly *Layout) buildLinks() {
 	byNode := map[*Node]*LinkInfo{}
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		a := nearestAnchor(f.Node)
+		a := NearestAnchor(f.Node)
 		if a == nil {
 			continue
 		}
@@ -147,14 +147,14 @@ func (ly *Layout) buildLinks() {
 			ly.Links = append(ly.Links, li)
 		}
 		f.Link = li
-		if f.Kind == fragFill {
+		if f.Kind == FragFill {
 			continue
 		}
-		li.Rects = append(li.Rects, Rect{X: f.X, Y: f.Y, W: f.W, H: maxInt(1, f.H)})
+		li.Rects = append(li.Rects, Rect{X: f.X, Y: f.Y, W: f.W, H: MaxInt(1, f.H)})
 	}
 }
 
-func nearestAnchor(n *Node) *Node {
+func NearestAnchor(n *Node) *Node {
 	for p := n; p != nil; p = p.Parent {
 		if p.Type == ElementNode && p.Tag == "a" && p.HasAttr("href") {
 			return p

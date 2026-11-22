@@ -1,11 +1,11 @@
-package browser
+package engine
 
 import (
 	"math"
 	"sort"
 )
 
-func (l *layouter) flexRow(n *Node, x, y, availW int) int {
+func (l *Layouter) flexRow(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -71,7 +71,7 @@ func (l *layouter) flexRow(n *Node, x, y, availW int) int {
 // for this subset: a responsive <picture> inside a column flex media box is a
 // flex item, so its width/aspect-ratio must produce a block box instead of an
 // inline one with no height.
-func (l *layouter) flexColumn(n *Node, x, y, availW int) int {
+func (l *Layouter) flexColumn(n *Node, x, y, availW int) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -110,12 +110,12 @@ func (l *layouter) flexColumn(n *Node, x, y, availW int) int {
 
 // flexItemBasis returns the base width used to decide where wrapped flex rows
 // break.
-func (l *layouter) flexItemBasis(it *Node, availW int) int {
+func (l *Layouter) flexItemBasis(it *Node, availW int) int {
 	st := it.Style
 	if st == nil {
 		return 1
 	}
-	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(st, availW)
 	extra := ml + mr + bl + br + pl + pr
 	base := 0
 	switch {
@@ -131,11 +131,11 @@ func (l *layouter) flexItemBasis(it *Node, availW int) int {
 	if base < 0 {
 		base = 0
 	}
-	return maxInt(1, base+extra)
+	return MaxInt(1, base+extra)
 }
 
 // layFlexLine sizes and lays out one flex row.
-func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style) int {
+func (l *Layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style) int {
 	if len(items) == 0 {
 		return 0
 	}
@@ -150,7 +150,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	growTotal := 0.0
 	for i, it := range items {
 		st := it.Style
-		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
+		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(st, availW)
 		extra := ml + mr + bl + br + pl + pr
 		maxTotals[i] = l.flexMaxTotal(st, extra, availW)
 		switch {
@@ -198,10 +198,10 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	mins := make([]int, len(items))
 	for i, it := range items {
 		st := it.Style
-		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, availW)
+		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(st, availW)
 		extra := ml + mr + bl + br + pl + pr
 		_, mi := l.measure(it)
-		mins[i] = maxInt(1, mi+extra)
+		mins[i] = MaxInt(1, mi+extra)
 		// A flex item is still bounded by its min/max widths. Bootstrap-style
 		// columns use max-width:75%, and a wide descendant (a carousel stage
 		// with an inline pixel width) would otherwise inflate the item's
@@ -346,7 +346,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 			extraGap = free / (n - 1)
 		}
 	case "around":
-		unit := free / maxInt(1, n)
+		unit := free / MaxInt(1, n)
 		startX += unit / 2
 		extraGap = unit
 	case "evenly":
@@ -361,7 +361,7 @@ func (l *layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 	xx := startX
 	for i, it := range items {
 		xx += autoL[i]
-		basis := maxInt(1, widths[i])
+		basis := MaxInt(1, widths[i])
 		starts[i] = len(l.frags)
 		var h int
 		if l.isBlock(it) || (it.Style != nil && it.Style.Display == "inline") {
@@ -422,7 +422,7 @@ func flexShrinkOf(n *Node) float64 {
 // This must happen before free space is distributed: a `flex-basis:100%` item
 // capped by `max-width` otherwise consumes the whole row and leaves the
 // growing sibling nothing to fill.
-func (l *layouter) clampFlexWidth(st *Style, w, extra, availW int) int {
+func (l *Layouter) clampFlexWidth(st *Style, w, extra, availW int) int {
 	if st == nil {
 		return w
 	}
@@ -453,7 +453,7 @@ func (l *layouter) clampFlexWidth(st *Style, w, extra, availW int) int {
 
 // flexMaxTotal returns an item's max-width as a border-box total, or 0 when it
 // is not set.
-func (l *layouter) flexMaxTotal(st *Style, extra, availW int) int {
+func (l *Layouter) flexMaxTotal(st *Style, extra, availW int) int {
 	if st == nil || !st.MaxWidth.Set || st.MaxWidth.IsAuto() {
 		return 0
 	}
@@ -542,4 +542,9 @@ func distributeGrow(widths []int, grow []float64, maxTotals []int, remaining int
 		}
 		remaining = budget
 	}
+}
+
+// DistributeGrow distributes extra width over flex items.
+func DistributeGrow(widths []int, grow []float64, maxTotals []int, remaining int) {
+	distributeGrow(widths, grow, maxTotals, remaining)
 }

@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"sort"
@@ -111,7 +111,7 @@ func layoutChildrenWithPseudo(parent *Node) []*Node {
 	return out
 }
 
-func (l *layouter) flow(parent *Node, x, y, width int) int {
+func (l *Layouter) flow(parent *Node, x, y, width int) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -204,7 +204,7 @@ func (l *layouter) flow(parent *Node, x, y, width int) int {
 
 // floatBand returns the horizontal range available for a line at y, after
 // shortening it around any active floated boxes.
-func (l *layouter) floatBand(x, y, width int) (int, int) {
+func (l *Layouter) floatBand(x, y, width int) (int, int) {
 	left, right := x, x+width
 	for _, f := range l.floats {
 		if y >= f.bottom || y+1 <= f.top {
@@ -225,7 +225,7 @@ func (l *layouter) floatBand(x, y, width int) (int, int) {
 }
 
 // clearY moves y below the floats selected by a CSS clear value.
-func (l *layouter) clearY(clear string, y int) int {
+func (l *Layouter) clearY(clear string, y int) int {
 	for _, f := range l.floats {
 		if f.bottom <= y {
 			continue
@@ -248,7 +248,7 @@ func (l *layouter) clearY(clear string, y int) int {
 
 // placeFloat lays out a floated child at the left or right edge of the current
 // line band. It stays out of normal flow; only its height counts.
-func (l *layouter) placeFloat(n *Node, x, y, width int) int {
+func (l *Layouter) placeFloat(n *Node, x, y, width int) int {
 	st := n.Style
 	if st == nil {
 		return y
@@ -319,9 +319,9 @@ func (l *layouter) placeFloat(n *Node, x, y, width int) int {
 
 // shrinkFitWidth returns the shrink-to-fit border-box width of a floated box
 // within avail cells.
-func (l *layouter) shrinkFitWidth(n *Node, cbW, avail int) int {
+func (l *Layouter) shrinkFitWidth(n *Node, cbW, avail int) int {
 	maxW, minW := l.measure(n)
-	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(n.Style, cbW)
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(n.Style, cbW)
 	extra := ml + mr + bl + br + pl + pr
 	st := n.Style
 	if st != nil && st.Width.Set && !st.Width.IsAuto() {
@@ -371,7 +371,7 @@ func (l *layouter) shrinkFitWidth(n *Node, cbW, avail int) int {
 
 func noContentFrags(frags []Frag) bool {
 	for _, f := range frags {
-		if f.Kind == fragText || f.Kind == fragImage {
+		if f.Kind == FragText || f.Kind == FragImage {
 			return false
 		}
 	}
@@ -379,7 +379,7 @@ func noContentFrags(frags []Frag) bool {
 }
 
 // trimFrags removes fragments from start onward that begin at or below limit.
-func (l *layouter) trimFrags(limit, start int) {
+func (l *Layouter) trimFrags(limit, start int) {
 	if start < 0 || start > len(l.frags) {
 		return
 	}
@@ -396,7 +396,7 @@ func (l *layouter) trimFrags(limit, start int) {
 // clipFragments drops or trims fragments from start onward to the clip rect.
 // Text and images that only partially fit vertically are dropped; fills and
 // link boxes are trimmed so panels do not paint over their own boundaries.
-func (l *layouter) clipFragments(start int, r Rect) {
+func (l *Layouter) clipFragments(start int, r Rect) {
 	if start < 0 || start > len(l.frags) || r.W <= 0 || r.H <= 0 {
 		return
 	}
@@ -410,14 +410,14 @@ func (l *layouter) clipFragments(start int, r Rect) {
 		if f.Y+f.H <= r.Y || f.Y >= bottom || f.X+f.W <= r.X || f.X >= right {
 			continue
 		}
-		if f.Kind == fragText || f.Kind == fragImage {
+		if f.Kind == FragText || f.Kind == FragImage {
 			// Glyphs and bitmaps cannot be cut cleanly; keep only the parts
 			// that fit entirely inside the clip box.
 			if f.Y < r.Y || f.Y+f.H > bottom {
 				continue
 			}
 			if f.X < r.X {
-				if f.Kind == fragImage {
+				if f.Kind == FragImage {
 					continue
 				}
 				cut := r.X - f.X
@@ -426,11 +426,11 @@ func (l *layouter) clipFragments(start int, r Rect) {
 				f.W -= cut
 			}
 			if f.X+f.W > right {
-				if f.Kind == fragImage {
+				if f.Kind == FragImage {
 					continue
 				}
 				f.W = right - f.X
-				f.Text = truncateWidth(f.Text, f.W)
+				f.Text = TruncateWidth(f.Text, f.W)
 			}
 		} else {
 			if f.Y < r.Y {
@@ -474,12 +474,12 @@ func pseudoElement(parent *Node, st *Style) *Node {
 
 // declaredFloatWidth returns a float's declared border-box width, or 0 when it
 // is auto (shrink-to-fit).
-func (l *layouter) declaredFloatWidth(n *Node, cbW int) int {
+func (l *Layouter) declaredFloatWidth(n *Node, cbW int) int {
 	st := n.Style
 	if st == nil || !st.Width.Set || st.Width.IsAuto() {
 		return 0
 	}
-	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.boxMetrics(st, cbW)
+	ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(st, cbW)
 	w := l.widthValue(st, st.Width, cbW) + ml + mr + bl + br + pl + pr
 	if w < 1 {
 		w = 1
@@ -489,7 +489,7 @@ func (l *layouter) declaredFloatWidth(n *Node, cbW int) int {
 
 // floatDropY finds the nearest lower row where a float of the given width fits
 // between the active floats, or 0 when none does.
-func (l *layouter) floatDropY(x, y, width, need int) int {
+func (l *Layouter) floatDropY(x, y, width, need int) int {
 	var cands []int
 	for _, f := range l.floats {
 		if f.bottom > y {

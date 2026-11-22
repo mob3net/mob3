@@ -7,9 +7,9 @@ import (
 func TestMeasureSkipsOutOfFlowChildren(t *testing.T) {
 	doc := ParseHTML(`<html><body><div id="box"><span style="position:absolute;width:100px">very wide absolute label</span></div></body></html>`)
 	styles := newStyleEngine(nil, 0).ComputeAll(doc)
-	l := &layouter{styles: styles, width: 40}
+	l := &Layouter{Styles: styles, Width: 40}
 	box := doc.FindFirst("div")
-	maxW, minW := l.measure(box)
+	maxW, minW := l.Measure(box)
 	if maxW > 10 || minW > 10 {
 		t.Fatalf("measure included out-of-flow child: max=%d min=%d", maxW, minW)
 	}
@@ -45,12 +45,12 @@ func TestDefiniteWidthCountsInMeasure(t *testing.T) {
 func TestBlockInlineChildrenMeasureAsOneLine(t *testing.T) {
 	doc := ParseHTML(`<div id="box" style="display:block"><span>aa</span> <span>bb</span></div>`)
 	ly := BuildLayout(doc, nil, 40)
-	l := &layouter{width: 40, styles: ly.Styles}
+	l := &Layouter{Width: 40, Styles: ly.Styles}
 	node := doc.FindFirst("div")
 	if node == nil {
 		t.Fatal("box missing")
 	}
-	if mw, _ := l.measure(node); mw != 5 {
+	if mw, _ := l.Measure(node); mw != 5 {
 		t.Fatalf("block with inline children measure = %d, want 5 (aa bb)", mw)
 	}
 }

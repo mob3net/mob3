@@ -33,7 +33,7 @@ func drawQuiet(b *Browser) {
 
 func TestGridTracksAndPlacement(t *testing.T) {
 	tracks := parseGridTracks("1fr 2fr", 90, 16)
-	if len(tracks) != 2 || tracks[0].flex != 1 || tracks[1].flex != 2 {
+	if len(tracks) != 2 || tracks[0].Flex != 1 || tracks[1].Flex != 2 {
 		t.Fatalf("tracks = %+v", tracks)
 	}
 	widths := resolveGridTracks(tracks, 90, 0, nil, nil)

@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"math"
@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-func (l *layouter) addText(x, y int, s string, st *Style, n *Node) {
+func (l *Layouter) addText(x, y int, s string, st *Style, n *Node) {
 	if l.outOfTime() {
 		return
 	}
@@ -18,13 +18,13 @@ func (l *layouter) addText(x, y int, s string, st *Style, n *Node) {
 		l.truncated = true
 		return
 	}
-	l.frags = append(l.frags, Frag{Kind: fragText, X: x, Y: y, W: l.textWidth(s, st), H: l.lineH(st), Text: s, Style: st, Node: n})
+	l.frags = append(l.frags, Frag{Kind: FragText, X: x, Y: y, W: l.textWidth(s, st), H: l.lineH(st), Text: s, Style: st, Node: n})
 }
 
-// layoutTextOverlaps reports whether a scaled (kitty large-type) run shares
+// LayoutTextOverlaps reports whether a scaled (kitty large-type) run shares
 // cells with any other text run. Normal-size overlays are ignored; only scaled
 // text spilling into neighbouring columns indicates a garbled layout.
-func layoutTextOverlaps(ly *Layout) bool {
+func LayoutTextOverlaps(ly *Layout) bool {
 	if ly == nil {
 		return false
 	}
@@ -35,7 +35,7 @@ func layoutTextOverlaps(ly *Layout) bool {
 	rows := make(map[int][]span)
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText || f.W <= 0 || f.H <= 0 || strings.TrimSpace(f.Text) == "" {
+		if f.Kind != FragText || f.W <= 0 || f.H <= 0 || strings.TrimSpace(f.Text) == "" {
 			continue
 		}
 		scaled := f.Style != nil && bigTextScale(f.Style, layoutZoom) > 1
@@ -63,7 +63,7 @@ func layoutTextOverlaps(ly *Layout) bool {
 func trimTextLeft(s string, cells int) string {
 	for cells > 0 && s != "" {
 		r, size := utf8.DecodeRuneInString(s)
-		cells -= runeWidth(r)
+		cells -= RuneWidth(r)
 		s = s[size:]
 	}
 	return s
@@ -81,7 +81,7 @@ type inlineItem struct {
 }
 
 type inlineCtx struct {
-	l          *layouter
+	l          *Layouter
 	x, y       int
 	baseX      int
 	baseW      int
@@ -117,7 +117,7 @@ func (c *inlineCtx) lineMaxW() int {
 	return w
 }
 
-func (l *layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
+func (l *Layouter) inlineFlow(nodes []*Node, x, y, width int, base *Style) int {
 	if l.outOfTime() {
 		return 0
 	}
@@ -154,7 +154,7 @@ func (c *inlineCtx) collect(n *Node) {
 	}
 	if n.Type == TextNode {
 		if n.Style != nil && !n.Style.Hidden {
-			c.addText(expandTabs(n.Text), n.Style, n)
+			c.addText(ExpandTabs(n.Text), n.Style, n)
 		}
 		return
 	}
@@ -324,7 +324,7 @@ func lengthPositive(l Length) bool {
 }
 
 // lineH returns the line box height for st, including large-glyph scaling.
-func (l *layouter) lineH(st *Style) int {
+func (l *Layouter) lineH(st *Style) int {
 	if st == nil {
 		return 1
 	}
@@ -338,7 +338,7 @@ func (l *layouter) lineH(st *Style) int {
 }
 
 // scale is how many cells each glyph in st occupies.
-func (l *layouter) scale(st *Style) int {
+func (l *Layouter) scale(st *Style) int {
 	if !l.bigText || st == nil {
 		return 1
 	}
@@ -346,15 +346,15 @@ func (l *layouter) scale(st *Style) int {
 }
 
 // textWidth measures s in layout cells, honouring glyph scaling.
-func (l *layouter) textWidth(s string, st *Style) int {
-	return stringWidth(s) * l.scale(st)
+func (l *Layouter) textWidth(s string, st *Style) int {
+	return StringWidth(s) * l.scale(st)
 }
 
 func (c *inlineCtx) addText(s string, st *Style, node *Node) {
 	if s == "" {
 		return
 	}
-	s = applyTextTransform(s, st.TextTransform)
+	s = ApplyTextTransform(s, st.TextTransform)
 	if st.WhiteSpace == "pre" {
 		c.addPre(s, st, node)
 		return
@@ -382,7 +382,7 @@ func (c *inlineCtx) addText(s string, st *Style, node *Node) {
 }
 
 func (c *inlineCtx) charW(r rune, st *Style) int {
-	return runeWidth(r) * c.l.scale(st)
+	return RuneWidth(r) * c.l.scale(st)
 }
 
 func (c *inlineCtx) addPre(s string, st *Style, node *Node) {
@@ -590,10 +590,10 @@ func (c *inlineCtx) flush(last bool) {
 				yy := inlineY(it.style, c.y, lineH, runH)
 				spaces := strings.Repeat(" ", cellW)
 				if s := c.l.scale(it.style); s > 1 {
-					spaces = strings.Repeat(" ", maxInt(1, cellW/s))
+					spaces = strings.Repeat(" ", MaxInt(1, cellW/s))
 				}
 				c.l.frags = append(c.l.frags, Frag{
-					Kind: fragText, X: bandX + shift + pos, Y: yy, W: cellW, H: runH,
+					Kind: FragText, X: bandX + shift + pos, Y: yy, W: cellW, H: runH,
 					Text: spaces, Style: it.style, Node: it.node,
 				})
 				pos += cellW
@@ -604,7 +604,7 @@ func (c *inlineCtx) flush(last bool) {
 			runH := c.l.lineH(it.style)
 			yy := inlineY(it.style, c.y, lineH, runH)
 			c.l.frags = append(c.l.frags, Frag{
-				Kind: fragText, X: bandX + shift + pos, Y: yy, W: it.w, H: runH,
+				Kind: FragText, X: bandX + shift + pos, Y: yy, W: it.w, H: runH,
 				Text: it.text, Style: it.style, Node: it.node,
 			})
 			pos += it.w

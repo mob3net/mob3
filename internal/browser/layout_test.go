@@ -561,8 +561,8 @@ func TestStickyDisabledKeepsNormalFlow(t *testing.T) {
 	</body></html>`)
 	ly := BuildLayoutBudgetDeadlineImages(root, fixtureAuthorRules(root), 40, 12,
 		false, false, false, true, false, time.Time{}, DefaultLayoutBudget)
-	if len(ly.stickies) != 0 {
-		t.Fatalf("sticky groups = %d, want none when disabled", len(ly.stickies))
+	if ly.StickyCount() != 0 {
+		t.Fatalf("sticky groups = %d, want none when disabled", ly.StickyCount())
 	}
 	idx := -1
 	for i := range ly.Frags {
@@ -648,7 +648,7 @@ func TestZIndexPaintOrder(t *testing.T) {
 	<div class="card low">LOW</div>
 	</body></html>`)
 	ly := BuildLayout(root, fixtureAuthorRules(root), 20)
-	if len(ly.paintOrder) == 0 {
+	if len(ly.PaintOrder()) == 0 {
 		t.Fatal("z-index page has no paint order")
 	}
 	pageFG := RGB(0x1f, 0x23, 0x28)

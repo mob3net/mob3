@@ -260,7 +260,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 		} else if start+rows > ly.Height {
 			rows = ly.Height - start
 		}
-	} else if ly.fixedApplied && ly.fixedScroll != 0 {
+	} else if ly.ScrollAnchored() && ly.FixedScrollOffset() != 0 {
 		// A whole-page copy shows fixed and sticky boxes at their flow
 		// positions, not shifted by the current scroll.
 		ly.SetFixedScroll(0)
