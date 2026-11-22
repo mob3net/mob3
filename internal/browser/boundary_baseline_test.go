@@ -123,7 +123,7 @@ func BenchmarkBoundaryLayoutPaint(b *testing.B) {
 		ly := BuildLayout(root, nil, 100)
 		g := NewGrid(100, 35, fg, bg)
 		PaintLayout(g, ly, 0, 0, 35, nil, fg)
-		_ = g.Lines(true)
+		_ = gridLines(g, true)
 	}
 }
 

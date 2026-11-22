@@ -164,7 +164,7 @@ func (a *Automation) pageTextLocked(vh int) string {
 	if g == nil {
 		return ""
 	}
-	lines := g.Lines(false)
+	lines := gridLines(g, false)
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
@@ -188,7 +188,7 @@ func (a *Automation) Screenshot(scale int) ([]byte, error) {
 	if g == nil {
 		return nil, errors.New("no page loaded")
 	}
-	return g.PNG(scale)
+	return gridPNG(g, scale)
 }
 
 func (a *Automation) linkLinesLocked(vh int) []string {

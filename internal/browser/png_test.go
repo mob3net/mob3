@@ -9,7 +9,7 @@ import (
 func TestGridPNG(t *testing.T) {
 	g := NewGrid(4, 2, RGB(31, 35, 40), RGB(255, 255, 255))
 	g.Put(0, 0, 'A', &Style{Bold: true}, RGB(200, 20, 30), Color{})
-	data, err := g.PNG(1)
+	data, err := gridPNG(g, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestGridPNG(t *testing.T) {
 		t.Fatal("glyph did not render in the foreground color")
 	}
 
-	scaled, err := g.PNG(2)
+	scaled, err := gridPNG(g, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestGridPNGHalfBlockImage(t *testing.T) {
 	c.R = '▀'
 	c.FG = RGB(255, 0, 0)
 	c.BG = RGB(0, 0, 255)
-	data, err := g.PNG(1)
+	data, err := gridPNG(g, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +75,10 @@ func TestGridPNGHalfBlockImage(t *testing.T) {
 }
 
 func TestGridPNGEmpty(t *testing.T) {
-	if _, err := (*Grid)(nil).PNG(1); err == nil {
+	if _, err := gridPNG(nil, 1); err == nil {
 		t.Fatal("nil grid produced an image")
 	}
-	if _, err := (&Grid{}).PNG(1); err == nil {
+	if _, err := gridPNG(&Grid{}, 1); err == nil {
 		t.Fatal("empty grid produced an image")
 	}
 }

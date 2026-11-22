@@ -292,7 +292,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 		}
 		g := NewGrid(width, h, pageFG, pageBG)
 		PaintLayout(g, ly, start+off, 0, h, nil, pageFG)
-		for _, line := range g.Lines(false) {
+		for _, line := range gridLines(g, false) {
 			out.WriteString(line)
 			out.WriteByte('\n')
 		}

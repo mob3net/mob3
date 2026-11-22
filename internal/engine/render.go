@@ -1,16 +1,12 @@
-package browser
+package engine
 
 import (
 	"bytes"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/draw"
-	"image/png"
 	"math"
-	"reflect"
 	"strings"
 
 	"github.com/go-gfx/oksvg"
@@ -34,10 +30,10 @@ type Cell struct {
 	Skip      bool
 }
 
-// scaledRun is the structured form of a kitty scaled-text run. The terminal
+// ScaledRun is the structured form of a kitty scaled-text run. The terminal
 // escape sequence is built only when the grid is encoded; page state never
 // carries a raw escape.
-type scaledRun struct {
+type ScaledRun struct {
 	X, Y      int
 	Cells     int
 	Scale     int
@@ -55,7 +51,7 @@ type Grid struct {
 	W, H  int
 	Cells []Cell
 	// Runs holds the scaled-text runs referenced by Cell.Run, in index order.
-	Runs []scaledRun
+	Runs []ScaledRun
 }
 
 // NewGrid creates a grid filled with spaces and the given background.
@@ -83,7 +79,7 @@ func (g *Grid) Reset(fg, bg Color) {
 
 // reuseGrid returns g ready for a frame of the given size, allocating only
 // when the size changed.
-func reuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
+func ReuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
 	if g == nil || g.W != w || g.H != h {
 		return NewGrid(w, h, fg, bg)
 	}
@@ -93,12 +89,12 @@ func reuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
 
 // blitGrid copies src into dst starting at row y. Cell run indexes refer to
 // src.Runs, so the caller must copy those runs in the same order.
-func blitGrid(dst, src *Grid, y int) {
+func BlitGrid(dst, src *Grid, y int) {
 	if dst == nil || src == nil || y < 0 || y >= dst.H {
 		return
 	}
-	rows := minInt(src.H, dst.H-y)
-	w := minInt(src.W, dst.W)
+	rows := MinInt(src.H, dst.H-y)
+	w := MinInt(src.W, dst.W)
 	for r := 0; r < rows; r++ {
 		copy(dst.Cells[(y+r)*dst.W:(y+r)*dst.W+w], src.Cells[r*src.W:r*src.W+w])
 	}
@@ -111,8 +107,8 @@ func (g *Grid) Fill(x, y, w, h int, c Color) {
 	if !c.Set || c.A == 0 {
 		return
 	}
-	x0, y0 := maxInt(x, 0), maxInt(y, 0)
-	x1, y1 := minInt(x+w, g.W), minInt(y+h, g.H)
+	x0, y0 := MaxInt(x, 0), MaxInt(y, 0)
+	x1, y1 := MinInt(x+w, g.W), MinInt(y+h, g.H)
 	for yy := y0; yy < y1; yy++ {
 		row := yy * g.W
 		for xx := x0; xx < x1; xx++ {
@@ -154,8 +150,8 @@ func blendOver(dst, src Color) Color {
 // Highlight recolors the background and foreground of existing cells without
 // changing their glyphs, used for focused form controls.
 func (g *Grid) Highlight(x, y, w, h int, bg, fg Color) {
-	x0, y0 := maxInt(x, 0), maxInt(y, 0)
-	x1, y1 := minInt(x+w, g.W), minInt(y+h, g.H)
+	x0, y0 := MaxInt(x, 0), MaxInt(y, 0)
+	x1, y1 := MinInt(x+w, g.W), MinInt(y+h, g.H)
 	for yy := y0; yy < y1; yy++ {
 		row := yy * g.W
 		for xx := x0; xx < x1; xx++ {
@@ -169,8 +165,8 @@ func (g *Grid) Highlight(x, y, w, h int, bg, fg Color) {
 // ClearGlyphs blanks the characters in a rectangle while keeping each cell's
 // background, used to reserve the scrollbar column without erasing page fills.
 func (g *Grid) ClearGlyphs(x, y, w, h int) {
-	x0, y0 := maxInt(x, 0), maxInt(y, 0)
-	x1, y1 := minInt(x+w, g.W), minInt(y+h, g.H)
+	x0, y0 := MaxInt(x, 0), MaxInt(y, 0)
+	x1, y1 := MinInt(x+w, g.W), MinInt(y+h, g.H)
 	for yy := y0; yy < y1; yy++ {
 		row := yy * g.W
 		for xx := x0; xx < x1; xx++ {
@@ -194,8 +190,8 @@ func (g *Grid) FillHGradient(x, y, w, h int, from, to Color) {
 	if !from.Set || !to.Set || w <= 0 || h <= 0 {
 		return
 	}
-	x0, x1 := maxInt(x, 0), minInt(x+w, g.W)
-	y0, y1 := maxInt(y, 0), minInt(y+h, g.H)
+	x0, x1 := MaxInt(x, 0), MinInt(x+w, g.W)
+	y0, y1 := MaxInt(y, 0), MinInt(y+h, g.H)
 	mix := func(a, b uint8, t int) uint8 {
 		return uint8((int(a)*(255-t) + int(b)*t) / 255)
 	}
@@ -221,7 +217,7 @@ func (g *Grid) Put(x, y int, r rune, st *Style, fg, bg Color) {
 	if y < 0 || y >= g.H {
 		return
 	}
-	rw := runeWidth(r)
+	rw := RuneWidth(r)
 	if rw == 0 {
 		return
 	}
@@ -272,7 +268,7 @@ func (g *Grid) Text(x, y int, s string, st *Style, fg Color) {
 		st = defaultStyle()
 	}
 	for _, r := range s {
-		rw := runeWidth(r)
+		rw := RuneWidth(r)
 		if rw == 0 {
 			continue
 		}
@@ -287,10 +283,10 @@ func (g *Grid) Text(x, y int, s string, st *Style, fg Color) {
 }
 
 // TextBig writes s with kitty's text-sizing protocol, scaled by scale. The
-// text consumes scale*stringWidth(s) columns and scale rows; covered cells are
+// text consumes scale*StringWidth(s) columns and scale rows; covered cells are
 // marked so Lines does not paint over the multicell.
 func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
-	s = stripTerminalControls(s)
+	s = StripTerminalControls(s)
 	if s == "" || x < 0 || y < 0 || y >= g.H || x >= g.W {
 		return
 	}
@@ -298,13 +294,13 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 		g.Text(x, y, s, st, fg)
 		return
 	}
-	base := stringWidth(s)
+	base := StringWidth(s)
 	if base <= 0 {
 		return
 	}
 	if room := (g.W - x) / scale; base > room {
-		s = truncateWidth(s, room)
-		base = stringWidth(s)
+		s = TruncateWidth(s, room)
+		base = StringWidth(s)
 	}
 	total := base * scale
 	if base <= 0 || total <= 0 {
@@ -345,7 +341,7 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 	c.Img = false
 	c.Skip = false
 	c.Reverse = false
-	run := scaledRun{
+	run := ScaledRun{
 		X: x, Y: y, Cells: total, Scale: scale, Text: s,
 		FG: fg, BG: c.BG,
 	}
@@ -427,12 +423,12 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 	var chrome []Rect
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if (!f.Fixed && f.Sticky == 0) || f.Kind != fragFill || !opaque(f.Color) {
+		if (!f.Fixed && f.Sticky == 0) || f.Kind != FragFill || !Opaque(f.Color) {
 			continue
 		}
 		y := f.Y - scroll + topRow
-		y0 := maxInt(y, topRow)
-		y1 := minInt(y+f.H, bottomRow)
+		y0 := MaxInt(y, topRow)
+		y1 := MinInt(y+f.H, bottomRow)
 		if y1 <= y0 {
 			continue
 		}
@@ -457,17 +453,17 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 		overlayRows = make(map[int][]Rect)
 		for i := range ly.Frags {
 			f := &ly.Frags[i]
-			if f.Kind != fragText || f.Text == "" || f.W <= 0 {
+			if f.Kind != FragText || f.Text == "" || f.W <= 0 {
 				continue
 			}
 			y := f.Y - scroll + topRow
-			h := maxInt(1, f.H)
+			h := MaxInt(1, f.H)
 			if bigText && f.Style != nil {
 				if s := bigTextScale(f.Style, layoutZoom); s > 1 {
-					h = maxInt(h, s)
+					h = MaxInt(h, s)
 				}
 			}
-			for r := maxInt(y, topRow); r < minInt(y+h, bottomRow); r++ {
+			for r := MaxInt(y, topRow); r < MinInt(y+h, bottomRow); r++ {
 				overlayRows[r] = append(overlayRows[r], Rect{X: f.X, Y: r, W: f.W, H: 1})
 			}
 		}
@@ -491,9 +487,9 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			return
 		}
 		switch f.Kind {
-		case fragFill:
-			clippedTop := maxInt(y, topRow)
-			clippedBot := minInt(y+f.H, bottomRow)
+		case FragFill:
+			clippedTop := MaxInt(y, topRow)
+			clippedBot := MinInt(y+f.H, bottomRow)
 			if f.Fixed || f.Sticky != 0 {
 				// Viewport-anchored chrome (fixed or sticky) paints after the
 				// page, so its fills must also erase glyphs from content that
@@ -501,7 +497,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				g.ClearGlyphs(f.X, clippedTop, f.W, clippedBot-clippedTop)
 			}
 			g.Fill(f.X, clippedTop, f.W, clippedBot-clippedTop, f.Color)
-		case fragText:
+		case FragText:
 			if y < topRow || y >= bottomRow {
 				return
 			}
@@ -523,7 +519,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				scale = 1
 			}
 			bg := textBackground(f)
-			if opaque(bg) {
+			if Opaque(bg) {
 				g.Fill(f.X, y, f.W, scale, bg)
 			}
 			if f.Link != nil && f.Link == focus {
@@ -542,25 +538,25 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				}
 				effBG = g.Cells[y*g.W+ex].BG
 			}
-			fg = readableFG(fg, effBG)
+			fg = ReadableFG(fg, effBG)
 			if scale > 1 {
 				g.TextBig(f.X, y, f.Text, st, fg, bg, scale)
 			} else {
 				g.Text(f.X, y, f.Text, st, fg)
 			}
-		case fragLink:
+		case FragLink:
 			if f.Link != nil && f.Link == focus {
 				g.Fill(f.X, f.Y, f.W, 1, focusBG)
 				g.Fill(f.X, f.Y+f.H-1, f.W, 1, focusBG)
 				g.Fill(f.X, f.Y, 1, f.H, focusBG)
 				g.Fill(f.X+f.W-1, f.Y, 1, f.H, focusBG)
 			}
-		case fragImage:
+		case FragImage:
 			if f.Img == nil {
 				return
 			}
-			y0 := maxInt(y, topRow)
-			y1 := minInt(y+f.H, bottomRow)
+			y0 := MaxInt(y, topRow)
+			y1 := MinInt(y+f.H, bottomRow)
 			if y0 >= y1 {
 				return
 			}
@@ -577,7 +573,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 					g.Fill(f.X, y0, f.W, y1-y0, backgroundPlaceholderBG)
 					return
 				}
-				paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
+				PaintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
 				return
 			}
 			if placements != nil && !hasTextOverlay(f.X, y0, f.W, y1-y0) && (f.Fixed || !paintBlocks(f, y0, y1)) {
@@ -591,7 +587,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				})
 				return
 			}
-			paintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
+			PaintImage(g, f.Img, f.Crop, f.X, y0, f.W, y1-y0, imgTop, f.H)
 			if f.Link != nil && f.Link == focus {
 				g.Fill(f.X, y, f.W, 1, focusBG)
 				g.Fill(f.X, y+f.H-1, f.W, 1, focusBG)
@@ -631,7 +627,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 
 // paintImage draws an image as half-block art. rowStart and totalRows describe
 // which part of the (possibly clipped) image we are drawing.
-func paintImage(g *Grid, img image.Image, crop image.Rectangle, x, y, w, h, rowStart, totalRows int) {
+func PaintImage(g *Grid, img image.Image, crop image.Rectangle, x, y, w, h, rowStart, totalRows int) {
 	b := img.Bounds()
 	if crop.Dx() > 0 && crop.Dy() > 0 {
 		b = crop
@@ -697,8 +693,8 @@ func paintImage(g *Grid, img image.Image, crop image.Rectangle, x, y, w, h, rowS
 type rowRegion struct{ y0, y1 int }
 
 func sampleImage(img image.Image, b image.Rectangle, srcRow, totalRows int) rowRegion {
-	y0 := b.Min.Y + srcRow*b.Dy()/maxInt(1, totalRows)
-	y1 := b.Min.Y + (srcRow+1)*b.Dy()/maxInt(1, totalRows)
+	y0 := b.Min.Y + srcRow*b.Dy()/MaxInt(1, totalRows)
+	y1 := b.Min.Y + (srcRow+1)*b.Dy()/MaxInt(1, totalRows)
 	if y1 <= y0 {
 		y1 = y0 + 1
 	}
@@ -706,8 +702,8 @@ func sampleImage(img image.Image, b image.Rectangle, srcRow, totalRows int) rowR
 }
 
 func sampleColumn(img image.Image, b image.Rectangle, col, totalCols int, reg rowRegion) Color {
-	x0 := b.Min.X + col*b.Dx()/maxInt(1, totalCols)
-	x1 := b.Min.X + (col+1)*b.Dx()/maxInt(1, totalCols)
+	x0 := b.Min.X + col*b.Dx()/MaxInt(1, totalCols)
+	x1 := b.Min.X + (col+1)*b.Dx()/MaxInt(1, totalCols)
 	if x1 <= x0 {
 		x1 = x0 + 1
 	}
@@ -769,7 +765,7 @@ func over(c, bg Color) Color {
 // so the walk stops there; inline/inline-block backgrounds otherwise have no
 // box of their own and would be lost (common on buttons and nav links).
 func textBackground(f *Frag) Color {
-	if f.Style != nil && opaque(f.Style.Background) {
+	if f.Style != nil && Opaque(f.Style.Background) {
 		return f.Style.Background
 	}
 	for n := f.Node; n != nil; n = n.Parent {
@@ -777,7 +773,7 @@ func textBackground(f *Frag) Color {
 		if st == nil {
 			continue
 		}
-		if opaque(st.Background) {
+		if Opaque(st.Background) {
 			switch st.Display {
 			case "block", "flex", "list-item", "table", "table-row", "table-cell":
 				return Color{}
@@ -796,7 +792,7 @@ func textBackground(f *Frag) Color {
 // stripTerminalControls drops C0/C1 control characters before text is embedded
 // in an OSC 66 escape. Ordinary Grid.Text drops them via zero rune width, but
 // scaled text is written raw inside the escape sequence.
-func stripTerminalControls(s string) string {
+func StripTerminalControls(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r < 32 || (r >= 0x7f && r < 0xa0) {
 			return -1
@@ -814,481 +810,26 @@ func stripTerminalControls(s string) string {
 // forcing the contrast fallback to flip it.
 var backgroundPlaceholderBG = RGB(0x76, 0x76, 0x76)
 
-type GraphicsMode int
-
-const (
-	// GraphicsAuto detects the best protocol from the environment.
-	GraphicsAuto GraphicsMode = iota
-	// GraphicsNone loads and draws no images, which is the fastest default.
-	GraphicsNone
-	// GraphicsBlocks always uses Unicode half-block art.
-	GraphicsBlocks
-	// GraphicsKitty uses the kitty graphics protocol.
-	GraphicsKitty
-	// GraphicsITerm uses the iTerm2 OSC 1337 inline-image protocol.
-	GraphicsITerm
-)
-
-// ParseGraphicsMode turns a -graphics flag value into a mode.
-func ParseGraphicsMode(s string) GraphicsMode {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", "auto":
-		return GraphicsAuto
-	case "none", "off", "no", "disabled":
-		return GraphicsNone
-	case "blocks", "block", "terminal", "text":
-		return GraphicsBlocks
-	case "kitty":
-		return GraphicsKitty
-	case "iterm", "iterm2", "iterm-2":
-		return GraphicsITerm
-	}
-	return GraphicsAuto
-}
-
-// DetectGraphics resolves an auto mode to a concrete protocol.
-func DetectGraphics(mode GraphicsMode) GraphicsMode {
-	if mode != GraphicsAuto {
-		return mode
-	}
-	if inMultiplexer() {
-		// Escapes would be consumed by the multiplexer unless explicit
-		// passthrough is configured, so prefer the always-safe fallback.
-		return GraphicsBlocks
-	}
-	if kittyTerminal() {
-		return GraphicsKitty
-	}
-	if itermTerminal() {
-		return GraphicsITerm
-	}
-	return GraphicsBlocks
-}
-
-// gfxKey identifies a scaled image. ptr is a best-effort object identity while
-// src keeps images from different pages apart if the address is reused.
-type gfxKey struct {
-	ptr  uintptr
-	src  string
-	cols int
-	rows int
-	pxW  int
-	pxH  int
-}
-
-type itermKey struct {
-	gfxKey
-	rowStart int
-	cropRows int
-}
-
-type kittyImage struct {
-	id   int
-	w, h int
-}
-
-// gfxRenderer writes images with a terminal graphics protocol.
-type gfxRenderer struct {
-	mode         GraphicsMode
-	cellW, cellH int
-	nextID       int
-	kitty        map[gfxKey]*kittyImage
-	scaled       map[gfxKey]*image.NRGBA
-	encoded      map[gfxKey][]byte
-	iterm        map[itermKey]string
-}
-
-// NewGFXRenderer creates a renderer for the given mode. It returns nil when
-// half-block art should be used.
-func NewGFXRenderer(mode GraphicsMode, cellW, cellH int) *gfxRenderer {
-	mode = DetectGraphics(mode)
-	if mode != GraphicsKitty && mode != GraphicsITerm {
-		return nil
-	}
-	if cellW <= 0 {
-		cellW = 8
-	}
-	if cellH <= 0 {
-		cellH = 16
-	}
-	return &gfxRenderer{
-		mode:    mode,
-		cellW:   cellW,
-		cellH:   cellH,
-		nextID:  1,
-		kitty:   make(map[gfxKey]*kittyImage),
-		scaled:  make(map[gfxKey]*image.NRGBA),
-		encoded: make(map[gfxKey][]byte),
-		iterm:   make(map[itermKey]string),
-	}
-}
-
-// Mode reports the active protocol (GraphicsBlocks when inactive).
-func (r *gfxRenderer) Mode() GraphicsMode {
-	if r == nil {
-		return GraphicsBlocks
-	}
-	return r.mode
-}
-
-// TextSizing reports whether kitty's scaled-text protocol can be used. It is
-// limited to real kitty because other kitty-graphics terminals do not
-// implement OSC 66.
-func (r *gfxRenderer) TextSizing() bool {
-	if r == nil || r.mode != GraphicsKitty {
-		return false
-	}
-	return kittyTerminal()
-}
-
-// BeginFrame emits protocol bookkeeping before the text frame is written.
-func (r *gfxRenderer) BeginFrame(sb *strings.Builder) {
-	if r == nil || r.mode != GraphicsKitty {
-		return
-	}
-	// Delete every visible placement but keep the transmitted image data so
-	// the next frame can re-place images without re-uploading them.
-	sb.WriteString("\x1b_Ga=d,q=2\x1b\\")
-}
-
-// ClearScreen clears screen text for a full repaint while preserving what can
-// be reused. Kitty keeps transmitted image data across ED 1/0 (only ED 2/3
-// frees it), so using those instead of ED 2 lets the next frame re-place cached
-// images by id instead of re-scaling, re-encoding and re-uploading them after
-// every scroll-triggered clear.
-func (r *gfxRenderer) ClearScreen(sb *strings.Builder) {
-	if sb == nil {
-		return
-	}
-	if r == nil {
-		sb.WriteString("\x1b[2J")
-		return
-	}
-	if r.mode == GraphicsKitty {
-		sb.WriteString("\x1b[1J\x1b[0J")
-		return
-	}
-	r.Reset(sb)
-	sb.WriteString("\x1b[2J")
-}
-
-// Reset frees terminal image storage and forgets cached transmissions. Use it
-// when image data really becomes invalid (for example an explicit 2J clear);
-// scroll-triggered repaints use ClearScreen, which keeps kitty data.
-func (r *gfxRenderer) Reset(sb *strings.Builder) {
-	if r == nil {
-		return
-	}
-	if r.mode == GraphicsKitty && sb != nil {
-		sb.WriteString("\x1b_Ga=d,d=A,q=2\x1b\\")
-	}
-	r.kitty = make(map[gfxKey]*kittyImage)
-	r.iterm = make(map[itermKey]string)
-}
-
-// Clear removes any images this renderer placed.
-func (r *gfxRenderer) Clear(sb *strings.Builder) {
-	if r == nil {
-		return
-	}
-	switch r.mode {
-	case GraphicsKitty:
-		sb.WriteString("\x1b_Ga=d,d=A,q=2\x1b\\")
-	case GraphicsITerm:
-		// Inline images are ordinary screen content and are cleared by the
-		// caller's screen reset / alternate-screen switch.
-	}
-}
-
-// maxCachedImages bounds the client-side image caches. Eviction never drops an
-// image used by the frame being drawn, so a viewport that shows more images
-// than this keeps them all instead of resetting and rebuilding the cache on
-// every frame.
-const maxCachedImages = 64
-
-// PlaceAll emits every image placement for the current frame.
-func (r *gfxRenderer) PlaceAll(sb *strings.Builder, placements []ImagePlacement) {
-	if r == nil || len(placements) == 0 {
-		return
-	}
-	keep := make(map[gfxKey]struct{}, len(placements))
-	for _, p := range placements {
-		if p.Img == nil || p.W <= 0 || p.H <= 0 || p.TotalRows <= 0 {
-			continue
-		}
-		switch r.mode {
-		case GraphicsKitty:
-			r.placeKitty(sb, p, keep)
-		case GraphicsITerm:
-			r.placeITerm(sb, p, keep)
-		}
-	}
-	r.prune(sb, keep)
-}
-
-// prune drops cached images that are not in the current frame once the cache
-// exceeds its soft cap. Visible images are always retained.
-func (r *gfxRenderer) prune(sb *strings.Builder, keep map[gfxKey]struct{}) {
-	if len(r.scaled) <= maxCachedImages && len(r.kitty) <= maxCachedImages && len(r.encoded) <= maxCachedImages {
-		return
-	}
-	for key, entry := range r.kitty {
-		if _, ok := keep[key]; ok {
-			continue
-		}
-		if r.mode == GraphicsKitty && sb != nil {
-			fmt.Fprintf(sb, "\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", entry.id)
-		}
-		delete(r.kitty, key)
-	}
-	for key := range r.scaled {
-		if _, ok := keep[key]; !ok {
-			delete(r.scaled, key)
-		}
-	}
-	for key := range r.encoded {
-		if _, ok := keep[key]; !ok {
-			delete(r.encoded, key)
-		}
-	}
-}
-
-func (r *gfxRenderer) placeKitty(sb *strings.Builder, p ImagePlacement, keep map[gfxKey]struct{}) {
-	key, img := r.scaledImage(p)
-	keep[key] = struct{}{}
-	entry := r.kitty[key]
-	if entry == nil {
-		entry = &kittyImage{id: r.nextID, w: img.Bounds().Dx(), h: img.Bounds().Dy()}
-		r.nextID++
-		data := r.encoded[key]
-		if data == nil {
-			var err error
-			data, err = encodePNG(img)
-			if err != nil {
-				return
-			}
-			r.encoded[key] = data
-		}
-		r.kittyTransmit(sb, entry.id, data)
-		r.kitty[key] = entry
-	}
-	if entry.h <= 0 || p.TotalRows <= 0 {
-		return
-	}
-	y0 := p.RowStart * entry.h / p.TotalRows
-	y1 := (p.RowStart + p.H) * entry.h / p.TotalRows
-	if y1 <= y0 {
-		y1 = y0 + 1
-	}
-	if y1 > entry.h {
-		y1 = entry.h
-	}
-	fmt.Fprintf(sb, "\x1b[%d;%dH", p.Y+1, p.X+1)
-	fmt.Fprintf(sb, "\x1b_Ga=p,i=%d,q=2,c=%d,r=%d,x=0,y=%d,w=%d,h=%d,C=1\x1b\\",
-		entry.id, p.W, p.H, y0, entry.w, y1-y0)
-}
-
-func (r *gfxRenderer) placeITerm(sb *strings.Builder, p ImagePlacement, keep map[gfxKey]struct{}) {
-	key, img := r.scaledImage(p)
-	keep[key] = struct{}{}
-	ik := itermKey{gfxKey: key, rowStart: p.RowStart, cropRows: p.H}
-	payload, ok := r.iterm[ik]
-	if !ok {
-		b := img.Bounds()
-		y0 := p.RowStart * b.Dy() / p.TotalRows
-		y1 := (p.RowStart + p.H) * b.Dy() / p.TotalRows
-		if y1 <= y0 {
-			y1 = y0 + 1
-		}
-		if y1 > b.Dy() {
-			y1 = b.Dy()
-		}
-		crop := img.SubImage(image.Rect(0, y0, b.Dx(), y1)).(*image.NRGBA)
-		data, err := encodePNG(crop)
-		if err != nil {
-			return
-		}
-		payload = base64.StdEncoding.EncodeToString(data)
-		r.iterm[ik] = payload
-	}
-	fmt.Fprintf(sb, "\x1b7\x1b[%d;%dH\x1b]1337;File=inline=1;width=%d;height=%d;preserveAspectRatio=0;doNotMoveCursor=1:%s\x07\x1b8",
-		p.Y+1, p.X+1, p.W, p.H, payload)
-}
-
-// scaledImage returns the cache key and a downscaled NRGBA image sized for the
-// placement's full cell box.
-func (r *gfxRenderer) scaledImage(p ImagePlacement) (gfxKey, *image.NRGBA) {
-	pxW, pxH := r.targetPixels(p.W, p.TotalRows)
-	key := gfxKey{
-		ptr:  imagePointer(p.Img),
-		src:  p.Src,
-		cols: p.W,
-		rows: p.TotalRows,
-		pxW:  pxW,
-		pxH:  pxH,
-	}
-	if img, ok := r.scaled[key]; ok {
-		return key, img
-	}
-	img := scaleImage(p.Img, pxW, pxH)
-	r.scaled[key] = img
-	return key, img
-}
-
-// targetPixels chooses a bounded pixel size for a cell box while preserving its
-// aspect ratio, so cropping stays proportional.
-func (r *gfxRenderer) targetPixels(cols, rows int) (int, int) {
-	const maxDim = 2048
-	w := cols * r.cellW
-	h := rows * r.cellH
-	if w < 1 {
-		w = 1
-	}
-	if h < 1 {
-		h = 1
-	}
-	scale := 1.0
-	if w > maxDim {
-		scale = float64(maxDim) / float64(w)
-	}
-	if h > maxDim {
-		if s := float64(maxDim) / float64(h); s < scale {
-			scale = s
-		}
-	}
-	if scale < 1 {
-		w = maxInt(1, int(float64(w)*scale))
-		h = maxInt(1, int(float64(h)*scale))
-	}
-	return w, h
-}
-
-func (r *gfxRenderer) kittyTransmit(sb *strings.Builder, id int, data []byte) {
-	const chunk = 4096
-	encoded := base64.StdEncoding.EncodeToString(data)
-	first := true
-	for len(encoded) > 0 {
-		n := chunk
-		if n > len(encoded) {
-			n = len(encoded)
-		}
-		part := encoded[:n]
-		encoded = encoded[n:]
-		more := 0
-		if len(encoded) > 0 {
-			more = 1
-		}
-		if first {
-			fmt.Fprintf(sb, "\x1b_Ga=t,f=100,q=2,i=%d,m=%d;%s\x1b\\", id, more, part)
-			first = false
-		} else {
-			fmt.Fprintf(sb, "\x1b_Gm=%d;%s\x1b\\", more, part)
-		}
-	}
-	if first {
-		fmt.Fprintf(sb, "\x1b_Ga=t,f=100,q=2,i=%d,m=0;\x1b\\", id)
-	}
-}
-
-func encodePNG(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err := enc.Encode(&buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func imagePointer(img image.Image) uintptr {
-	if img == nil {
-		return 0
-	}
-	v := reflect.ValueOf(img)
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		return v.Pointer()
-	}
-	return 0
-}
-
-// scaleImage resizes src to w x h with area sampling. The result is always
-// straight-alpha NRGBA so it can be encoded as PNG.
-func scaleImage(src image.Image, w, h int) *image.NRGBA {
-	if w < 1 {
-		w = 1
-	}
-	if h < 1 {
-		h = 1
-	}
-	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
-	b := src.Bounds()
-	sw, sh := b.Dx(), b.Dy()
-	if sw <= 0 || sh <= 0 {
-		return dst
-	}
-	for dy := 0; dy < h; dy++ {
-		y0 := b.Min.Y + dy*sh/h
-		y1 := b.Min.Y + (dy+1)*sh/h
-		if y1 <= y0 {
-			y1 = y0 + 1
-		}
-		for dx := 0; dx < w; dx++ {
-			x0 := b.Min.X + dx*sw/w
-			x1 := b.Min.X + (dx+1)*sw/w
-			if x1 <= x0 {
-				x1 = x0 + 1
-			}
-			sx := maxInt(1, (x1-x0)/4)
-			sy := maxInt(1, (y1-y0)/4)
-			var sr, sg, sb, sa uint64
-			var n uint64
-			for yy := y0; yy < y1; yy += sy {
-				for xx := x0; xx < x1; xx += sx {
-					r, g, bl, a := src.At(xx, yy).RGBA()
-					sr += uint64(r)
-					sg += uint64(g)
-					sb += uint64(bl)
-					sa += uint64(a)
-					n++
-				}
-			}
-			if n == 0 {
-				continue
-			}
-			alpha := uint8(sa / n / 257)
-			if alpha == 0 {
-				continue
-			}
-			unpremul := func(v uint64) uint8 {
-				x := v / n / 257
-				y := x * 255 / uint64(alpha)
-				if y > 255 {
-					y = 255
-				}
-				return uint8(y)
-			}
-			dst.SetNRGBA(dx, dy, color.NRGBA{
-				R: unpremul(sr),
-				G: unpremul(sg),
-				B: unpremul(sb),
-				A: alpha,
-			})
-		}
-	}
-	return dst
-}
+// BackgroundPlaceholderBG is the neutral fill used when backgrounds are hidden.
+var BackgroundPlaceholderBG = backgroundPlaceholderBG
 
 const maxSVGDim = 1024
 
+// MaxSVGDim caps one SVG raster dimension.
+const MaxSVGDim = maxSVGDim
+
 var errBadSVG = errors.New("invalid SVG")
 
+// ErrBadSVG marks malformed SVG input.
+var ErrBadSVG = errBadSVG
+
 // isSVG reports whether fetched data is an SVG image.
-func isSVG(ctype string, data []byte) bool {
+func IsSVG(ctype string, data []byte) bool {
 	ct := strings.ToLower(ctype)
 	if strings.Contains(ct, "image/svg+xml") {
 		return true
 	}
-	head := strings.TrimSpace(string(data[:minInt(len(data), 1024)]))
+	head := strings.TrimSpace(string(data[:MinInt(len(data), 1024)]))
 	if strings.HasPrefix(strings.ToLower(head), "<svg") {
 		return true
 	}
@@ -1299,13 +840,22 @@ func isSVG(ctype string, data []byte) bool {
 }
 
 // decodeSVG rasterizes an SVG into an RGBA image, bounded in size.
-func decodeSVG(data []byte) (image.Image, error) {
-	return decodeSVGWithin(data, 0)
+func DecodeSVG(data []byte) (image.Image, error) {
+	return DecodeSVGWithin(data, 0)
 }
 
 // decodeSVGWithin is decodeSVG with a cap on the rasterized pixel count. It
 // scales the raster down rather than failing when the budget is smaller.
-func decodeSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
+func recoverImage(fn func() (image.Image, error)) (img image.Image, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			img, err = nil, fmt.Errorf("image decoder panic: %v", r)
+		}
+	}()
+	return fn()
+}
+
+func DecodeSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
 	return recoverImage(func() (image.Image, error) { return renderSVGWithin(data, maxPixels) })
 }
 
@@ -1315,7 +865,7 @@ func renderSVG(data []byte) (image.Image, error) {
 
 func renderSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
 	if len(data) == 0 {
-		return nil, errBadSVG
+		return nil, ErrBadSVG
 	}
 	icon, err := oksvg.ReadIconStream(bytes.NewReader(data), oksvg.IgnoreErrorMode)
 	if err != nil {
@@ -1337,8 +887,8 @@ func renderSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
 	if maxPixels > 0 && w*h*scale*scale > float64(maxPixels) {
 		scale *= math.Sqrt(float64(maxPixels) / (w * h * scale * scale))
 	}
-	w = float64(maxInt(1, int(w*scale)))
-	h = float64(maxInt(1, int(h*scale)))
+	w = float64(MaxInt(1, int(w*scale)))
+	h = float64(MaxInt(1, int(h*scale)))
 	rgba := image.NewRGBA(image.Rect(0, 0, int(w), int(h)))
 	draw.Draw(rgba, rgba.Bounds(), image.Transparent, image.Point{}, draw.Src)
 	scanner := rasterx.NewScannerGV(int(w), int(h), rgba, rgba.Bounds())
@@ -1346,176 +896,4 @@ func renderSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
 	icon.SetTarget(0, 0, w, h)
 	icon.Draw(raster, 1.0)
 	return rgba, nil
-}
-
-func (l *Loader) resetSVGBudget() {
-	l.svgMu.Lock()
-	l.svgPixels = 0
-	l.svgCount = 0
-	l.svgMu.Unlock()
-}
-
-// loadInlineSVGs rasterizes inline <svg> elements into their Node.Img field so
-// layout can treat them as images. The per-page pixel and count budgets keep a
-// document with many icons from retaining gigabytes of rasters.
-func (l *Loader) loadInlineSVGs(root *Node) {
-	if l.noImages {
-		return
-	}
-	l.svgMu.Lock()
-	defer l.svgMu.Unlock()
-	nodes := root.FindAll(func(n *Node) bool { return n.Tag == "svg" })
-	for _, n := range nodes {
-		if n.Img != nil || n.ImgFailed {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(n.Attr("aria-hidden")), "true") {
-			continue
-		}
-		remaining := l.svgBudgetPixels - l.svgPixels
-		if remaining < 1 || l.svgCount >= maxInlineSVGCount {
-			n.ImgFailed = true
-			continue
-		}
-		img, err := decodeSVGWithin([]byte(serializeSVG(n)), remaining)
-		if err != nil {
-			n.ImgFailed = true
-			continue
-		}
-		n.Img = img
-		n.ImgSrc = "inline-svg"
-		l.svgPixels += int64(img.Bounds().Dx()) * int64(img.Bounds().Dy())
-		l.svgCount++
-	}
-}
-
-var svgTagCase = map[string]string{
-	"lineargradient":      "linearGradient",
-	"radialgradient":      "radialGradient",
-	"clippath":            "clipPath",
-	"textpath":            "textPath",
-	"foreignobject":       "foreignObject",
-	"feblend":             "feBlend",
-	"fecolormatrix":       "feColorMatrix",
-	"fecomponenttransfer": "feComponentTransfer",
-	"fecomposite":         "feComposite",
-	"feconvolvematrix":    "feConvolveMatrix",
-	"fediffuselighting":   "feDiffuseLighting",
-	"fedisplacementmap":   "feDisplacementMap",
-	"fedistantlight":      "feDistantLight",
-	"fedropshadow":        "feDropShadow",
-	"feflood":             "feFlood",
-	"fefunca":             "feFuncA",
-	"fefuncb":             "feFuncB",
-	"fefuncg":             "feFuncG",
-	"fefuncr":             "feFuncR",
-	"fegaussianblur":      "feGaussianBlur",
-	"feimage":             "feImage",
-	"femerge":             "feMerge",
-	"femergenode":         "feMergeNode",
-	"femorphology":        "feMorphology",
-	"feoffset":            "feOffset",
-	"fepointlight":        "fePointLight",
-	"fespecularlighting":  "feSpecularLighting",
-	"fespotlight":         "feSpotLight",
-	"fetile":              "feTile",
-	"feturbulence":        "feTurbulence",
-}
-
-var svgAttrCase = map[string]string{
-	"viewbox":                   "viewBox",
-	"preserveaspectratio":       "preserveAspectRatio",
-	"gradientunits":             "gradientUnits",
-	"gradienttransform":         "gradientTransform",
-	"patternunits":              "patternUnits",
-	"patterncontentunits":       "patternContentUnits",
-	"patterntransform":          "patternTransform",
-	"clippathunits":             "clipPathUnits",
-	"maskunits":                 "maskUnits",
-	"maskcontentunits":          "maskContentUnits",
-	"markerunits":               "markerUnits",
-	"markerwidth":               "markerWidth",
-	"markerheight":              "markerHeight",
-	"refx":                      "refX",
-	"refy":                      "refY",
-	"spreadmethod":              "spreadMethod",
-	"startoffset":               "startOffset",
-	"textlength":                "textLength",
-	"lengthadjust":              "lengthAdjust",
-	"baseprofile":               "baseProfile",
-	"zoomandpan":                "zoomAndPan",
-	"attributename":             "attributeName",
-	"attributetype":             "attributeType",
-	"repeatcount":               "repeatCount",
-	"repeatdur":                 "repeatDur",
-	"keytimes":                  "keyTimes",
-	"keysplines":                "keySplines",
-	"keypoints":                 "keyPoints",
-	"calcmode":                  "calcMode",
-	"pathlength":                "pathLength",
-	"requiredfeatures":          "requiredFeatures",
-	"requiredextensions":        "requiredExtensions",
-	"systemlanguage":            "systemLanguage",
-	"externalresourcesrequired": "externalResourcesRequired",
-	"xml:space":                 "xml:space",
-}
-
-func canonicalSVGTag(tag string) string {
-	if v, ok := svgTagCase[tag]; ok {
-		return v
-	}
-	return tag
-}
-
-func canonicalSVGAttr(name string) string {
-	lower := strings.ToLower(name)
-	if v, ok := svgAttrCase[lower]; ok {
-		return v
-	}
-	return lower
-}
-
-// serializeSVG turns the parsed inline SVG subtree back into XML. HTML parsing
-// lowercases names, so known SVG camelCase names are restored for oksvg.
-func serializeSVG(n *Node) string {
-	var b strings.Builder
-	var walk func(*Node)
-	walk = func(x *Node) {
-		if x == nil {
-			return
-		}
-		if x.Type == TextNode {
-			b.WriteString(textEscape(x.Text))
-			return
-		}
-		if x.Type != ElementNode {
-			return
-		}
-		tag := canonicalSVGTag(x.Tag)
-		b.WriteString("<")
-		b.WriteString(tag)
-		if x.Tag == "svg" && x.Attr("xmlns") == "" {
-			b.WriteString(` xmlns="http://www.w3.org/2000/svg"`)
-		}
-		for _, a := range x.Attrs {
-			b.WriteString(" ")
-			b.WriteString(canonicalSVGAttr(a.Key))
-			b.WriteString(`="`)
-			b.WriteString(EscapeHTML(a.Value))
-			b.WriteString(`"`)
-		}
-		if len(x.Children) == 0 {
-			b.WriteString("/>")
-			return
-		}
-		b.WriteString(">")
-		for _, c := range x.Children {
-			walk(c)
-		}
-		b.WriteString("</")
-		b.WriteString(tag)
-		b.WriteString(">")
-	}
-	walk(n)
-	return b.String()
 }

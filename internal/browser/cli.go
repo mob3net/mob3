@@ -466,7 +466,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 	g := NewGrid(width, height, pageFG, pageBG)
 	PaintLayout(g, layout, 0, 0, height, nil, pageFG)
 	if pngOut {
-		data, err := g.PNG(1)
+		data, err := gridPNG(g, 1)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "mob3: png: %v\n", err)
 			return 1
@@ -477,7 +477,7 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 		return 0
 	}
 	color := !noColor && (forceColor || isTTY(os.Stdout))
-	lines := g.Lines(color)
+	lines := gridLines(g, color)
 	for _, line := range lines {
 		fmt.Println(line)
 	}

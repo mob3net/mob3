@@ -538,7 +538,7 @@ func TestStickyTopFollowsScroll(t *testing.T) {
 	}
 	g := NewGrid(40, 12, pageFG, RGB(255, 255, 255))
 	PaintLayout(g, ly, 2, 0, 12, nil, pageFG)
-	top := g.Lines(false)[0]
+	top := gridLines(g, false)[0]
 	if !strings.Contains(top, "HEAD") {
 		t.Fatalf("sticky header did not paint above the scrolled text: %q", top)
 	}
@@ -654,7 +654,7 @@ func TestZIndexPaintOrder(t *testing.T) {
 	pageFG := RGB(0x1f, 0x23, 0x28)
 	g := NewGrid(20, 3, pageFG, RGB(255, 255, 255))
 	PaintLayout(g, ly, 0, 0, 3, nil, pageFG)
-	if top := g.Lines(false)[0]; !strings.HasPrefix(top, "HIGH") {
+	if top := gridLines(g, false)[0]; !strings.HasPrefix(top, "HIGH") {
 		t.Fatalf("painted top row = %q, want the higher z-index text", top)
 	}
 

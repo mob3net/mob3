@@ -46,7 +46,7 @@ func (b *Browser) encodeGrid(g *Grid, color, attrs bool) []string {
 }
 
 // Lines renders the grid to ANSI strings, one per row.
-func (g *Grid) Lines(color bool) []string {
+func gridLines(g *Grid, color bool) []string {
 	if g == nil {
 		return nil
 	}
@@ -56,7 +56,7 @@ func (g *Grid) Lines(color bool) []string {
 // LinesMono renders the grid without colors but keeps bold, italic, underline
 // and strike attributes, so interactive output without color still marks links
 // and link-hint letters. Plain dumps use Lines(false) instead.
-func (g *Grid) LinesMono() []string {
+func gridLinesMono(g *Grid) []string {
 	if g == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (g *Grid) LinesMono() []string {
 }
 
 // PNG renders the grid as a PNG image.
-func (g *Grid) PNG(scale int) ([]byte, error) {
+func gridPNG(g *Grid, scale int) ([]byte, error) {
 	if g == nil {
 		return nil, errors.New("empty grid")
 	}

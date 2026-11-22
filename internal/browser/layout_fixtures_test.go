@@ -95,7 +95,7 @@ func renderFixture(root *Node, author []Rule, width int) string {
 	}
 	g := NewGrid(width, rows, pageFG, pageBG)
 	PaintLayout(g, ly, 0, 0, rows, nil, pageFG)
-	return strings.Join(g.Lines(false), "\n") + "\n"
+	return strings.Join(gridLines(g, false), "\n") + "\n"
 }
 
 func itoaFixture(n int) string {

@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 3 in progress (3a frontend, 3b DOM/style/layout).**
+Status: **Phase 3 in progress (3a frontend, 3b DOM/style/layout/paint).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -58,6 +58,7 @@ network destination.
 | D22 | 2026-11-22 | Engine extraction starts with the style primitives: `Color`, `Length`, `Unit`, calc/min/max/clamp parsing, and the CSS split helpers. Browser aliases and wrappers keep the old names. Node and Style follow. | These are leaf types with no Browser dependency, so the package and import gate land with near-zero behavioral risk. |
 | D23 | 2026-11-22 | Move `html.go`/`Node`, `Style` and the style sheet/selector/engine/media/UA files into `internal/engine`. Page style injection stays in the browser; style tests move with the engine, while layout-dependent tests stay in the browser. | The DOM/style layer is the prerequisite for layout. Keeping layout tests in the browser avoids exporting layout internals before layout moves. |
 | D24 | 2026-11-22 | Move all `layout*.go` files and the dark palette into `internal/engine`; paint, `Grid` and the content frame stay in the browser with aliases. Layout tests stay in the browser because they exercise `PaintLayout`. | Layout is the last engine layer before paint. Keeping paint tests in the browser avoids moving the terminal framebuffer until its frontend/engine split is ready. |
+| D25 | 2026-11-22 | Move `Grid`, `PaintLayout*`, `ImagePlacement` and SVG decoding into `internal/engine`; keep kitty/iTerm2 placement, PNG encoding and image scaling in the browser until Phase 5. ANSI/PNG remain in `internal/frontend`. | Paint is page content and crosses no trusted policy. Terminal placement is frontend work and needs the image/placement bridge, so it waits for the transport phase. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -111,8 +112,10 @@ which part goes where.
 | `page_styles.go` | browser | `Page` inline-style collection after load. |
 | `layout*.go` | `internal/engine` | All layout files, including forms, images, tables, grid, flex and measurement. |
 | `layout_compat.go` | browser bridge | Layout aliases, builders, utilities and form predicates. |
-| `render.go` | engine + frontend | Grid, paint and native image placement stay; `Lines`/`LinesMono`, ANSI and color modes moved to `internal/frontend` (3a). |
-| `frame_protocol.go` | engine | Maps the internal grid to `protocol.Frame` at the seam, including the reusable draw-path buffer. |
+| `render.go` | `internal/engine/render.go` | Grid, paint, image placement and SVG decode. |
+| `render_gfx.go` | browser bridge | Kitty/iTerm2 placement, cache, PNG encode, image scaling and inline-SVG loading; moves to frontend in Phase 5. |
+| `paint_compat.go` | browser bridge | Grid/paint aliases and SVG decoder wrappers. |
+| `frame_protocol.go` | browser bridge | Maps the engine grid to `protocol.Frame`; moves with the transport seam. |
 | `frontend_bridge.go` | browser bridge | Temporary wrappers for `Lines`, `PNG`, color modes and code helpers during the package move. |
 | `term_detect.go` | frontend | Terminal capability detection; `DetectColorMode` moved to `internal/frontend`. |
 | `png.go` | `internal/frontend/png.go` | Protocol frame to PNG. |
@@ -154,7 +157,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
-| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a, 3b2) | Engine import gate passes; engine tests green |
+| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a, 3b3) | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
@@ -248,7 +251,7 @@ Next: 3b, the engine package.
 - [x] Move `Style`, sheets, selectors, media queries and the UA sheet.
 - [x] Move the engine tests; keep layout-dependent style tests in the browser.
 - [x] Move layout and the dark palette.
-- [ ] Move paint and the content frame.
+- [x] Move paint and the content frame; keep native-image/terminal encoding in the browser until Phase 5.
 - [ ] Move JS/DOM and the session.
 - [ ] Remove the browser wrappers.
 
@@ -441,6 +444,19 @@ reruns were stable at the values below.
 | Content paint+blit | 95–101 µs, 0 B/op | 79–102 µs, 0 B/op | flat/noisy |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 
+### Phase 3b3 deltas
+
+Grid, paint and SVG decode moved to the engine; the gfx/terminal layer stayed
+in the browser with aliases. One layout run showed 14–16 ms under load; reruns
+were stable at the values below.
+
+| Metric | Before 3b3 | After 3b3 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 828–845 µs, 519 594 B/op | 829–876 µs, 519 600 B/op | flat |
+| Layout+paint+ANSI | 12.8–13.0 ms, 19.90 MB | 13.1–14.2 ms, 19.90 MB | flat/noisy |
+| Content paint+blit | 79–102 µs, 0 B/op | 93–102 µs, 0 B/op | flat |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -506,3 +522,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 3b0 | `internal/engine` with Color, Length, Unit, calc/min/max/clamp parsing, resolution and CSS split helpers; browser aliases/wrappers; engine import gate active; all tests and hashes still green | `go test ./...`, `go vet`, dump/PNG hashes, draw and layout benchmarks | Phase 3b1: Node and Style |
 | 2026-11-22 | 3b1 | HTML/Node, Style, sheets, selectors, cascade, media and UA moved to `internal/engine`; engine tests moved; layout-dependent tests stayed; browser compat/page-style bridges; all hashes and tests green | `go test ./...`, `go vet`, `-race` on style/layout, dump/PNG hashes, draw and layout benchmarks | Phase 3b2: layout |
 | 2026-11-22 | 3b2 | All layout files and the dark palette moved to `internal/engine`; browser layout compat aliases/builders/utilities/form predicates; js_dom and selection use exported accessors; all tests and hashes green | `go test ./...`, `go vet`, `-race` on layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b3: paint and the content frame |
+| 2026-11-22 | 3b3 | Grid, paint, `PaintLayout*`, `ImagePlacement` and SVG decode moved to `internal/engine`; gfx/terminal placement and inline-SVG loading stay in `render_gfx.go`; paint compat aliases; all tests and hashes green | `go test ./...`, `go vet`, `-race` on paint/layout/frame, dump/PNG hashes, draw and layout benchmarks | Phase 3b4: JS/DOM and session |

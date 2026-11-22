@@ -196,7 +196,7 @@ func TestBigTextStripsControls(t *testing.T) {
 func TestGridDropsTerminalControls(t *testing.T) {
 	g := NewGrid(40, 2, RGB(0, 0, 0), RGB(255, 255, 255))
 	g.Text(0, 0, "safe\x1b]52;c;evil\x07\x1b[2Jafter", &Style{}, RGB(0, 0, 0))
-	joined := strings.Join(g.Lines(true), "\n")
+	joined := strings.Join(gridLines(g, true), "\n")
 	for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\u009b"} {
 		if strings.Contains(joined, bad) {
 			t.Fatalf("terminal control %q leaked into output: %q", bad, joined)
@@ -205,7 +205,7 @@ func TestGridDropsTerminalControls(t *testing.T) {
 	if !strings.Contains(joined, "safe") || !strings.Contains(joined, "after") {
 		t.Fatalf("ordinary text was lost: %q", joined)
 	}
-	if plain := strings.Join(g.Lines(false), "\n"); strings.Contains(plain, "\x1b") {
+	if plain := strings.Join(gridLines(g, false), "\n"); strings.Contains(plain, "\x1b") {
 		t.Fatalf("no-color output contains an escape: %q", plain)
 	}
 }
@@ -233,7 +233,7 @@ func TestBigTextPaint(t *testing.T) {
 	if !g.Cells[1].Skip || !g.Cells[1*g.W].Skip {
 		t.Fatal("covered cells were not marked")
 	}
-	lines := g.Lines(true)
+	lines := gridLines(g, true)
 	if !strings.Contains(lines[0], "\x1b]66;") || !strings.Contains(lines[1], "\x1b[4C") {
 		t.Fatalf("lines = %q | %q", lines[0], lines[1])
 	}
@@ -647,14 +647,14 @@ func TestLinesMonoKeepsAttributes(t *testing.T) {
 	g := NewGrid(4, 1, RGB(0, 0, 0), RGB(255, 255, 255))
 	g.Put(0, 0, 'a', &Style{Bold: true, Underline: true}, RGB(255, 0, 0), RGB(0, 0, 255))
 	g.Cells[0].Reverse = true
-	mono := g.LinesMono()[0]
+	mono := gridLinesMono(g)[0]
 	if strings.Contains(mono, "38;2") || strings.Contains(mono, "48;2") {
 		t.Fatalf("mono line kept colors: %q", mono)
 	}
 	if !strings.Contains(mono, "0;1;4;7") {
 		t.Fatalf("mono line lost attributes: %q", mono)
 	}
-	plain := g.Lines(false)[0]
+	plain := gridLines(g, false)[0]
 	if strings.Contains(plain, "\x1b[") {
 		t.Fatalf("plain dump kept escapes: %q", plain)
 	}
