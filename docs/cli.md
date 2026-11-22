@@ -29,9 +29,7 @@ falls back to dump mode and prints the rendered page.
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
 | `-bookmarks string` | none | Import a Netscape bookmark HTML file |
 | `-home string` | `about:home` | Startup and Home-button target |
-| `-cache int` | 32 | In-memory resource cache limit in MB; `0` disables it |
-| `-history-cache int` | 128 | Back/forward history cache limit in MB of estimated page size; `0` disables it |
-| `-mem-limit int` | 0 | Soft process memory limit in MB for the Go heap; `0` leaves it unlimited and honors `GOMEMLIMIT` |
+| `-mem-limit int` | 0 | Soft process memory limit in MB; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
 | `-zoom string` | `100%` | Layout zoom percent from 25 to 200; `%` is optional and `+`/`-` step the presets |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
@@ -202,8 +200,12 @@ absolute fallbacks. `-no-js` disables both script fetching and execution;
 `<noscript>` content is then shown. Press `J` (or click the footer JavaScript
 label) to toggle this for the session and reload the current page.
 
-`-cache` is a session-only LRU budget for CSS/JS response bodies and decoded
-images. Nothing is written to disk, and cache hits appear in the `!` console.
+The resource cache and the back/forward history cache follow the same limit:
+3% and 12% of `-mem-limit`/`GOMEMLIMIT`, with 32 MB and 128 MB fallbacks when
+the process is unlimited. The resource cache is a session-only LRU for CSS/JS
+response bodies and decoded images; nothing is written to disk, and cache hits
+appear in the `!` console. The history cache weighs suspended pages and evicts
+the least recently used ones.
 
 ## Home, search and bookmarks
 

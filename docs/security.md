@@ -120,11 +120,11 @@ not audited and is not a security boundary.
 
 ## Memory and caches
 
-The back/forward history cache is bounded by estimated page weight
-(`-history-cache`, 128 MB by default): the least recently used pages are
-evicted first, and a page heavier than half the budget is never cached. When a
-heavy cached page is evicted, one collection plus scavenge runs between frames
-so its memory returns to the OS.
+The back/forward history cache is bounded by estimated page weight (12% of
+`-mem-limit`/`GOMEMLIMIT`, or 128 MB when unlimited): the least recently used
+pages are evicted first, and a page heavier than half the budget is never
+cached. When a heavy cached page is evicted, one collection plus scavenge runs
+between frames so its memory returns to the OS.
 
 `-mem-limit` sets an optional soft limit on the Go heap, making the runtime
 collect harder as memory approaches it. It is off by default (`0`), so memory is

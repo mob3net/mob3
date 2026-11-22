@@ -121,9 +121,10 @@ agreement, the non-negotiable constraints and the change protocol.
   not fetched, and removing or rewriting a style leaves its earlier rules in
   place.
 - **Session resource cache:** CSS and JavaScript response bodies and decoded
-  images share a session-only LRU byte cache. The default budget is 32 MiB with
-  a 2 MiB per-entry cap; `-cache` sets the budget in MB and `0` disables it.
-  Only successful GET CSS/JS responses and decoded images are stored; page
+  images share a session-only LRU byte cache. Its budget is 3% of
+  `-mem-limit`/`GOMEMLIMIT`, or 32 MiB when the process is unlimited, with a
+  2 MiB per-entry cap. Only successful GET CSS/JS responses and decoded images
+  are stored; page
   documents, POST, `data:` and `file:` reads are not cached, and
   `Cache-Control: no-store` responses are skipped. Hits avoid network requests;
   nothing is written to disk. The limit is editable in `about:config`. The

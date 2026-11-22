@@ -8,9 +8,6 @@ import (
 )
 
 const (
-	// defaultResourceCacheLimit is the session budget for cached CSS, scripts
-	// and decoded images.
-	defaultResourceCacheLimit = 32 << 20
 	// defaultResourceCacheEntryLimit keeps one large asset from evicting many
 	// useful small ones.
 	defaultResourceCacheEntryLimit = 2 << 20
@@ -213,11 +210,4 @@ func (l *Loader) setCacheLimitMB(mb int) {
 		return
 	}
 	l.cache.setLimit(int64(mb) << 20)
-}
-
-func (l *Loader) cacheLimitMB() int {
-	if l == nil || l.cache == nil {
-		return 0
-	}
-	return int(l.cache.limitBytes() >> 20)
 }

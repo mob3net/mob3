@@ -28,10 +28,10 @@ func TestConfigPageShowsValues(t *testing.T) {
 	text := page.Root.TextContent()
 	for _, want := range []string{
 		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-bookmarks", "-home", "-cache", "-layout-budget", "-text-scale", "-color", "-no-color",
+		"-bookmarks", "-home", "-layout-budget", "-text-scale", "-color", "-no-color",
 		"-ua", "-search", "-mcp", "-version", "startup",
 		"Viewport:", "80x7 characters", "640x112 pixels", "8x16 per cell",
-		"JS ceiling",
+		"JS 64 MB", "cache 32 MB", "history 128 MB",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("config page missing %q", want)
@@ -51,7 +51,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 		selects[n.Attr("name")] = inputValue(n)
 	}
 	want := map[string]string{
-		"no-js": "on", "home": "https://example.com/home", "cache": "32",
+		"no-js": "on", "home": "https://example.com/home",
 		"ua": "TestUA", "search": "https://search.example/?q=%s",
 	}
 	for k, v := range want {
@@ -91,7 +91,6 @@ func TestApplyConfig(t *testing.T) {
 		"no-js":         {"on"},
 		"ignore-blocks": {"on"},
 		"home":          {"https://example.com/start"},
-		"cache":         {"16"},
 		"layout-budget": {"high"},
 		"text-scale":    {"off"},
 		"ua":            {"TestUA"},
@@ -106,9 +105,6 @@ func TestApplyConfig(t *testing.T) {
 	}
 	if b.home != "https://example.com/start" {
 		t.Fatalf("home = %q", b.home)
-	}
-	if got := b.loader.cacheLimitMB(); got != 16 {
-		t.Fatalf("cache = %d MB, want 16", got)
 	}
 	if !b.noBigText {
 		t.Fatal("text-scale off was not applied")

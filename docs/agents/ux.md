@@ -25,7 +25,7 @@ agreement, the non-negotiable constraints and the change protocol.
   prominence.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home, cache, history-cache,
+  session (no-js, ignore-blocks, home,
   mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
   on/off options are checkboxes; options labelled “startup” are read-only, and
   colour options are “dump only”. A rejected value keeps the current setting
@@ -423,11 +423,12 @@ agreement, the non-negotiable constraints and the change protocol.
   weighed once (raw source, script text, POST body, DOM with attributes and
   text, decoded image bytes, plus a conservative allowance for a live JS
   runtime and its node wrappers), pages evicted least-recently-used first until
-  the total fits `-history-cache` MB (128 by default, `0` disables page
-  caching), and a page heavier than half the budget is never cached at all, so
+  the total fits the derived history budget (12% of `-mem-limit`/`GOMEMLIMIT`,
+  or 128 MB when unlimited), and a page heavier than half the budget is never
+  cached at all, so
   one heavy document cannot pin the allowance. The newest entry is kept when
   the budget is tight, `maxCachedPages` (10) stays as a second guard, and the
-  limit can be changed live in `about:config`. When an evicted page held at
+  budget follows live changes to `-mem-limit`. When an evicted page held at
   least a quarter of the budget, one `debug.FreeOSMemory()` is requested and
   run between frames, returning its memory to the OS at once.
   `about:` pages and downloads are never cached.

@@ -22,10 +22,10 @@ type historyEntry struct {
 // are dropped first; nothing is written to disk.
 const maxCachedPages = 10
 
-// defaultHistoryCacheBytes is the estimated total size the back/forward cache may
-// keep by default. It is a soft accounting budget, not an allocation: pages are
-// weighed when they are suspended and dropped once the total would exceed it.
-const defaultHistoryCacheBytes = 128 << 20
+// The history cache budget is derived from -mem-limit/GOMEMLIMIT (12%) with a
+// 128 MB fallback; see memory.go. It is a soft accounting budget, not an
+// allocation: pages are weighed when they are suspended and dropped once the
+// total would exceed it.
 
 // Weight estimates for a cached page. They are deliberately coarse: the cache
 // only needs to compare pages, and decoded images plus a live JS runtime

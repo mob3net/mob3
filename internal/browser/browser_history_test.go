@@ -6,6 +6,7 @@ import (
 	"image"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
@@ -598,20 +599,24 @@ func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
 	}
 }
 
-func TestConfigAppliesHistoryCacheLimit(t *testing.T) {
+func TestMemoryLimitDerivesCaches(t *testing.T) {
+	prev := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
 	b := NewBrowser(60, 10)
-	b.history = []historyEntry{{URL: "https://example.com/a", cached: &cachedPage{bytes: 4 << 20}}}
-	b.applyConfig(url.Values{"history-cache": {"1"}})
-	if b.historyCacheBytes != 1<<20 {
-		t.Fatalf("budget = %d, want 1 MiB", b.historyCacheBytes)
+	b.setMemoryLimitMB(1024)
+	if got, want := b.historyCacheBytes, memoryFraction(int64(1)<<30, historyCachePercent); got != want {
+		t.Fatalf("history cache = %d, want %d", got, want)
 	}
-	// A 4 MiB entry does not fit a 1 MiB budget; the newest entry is protected
-	// only up to the single-page cap, which a re-trim during caching enforces.
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
-	if total := cachedBytes(b.history); total > b.historyCacheBytes && len(b.history) > 1 {
-		t.Fatalf("cached bytes = %d, budget = %d", total, b.historyCacheBytes)
+	if got, want := b.loader.cache.limitBytes(), memoryFraction(int64(1)<<30, resourceCachePercent); got != want {
+		t.Fatalf("resource cache = %d, want %d", got, want)
+	}
+	// Clearing the limit restores the fallback budgets.
+	b.setMemoryLimitMB(0)
+	if b.historyCacheBytes != fallbackHistoryCacheBytes {
+		t.Fatalf("history cache fallback = %d, want %d", b.historyCacheBytes, fallbackHistoryCacheBytes)
+	}
+	if got := b.loader.cache.limitBytes(); got != fallbackResourceCacheBytes {
+		t.Fatalf("resource cache fallback = %d, want %d", got, fallbackResourceCacheBytes)
 	}
 }
 

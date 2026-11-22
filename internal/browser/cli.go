@@ -36,9 +36,7 @@ func Run(args []string) int {
 	bookmarks := fs.String("bookmarks", "", "import a Netscape bookmark HTML file")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	cache := fs.Int("cache", int(defaultResourceCacheLimit>>20), "in-memory resource cache limit in MB (0 disables)")
-	historyCache := fs.Int("history-cache", int(defaultHistoryCacheBytes>>20), "in-memory back/forward page cache limit in MB (0 disables)")
-	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB; also sets the 25% JS, 12% image and 3% SVG budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
+	memLimit := fs.Int("mem-limit", 0, "soft process memory limit in MB; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
@@ -103,7 +101,6 @@ func Run(args []string) int {
 	interactive := !*dump && isTTY(os.Stdin) && isTTY(os.Stdout)
 	graphicsMode := ParseGraphicsMode(*graphics)
 	loader := NewLoader()
-	loader.setCacheLimitMB(*cache)
 	loader.noScripts = *noJS
 	loader.noPDF = *noPDF
 	loader.noImages = graphicsMode == GraphicsNone
@@ -212,8 +209,6 @@ func Run(args []string) int {
 		"-pdf-page":      strings.TrimSpace(*pdfPage),
 		"-graphics":      *graphics,
 		"-bookmarks":     bookmarksValue,
-		"-cache":         strconv.Itoa(*cache),
-		"-history-cache": strconv.Itoa(*historyCache),
 		"-mem-limit":     strconv.Itoa(*memLimit),
 		"-layout-budget": budget.Name,
 		"-zoom":          zoomPercentLabel(zoomFactor),
@@ -228,7 +223,6 @@ func Run(args []string) int {
 	b.noPDF = *noPDF
 	b.jsMemLimit = jsMemLimit
 	b.layoutBudget = budget
-	b.setHistoryCacheLimitMB(*historyCache)
 	b.memLimitBytes = int64(*memLimit) << 20
 	switch strings.ToLower(strings.TrimSpace(*textScale)) {
 	case "off", "none", "false":

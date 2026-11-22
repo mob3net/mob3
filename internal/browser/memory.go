@@ -16,13 +16,17 @@ var startupMemoryLimit = debug.SetMemoryLimit(-1)
 // used before budgets became percentages, and are replaced by the percentages
 // below whenever -mem-limit or GOMEMLIMIT gives a base.
 const (
-	fallbackJSHeap     = int64(256) << 20
-	fallbackImageBytes = int64(128) << 20
-	fallbackSVGPixels  = int64(8_000_000)
-	jsHeapPercent      = 25
-	imageBudgetPercent = 12
-	svgBudgetPercent   = 3
-	maxInlineSVGCount  = 256
+	fallbackJSHeap             = int64(256) << 20
+	fallbackImageBytes         = int64(128) << 20
+	fallbackSVGPixels          = int64(8_000_000)
+	fallbackResourceCacheBytes = int64(32) << 20
+	fallbackHistoryCacheBytes  = int64(128) << 20
+	jsHeapPercent              = 25
+	imageBudgetPercent         = 12
+	svgBudgetPercent           = 3
+	resourceCachePercent       = 3
+	historyCachePercent        = 12
+	maxInlineSVGCount          = 256
 )
 
 // effectiveMemoryLimit reports the user's soft heap limit, or zero when the
@@ -76,6 +80,20 @@ func svgPixelBudget(base int64) int64 {
 	return memoryFraction(base, svgBudgetPercent) / 4
 }
 
+func resourceCacheBudget(base int64) int64 {
+	if base <= 0 {
+		return fallbackResourceCacheBytes
+	}
+	return memoryFraction(base, resourceCachePercent)
+}
+
+func historyCacheBudget(base int64) int64 {
+	if base <= 0 {
+		return fallbackHistoryCacheBytes
+	}
+	return memoryFraction(base, historyCachePercent)
+}
+
 // setMemoryLimitMB applies a process soft heap limit. Zero restores the
 // startup limit (including an environment GOMEMLIMIT) and keeps the process
 // unlimited when the user never configured one.
@@ -95,6 +113,10 @@ func (b *Browser) setMemoryLimitMB(mb int) {
 	if b.js != nil {
 		b.js.setMemLimit(b.jsMemLimit)
 	}
+	b.historyCacheBytes = historyCacheBudget(base)
+	b.histMu.Lock()
+	b.trimHistoryCacheLocked()
+	b.histMu.Unlock()
 	if b.loader != nil {
 		b.loader.setMemoryBudget(base)
 	}
@@ -113,6 +135,9 @@ func (l *Loader) setMemoryBudget(base int64) {
 	l.svgMu.Lock()
 	l.svgBudgetPixels = svgPixelBudget(base)
 	l.svgMu.Unlock()
+	if l.cache != nil {
+		l.cache.setLimit(resourceCacheBudget(base))
+	}
 }
 
 // byteLimiter is a context-aware weighted semaphore for decoded image bytes.

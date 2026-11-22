@@ -312,7 +312,7 @@ func NewBrowser(w, h int) *Browser {
 		jsMemLimit:        jsHeapBudget(effectiveMemoryLimit()),
 		jsPageBudget:      jsPageBudget,
 		layoutBudget:      DefaultLayoutBudget,
-		historyCacheBytes: defaultHistoryCacheBytes,
+		historyCacheBytes: historyCacheBudget(effectiveMemoryLimit()),
 		loadCh:            make(chan loadResult, 1),
 		importCh:          make(chan jsImportTask, 16),
 		imageCh:           make(chan imageBatch, 1),
