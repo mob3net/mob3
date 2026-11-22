@@ -97,6 +97,22 @@ func (b *Browser) consoleHistoryFor(pane int) *consoleHistory {
 	return &b.consoleHist
 }
 
+// logEngineError records a contained engine failure for the console view. It
+// sanitizes the message, keeps duplicate consecutive reports out of the log,
+// and points the footer at the console so the failure is discoverable.
+func (b *Browser) logEngineError(msg string) {
+	msg = stripTerminalControls(msg)
+	if msg == "" {
+		return
+	}
+	entry := "[engine] " + msg
+	if n := len(b.jsLog); n > 0 && b.jsLog[n-1] == entry {
+		return
+	}
+	b.logJS("engine", msg)
+	b.status = "Error: page engine — see ! console"
+}
+
 // logJS records a JavaScript console/error message for the console view.
 func (b *Browser) logJS(kind, msg string) {
 	msg = strings.TrimRight(msg, "\n")

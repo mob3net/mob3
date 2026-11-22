@@ -115,6 +115,9 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.u32(v.ID)
 		e.bool(v.OK)
 		e.str(v.Text)
+	case ClientError:
+		kind = CmdClientError
+		e.str(v.Message)
 	default:
 		return dst[:start], fmt.Errorf("%w: unknown command body %T", ErrInvalid, c.Body)
 	}
@@ -276,6 +279,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = Shutdown{}
 	case CmdDialogResult:
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
+	case CmdClientError:
+		body = ClientError{Message: d.str()}
 	default:
 		return Command{}, nil, fmt.Errorf("%w: unknown command kind %d", ErrInvalid, h.kind)
 	}

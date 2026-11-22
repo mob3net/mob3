@@ -36,6 +36,7 @@ func testCommands() []Command {
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},
 		{Session: 11, Seq: 11, Body: DialogResult{ID: 77, OK: true, Text: "yes"}},
+		{Session: 12, Seq: 12, Body: ClientError{Message: "invalid engine event: test"}},
 	}
 }
 

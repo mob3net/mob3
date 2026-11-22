@@ -37,6 +37,24 @@ temporary and remove them before handing work back.
   media queries, `display`, `position`, `float`, `grid-*`, `flex*`, `calc(`,
   `transform`, `content`, and `visibility`.
 
+## Contained engine failures
+
+The transport validates every event after the engine produces it. If a frame
+fails (for example an image placement outside the frame), the transport swaps
+it for a `Crash` event instead of delivering unsafe cell data. The front end
+prints the first identical message to stderr, sends it back as a `ClientError`
+command, and the engine adds `[engine] ...` to the `!` console and sets
+`Error: page engine — see ! console` in the footer. Identical repeats are
+suppressed until a frame presents successfully, so a per-frame fault does not
+flood the terminal.
+
+MOB³ writes no log file. When the alternate screen hides stderr, capture it
+with shell redirection:
+
+```sh
+bin/mob3 "$URL" 2>/tmp/mob3.err
+```
+
 ## Zoom probe
 
 Zoom is a layout oracle, not just a convenience: it changes the CSS pixels per

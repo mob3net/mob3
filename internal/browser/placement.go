@@ -167,22 +167,51 @@ func (b *Browser) evictPlacements() {
 	}
 }
 
-// protocolPlacements maps engine image fragments to wire placements. The image
-// bytes are immutable cached blobs; a frame may share them with the front end.
-func (b *Browser) protocolPlacements(dst []protocol.Placement, placements []ImagePlacement) []protocol.Placement {
+// protocolPlacements maps engine image fragments to wire placements and clips
+// them to the frame. Layout can place an image partly outside the viewport
+// (negative offsets or a box wider than the terminal); the wire contract
+// requires every placement to be inside the frame.
+func (b *Browser) protocolPlacements(dst []protocol.Placement, placements []ImagePlacement, w, h int) []protocol.Placement {
 	dst = dst[:0]
 	for _, p := range placements {
+		if p.W <= 0 || p.H <= 0 || p.TotalRows <= 0 {
+			continue
+		}
+		x0, y0 := p.X, p.Y
+		x1, y1 := p.X+p.W, p.Y+p.H
+		if x0 < 0 {
+			x0 = 0
+		}
+		if y0 < 0 {
+			y0 = 0
+		}
+		if x1 > w {
+			x1 = w
+		}
+		if y1 > h {
+			y1 = h
+		}
+		if x1 <= x0 || y1 <= y0 {
+			continue
+		}
 		e := b.placementImage(p)
 		if e == nil {
 			continue
 		}
+		rowStart := p.RowStart
+		if p.Y < 0 {
+			rowStart += -p.Y
+		}
+		if rowStart < 0 || rowStart >= p.TotalRows {
+			continue
+		}
 		dst = append(dst, protocol.Placement{
 			Key:       strconv.Itoa(e.id),
-			X:         p.X,
-			Y:         p.Y,
-			W:         p.W,
-			H:         p.H,
-			RowStart:  p.RowStart,
+			X:         x0,
+			Y:         y0,
+			W:         x1 - x0,
+			H:         y1 - y0,
+			RowStart:  rowStart,
 			TotalRows: p.TotalRows,
 			Format:    protocol.PlacementPNG,
 			Data:      e.data,

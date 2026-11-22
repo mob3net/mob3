@@ -200,6 +200,8 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		return b.handleAppAction(v)
 	case protocol.Abort:
 		b.abortGen.Add(1)
+	case protocol.ClientError:
+		b.logEngineError(v.Message)
 	case protocol.Shutdown:
 		return true, nil
 	}

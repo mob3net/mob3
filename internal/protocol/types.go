@@ -47,6 +47,7 @@ const (
 	CmdAbort
 	CmdShutdown
 	CmdDialogResult
+	CmdClientError
 )
 
 const (

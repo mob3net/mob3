@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"image"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -281,8 +282,8 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 	var out bytes.Buffer
 	p := frontend.NewPresenter(&out, true)
 	p.SetGraphics(frontend.GraphicsKitty, 8, 16)
-	scroll, native := 0, false
-	if _, err := applySessionEvent(p, protocol.Event{Body: protocol.State{Flags: protocol.StateNativeImages}}, &scroll, &native); err != nil {
+	st := &frontEndState{}
+	if _, err := applySessionEvent(p, protocol.Event{Body: protocol.State{Flags: protocol.StateNativeImages}}, st, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := encodePNG(image.NewNRGBA(image.Rect(0, 0, 16, 16)))
@@ -295,7 +296,7 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 	for i := range f.Cells {
 		f.Cells[i].R = 'x'
 	}
-	if _, err := applySessionEvent(p, protocol.Event{Body: f}, &scroll, &native); err != nil {
+	if _, err := applySessionEvent(p, protocol.Event{Body: f}, st, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
@@ -304,5 +305,81 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 	}
 	if !strings.Contains(got, "\x1b_G") {
 		t.Fatal("native placement was not presented")
+	}
+}
+
+func TestSessionClipsOutOfBoundsPlacements(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	b := NewBrowser(10, 8)
+	b.noJS = true
+	b.noDraw = false
+	b.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "clip"}
+	b.layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: -5, Y: 1, W: 20, H: 3, Img: img}}}
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.emitFrames = true
+	capture := &frameCapture{}
+	b.sessionOut = capture
+	b.draw()
+	b.emitPendingFrame()
+	f := capture.frame
+	if err := f.Validate(protocol.DefaultLimits); err != nil {
+		t.Fatalf("frame is invalid: %v", err)
+	}
+	if len(f.Placements) != 1 {
+		t.Fatalf("placements = %d, want 1", len(f.Placements))
+	}
+	p := f.Placements[0]
+	if p.X != 0 || p.W <= 0 || p.X+p.W > f.W {
+		t.Fatalf("placement x/w = %d/%d in frame %d, want clipped to [0,%d]", p.X, p.W, f.W, f.W)
+	}
+}
+
+func TestApplySessionEventDeduplicatesCrash(t *testing.T) {
+	p := frontend.NewPresenter(io.Discard, false)
+	st := &frontEndState{}
+	var reports []string
+	report := func(msg string) { reports = append(reports, msg) }
+	crash := protocol.Event{Body: protocol.Crash{Message: "bad\x1b[31m"}}
+	if _, err := applySessionEvent(p, crash, st, report); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applySessionEvent(p, crash, st, report); err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want 1 for repeated crash", len(reports))
+	}
+	if strings.Contains(reports[0], "\x1b") {
+		t.Fatalf("report kept a control sequence: %q", reports[0])
+	}
+	frame := protocol.Frame{W: 1, H: 1, Cells: []protocol.Cell{{R: 'x'}}}
+	if _, err := applySessionEvent(p, protocol.Event{Body: frame}, st, report); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applySessionEvent(p, crash, st, report); err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("reports = %d, want 2 after a good frame re-armed reporting", len(reports))
+	}
+}
+
+func TestClientErrorLogsOnce(t *testing.T) {
+	b := NewBrowser(40, 10)
+	cmd := protocol.Command{Body: protocol.ClientError{Message: "bad frame\x1b[31m"}}
+	if _, err := b.handleCommand(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.handleCommand(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.jsLog) != 1 {
+		t.Fatalf("jsLog = %q, want one entry", b.jsLog)
+	}
+	if strings.Contains(b.jsLog[0], "\x1b") {
+		t.Fatalf("console entry kept a control sequence: %q", b.jsLog[0])
+	}
+	if !strings.Contains(b.status, "engine") {
+		t.Fatalf("status = %q, want an engine-error hint", b.status)
 	}
 }

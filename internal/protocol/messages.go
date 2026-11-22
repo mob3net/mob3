@@ -268,3 +268,12 @@ func (Download) eventKind() Kind { return EvDownload }
 type Quit struct{}
 
 func (Quit) eventKind() Kind { return EvQuit }
+
+// ClientError reports a contained front-end observation to the engine so it
+// can show it in the in-app console. The message is already sanitized by the
+// front end and may only be displayed, never interpreted as page content.
+type ClientError struct {
+	Message string
+}
+
+func (ClientError) commandKind() Kind { return CmdClientError }

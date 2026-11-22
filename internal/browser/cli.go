@@ -302,8 +302,11 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
 		return 1
 	}
-	scroll := 0
-	native := false
+	feState := &frontEndState{}
+	reportCrash := func(msg string) {
+		fmt.Fprintf(os.Stderr, "mob3: page engine: %s\n", msg)
+		_ = session.Send(protocol.Command{Body: protocol.ClientError{Message: msg}})
+	}
 	for {
 		select {
 		case k := <-keys:
@@ -339,7 +342,7 @@ func Run(args []string) int {
 			if !ok {
 				return 0
 			}
-			quit, err := applySessionEvent(presenter, ev, &scroll, &native)
+			quit, err := applySessionEvent(presenter, ev, feState, reportCrash)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "mob3: present: %v\n", err)
 				return 1
@@ -475,19 +478,42 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 // remains "dev" for local builds that do not pass a version.
 var Version = "dev"
 
+// frontEndState is presentation state the event handler updates as it sees
+// session events.
+type frontEndState struct {
+	scroll    int
+	native    bool
+	lastCrash string
+}
+
 // applySessionEvent updates the front-end presentation state and draws frames.
-// It reports whether the session asked the application to exit.
-func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, scroll *int, native *bool) (bool, error) {
+// It reports whether the session asked the application to exit. Identical
+// consecutive crashes are reported once; a successfully presented frame
+// re-arms reporting.
+func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, st *frontEndState, report func(string)) (bool, error) {
+	if st == nil {
+		st = &frontEndState{}
+	}
 	switch v := ev.Body.(type) {
 	case protocol.Quit:
 		return true, nil
 	case protocol.Crash:
-		fmt.Fprintf(os.Stderr, "mob3: page engine: %s\n", stripTerminalControls(v.Message))
+		msg := stripTerminalControls(v.Message)
+		if msg == "" || msg == st.lastCrash {
+			break
+		}
+		st.lastCrash = msg
+		if report != nil {
+			report(msg)
+		}
 	case protocol.State:
-		*scroll = v.Scroll
-		*native = v.Flags&protocol.StateNativeImages != 0
+		st.scroll = v.Scroll
+		st.native = v.Flags&protocol.StateNativeImages != 0
 	case protocol.Frame:
-		return false, presenter.Present(v, *scroll, *native)
+		if err := presenter.Present(v, st.scroll, st.native); err != nil {
+			return false, err
+		}
+		st.lastCrash = ""
 	}
 	return false, nil
 }
