@@ -1294,7 +1294,9 @@ func (b *Browser) paintChoiceMenu(g *Grid, title, hint string, minW int, rows []
 	x, y := b.modalFrame(g, boxW, boxH, title)
 	fg := RGB(0x1f, 0x23, 0x28)
 	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	activeBG := RGB(0x2f, 0x6f, 0xbf)
+	// The active row must not reuse the frame/title blue, or it reads as part
+	// of the window chrome instead of as the highlighted option.
+	activeBG := RGB(0x1f, 0x4f, 0x9f)
 	activeFG := RGB(0xff, 0xff, 0xff)
 	rects := make([]Rect, 0, visible)
 	for i := 0; i < visible; i++ {
