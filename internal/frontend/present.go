@@ -14,6 +14,7 @@ import (
 type Presenter struct {
 	out   io.Writer
 	color bool
+	gfx   *GFX
 
 	prev       []string
 	lastScroll int
@@ -25,6 +26,20 @@ type Presenter struct {
 // monochrome output keeps text attributes so links stay visible.
 func NewPresenter(out io.Writer, color bool) *Presenter {
 	return &Presenter{out: out, color: color}
+}
+
+// SetGraphics installs the terminal image renderer for this presenter. Modes
+// without native graphics leave it nil.
+func (p *Presenter) SetGraphics(mode GraphicsMode, cellW, cellH int) {
+	p.gfx = NewGFXRenderer(mode, cellW, cellH)
+}
+
+// ClearGraphics removes placements this presenter has shown. Call it before
+// leaving the alternate screen.
+func (p *Presenter) ClearGraphics(sb *strings.Builder) {
+	if p.gfx != nil {
+		p.gfx.Clear(sb)
+	}
 }
 
 // Reset forces the next frame to repaint every row. It is used by tests and by
@@ -44,12 +59,10 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		p.nativeSet = true
 		p.prev = nil
 	}
+	leavingNative := p.lastNative && !native
 	if native != p.lastNative {
 		p.lastNative = native
 		p.prev = nil
-	}
-	if native {
-		return nil
 	}
 	if scroll != p.lastScroll {
 		p.lastScroll = scroll
@@ -64,8 +77,18 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		p.prev = make([]string, len(lines))
 	}
 	var sb strings.Builder
+	if leavingNative && p.gfx != nil {
+		p.gfx.Clear(&sb)
+	}
+	if native && p.gfx != nil {
+		p.gfx.BeginFrame(&sb)
+	}
 	if needClear {
-		sb.WriteString("\x1b[2J")
+		if native && p.gfx != nil {
+			p.gfx.ClearScreen(&sb)
+		} else {
+			sb.WriteString("\x1b[2J")
+		}
 	}
 	for i := range lines {
 		if !p.chromeRow(i, len(lines)) && p.prev[i] == lines[i] {
@@ -79,6 +102,9 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 			sb.WriteString("\x1b[K")
 		}
 		p.prev[i] = lines[i]
+	}
+	if native && p.gfx != nil {
+		p.gfx.PlaceAll(&sb, f.Placements)
 	}
 	if sb.Len() == 0 {
 		return nil

@@ -212,11 +212,10 @@ func copyFrame(f Frame, lim Limits) (Frame, error) {
 	out.Cells = append([]Cell(nil), f.Cells...)
 	out.Runs = append([]ScaledRun(nil), f.Runs...)
 	if len(f.Placements) > 0 {
-		out.Placements = make([]Placement, len(f.Placements))
-		for i, p := range f.Placements {
-			p.Data = append([]byte(nil), p.Data...)
-			out.Placements[i] = p
-		}
+		// Placement image bytes are immutable cached blobs. Copying the slice
+		// headers is enough; re-copying every image on every frame would undo
+		// the placement cache.
+		out.Placements = append([]Placement(nil), f.Placements...)
 	}
 	return out, nil
 }

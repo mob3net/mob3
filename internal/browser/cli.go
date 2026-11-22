@@ -227,6 +227,14 @@ func Run(args []string) int {
 	b.cellW, b.cellH = cellW, cellH
 	b.gfx = NewGFXRenderer(graphicsMode, cellW, cellH)
 	b.initGraphicsModes(graphicsMode)
+	presenter := frontend.NewPresenter(os.Stdout, b.color)
+	// The graphics cycle can switch into native mode from blocks or none, so
+	// the front-end renderer must exist whenever the terminal supports it.
+	presenterMode := graphicsMode
+	if presenterMode == GraphicsAuto || presenterMode == GraphicsBlocks || presenterMode == GraphicsNone {
+		presenterMode = DetectGraphics(GraphicsAuto)
+	}
+	presenter.SetGraphics(presenterMode, cellW, cellH)
 
 	kittyKeys := kittyKeyboardEnabled()
 	var startSeq strings.Builder
@@ -245,6 +253,7 @@ func Run(args []string) int {
 		}
 		sb.WriteString("\x1b[?1003l\x1b[?1000l\x1b[?1006l")
 		b.gfx.Clear(&sb)
+		presenter.ClearGraphics(&sb)
 		sb.WriteString("\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l")
 		_, _ = os.Stdout.WriteString(sb.String())
 		restoreTerm(stdin, state)
@@ -277,7 +286,6 @@ func Run(args []string) int {
 			caps |= protocol.CapKittyText
 		}
 	}
-	presenter := frontend.NewPresenter(os.Stdout, b.color)
 	session, err := (&protocol.InProc{}).Open(context.Background(), 1, b)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: session: %v\n", err)

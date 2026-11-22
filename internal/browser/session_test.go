@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"image"
 	"os"
 	"strings"
 	"testing"
@@ -231,5 +232,45 @@ func TestDialogReadsTransportCommands(t *testing.T) {
 	in <- protocol.Command{Body: protocol.Key{Token: "n"}}
 	if b.showConfirm("sure?") {
 		t.Fatal("confirm accepted n")
+	}
+}
+
+type frameCapture struct{ frame protocol.Frame }
+
+func (s *frameCapture) Send(ev protocol.Event) error {
+	if f, ok := ev.Body.(protocol.Frame); ok {
+		s.frame = f
+	}
+	return nil
+}
+
+func TestSessionFrameCarriesNativePlacements(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 32, 64))
+	b := NewBrowser(40, 12)
+	b.noJS = true
+	b.color = true
+	b.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
+	b.layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: 1, Y: 0, W: 4, H: 4, Img: img}}}
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.emitFrames = true
+	capture := &frameCapture{}
+	b.sessionOut = capture
+	b.draw()
+	b.emitPendingFrame()
+	if len(capture.frame.Placements) != 1 {
+		t.Fatalf("placements = %d, want 1", len(capture.frame.Placements))
+	}
+	p := capture.frame.Placements[0]
+	if p.Format != protocol.PlacementPNG || p.Key == "" || len(p.Data) == 0 {
+		t.Fatalf("placement = %+v", p)
+	}
+	first := p.Data
+	b.draw()
+	b.emitPendingFrame()
+	if len(capture.frame.Placements) != 1 {
+		t.Fatalf("second frame placements = %d", len(capture.frame.Placements))
+	}
+	if &capture.frame.Placements[0].Data[0] != &first[0] {
+		t.Fatal("placement bytes were re-encoded instead of reusing the cache")
 	}
 }

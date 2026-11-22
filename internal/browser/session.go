@@ -35,10 +35,12 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 	b.sessionOut = out
 	b.sessionQuit = false
 	b.lastState = protocol.State{}
+	b.emitFrames = true
 	defer func() {
 		b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
 		b.sessionOut = nil
 		b.frameReady = false
+		b.emitFrames = false
 	}()
 	b.sampleUsage()
 	for {
@@ -48,7 +50,6 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 		if b.takeScavengePending() {
 			debug.FreeOSMemory()
 		}
-		b.syncPresentation()
 		if b.skipDraw {
 			b.skipDraw = false
 		} else {
@@ -259,19 +260,6 @@ func (b *Browser) protocolMouse(v protocol.Mouse) MouseEvent {
 // reads this atomic from inside a script, so a busy page stops even though the
 // session loop has not run yet.
 func (b *Browser) AbortSession() { b.abortGen.Add(1) }
-
-// syncPresentation follows a graphics-mode change. Text modes hand the screen
-// to the front end; native image modes keep the engine-side writer until image
-// placements cross the seam.
-func (b *Browser) syncPresentation() {
-	emit := b.gfx == nil
-	if emit == b.emitFrames {
-		return
-	}
-	b.emitFrames = emit
-	b.prev = nil
-	b.frameReady = false
-}
 
 // emitPendingFrame sends the frame the last draw stashed. The transport copies
 // it before returning, so the frame buffer can be reused immediately.

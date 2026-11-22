@@ -122,8 +122,9 @@ const (
 )
 
 // Placement is one native terminal image placement. Data is an encoded image,
-// never a decoded bitmap: decoding stays in the engine, and a hostile engine
-// cannot make the front end allocate an unbounded bitmap.
+// never a decoded bitmap. The sender treats the bytes as immutable and may
+// share cached blobs between frames; the front end decodes them only for
+// terminal output, with its own size limits.
 type Placement struct {
 	Key       string
 	X, Y      int

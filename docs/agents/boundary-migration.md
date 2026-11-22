@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 5 in progress (text presentation on the front end).**
+Status: **Phase 5 in progress (native image placement on the front end).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -76,6 +76,7 @@ network destination.
 | D40 | 2026-11-22 | `Loader` takes a fresh `host.Fetcher` snapshot per request instead of mutating one shared value. A test or CLI can still replace the loader's client, settings, cache and request log, because the snapshot is taken at call time. | The shared fetcher raced under concurrent navigations and would be unsafe once the engine services loads on its own goroutine; the snapshot removes the shared write without changing the Loader API. |
 | D41 | 2026-11-22 | Replace the handler's `chan<- Event` with `protocol.EventSink`. `Send` validates and detaches the event before returning, so the engine may immediately reuse its paint buffers. Frames use a validated copy; every other command and event keeps the wire codec. | The channel handoff left events referencing reusable engine memory, which was unsafe across the goroutine boundary. Measurement showed the wire codec costs ~320 µs per frame, so D15's measurement escape applies to the hot frame path; the semantic checks are unchanged. |
 | D42 | 2026-11-22 | Text-mode presentation moves to `frontend.Presenter`: the engine emits a full-screen `Frame`, the front end encodes ANSI, keeps the row diff and writes the terminal. Native image modes keep the engine-side writer until image placements cross the seam. `StateNativeImages` tells the front end which side owns the current frame. Chrome composition stays in the engine for now. | This removes stdout from the engine for the default graphics modes while preserving kitty/iTerm2 output exactly. Chrome ownership and placement encoding are the remaining presentation steps. |
+| D43 | 2026-11-22 | Move terminal graphics to `internal/frontend/gfx.go`. The engine encodes each image once into an immutable PNG blob, caches it under a stable placement key, and puts `protocol.Placement` values in the frame; the front end decodes, scales, crops and writes kitty/iTerm2 escapes. Placement bytes are shared between frames. The engine keeps only mode/capability state (`GraphicsMode`, `Mode`, `TextSizing`) for layout and the graphics cycle. | Native output is terminal work and belongs with the presenter. The bounded encode cache keeps the per-frame cost to a slice copy; the PTY checks cover kitty, iTerm2, blocks and cycling from blocks into native mode. Chrome composition is the last presentation step. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -149,7 +150,10 @@ which part goes where.
 | transport contract | `internal/protocol/transport.go` | `Handler`, `Transport` and the codec-validating in-process session. |
 | interactive session loop | `internal/browser/session.go` | `Serve`, command routing, timers, progress, usage, frame stashing and engine-side dialog input while the transport owns the front end. |
 | terminal loop | `internal/browser/cli.go` | Raw mode, key reading, resize and quit signals; sends commands, feeds frames to the presenter and reacts to `Quit`. |
-| text presentation | `internal/frontend/present.go` | ANSI encoding, row diff, scroll/native resets and terminal writes for engine frames. |
+| text presentation | `internal/frontend/present.go` | ANSI encoding, row diff, scroll/native resets, text plus placement output. |
+| terminal graphics | `internal/frontend/gfx.go` | Graphics modes, capability detection, PNG decode/scale/crop and kitty/iTerm2 escape output. |
+| placement encoding | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded immutable PNG cache and image scaling for page decode. |
+| graphics compatibility | `internal/browser/render_gfx.go` | Mode/constructor aliases for the CLI and tests; SVG loading stays here. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
 | `certs.go` | host | Trust store selection. |
 | `pdf_object.go`, `pdf_text.go`, `pdf.go` | `internal/engine` | Object/text parser and document assembly; `pdf_compat.go` keeps the browser API. |
@@ -191,7 +195,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Engine cannot open sockets or read cookies |
-| 5 | Transport and lifecycle | 1–2 weeks | In progress (5c) | All paths run through the in-process transport |
+| 5 | Transport and lifecycle | 1–2 weeks | In progress (5d) | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
@@ -344,9 +348,10 @@ Next: 3b, the engine package.
       in `frontend.Presenter`; the engine emits `Frame` events for text modes.
 - [ ] Move chrome composition (`drawChrome`) to the front end. The engine
       still includes chrome in the frame while this is pending.
-- [ ] Move native image placement to the front end: encode `ImagePlacement`
+- [x] Move native image placement to the front end: encode `ImagePlacement`
       into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
-      output out of the engine. Native modes still write from the engine.
+      output to `internal/frontend/gfx.go`. Frames carry placements in every
+      graphics mode.
 - [ ] Frame coalescing, backpressure and hostile-frame bounds.
       Invalid events already become `Crash`; queue depth is the only
       backpressure today.
@@ -462,6 +467,24 @@ the Phase 5 transport.
 | Content paint+blit, 100×33 | 91–101 µs, 0 B/op | 94–99 µs, 0 B/op | within noise |
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
+
+### Phase 5d deltas
+
+Native placements now cross the frame, so the engine writes no terminal
+graphics in a session. The encode cache is populated on the first frame and
+reused; the transport shares the immutable image bytes instead of copying them.
+
+| Metric | Before 5d | After 5d | Delta |
+| --- | --- | --- | --- |
+| Engine frame + one native image (cached) | new | 73–75 µs, 74.4 KB, 13 allocs | frame + placement map |
+| Text repaint, full frame | 802–836 µs, 593.1 KB | 813–834 µs, 593.1 KB | flat |
+| Interactive idle CPU / RSS | 0 ticks / 5 s, 31.4 MB | 0 ticks / 5 s, 31.6 MB | idle |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite and `-race` | pass | pass | no change |
+
+PTY checks with a real image: kitty, iTerm2 and blocks all render the page text
+and their expected image marker; cycling from blocks to none to native turns
+kitty placements on. Alert, abort, resize and quit still pass.
 
 ### Phase 5c deltas
 
@@ -805,3 +828,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5a | `protocol.Handler`/`Transport` and the codec-validating `InProc` session; abort channel, `Crash` substitution for invalid events, drain-on-close; round-trip/abort/close tests, a frontend frame seam test and a transport benchmark | `go test ./...`, `go vet`, `-race` on protocol/frontend, dump/PNG hashes | Wire the browser loop through the transport |
 | 2026-11-22 | 5b | Interactive loop moved onto `InProc`: engine `Serve` goroutine, command routing, front-end terminal loop, `Quit` event, `Aborter`, transport-aware dialogs, hover coalescing; `Loader` now snapshots `host.Fetcher` per request to remove the concurrent-fetch race | `go test ./...`, `go vet`, full `-race` browser suite, PTY quit/resize smoke, 5 s idle sample, dump/PNG hashes, draw/content benchmarks | Move presentation and chrome to the front end |
 | 2026-11-22 | 5c | `EventSink` with validated, detached frame handoff; `frontend.Presenter` owns ANSI, row diff and stdout for text modes; engine emits full-screen frames, `StateNativeImages` marks the engine-side native path; chrome and native placement still engine-side | `go test ./...`, `go vet`, full `-race`, frame/handoff/presenter benchmarks, PTY http/dialog/abort/graphics runs, idle sample, dump/PNG hashes | Move chrome composition and native image placement |
+| 2026-11-22 | 5d | Native placements moved to the front end: engine encodes bounded immutable PNG blobs and emits `protocol.Placement`; `frontend.GFX` decodes/scales/crops and writes kitty/iTerm2; presenter combines text and placements; `StateNativeImages` drives mode ownership | `go test ./...`, `go vet`, full `-race`, placement/frame benchmarks, PTY kitty/iTerm2/blocks image and cycle checks, idle sample, dump/PNG hashes | Move chrome composition |

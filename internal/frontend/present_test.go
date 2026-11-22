@@ -86,8 +86,8 @@ func TestPresenterResetsOnScrollAndNative(t *testing.T) {
 	if err := p.Present(f, 1, true); err != nil {
 		t.Fatal(err)
 	}
-	if out.Len() != 0 {
-		t.Fatalf("native mode wrote text: %q", out.String())
+	if !strings.Contains(out.String(), "body") {
+		t.Fatalf("native mode dropped the text layer: %q", out.String())
 	}
 	out.Reset()
 	if err := p.Present(f, 1, false); err != nil {

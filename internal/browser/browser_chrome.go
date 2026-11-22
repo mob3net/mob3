@@ -321,6 +321,7 @@ func (b *Browser) draw() {
 		// The front end owns the terminal in this mode. The frame buffer is
 		// reused; the transport copies it before the next draw.
 		b.frameBuf = toProtocolFrameInto(&b.frameBuf, g, 0)
+		b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements)
 		b.frameReady = true
 		return
 	}
@@ -753,7 +754,7 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.prev[i] = lines[i]
 	}
 	if b.gfx != nil {
-		b.gfx.PlaceAll(&sb, placements)
+		b.gfx.PlaceAll(&sb, b.protocolPlacements(nil, placements))
 	}
 	if sb.Len() > 0 {
 		_, _ = os.Stdout.WriteString(sb.String())

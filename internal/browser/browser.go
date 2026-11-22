@@ -261,6 +261,11 @@ type Browser struct {
 	emitFrames bool
 	frameReady bool
 	sessionOut protocol.EventSink
+	// placementCache keeps encoded image blobs stable across frames so native
+	// image output does not re-encode every picture on every repaint.
+	placementCache  map[placementKey]*placementEntry
+	placementBytes  int
+	nextPlacementID int
 	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.

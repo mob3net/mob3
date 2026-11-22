@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"strings"
@@ -249,5 +250,26 @@ func BenchmarkBoundaryTextRepaint(b *testing.B) {
 		if err := p.Present(sink.last, 0, false); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// BenchmarkBoundarySessionFrameImage measures the same repaint with one native
+// image placement, after the first frame has populated the encode cache.
+func BenchmarkBoundarySessionFrameImage(b *testing.B) {
+	img := image.NewNRGBA(image.Rect(0, 0, 320, 320))
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
+	br.layout = &Layout{Height: 30, Frags: []Frag{{Kind: fragImage, X: 2, Y: 1, W: 40, H: 20, Img: img}}}
+	br.color = true
+	br.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	br.emitFrames = true
+	br.sessionOut = &codecSink{}
+	br.draw()
+	br.emitPendingFrame()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.draw()
+		br.emitPendingFrame()
 	}
 }

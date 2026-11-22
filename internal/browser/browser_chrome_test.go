@@ -575,7 +575,7 @@ func TestFooterShowsJSAndGraphicsState(t *testing.T) {
 		t.Fatalf("footer right = %q", right)
 	}
 	b.loader.noImages = false
-	b.gfx = &gfxRenderer{mode: GraphicsKitty}
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	if got := b.footerRight(120); !strings.Contains(got, "Graphics:kitty") {
 		t.Fatalf("resolved graphics footer = %q", got)
 	}
