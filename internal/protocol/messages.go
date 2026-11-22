@@ -50,9 +50,10 @@ const (
 	InitNoBigText
 )
 
-// Init creates or reconfigures a session. Width and Height are the content
-// rectangle, excluding chrome. CellW and CellH are CSS pixels per terminal
-// cell, already adjusted for zoom.
+// Init creates or reconfigures a session. Width and Height are the terminal
+// size: the engine still reserves the chrome rows and derives the content
+// rectangle until that geometry moves to the front end. CellW and CellH are CSS
+// pixels per terminal cell, already adjusted for zoom.
 type Init struct {
 	Width, Height int
 	CellW, CellH  int
@@ -73,7 +74,8 @@ type Navigate struct {
 
 func (Navigate) commandKind() Kind { return CmdNavigate }
 
-// Resize changes the content rectangle.
+// Resize changes the terminal size. The engine derives the content rectangle
+// from it until that geometry moves to the front end.
 type Resize struct {
 	Width, Height int
 	CellW, CellH  int

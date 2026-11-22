@@ -197,7 +197,7 @@ published by the Pages build.
 - `internal/app/` — flag parsing, validation and dispatch into the session
   (still `browser.Execute` during the migration).
 - `internal/browser/` — package `browser` with session construction, the
-  289-method `Browser`, chrome/dialogs/navigation and tests until the boundary
+  303-method `Browser`, chrome/dialogs/navigation and tests until the boundary
   migration completes. Nothing under `internal` is imported from outside this
   module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
@@ -215,8 +215,8 @@ published by the Pages build.
   leaves `internal/browser` unrestricted; both exceptions end with the session
   split. The front end never names an engine type, and `internal/protocol` is
   canonical for the message set. The engine no longer imports `net/http`:
-  JS `fetch`/XHR and cookie parsing use the host broker. Session construction,
-  navigation still lives in `internal/browser`; the terminal loop, normal
+  JS `fetch`/XHR and cookie parsing use the host broker. Session construction and
+  navigation still live in `internal/browser`; the terminal loop, normal
   header/footer chrome, base shell keys, scrollbar, URL/vim prompt, page find,
   view/zoom windows, JS dialogs, the select popup, download/notice modals,
   link hints and the console (composition, input and find) are

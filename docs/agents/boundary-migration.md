@@ -9,12 +9,14 @@ folding every durable rule into `AGENTS.md` and
 in `architecture.md` are removed in the same change.
 
 Status: **Rewrite incomplete.** The protocol seam, host broker, engine content,
-terminal front end, live session loop, app dispatch and normal header/footer
-chrome are landed. Remaining: scrollbar/overlay/console/find chrome, shell
-keyboard modes, dialogs, navigation ownership, the `Browser` → `Session` split,
-direct app wiring, and Phase 6 cleanup.
+terminal front end, live session loop, app dispatch and the interactive chrome
+surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
+select, download/notice, hints and the console) are landed. The engine still
+composes chrome while a focused page form holds the key path. Remaining:
+navigation state and trusted URL ownership, moving content-rectangle geometry,
+the `Browser` → `Session` split, direct app wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-22.
+Last updated: 2026-11-22 (audited against the code).
 
 ## 1. Goal
 
@@ -139,6 +141,9 @@ moved.
 
 Known exceptions to remove during the migration:
 
+- `app` still imports `internal/browser` for `browser.Execute`; the dependency
+  test therefore allows any project import from `app`. This ends with the
+  session split.
 - None for `net/http`: JS `fetch`/XHR and `document.cookie` now go through the
   host broker. Terminal capability detection is front-end-owned.
 
@@ -156,7 +161,7 @@ seam; the note names which part goes where.
 
 | Current file(s) | Final side | Remaining work |
 | --- | --- | --- |
-| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
+| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation and the build `Version`; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Engine fallback modals/hints/console drawing still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
@@ -180,19 +185,20 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | --- | --- | --- | --- | --- |
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done | `-dump`/`-png` byte-identical; paint path has no ANSI |
-| 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, content-rect values, shell-loop split and normal header/footer ownership exist; scrollbar, overlays, console, find bar, menus, dialogs, keyboard modes and navigation state are still session-side |
+| 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, shell-loop split and every interactive chrome surface are front-end-owned; navigation state and content-rectangle geometry remain engine-side |
 | 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session split and `Browser` → `Session` rename remain |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR, CORS, config token and about-page rendering are split; engine cannot open sockets or parse cookies. Loader orchestration moves with 3c. |
-| 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership remains. The restart hook is deferred to the child-process work (D59). |
+| 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; interactive chrome ownership is done apart from the form-input fallback. The restart hook is deferred to the child-process work (D59). |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
 Phase 3 under D19.
 
-\*\* Phase 2 is partial: the `State` snapshot, content-rect values and the
-live session loop exist. Chrome/overlay composition, shell key routing,
-dialogs and navigation state are still session-side. `protocol.Dialog` and
-`DialogResult` exist in the codec but are not wired to production code.
+\*\* Phase 2 is partial only for navigation state and content-rectangle
+geometry. Every interactive chrome surface, overlay, dialog, hint, console and
+find bar is front-end-owned; the engine keeps its fallback composition for
+direct callers, tests and while a focused page form keeps keys engine-side.
+`protocol.Dialog`/`DialogResult` are wired in the interactive path.
 
 ### Phase 0 — Contract and baseline
 
@@ -236,13 +242,13 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 ### Phase 2 — Chrome and state ownership
 
 - [x] Front end draws the normal header and footer from `protocol.State`.
-      The engine keeps `Chrome` composition as the fallback for overlays, the
-      console, the find bar and tests.
+      The engine keeps `Chrome` composition as the fallback for direct callers,
+      tests and the engine-owned form-input path.
 - [x] Header/footer and scrollbar mouse are front-end-owned and send
       `App`/`Navigate`/`Scroll` actions. Page-area mouse remains engine-side.
-- [~] Prompts are drawn in the front-end header but their key editing and
-      state remain engine-side. Notices, dialogs, console, menus and the find
-      bar are still drawn and owned session-side.
+- [x] Prompts, notices, dialogs, console, menus and the find bar are
+      front-end-owned; the engine keeps fallback rendering for direct callers
+      and tests.
 - [x] The `State` snapshot exists (`stateMessage`), is emitted by `Serve`, and
       is consumed by `frontend.SessionLoop`.
 - [~] The content rectangle exists (`contentRect`, `headerRows`, `viewport`),
@@ -260,7 +266,8 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
       automation/tests and the fallback.
 - [x] The page find bar, query, caret and result count are front-end-owned;
       the engine computes matches, scrolls and paints highlights through
-      `Find`/`FindResults`. Console HTML find remains engine-owned.
+      `Find`/`FindResults`. Console HTML find has the separate `FindHTML` scope
+      and the same front-end bar.
 - [x] View and zoom windows are front-end-owned, including the full-screen
       dimmed overlay, keyboard/mouse selection and toggle/zoom actions.
 - [x] The page select popup is front-end-owned through
@@ -280,12 +287,16 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 - [x] JS dialogs are request/response messages: the engine sends `Dialog` and
       blocks, the front end draws/edits and answers with `DialogResult`. The
       direct-key path remains for tests and automation.
-- [~] The chrome contract now carries geometry, header prompt fields, footer
-      text/level/hits, PDF hint and the find/console fallback flags. Menu,
-      console, dialog, hint and selection state still need messages of their
-      own.
-- [ ] Back/forward history, scroll restore, `about:history` data and the
-      download/curl hint move to the front end (D54).
+- [~] The chrome contract carries geometry, footer text/level/hits, PDF hint,
+      view/zoom menu state and the fallback flags. Selection stays engine-side
+      and crosses only as clipboard text; image progress is part of the footer
+      text, so no extra state message is needed.
+- [ ] While a focused page form (or an engine-only fallback modal) holds the
+      key path, `State.FrontendChrome` is false and the engine composes chrome.
+      Closing that gap belongs with the session split.
+- [ ] Back/forward history, scroll restore and `about:history` data move to the
+      front end (D54). The download/curl hint is already front-end
+      presentation; the engine still builds the command.
 - [x] Engine overlays are clipped to the content grid; chrome and modals
       compose above it.
 - [x] Automation still drives the same commands; full suite green.
@@ -339,7 +350,7 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
 - [ ] Split the session: page/content state to `engine.Session`, chrome and
       navigation to the front end; rename `Browser` → `Session`. Still
-      `internal/browser`, 289 methods.
+      `internal/browser`, 303 methods.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
       lists them.
 
@@ -388,10 +399,11 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
       cannot swallow it.
 - [x] Move text presentation: ANSI encoding, stdout and the row diff now live
       in `frontend.Presenter`; the engine emits `Frame` events for text modes.
-- [~] Split chrome presentation: the front end now draws the normal header and
-      footer from `State`; overlays, the console and the find bar still use the
-      engine `Chrome`/full-frame fallback. Scrollbar, shell keyboard modes,
-      menus and dialogs remain for the next batch.
+- [~] Split chrome presentation: normal header/footer, scrollbar, prompts,
+      find, menus, dialogs, select, download/notice, hints and the console are
+      front-end-drawn. The engine `Chrome`/full-frame fallback remains for
+      direct callers, tests and the engine-owned form-input path. Navigation
+      state and content-rectangle geometry remain engine-side.
 - [x] Move native image placement to the front end: encode `ImagePlacement`
       into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
       output to `internal/frontend/gfx.go`. Frames carry placements in every
@@ -428,33 +440,41 @@ trusted-shell split, then Phase 6. Dependency order:
 
 **A. Shell state and chrome contract**
 
-- [~] The normal header/footer contract is in `protocol.State`. Still needed:
-      menu, console, hint, dialog, download/notice, selection and image-progress
-      state.
+- [x] `protocol.State` carries the normal header/footer, geometry, footer
+      text/level/hits, PDF hint, view/zoom menu state and the fallback flags.
+      Selection stays engine-side and crosses only as clipboard text; image
+      progress is part of the footer text.
 - [~] Base shell keys, quit, URL/vim prompt, page find, view/zoom windows,
       dialogs, the select popup, download/notice modals, link hints, console
       input/find and header/footer mouse are front-end-owned. Navigation state
       still routes through the engine.
-- [~] Toolbar, footer and scrollbar drawing moved. Overlays, console, find bar
-      and menus still live in `internal/browser`; `Browser.drawChrome`,
+- [~] Toolbar, footer, scrollbar, overlays, console, find bar and menus are
+      front-end-drawn on the interactive path. `Browser.drawChrome`,
       `presentComposed`, `protocol.Chrome` and the full-frame fallback remain
-      for those paths.
+      for direct callers, tests and the engine-owned form-input path.
+- [ ] While a focused page form keeps `State.KeysEngine` true, the engine also
+      composes chrome. Make the front end own chrome in that state, or move form
+      editing out of the engine key path, so the engine cannot emit chrome in a
+      live session.
 - [ ] Move content-rect geometry (`headerRows`, `viewport`, `contentRect`) to
-      the front end; the engine receives width/height only.
+      the front end; the engine receives the content rectangle only.
 
 **B. Dialogs and navigation**
 
 - [x] Wire `protocol.Dialog`/`DialogResult` so JS alerts, confirms and prompts
       are front-end modals. The engine keeps the direct-key path for tests and
       automation.
-- [ ] Move back/forward history, scroll restore, `about:history` data and the
-      download/curl hint to the front end; keep the page cache memory-only.
-- [ ] Remove back/forward from the engine `App` actions.
+- [ ] Move back/forward history, scroll restore and `about:history` data to the
+      front end; keep the page cache memory-only. The download/curl hint is
+      already front-end presentation, but the engine still builds the command.
+- [ ] Remove back/forward from the engine `App` actions. `Navigate.RestoreScroll`
+      already exists on the wire but is unused: use it for front-end history
+      restore instead of adding a new field.
 
 **C. Session split and app wiring**
 
-- [ ] Split `Browser`: page/content state → `engine.Session`; chrome,
-      navigation, prompts, menus, console and dialogs → front end.
+- [ ] Split `Browser` (303 methods): page/content state → `engine.Session`;
+      chrome, navigation, prompts, menus, console and form focus → front end.
 - [ ] Move Loader image/SVG/about/PDF orchestration into the engine session;
       the host keeps fetch, cache, cookies, settings and policy.
 - [ ] Rename `Browser` → `Session` and remove `internal/browser`.
@@ -468,7 +488,14 @@ trusted-shell split, then Phase 6. Dependency order:
 
 - [ ] Move whole-app tests to seam tests in `app`; keep engine, layout and PDF
       fixtures with their packages and update the documented paths.
-- [ ] Remove the browser-side shims, adapters and dead aliases.
+- [ ] Remove the browser-side shims, adapters and dead aliases
+      (`engine_compat.go`, `layout_compat.go`, `paint_compat.go`,
+      `frontend_bridge.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`,
+      `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`,
+      `cache.go`, `certs.go`, `render_gfx.go`); the real bridges
+      (`frame_protocol.go`, `js_host.go`, `js_life.go`) move with the session.
+- [ ] Remove the unused `protocol.Selection` event, or wire it if a front-end
+      consumer appears.
 - [ ] Record the Phase 6 benchmark deltas. The 60 s codec fuzz already runs in
       `.github/workflows/fuzz.yml` and through `make fuzz`.
 - [ ] Update `AGENTS.md`, `architecture.md` and, only if user-visible behavior
@@ -488,7 +515,7 @@ test.
 
 | Risk | Mitigation |
 | --- | --- |
-| `Browser` is a 289-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
+| `Browser` is a 303-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
 | Chrome state is spread across Browser fields | Define the `State`/overlay contract before moving input or drawing. Move shell key routing and chrome composition together so there is one source of truth. |
 | Loader mixes host fetch, engine assembly and session orchestration | Split orchestration with the session; keep the per-request host fetcher snapshot (D40). |
 | Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options during app wiring; required before any multi-session work. |
@@ -1025,3 +1052,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7j | Batch 10: console composition moved to the front end via `ConsoleView`; engine supplies visible lines/tabs/summary/input/footer, front end draws the full screen and overlays dialogs/select/download/notice. Console input/find remains engine-side by design. Added console snapshot/draw/transport tests and PTY console checks. | `go test ./...`, `go vet`, full `-race`, console view/draw tests, PTY console tabs/input/close, dump/PNG hashes | Batch 11: console input and find |
 | 2026-11-22 | 7k | Batch 11: console input, tabs, scrolling, history, copy and quit moved to the front end via `ConsoleAction`; engine applies actions and returns snapshots. HTML find remains engine fallback and `/`/`n`/`N` forward there. Added console action/input/quit tests and PTY console editing/tab/close checks. | `go test ./...`, `go vet`, full `-race`, console action/input tests, PTY console editing/tab/close, dump/PNG hashes | Batch 12: console HTML find, then navigation/session split |
 | 2026-11-22 | 7l | Batch 12: console HTML find moved to the front end; `Find` has a page/HTML scope, engine sends counts/highlight rectangles in `ConsoleView`, front end owns bar/query/caret/next/close. Engine old find path remains for direct callers/tests. Added console find command/view/key tests and PTY `/help` check. | `go test ./...`, `go vet`, full `-race`, console find tests, PTY console HTML find, dump/PNG hashes | Batch 13: navigation state and session split |
+| 2026-11-22 | 7m | Audit: corrected the stale status, Phase 2/5 checklists and file-ownership notes to match the landed console/find/dialog/chrome ownership. Recorded the remaining trust gap (a focused page form makes `State.FrontendChrome` false and lets the engine compose chrome), the unused `protocol.Selection` event and the unused `Navigate.RestoreScroll`, and updated the `Browser` method count to 303. No behavior change. | `go test ./...`, `go vet`, `gofmt`, `git diff --check`, dump/PNG hashes | Batch 13: navigation state, trusted URL and content-rectangle geometry |

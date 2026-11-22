@@ -2,9 +2,9 @@ package browser
 
 import "browser/internal/protocol"
 
-// Shell-owned geometry and state. The front end owns the terminal rows, the
-// chrome reservation and the snapshot it shows; the engine only receives the
-// content rectangle and the page state it is asked to render.
+// Shell geometry and state. The front end owns the terminal rows and the
+// chrome reservation; moving this content-rectangle geometry to the front end
+// is the remaining Phase 2 step.
 
 // frameScratch is the reusable protocol frame for the draw path.
 type frameScratch = protocol.Frame
@@ -59,14 +59,14 @@ func (b *Browser) keysEngine() bool {
 }
 
 // frontendChromeActive is the normal path while the front end also owns the
-// base key/mouse state. Editable page controls and shell modals fall back to
-// the engine chrome and input.
+// base key/mouse state. Page form fields and engine-owned fallback modals keep
+// the engine on the chrome and key path, which is the remaining trust gap.
 func (b *Browser) frontendChromeActive() bool {
 	return b.frontendChromePath() && !b.keysEngine()
 }
 
-// contentRect computes the content rectangle once for a frame. The engine is
-// expected to receive only this rectangle, never the full terminal size.
+// contentRect computes the content rectangle once for a frame. Target state:
+// the front end computes it and the engine receives only this rectangle.
 func (b *Browser) contentRect() contentRect {
 	top, bottom := b.viewport()
 	return contentRect{Top: top, Bottom: bottom, Width: b.width, Height: bottom - top}

@@ -42,16 +42,19 @@ transport implementation, not another architecture change.
 ### Migration order
 
 Each batch lands with tests green; type aliases are temporary and removed at
-the end. Steps 1, 2 and 6 are landed; step 3, the session half of step 4 and
-the Loader-orchestration half of step 5 remain; step 7 is Phase 6.
+the end. Steps 1, 2 and 6 are landed. Step 3's normal chrome, dialogs, console
+and find are landed but navigation state and content-rectangle geometry remain;
+step 4's session type and step 5's Loader orchestration remain; step 7 is
+Phase 6.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
 2. **Landed.** Frame boundary: content-rect `Frame`, structured scaled text
    instead of raw escape cells, ANSI and native-image encoding in the front
    end.
-3. **Remaining.** Chrome and shell state owned by the front end; engine state
-   arrives as events; the engine learns only the content rectangle.
+3. **Partial.** Normal chrome, overlays, dialogs, hints, the console and the
+   find bar are front-end-owned. Navigation state, the trusted URL and the
+   content-rectangle geometry remain engine-side.
 4. **Partial.** Leaf subsystems moved into `internal/engine`; the session type
    and `Browser` → `Session` split remain.
 5. **Partial.** Host `Fetch`, decompression/charset/parse and MCP are split;
@@ -92,7 +95,7 @@ destination; the tracker lists what remains.
   and `internal/app` exist. `app` owns flags, validation and dispatch, but
   still calls `browser.Execute`; session construction lives in
   `internal/browser`. `app → browser` is the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 289-method `Browser`,
+- `internal/browser/` still holds the session shell: the 303-method `Browser`,
   chrome/overlay composition, dialogs, navigation/history, session setup,
   Loader image/SVG/about/PDF orchestration, MCP and automation, and most
   integration tests.
@@ -103,7 +106,10 @@ destination; the tracker lists what remains.
   and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
   select popup, download/notice modals, link hints and console
-  composition/input/find. It does not yet own navigation state.
+  composition/input/find. It does not yet own navigation state. While a page
+  form field (or an engine-only fallback modal) holds the key path,
+  `State.FrontendChrome` is false and the engine composes chrome; closing that
+  gap is part of the session split.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -177,15 +183,15 @@ destination; the tracker lists what remains.
 | `internal/frontend/download.go` | Download curl hint and notice modal layout/drawing. |
 | `internal/frontend/hints.go` | Link-hint overlay painting and prefix matching data. |
 | `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
-| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. The scrollbar painter is in `present.go`. |
+| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. The engine fallback still paints chrome for direct callers, tests and while a focused page form keeps the engine on the key path. The scrollbar painter is in `present.go`. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
-| `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for overlays, the console, the find bar and tests. Normal frames are composed from `State`; removed when the remaining chrome moves. |
+| `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers, tests and the engine-owned form-input path. Normal frames and interactive overlays are composed by the front end; removed when the remaining chrome moves. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |
 | `internal/browser/automation_transport.go` | MCP protocol client and engine-side `automationHandler`; the automation library remains the handler implementation. |
-| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and engine-side dialog input. Presentation is front-end-owned. |
+| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
 | `internal/browser/cli.go` | Session setup: loader/engine construction, terminal enter/leave, presenter and transport wiring, and loop start. The build version is `internal/app.Version`. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
@@ -199,9 +205,9 @@ destination; the tracker lists what remains.
 | `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
 | `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
 | `browser_chrome.go` | Session-side fallback composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, the fallback scrollbar and memory readout remain here. |
-| `shell.go` | Shell-owned geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. |
+| `shell.go` | Content-rectangle geometry (`contentRect`, `headerRows`, `viewport`) and the `protocol.State` snapshot used by the chrome. The geometry still lives here; moving it to the front end is the remaining Phase 2 item. |
 | `browser_forms.go` | Form controls: Tab order and focus, control activation, radio/select/range stepping, input value editing and caret handling, constraint validation, label resolution, and GET/POST submission. |
-| `browser_input.go` | Engine key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing for direct callers, mouse escape decoding and `MouseEvent`. Base shell keys, quit, the interactive prompt and page find are front-end-owned; form fields, console find, menus and dialogs still use the shared line editor. The shared line-editing core (`editLineKey`) serves the prompt, find bar, form fields, console input and JS dialogs, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
+| `browser_input.go` | Engine key and mouse input: `HandleKey`/`HandleMouse`, click-to-node and click-to-link hit testing, URL/command prompt editing for direct callers, mouse escape decoding and `MouseEvent`. Base shell keys, quit, the interactive prompt, page and console find, menus and dialogs are front-end-owned; page form fields still use the engine line editor. The shared line-editing core (`editLineKey`) has a front-end copy in `frontend/prompt.go` and an engine copy here, so caret motion, word motion, deletion, selection replacement and the length cap behave the same everywhere; Enter, Escape, Tab, Up/Down, history and textarea line movement stay with each caller. |
 | `browser_history.go` | Session history and the memory-aware back/forward page cache (per-page weight, budget and per-page cap, suspend/cache/restore/trim, scavenge request after a heavy eviction), back/forward/reload, and meta-refresh targets. |
 | `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`), the percentage-derived JS/image/SVG budgets, the weighted decoded-image byte limiter, and the one-shot scavenge request consumed between frames. |
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
@@ -210,9 +216,9 @@ destination; the tracker lists what remains.
 | `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
 | `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, history, JS evaluation and `RunCommand`. Browser-side today; moves to the engine with the session. `automation_transport.go` exposes it through the MCP protocol client. |
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
-| `ui.go` | JS console view, alert/confirm/prompt dialogs, the `X` page view options window (fixed elements and background images) and their rendering. |
-| `find.go` | Incremental page/HTML find bar, match computation, scrolling and match highlights. |
-| `hints.go` | Vimium-style link hints chosen from each visible link's own text: letters with a yellow background and underline (the first unused letter, or two adjacent letters when hints share a prefix), case-insensitive prefix filtering, following the chosen link, and the F destination-confirmation step. |
+| `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs, the page select popup, the `X` view/`Z` zoom windows and their rendering. Interactive presentation and input for all of these are front-end-owned. |
+| `find.go` | Page and console HTML match computation, scrolling and match highlights. The visible find bar, query, caret and next/previous are front-end-owned. |
+| `hints.go` | Engine-side target discovery and following for link hints: each visible link's own text, labels, glyph cells, case-insensitive prefix filtering and the F destination-confirmation step. The overlay painting and prefix input are front-end-owned (`frontend/hints.go`). |
 | `reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow reader stylesheet. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |

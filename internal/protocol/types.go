@@ -291,7 +291,8 @@ type State struct {
 
 	// Geometry and chrome fields are filled for normal content frames. When
 	// FrontendChrome is true the front end draws the header and footer from
-	// this snapshot; overlays and the console keep the full-frame fallback.
+	// this snapshot; the engine fallback still composes chrome for direct
+	// callers, tests and while a focused page form keeps keys engine-side.
 	Width, Height, HeaderRows int
 	FrontendChrome            bool
 	FooterLeft, FooterRight   string
