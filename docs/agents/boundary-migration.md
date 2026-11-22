@@ -99,6 +99,7 @@ network destination.
 | D59 | 2026-11-22 | Defer the transport-level restart hook to the child-process work. `protocol` already carries the stream transport; a restart hook has no in-process caller and cannot be validated until the engine child exists. | The hook is a lifecycle concern of the later process split, not part of B's boundary. Phase 5 closes on semantic chrome ownership. |
 | D60 | 2026-11-22 | The front end renders the normal header and footer from `protocol.State`; the engine keeps `Chrome` composition as the fallback for overlays, the console, the find bar and tests. Header/footer mouse hits move to the front end and send `App`/`Navigate` actions. The scrollbar, shell keyboard modes, menus, dialogs and console remain engine-side for the next batch. | This is the first chrome-ownership batch. It moves the visible normal-page chrome without changing output, but `State.URL`/`Title` still come from the engine and navigation is still engine-side, so this is display ownership, not the final trust boundary. |
 | D61 | 2026-11-22 | Move base shell keys, local quit confirmation and the scrollbar to the front end. `State.KeysEngine` tells the front end when the engine owns key interpretation (prompt, find, menus, console, dialog, form field or hints); otherwise the front end maps app keys to `App`/`Navigate` and keeps page movement keys on the engine path. The quit prompt is local and confirms with `y`/`Y`/Enter. The scrollbar is drawn from `Scroll`/`MaxScroll` and drag-tested in the last content column. Prompt editing, find, menus, console, dialogs, navigation state and the engine fallback remain. | This closes the base keyboard and scrollbar part of Phase 2 without duplicating the line editor or the modal state machines. `KeysEngine` is still engine-provided; the final trust boundary needs front-end-owned navigation and dialogs. |
+| D62 | 2026-11-22 | Move the URL/vim prompt state, line editing, recall history and mouse caret to the front end. `o`/`ctrl-l` and `:` open a local prompt seeded with the current URL and select-all; Enter sends `Navigate`, Esc cancels, `:q` exits, and prompt history is front-end-local. The engine prompt remains for direct `HandleKey` callers, automation and tests; `AppOpenURL`/`AppOpenVimPrompt` stay for those paths. | This removes the last text-entry mode from the engine's interactive key path, using the same line-editing rules copied for the prompt. Find, menus, console, dialogs, navigation state and the engine fallback remain. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -148,7 +149,7 @@ seam; the note names which part goes where.
 | --- | --- | --- |
 | `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
-| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing and the scrollbar are frontend (`internal/frontend/chrome.go`, `frontend/session.go`). Overlays, console, find bar, menus, dialogs and prompt editing still live here; page hit testing, field editing, search results and hint computation consume engine state. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit and URL/vim prompt are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`). Overlays, console, find bar, menus and dialogs still live here; page hit testing, form editing, search results and hint computation consume engine state. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
 | `browser_forms.go`, `browser_selection.go`, `reader.go` | engine | Form state, selection and reader extraction are page content. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
@@ -245,9 +246,11 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 - [x] The scrollbar is drawn and drag-tested by the front end from
       `Scroll`/`MaxScroll`; the engine keeps its scrollbar only for the
       fallback path and tests.
-- [~] Prompt editing, find, menus, console and dialogs still own key
-      interpretation inside the engine. The full shell/page key split is not
-      complete until those move.
+- [x] URL/vim prompt state, line editing, history and mouse caret are
+      front-end-owned (`frontend/prompt.go`). The engine prompt remains for
+      automation/tests and the fallback.
+- [~] Find, menus, console and dialogs still own key interpretation inside the
+      engine. The full shell/page key split is not complete until those move.
 - [ ] JS dialogs become request/response messages. They still block inside the
       session and read commands directly (D20).
 - [~] The chrome contract now carries geometry, header prompt fields, footer
@@ -401,9 +404,9 @@ trusted-shell split, then Phase 6. Dependency order:
 - [~] The normal header/footer contract is in `protocol.State`. Still needed:
       menu, console, hint, dialog, download/notice, selection and image-progress
       state.
-- [~] Base shell key routing, quit and header/footer mouse are
-      front-end-owned. Prompt editing, find, menus, console, dialogs and hints
-      still route through the engine.
+- [~] Base shell keys, quit, URL/vim prompt and header/footer mouse are
+      front-end-owned. Find, menus, console, dialogs and hints still route
+      through the engine.
 - [~] Toolbar, footer and scrollbar drawing moved. Overlays, console, find bar
       and menus still live in `internal/browser`; `Browser.drawChrome`,
       `presentComposed`, `protocol.Chrome` and the full-frame fallback remain
@@ -983,3 +986,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 6e | Quick closures: added the nightly/manual codec fuzz workflow and `make fuzz`; deferred the transport restart hook to the child-process work (D59); moved the build `Version` to `internal/app` and injected it into the session; removed the `pages.go` wrapper. | `go test ./...`, `go vet`, full `-race`, `make build`, `make fuzz` | Chrome-state trust contract and footer pilot |
 | 2026-11-22 | 7a | Batch 1 of chrome ownership: added the `State` chrome snapshot, front-end header/footer rendering, header/footer mouse input and `App` actions for URL/zoom/console/JS/status/download/home; engine `Chrome` remains the overlay/console/find fallback. Added parity tests against engine chrome and chrome hit/input tests. | `go test ./...`, `go vet`, full `-race`, state/footer parity at several sizes, PTY header/footer click checks, dump/PNG hashes | Batch 2: shell keyboard modes, find bar, menus, scrollbar |
 | 2026-11-22 | 7b | Batch 2: base shell keys and local quit live in the front end, gated by `State.KeysEngine`; added `AppOpenVimPrompt`/`AppOpenViewMenu`; moved scrollbar drawing and drag input to the front end with `Presenter.Refresh` for chrome-only updates. Prompt editing, find, menus, console and dialogs remain engine-side. | `go test ./...`, `go vet`, full `-race`, quit/action/key-gate and scrollbar parity tests, PTY quit/dark/footer checks, dump/PNG hashes | Batch 3: prompts, find bar, menus and dialogs |
+| 2026-11-22 | 7c | Batch 3: URL/vim prompt state, line editing, recall history and mouse caret moved to `frontend/prompt.go`; `o`/`ctrl-l`/`:` open the local prompt, Enter navigates, Esc cancels and `:q` exits. Engine prompt remains for direct callers/automation. | `go test ./...`, `go vet`, full `-race`, prompt edit/history/mouse tests, PTY prompt navigation and `:q`, dump/PNG hashes | Batch 4: find bar, menus and dialogs |

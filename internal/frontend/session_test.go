@@ -134,8 +134,6 @@ func TestShellKeysSendAppActions(t *testing.T) {
 	loop := &SessionLoop{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	cases := map[string]any{
-		"o": protocol.App{Action: protocol.AppOpenURL},
-		":": protocol.App{Action: protocol.AppOpenVimPrompt},
 		"r": protocol.App{Action: protocol.AppReload},
 		"R": protocol.App{Action: protocol.AppToggleReader},
 		"D": protocol.App{Action: protocol.AppToggleDark},
@@ -206,5 +204,77 @@ func TestScrollbarMouseSendsScroll(t *testing.T) {
 	}
 	if loop.handleChromeMouse(MouseEvent{Button: 0, X: 10, Y: 5, Press: true}) {
 		t.Fatal("content mouse was consumed")
+	}
+}
+
+func TestPromptEditsAndNavigates(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.startPrompt(false)
+	if !loop.promptActive || !loop.promptSelectAll || loop.promptText != loop.State.Page.URL {
+		t.Fatalf("prompt = %v %q select=%v", loop.promptActive, loop.promptText, loop.promptSelectAll)
+	}
+	loop.handlePromptKey("h")
+	loop.handlePromptKey("i")
+	if loop.promptText != "hi" || loop.promptSelectAll {
+		t.Fatalf("text = %q select=%v", loop.promptText, loop.promptSelectAll)
+	}
+	if handled, quit := loop.handlePromptKey("enter"); !handled || quit {
+		t.Fatalf("enter handled=%v quit=%v", handled, quit)
+	}
+	if loop.promptActive {
+		t.Fatal("prompt stayed open")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Navigate{URL: "hi", Push: true}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+	loop.startPrompt(false)
+	if _, ok := loop.promptHist.up(""); !ok {
+		t.Fatal("history did not record the URL")
+	}
+}
+
+func TestPromptEscapeAndVimQuit(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.startPrompt(false)
+	if handled, quit := loop.handlePromptKey("esc"); !handled || quit || loop.promptActive {
+		t.Fatalf("esc handled=%v quit=%v active=%v", handled, quit, loop.promptActive)
+	}
+	loop.startPrompt(true)
+	loop.handlePromptKey("q")
+	if handled, quit := loop.handlePromptKey("enter"); !handled || !quit {
+		t.Fatalf("vim q handled=%v quit=%v", handled, quit)
+	}
+	if loop.promptActive {
+		t.Fatal("vim prompt stayed open")
+	}
+}
+
+func TestPromptMouseMovesCaret(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.startPrompt(false)
+	var hit ChromeHit
+	for _, h := range LayoutChrome(loop.State.Page).Hits {
+		if h.Kind == ChromeHitURL {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no URL hit")
+	}
+	if !loop.handlePromptMouse(MouseEvent{X: hit.X + 8, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("prompt click not consumed")
+	}
+	if loop.promptSelectAll {
+		t.Fatal("click left the whole prompt selected")
+	}
+	if loop.promptCursor < 0 || loop.promptCursor > len(loop.promptText) {
+		t.Fatalf("cursor = %d", loop.promptCursor)
 	}
 }

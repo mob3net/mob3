@@ -78,7 +78,6 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 	}{
 		{"back", ChromeHitBack, protocol.App{Action: protocol.AppBack}},
 		{"reload", ChromeHitReload, protocol.App{Action: protocol.AppReload}},
-		{"url", ChromeHitURL, protocol.App{Action: protocol.AppOpenURL}},
 		{"zoom", ChromeHitZoom, protocol.App{Action: protocol.AppOpenZoom}},
 		{"graphics", ChromeHitGraphics, protocol.App{Action: protocol.AppToggleImages}},
 		{"console", ChromeHitConsole, protocol.App{Action: protocol.AppToggleConsole}},
@@ -109,6 +108,31 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 				t.Fatalf("command = %#v, want %#v", s.cmds[0].Body, tc.body)
 			}
 		})
+	}
+}
+
+func TestChromeURLHitStartsPrompt(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = chromeState()
+	var hit ChromeHit
+	for _, h := range LayoutChrome(loop.State.Page).Hits {
+		if h.Kind == ChromeHitURL {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no URL hit")
+	}
+	if !loop.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("URL click not consumed")
+	}
+	if !loop.promptActive || loop.promptText != loop.State.Page.URL {
+		t.Fatalf("prompt = %v %q", loop.promptActive, loop.promptText)
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("commands = %#v", s.cmds)
 	}
 }
 
