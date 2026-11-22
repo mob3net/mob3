@@ -98,9 +98,10 @@ destination; the tracker lists what remains.
   integration tests.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
-  placement, clipboard encoding and the live session loop
-  (`frontend.SessionLoop`). It does not yet own chrome, dialogs or navigation
-  state.
+  placement, clipboard encoding, the live session loop
+  (`frontend.SessionLoop`), normal header/footer composition and header/footer
+  mouse input. It does not yet own the scrollbar, keyboard shell modes, menus,
+  dialogs, the console, the find bar or navigation state.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -165,11 +166,12 @@ destination; the tracker lists what remains.
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
-| `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, chrome-layer stacking and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: keys, abort, resize, events, chrome state, crash dedup and clipboard writes. |
+| `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
+| `internal/frontend/session.go` | Live session loop: keys, abort, resize, events, chrome state, header/footer mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
-| `internal/protocol` `Chrome` message | Temporary display-list bridge: header/footer cell layer for content-only frames; overlay and console frames use the full-screen fallback. Removed when the front end composes chrome from `State`. |
+| `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for overlays, the console, the find bar and tests. Normal frames are composed from `State`; removed when the remaining chrome moves. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |

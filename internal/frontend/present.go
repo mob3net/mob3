@@ -21,6 +21,7 @@ type Presenter struct {
 	lastNative bool
 	nativeSet  bool
 	chrome     protocol.Chrome
+	state      protocol.State
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -56,6 +57,18 @@ func (p *Presenter) SetChrome(c protocol.Chrome) {
 	p.chrome = c
 }
 
+// SetState stores the chrome snapshot. Normal frames are composed from it when
+// State.FrontendChrome is set; the Chrome event remains the fallback for
+// overlays, the console and older tests.
+func (p *Presenter) SetState(st protocol.State) {
+	if p.state.FrontendChrome != st.FrontendChrome ||
+		p.state.HeaderRows != st.HeaderRows ||
+		p.state.Width != st.Width || p.state.Height != st.Height {
+		p.prev = nil
+	}
+	p.state = st
+}
+
 // Present writes one frame. scroll is the page scroll offset; native reports
 // that the engine is writing terminal-native image placements itself, so the
 // presenter must leave the screen alone. A scroll, native-mode or size change
@@ -84,7 +97,28 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	}
 	placements := f.Placements
 	headerRows := 0
-	if p.chrome.Show && p.chrome.Width == f.W {
+	composed := false
+	if p.state.FrontendChrome && p.state.Width == f.W &&
+		p.state.HeaderRows > 0 && p.state.Height == f.H+p.state.HeaderRows+1 {
+		layout := LayoutChrome(p.state)
+		if len(layout.Header) == p.state.Width*p.state.HeaderRows &&
+			len(layout.Footer) == p.state.Width {
+			header := protocol.Frame{W: p.state.Width, H: p.state.HeaderRows, Cells: layout.Header}
+			footer := protocol.Frame{W: p.state.Width, H: 1, Cells: layout.Footer}
+			hline := EncodeFrame(header, p.color, !p.color)
+			fline := EncodeFrame(footer, p.color, !p.color)
+			if len(hline) == p.state.HeaderRows && len(fline) == 1 {
+				next := make([]string, 0, len(hline)+len(lines)+1)
+				next = append(next, hline...)
+				next = append(next, lines...)
+				next = append(next, fline...)
+				lines = next
+				headerRows = p.state.HeaderRows
+				composed = true
+			}
+		}
+	}
+	if !composed && p.chrome.Show && p.chrome.Width == f.W {
 		header := protocol.Frame{W: p.chrome.Width, H: p.chrome.HeaderRows, Cells: p.chrome.Header}
 		footer := protocol.Frame{W: p.chrome.Width, H: 1, Cells: p.chrome.Footer}
 		hline := EncodeFrame(header, p.color, !p.color)
@@ -93,21 +127,21 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 			// Malformed chrome is not worth rendering; fall back to the frame.
 			p.chrome = protocol.Chrome{}
 		} else {
-			composed := make([]string, 0, len(hline)+len(lines)+1)
-			composed = append(composed, hline...)
-			composed = append(composed, lines...)
-			composed = append(composed, fline...)
-			lines = composed
+			next := make([]string, 0, len(hline)+len(lines)+1)
+			next = append(next, hline...)
+			next = append(next, lines...)
+			next = append(next, fline...)
+			lines = next
 			headerRows = p.chrome.HeaderRows
-			if headerRows > 0 && len(placements) > 0 {
-				shifted := make([]protocol.Placement, len(placements))
-				copy(shifted, placements)
-				for i := range shifted {
-					shifted[i].Y += headerRows
-				}
-				placements = shifted
-			}
 		}
+	}
+	if headerRows > 0 && len(placements) > 0 {
+		shifted := make([]protocol.Placement, len(placements))
+		copy(shifted, placements)
+		for i := range shifted {
+			shifted[i].Y += headerRows
+		}
+		placements = shifted
 	}
 	needClear := p.prev == nil || len(p.prev) != len(lines)
 	if needClear {

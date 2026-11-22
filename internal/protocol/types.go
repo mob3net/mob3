@@ -244,6 +244,16 @@ func (c Chrome) Validate(lim Limits) error {
 	return nil
 }
 
+// FooterLevel classifies the footer status colour.
+type FooterLevel uint8
+
+const (
+	FooterNormal FooterLevel = iota
+	FooterWarning
+	FooterError
+	FooterSuccess
+)
+
 // State is the small, trusted snapshot the chrome needs. The engine sends it
 // when something changes; it is never derived from page text without the front
 // end sanitizing it.
@@ -254,6 +264,24 @@ type State struct {
 	Scroll, MaxScroll  int
 	Kind               PageKind
 	Flags              uint32
+
+	// Geometry and chrome fields are filled for normal content frames. When
+	// FrontendChrome is true the front end draws the header and footer from
+	// this snapshot; overlays and the console keep the full-frame fallback.
+	Width, Height, HeaderRows int
+	FrontendChrome            bool
+	FooterLeft, FooterRight   string
+	FooterLevel               FooterLevel
+	FooterStatusHit           bool
+	PDFHint                   string
+	PDFHintX                  int
+	PromptActive              bool
+	PromptText                string
+	PromptCursor              int
+	PromptSelectAll           bool
+	ZoomLabel                 string
+	FindActive                bool
+	QuitPending               bool
 }
 
 // Limits bounds every variable-size field on decode. A hostile engine must not

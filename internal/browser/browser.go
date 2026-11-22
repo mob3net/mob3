@@ -262,8 +262,10 @@ type Browser struct {
 	emitFrames bool
 	frameReady bool
 	sessionOut protocol.EventSink
-	// frontendChrome lets the engine send a content-only frame plus the chrome
-	// rows it composed; full-screen frames remain for overlays and the console.
+	// frontendChrome lets the normal path emit a content-only frame and a
+	// State snapshot; the front end draws the header/footer from it. Chrome
+	// rows remain the fallback for overlays, the console, the find bar and
+	// tests.
 	frontendChrome bool
 	chromeBuf      protocol.Chrome
 	chromeReady    bool

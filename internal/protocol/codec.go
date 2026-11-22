@@ -176,6 +176,23 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.i32(v.MaxScroll)
 		e.u8(uint8(v.Kind))
 		e.u32(v.Flags)
+		e.i32(v.Width)
+		e.i32(v.Height)
+		e.i32(v.HeaderRows)
+		e.bool(v.FrontendChrome)
+		e.str(v.FooterLeft)
+		e.str(v.FooterRight)
+		e.u8(uint8(v.FooterLevel))
+		e.bool(v.FooterStatusHit)
+		e.str(v.PDFHint)
+		e.i32(v.PDFHintX)
+		e.bool(v.PromptActive)
+		e.str(v.PromptText)
+		e.i32(v.PromptCursor)
+		e.bool(v.PromptSelectAll)
+		e.str(v.ZoomLabel)
+		e.bool(v.FindActive)
+		e.bool(v.QuitPending)
 	case Links:
 		kind = EvLinks
 		e.u32(v.Version)
@@ -385,6 +402,24 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			MaxScroll: d.i32(),
 			Kind:      PageKind(d.u8()),
 			Flags:     d.u32(),
+
+			Width:           d.i32(),
+			Height:          d.i32(),
+			HeaderRows:      d.i32(),
+			FrontendChrome:  d.bool(),
+			FooterLeft:      d.str(),
+			FooterRight:     d.str(),
+			FooterLevel:     FooterLevel(d.u8()),
+			FooterStatusHit: d.bool(),
+			PDFHint:         d.str(),
+			PDFHintX:        d.i32(),
+			PromptActive:    d.bool(),
+			PromptText:      d.str(),
+			PromptCursor:    d.i32(),
+			PromptSelectAll: d.bool(),
+			ZoomLabel:       d.str(),
+			FindActive:      d.bool(),
+			QuitPending:     d.bool(),
 		}
 	case EvLinks:
 		version := d.u32()

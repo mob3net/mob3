@@ -130,6 +130,13 @@ const (
 	AppZoomIn
 	AppZoomOut
 	AppZoomReset
+	AppOpenURL
+	AppOpenZoom
+	AppToggleConsole
+	AppToggleJS
+	AppStatusDetails
+	AppDownload
+	AppHome
 )
 
 // App requests an application action. Arg carries an action-specific value.

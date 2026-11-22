@@ -373,6 +373,57 @@ func (b *Browser) presentComposed(content, screen *Grid, top, contentH int, plac
 // drawChrome composes the trusted shell: toolbar, footer and app overlays. It
 // runs after the content frame is blitted, so page content cannot reach these
 // rows and dialogs always paint above it.
+// footerModel computes the footer text, level and hit width once for both the
+// engine fallback and the protocol.State snapshot the front end draws from.
+type footerModel struct {
+	left, right, pdfHint string
+	pdfHintX             int
+	avail                int
+	level                statusLevel
+	statusHit            bool
+}
+
+func (b *Browser) footerModel() footerModel {
+	w := b.width
+	consoleW := 2
+	reserve := 0
+	if w >= 6 {
+		reserve = consoleW + 2
+	}
+	rightBudget := w/2 - reserve - footerGap
+	if rightBudget < 1 {
+		rightBudget = 1
+	}
+	rightText := b.footerRight(rightBudget)
+	avail := w - stringWidth(rightText) - reserve - footerGap
+	if avail < 0 {
+		avail = 0
+	}
+	leftText := b.footerLeft()
+	pdfHint, pdfHintX := "", -1
+	if leftText == " Ready" && b.page != nil && b.page.PDF != nil {
+		if text, hint, cell, ok := b.pdfFooterLine(avail); ok {
+			leftText, pdfHint, pdfHintX = text, hint, cell
+		}
+	}
+	level := statusNormal
+	statusHit := false
+	if b.hintConfirm {
+		level = statusWarning
+	} else if b.status != "" && (b.quitPending || b.hoveredLink() == nil) {
+		level = statusLevelFor(b.status)
+	}
+	if b.status != "" && !b.hintConfirm && !b.quitPending && b.hoveredLink() == nil {
+		if level == statusWarning || level == statusError {
+			statusHit = true
+		}
+	}
+	return footerModel{
+		left: leftText, right: rightText, pdfHint: pdfHint, pdfHintX: pdfHintX,
+		avail: avail, level: level, statusHit: statusHit,
+	}
+}
+
 func (b *Browser) drawChrome(g *Grid) {
 	w, h := g.W, g.H
 	headerBG := RGB(0x1f, 0x29, 0x37)
@@ -593,75 +644,47 @@ func (b *Browser) drawChrome(g *Grid) {
 		if b.findActive {
 			b.drawFindBar(g, fy, w)
 		} else {
+			fm := b.footerModel()
 			fs := &Style{Color: footerFG, FontSize: 16, LineHeight: 1}
-			consoleIcon := ">_"
-			consoleW := stringWidth(consoleIcon)
-			showConsole := w >= 6
-			reserve := 0
-			consoleX := w - consoleW
-			if showConsole {
-				reserve += consoleW + 2
-			}
-			rightBudget := w/2 - reserve - footerGap
-			if rightBudget < 1 {
-				rightBudget = 1
-			}
-			// The right-side state collapses according to terminal width only.
-			// Reserve at least half the footer for the left status/URL so a long
-			// message never costs more right-side labels than a short one.
-			rightText := b.footerRight(rightBudget)
-			avail := w - stringWidth(rightText) - reserve - footerGap
-			if avail < 0 {
-				avail = 0
-			}
-			leftText := b.footerLeft()
-			pdfHint, pdfHintX := "", -1
-			if leftText == " Ready" && b.page != nil && b.page.PDF != nil {
-				if text, hint, cell, ok := b.pdfFooterLine(avail); ok {
-					leftText, pdfHint, pdfHintX = text, hint, cell
-				}
-			}
 			leftStyle := fs
 			leftColor := footerFG
-			if b.hintConfirm {
+			switch fm.level {
+			case statusWarning:
 				leftColor = RGB(0x9a, 0x5b, 0x00)
 				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-			} else if b.status != "" && (b.quitPending || b.hoveredLink() == nil) {
-				switch statusLevelFor(b.status) {
-				case statusWarning:
-					leftColor = RGB(0x9a, 0x5b, 0x00)
-					leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-				case statusError:
-					leftColor = RGB(0xb3, 0x1d, 0x1d)
-					leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
-				case statusSuccess:
-					leftColor = RGB(0x17, 0x6b, 0x35)
-					leftStyle = &Style{Color: leftColor, FontSize: 16, LineHeight: 1}
+			case statusError:
+				leftColor = RGB(0xb3, 0x1d, 0x1d)
+				leftStyle = &Style{Bold: true, Color: leftColor, FontSize: 16, LineHeight: 1}
+			case statusSuccess:
+				leftColor = RGB(0x17, 0x6b, 0x35)
+				leftStyle = &Style{Color: leftColor, FontSize: 16, LineHeight: 1}
+			}
+			g.Text(0, fy, padWidth(truncateWidth(fm.left, fm.avail), fm.avail), leftStyle, leftColor)
+			if fm.statusHit {
+				sw := stringWidth(fm.left)
+				if sw > fm.avail {
+					sw = fm.avail
+				}
+				if sw > 0 {
+					b.footerHits = append(b.footerHits, headerHit{kind: headerStatus, x: 0, y: fy, w: sw, h: 1})
+				}
+				if fm.level == statusError {
+					drawStatusShortcut(g, 0, fy, fm.avail, fm.left, leftStyle, leftColor)
 				}
 			}
-			g.Text(0, fy, padWidth(truncateWidth(leftText, avail), avail), leftStyle, leftColor)
-			if b.status != "" && !b.hintConfirm && !b.quitPending && b.hoveredLink() == nil {
-				if lvl := statusLevelFor(b.status); lvl == statusWarning || lvl == statusError {
-					sw := stringWidth(leftText)
-					if sw > avail {
-						sw = avail
-					}
-					if sw > 0 {
-						b.footerHits = append(b.footerHits, headerHit{kind: headerStatus, x: 0, y: fy, w: sw, h: 1})
-					}
-					if lvl == statusError {
-						drawStatusShortcut(g, 0, fy, avail, leftText, leftStyle, leftColor)
-					}
-				}
-			}
-			if pdfHint != "" && pdfHintX >= 0 {
+			if fm.pdfHint != "" && fm.pdfHintX >= 0 {
 				hintStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
-				g.Text(pdfHintX, fy, pdfHint, hintStyle, hintStyle.Color)
-				b.footerHits = append(b.footerHits, headerHit{kind: headerDownload, x: pdfHintX, y: fy, w: stringWidth(pdfHint), h: 1})
+				g.Text(fm.pdfHintX, fy, fm.pdfHint, hintStyle, hintStyle.Color)
+				b.footerHits = append(b.footerHits, headerHit{kind: headerDownload, x: fm.pdfHintX, y: fy, w: stringWidth(fm.pdfHint), h: 1})
 			}
-			if rightText != "" {
-				rightX := w - reserve - stringWidth(rightText)
-				g.Text(rightX, fy, rightText, fs, footerFG)
+			if fm.right != "" {
+				consoleW := stringWidth(">_")
+				reserve := 0
+				if w >= 6 {
+					reserve = consoleW + 2
+				}
+				rightX := w - reserve - stringWidth(fm.right)
+				g.Text(rightX, fy, fm.right, fs, footerFG)
 				labels := []struct {
 					text string
 					kind headerKind
@@ -674,11 +697,11 @@ func (b *Browser) drawChrome(g *Grid) {
 					{b.readerStatusText(), headerReader, b.reader, false},
 				}
 				for _, label := range labels {
-					i := strings.Index(rightText, label.text)
+					i := strings.Index(fm.right, label.text)
 					if i < 0 {
 						continue
 					}
-					lx := rightX + stringWidth(rightText[:i])
+					lx := rightX + stringWidth(fm.right[:i])
 					lw := stringWidth(label.text)
 					switch {
 					case label.err:
@@ -697,10 +720,12 @@ func (b *Browser) drawChrome(g *Grid) {
 					b.footerHits = append(b.footerHits, headerHit{kind: label.kind, x: lx, y: fy, w: lw, h: 1})
 				}
 			}
-			if showConsole {
+			if w >= 6 {
+				consoleIcon := ">_"
+				consoleX := w - stringWidth(consoleIcon)
 				iconStyle := &Style{Bold: true, Color: RGB(0x1f, 0x4f, 0x9f), FontSize: 16, LineHeight: 1}
 				g.Text(consoleX, fy, consoleIcon, iconStyle, iconStyle.Color)
-				b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: consoleX, y: fy, w: consoleW, h: 1})
+				b.footerHits = append(b.footerHits, headerHit{kind: headerConsole, x: consoleX, y: fy, w: stringWidth(consoleIcon), h: 1})
 			}
 		}
 	}

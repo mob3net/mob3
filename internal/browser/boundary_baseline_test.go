@@ -260,6 +260,35 @@ func BenchmarkBoundaryTextRepaint(b *testing.B) {
 
 // BenchmarkBoundarySessionFrameImage measures the same repaint with one native
 // image placement, after the first frame has populated the encode cache.
+// BenchmarkBoundaryStateChromeRepaint measures the same complete text path
+// with the front end drawing the header and footer from protocol.State.
+func BenchmarkBoundaryStateChromeRepaint(b *testing.B) {
+	root := ParseHTML(boundaryBaselineHTML())
+	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
+	br := NewBrowser(100, 35)
+	br.page = &Page{Root: root, Title: "bench"}
+	br.layout = ly
+	br.color = true
+	br.bigText = false
+	br.emitFrames = true
+	br.frontendChrome = true
+	sink := &codecSink{}
+	br.sessionOut = sink
+	p := frontend.NewPresenter(io.Discard, true)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		br.prev = nil
+		br.draw()
+		br.emitPendingFrame()
+		p.SetState(br.stateMessage())
+		p.Reset()
+		if err := p.Present(sink.last, 0, false); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkBoundarySessionFrameImage(b *testing.B) {
 	img := image.NewNRGBA(image.Rect(0, 0, 320, 320))
 	br := NewBrowser(100, 35)

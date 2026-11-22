@@ -104,7 +104,40 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.gfx != nil {
 		st.Flags |= protocol.StateNativeImages
 	}
+
+	// Chrome state. The front end draws the normal header and footer from this
+	// snapshot; overlays, the console and the find bar keep the full-frame or
+	// engine-composed fallback for now.
+	st.Width, st.Height = b.width, b.height
+	st.HeaderRows = b.headerRows()
+	st.FrontendChrome = b.emitFrames && b.frontendChrome && b.height >= 3 &&
+		!b.overlayOpen() && !b.consoleOpen && !b.findActive
+	st.ZoomLabel = b.zoomBadge()
+	st.PromptActive = b.prompt
+	st.PromptText = b.promptText
+	st.PromptCursor = b.promptCursor
+	st.PromptSelectAll = b.promptSelectAll
+	st.FindActive = b.findActive
+	st.QuitPending = b.quitPending
+	fm := b.footerModel()
+	st.FooterLeft, st.FooterRight = fm.left, fm.right
+	st.FooterLevel = footerLevelMessage(fm.level)
+	st.FooterStatusHit = fm.statusHit
+	st.PDFHint, st.PDFHintX = fm.pdfHint, fm.pdfHintX
 	return st
+}
+
+func footerLevelMessage(l statusLevel) protocol.FooterLevel {
+	switch l {
+	case statusWarning:
+		return protocol.FooterWarning
+	case statusError:
+		return protocol.FooterError
+	case statusSuccess:
+		return protocol.FooterSuccess
+	default:
+		return protocol.FooterNormal
+	}
 }
 
 func (b *Browser) pageKind() protocol.PageKind {

@@ -13,9 +13,9 @@ import (
 // deferred images and imports are serviced here, and the resulting shell state
 // leaves as events.
 //
-// The front end owns text and native placement presentation; this loop emits
-// frames and state. The engine still composes the chrome cells and handles
-// shell dialogs until the chrome-ownership slice lands.
+// The front end owns text/native presentation and normal header/footer chrome;
+// this loop emits frames and state. The engine still composes chrome for
+// overlays, the console and the find bar and handles shell dialogs.
 func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
 	var jsTimer, progressTimer *time.Timer
 	defer func() {
@@ -215,13 +215,34 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 	switch a.Action {
 	case protocol.AppBack:
+		b.clearInputFocus()
 		b.back()
 	case protocol.AppForward:
+		b.clearInputFocus()
 		b.forward()
 	case protocol.AppReload:
 		b.reload()
 	case protocol.AppStop:
 		b.stopLoading()
+	case protocol.AppOpenURL:
+		b.clearInputFocus()
+		b.openURLPrompt()
+	case protocol.AppOpenZoom:
+		b.openZoomMenu()
+	case protocol.AppToggleConsole:
+		b.toggleConsole()
+	case protocol.AppToggleJS:
+		b.toggleJavaScript()
+	case protocol.AppStatusDetails:
+		b.showStatusDetails()
+	case protocol.AppDownload:
+		b.downloadCurrentPDF()
+	case protocol.AppHome:
+		target := b.home
+		if target == "" {
+			target = "about:home"
+		}
+		b.Navigate(target, true)
 	case protocol.AppToggleDark:
 		b.toggleDark()
 	case protocol.AppToggleReader:

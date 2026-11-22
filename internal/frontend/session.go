@@ -10,12 +10,14 @@ import (
 )
 
 // LoopState is the presentation state the session loop updates as events
-// arrive. It is exported for tests and for the app wiring layer.
+// arrive, including the Page snapshot the front end uses to draw chrome. It is
+// exported for tests and for the app wiring layer.
 type LoopState struct {
 	Scroll    int
 	Native    bool
 	LastCrash string
 	Clipboard io.Writer
+	Page      protocol.State
 }
 
 // SessionLoop drives one protocol session from the terminal. It owns the
@@ -58,6 +60,9 @@ func (l *SessionLoop) Run() error {
 			}
 			if k == "esc" || k == "ctrl-c" {
 				l.Session.Abort()
+			}
+			if ev, ok := ParseMouseToken(k); ok && l.handleChromeMouse(ev) {
+				continue
 			}
 			if err := l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
 				if errors.Is(err, protocol.ErrSessionClosed) {
@@ -118,8 +123,12 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		l.State.Page = v
 		l.State.Scroll = v.Scroll
 		l.State.Native = v.Flags&protocol.StateNativeImages != 0
+		if l.Presenter != nil {
+			l.Presenter.SetState(v)
+		}
 	case protocol.Chrome:
 		if l.Presenter != nil {
 			l.Presenter.SetChrome(v)
@@ -137,6 +146,83 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		l.State.LastCrash = ""
 	}
 	return false, nil
+}
+
+// handleChromeMouse consumes a pointer report on the front-end-owned header or
+// footer and sends the corresponding action. It reports whether the report was
+// consumed; content-area mouse events still go to the engine as key tokens.
+func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	st := l.State.Page
+	if !st.FrontendChrome || st.PromptActive || st.Width <= 0 || st.Height <= 0 {
+		return false
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < 0 || x >= st.Width || y < 0 || y >= st.Height {
+		return false
+	}
+	if y >= st.HeaderRows && y != st.Height-1 {
+		return false
+	}
+	if ev.Wheel != 0 {
+		// Wheels scroll the page regardless of the pointer row.
+		return false
+	}
+	if !ev.Press || ev.Motion {
+		// Header and footer motion must not reach page hover/selection.
+		return true
+	}
+	layout := LayoutChrome(st)
+	for _, hit := range layout.Hits {
+		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
+			continue
+		}
+		l.activateChromeHit(hit.Kind)
+		return true
+	}
+	return true
+}
+
+func (l *SessionLoop) activateChromeHit(kind ChromeHitKind) {
+	var body protocol.CommandBody
+	switch kind {
+	case ChromeHitBack:
+		body = protocol.App{Action: protocol.AppBack}
+	case ChromeHitForward:
+		body = protocol.App{Action: protocol.AppForward}
+	case ChromeHitReload:
+		body = protocol.App{Action: protocol.AppReload}
+	case ChromeHitStop:
+		body = protocol.App{Action: protocol.AppStop}
+	case ChromeHitHome:
+		body = protocol.App{Action: protocol.AppHome}
+	case ChromeHitHistory:
+		body = protocol.Navigate{URL: "about:history", Push: true}
+	case ChromeHitHelp:
+		body = protocol.Navigate{URL: "about:help", Push: true}
+	case ChromeHitConfig:
+		body = protocol.Navigate{URL: "about:config", Push: true}
+	case ChromeHitURL:
+		body = protocol.App{Action: protocol.AppOpenURL}
+	case ChromeHitZoom:
+		body = protocol.App{Action: protocol.AppOpenZoom}
+	case ChromeHitConsole:
+		body = protocol.App{Action: protocol.AppToggleConsole}
+	case ChromeHitJS:
+		body = protocol.App{Action: protocol.AppToggleJS}
+	case ChromeHitReader:
+		body = protocol.App{Action: protocol.AppToggleReader}
+	case ChromeHitDark:
+		body = protocol.App{Action: protocol.AppToggleDark}
+	case ChromeHitGraphics:
+		body = protocol.App{Action: protocol.AppToggleImages}
+	case ChromeHitDownload:
+		body = protocol.App{Action: protocol.AppDownload}
+	case ChromeHitStatus:
+		body = protocol.App{Action: protocol.AppStatusDetails}
+	default:
+		return
+	}
+	_ = l.Session.Send(protocol.Command{Body: body})
 }
 
 func clipCrashMessage(msg string) string {

@@ -47,7 +47,16 @@ func testEvents() []Event {
 	f.Placements = []Placement{{Key: "k", X: 0, Y: 1, W: 2, H: 2, RowStart: 0, TotalRows: 2, Format: PlacementPNG, Data: []byte{1, 2, 3}}}
 	return []Event{
 		{Session: 1, Seq: 1, Body: f},
-		{Session: 2, Seq: 2, Body: State{URL: "https://example.test/", Title: "T", Status: "ok", Loading: true, Progress: 50, Scroll: 3, MaxScroll: 9, Kind: PageHTML, Flags: StateDark}},
+		{Session: 2, Seq: 2, Body: State{
+			URL: "https://example.test/", Title: "T", Status: "ok", Loading: true,
+			Progress: 50, Scroll: 3, MaxScroll: 9, Kind: PageHTML, Flags: StateDark,
+			Width: 100, Height: 30, HeaderRows: 2, FrontendChrome: true,
+			FooterLeft: " Ready", FooterRight: "Graphics:blocks   MEM 42MB",
+			FooterLevel: FooterWarning, FooterStatusHit: true,
+			PDFHint: "(d -> Download f.pdf)", PDFHintX: 3,
+			PromptActive: true, PromptText: "example.com", PromptCursor: 4, PromptSelectAll: true,
+			ZoomLabel: " 150% ", FindActive: true, QuitPending: true,
+		}},
 		{Session: 3, Seq: 3, Body: Links{Version: 9, Items: []Link{{Index: 1, X: 0, Y: 1, W: 4, H: 1, Text: "go", Href: "/x"}}}},
 		{Session: 4, Seq: 4, Body: Dialog{ID: 5, Kind: DialogPrompt, Text: "name?", Default: "x"}},
 		{Session: 5, Seq: 5, Body: Clipboard{Text: "copied"}},

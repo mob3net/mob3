@@ -1,0 +1,160 @@
+package frontend
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"browser/internal/protocol"
+)
+
+func chromeState() protocol.State {
+	return protocol.State{
+		Width: 80, Height: 24, HeaderRows: 2, FrontendChrome: true,
+		URL: "https://example.com/", Title: "Example", Loading: false,
+		FooterLeft: " Ready", FooterRight: "Graphics:blocks   JavaScript:on   Dark:off   Reader:off   MEM 42MB",
+		FooterLevel: protocol.FooterNormal, ZoomLabel: " 100% ",
+	}
+}
+
+func TestLayoutChromeHeaderAndFooter(t *testing.T) {
+	st := chromeState()
+	layout := LayoutChrome(st)
+	if len(layout.Header) != st.Width*st.HeaderRows {
+		t.Fatalf("header cells = %d", len(layout.Header))
+	}
+	if len(layout.Footer) != st.Width {
+		t.Fatalf("footer cells = %d", len(layout.Footer))
+	}
+	var header, footer strings.Builder
+	for _, c := range layout.Header {
+		if c.R != 0 {
+			header.WriteRune(c.R)
+		}
+	}
+	for _, c := range layout.Footer {
+		if c.R != 0 {
+			footer.WriteRune(c.R)
+		}
+	}
+	for _, want := range []string{"Example", "example.com", "100%"} {
+		if !strings.Contains(header.String(), want) {
+			t.Errorf("header %q does not contain %q", header.String(), want)
+		}
+	}
+	for _, want := range []string{"Ready", "Graphics:blocks", ">_"} {
+		if !strings.Contains(footer.String(), want) {
+			t.Errorf("footer %q does not contain %q", footer.String(), want)
+		}
+	}
+}
+
+func TestLayoutChromeHits(t *testing.T) {
+	hits := LayoutChrome(chromeState()).Hits
+	want := []ChromeHitKind{ChromeHitBack, ChromeHitForward, ChromeHitReload, ChromeHitHome, ChromeHitURL, ChromeHitZoom, ChromeHitGraphics, ChromeHitJS, ChromeHitDark, ChromeHitReader, ChromeHitConsole}
+	seen := map[ChromeHitKind]bool{}
+	for _, h := range hits {
+		seen[h.Kind] = true
+	}
+	for _, kind := range want {
+		if !seen[kind] {
+			t.Errorf("missing chrome hit %v", kind)
+		}
+	}
+}
+
+type recordSession struct{ cmds []protocol.Command }
+
+func (s *recordSession) Send(c protocol.Command) error { s.cmds = append(s.cmds, c); return nil }
+func (s *recordSession) Events() <-chan protocol.Event { return nil }
+func (s *recordSession) Abort()                        {}
+func (s *recordSession) Close() error                  { return nil }
+
+func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
+	cases := []struct {
+		name string
+		kind ChromeHitKind
+		body any
+	}{
+		{"back", ChromeHitBack, protocol.App{Action: protocol.AppBack}},
+		{"reload", ChromeHitReload, protocol.App{Action: protocol.AppReload}},
+		{"url", ChromeHitURL, protocol.App{Action: protocol.AppOpenURL}},
+		{"zoom", ChromeHitZoom, protocol.App{Action: protocol.AppOpenZoom}},
+		{"graphics", ChromeHitGraphics, protocol.App{Action: protocol.AppToggleImages}},
+		{"console", ChromeHitConsole, protocol.App{Action: protocol.AppToggleConsole}},
+	}
+	st := chromeState()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &recordSession{}
+			loop := &SessionLoop{Session: s}
+			loop.State.Page = st
+			var hit ChromeHit
+			for _, h := range LayoutChrome(st).Hits {
+				if h.Kind == tc.kind {
+					hit = h
+					break
+				}
+			}
+			if hit.W == 0 {
+				t.Fatalf("no hit %v", tc.kind)
+			}
+			if !loop.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+				t.Fatalf("hit %v was not consumed", tc.kind)
+			}
+			if len(s.cmds) != 1 {
+				t.Fatalf("commands = %d, want 1", len(s.cmds))
+			}
+			if s.cmds[0].Body != tc.body {
+				t.Fatalf("command = %#v, want %#v", s.cmds[0].Body, tc.body)
+			}
+		})
+	}
+}
+
+func TestHandleChromeMouseLeavesContentAndPromptAlone(t *testing.T) {
+	st := chromeState()
+	st.PromptActive = true
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = st
+	if loop.handleChromeMouse(MouseEvent{X: 1, Y: 1, Press: true}) {
+		t.Fatal("prompt header mouse was consumed")
+	}
+	st.PromptActive = false
+	st.FrontendChrome = false
+	loop.State.Page = st
+	if loop.handleChromeMouse(MouseEvent{X: 1, Y: 1, Press: true}) {
+		t.Fatal("non-frontend chrome mouse was consumed")
+	}
+	loop.State.Page = chromeState()
+	if loop.handleChromeMouse(MouseEvent{X: 10, Y: 10, Press: true}) {
+		t.Fatal("content mouse was consumed")
+	}
+}
+
+func TestPresenterComposesFrontendChrome(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, false)
+	st := protocol.State{
+		Width: 20, Height: 3, HeaderRows: 1, FrontendChrome: true,
+		URL: "x", FooterLeft: " Ready", FooterRight: "MEM 1MB",
+	}
+	p.SetState(st)
+	content := protocol.Frame{W: 20, H: 1, Cells: make([]protocol.Cell, 20)}
+	for i := range content.Cells {
+		content.Cells[i].R = 'p'
+	}
+	if err := p.Present(content, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"Ready", "MEM 1MB", "pppp"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("presented output %q does not contain %q", got, want)
+		}
+	}
+	if strings.Index(got, "Ready") < strings.Index(got, "pppp") {
+		t.Error("footer was not composed below the content")
+	}
+}
