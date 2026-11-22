@@ -239,9 +239,10 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
 	})
-	b.js = &jsRuntime{storageLocalData: map[string]string{
+	b.js = newJSRuntime(b, nil)
+	b.js.SetStorageLocalData(map[string]string{
 		"config": strings.Repeat("x", 200),
-	}}
+	})
 	const width = 40
 	lines := b.storageLinesWidth(width)
 	for _, line := range lines {
@@ -511,11 +512,9 @@ func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	check("request")
 
-	b.js = &jsRuntime{
-		host:               newJSHost(b),
-		storageLocalData:   map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"},
-		storageSessionData: map[string]string{},
-	}
+	b.js = newJSRuntime(b, nil)
+	b.js.SetStorageLocalData(map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"})
+	b.js.SetStorageSessionData(map[string]string{})
 	b.selectConsolePane(consoleStorage)
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	check("storage")

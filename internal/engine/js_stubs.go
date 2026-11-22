@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"github.com/grafana/sobek"
@@ -509,7 +509,7 @@ func (j *jsRuntime) installPlatformStubs() {
 })();
 `
 	if _, err := j.vm.RunScript("platform stubs", script); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 		return
 	}
 	protoOf := func(name string) *sobek.Object {

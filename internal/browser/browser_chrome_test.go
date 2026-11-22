@@ -604,8 +604,8 @@ func TestJSConsoleDoesNotUseFooterText(t *testing.T) {
 func TestJSReportErrorUsesFooterHint(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.status = "keep me"
-	j := &jsRuntime{host: newJSHost(b)}
-	j.reportError(errors.New("boom"))
+	j := newJSRuntime(b, nil)
+	j.ReportError(errors.New("boom"))
 	if b.status != "keep me" {
 		t.Fatalf("status = %q", b.status)
 	}

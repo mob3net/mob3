@@ -379,7 +379,7 @@ func (b *Browser) runConsoleInput() {
 		b.logJS("error", "JavaScript is disabled — press J to enable")
 		return
 	}
-	v, err := b.js.runCode("console", src)
+	v, err := b.js.RunCode("console", src)
 	if err != nil {
 		b.logJS("error", err.Error())
 	} else if v != nil && !sobek.IsUndefined(v) {
@@ -389,7 +389,7 @@ func (b *Browser) runConsoleInput() {
 		}
 		b.logJS("result", s)
 	}
-	if b.js.consumeDirty() {
+	if b.js.ConsumeDirty() {
 		b.rebuild()
 	}
 	b.consumePendingJS()
@@ -818,8 +818,8 @@ func (b *Browser) storageLinesWidth(width int) []string {
 	}
 	var local, session map[string]string
 	if b.js != nil {
-		local = b.js.storageLocalData
-		session = b.js.storageSessionData
+		local = b.js.StorageLocalData()
+		session = b.js.StorageSessionData()
 	}
 	out = append(out, "")
 	out = appendStorageSection(out, "localStorage", local, b.js != nil, width)

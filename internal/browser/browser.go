@@ -663,7 +663,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	b.resetConsole()
 	b.startJS(page)
-	if b.js != nil && (b.js.pendingNav != "" || b.js.pendingForm != nil) {
+	if b.js != nil && (b.js.PendingNav() != "" || b.js.PendingForm() != nil) {
 		b.prepareHistory(res.push)
 	}
 	// A navigation queued by the page's own load-time scripts is also a
@@ -757,22 +757,22 @@ func (b *Browser) applyPendingJS(duringLoad bool) bool {
 	if b.js == nil {
 		return false
 	}
-	if pf := b.js.pendingForm; pf != nil {
-		b.js.pendingForm = nil
-		if pf.method == http.MethodPost {
-			b.navigateRequest(pf.method, pf.target, pf.body, pf.contentType, true)
+	if pf := b.js.PendingForm(); pf != nil {
+		b.js.SetPendingForm(nil)
+		if pf.Method == http.MethodPost {
+			b.navigateRequest(pf.Method, pf.Target, pf.Body, pf.ContentType, true)
 		} else {
-			b.Navigate(pf.target, true)
+			b.Navigate(pf.Target, true)
 		}
 		return true
 	}
-	if b.js.pendingNav == "" {
+	if b.js.PendingNav() == "" {
 		return false
 	}
-	target := b.js.pendingNav
-	replace := b.js.pendingReplace
-	b.js.pendingNav = ""
-	b.js.pendingReplace = false
+	target := b.js.PendingNav()
+	replace := b.js.PendingReplace()
+	b.js.SetPendingNav("")
+	b.js.SetPendingReplace(false)
 	if b.autoNavigations >= maxAutoNavigations {
 		b.loopStopped = true
 		return false
@@ -1108,8 +1108,8 @@ func (b *Browser) setPageHover(n *Node) {
 	if old != nil {
 		markHoverChain(old, false)
 		if b.js != nil && b.liveNode(old) {
-			b.js.fireNodeEvent(old, "mouseout")
-			b.js.fireNodeEvent(old, "mouseleave")
+			b.js.FireNodeEvent(old, "mouseout")
+			b.js.FireNodeEvent(old, "mouseleave")
 		}
 	}
 	b.hoverNode = n
@@ -1117,12 +1117,12 @@ func (b *Browser) setPageHover(n *Node) {
 	if n != nil {
 		markHoverChain(n, true)
 		if b.js != nil && b.liveNode(n) {
-			b.js.fireNodeEvent(n, "mouseover")
-			b.js.fireNodeEvent(n, "mouseenter")
+			b.js.FireNodeEvent(n, "mouseover")
+			b.js.FireNodeEvent(n, "mouseenter")
 		}
 	}
 	if b.js != nil {
-		dirty = b.js.consumeDirty()
+		dirty = b.js.ConsumeDirty()
 	}
 	// Hover-driven style passes are delayed in interactive sessions so fast
 	// pointer movement does not rebuild the page for every cell. Automation
@@ -1187,9 +1187,9 @@ func (b *Browser) followFocused() {
 	// Run the link's click handlers before navigating. Bare "#" links often
 	// open dialogs or menus from JavaScript and cancel the default navigation.
 	if b.js != nil && li.Node != nil && b.liveNode(li.Node) {
-		prevented := b.js.dispatchClick(li.Node)
-		if prevented && !(b.js.eventErr && linkFallbackOK(li.Href)) {
-			if b.js.consumeDirty() {
+		prevented := b.js.DispatchClick(li.Node)
+		if prevented && !(b.js.EventErr() && linkFallbackOK(li.Href)) {
+			if b.js.ConsumeDirty() {
 				b.rebuild()
 			}
 			b.consumePendingJS()

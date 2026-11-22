@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"net/http"
@@ -126,7 +126,7 @@ func (j *jsRuntime) unwrap(v sobek.Value) *Node {
 	return nil
 }
 
-func attrValue(n *Node, name string) string {
+func AttrValue(n *Node, name string) string {
 	if n == nil {
 		return ""
 	}
@@ -138,7 +138,7 @@ func attrValue(n *Node, name string) string {
 	return ""
 }
 
-func setAttr(n *Node, name, value string) {
+func SetAttr(n *Node, name, value string) {
 	if n == nil {
 		return
 	}
@@ -151,7 +151,7 @@ func setAttr(n *Node, name, value string) {
 	n.Attrs = append(n.Attrs, Attr{Key: strings.ToLower(name), Value: value})
 }
 
-func removeAttr(n *Node, name string) {
+func RemoveAttr(n *Node, name string) {
 	for i := range n.Attrs {
 		if strings.EqualFold(n.Attrs[i].Key, name) {
 			n.Attrs = append(n.Attrs[:i], n.Attrs[i+1:]...)
@@ -312,7 +312,7 @@ func (j *jsRuntime) constructCustomElement(n *Node) (sobek.Value, bool) {
 	v, err := construct(reflectObj, ctor, j.vm.NewArray())
 	j.building = j.building[:len(j.building)-1]
 	if err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 		return nil, false
 	}
 	o, ok := v.(*sobek.Object)
@@ -418,26 +418,26 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "namespaceURI", func(n *Node) sobek.Value {
 		return j.vm.ToValue(elementNamespaceURI(n))
 	}, nil)
-	j.protoAccessor(p, "id", func(n *Node) sobek.Value { return j.vm.ToValue(attrValue(n, "id")) }, func(n *Node, v sobek.Value) {
-		setAttr(n, "id", v.String())
+	j.protoAccessor(p, "id", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "id")) }, func(n *Node, v sobek.Value) {
+		SetAttr(n, "id", v.String())
 		j.markDirty()
 	})
-	j.protoAccessor(p, "className", func(n *Node) sobek.Value { return j.vm.ToValue(attrValue(n, "class")) }, func(n *Node, v sobek.Value) {
-		setAttr(n, "class", v.String())
+	j.protoAccessor(p, "className", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "class")) }, func(n *Node, v sobek.Value) {
+		SetAttr(n, "class", v.String())
 		j.markDirty()
 	})
 	reflectString := func(jsName, attr string) {
-		j.protoAccessor(p, jsName, func(n *Node) sobek.Value { return j.vm.ToValue(attrValue(n, attr)) }, func(n *Node, v sobek.Value) {
-			setAttr(n, attr, v.String())
+		j.protoAccessor(p, jsName, func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, attr)) }, func(n *Node, v sobek.Value) {
+			SetAttr(n, attr, v.String())
 			j.markDirty()
 		})
 	}
 	reflectBool := func(jsName, attr string) {
 		j.protoAccessor(p, jsName, func(n *Node) sobek.Value { return j.vm.ToValue(n.HasAttr(attr)) }, func(n *Node, v sobek.Value) {
 			if v.ToBoolean() {
-				setAttr(n, attr, "")
+				SetAttr(n, attr, "")
 			} else {
-				removeAttr(n, attr)
+				RemoveAttr(n, attr)
 			}
 			j.markDirty()
 		})
@@ -450,45 +450,45 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	reflectBool("hidden", "hidden")
 	reflectBool("inert", "inert")
 	j.protoAccessor(p, "draggable", func(n *Node) sobek.Value {
-		return j.vm.ToValue(attrValue(n, "draggable") == "true")
+		return j.vm.ToValue(AttrValue(n, "draggable") == "true")
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			setAttr(n, "draggable", "true")
+			SetAttr(n, "draggable", "true")
 		} else {
-			setAttr(n, "draggable", "false")
+			SetAttr(n, "draggable", "false")
 		}
 		j.markDirty()
 	})
 	j.protoAccessor(p, "spellcheck", func(n *Node) sobek.Value {
-		if attrValue(n, "spellcheck") == "false" {
+		if AttrValue(n, "spellcheck") == "false" {
 			return j.vm.ToValue(false)
 		}
 		return j.vm.ToValue(true)
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			setAttr(n, "spellcheck", "true")
+			SetAttr(n, "spellcheck", "true")
 		} else {
-			setAttr(n, "spellcheck", "false")
+			SetAttr(n, "spellcheck", "false")
 		}
 		j.markDirty()
 	})
 	j.protoAccessor(p, "translate", func(n *Node) sobek.Value {
-		return j.vm.ToValue(attrValue(n, "translate") != "no")
+		return j.vm.ToValue(AttrValue(n, "translate") != "no")
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			setAttr(n, "translate", "yes")
+			SetAttr(n, "translate", "yes")
 		} else {
-			setAttr(n, "translate", "no")
+			SetAttr(n, "translate", "no")
 		}
 		j.markDirty()
 	})
 	j.protoAccessor(p, "contentEditable", func(n *Node) sobek.Value {
-		if v := attrValue(n, "contenteditable"); v != "" {
+		if v := AttrValue(n, "contenteditable"); v != "" {
 			return j.vm.ToValue(v)
 		}
 		return j.vm.ToValue("inherit")
 	}, func(n *Node, v sobek.Value) {
-		setAttr(n, "contenteditable", v.String())
+		SetAttr(n, "contenteditable", v.String())
 		j.markDirty()
 	})
 	j.protoAccessor(p, "isContentEditable", func(n *Node) sobek.Value {
@@ -497,7 +497,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "tabIndex", func(n *Node) sobek.Value {
 		return j.vm.ToValue(nodeTabIndex(n))
 	}, func(n *Node, v sobek.Value) {
-		setAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
+		SetAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
 		j.markDirty()
 	})
 	j.protoAccessor(p, "outerText", func(n *Node) sobek.Value {
@@ -506,12 +506,12 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		replaceNodeWithText(n, v.String())
 		j.markDirty()
 	})
-	j.protoAccessor(p, "href", func(n *Node) sobek.Value { return j.vm.ToValue(attrValue(n, "href")) }, func(n *Node, v sobek.Value) {
-		setAttr(n, "href", v.String())
+	j.protoAccessor(p, "href", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "href")) }, func(n *Node, v sobek.Value) {
+		SetAttr(n, "href", v.String())
 		j.markDirty()
 	})
 	j.protoAccessor(p, "value", func(n *Node) sobek.Value {
-		return j.vm.ToValue(inputValue(n))
+		return j.vm.ToValue(InputValue(n))
 	}, func(n *Node, v sobek.Value) {
 		n.Value = v.String()
 		n.ValueSet = true
@@ -521,23 +521,23 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(n.HasAttr("checked"))
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			setAttr(n, "checked", "")
+			SetAttr(n, "checked", "")
 		} else {
-			removeAttr(n, "checked")
+			RemoveAttr(n, "checked")
 		}
 		j.markDirty()
 	})
 	j.protoAccessor(p, "form", func(n *Node) sobek.Value {
-		return j.wrap(nearestForm(n))
+		return j.wrap(NearestForm(n))
 	}, nil)
 	for jsName, attrName := range map[string]string{
 		"src": "src", "alt": "alt", "width": "width", "height": "height",
 	} {
 		jsName, attrName := jsName, attrName
 		j.protoAccessor(p, jsName, func(n *Node) sobek.Value {
-			return j.vm.ToValue(attrValue(n, attrName))
+			return j.vm.ToValue(AttrValue(n, attrName))
 		}, func(n *Node, v sobek.Value) {
-			setAttr(n, attrName, v.String())
+			SetAttr(n, attrName, v.String())
 			j.markDirty()
 		})
 	}
@@ -552,7 +552,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 				}
 				return j.vm.ToValue(h)
 			}
-			vw, vh := cssWidthPx(j.host.Width()), cssHeightPx(j.host.Height())
+			vw, vh := CSSWidthPx(j.host.Width()), CSSHeightPx(j.host.Height())
 			if width {
 				return j.vm.ToValue(j.elementWidthPx(n, vw))
 			}
@@ -573,7 +573,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoMethod(p, "getBoundingClientRect", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		x, y, w, h, ok := j.elementRect(n)
 		if !ok {
-			vw, vh := cssWidthPx(j.host.Width()), cssHeightPx(j.host.Height())
+			vw, vh := CSSWidthPx(j.host.Width()), CSSHeightPx(j.host.Height())
 			x, y = 0, 0
 			w = j.elementWidthPx(n, vw)
 			h = j.elementHeightPx(n, vh)
@@ -722,15 +722,15 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	}, nil)
 
 	j.protoMethod(p, "getAttribute", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		return j.vm.ToValue(attrValue(n, call.Argument(0).String()))
+		return j.vm.ToValue(AttrValue(n, call.Argument(0).String()))
 	})
 	j.protoMethod(p, "setAttribute", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		setAttr(n, call.Argument(0).String(), call.Argument(1).String())
+		SetAttr(n, call.Argument(0).String(), call.Argument(1).String())
 		j.markDirty()
 		return sobek.Undefined()
 	})
 	j.protoMethod(p, "removeAttribute", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		removeAttr(n, call.Argument(0).String())
+		RemoveAttr(n, call.Argument(0).String())
 		j.markDirty()
 		return sobek.Undefined()
 	})
@@ -796,11 +796,11 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.wrap(j.cloneNodeValue(n, call.Argument(0).ToBoolean()))
 	})
 	j.protoMethod(p, "matches", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		sels := j.parsedSelectors(call.Argument(0).String())
+		sels := j.ParsedSelectors(call.Argument(0).String())
 		return j.vm.ToValue(matchSelectors(n, sels))
 	})
 	j.protoMethod(p, "closest", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		sels := j.parsedSelectors(call.Argument(0).String())
+		sels := j.ParsedSelectors(call.Argument(0).String())
 		for p := n; p != nil; p = p.Parent {
 			if p.Type == ElementNode && matchSelectors(p, sels) {
 				return j.wrap(p)
@@ -988,10 +988,10 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		// A page usually opens the file picker by calling click() on a hidden
 		// file input (an Upload button wrapping it). There is no picker here,
 		// so show the same unsupported-upload notice a direct click does.
-		if isFileInput(n) && j.host != nil {
+		if IsFileInput(n) && j.host != nil {
 			j.host.ShowUploadNotice()
 		}
-		j.fireNodeEvent(n, "click")
+		j.FireNodeEvent(n, "click")
 		j.markDirty()
 		return sobek.Undefined()
 	})
@@ -1026,7 +1026,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		if name == nil || value == nil {
 			return sobek.Null()
 		}
-		setAttr(n, name.String(), value.String())
+		SetAttr(n, name.String(), value.String())
 		j.markDirty()
 		return sobek.Null()
 	})
@@ -1041,7 +1041,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		}
 		for i := range n.Attrs {
 			if strings.EqualFold(n.Attrs[i].Key, name.String()) {
-				removeAttr(n, n.Attrs[i].Key)
+				RemoveAttr(n, n.Attrs[i].Key)
 				j.markDirty()
 				return call.Argument(0)
 			}
@@ -1195,7 +1195,7 @@ func (j *jsRuntime) cloneNodeValue(n *Node, deep bool) *Node {
 func (j *jsRuntime) initCanvasObject(o *sobek.Object, n *Node) {
 	dim := func(attr string, def int) (func() sobek.Value, func(sobek.Value)) {
 		get := func() sobek.Value {
-			if s := attrValue(n, attr); s != "" {
+			if s := AttrValue(n, attr); s != "" {
 				if v, err := strconv.Atoi(s); err == nil {
 					return j.vm.ToValue(v)
 				}
@@ -1203,7 +1203,7 @@ func (j *jsRuntime) initCanvasObject(o *sobek.Object, n *Node) {
 			return j.vm.ToValue(def)
 		}
 		set := func(v sobek.Value) {
-			setAttr(n, attr, strconv.Itoa(int(v.ToInteger())))
+			SetAttr(n, attr, strconv.Itoa(int(v.ToInteger())))
 			j.markDirty()
 		}
 		return get, set
@@ -1313,9 +1313,9 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 		return j.vm.ToValue(n.HasAttr("open"))
 	}, func(v sobek.Value) {
 		if v.ToBoolean() {
-			setAttr(n, "open", "")
+			SetAttr(n, "open", "")
 		} else {
-			removeAttr(n, "open")
+			RemoveAttr(n, "open")
 		}
 		j.markDirty()
 	})
@@ -1325,7 +1325,7 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 		n.DialogReturnValue = v.String()
 	})
 	open := func(sobek.FunctionCall) sobek.Value {
-		setAttr(n, "open", "")
+		SetAttr(n, "open", "")
 		j.markDirty()
 		return sobek.Undefined()
 	}
@@ -1338,9 +1338,9 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 		if v := call.Argument(0); !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			n.DialogReturnValue = v.String()
 		}
-		removeAttr(n, "open")
+		RemoveAttr(n, "open")
 		j.markDirty()
-		j.fireNodeEvent(n, "close")
+		j.FireNodeEvent(n, "close")
 		return sobek.Undefined()
 	})
 }
@@ -1415,7 +1415,7 @@ func (j *jsRuntime) newDetachedDocument(title string) *sobek.Object {
 		id := call.Argument(0).String()
 		var found *Node
 		html.FindAll(func(x *Node) bool {
-			if found == nil && attrValue(x, "id") == id {
+			if found == nil && AttrValue(x, "id") == id {
 				found = x
 				return true
 			}
@@ -1430,7 +1430,7 @@ func (j *jsRuntime) newDetachedDocument(title string) *sobek.Object {
 	})
 	j.method(doc, "getElementsByName", func(call sobek.FunctionCall) sobek.Value {
 		want := call.Argument(0).String()
-		nodes := html.FindAll(func(x *Node) bool { return attrValue(x, "name") == want })
+		nodes := html.FindAll(func(x *Node) bool { return AttrValue(x, "name") == want })
 		return j.nodeArray(nodes)
 	})
 	collection := func(pick func(*Node) bool) func() sobek.Value {
@@ -1936,7 +1936,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		id := call.Argument(0).String()
 		var found *Node
 		root.FindAll(func(x *Node) bool {
-			if found == nil && attrValue(x, "id") == id {
+			if found == nil && AttrValue(x, "id") == id {
 				found = x
 				return true
 			}
@@ -1957,7 +1957,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 	})
 	j.method(o, "getElementsByName", func(call sobek.FunctionCall) sobek.Value {
 		want := call.Argument(0).String()
-		nodes := root.FindAll(func(x *Node) bool { return attrValue(x, "name") == want })
+		nodes := root.FindAll(func(x *Node) bool { return AttrValue(x, "name") == want })
 		return j.nodeArray(nodes)
 	})
 	collection := func(pick func(*Node) bool) func() sobek.Value {
@@ -2051,7 +2051,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 }
 
 // parsedSelectors caches querySelector selector parsing per page runtime.
-func (j *jsRuntime) parsedSelectors(sel string) []*Selector {
+func (j *jsRuntime) ParsedSelectors(sel string) []*Selector {
 	if s, ok := j.selectors[sel]; ok {
 		return s
 	}
@@ -2064,7 +2064,7 @@ func (j *jsRuntime) parsedSelectors(sel string) []*Selector {
 // entries.
 func parseSelectors(sel string) []*Selector {
 	var out []*Selector
-	for _, part := range splitTopLevel(sel, ',') {
+	for _, part := range SplitTopLevel(sel, ',') {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -2086,7 +2086,7 @@ func matchSelectors(n *Node, sels []*Selector) bool {
 }
 
 func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Node {
-	sels := j.parsedSelectors(sel)
+	sels := j.ParsedSelectors(sel)
 	if len(sels) == 0 || root == nil {
 		return nil
 	}
@@ -2118,7 +2118,7 @@ func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Nod
 }
 
 func (j *jsRuntime) querySelectorAll(root *Node, sel string, includeRoot bool) []*Node {
-	sels := j.parsedSelectors(sel)
+	sels := j.ParsedSelectors(sel)
 	if len(sels) == 0 || root == nil {
 		return nil
 	}
@@ -2196,7 +2196,7 @@ func cssLengthPx(v string, font, basis float64) (int, bool) {
 	if strings.TrimSpace(v) == "" {
 		return 0, false
 	}
-	l := parseLength(v, font)
+	l := ParseLength(v, font)
 	if !l.Set || l.Auto {
 		return 0, false
 	}
@@ -2246,7 +2246,7 @@ func (j *jsRuntime) elementWidthPx(n *Node, viewport int) int {
 	}
 	if j.host.Layout() != nil {
 		if r, ok := j.host.Layout().Boxes[n]; ok && r.W > 0 {
-			return cssWidthPx(r.W)
+			return CSSWidthPx(r.W)
 		}
 	}
 	// Before the first layout pass (scripts run ahead of it) a block-level box
@@ -2361,14 +2361,14 @@ func (j *jsRuntime) elementHeightPx(n *Node, viewport int) int {
 	}
 	if j.host.Layout() != nil {
 		if r, ok := j.host.Layout().Boxes[n]; ok && r.H > 0 {
-			return cssHeightPx(r.H)
+			return CSSHeightPx(r.H)
 		}
 	}
 	return 0
 }
 
 func styleGet(n *Node, prop string) string {
-	for _, d := range ParseDeclarations(attrValue(n, "style")) {
+	for _, d := range ParseDeclarations(AttrValue(n, "style")) {
 		if strings.EqualFold(d.Prop, prop) {
 			return d.Value
 		}
@@ -2377,7 +2377,7 @@ func styleGet(n *Node, prop string) string {
 }
 
 func styleSet(n *Node, prop, value string) {
-	decls := ParseDeclarations(attrValue(n, "style"))
+	decls := ParseDeclarations(AttrValue(n, "style"))
 	found := false
 	for i := range decls {
 		if strings.EqualFold(decls[i].Prop, prop) {
@@ -2397,7 +2397,7 @@ func styleSet(n *Node, prop, value string) {
 	for _, d := range decls {
 		parts = append(parts, d.Prop+": "+d.Value)
 	}
-	setAttr(n, "style", strings.Join(parts, "; "))
+	SetAttr(n, "style", strings.Join(parts, "; "))
 }
 
 func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
@@ -2406,9 +2406,9 @@ func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
 		_ = o.SetPrototype(j.cssStyleProto)
 	}
 	j.accessor(o, "cssText", func() sobek.Value {
-		return j.vm.ToValue(attrValue(n, "style"))
+		return j.vm.ToValue(AttrValue(n, "style"))
 	}, func(v sobek.Value) {
-		setAttr(n, "style", v.String())
+		SetAttr(n, "style", v.String())
 		j.markDirty()
 	})
 	j.method(o, "setProperty", func(call sobek.FunctionCall) sobek.Value {
@@ -2424,7 +2424,7 @@ func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
 	})
 	j.method(o, "item", func(call sobek.FunctionCall) sobek.Value {
 		idx := int(call.Argument(0).ToInteger())
-		decls := ParseDeclarations(attrValue(n, "style"))
+		decls := ParseDeclarations(AttrValue(n, "style"))
 		if idx >= 0 && idx < len(decls) {
 			return j.vm.ToValue(decls[idx].Prop)
 		}
@@ -2495,7 +2495,7 @@ func (j *jsRuntime) attributesObject(n *Node) *sobek.Object {
 		for i := range attrs {
 			if strings.EqualFold(n.Attrs[i].Key, name) {
 				removed := attrs[i]
-				removeAttr(n, n.Attrs[i].Key)
+				RemoveAttr(n, n.Attrs[i].Key)
 				j.markDirty()
 				return removed
 			}
@@ -2512,7 +2512,7 @@ func (j *jsRuntime) attributesObject(n *Node) *sobek.Object {
 		if name == nil || value == nil {
 			return sobek.Null()
 		}
-		setAttr(n, name.String(), value.String())
+		SetAttr(n, name.String(), value.String())
 		j.markDirty()
 		return sobek.Null()
 	})
@@ -2526,7 +2526,7 @@ func (j *jsRuntime) classListObject(n *Node) *sobek.Object {
 	}
 	get := func() []string { return n.ClassList() }
 	put := func(list []string) {
-		setAttr(n, "class", strings.Join(list, " "))
+		SetAttr(n, "class", strings.Join(list, " "))
 		j.markDirty()
 	}
 	j.accessor(o, "value", func() sobek.Value {
@@ -2628,17 +2628,17 @@ func (j *jsRuntime) classListObject(n *Node) *sobek.Object {
 func serializeChildren(n *Node) string {
 	var b strings.Builder
 	for _, c := range n.Children {
-		serializeNode(&b, c)
+		SerializeNode(&b, c)
 	}
 	return b.String()
 }
 
-func serializeNode(b *strings.Builder, n *Node) {
+func SerializeNode(b *strings.Builder, n *Node) {
 	if n == nil {
 		return
 	}
 	if n.Type == TextNode {
-		b.WriteString(textEscape(n.Text))
+		b.WriteString(TextEscape(n.Text))
 		return
 	}
 	if n.Type != ElementNode {
@@ -2658,14 +2658,14 @@ func serializeNode(b *strings.Builder, n *Node) {
 		return
 	}
 	for _, c := range n.Children {
-		serializeNode(b, c)
+		SerializeNode(b, c)
 	}
 	b.WriteString("</")
 	b.WriteString(n.Tag)
 	b.WriteString(">")
 }
 
-func textEscape(s string) string {
+func TextEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }
 
@@ -2680,7 +2680,7 @@ func isVoidTag(tag string) bool {
 
 func isEditableNode(n *Node) bool {
 	for x := n; x != nil; x = x.Parent {
-		v := strings.ToLower(attrValue(x, "contenteditable"))
+		v := strings.ToLower(AttrValue(x, "contenteditable"))
 		switch v {
 		case "false":
 			return false
@@ -2698,7 +2698,7 @@ func nodeTabIndex(n *Node) int {
 		return -1
 	}
 	if n.HasAttr("tabindex") {
-		if v, err := strconv.Atoi(strings.TrimSpace(attrValue(n, "tabindex"))); err == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(AttrValue(n, "tabindex"))); err == nil {
 			return v
 		}
 	}
@@ -2713,7 +2713,7 @@ func nodeTabIndex(n *Node) int {
 	case "button", "select", "textarea", "iframe", "summary", "object", "embed":
 		return 0
 	case "input":
-		if !strings.EqualFold(attrValue(n, "type"), "hidden") {
+		if !strings.EqualFold(AttrValue(n, "type"), "hidden") {
 			return 0
 		}
 	case "audio", "video":

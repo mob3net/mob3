@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 4a in progress (host contract + page model).**
+Status: **Phase 4a complete (JS runtime in the engine).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -63,6 +63,7 @@ network destination.
 | D27 | 2026-11-22 | `jsRuntime` no longer holds `*Browser`; it depends on a narrow `jsHost` interface (viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookies, fetch, request accounting, import queue). A `browserJSHost` adapter implements it. | This is the first session/host split step. The interface still lives in the browser and exposes brokered I/O, but JS can no longer reach arbitrary Browser fields. Next: move the contract to engine/protocol and broker the loader calls. |
 | D28 | 2026-11-22 | Move `JSHost` and `ImportTask` to `internal/engine`; move `Page`/`Script` and the page style collection there too. The browser adapter still implements the contract, and `js*.go` stays in the browser until its tests can move with it. | The engine now owns the session-facing contract and the document model. JS code itself still depends on browser test surfaces and the loader broker, so moving it now would break test ownership and expose host types. |
 | D29 | 2026-11-22 | Extend `JSHost` with request-context/decode/MIME brokering, and move `NearestForm`/`IsFileInput` into the engine. Do not move `js*.go` yet. | `js.go` still mixes runtime code with Browser lifecycle (`startJS`, timer loop, import completion) and its tests read unexported runtime state. That split must happen before the files move, or the tests and event loop move with them. |
+| D30 | 2026-11-22 | Move `js*.go` into `internal/engine`; keep `startJS`/`stopJS`/timer-loop/import completion and the host adapter in the browser. Export the runtime accessors the browser and tests need; move pure runtime/module tests to the engine and keep Browser integration tests in the browser. | The runtime is page content and belongs on the engine side. The event loop is session/shell orchestration and still needs Browser state, so it stays on the trusted side for now. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -147,7 +148,10 @@ which part goes where.
 | `hints.go` | engine + frontend | Hint computation engine; overlay drawing frontend. |
 | `reader.go` | engine | Article extraction. |
 | `dark.go` | `internal/engine/dark.go` | Palette remap. |
-| `js*.go` | engine | Runtime, DOM, events, compat, stubs, modules, web APIs, Intl. |
+| `js*.go` | `internal/engine` | Runtime, DOM, events, compat, stubs, modules, web APIs, Intl. |
+| `js_compat.go` | browser bridge | Runtime/import-task aliases and constructor. |
+| `js_life.go` | browser | `startJS`, stop, timer loop, import completion; the session/shell orchestration. |
+| `js_host.go` | browser bridge | `browserJSHost` adapter for the engine contract. |
 | `term_unix.go`, `term_linux.go`, `term_darwin.go`, `term_stub.go` | frontend | Terminal modes, size and cell pixels. |
 | `signals_unix.go`, `signals_other.go` | frontend | Resize and quit signals. |
 | `cli.go` | app + frontend | Flags and wiring app; terminal event loop frontend. |
@@ -163,7 +167,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
 | 3 | Extract `internal/engine` | 3–4 weeks | Paused before JS/session | Engine import gate passes; engine tests green |
-| 4 | Extract `internal/host` and broker | 2–3 weeks | In progress (4a) | Engine cannot open sockets or read cookies |
+| 4 | Extract `internal/host` and broker | 2–3 weeks | 4a done; 4b next | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
@@ -528,6 +532,18 @@ form predicates moved to the engine. This is not on the draw path.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Full test suite | pass | pass | no change |
 
+### Phase 4a-4 deltas
+
+The JS runtime moved to the engine; the Browser keeps the adapter and the
+event-loop orchestration. Draw/layout do not run JS, so they are unchanged.
+
+| Metric | Before 4a-4 | After 4a-4 | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 839–880 µs, 519 599 B/op | 840–865 µs, 519 610 B/op | flat |
+| Content paint+blit | 96–100 µs, 0 B/op | 85–105 µs, 0 B/op | flat/noisy |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+| Full test suite | pass | pass | no change |
+
 The conversion is a straight cell copy plus attribute mapping, not a second
 paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
 the transport carry the frame directly, or by encoding dirty rows only.
@@ -598,3 +614,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 4a | `jsRuntime` now holds `jsHost`, not `*Browser`; adapter covers viewport/layout/scroll/focus/hit-testing/dialogs/status/forms/cookies/fetch/requests/import queue; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/console/frame, dump/PNG hashes, draw benchmarks | Move the host contract and JS to engine |
 | 2026-11-22 | 4a-2 | `JSHost`/`ImportTask` moved to `internal/engine`; `Page`/`Script` and page style collection moved; browser adapter remains; tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/page/frame, dump/PNG hashes | Move `js*.go` and its tests |
 | 2026-11-22 | 4a-3 | `JSHost` gained request-context/decode/MIME brokering; `NearestForm`/`IsFileInput` moved to the engine; JS file move deferred after finding the lifecycle/test coupling | `go test ./...`, `go vet`, `-race` on JS/form/frame, dump/PNG hashes | Split the JS event loop and tests before moving `js*.go` |
+| 2026-11-22 | 4a-4 | `js*.go` moved to `internal/engine`; browser keeps `js_host.go`, `js_life.go` and `js_compat.go`; pure runtime/module tests moved to the engine; all tests and hashes green | `go test ./...`, `go vet`, `-race` on JS/module/frame, dump/PNG hashes, draw benchmarks | 4b: host loader/HTTP/cookies split |

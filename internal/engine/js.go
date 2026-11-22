@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"fmt"
@@ -25,6 +25,9 @@ const (
 	jsMaxScripts = 2000
 )
 
+// DefaultUserAgent is used when no host UA is configured.
+const DefaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
+
 // Stop reasons for a page's load-time script phase.
 const (
 	jsStopNone = iota
@@ -35,7 +38,7 @@ const (
 // jsRuntime hosts one page's JavaScript world. Everything runs on the main
 // browser goroutine; timers are pumped from the interactive loop.
 type jsRuntime struct {
-	host jsHost
+	host JSHost
 	vm   *sobek.Runtime
 	page *Page
 
@@ -74,6 +77,7 @@ type jsRuntime struct {
 	pendingReplace    bool
 	pendingForm       *jsFormSubmission
 	dialogActive      atomic.Bool
+	moduleErr         bool
 	// inFlight counts guarded calls. The memory sampler only interrupts while
 	// one is running, so an idle tick cannot poison the next invocation.
 	inFlight atomic.Int32
@@ -162,15 +166,21 @@ type jsTimer struct {
 // jsFormSubmission is a programmatic form.submit() queued until the current
 // script/callback returns.
 type jsFormSubmission struct {
-	method      string
-	target      string
-	body        []byte
-	contentType string
+	Method      string
+	Target      string
+	Body        []byte
+	ContentType string
 }
 
-func newJSRuntime(b *Browser, page *Page) *jsRuntime {
+// FormSubmission is the exported form submission record.
+type FormSubmission = jsFormSubmission
+
+func NewJSRuntime(host JSHost, page *Page) *jsRuntime {
+	if page == nil {
+		page = &Page{Root: &Node{Type: DocumentNode}}
+	}
 	j := &jsRuntime{
-		host:           newJSHost(b),
+		host:           host,
 		vm:             sobek.New(),
 		page:           page,
 		timeout:        jsTimeout,
@@ -237,7 +247,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 		if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 			return sobek.Undefined()
 		}
-		j.host.LogJS("error", j.errorText(v))
+		j.host.LogJS("error", j.ErrorText(v))
 		return sobek.Undefined()
 	})
 	_ = j.vm.Set("reportError", reportError)
@@ -269,7 +279,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 			return __mob3XHRImpl();
 		}
 	`); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 	}
 	_ = j.vm.Set("setTimeout", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		return j.setTimer(call, false)
@@ -282,7 +292,7 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	_ = j.vm.Set("alert", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
 		j.host.LogJS("alert", msg)
-		j.host.SetStatus("JS alert: " + truncateWidth(msg, 120) + "  (! console)")
+		j.host.SetStatus("JS alert: " + TruncateWidth(msg, 120) + "  (! console)")
 		j.dialogActive.Store(true)
 		j.host.ShowAlert(msg)
 		j.dialogActive.Store(false)
@@ -337,10 +347,6 @@ func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	// dynamic import() even when the page has no module script of its own.
 	j.modules = newJSModuleLoader(j)
 	j.memBase = heapAlloc()
-	j.memLimit.Store(b.jsMemLimit)
-	if b.jsMemLimit > 0 {
-		j.startMemSampler()
-	}
 	return j
 }
 
@@ -353,35 +359,21 @@ func heapAlloc() uint64 {
 }
 
 // startJS creates a fresh runtime and runs the page's scripts in order.
-func (b *Browser) startJS(page *Page) {
-	b.stopJS()
-	if b.noJS || page == nil {
+func (j *jsRuntime) StartPage(page *Page) {
+	if page == nil {
 		return
 	}
-	// With scripting enabled, <noscript> content is not displayed.
 	removeNoscript(page.Root)
-	// Record the styles already collected at load; anything added or changed
-	// from here on is component CSS injected by a script.
 	page.SeedParsedStyles()
-	j := newJSRuntime(b, page)
-	if b.jsPageBudget > 0 {
-		j.pageBudget = b.jsPageBudget
-	}
 	j.titleSet = func(s string) {
 		page.Title = s
-		b.status = ""
+		j.host.SetStatus("")
 	}
-	b.js = j
 	j.loadDeadline.Store(time.Now().Add(j.pageBudget).UnixNano())
-	// A press after the phase starts also skips the next script even if it
-	// lands between two scripts instead of inside the running one.
-	phaseAbort := b.abortGen.Load()
+	phaseAbort := j.host.AbortGen()
 	executed := 0
 	for _, sc := range page.Scripts {
-		// The page-wide budget and a user abort stop the whole phase. Checking
-		// before each script means a document with many scripts never starts
-		// the next one once the limit is gone.
-		if b.abortGen.Load() != phaseAbort {
+		if j.host.AbortGen() != phaseAbort {
 			j.stopScripts.Store(true)
 			j.stopReason.Store(jsStopUser)
 		} else if j.deadlineExpired() {
@@ -392,17 +384,15 @@ func (b *Browser) startJS(page *Page) {
 			break
 		}
 		if executed >= jsMaxScripts {
-			b.logJS("warn", fmt.Sprintf("script limit reached (%d); skipped remaining scripts", jsMaxScripts))
+			j.host.LogJS("warn", fmt.Sprintf("script limit reached (%d); skipped remaining scripts", jsMaxScripts))
 			break
 		}
 		executed++
 		if sc.Module {
-			// A module script has no document.currentScript and is evaluated as
-			// part of a linked module graph.
 			j.currentScript = nil
 			if err := j.runModule(sc); err != nil {
-				j.reportError(err)
-				b.moduleErr = true
+				j.ReportError(err)
+				j.moduleErr = true
 			}
 			continue
 		}
@@ -416,20 +406,20 @@ func (b *Browser) startJS(page *Page) {
 				j.currentScript = v
 			}
 		}
-		if _, err := j.runCode(name, sc.Code); err != nil {
-			j.reportError(err)
+		if _, err := j.RunCode(name, sc.Code); err != nil {
+			j.ReportError(err)
 		}
 	}
 	j.currentScript = nil
 	switch j.stopReason.Load() {
 	case jsStopUser:
-		b.logJS("warn", "JavaScript stopped by user")
+		j.host.LogJS("warn", "JavaScript stopped by user")
 	case jsStopBudget:
-		b.logJS("warn", fmt.Sprintf("JavaScript time limit reached (%s)", j.pageBudget))
+		j.host.LogJS("warn", fmt.Sprintf("JavaScript time limit reached (%s)", j.pageBudget))
 	}
 	if !j.stopScripts.Load() {
-		j.fireDocumentEvent("DOMContentLoaded")
-		j.fireWindowEvent("load")
+		j.FireDocumentEvent("DOMContentLoaded")
+		j.FireWindowEvent("load")
 	}
 	j.loadDeadline.Store(0)
 	j.loadDone = true
@@ -444,14 +434,7 @@ func removeNoscript(root *Node) {
 	}
 }
 
-func (b *Browser) stopJS() {
-	if b.js != nil {
-		b.js.stop()
-		b.js = nil
-	}
-}
-
-func (j *jsRuntime) stop() {
+func (j *jsRuntime) Stop() {
 	j.stopped = true
 	j.timers = nil
 	j.stopMemSampler()
@@ -459,7 +442,7 @@ func (j *jsRuntime) stop() {
 
 // freeze detaches a cached runtime from the event loop; its timers do not run
 // until the page is resumed.
-func (j *jsRuntime) freeze() {
+func (j *jsRuntime) Freeze() {
 	if j == nil || !j.frozenAt.IsZero() {
 		return
 	}
@@ -470,7 +453,7 @@ func (j *jsRuntime) freeze() {
 // resume reattaches a frozen runtime and shifts pending timers by the time the
 // page spent in the back/forward cache, so a paused interval does not fire a
 // burst of catch-up callbacks.
-func (j *jsRuntime) resume() {
+func (j *jsRuntime) Resume() {
 	if j == nil || j.frozenAt.IsZero() {
 		return
 	}
@@ -490,70 +473,8 @@ func (j *jsRuntime) resume() {
 // nextJSTimerDelay reports how long until the earliest scheduled JS timer is
 // due. It reports false when no timers are pending, so the event loop can sleep
 // instead of waking on a fixed tick.
-func (b *Browser) nextJSTimerDelay() (time.Duration, bool) {
-	if b.consoleOpen {
-		return 0, false
-	}
-	var next time.Time
-	if b.hoverRebuildPending {
-		next = b.hoverRebuildAt
-	}
-	if b.js != nil {
-		for _, t := range b.js.timers {
-			if next.IsZero() || t.due.Before(next) {
-				next = t.due
-			}
-		}
-	}
-	if next.IsZero() {
-		return 0, false
-	}
-	d := time.Until(next)
-	if d < 0 {
-		d = 0
-	}
-	return d, true
-}
 
 // runJSTimers executes due timers and reports whether the UI should redraw.
-func (b *Browser) runJSTimers() bool {
-	now := time.Now()
-	if b.consoleOpen {
-		// Keep the console view stable while the user selects/copies output;
-		// timer-driven redraws would clear the terminal selection.
-		return false
-	}
-	if b.hoverRebuildPending && !now.Before(b.hoverRebuildAt) {
-		b.hoverRebuildPending = false
-		b.rebuild()
-		return true
-	}
-	if b.js == nil {
-		return false
-	}
-	b.js.tick(now)
-	if b.consumePendingJS() {
-		return false
-	}
-	if !b.js.dirty {
-		return false
-	}
-	// Coalesce timer-driven rebuilds. A page whose timers fire every 50 ms
-	// must not force a full style+layout pass at the same rate; waiting twice
-	// as long as the previous rebuild caps timer redraws at about half a core.
-	wait := jsRedrawInterval
-	if 2*b.lastBuild > wait {
-		wait = 2 * b.lastBuild
-	}
-	if !b.lastRebuild.IsZero() && now.Sub(b.lastRebuild) < wait {
-		return false
-	}
-	b.js.consumeDirty()
-	// rebuild handles image refresh; with deferred images it queues a
-	// background batch instead of blocking the event loop.
-	b.rebuild()
-	return true
-}
 
 func (j *jsRuntime) markDirty() {
 	if j != nil {
@@ -561,7 +482,7 @@ func (j *jsRuntime) markDirty() {
 	}
 }
 
-func (j *jsRuntime) consumeDirty() bool {
+func (j *jsRuntime) ConsumeDirty() bool {
 	d := j.dirty
 	j.dirty = false
 	return d
@@ -569,7 +490,7 @@ func (j *jsRuntime) consumeDirty() bool {
 
 // errorText renders a thrown value for the console, preferring the script
 // stack an Error object carries so the failing line is visible.
-func (j *jsRuntime) errorText(v sobek.Value) string {
+func (j *jsRuntime) ErrorText(v sobek.Value) string {
 	if v == nil || sobek.IsUndefined(v) || sobek.IsNull(v) {
 		return "undefined"
 	}
@@ -583,7 +504,7 @@ func (j *jsRuntime) errorText(v sobek.Value) string {
 	return jsValueString(v)
 }
 
-func (j *jsRuntime) reportError(err error) {
+func (j *jsRuntime) ReportError(err error) {
 	if err == nil {
 		return
 	}
@@ -602,7 +523,7 @@ func (j *jsRuntime) matchMediaFunc() func(sobek.FunctionCall) sobek.Value {
 			_ = o.SetPrototype(j.mediaQueryProto)
 		}
 		_ = o.Set("media", q)
-		_ = o.Set("matches", mediaMatches(q, cssWidthPx(j.host.Width()), j.host.Dark()))
+		_ = o.Set("matches", MediaMatches(q, CSSWidthPx(j.host.Width()), j.host.Dark()))
 		_ = o.Set("onchange", sobek.Null())
 		noop := j.vm.ToValue(func(sobek.FunctionCall) sobek.Value { return sobek.Undefined() })
 		_ = o.Set("addListener", noop)
@@ -755,7 +676,7 @@ func prefixHash(h string) string {
 
 func (j *jsRuntime) navigatorObject() *sobek.Object {
 	o := j.vm.NewObject()
-	ua := defaultUserAgent
+	ua := DefaultUserAgent
 	if j.host != nil && j.host.UserAgent() != "" {
 		ua = j.host.UserAgent()
 	}
@@ -845,7 +766,7 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 
 // setMemLimit updates the runtime's absolute heap ceiling and starts or stops
 // the shared sampler.
-func (j *jsRuntime) setMemLimit(limit int64) {
+func (j *jsRuntime) SetMemLimit(limit int64) {
 	if j == nil {
 		return
 	}
@@ -956,7 +877,7 @@ func (j *jsRuntime) deadlineExpired() bool {
 	return dl != 0 && time.Now().UnixNano() >= dl
 }
 
-func (j *jsRuntime) runCode(name, src string) (v sobek.Value, err error) {
+func (j *jsRuntime) RunCode(name, src string) (v sobek.Value, err error) {
 	err = j.guard(func() error {
 		var e error
 		v, e = j.vm.RunScript(name, src)
@@ -976,7 +897,7 @@ func (j *jsRuntime) call(fn sobek.Callable, this sobek.Value, args ...sobek.Valu
 	})
 	if err != nil {
 		j.eventErr = true
-		j.reportError(err)
+		j.ReportError(err)
 		return nil, false
 	}
 	return v, true
@@ -1026,10 +947,10 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 	_ = o.Set("history", j.histObj)
 	_ = o.Set("localStorage", j.storageLocal)
 	_ = o.Set("sessionStorage", j.storageSession)
-	_ = o.Set("innerWidth", cssWidthPx(j.host.Width()))
-	_ = o.Set("innerHeight", cssHeightPx(j.host.Height()))
-	_ = o.Set("outerWidth", cssWidthPx(j.host.Width()))
-	_ = o.Set("outerHeight", cssHeightPx(j.host.Height()))
+	_ = o.Set("innerWidth", CSSWidthPx(j.host.Width()))
+	_ = o.Set("innerHeight", CSSHeightPx(j.host.Height()))
+	_ = o.Set("outerWidth", CSSWidthPx(j.host.Width()))
+	_ = o.Set("outerHeight", CSSHeightPx(j.host.Height()))
 	_ = o.Set("devicePixelRatio", 1)
 	scrollPx := func() int { return int(float64(j.host.Scroll()) * cellH) }
 	j.accessor(o, "scrollX", func() sobek.Value { return j.vm.ToValue(0) }, nil)
@@ -1090,16 +1011,16 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 		return j.computedStyleObject(j.unwrap(call.Argument(0)))
 	}))
 	screen := j.vm.NewObject()
-	_ = screen.Set("width", cssWidthPx(j.host.Width()))
-	_ = screen.Set("height", cssHeightPx(j.host.Height()))
-	_ = screen.Set("availWidth", cssWidthPx(j.host.Width()))
-	_ = screen.Set("availHeight", cssHeightPx(j.host.Height()))
+	_ = screen.Set("width", CSSWidthPx(j.host.Width()))
+	_ = screen.Set("height", CSSHeightPx(j.host.Height()))
+	_ = screen.Set("availWidth", CSSWidthPx(j.host.Width()))
+	_ = screen.Set("availHeight", CSSHeightPx(j.host.Height()))
 	_ = screen.Set("colorDepth", 24)
 	_ = screen.Set("pixelDepth", 24)
 	_ = o.Set("screen", screen)
 	vv := j.vm.NewObject()
-	_ = vv.Set("width", cssWidthPx(j.host.Width()))
-	_ = vv.Set("height", cssHeightPx(j.host.Height()))
+	_ = vv.Set("width", CSSWidthPx(j.host.Width()))
+	_ = vv.Set("height", CSSHeightPx(j.host.Height()))
 	_ = vv.Set("scale", 1)
 	_ = vv.Set("offsetLeft", 0)
 	_ = vv.Set("offsetTop", 0)
@@ -1181,9 +1102,9 @@ func (j *jsRuntime) timerFunc(v sobek.Value) (sobek.Callable, bool) {
 		return fn, true
 	}
 	if s, ok := v.Export().(string); ok && strings.TrimSpace(s) != "" {
-		fv, err := j.runCode("timer", "(function(event){"+s+"\n})")
+		fv, err := j.RunCode("timer", "(function(event){"+s+"\n})")
 		if err != nil {
-			j.reportError(err)
+			j.ReportError(err)
 			return nil, false
 		}
 		return sobek.AssertFunction(fv)
@@ -1198,7 +1119,7 @@ func (j *jsRuntime) clearTimer(call sobek.FunctionCall) sobek.Value {
 }
 
 // tick runs due timers and returns whether any callback ran.
-func (j *jsRuntime) tick(now time.Time) bool {
+func (j *jsRuntime) Tick(now time.Time) bool {
 	if j == nil || j.stopped || len(j.timers) == 0 {
 		return false
 	}
@@ -1349,7 +1270,7 @@ func (j *jsRuntime) callList(m map[string][]jsListener, typ string, this, evObj 
 
 // fireNodeEvent dispatches an event on an element and bubbles to document and
 // window. It returns whether default behavior was prevented.
-func (j *jsRuntime) fireNodeEvent(n *Node, typ string) bool {
+func (j *jsRuntime) FireNodeEvent(n *Node, typ string) bool {
 	if j == nil || j.stopped || n == nil {
 		return false
 	}
@@ -1387,7 +1308,7 @@ func (j *jsRuntime) fireNodeEvent(n *Node, typ string) bool {
 	return ev.prevented
 }
 
-func (j *jsRuntime) fireDocumentEvent(typ string) {
+func (j *jsRuntime) FireDocumentEvent(typ string) {
 	if j == nil || j.stopped {
 		return
 	}
@@ -1399,7 +1320,7 @@ func (j *jsRuntime) fireDocumentEvent(typ string) {
 	}
 }
 
-func (j *jsRuntime) fireWindowEvent(typ string) {
+func (j *jsRuntime) FireWindowEvent(typ string) {
 	if j == nil || j.stopped {
 		return
 	}
@@ -1418,10 +1339,10 @@ func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj sobek.Value, ev *j
 	if code == "" {
 		return
 	}
-	fv, err := j.runCode("inline "+attr, "(function(event){"+code+"\n})")
+	fv, err := j.RunCode("inline "+attr, "(function(event){"+code+"\n})")
 	if err != nil {
 		j.eventErr = true
-		j.reportError(err)
+		j.ReportError(err)
 		return
 	}
 	fn, ok := sobek.AssertFunction(fv)
@@ -1440,6 +1361,81 @@ func (j *jsRuntime) inlineHandler(n *Node, attr string, evObj sobek.Value, ev *j
 
 // dispatchClick runs click handlers for n. It returns true when default
 // navigation should be suppressed.
-func (j *jsRuntime) dispatchClick(n *Node) bool {
-	return j.fireNodeEvent(n, "click")
+func (j *jsRuntime) DispatchClick(n *Node) bool {
+	return j.FireNodeEvent(n, "click")
 }
+
+// NodeCount reports the number of wrapped DOM nodes for cache accounting.
+func (j *jsRuntime) NodeCount() int { return len(j.nodes) }
+
+// ModuleErr reports whether a module script failed.
+func (j *jsRuntime) ModuleErr() bool { return j.moduleErr }
+
+// Dirty reports unflushed DOM mutations.
+func (j *jsRuntime) Dirty() bool     { return j.dirty }
+func (j *jsRuntime) SetDirty(v bool) { j.dirty = v }
+
+// PendingNav reports a queued scripted navigation.
+func (j *jsRuntime) PendingNav() string           { return j.pendingNav }
+func (j *jsRuntime) SetPendingNav(v string)       { j.pendingNav = v }
+func (j *jsRuntime) PendingReplace() bool         { return j.pendingReplace }
+func (j *jsRuntime) PendingForm() *FormSubmission { return j.pendingForm }
+
+// StorageLocalData and StorageSessionData expose the in-memory stores.
+func (j *jsRuntime) StorageLocalData() map[string]string     { return j.storageLocalData }
+func (j *jsRuntime) StorageSessionData() map[string]string   { return j.storageSessionData }
+func (j *jsRuntime) SetStorageLocalData(m map[string]string) { j.storageLocalData = m }
+
+// TimerCount reports scheduled timers.
+func (j *jsRuntime) TimerCount() int { return len(j.timers) }
+
+// NextTimerDelay reports the earliest timer deadline.
+func (j *jsRuntime) NextTimerDelay() (time.Duration, bool) {
+	var next time.Time
+	for _, t := range j.timers {
+		if next.IsZero() || t.due.Before(next) {
+			next = t.due
+		}
+	}
+	if next.IsZero() {
+		return 0, false
+	}
+	d := time.Until(next)
+	if d < 0 {
+		d = 0
+	}
+	return d, true
+}
+
+// VM returns the sobek runtime for tests and host inspection.
+func (j *jsRuntime) VM() *sobek.Runtime { return j.vm }
+
+// EventErr reports a listener exception.
+func (j *jsRuntime) EventErr() bool { return j.eventErr }
+
+func (j *jsRuntime) SetPendingForm(f *FormSubmission) { j.pendingForm = f }
+func (j *jsRuntime) SetPendingReplace(v bool)         { j.pendingReplace = v }
+func (j *jsRuntime) SetPageBudget(d time.Duration) {
+	if d > 0 {
+		j.pageBudget = d
+	}
+}
+func (j *jsRuntime) ModuleErrValue() bool { return j.moduleErr }
+
+// JSRuntime is the exported runtime type.
+type JSRuntime = jsRuntime
+
+// RemoveNoscript strips <noscript> subtrees when scripting is enabled.
+func RemoveNoscript(root *Node) { removeNoscript(root) }
+
+func (j *jsRuntime) TemplateCount() int     { return len(j.templates) }
+func (j *jsRuntime) DatasetCount() int      { return len(j.datasetObjs) }
+func (j *jsRuntime) ModuleSourceBytes() int { return j.modules.sourceBytes() }
+
+func (j *jsRuntime) SetStorageSessionData(m map[string]string) { j.storageSessionData = m }
+
+func (j *jsRuntime) SetTimeout(d time.Duration) { j.timeout = d }
+
+func (j *jsRuntime) MemSamplerActive() bool { return j.memStop != nil }
+
+func (j *jsRuntime) SetMemBase(v uint64) { j.memBase = v }

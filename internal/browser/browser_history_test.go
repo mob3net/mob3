@@ -260,7 +260,7 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 	if b.js == nil {
 		t.Fatal("cached page lost its JavaScript runtime")
 	}
-	v, err := b.js.runCode("test", "window.__runs")
+	v, err := b.js.RunCode("test", "window.__runs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +482,7 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	if b.js == nil {
 		t.Fatal("no JS runtime")
 	}
-	b.js.pendingNav = "/next"
+	b.js.SetPendingNav("/next")
 	if !b.consumePendingJS() {
 		t.Fatal("queued navigation was not applied")
 	}

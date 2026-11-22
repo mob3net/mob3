@@ -712,7 +712,7 @@ func TestHelpAlertExample(t *testing.T) {
 	b.keys = keys
 	withQuietStdout(t, func() {
 		b.startJS(page)
-		b.js.dispatchClick(link)
+		b.js.DispatchClick(link)
 	})
 	found := false
 	for _, line := range b.jsLog {
@@ -788,14 +788,14 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 	if b.layout != first {
 		t.Fatal("layout changed inside the coalescing interval")
 	}
-	if !b.js.dirty {
+	if !b.js.Dirty() {
 		t.Fatal("dirty flag was cleared before the deferred rebuild")
 	}
 	b.lastRebuild = time.Now().Add(-time.Second)
 	if !b.runJSTimers() {
 		t.Fatal("deferred timer rebuild did not run after the interval")
 	}
-	if b.js.dirty {
+	if b.js.Dirty() {
 		t.Fatal("dirty flag was not cleared after rebuilding")
 	}
 	if b.layout == first {

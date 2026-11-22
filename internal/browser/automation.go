@@ -709,13 +709,13 @@ func (a *Automation) Evaluate(ctx context.Context, expression string) (string, e
 	if b.js == nil {
 		return "", errors.New("JavaScript is disabled or no page is loaded")
 	}
-	v, err := b.js.runCode("automation", expression)
+	v, err := b.js.RunCode("automation", expression)
 	if b.consumePendingJS() {
 		if err := a.waitLoad(ctx); err != nil {
 			return "", err
 		}
 	}
-	if b.js.consumeDirty() {
+	if b.js.ConsumeDirty() {
 		b.rebuild()
 	}
 	if err != nil {
@@ -1002,8 +1002,8 @@ func (a *Automation) fireChangeLocked(n *Node) {
 	if b.js == nil {
 		return
 	}
-	b.js.fireNodeEvent(n, "change")
-	if b.js.consumeDirty() {
+	b.js.FireNodeEvent(n, "change")
+	if b.js.ConsumeDirty() {
 		b.rebuild()
 	}
 }
@@ -1601,7 +1601,7 @@ func (a *Automation) waitStepLocked(ctx context.Context, deadline time.Time) err
 // flushDirtyLocked rebuilds immediately when a timer changed the DOM but the
 // interactive redraw coalescing deferred it.
 func (a *Automation) flushDirtyLocked() {
-	if a.b.js != nil && a.b.js.consumeDirty() {
+	if a.b.js != nil && a.b.js.ConsumeDirty() {
 		a.b.rebuild()
 	}
 }

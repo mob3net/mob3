@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"fmt"
@@ -108,7 +108,7 @@ func (j *jsRuntime) installIntl() {
 })();
 `
 	if _, err := j.vm.RunScript("Intl", script); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 	}
 }
 

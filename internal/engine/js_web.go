@@ -1,8 +1,7 @@
-package browser
+package engine
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -317,7 +316,7 @@ func (j *jsRuntime) installFetch() {
 })();
 `
 	if _, err := j.vm.RunScript("fetch constructors", script); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 	}
 	_ = j.vm.Set("fetch", j.vm.ToValue(j.fetchFunc))
 }
@@ -394,7 +393,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 			reqHeaders[http.CanonicalHeaderKey(k)] = strings.Join(vs, ", ")
 		}
 	}
-	status, data, ctype, respHeaders, final, err := j.httpXHR("fetch", method, u, []byte(body), reqHeaders)
+	status, data, ctype, respHeaders, final, err := j.HTTPXHR("fetch", method, u, []byte(body), reqHeaders)
 	if err != nil {
 		return fail(err.Error())
 	}
@@ -435,7 +434,7 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *sobek.Object {
 	_ = o.Set("type", "basic")
 	_ = o.Set("headers", j.headersValue(st.headers))
 	j.accessor(o, "bodyUsed", func() sobek.Value { return j.vm.ToValue(used) }, nil)
-	bodyText := decodeBody(st.data, st.ctype)
+	bodyText := j.host.DecodeBody(st.data, st.ctype)
 	consume := func() bool {
 		if used {
 			return false
@@ -881,7 +880,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 		st.readyState = 3
 		j.fireXHR(st, "readystatechange")
 
-		status, data, ctype, headers, final, err := j.httpXHR("xhr", st.method, st.url, body, st.reqHeaders)
+		status, data, ctype, headers, final, err := j.HTTPXHR("xhr", st.method, st.url, body, st.reqHeaders)
 		st.readyState = 4
 		if err != nil {
 			st.status = 0
@@ -896,7 +895,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 		st.statusText = http.StatusText(status)
 		st.ctype = ctype
 		st.resHeaders = headers
-		st.text = decodeBody(data, ctype)
+		st.text = j.host.DecodeBody(data, ctype)
 		st.response = nil
 		if final != nil {
 			st.responseURL = final.String()
@@ -951,7 +950,7 @@ func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	}
 }
 
-func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers http.Header, final *url.URL, err error) {
+func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers http.Header, final *url.URL, err error) {
 	if len(body) > maxResourceSize {
 		return 0, nil, "", nil, nil, errBadSVG
 	}
@@ -975,17 +974,10 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	if len(body) > 0 {
 		reader = bytes.NewReader(body)
 	}
-	reqCtx := withRequestKind(context.Background(), kind)
-	reqCtx = withRequestPage(reqCtx, origin, j.page.Local)
-	reqCtx = withRequestTarget(reqCtx, u)
-	meta := requestMetaFrom(reqCtx)
-	if meta.blockLocal && isLocalURL(u) {
-		j.host.LogJS("warn", "blocked local-network request: "+u.Redacted())
-		return 0, nil, "", nil, nil, errLocalNetworkBlocked
-	}
-	if meta.pageSecure && u.Scheme == "http" {
-		j.host.LogJS("warn", "blocked mixed content: "+u.Redacted())
-		return 0, nil, "", nil, nil, errMixedContentBlocked
+	reqCtx := j.host.RequestContext(kind, origin, j.page != nil && j.page.Local, u)
+	if err := j.host.CheckRequest(reqCtx, u); err != nil {
+		j.host.LogJS("warn", err.Error())
+		return 0, nil, "", nil, nil, err
 	}
 	req, err := http.NewRequestWithContext(reqCtx, method, u.String(), reader)
 	if err != nil {
@@ -1010,7 +1002,7 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 			return errors.New("too many redirects")
 		}
 		if origin.Scheme == "https" && next.URL.Scheme == "http" {
-			return errMixedContentBlocked
+			return errors.New("blocked mixed content")
 		}
 		if !crossOrigin && !sameOrigin(next.URL, origin) {
 			return errors.New("cross-origin redirect blocked")
@@ -1023,15 +1015,7 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 	resp, err := client.Do(req)
 	if err != nil {
 		j.ioActive.Store(false)
-		if isLocalNetworkError(err) {
-			j.host.LogJS("warn", "blocked local-network request: "+u.Redacted())
-			err = errLocalNetworkBlocked
-		}
-		if isMixedContentError(err) {
-			j.host.LogJS("warn", "blocked mixed content: "+u.Redacted())
-			err = errMixedContentBlocked
-		}
-		return 0, nil, "", nil, nil, err
+		return 0, nil, "", nil, nil, j.host.MapRequestError(err)
 	}
 	defer j.ioActive.Store(false)
 	defer resp.Body.Close()
@@ -1043,7 +1027,7 @@ func (j *jsRuntime) httpXHR(kind string, method string, u *url.URL, body []byte,
 		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, err
 	}
 	if len(data) > maxResourceSize {
-		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errResourceTooLarge
+		return resp.StatusCode, nil, "", resp.Header, resp.Request.URL, errors.New("resource too large")
 	}
 	return resp.StatusCode, data, resp.Header.Get("Content-Type"), resp.Header, resp.Request.URL, nil
 }

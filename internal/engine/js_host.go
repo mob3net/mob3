@@ -53,6 +53,8 @@ type JSHost interface {
 	UserAgent() string
 	Interactive() bool
 	RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context
+	CheckRequest(ctx context.Context, u *url.URL) error
+	MapRequestError(err error) error
 	DecodeBody(data []byte, contentType string) string
 	IsJavaScriptMIME(contentType string) bool
 	MIMEEssence(contentType string) string

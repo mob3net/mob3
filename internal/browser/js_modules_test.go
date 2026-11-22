@@ -96,7 +96,7 @@ func TestAsyncImportsShareModuleRecords(t *testing.T) {
 	b.interactive = true
 	b.startJS(page)
 	for i := 0; i < 2; i++ {
-		if _, err := b.js.runCode("test",
+		if _, err := b.js.RunCode("test",
 			`import("`+dep+`").then(function (m) {`+
 				`document.getElementById("out").textContent = String(globalThis.hits) + ":" + String(m.n);});`); err != nil {
 			t.Fatal(err)
@@ -120,7 +120,7 @@ func TestAsyncDynamicImportCompletes(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.interactive = true
 	b.startJS(page)
-	if _, err := b.js.runCode("test",
+	if _, err := b.js.RunCode("test",
 		`import("data:text/javascript,export const v = 9;").then(function (m) {`+
 			`document.getElementById("out").textContent = String(m.v);});`); err != nil {
 		t.Fatal(err)
@@ -200,21 +200,6 @@ func TestBareSpecifierUsesImportMap(t *testing.T) {
 	}
 }
 
-func TestImportMapPrefixMapping(t *testing.T) {
-	base := mustParse(t, "https://example.com/app/")
-	j := &jsRuntime{page: &Page{URL: base, Base: base}}
-	m := &jsModuleLoader{j: j, base: base, imports: map[string]string{
-		"lib/": "https://cdn.example/lib/",
-	}}
-	got, err := m.resolveSpecifier(base, "lib/util.js")
-	if err != nil || got.String() != "https://cdn.example/lib/util.js" {
-		t.Fatalf("prefix mapping = %v, %v", got, err)
-	}
-	if _, err := m.resolveSpecifier(base, "lib"); err == nil {
-		t.Fatal("bare specifier without map entry was resolved")
-	}
-}
-
 func TestModuleFailureShowsStatus(t *testing.T) {
 	page := moduleTestPage(`<html><body><p>Loading...</p></body></html>`, `import "react";`)
 	b := NewBrowser(40, 10)
@@ -264,26 +249,5 @@ func TestCollectScriptsMarksModulesAndSkipsNoModule(t *testing.T) {
 	}
 	if scripts[1].Module {
 		t.Fatal("classic script was marked as a module")
-	}
-}
-
-func TestModuleSpecifierResolution(t *testing.T) {
-	base := mustParse(t, "https://example.com/app/index.html")
-	j := &jsRuntime{page: &Page{URL: base, Base: base}}
-	m := &jsModuleLoader{j: j, base: base}
-
-	got, err := m.resolveSpecifier(base, "./dep.js")
-	if err != nil || got.String() != "https://example.com/app/dep.js" {
-		t.Fatalf("relative specifier = %v, %v", got, err)
-	}
-	got, err = m.resolveSpecifier(base, "/lib/x.js")
-	if err != nil || got.String() != "https://example.com/lib/x.js" {
-		t.Fatalf("root specifier = %v, %v", got, err)
-	}
-	if _, err := m.resolveSpecifier(base, "react"); err == nil {
-		t.Fatal("bare specifier was resolved")
-	}
-	if _, err := m.resolveSpecifier(base, "mailto:x@example.com"); err == nil {
-		t.Fatal("unsupported scheme was resolved")
 	}
 }

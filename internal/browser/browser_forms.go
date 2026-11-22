@@ -574,8 +574,8 @@ func (b *Browser) toggleControl(n *Node) {
 		setAttr(n, "checked", "")
 	}
 	if b.js != nil {
-		b.js.fireNodeEvent(n, "input")
-		b.js.fireNodeEvent(n, "change")
+		b.js.FireNodeEvent(n, "input")
+		b.js.FireNodeEvent(n, "change")
 	}
 	b.rebuild()
 }
@@ -583,8 +583,8 @@ func (b *Browser) toggleControl(n *Node) {
 // fireSelectChange notifies scripts and repaints after a select value changes.
 func (b *Browser) fireSelectChange(sel *Node) {
 	if b.js != nil && sel != nil {
-		b.js.fireNodeEvent(sel, "input")
-		b.js.fireNodeEvent(sel, "change")
+		b.js.FireNodeEvent(sel, "input")
+		b.js.FireNodeEvent(sel, "change")
 	}
 	b.rebuild()
 }
@@ -607,7 +607,7 @@ func (b *Browser) setInputFocus(n *Node) {
 		old.InputFocused = false
 		old.InputCursor = 0
 		if b.js != nil {
-			b.js.fireNodeEvent(old, "change")
+			b.js.FireNodeEvent(old, "change")
 		}
 	}
 	b.inputFocus = n
@@ -659,10 +659,10 @@ func (b *Browser) setInputValue(n *Node, v string) {
 	n.ValueSet = true
 	dirty := false
 	if b.js != nil {
-		b.js.fireNodeEvent(n, "input")
+		b.js.FireNodeEvent(n, "input")
 		// The rebuild below uses any DOM mutations the handler made, so do
 		// not schedule a second timer-driven rebuild for the same keystroke.
-		dirty = b.js.consumeDirty()
+		dirty = b.js.ConsumeDirty()
 	}
 	if b.consumePendingJS() {
 		return
@@ -933,7 +933,7 @@ func (b *Browser) submitForm(form *Node) (started bool, reason string) {
 	}
 	prevented := false
 	if b.js != nil {
-		prevented = b.js.fireNodeEvent(form, "submit")
+		prevented = b.js.FireNodeEvent(form, "submit")
 	}
 	if b.consumePendingJS() {
 		return true, ""
@@ -1050,7 +1050,7 @@ func (b *Browser) queueFormSubmit(form *Node) {
 		}
 		return
 	}
-	b.js.pendingForm = &jsFormSubmission{method: method, target: target, body: body, contentType: contentType}
+	b.js.SetPendingForm(&FormSubmission{Method: method, Target: target, Body: body, ContentType: contentType})
 }
 
 // isLabelable reports controls that a <label> can activate.
@@ -1315,8 +1315,8 @@ func (b *Browser) setRangeValue(n *Node, value float64) {
 	n.Value = formatRangeNumber(value)
 	n.ValueSet = true
 	if b.js != nil {
-		b.js.fireNodeEvent(n, "input")
-		b.js.fireNodeEvent(n, "change")
+		b.js.FireNodeEvent(n, "input")
+		b.js.FireNodeEvent(n, "change")
 	}
 	b.rebuild()
 }

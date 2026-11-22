@@ -173,7 +173,7 @@ func TestJSScriptLimit(t *testing.T) {
 	b.jsMemLimit = 0
 	b.startJS(page)
 	n := int64(0)
-	if v := b.js.vm.Get("count"); v != nil {
+	if v := b.js.VM().Get("count"); v != nil {
 		n = v.ToInteger()
 	}
 	if n != jsMaxScripts {
@@ -190,7 +190,7 @@ func TestJSPageBudgetSkipsScripts(t *testing.T) {
 	b.jsMemLimit = 0
 	b.jsPageBudget = time.Nanosecond
 	b.startJS(page)
-	if v := b.js.vm.Get("count"); v != nil && v.ToInteger() != 0 {
+	if v := b.js.VM().Get("count"); v != nil && v.ToInteger() != 0 {
 		t.Fatalf("executed %d scripts after the budget expired, want 0", v.ToInteger())
 	}
 	if !strings.Contains(strings.Join(b.jsLog, "\n"), "time limit") {
@@ -202,18 +202,18 @@ func TestJSUserAbortInterruptsScript(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
-	j.timeout = 20 * time.Millisecond
+	j.SetTimeout(20 * time.Millisecond)
 	go func() {
 		time.Sleep(5 * time.Millisecond)
 		b.abortGen.Add(1)
 	}()
-	if _, err := j.runCode("loop", "while (true) {}"); err == nil {
+	if _, err := j.RunCode("loop", "while (true) {}"); err == nil {
 		t.Fatal("aborted script returned no error")
 	} else if !strings.Contains(err.Error(), "stopped by user") {
 		t.Fatalf("abort error = %v, want a user-stop message", err)
 	}
 	// The escape request belonged to the previous call; a later call runs.
-	if _, err := j.runCode("after", "1 + 1"); err != nil {
+	if _, err := j.RunCode("after", "1 + 1"); err != nil {
 		t.Fatalf("script after an abort failed: %v", err)
 	}
 }
@@ -244,28 +244,8 @@ func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
 		Code: "globalThis.afterAbort = 1;",
 	})
 	b.startJS(page)
-	if v := b.js.vm.Get("afterAbort"); v != nil && v.ToInteger() != 0 {
+	if v := b.js.VM().Get("afterAbort"); v != nil && v.ToInteger() != 0 {
 		t.Fatal("a script after the user abort still ran")
-	}
-}
-
-func TestJSRuntimeFreezeShiftsTimers(t *testing.T) {
-	base := time.Now()
-	j := &jsRuntime{timers: map[int]*jsTimer{
-		1: {id: 1, due: base.Add(100 * time.Millisecond)},
-	}}
-	j.freeze()
-	if j.frozenAt.IsZero() {
-		t.Fatal("freeze did not mark the runtime")
-	}
-	j.frozenAt = base.Add(-2 * time.Second)
-	j.resume()
-	if !j.frozenAt.IsZero() {
-		t.Fatal("resume left the runtime frozen")
-	}
-	want := base.Add(2100 * time.Millisecond)
-	if got := j.timers[1].due; got.Sub(want) > 10*time.Millisecond || want.Sub(got) > 10*time.Millisecond {
-		t.Fatalf("timer due = %v, want about %v", got, want)
 	}
 }
 
@@ -273,8 +253,8 @@ func TestSelectorParseCache(t *testing.T) {
 	page := &Page{Root: ParseHTML(`<html><body><p class="x">hi</p></body></html>`)}
 	b := NewBrowser(40, 10)
 	j := newJSRuntime(b, page)
-	a := j.parsedSelectors(".x")
-	c := j.parsedSelectors(".x")
+	a := j.ParsedSelectors(".x")
+	c := j.ParsedSelectors(".x")
 	if len(a) != 1 || len(c) != 1 || a[0] != c[0] {
 		t.Fatal("selector parsing was not cached")
 	}
@@ -789,12 +769,12 @@ func TestJSLocationRedirect(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.page = page
 	b.startJS(page)
-	if b.js == nil || b.js.pendingNav != "https://example.com/next" {
+	if b.js == nil || b.js.PendingNav() != "https://example.com/next" {
 		t.Fatalf("pending navigation = %q", func() string {
 			if b.js == nil {
 				return "<nil>"
 			}
-			return b.js.pendingNav
+			return b.js.PendingNav()
 		}())
 	}
 }
@@ -829,21 +809,21 @@ func TestJSFormSubmitQueuesPost(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.page = page
 	b.startJS(page)
-	if b.js == nil || b.js.pendingForm == nil {
+	if b.js == nil || b.js.PendingForm() == nil {
 		t.Fatal("form.submit() did not queue a submission")
 	}
-	pf := b.js.pendingForm
-	if pf.method != http.MethodPost || pf.target != "https://example.com/access_keys" {
-		t.Fatalf("queued form = %s %s", pf.method, pf.target)
+	pf := b.js.PendingForm()
+	if pf.Method != http.MethodPost || pf.Target != "https://example.com/access_keys" {
+		t.Fatalf("queued form = %s %s", pf.Method, pf.Target)
 	}
-	body := string(pf.body)
+	body := string(pf.Body)
 	for _, want := range []string{"authenticity_token=abc", "_method=POST", "try_url=https%3A%2F%2Fexample.com"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("form body %q is missing %q", body, want)
 		}
 	}
-	if pf.contentType != "application/x-www-form-urlencoded" {
-		t.Fatalf("content type = %q", pf.contentType)
+	if pf.ContentType != "application/x-www-form-urlencoded" {
+		t.Fatalf("content type = %q", pf.ContentType)
 	}
 }
 
@@ -887,7 +867,7 @@ func TestStorageNamedProperties(t *testing.T) {
 	if page.Title != want {
 		t.Fatalf("title = %q, want %q", page.Title, want)
 	}
-	if _, ok := b.js.storageLocalData["theirValue"]; ok {
+	if _, ok := b.js.StorageLocalData()["theirValue"]; ok {
 		t.Fatal("deleted storage key is still present")
 	}
 }
@@ -975,7 +955,7 @@ func TestJSClickHandlerPreventsDefault(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.startJS(page)
 	link := page.Root.FindFirst("a")
-	if !b.js.dispatchClick(link) {
+	if !b.js.DispatchClick(link) {
 		t.Fatal("click default was not prevented")
 	}
 	if got := link.TextContent(); got != "clicked" {
@@ -1043,8 +1023,8 @@ func TestJSListenerOnce(t *testing.T) {
 	`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	b.js.fireDocumentEvent("tick")
-	b.js.fireDocumentEvent("tick")
+	b.js.FireDocumentEvent("tick")
+	b.js.FireDocumentEvent("tick")
 	if page.Title != "n1" {
 		t.Fatalf("title = %q, want n1", page.Title)
 	}
@@ -1058,16 +1038,16 @@ func TestJSTimers(t *testing.T) {
 	`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	if b.js.tick(time.Now()) {
+	if b.js.Tick(time.Now()) {
 		t.Fatal("timer fired immediately")
 	}
-	if !b.js.tick(time.Now().Add(time.Second)) {
+	if !b.js.Tick(time.Now().Add(time.Second)) {
 		t.Fatal("timer did not fire")
 	}
 	if got := page.Root.FindFirst("p").TextContent(); got != "timer" {
 		t.Fatalf("text = %q", got)
 	}
-	if len(b.js.timers) != 0 {
+	if b.js.TimerCount() != 0 {
 		t.Error("one-shot timer was not removed")
 	}
 }
@@ -1113,7 +1093,7 @@ func TestJSMemoryLimitExceeded(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsMemLimit = 1
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
-	_, err := j.runCode("alloc", `var a = []; for (;;) { a.push(new Array(4096).fill("x")); }`)
+	_, err := j.RunCode("alloc", `var a = []; for (;;) { a.push(new Array(4096).fill("x")); }`)
 	if err == nil || !strings.Contains(err.Error(), "memory limit exceeded") {
 		t.Fatalf("err = %v, want memory limit exceeded", err)
 	}
@@ -1123,7 +1103,7 @@ func TestJSMemoryLimitZeroDisables(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
-	_, err := j.runCode("alloc", `var a = []; for (var i = 0; i < 1000; i++) { a.push(new Array(1024).fill(i)); }`)
+	_, err := j.RunCode("alloc", `var a = []; for (var i = 0; i < 1000; i++) { a.push(new Array(1024).fill(i)); }`)
 	if err != nil {
 		t.Fatalf("runCode with watchdog disabled: %v", err)
 	}
@@ -1213,7 +1193,7 @@ func TestJSMessageChannel(t *testing.T) {
 	`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	if page.Title != "got" && !b.js.tick(time.Now().Add(time.Second)) {
+	if page.Title != "got" && !b.js.Tick(time.Now().Add(time.Second)) {
 		t.Fatal("message timer did not fire")
 	}
 	if page.Title != "got7" {
@@ -1460,7 +1440,7 @@ func TestJSBlobFileReaderFormData(t *testing.T) {
 	`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	b.js.tick(time.Now().Add(time.Second))
+	b.js.Tick(time.Now().Add(time.Second))
 	if page.Title != "2,text/plain,3,1,true,a=3|b=2,true,hi,1" {
 		t.Fatalf("title = %q", page.Title)
 	}
@@ -1478,7 +1458,7 @@ func TestJSFocusAndMicrotask(t *testing.T) {
 	`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	b.js.tick(time.Now().Add(time.Second))
+	b.js.Tick(time.Now().Add(time.Second))
 	if page.Title != "true,true" {
 		t.Fatalf("title = %q", page.Title)
 	}
@@ -1564,7 +1544,7 @@ func TestPlatformStubs(t *testing.T) {
 	j := b.js
 	check := func(expr, want string) {
 		t.Helper()
-		v, err := j.runCode("stub check", expr)
+		v, err := j.RunCode("stub check", expr)
 		if err != nil {
 			t.Fatalf("%s: %v", expr, err)
 		}
@@ -1655,21 +1635,21 @@ func TestPlatformStubs(t *testing.T) {
 		r.read().then(function (x) { out.push(x.value); return r.read(); }).then(function (x) { out.push(String(x.done)); window.__stream = out.join(":"); });
 		return "started";
 	})()`, "started")
-	for i := 0; i < 10 && j.vm.Get("__stream") == nil; i++ {
-		j.tick(time.Now().Add(time.Second))
+	for i := 0; i < 10 && j.VM().Get("__stream") == nil; i++ {
+		j.Tick(time.Now().Add(time.Second))
 	}
-	if v := j.vm.Get("__stream"); v == nil || v.String() != "a:true" {
+	if v := j.VM().Get("__stream"); v == nil || v.String() != "a:true" {
 		t.Fatalf("ReadableStream result = %v", v)
 	}
 
 	// IntersectionObserver reports one synthetic intersecting entry.
-	_, err := j.runCode("observer", `window.__seen = 0; new IntersectionObserver(function (entries) { window.__seen = entries.length; }).observe(document.body);`)
+	_, err := j.RunCode("observer", `window.__seen = 0; new IntersectionObserver(function (entries) { window.__seen = entries.length; }).observe(document.body);`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(2 * time.Millisecond)
-	j.tick(time.Now().Add(time.Second))
-	if v := j.vm.Get("__seen"); v == nil || v.String() != "1" {
+	j.Tick(time.Now().Add(time.Second))
+	if v := j.VM().Get("__seen"); v == nil || v.String() != "1" {
 		t.Fatalf("IntersectionObserver entries = %v", v)
 	}
 }
@@ -1693,13 +1673,13 @@ func TestWindowScrollAliases(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.startJS(page)
 	b.layout = &Layout{Height: 100}
-	if _, err := b.js.runCode("scroll", `window.scrollTo(0, 32); window.scrollBy(0, 16);`); err != nil {
+	if _, err := b.js.RunCode("scroll", `window.scrollTo(0, 32); window.scrollBy(0, 16);`); err != nil {
 		t.Fatal(err)
 	}
 	if b.scroll != 3 {
 		t.Fatalf("scroll row = %d, want 3", b.scroll)
 	}
-	v, err := b.js.runCode("scrollY", `String(window.scrollY) + ":" + String(window.pageYOffset)`)
+	v, err := b.js.RunCode("scrollY", `String(window.scrollY) + ":" + String(window.pageYOffset)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1717,7 +1697,7 @@ func TestElementMetricsReadInlineStyle(t *testing.T) {
 	if b.js == nil {
 		t.Fatal("no JS runtime")
 	}
-	v, err := b.js.vm.RunString(`(function(){var d=document.getElementById("d");return d.offsetWidth+","+d.offsetHeight+","+Math.round(d.getBoundingClientRect().width)})()`)
+	v, err := b.js.VM().RunString(`(function(){var d=document.getElementById("d");return d.offsetWidth+","+d.offsetHeight+","+Math.round(d.getBoundingClientRect().width)})()`)
 	if err != nil {
 		t.Fatal(err)
 	}

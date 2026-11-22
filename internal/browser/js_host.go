@@ -121,3 +121,23 @@ func (h browserJSHost) IsJavaScriptMIME(contentType string) bool {
 func (h browserJSHost) MIMEEssence(contentType string) string {
 	return mimeEssence(contentType)
 }
+
+func (h browserJSHost) CheckRequest(ctx context.Context, u *url.URL) error {
+	meta := requestMetaFrom(ctx)
+	if meta.blockLocal && isLocalURL(u) {
+		return errLocalNetworkBlocked
+	}
+	if meta.pageSecure && u.Scheme == "http" {
+		return errMixedContentBlocked
+	}
+	return nil
+}
+func (h browserJSHost) MapRequestError(err error) error {
+	if isLocalNetworkError(err) {
+		return errLocalNetworkBlocked
+	}
+	if isMixedContentError(err) {
+		return errMixedContentBlocked
+	}
+	return err
+}

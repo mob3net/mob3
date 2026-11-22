@@ -79,10 +79,10 @@ func pageWeight(page *Page, js *jsRuntime, body []byte, readerRoot *Node) int64 
 		w += domWeight(readerRoot)
 	}
 	if js != nil {
-		w += jsRuntimeWeight + int64(len(js.nodes))*jsNodeWeight
-		w += int64(len(js.templates)) * nodeWeightBase
-		w += int64(len(js.datasetObjs)) * jsNodeWeight
-		w += int64(js.modules.sourceBytes())
+		w += jsRuntimeWeight + int64(js.NodeCount())*jsNodeWeight
+		w += int64(js.TemplateCount()) * nodeWeightBase
+		w += int64(js.DatasetCount()) * jsNodeWeight
+		w += int64(js.ModuleSourceBytes())
 	}
 	return w
 }
@@ -226,9 +226,9 @@ func (b *Browser) suspendCurrentPage() {
 	cached := b.cacheCurrentPage()
 	if b.js != nil {
 		if cached {
-			b.js.freeze()
+			b.js.Freeze()
 		} else {
-			b.js.stop()
+			b.js.Stop()
 		}
 		b.js = nil
 	}
@@ -353,7 +353,7 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 	b.resetConsole()
 	if c.js != nil {
 		b.js = c.js
-		c.js.resume()
+		c.js.Resume()
 	}
 	b.readerRoot = nil
 	b.readerSavedScroll = 0
@@ -424,7 +424,7 @@ func (b *Browser) replaceHistoryEntry(u string, scroll int) {
 	e := &b.history[b.histIdx]
 	if e.URL != u {
 		if e.cached != nil && e.cached.js != nil {
-			e.cached.js.stop()
+			e.cached.js.Stop()
 		}
 		e.cached = nil
 	}
@@ -515,7 +515,7 @@ func (b *Browser) dropCachedPages() {
 	for i := range b.history {
 		if c := b.history[i].cached; c != nil {
 			if c.js != nil {
-				c.js.stop()
+				c.js.Stop()
 			}
 			b.history[i].cached = nil
 		}

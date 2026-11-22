@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"strconv"
@@ -317,7 +317,7 @@ const eventConstructorScript = `
 // them for document.createEvent.
 func (j *jsRuntime) installEventConstructors() {
 	if _, err := j.vm.RunScript("event constructors", eventConstructorScript); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 		return
 	}
 	j.eventCtors = make(map[string]*sobek.Object)
@@ -577,7 +577,7 @@ func (j *jsRuntime) installElementConstructors() {
 })();
 `
 	if _, err := j.vm.RunScript("element constructors", script); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 		return
 	}
 	j.elementProtos = make(map[string]*sobek.Object)

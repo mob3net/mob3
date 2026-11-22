@@ -1,8 +1,6 @@
-package browser
+package engine
 
 import (
-	"browser/internal/engine"
-	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -88,7 +86,7 @@ func (m *jsModuleLoader) install() {
 		if op != sobek.PromiseRejectionReject {
 			return
 		}
-		m.j.host.LogJS("warn", "Unhandled promise rejection: "+m.j.errorText(p.Result()))
+		m.j.host.LogJS("warn", "Unhandled promise rejection: "+m.j.ErrorText(p.Result()))
 	})
 }
 
@@ -101,7 +99,7 @@ func (m *jsModuleLoader) baseString() string {
 
 // jsImportTask is one dynamic import() loaded off the main goroutine. The
 // event loop completes it on the runtime's own goroutine.
-type jsImportTask = engine.ImportTask
+type jsImportTask = ImportTask
 
 // importModule resolves and loads a dynamic import() target, then hands the
 // record back to the engine. Interactive browsing loads the graph in the
@@ -158,18 +156,16 @@ func (m *jsModuleLoader) loadImportAsync(ref interface{}, spec string, pcap inte
 // finishJSImport completes a background dynamic import on the event loop. The
 // module graph was parsed off-thread, but linking and evaluation run here so
 // the runtime is only ever touched from its own goroutine.
-func (b *Browser) finishJSImport(task jsImportTask) {
-	j := b.js
+func (j *jsRuntime) FinishImport(task ImportTask) {
 	if j == nil || j.stopped || task.Owner != j || j.stopScripts.Load() {
 		return
 	}
 	if err := j.guard(func() error {
 		j.vm.FinishLoadingImportModule(task.Ref, j.vm.ToValue(task.Spec), task.Parent, task.Record, task.Err)
-		// The continuation jobs were queued outside a script run; drain them.
 		_, err := j.vm.RunString("")
 		return err
 	}); err != nil {
-		j.reportError(err)
+		j.ReportError(err)
 	}
 }
 
@@ -454,12 +450,7 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 	if m.j.host == nil {
 		return "", errors.New("no host for module fetch")
 	}
-	ctx := withRequestKind(context.Background(), "js")
-	pageURL := m.base
-	if m.j.page != nil && m.j.page.URL != nil {
-		pageURL = m.j.page.URL
-	}
-	ctx = withRequestPage(ctx, pageURL, m.j.page != nil && m.j.page.Local)
+	ctx := m.j.host.RequestContext("js", m.base, m.j.page != nil && m.j.page.Local, nil)
 	data, ctype, _, status, err := m.j.host.FetchResource(ctx, u)
 	if err != nil {
 		return "", err
@@ -467,10 +458,10 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 	if status < 200 || status >= 400 {
 		return "", fmt.Errorf("module %s: HTTP %d", u.Redacted(), status)
 	}
-	if !isJavaScriptMIME(ctype) {
-		return "", fmt.Errorf("module %s is not JavaScript (%s)", u.Redacted(), mimeEssence(ctype))
+	if !m.j.host.IsJavaScriptMIME(ctype) {
+		return "", fmt.Errorf("module %s is not JavaScript (%s)", u.Redacted(), m.j.host.MIMEEssence(ctype))
 	}
-	return decodeBody(data, ctype), nil
+	return m.j.host.DecodeBody(data, ctype), nil
 }
 
 // evaluate links and evaluates a module graph under the usual script guard.

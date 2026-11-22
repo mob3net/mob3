@@ -134,19 +134,19 @@ func TestJSMemorySamplerLifecycle(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
-	if j.memStop == nil {
+	if !j.MemSamplerActive() {
 		t.Fatal("memory sampler did not start")
 	}
-	j.setMemLimit(0)
-	if j.memStop != nil {
+	j.SetMemLimit(0)
+	if j.MemSamplerActive() {
 		t.Fatal("memory sampler did not stop")
 	}
-	j.setMemLimit(1 << 20)
-	if j.memStop == nil {
+	j.SetMemLimit(1 << 20)
+	if !j.MemSamplerActive() {
 		t.Fatal("memory sampler did not restart")
 	}
-	j.stop()
-	if j.memStop != nil {
+	j.Stop()
+	if j.MemSamplerActive() {
 		t.Fatal("memory sampler survived runtime stop")
 	}
 }
@@ -155,12 +155,12 @@ func TestJSMemorySamplerInterrupts(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
-	defer j.stop()
-	j.memBase = 0
-	j.memLimit.Store(1)
-	j.timeout = 10 * time.Second
+	defer j.Stop()
+	j.SetMemBase(0)
+	j.SetMemLimit(1)
+	j.SetTimeout(10 * time.Second)
 	start := time.Now()
-	_, err := j.runCode("loop", "while (true) {}")
+	_, err := j.RunCode("loop", "while (true) {}")
 	if err == nil || !strings.Contains(err.Error(), "memory limit") {
 		t.Fatalf("memory watchdog error = %v, want a memory limit", err)
 	}

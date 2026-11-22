@@ -337,7 +337,7 @@ func Run(args []string) int {
 			}
 		case task := <-b.importCh:
 			b.finishJSImport(task)
-			if b.js != nil && b.js.consumeDirty() {
+			if b.js != nil && b.js.ConsumeDirty() {
 				b.rebuild()
 			}
 			b.consumePendingJS()
