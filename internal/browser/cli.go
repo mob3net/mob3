@@ -339,19 +339,13 @@ func Run(args []string) int {
 			if !ok {
 				return 0
 			}
-			switch v := ev.Body.(type) {
-			case protocol.Quit:
+			quit, err := applySessionEvent(presenter, ev, &scroll, &native)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "mob3: present: %v\n", err)
+				return 1
+			}
+			if quit {
 				return 0
-			case protocol.State:
-				scroll = v.Scroll
-				native = v.Flags&protocol.StateNativeImages != 0
-			case protocol.Frame:
-				if !native {
-					if err := presenter.Present(v, scroll, native); err != nil {
-						fmt.Fprintf(os.Stderr, "mob3: present: %v\n", err)
-						return 1
-					}
-				}
 			}
 		case <-quitSig:
 			return 0
@@ -480,3 +474,20 @@ func dumpPage(loader *Loader, target string, width, viewportH int, noColor, forc
 // build time with -ldflags "-X browser/internal/browser.Version=v1.2.3" and
 // remains "dev" for local builds that do not pass a version.
 var Version = "dev"
+
+// applySessionEvent updates the front-end presentation state and draws frames.
+// It reports whether the session asked the application to exit.
+func applySessionEvent(presenter *frontend.Presenter, ev protocol.Event, scroll *int, native *bool) (bool, error) {
+	switch v := ev.Body.(type) {
+	case protocol.Quit:
+		return true, nil
+	case protocol.Crash:
+		fmt.Fprintf(os.Stderr, "mob3: page engine: %s\n", stripTerminalControls(v.Message))
+	case protocol.State:
+		*scroll = v.Scroll
+		*native = v.Flags&protocol.StateNativeImages != 0
+	case protocol.Frame:
+		return false, presenter.Present(v, *scroll, *native)
+	}
+	return false, nil
+}

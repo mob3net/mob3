@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"image"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"browser/internal/frontend"
 	"browser/internal/protocol"
 )
 
@@ -272,5 +274,35 @@ func TestSessionFrameCarriesNativePlacements(t *testing.T) {
 	}
 	if &capture.frame.Placements[0].Data[0] != &first[0] {
 		t.Fatal("placement bytes were re-encoded instead of reusing the cache")
+	}
+}
+
+func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
+	var out bytes.Buffer
+	p := frontend.NewPresenter(&out, true)
+	p.SetGraphics(frontend.GraphicsKitty, 8, 16)
+	scroll, native := 0, false
+	if _, err := applySessionEvent(p, protocol.Event{Body: protocol.State{Flags: protocol.StateNativeImages}}, &scroll, &native); err != nil {
+		t.Fatal(err)
+	}
+	data, err := encodePNG(image.NewNRGBA(image.Rect(0, 0, 16, 16)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := protocol.Frame{W: 8, H: 3, Cells: make([]protocol.Cell, 24), Placements: []protocol.Placement{{
+		Key: "1", W: 2, H: 1, TotalRows: 1, Format: protocol.PlacementPNG, Data: data,
+	}}}
+	for i := range f.Cells {
+		f.Cells[i].R = 'x'
+	}
+	if _, err := applySessionEvent(p, protocol.Event{Body: f}, &scroll, &native); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "x") {
+		t.Fatal("native frame text was not presented")
+	}
+	if !strings.Contains(got, "\x1b_G") {
+		t.Fatal("native placement was not presented")
 	}
 }
