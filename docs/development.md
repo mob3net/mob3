@@ -12,6 +12,7 @@
 ```sh
 make
 make test
+make fuzz
 go vet ./...
 gofmt -w <files>
 ```

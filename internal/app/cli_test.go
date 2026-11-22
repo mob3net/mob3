@@ -37,9 +37,9 @@ func runCaptured(t *testing.T, args []string) (int, []byte) {
 }
 
 func TestRunVersion(t *testing.T) {
-	old := browser.Version
-	browser.Version = "v9.9.9"
-	defer func() { browser.Version = old }()
+	old := Version
+	Version = "v9.9.9"
+	defer func() { Version = old }()
 
 	code, out := runCaptured(t, []string{"-version"})
 	if code != 0 {
@@ -51,9 +51,9 @@ func TestRunVersion(t *testing.T) {
 }
 
 func TestRunHelpShowsVersionLicenseCopyrightAndGraphicsAlias(t *testing.T) {
-	old := browser.Version
-	browser.Version = "v9.9.9"
-	defer func() { browser.Version = old }()
+	old := Version
+	Version = "v9.9.9"
+	defer func() { Version = old }()
 
 	oldErr := os.Stderr
 	r, w, err := os.Pipe()

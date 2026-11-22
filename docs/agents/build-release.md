@@ -20,7 +20,8 @@ agreement, the non-negotiable constraints and the change protocol.
   a `.dockerignore`. `make docker` builds `mob3`, and the image includes
   `LICENSE` and `THIRD_PARTY_NOTICES` under `/usr/share/doc/mob3`.
 - `make test` = `go test -mod=vendor ./...`; tests must not require network
-  access.
+  access. `make fuzz` runs both codec decoders for 60 s each (override with
+  `FUZZTIME`).
 - Binaries and test/coverage output are covered by `.gitignore`; keep it in sync
   when the layout or build output changes.
 - `make hooks` points `core.hooksPath` at `.githooks/` so the size-cap
@@ -37,8 +38,8 @@ agreement, the non-negotiable constraints and the change protocol.
 - Keep the binary out of layout decisions: it may be committed/present locally,
   but `make clean` removes it.
 - The Git tag (`vX.Y.Z`) is the release version source of truth.
-  `internal/browser.Version` defaults to `dev` and is set at build time with
-  `-ldflags "-X browser/internal/browser.Version=<tag>"`; `mob3 -version` prints
+  `internal/app.Version` defaults to `dev` and is set at build time with
+  `-ldflags "-X browser/internal/app.Version=<tag>"`; `mob3 -version` prints
   it, and `mob3 -h` prints usage plus the short build version, the
   `AGPL-3.0-only` license and the copyright notice. `-g` is an alias for
   `-graphics`; `about:config` shows the canonical `-graphics` name only.
@@ -47,6 +48,8 @@ agreement, the non-negotiable constraints and the change protocol.
   `docker build --build-arg VERSION=vX.Y.Z`.
 - `.github/workflows/ci.yml` runs gofmt, `go vet` and tests on pushes to `main`
   and on open, synchronize, reopen and edit pull-request events.
+  `.github/workflows/fuzz.yml` runs both codec decoders for 60 s each nightly
+  and on manual dispatch.
   `.github/workflows/pr.yml` runs only for pull requests and requires the exact
   statement `I have read and agree to the MOB³ Contributor License Agreement.`
   in the PR description.

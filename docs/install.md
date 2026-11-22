@@ -102,7 +102,7 @@ make VERSION=vX.Y.Z
 ./bin/mob3 -version
 ```
 
-`internal/browser.Version` defaults to `dev`; release builds inject the Git tag
+`internal/app.Version` defaults to `dev`; release builds inject the Git tag
 through linker flags. The built binary is ignored by Git and `make clean`
 removes it.
 

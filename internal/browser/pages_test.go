@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"net/url"
 	"strings"
 	"testing"
@@ -16,11 +17,11 @@ func TestBuiltinPagesShareShell(t *testing.T) {
 		"history":        historyPageHTML([]string{"https://example.com/"}, 0),
 		"blocked":        blockedPageHTML("https://example.com/", "anti-bot challenge", 403),
 		"config":         configPageHTML(nil, false, "", "", 80, 24, 8, 16),
-		"cannot display": cannotDisplayPageHTML("image/png", u),
-		"load error":     loadErrorPageHTML("dial tcp: connection refused"),
+		"cannot display": engine.CannotDisplayPageHTML("image/png", u),
+		"load error":     engine.LoadErrorPageHTML("dial tcp: connection refused"),
 	}
 	for name, doc := range pages {
-		if !strings.Contains(doc, appPageCSS) {
+		if !strings.Contains(doc, engine.AppPageCSS) {
 			t.Errorf("%s does not include the shared page style", name)
 		}
 		if !strings.HasPrefix(doc, "<!DOCTYPE html>") || !strings.HasSuffix(doc, "</body></html>") {
@@ -38,10 +39,10 @@ func TestBuiltinPagesShareShell(t *testing.T) {
 }
 
 func TestAppPageHTML(t *testing.T) {
-	doc := appPageHTML("T & X", ".x { color: red; }\n", "<h1>Body</h1>")
+	doc := engine.AppPageHTML("T & X", ".x { color: red; }\n", "<h1>Body</h1>")
 	for _, want := range []string{
 		"<title>T &amp; X</title>",
-		appPageCSS,
+		engine.AppPageCSS,
 		".x { color: red; }",
 		"<h1>Body</h1>",
 	} {
@@ -54,9 +55,9 @@ func TestAppPageHTML(t *testing.T) {
 // TestLoadErrorPageUsesShellStyles checks the load-error placeholder attaches
 // the generated page's stylesheet, since it is built outside the loader.
 func TestLoadErrorPageUsesShellStyles(t *testing.T) {
-	root := ParseHTML(loadErrorPageHTML("dial tcp: connection refused"))
+	root := ParseHTML(engine.LoadErrorPageHTML("dial tcp: connection refused"))
 	page := &Page{Root: root}
-	applyPageStyles(root, page)
+	engine.ApplyPageStyles(root, page)
 	if len(page.Author) == 0 {
 		t.Fatal("load error page stylesheet was not applied")
 	}

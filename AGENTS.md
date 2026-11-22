@@ -245,6 +245,7 @@ adding a file or moving a subsystem.
 ```sh
 make                                                  # static binary at bin/mob3
 make test                                             # go test -mod=vendor ./...
+make fuzz                                             # 60 s per codec decoder
 go vet -mod=vendor ./...
 gofmt -w <touched files>                              # never vendor/
 make vendor                                           # after go.mod/go.sum changes

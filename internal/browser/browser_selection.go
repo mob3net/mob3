@@ -329,7 +329,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	}
 	header := fmt.Sprintf(
 		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d scroll=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
-		url, Version, b.width, b.height, width, b.viewportHeight(), docRows,
+		url, buildVersion, b.width, b.height, width, b.viewportHeight(), docRows,
 		b.scroll, zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
 		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.cellW, b.cellH,
 		ly.Truncated, copyTruncated, pageLines)

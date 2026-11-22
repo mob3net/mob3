@@ -96,8 +96,8 @@ func TestHelpPage(t *testing.T) {
 		t.Errorf("title = %q", p.Title)
 	}
 	text := p.Root.TextContent()
-	if !strings.Contains(text, "Version") || !strings.Contains(text, Version) {
-		t.Errorf("help page is missing Version %q: %q", Version, text[:minInt(len(text), 200)])
+	if !strings.Contains(text, "Version") || !strings.Contains(text, buildVersion) {
+		t.Errorf("help page is missing Version %q: %q", buildVersion, text[:minInt(len(text), 200)])
 	}
 	for _, want := range []string{"JavaScript console", "open a URL", "Mouse", "Try it", "show an alert", "Download a sample file", "File upload", "not supported", "Checkbox", "Radio A", "Select", "Multi-select", "Three", "Date", "Time", "Range", "Color", "Required", "Pattern", "Read-only", "Disabled", "Textarea", "Submit demo", "Command line", "-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks", "-home", "-text-scale", "-color", "-no-color", "-ua", "-search", "-version", "-help", "alias for -graphics", "session history"} {
 		if !strings.Contains(text, want) {

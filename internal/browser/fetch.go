@@ -296,7 +296,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 				downloadName = unescaped
 			}
 		}
-		text = cannotDisplayPageHTML(mediaType, finalURL)
+		text = engine.CannotDisplayPageHTML(mediaType, finalURL)
 	}
 	page := &Page{
 		URL: finalURL, Base: finalURL, RawHTML: rawHTML, Status: status,
@@ -1101,7 +1101,7 @@ func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, 
 // session-side call sites and tests stable during the migration.
 const startPageHTML = engine.StartPageHTML
 
-func helpPageHTML() string { return engine.HelpPageHTML(Version) }
+func helpPageHTML() string { return engine.HelpPageHTML(buildVersion) }
 
 func historyPageHTML(urls []string, current int) string {
 	return engine.HistoryPageHTML(urls, current)

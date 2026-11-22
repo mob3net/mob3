@@ -14,8 +14,14 @@ import (
 	"browser/internal/browser"
 )
 
+// Version is the MOB³ release version reported by -version. It is set at
+// build time with -ldflags "-X browser/internal/app.Version=v1.2.3" and
+// remains "dev" for local builds that do not pass a version.
+var Version = "dev"
+
 // Run executes the MOB³ command line and returns a process exit code.
 func Run(args []string) int {
+	browser.SetBuildVersion(Version)
 	fs := flag.NewFlagSet("mob3", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dump := fs.Bool("dump", false, "render the page to stdout and exit")
@@ -44,7 +50,7 @@ func Run(args []string) int {
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url]\n\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", browser.Version)
+		fmt.Fprintf(os.Stderr, "MOB³ %s — A small terminal browser with its own HTML/CSS engine.\n", Version)
 		fmt.Fprintf(os.Stderr, "License: AGPL-3.0-only\n")
 		fmt.Fprintf(os.Stderr, "Copyright (c) 2026 Milos Stojanovic\n\n")
 		fs.PrintDefaults()
@@ -57,7 +63,7 @@ func Run(args []string) int {
 		return 2
 	}
 	if *showVersion {
-		fmt.Println(browser.Version)
+		fmt.Println(Version)
 		return 0
 	}
 	if *heightFlag < 0 {

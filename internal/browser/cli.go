@@ -153,7 +153,7 @@ func Execute(o RunOptions) int {
 		"-no-color":      onOff(o.NoColor),
 		"-certs":         loader.certSource,
 		"-mcp":           onOff(o.MCP),
-		"-version":       Version,
+		"-version":       buildVersion,
 	}
 	b.color = !o.NoColor
 	b.noJS = o.NoJS
@@ -263,7 +263,15 @@ func Execute(o RunOptions) int {
 	return 0
 }
 
-// Version is the MOB³ release version reported by -version. It is set at
-// build time with -ldflags "-X browser/internal/browser.Version=v1.2.3" and
-// remains "dev" for local builds that do not pass a version.
-var Version = "dev"
+// buildVersion is the app's build version, set at startup with
+// SetBuildVersion. It is used by session-generated pages, the config view, the
+// copy header and MCP metadata so they agree with -version.
+var buildVersion = "dev"
+
+// SetBuildVersion supplies the build version used by session-generated pages.
+func SetBuildVersion(v string) {
+	if v == "" {
+		v = "dev"
+	}
+	buildVersion = v
+}

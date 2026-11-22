@@ -633,10 +633,10 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.status = "Error: " + res.err.Error()
 		b.finishProgress()
 		if b.page == nil {
-			doc := loadErrorPageHTML(res.err.Error())
+			doc := engine.LoadErrorPageHTML(res.err.Error())
 			root := ParseHTML(doc)
 			page := &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
-			applyPageStyles(root, page)
+			engine.ApplyPageStyles(root, page)
 			b.page = page
 			b.url = res.u
 			b.rebuild()

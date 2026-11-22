@@ -18,7 +18,7 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOARM="${TARGETVARIANT#v}" \
     go build -trimpath -buildvcs=false \
-    -ldflags="-s -w -X browser/internal/browser.Version=${VERSION}" \
+    -ldflags="-s -w -X browser/internal/app.Version=${VERSION}" \
     -o /out/mob3 ./cmd/mob3
 
 FROM alpine:3

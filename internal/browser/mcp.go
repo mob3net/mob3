@@ -130,7 +130,7 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 		},
 		"serverInfo": map[string]any{
 			"name":    "mob3",
-			"version": Version,
+			"version": buildVersion,
 		},
 		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
 			"links as [n], and form-control positions; click accepts link, text, selector, x/y. " +

@@ -1,0 +1,32 @@
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: "-mod=vendor"
+  GOPROXY: "off"
+
+jobs:
+  codec:
+    name: Codec decoders
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Fuzz command decoder
+        run: go test -fuzz=FuzzDecodeCommand -fuzztime=60s ./internal/protocol
+
+      - name: Fuzz event decoder
+        run: go test -fuzz=FuzzDecodeEvent -fuzztime=60s ./internal/protocol

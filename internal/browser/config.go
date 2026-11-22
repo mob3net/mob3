@@ -95,7 +95,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-search", Value: search, Note: "empty disables search", Editable: true},
 		{Flag: "-certs", Value: b.certSourceLabel(), Note: "system or embedded", Editable: true},
 		{Flag: "-mcp", Value: get("-mcp", "off"), Note: "startup"},
-		{Flag: "-version", Value: get("-version", Version), Note: "read only"},
+		{Flag: "-version", Value: get("-version", buildVersion), Note: "read only"},
 	}
 }
 
@@ -233,7 +233,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 	doc := configPageHTML(b.configItems(), updated, b.configNotice, token, b.width, b.viewportHeight(), b.cellW, b.cellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
-	applyPageStyles(root, page)
+	engine.ApplyPageStyles(root, page)
 	return page
 }
 

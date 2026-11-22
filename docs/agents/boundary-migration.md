@@ -95,6 +95,7 @@ network destination.
 | D56 | 2026-11-22 | Move start/help/history/blocked and config page rendering to the engine, and move the one-shot config form token into `internal/host.ConfigToken`. The session still collects history/settings data and applies submitted values. | This completes the about-page ownership part of D16: templates live with the engine, and the token is minted/validated on the trusted side. The remaining session code is data collection and applying settings, which belongs with the app split. |
 | D57 | 2026-11-22 | Move terminal raw mode, size/cell-pixel probes, key/mouse decoding, capability detection and resize/quit signal wiring into `internal/frontend`. Mouse event/token types are front-end-owned with browser aliases. Clipboard OSC 52 encoding moved to the front end; the session emits `Clipboard` events when a presentation session exists and keeps the writer fallback for tests/automation. The live-loop part is superseded by D58. | These are terminal concerns, not page content. The interactive loop moved to `frontend.SessionLoop` in D58; the terminal API stays front-end-owned. |
 | D58 | 2026-11-22 | Create `internal/app` and move flag parsing, validation and dispatch there. `browser.Execute(RunOptions)` keeps session setup until the session type moves. Move the live session event loop to `frontend.SessionLoop`; crash dedup, chrome state and clipboard handling now live there. | This gives the app a real wiring layer and removes the event loop from the browser CLI. The remaining app step is moving `Browser`/session construction and the session type itself. |
+| D59 | 2026-11-22 | Defer the transport-level restart hook to the child-process work. `protocol` already carries the stream transport; a restart hook has no in-process caller and cannot be validated until the engine child exists. | The hook is a lifecycle concern of the later process split, not part of B's boundary. Phase 5 closes on semantic chrome ownership. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -142,7 +143,7 @@ seam; the note names which part goes where.
 
 | Current file(s) | Final side | Remaining work |
 | --- | --- | --- |
-| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup and `Version` until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
+| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; `app.Version` is the build value until the split; terminal I/O and the live loop are already `frontend.SessionLoop`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Chrome/overlay/console/find/menu/dialog drawing, prompts and shell keys are frontend. Page hit testing, field editing, search results and hint computation consume engine state. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
@@ -154,7 +155,7 @@ seam; the note names which part goes where.
 | `automation.go` | engine | Headless automation is the engine-side implementation. |
 | `mcp.go` | app/frontend | MCP JSON-RPC client; consumes the transport, not engine internals. |
 | `config.go` | app + engine | Host token, engine form markup and the app/session apply path. |
-| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frontend_bridge.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go`, `pages.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps only inline-SVG loading until that moves; `pages.go` is a wrapper. |
+| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frontend_bridge.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps only inline-SVG loading until that moves. |
 | `internal/engine/*`, `internal/host/*`, `internal/frontend/*`, `internal/protocol/*`, `dark.go`, `js*.go` | done | Already on their final side; responsibilities are in [architecture.md](architecture.md#current-layout-during-migration). |
 
 ## 4. Phases
@@ -169,7 +170,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, content-rect values, shell-loop split and chrome display-list layer exist; chrome, menus, prompts, dialogs and navigation state are still composed and handled in the browser/session side |
 | 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session split and `Browser` → `Session` rename remain |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR, CORS, config token and about-page rendering are split; engine cannot open sockets or parse cookies. Loader orchestration moves with 3c. |
-| 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership and the restart hook remain |
+| 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; semantic chrome ownership remains. The restart hook is deferred to the child-process work (D59). |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
 
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
@@ -352,8 +353,8 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 - [x] Frame coalescing, backpressure and hostile-frame bounds: a bounded
       outbox coalesces frames/states, preserves one-shot order, and invalid
       frames are reported plus repaired or dropped.
-- [ ] Transport-level restart hook (unused in-process, used by the later
-      child).
+- [~] Transport-level restart hook deferred to the child-process work (D59);
+      there is no in-process caller to validate it.
 - [x] Keep a stream/socket transport behind the same ports for the later child
       process: `ServeStream`/`DialStream` share the codec, validation and
       outbox, with direct abort on the serving reader.
@@ -361,7 +362,9 @@ dialogs and navigation state are still session-side. `protocol.Dialog` and
 ### Phase 6 — Verification and cleanup
 
 - [x] Fuzz both codec decoders for 60 s manually with no findings.
-- [ ] Wire that fuzz run into CI or a nightly job.
+- [x] Wire that fuzz run into CI or a nightly job:
+      `.github/workflows/fuzz.yml` runs both decoders nightly and on manual
+      dispatch; `make fuzz` runs them locally.
 - [ ] Consolidate benchmarks against the baseline and record the final deltas
       here; per-phase numbers exist but the Phase 6 summary is missing.
 - [x] `-race` on engine/frontend (the full internal suite is green).
@@ -416,8 +419,8 @@ trusted-shell split, then Phase 6. Dependency order:
 - [ ] Move whole-app tests to seam tests in `app`; keep engine, layout and PDF
       fixtures with their packages and update the documented paths.
 - [ ] Remove the browser-side shims, adapters and dead aliases.
-- [ ] Wire the 60 s codec fuzz into CI or nightly; record the Phase 6 benchmark
-      deltas.
+- [ ] Record the Phase 6 benchmark deltas. The 60 s codec fuzz already runs in
+      `.github/workflows/fuzz.yml` and through `make fuzz`.
 - [ ] Update `AGENTS.md`, `architecture.md` and, only if user-visible behavior
       changed, `README.md` and `docs/agents/limitations.md`.
 - [ ] Delete this tracker and its links.
@@ -873,7 +876,8 @@ go vet -mod=vendor ./...
 gofmt -l <touched files>
 git diff --check
 go test -race ./internal/...
-go test -fuzz=FuzzProtocolDecode -fuzztime=60s ./internal/protocol
+go test -fuzz=FuzzDecodeCommand -fuzztime=60s ./internal/protocol
+go test -fuzz=FuzzDecodeEvent -fuzztime=60s ./internal/protocol
 go test ./internal/browser -run TestLayoutFixtures -update   # only when intentional
 ```
 
@@ -893,7 +897,9 @@ work back.
       `docs/agents/architecture.md`; no rule exists only here.
 - [ ] Remove the routing row in `AGENTS.md` §1.
 - [ ] Remove the link in `architecture.md`.
-- [ ] 60 s fuzz runs in CI or nightly; final benchmark deltas recorded.
+- [x] 60 s codec fuzz runs in CI/nightly (`.github/workflows/fuzz.yml`,
+      `make fuzz`).
+- [ ] Final benchmark deltas recorded after the shell split.
 - [ ] Delete this file with `git rm`.
 - [ ] One-line commit message records the completion.
 
@@ -943,4 +949,5 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 5j–6b | Host broker closed: JS `fetch`/XHR and `document.cookie` use `host.JSFetch` and brokered cookie values; built-in/about pages render in the engine; the config token moved to `host.ConfigToken`; Phase 4 closed. | `go test ./...`, `go vet`, full `-race`, host/JS/page tests, dump/PNG hashes | Terminal front end, then app |
 | 2026-11-22 | 6c | Terminal raw mode, capability detection, key/mouse decoding, resize/quit signals and OSC 52 clipboard moved to `internal/frontend`; mouse types aliased; `Clipboard` events added. | `go test ./...`, `go vet`, full `-race`, frontend terminal tests, dump/PNG hashes | Create app and move the loop |
 | 2026-11-22 | 6d | Created `internal/app` for flags/validation/dispatch; `cmd/mob3` calls `app.Run`; moved the live session event loop and crash/chrome/clipboard handling to `frontend.SessionLoop`; browser `Execute(RunOptions)` retains session setup. CLI tests moved to app. | `go test ./...`, `go vet`, full `-race`, app/frontend tests, version/help smoke, dump/PNG hashes | Move session construction/type, then semantic chrome ownership |
-| 2026-11-22 | docs | Corrected and consolidated this tracker: status, phase checklists, file ownership, remaining work, protocol and risk sections now match the landed app/frontend split. No code change. | `go test ./...`, `go vet`, `gofmt`, `git diff --check` | Shell state/chrome contract, then the session split |
+| 2026-11-22 | docs | Corrected and consolidated this tracker: status, phase checklists, file ownership, remaining work, protocol and risk sections now match the landed app/frontend split. | `go test ./...`, `go vet`, `gofmt`, `git diff --check` | Shell state/chrome contract, then the session split |
+| 2026-11-22 | 6e | Quick closures: added the nightly/manual codec fuzz workflow and `make fuzz`; deferred the transport restart hook to the child-process work (D59); moved the build `Version` to `internal/app` and injected it into the session; removed the `pages.go` wrapper. | `go test ./...`, `go vet`, full `-race`, `make build`, `make fuzz` | Chrome-state trust contract and footer pilot |
