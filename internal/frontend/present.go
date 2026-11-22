@@ -120,18 +120,27 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		layout := LayoutChrome(p.state)
 		if len(layout.Header) == p.state.Width*p.state.HeaderRows &&
 			len(layout.Footer) == p.state.Width {
-			header := protocol.Frame{W: p.state.Width, H: p.state.HeaderRows, Cells: layout.Header}
-			footer := protocol.Frame{W: p.state.Width, H: 1, Cells: layout.Footer}
-			hline := EncodeFrame(header, p.color, !p.color)
-			fline := EncodeFrame(footer, p.color, !p.color)
-			if len(hline) == p.state.HeaderRows && len(fline) == 1 {
-				next := make([]string, 0, len(hline)+len(lines)+1)
-				next = append(next, hline...)
-				next = append(next, lines...)
-				next = append(next, fline...)
-				lines = next
-				headerRows = p.state.HeaderRows
-				composed = true
+			if p.state.Menu != protocol.MenuNone {
+				if full, ok := ComposeMenuFrame(p.state, f); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
+			} else {
+				header := protocol.Frame{W: p.state.Width, H: p.state.HeaderRows, Cells: layout.Header}
+				footer := protocol.Frame{W: p.state.Width, H: 1, Cells: layout.Footer}
+				hline := EncodeFrame(header, p.color, !p.color)
+				fline := EncodeFrame(footer, p.color, !p.color)
+				if len(hline) == p.state.HeaderRows && len(fline) == 1 {
+					next := make([]string, 0, len(hline)+len(lines)+1)
+					next = append(next, hline...)
+					next = append(next, lines...)
+					next = append(next, fline...)
+					lines = next
+					headerRows = p.state.HeaderRows
+					composed = true
+				}
 			}
 		}
 	}

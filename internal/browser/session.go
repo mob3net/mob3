@@ -259,12 +259,31 @@ func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 	case protocol.AppToggleFixed:
 		b.hideFixed = !b.hideFixed
 		b.rebuild()
+		if b.hideFixed {
+			b.status = "Fixed elements hidden"
+		} else {
+			b.status = "Fixed elements shown"
+		}
 	case protocol.AppToggleSticky:
 		b.noSticky = !b.noSticky
 		b.rebuild()
+		if b.noSticky {
+			b.status = "Sticky elements disabled"
+		} else {
+			b.status = "Sticky elements enabled"
+		}
 	case protocol.AppToggleBackgrounds:
 		b.hideBackgrounds = !b.hideBackgrounds
 		b.rebuild()
+		if b.hideBackgrounds {
+			b.status = "Background images hidden"
+		} else {
+			b.status = "Background images shown"
+		}
+	case protocol.AppZoomSet:
+		if a.Arg >= 25 && a.Arg <= 200 {
+			b.applyZoom(float64(a.Arg) / 100)
+		}
 	case protocol.AppZoomIn:
 		b.zoomBy(1)
 	case protocol.AppZoomOut:

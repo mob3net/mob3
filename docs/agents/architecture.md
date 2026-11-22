@@ -101,8 +101,9 @@ destination; the tracker lists what remains.
   placement, clipboard encoding, the live session loop
   (`frontend.SessionLoop`), normal header/footer composition, header/footer
   and scrollbar mouse input, base shell keys, local quit confirmation, the
-  URL/vim prompt and the page find bar. It does not yet own menus, dialogs, the
-  console (including its HTML find) or navigation state.
+  URL/vim prompt, the page find bar and the view/zoom windows. It does not yet
+  own the select menu, dialogs, the console (including its HTML find) or
+  navigation state.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -168,8 +169,9 @@ destination; the tracker lists what remains.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, page find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/session.go` | Live session loop: base shell keys, local quit, URL/vim prompt, page find, view/zoom windows, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
+| `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, plus header/footer hit regions. Overlays, console and the find bar still use the engine fallback. The scrollbar painter is in `present.go`. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |

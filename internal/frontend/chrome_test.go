@@ -78,7 +78,6 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 	}{
 		{"back", ChromeHitBack, protocol.App{Action: protocol.AppBack}},
 		{"reload", ChromeHitReload, protocol.App{Action: protocol.AppReload}},
-		{"zoom", ChromeHitZoom, protocol.App{Action: protocol.AppOpenZoom}},
 		{"graphics", ChromeHitGraphics, protocol.App{Action: protocol.AppToggleImages}},
 		{"console", ChromeHitConsole, protocol.App{Action: protocol.AppToggleConsole}},
 	}
@@ -228,6 +227,55 @@ func TestFindBarLayout(t *testing.T) {
 	for _, want := range []string{"Find:", "alpha", "1/2"} {
 		if !strings.Contains(footer.String(), want) {
 			t.Errorf("find bar %q does not contain %q", footer.String(), want)
+		}
+	}
+}
+
+func TestChromeZoomHitStartsMenu(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = chromeState()
+	var hit ChromeHit
+	for _, h := range LayoutChrome(loop.State.Page).Hits {
+		if h.Kind == ChromeHitZoom {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no zoom hit")
+	}
+	if !loop.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("zoom click not consumed")
+	}
+	if loop.menuKind != protocol.MenuZoom {
+		t.Fatalf("menu = %v", loop.menuKind)
+	}
+}
+
+func TestMenuLayoutAndDraw(t *testing.T) {
+	st := chromeState()
+	st.Menu = protocol.MenuView
+	st.MenuIndex = 0
+	st.ViewFlags = protocol.ViewFlagFixed | protocol.ViewFlagSticky
+	layout := LayoutMenu(st)
+	if len(layout.Rows) != 3 || layout.BoxW <= 0 {
+		t.Fatalf("layout = %+v", layout)
+	}
+	if layout.Rows[0].Marker != "☑ " || layout.Rows[2].Marker != "☐ " {
+		t.Fatalf("markers = %q %q", layout.Rows[0].Marker, layout.Rows[2].Marker)
+	}
+	c := newCanvas(st.Width, st.Height)
+	DrawMenu(c, st)
+	var text strings.Builder
+	for _, cell := range c.cells {
+		if cell.R != 0 {
+			text.WriteRune(cell.R)
+		}
+	}
+	for _, want := range []string{"View options", "Fixed elements", "Background images", "Space toggle"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("menu %q does not contain %q", text.String(), want)
 		}
 	}
 }

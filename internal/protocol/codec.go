@@ -196,6 +196,10 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.i32(v.FindCursor)
 		e.i32(v.FindCurrent)
 		e.i32(v.FindTotal)
+		e.u8(uint8(v.Menu))
+		e.i32(v.MenuIndex)
+		e.u32(v.ViewFlags)
+		e.i32(v.ZoomPercent)
 		e.bool(v.QuitPending)
 		e.bool(v.KeysEngine)
 	case Links:
@@ -428,6 +432,10 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			FindCursor:      d.i32(),
 			FindCurrent:     d.i32(),
 			FindTotal:       d.i32(),
+			Menu:            MenuKind(d.u8()),
+			MenuIndex:       d.i32(),
+			ViewFlags:       d.u32(),
+			ZoomPercent:     d.i32(),
 			QuitPending:     d.bool(),
 			KeysEngine:      d.bool(),
 		}

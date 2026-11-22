@@ -50,6 +50,10 @@ type SessionLoop struct {
 	findTotal   int
 	findBase    protocol.State
 
+	menuKind  protocol.MenuKind
+	menuIndex int
+	menuBase  protocol.State
+
 	promptActive    bool
 	promptVim       bool
 	promptText      string
@@ -149,6 +153,18 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		if l.menuKind != protocol.MenuNone {
+			l.menuBase = v
+			if v.KeysEngine {
+				l.closeMenu()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncMenu()
+			return false, nil
+		}
 		if l.findActive {
 			l.findBase = v
 			if v.KeysEngine {
@@ -222,6 +238,9 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	if l.findActive {
 		return l.handleFindKey(k)
 	}
+	if l.menuKind != protocol.MenuNone {
+		return l.handleMenuKey(k)
+	}
 	if l.quitPending {
 		switch k {
 		case "y", "Y", "enter":
@@ -278,15 +297,157 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	case "!":
 		return send(protocol.App{Action: protocol.AppToggleConsole})
 	case "X":
-		return send(protocol.App{Action: protocol.AppOpenViewMenu})
+		l.startMenu(protocol.MenuView)
+		return true, false
 	case "Z":
-		return send(protocol.App{Action: protocol.AppOpenZoom})
+		l.startMenu(protocol.MenuZoom)
+		return true, false
 	case "?":
 		return send(protocol.Navigate{URL: "about:help", Push: true})
 	case "H":
 		return send(protocol.Navigate{URL: "about:history", Push: true})
 	}
 	return false, false
+}
+
+func zoomPresetIndex(percent int) int {
+	best, idx := 0, 0
+	for i, pct := range zoomPresets {
+		d := pct - percent
+		if d < 0 {
+			d = -d
+		}
+		if i == 0 || d < best {
+			best, idx = d, i
+		}
+	}
+	return idx
+}
+
+func (l *SessionLoop) startMenu(kind protocol.MenuKind) {
+	if l.menuKind != protocol.MenuNone {
+		return
+	}
+	l.menuKind = kind
+	l.menuBase = l.State.Page
+	l.menuIndex = 0
+	if kind == protocol.MenuZoom {
+		l.menuIndex = zoomPresetIndex(l.State.Page.ZoomPercent)
+	}
+	l.syncMenu()
+}
+
+func (l *SessionLoop) syncMenu() {
+	st := l.State.Page
+	st.Menu = l.menuKind
+	st.MenuIndex = l.menuIndex
+	st.KeysEngine = true
+	st.FrontendChrome = true
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) closeMenu() {
+	if l.menuKind == protocol.MenuNone {
+		return
+	}
+	l.menuKind = protocol.MenuNone
+	l.State.Page = l.menuBase
+	if l.Presenter != nil {
+		l.Presenter.SetState(l.menuBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) handleMenuKey(k string) (handled, quit bool) {
+	if k == "ctrl-c" {
+		l.Session.Abort()
+	}
+	switch k {
+	case "esc", "q", "ctrl-c":
+		l.closeMenu()
+		return true, false
+	case "X":
+		if l.menuKind == protocol.MenuView {
+			l.closeMenu()
+			return true, false
+		}
+	case "up", "k", "ctrl-p":
+		if l.menuIndex > 0 {
+			l.menuIndex--
+		}
+		l.syncMenu()
+		return true, false
+	case "down", "j", "ctrl-n":
+		if l.menuIndex < menuRowCount(l.menuKind)-1 {
+			l.menuIndex++
+		}
+		l.syncMenu()
+		return true, false
+	case "home", "g":
+		l.menuIndex = 0
+		l.syncMenu()
+		return true, false
+	case "end", "G":
+		l.menuIndex = menuRowCount(l.menuKind) - 1
+		l.syncMenu()
+		return true, false
+	case " ", "enter":
+		l.activateMenu()
+		return true, false
+	}
+	return true, false
+}
+
+func menuRowCount(kind protocol.MenuKind) int {
+	if kind == protocol.MenuZoom {
+		return len(zoomPresets)
+	}
+	return 3
+}
+
+func (l *SessionLoop) activateMenu() {
+	if l.menuKind == protocol.MenuView {
+		switch l.menuIndex {
+		case 0:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleFixed}})
+		case 1:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleSticky}})
+		case 2:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleBackgrounds}})
+		}
+		return
+	}
+	if l.menuKind == protocol.MenuZoom && l.menuIndex >= 0 && l.menuIndex < len(zoomPresets) {
+		pct := zoomPresets[l.menuIndex]
+		l.closeMenu()
+		_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppZoomSet, Arg: pct}})
+	}
+}
+
+func (l *SessionLoop) handleMenuMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	layout := LayoutMenu(l.State.Page)
+	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+		l.closeMenu()
+		return true
+	}
+	for i, r := range layout.Rects {
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			l.menuIndex = layout.Top + i
+			l.activateMenu()
+			return true
+		}
+	}
+	l.closeMenu()
+	return true
 }
 
 func (l *SessionLoop) startFind() {
@@ -518,6 +679,9 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 	if l.quitPending {
 		return true
 	}
+	if l.menuKind != protocol.MenuNone {
+		return l.handleMenuMouse(ev)
+	}
 	if l.promptActive {
 		return l.handlePromptMouse(ev)
 	}
@@ -670,7 +834,8 @@ func (l *SessionLoop) activateChromeHit(kind ChromeHitKind) {
 		l.startPrompt(false)
 		return
 	case ChromeHitZoom:
-		body = protocol.App{Action: protocol.AppOpenZoom}
+		l.startMenu(protocol.MenuZoom)
+		return
 	case ChromeHitConsole:
 		body = protocol.App{Action: protocol.AppToggleConsole}
 	case ChromeHitJS:

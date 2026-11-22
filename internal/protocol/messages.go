@@ -139,6 +139,7 @@ const (
 	AppHome
 	AppOpenVimPrompt
 	AppOpenViewMenu
+	AppZoomSet
 )
 
 // App requests an application action. Arg carries an action-specific value.

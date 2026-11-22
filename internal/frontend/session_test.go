@@ -145,8 +145,6 @@ func TestShellKeysSendAppActions(t *testing.T) {
 		"E": protocol.App{Action: protocol.AppStatusDetails},
 		"d": protocol.App{Action: protocol.AppDownload},
 		"!": protocol.App{Action: protocol.AppToggleConsole},
-		"X": protocol.App{Action: protocol.AppOpenViewMenu},
-		"Z": protocol.App{Action: protocol.AppOpenZoom},
 		"?": protocol.Navigate{URL: "about:help", Push: true},
 		"H": protocol.Navigate{URL: "about:history", Push: true},
 	}
@@ -313,5 +311,64 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 	}
 	if !strings.Contains(loop.State.Page.FooterLeft, "Find 1/2: ab") {
 		t.Fatalf("footer = %q", loop.State.Page.FooterLeft)
+	}
+}
+
+func TestMenuKeysToggleAndZoom(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2, ZoomPercent: 100}
+	if handled, _ := loop.handleShellKey("X"); !handled || loop.menuKind != protocol.MenuView {
+		t.Fatalf("X handled=%v menu=%v", handled, loop.menuKind)
+	}
+	loop.handleMenuKey("down")
+	s.cmds = nil
+	if handled, _ := loop.handleMenuKey(" "); !handled {
+		t.Fatal("space not handled")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.App{Action: protocol.AppToggleSticky}) {
+		t.Fatalf("toggle commands = %#v", s.cmds)
+	}
+	if loop.menuKind != protocol.MenuView {
+		t.Fatal("view toggle closed the menu")
+	}
+	loop.handleMenuKey("esc")
+	if loop.menuKind != protocol.MenuNone {
+		t.Fatal("esc left the menu open")
+	}
+	loop.startMenu(protocol.MenuZoom)
+	if loop.menuIndex != 4 {
+		t.Fatalf("zoom index = %d, want 4", loop.menuIndex)
+	}
+	loop.handleMenuKey("down")
+	s.cmds = nil
+	loop.handleMenuKey("enter")
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.App{Action: protocol.AppZoomSet, Arg: 125}) {
+		t.Fatalf("zoom commands = %#v", s.cmds)
+	}
+	if loop.menuKind != protocol.MenuNone {
+		t.Fatal("zoom selection left the menu open")
+	}
+}
+
+func TestMenuMouseRowAndBackdrop(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.startMenu(protocol.MenuView)
+	layout := LayoutMenu(loop.State.Page)
+	if len(layout.Rects) < 2 {
+		t.Fatal("no menu rows")
+	}
+	r := layout.Rects[1]
+	if !loop.handleMenuMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
+		t.Fatal("row click not consumed")
+	}
+	if loop.menuIndex != layout.Top+1 || len(s.cmds) != 1 {
+		t.Fatalf("idx=%d cmds=%#v", loop.menuIndex, s.cmds)
+	}
+	loop.handleMenuMouse(MouseEvent{X: 1, Y: 1, Press: true})
+	if loop.menuKind != protocol.MenuNone {
+		t.Fatal("backdrop click did not close the menu")
 	}
 }

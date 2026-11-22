@@ -134,6 +134,16 @@ func (b *Browser) stateMessage() protocol.State {
 	st.HeaderRows = b.headerRows()
 	st.FrontendChrome = b.frontendChromeActive()
 	st.ZoomLabel = b.zoomBadge()
+	st.ZoomPercent = int(b.zoom*100 + 0.5)
+	if !b.hideFixed {
+		st.ViewFlags |= protocol.ViewFlagFixed
+	}
+	if !b.noSticky {
+		st.ViewFlags |= protocol.ViewFlagSticky
+	}
+	if !b.hideBackgrounds {
+		st.ViewFlags |= protocol.ViewFlagBackgrounds
+	}
 	st.PromptActive = b.prompt
 	st.PromptText = b.promptText
 	st.PromptCursor = b.promptCursor
