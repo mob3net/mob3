@@ -1,4 +1,4 @@
-package browser
+package frontend
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"image/draw"
 	"image/png"
 	"sync"
+
+	"browser/internal/protocol"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gomono"
@@ -39,7 +41,8 @@ var (
 
 func parsePNGFonts() {
 	pngFontOnce.Do(func() {
-		if pngRegular, pngFontErr = opentype.Parse(gomono.TTF); pngFontErr != nil {
+		pngRegular, pngFontErr = opentype.Parse(gomono.TTF)
+		if pngFontErr != nil {
 			return
 		}
 		pngBold, pngFontErr = opentype.Parse(gomonobold.TTF)
@@ -55,10 +58,17 @@ func parsePNGFonts() {
 }
 
 func (f pngFonts) close() {
-	for _, face := range []font.Face{f.regular, f.bold, f.italic, f.boldItalic} {
-		if c, ok := face.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
+	if f.regular != nil {
+		_ = f.regular.Close()
+	}
+	if f.bold != nil && f.bold != f.regular {
+		_ = f.bold.Close()
+	}
+	if f.italic != nil && f.italic != f.regular {
+		_ = f.italic.Close()
+	}
+	if f.boldItalic != nil && f.boldItalic != f.regular {
+		_ = f.boldItalic.Close()
 	}
 }
 
@@ -68,30 +78,35 @@ func pngFaces(scale int) (pngFonts, error) {
 		return pngFonts{}, pngFontErr
 	}
 	opts := &opentype.FaceOptions{Size: 12 * float64(scale), DPI: 72, Hinting: font.HintingFull}
-	regular, err := opentype.NewFace(pngRegular, opts)
-	if err != nil {
-		return pngFonts{}, err
+	face := func(f *sfnt.Font) font.Face {
+		if f == nil {
+			return nil
+		}
+		ff, err := opentype.NewFace(f, opts)
+		if err != nil {
+			pngFontErr = err
+			return nil
+		}
+		return ff
 	}
-	bold, err := opentype.NewFace(pngBold, opts)
-	if err != nil {
-		return pngFonts{}, err
+	out := pngFonts{
+		regular:    face(pngRegular),
+		bold:       face(pngBold),
+		italic:     face(pngItalic),
+		boldItalic: face(pngBoldItal),
 	}
-	italic, err := opentype.NewFace(pngItalic, opts)
-	if err != nil {
-		return pngFonts{}, err
+	if pngFontErr != nil {
+		out.close()
+		return pngFonts{}, pngFontErr
 	}
-	boldItalic, err := opentype.NewFace(pngBoldItal, opts)
-	if err != nil {
-		return pngFonts{}, err
-	}
-	return pngFonts{regular: regular, bold: bold, italic: italic, boldItalic: boldItalic}, nil
+	return out, nil
 }
 
-// PNG renders the grid as a PNG image. Scale 1 uses an 8x16 pixel cell;
-// scale 2 doubles both dimensions.
-func (g *Grid) PNG(scale int) ([]byte, error) {
-	if g == nil || g.W < 1 || g.H < 1 {
-		return nil, errors.New("empty grid")
+// RenderPNG renders a protocol frame as a PNG image. Scale 1 uses an 8x16
+// pixel cell; scale 2 to 4 doubles or quadruples both dimensions.
+func RenderPNG(f protocol.Frame, scale int) ([]byte, error) {
+	if f.W < 1 || f.H < 1 || len(f.Cells) != f.W*f.H {
+		return nil, errors.New("empty frame")
 	}
 	if scale < 1 {
 		scale = 1
@@ -100,10 +115,10 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 		scale = 4
 	}
 	cw, ch := pngCellW*scale, pngCellH*scale
-	img := image.NewRGBA(image.Rect(0, 0, g.W*cw, g.H*ch))
+	img := image.NewRGBA(image.Rect(0, 0, f.W*cw, f.H*ch))
 	pageBG := color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	if g.Cells[0].BG.Set {
-		pageBG = colorRGBA(g.Cells[0].BG)
+	if f.Cells[0].BG.Set {
+		pageBG = colorRGBA(f.Cells[0].BG)
 	}
 	draw.Draw(img, img.Bounds(), &image.Uniform{C: pageBG}, image.Point{}, draw.Src)
 
@@ -112,10 +127,10 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 		return nil, err
 	}
 	defer faces.close()
-	for y := 0; y < g.H; y++ {
-		for x := 0; x < g.W; x++ {
-			c := g.Cells[y*g.W+x]
-			if c.Skip || c.Cont {
+	for y := 0; y < f.H; y++ {
+		for x := 0; x < f.W; x++ {
+			c := f.Cells[y*f.W+x]
+			if c.Flags&(protocol.CellSkip|protocol.CellCont) != 0 {
 				continue
 			}
 			bg := pageBG
@@ -124,11 +139,11 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 			}
 			rect := image.Rect(x*cw, y*ch, (x+1)*cw, (y+1)*ch)
 			draw.Draw(img, rect, &image.Uniform{C: bg}, image.Point{}, draw.Src)
-			if c.Img {
+			if c.Flags&protocol.CellImg != 0 {
 				drawImageCell(img, rect, c, bg)
 				continue
 			}
-			if c.Run != 0 || c.Skip {
+			if c.Run != 0 {
 				continue
 			}
 			r := c.R
@@ -140,12 +155,14 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 				fg = colorRGBA(c.FG)
 			}
 			face := faces.regular
+			bold := c.Attrs&protocol.AttrBold != 0
+			italic := c.Attrs&protocol.AttrItalic != 0
 			switch {
-			case c.Bold && c.Italic:
+			case bold && italic:
 				face = faces.boldItalic
-			case c.Bold:
+			case bold:
 				face = faces.bold
-			case c.Italic:
+			case italic:
 				face = faces.italic
 			}
 			m := face.Metrics()
@@ -159,10 +176,10 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 				}
 				d.DrawString(string(r))
 			}
-			if c.Underline {
+			if c.Attrs&protocol.AttrUnderline != 0 {
 				fillRect(img, rect.Min.X, baseline+2*scale, rect.Max.X, baseline+3*scale, fg)
 			}
-			if c.Strike {
+			if c.Attrs&protocol.AttrStrike != 0 {
 				fillRect(img, rect.Min.X, baseline-4*scale, rect.Max.X, baseline-3*scale, fg)
 			}
 		}
@@ -174,7 +191,7 @@ func (g *Grid) PNG(scale int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func drawImageCell(img *image.RGBA, rect image.Rectangle, c Cell, bg color.RGBA) {
+func drawImageCell(img *image.RGBA, rect image.Rectangle, c protocol.Cell, bg color.RGBA) {
 	fg := bg
 	if c.FG.Set {
 		fg = colorRGBA(c.FG)
@@ -191,6 +208,6 @@ func fillRect(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
 	draw.Draw(img, image.Rect(x0, y0, x1, y1), &image.Uniform{C: c}, image.Point{}, draw.Src)
 }
 
-func colorRGBA(c Color) color.RGBA {
+func colorRGBA(c protocol.Color) color.RGBA {
 	return color.RGBA{R: c.R, G: c.G, B: c.B, A: c.A}
 }

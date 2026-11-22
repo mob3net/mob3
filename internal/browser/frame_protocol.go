@@ -7,28 +7,65 @@ import "browser/internal/protocol"
 // mapped to the wire contract; image placements are added when native graphics
 // move to the front end.
 func toProtocolFrame(g *Grid, version uint32) protocol.Frame {
+	var f protocol.Frame
+	return toProtocolFrameInto(&f, g, version)
+}
+
+// toProtocolFrameInto is toProtocolFrame with a reusable destination, used on
+// the draw path so a repaint does not allocate a new frame.
+func toProtocolFrameInto(dst *protocol.Frame, g *Grid, version uint32) protocol.Frame {
 	if g == nil {
-		return protocol.Frame{Version: version}
+		*dst = protocol.Frame{Version: version}
+		return *dst
 	}
-	f := protocol.Frame{
-		Version: version,
-		W:       g.W,
-		H:       g.H,
-		Cells:   make([]protocol.Cell, len(g.Cells)),
-		Runs:    make([]protocol.ScaledRun, len(g.Runs)),
+	dst.Version = version
+	dst.W = g.W
+	dst.H = g.H
+	if cap(dst.Cells) < len(g.Cells) {
+		dst.Cells = make([]protocol.Cell, len(g.Cells))
+	} else {
+		dst.Cells = dst.Cells[:len(g.Cells)]
 	}
 	for i, c := range g.Cells {
-		f.Cells[i] = protocol.Cell{
-			R:     c.R,
-			FG:    protoColor(c.FG),
-			BG:    protoColor(c.BG),
-			Attrs: protoAttrs(c.Bold, c.Italic, c.Underline, c.Strike, c.Reverse),
-			Flags: protoFlags(c.Cont, c.Img, c.Skip),
-			Run:   c.Run,
+		pc := protocol.Cell{
+			R:   c.R,
+			FG:  protocol.Color{R: c.FG.R, G: c.FG.G, B: c.FG.B, A: c.FG.A, Set: c.FG.Set},
+			BG:  protocol.Color{R: c.BG.R, G: c.BG.G, B: c.BG.B, A: c.BG.A, Set: c.BG.Set},
+			Run: c.Run,
 		}
+		if c.Bold {
+			pc.Attrs |= protocol.AttrBold
+		}
+		if c.Italic {
+			pc.Attrs |= protocol.AttrItalic
+		}
+		if c.Underline {
+			pc.Attrs |= protocol.AttrUnderline
+		}
+		if c.Strike {
+			pc.Attrs |= protocol.AttrStrike
+		}
+		if c.Reverse {
+			pc.Attrs |= protocol.AttrReverse
+		}
+		if c.Cont {
+			pc.Flags |= protocol.CellCont
+		}
+		if c.Img {
+			pc.Flags |= protocol.CellImg
+		}
+		if c.Skip {
+			pc.Flags |= protocol.CellSkip
+		}
+		dst.Cells[i] = pc
+	}
+	if cap(dst.Runs) < len(g.Runs) {
+		dst.Runs = make([]protocol.ScaledRun, len(g.Runs))
+	} else {
+		dst.Runs = dst.Runs[:len(g.Runs)]
 	}
 	for i, r := range g.Runs {
-		f.Runs[i] = protocol.ScaledRun{
+		dst.Runs[i] = protocol.ScaledRun{
 			X:     r.X,
 			Y:     r.Y,
 			Cells: r.Cells,
@@ -39,11 +76,23 @@ func toProtocolFrame(g *Grid, version uint32) protocol.Frame {
 			Attrs: protoAttrs(r.Bold, r.Italic, r.Underline, r.Strike, r.Reverse),
 		}
 	}
-	return f
+	dst.Placements = dst.Placements[:0]
+	return *dst
 }
 
 func protoColor(c Color) protocol.Color {
 	return protocol.Color{R: c.R, G: c.G, B: c.B, A: c.A, Set: c.Set}
+}
+
+func protoCell(c Cell) protocol.Cell {
+	return protocol.Cell{
+		R:     c.R,
+		FG:    protoColor(c.FG),
+		BG:    protoColor(c.BG),
+		Attrs: protoAttrs(c.Bold, c.Italic, c.Underline, c.Strike, c.Reverse),
+		Flags: protoFlags(c.Cont, c.Img, c.Skip),
+		Run:   c.Run,
+	}
 }
 
 func protoAttrs(bold, italic, underline, strike, reverse bool) uint8 {

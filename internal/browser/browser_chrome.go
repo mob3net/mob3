@@ -682,9 +682,9 @@ func (b *Browser) paintShellOverlays(g *Grid) {
 func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	var lines []string
 	if b.color {
-		lines = g.Lines(true)
+		lines = b.encodeGrid(g, true, false)
 	} else {
-		lines = g.LinesMono()
+		lines = b.encodeGrid(g, false, true)
 	}
 	// Scrolling can leave the terminal in a shifted state (for example after a
 	// stray wrap), and cells covered by scaled text are skipped when painting.

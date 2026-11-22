@@ -8,20 +8,6 @@ import (
 	"strings"
 )
 
-// DetectColorMode reports the color depth to use. macOS Terminal.app does not
-// implement 24-bit SGR sequences and garbles them, so it gets 256-color output;
-// terminals that advertise truecolor through COLORTERM keep 24-bit output.
-func DetectColorMode() ColorMode {
-	ct := strings.ToLower(os.Getenv("COLORTERM"))
-	if strings.Contains(ct, "truecolor") || strings.Contains(ct, "24bit") {
-		return ColorTrueColor
-	}
-	if strings.EqualFold(os.Getenv("TERM_PROGRAM"), "Apple_Terminal") {
-		return Color256
-	}
-	return ColorTrueColor
-}
-
 func inMultiplexer() bool {
 	term := strings.ToLower(os.Getenv("TERM"))
 	return os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != "" ||

@@ -6,6 +6,9 @@ import "browser/internal/protocol"
 // chrome reservation and the snapshot it shows; the engine only receives the
 // content rectangle and the page state it is asked to render.
 
+// frameScratch is the reusable protocol frame for the draw path.
+type frameScratch = protocol.Frame
+
 // contentRect is the page viewport in terminal cells.
 type contentRect struct {
 	Top, Bottom int

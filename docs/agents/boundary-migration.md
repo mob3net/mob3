@@ -8,7 +8,7 @@ folding every durable rule into `AGENTS.md` and
 [architecture.md](architecture.md). The routing row in `AGENTS.md` and the link
 in `architecture.md` are removed in the same change.
 
-Status: **Phase 2 complete; Phase 3 next.**
+Status: **Phase 3 in progress (3a frontend package done).**
 Branch: `core-rewrite`.
 Last updated: 2026-11-22.
 
@@ -54,6 +54,7 @@ network destination.
 | D18 | 2026-11-22 | Wire v1 is a 24-byte binary header plus fixed-value bodies; `Cell` is 20 bytes; scaled text is a structured run; control runes and scaled-run text are rejected on decode. | No reflection, no JSON, a small hostile-input surface, and no escape sequence can cross the boundary. |
 | D19 | 2026-11-22 | Phase 1 leaves `Lines`/`LinesMono` and the gfx renderer physically in `render.go`; they are called only from the frontend path and move with the package split in Phase 3. | The functional gate is that the paint path has no ANSI writer, no `os` and no terminal state. Moving ~600 lines now would add risk without changing behavior. |
 | D20 | 2026-11-22 | Phase 2 lands shell state, key routing and the content rectangle at the value/API level; the frontend goroutine and the live `State`/`Dialog` event loop land in Phase 5. | Without a separate loop an "emitted" event is read synchronously by `draw`; the payload, ownership and tests are ready for the transport. |
+| D21 | 2026-11-22 | Phase 3 starts with `internal/frontend` (ANSI and PNG), which imports only `protocol`; the engine package follows. Browser wrappers keep the old API during the move. | It creates the first real side of the DAG and forces the wire frame onto the output path. A forced full repaint pays a conversion (~10%); row-diff/zero-copy optimization is tracked for Phase 5. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -102,10 +103,11 @@ which part goes where.
 | `html.go` | engine | Tokenizer and tree builder. |
 | `style*.go` | engine | All style, selector, sheet, media and UA files. |
 | `layout*.go` | engine | All layout files, including forms, images, tables, grid, flex and measurement. |
-| `render.go` | engine + frontend | Grid, paint and image placement stay in the engine; `Lines`/`LinesMono`, ANSI and kitty/iTerm2 move to the frontend in Phase 3 (D19). |
-| `frame_protocol.go` | engine | Maps the internal grid to `protocol.Frame` at the seam. |
-| `term_detect.go` | frontend | Environment capability detection; the paint path takes capabilities as input. |
-| `png.go` | frontend | Cells to PNG. |
+| `render.go` | engine + frontend | Grid, paint and native image placement stay; `Lines`/`LinesMono`, ANSI and color modes moved to `internal/frontend` (3a). |
+| `frame_protocol.go` | engine | Maps the internal grid to `protocol.Frame` at the seam, including the reusable draw-path buffer. |
+| `frontend_bridge.go` | browser bridge | Temporary wrappers for `Lines`, `PNG`, color modes and code helpers during the package move. |
+| `term_detect.go` | frontend | Terminal capability detection; `DetectColorMode` moved to `internal/frontend`. |
+| `png.go` | `internal/frontend/png.go` | Protocol frame to PNG. |
 | `fetch.go` | host + engine | HTTP/TLS/redirect/cookies/size caps host; decompression, charset, parsing and decoder budgets engine. |
 | `cache.go` | host | Resource cache. |
 | `pages.go` | engine | About/help/error HTML from host data; the config token is validated by the host. |
@@ -144,7 +146,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done* | `-dump`/`-png` byte-identical; paint path has no ANSI |
 | 2 | Chrome and state ownership | 2–3 weeks | Done** | UI tests pass; engine has no terminal or chrome concepts |
-| 3 | Extract `internal/engine` | 3–4 weeks | Next | Engine import gate passes; engine tests green |
+| 3 | Extract `internal/engine` | 3–4 weeks | In progress (3a) | Engine import gate passes; engine tests green |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Not started | Engine cannot open sockets or read cookies |
 | 5 | Transport and lifecycle | 1–2 weeks | Not started | All paths run through the in-process transport |
 | 6 | Verification, docs, cleanup | 1 week | Not started | Gates below hold; aliases removed |
@@ -208,6 +210,21 @@ loop and dialog request/response transport land in Phase 5 under D20.
 - [x] Engine overlays are clipped to the content grid; chrome and modals
       compose above it.
 - [x] Automation still drives the same commands; full suite green.
+
+### Phase 3a — Extract `internal/frontend` (done)
+
+- [x] Create `internal/frontend` with `frame.go` (ANSI encoding, color modes)
+      and `png.go` (frame to PNG).
+- [x] Keep the package protocol-only; the dependency test enforces it.
+- [x] Add browser bridges (`frontend_bridge.go`) so the old `Grid.Lines`,
+      `LinesMono`, `PNG`, color-mode and code helpers keep working.
+- [x] Reuse the browser protocol frame buffer on the draw path; a repaint does
+      not allocate a second cell grid.
+- [x] Frontend tests for color/mono encoding, scaled runs, invalid frames and
+      PNG dimensions.
+- [x] Dump and PNG hashes unchanged.
+
+Next: 3b, the engine package.
 
 ### Phase 3 — Extract `internal/engine`
 
@@ -358,6 +375,24 @@ the Phase 5 transport.
 | `-dump`/`-png` hashes | fixed | identical | pass |
 | Startup / RSS | 4.5–5.0 ms / 19.3 MB | not re-measured | no new startup or heap work |
 
+### Phase 3a deltas
+
+The frontend package is protocol-only. The draw path now converts the screen
+grid to `protocol.Frame` before encoding, which is the measured cost below.
+The frame buffer is reused, so allocations are flat.
+
+| Metric | Before Phase 3a | After Phase 3a | Delta |
+| --- | --- | --- | --- |
+| Full draw, forced repaint | 774–820 µs, 519 550 B/op, 28 212 allocs | 850–875 µs, 519 595 B/op, 28 212 allocs | +5–10% time, bytes/allocs flat |
+| Content paint+blit, 100×33 | 94–99 µs, 0 B/op | 92–100 µs, 0 B/op | flat |
+| Synthetic `-dump` | 25–36 ms | 32–44 ms | noisy; full-page frame conversion |
+| Synthetic `-png` | not measured | 30–32 ms | new |
+| `-dump`/`-png` hashes | fixed | identical | pass |
+
+The conversion is a straight cell copy plus attribute mapping, not a second
+paint. It is paid only when a frame is encoded. Phase 5 can remove it by making
+the transport carry the frame directly, or by encoding dirty rows only.
+
 ## 8. Open questions
 
 All Phase 0 questions are resolved in the decision log: D13 (transport path),
@@ -402,3 +437,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 0 | Codec hardening: 32-bit body-length guard, scaled-run scale cap, control-text rejection; full suite and race green | `go test ./...`, `go test -race ./internal/protocol`, fuzz 8 s each | Phase 1: frame boundary |
 | 2026-11-22 | 1 | Content-rect painting with reused screen/content grids; `Cell.Raw` replaced by structured runs; `Cell` 56→24 B; terminal detection moved to `term_detect.go`; `toProtocolFrame` mapping and round-trip test; content-blit equivalence, cell-size guard; draw and content-frame benchmarks | `go test ./...`, `go vet`, `go test -race` on the frame tests, baseline hashes | Phase 2: chrome and state ownership |
 | 2026-11-22 | 2 | Shell geometry and `State` snapshot in `shell.go`; `drawChrome` is composition-only and `flushGrid` is output-only; `paintShellOverlays` covers content and console; `handleShellKey`/`handlePageKey` split; tests for content rect, key routing, state flags and console modals | `go test ./...`, `go vet`, `-race` on shell/chrome/frame tests, baseline hashes, draw benchmarks | Phase 3: extract `internal/engine` |
+| 2026-11-22 | 3a | `internal/frontend` with ANSI/PNG, protocol-only; browser bridges; reusable draw-path frame buffer; frontend tests; import gate now covers the package | `go test ./...`, `go vet`, `-race` on frontend/frame tests, dump/PNG hashes, draw benchmarks | Phase 3b: engine package |

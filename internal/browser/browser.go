@@ -114,6 +114,7 @@ type Browser struct {
 	// is exactly the page viewport; the screen grid adds chrome and overlays.
 	screenGrid  *Grid
 	contentGrid *Grid
+	frameBuf    frameScratch
 	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
 	// per terminal cell for everything except text metrics.
 	zoom float64
