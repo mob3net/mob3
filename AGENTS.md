@@ -194,10 +194,11 @@ published by the Pages build.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])` and
   exits with its status.
-- `internal/app/` — flag parsing, validation and dispatch into the session
-  (still `browser.Execute` during the migration).
-- `internal/browser/` — package `browser` with session construction, the
-  304-method `Browser`, chrome/dialogs/navigation loads and tests until the
+- `internal/app/` — flag parsing, validation, mode dispatch and the
+  interactive session boot. It still imports `internal/browser` for the
+  session type and non-interactive render/MCP helpers until the session split.
+- `internal/browser/` — package `browser` with the 306-method `Browser`, its
+  construction helpers, chrome/dialogs/navigation loads and tests until the
   boundary migration completes. Nothing under `internal` is imported from
   outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,

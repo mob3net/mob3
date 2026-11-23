@@ -95,7 +95,7 @@ func Run(args []string) int {
 	if fs.NArg() > 0 {
 		start = fs.Arg(0)
 	}
-	return browser.Execute(browser.RunOptions{
+	return execute(runOptions{
 		Dump: *dump, PNG: *pngOut, Width: *widthFlag, Height: *heightFlag,
 		PDFPage: pdfPageSel, PDFPageLabel: strings.TrimSpace(*pdfPage),
 		NoColor: *noColor, Color: *forceColor, UA: *ua, Certs: *certs,

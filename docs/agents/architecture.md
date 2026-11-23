@@ -93,10 +93,11 @@ destination; the tracker lists what remains.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
-  and `internal/app` exist. `app` owns flags, validation and dispatch, but
-  still calls `browser.Execute`; session construction lives in
-  `internal/browser`. `app → browser` is the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 304-method `Browser`,
+  and `internal/app` exist. `app` owns flags, validation, mode dispatch and the
+  interactive terminal/session boot; it still imports `internal/browser` for
+  the session type, non-interactive render and MCP helpers. `app → browser` is
+  the temporary wiring exception.
+- `internal/browser/` still holds the session shell: the 306-method `Browser`,
   chrome/overlay composition, dialogs, navigation loads, the memory-only page
   cache, session setup, Loader image/SVG/about/PDF orchestration, MCP and
   automation, and most integration tests.
@@ -200,7 +201,7 @@ destination; the tracker lists what remains.
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |
 | `internal/browser/automation_transport.go` | MCP protocol client and engine-side `automationHandler`; the automation library remains the handler implementation. |
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
-| `internal/browser/cli.go` | Session setup: loader/engine construction, terminal enter/leave, presenter and transport wiring, and loop start. The build version is `internal/app.Version`. |
+| `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
@@ -247,5 +248,5 @@ destination; the tracker lists what remains.
 | `internal/frontend/term_darwin.go` | macOS termios raw mode, window size and cell pixels via ioctl. |
 | `internal/frontend/term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `internal/frontend/signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
-| `internal/app/app.go` | Flags, validation, the build `Version` and dispatch into `browser.Execute`; direct engine/host/frontend wiring is the remaining app split. |
+| `internal/app/app.go` | Flags, validation, the build `Version` and dispatch into `execute`; direct engine/host/frontend wiring is the remaining app split. |
 | `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |

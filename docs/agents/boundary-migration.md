@@ -145,9 +145,9 @@ moved.
 
 Known exceptions to remove during the migration:
 
-- `app` still imports `internal/browser` for `browser.Execute`; the dependency
-  test therefore allows any project import from `app`. This ends with the
-  session split.
+- `app` still imports `internal/browser` for the session type and its
+  non-interactive render/MCP helpers; the dependency test therefore allows any
+  project import from `app`. This ends with the session split.
 - None for `net/http`: JS `fetch`/XHR and `document.cookie` now go through the
   host broker. Terminal capability detection is front-end-owned.
 
@@ -165,7 +165,7 @@ seam; the note names which part goes where.
 
 | Current file(s) | Final side | Remaining work |
 | --- | --- | --- |
-| `internal/app/app.go`, `internal/browser/cli.go` | app + frontend | `app` owns flags/validation and the build `Version`; move session construction, `RunOptions` and mode dispatch there. `cli.go` keeps only session setup; terminal I/O and the live loop are already `frontend.SessionLoop`. |
+| `internal/app/app.go`, `internal/app/execute.go` | app + frontend | `app` owns flags/validation, the build `Version`, mode dispatch and the interactive boot. It still calls `browser.NewSession`/`NewConfiguredLoader`/`Dump`/`RunMCPBoot`; direct engine/host/frontend construction follows the session split. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Engine fallback modals/hints/console drawing still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
@@ -369,7 +369,7 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
 - [ ] Split the session: page/content state to `engine.Session`, chrome and
       navigation to the front end; rename `Browser` → `Session`. Still
-      `internal/browser`, 304 methods.
+      `internal/browser`, 306 methods.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
       lists them.
 
@@ -504,14 +504,15 @@ trusted-shell split, then Phase 6. Dependency order:
 
 **C. Session split and app wiring**
 
-- [ ] Split `Browser` (304 methods): page/content state → `engine.Session`;
+- [ ] Split `Browser` (306 methods): page/content state → `engine.Session`;
       chrome, navigation, prompts, menus, console and form focus → front end.
 - [ ] Move Loader image/SVG/about/PDF orchestration into the engine session;
       the host keeps fetch, cache, cookies, settings and policy.
 - [ ] Rename `Browser` → `Session` and remove `internal/browser`.
-- [ ] Move `browser.Execute`, `RunOptions` and mode dispatch into
-      `internal/app`; `app` constructs the host, engine session, frontend and
-      transport directly.
+- [x] Move `browser.Execute`, `RunOptions` and mode dispatch into
+      `internal/app`; the interactive boot now lives in `app/execute.go`.
+- [ ] Replace the remaining `browser.NewSession`/`Dump`/`RunMCPBoot` calls
+      with direct host/engine/frontend construction after the session split.
 - [ ] Tighten `protocol/deps_test.go`: `app` → `engine`, `host`, `frontend`,
       `protocol`; no `browser` package.
 
@@ -546,7 +547,7 @@ test.
 
 | Risk | Mitigation |
 | --- | --- |
-| `Browser` is a 304-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
+| `Browser` is a 306-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
 | Chrome state is spread across Browser fields | Define the `State`/overlay contract before moving input or drawing. Move shell key routing and chrome composition together so there is one source of truth. |
 | Loader mixes host fetch, engine assembly and session orchestration | Split orchestration with the session; keep the per-request host fetcher snapshot (D40). |
 | Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options during app wiring; required before any multi-session work. |
@@ -1089,3 +1090,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 7o | Batch 14: moved content-rectangle geometry to the front end. `ContentBounds` computes the chrome reservation; `Init`/`Resize` carry `ContentTop`/`ContentHeight`; the engine uses the supplied rectangle and keeps the legacy derivation only for direct callers/tests. Terminal dimensions still travel for the fallback screen. Added geometry and protocol tests; PTY and hashes unchanged. | `go test ./...`, `go vet`, full `-race`, geometry/state/protocol tests, PTY H/back, dump/PNG hashes | Trusted URL/title, then session split |
 | 2026-11-23 | 7p | Batch 15: moved the displayed URL/title ledger to the front end. `HistoryCommit` now carries the page title; the front end validates scheme/length, stores the entry, and substitutes it for `State.URL/Title` in normal chrome. Dynamic title updates are accepted only while the engine reports the committed URL. Invalid commits are ignored. Host-attested final URLs remain for the session split. | `go test ./...`, `go vet`, full `-race`, protocol/commit/ledger/validation tests, PTY H/back, dump/PNG hashes | Form chrome gap, then host-attested URL/session split |
 | 2026-11-23 | 7q | Batch 16: closed the form-focus chrome gap. `frontendChromeActive` now follows the normal front-end chrome path even when `KeysEngine` is true, so a focused page form still routes keys through the engine while the front end composes header/footer/scrollbar. Added a state test for form focus and updated the chrome/ownership docs. | `go test ./...`, `go vet`, full `-race`, chrome state tests, PTY form/help, dump/PNG hashes | Host-attested URL/session split |
+| 2026-11-23 | 7r | Batch 17: moved mode dispatch and the interactive session boot from `internal/browser/cli.go` to `internal/app/execute.go`. The app now builds the loader/session, owns terminal enter/leave, presenter/transport wiring and the loop; browser exposes narrow `NewConfiguredLoader`/`NewSession`/`Dump`/`RunMCPBoot` helpers. `browser.Execute`/`RunOptions` and `cli.go` are gone. | `go test ./...`, `go vet`, full `-race`, app/browser tests, PTY interactive boot, MCP tools/list smoke, dump/PNG hashes | Session split (Browser → engine.Session), then direct app wiring |

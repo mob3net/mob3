@@ -21,6 +21,14 @@ func (l *Loader) SetCertSource(source string) error {
 	return nil
 }
 
+// CertSource reports the active trust-store label for the app's config view.
+func (l *Loader) CertSource() string {
+	if l != nil && l.certSource != "" {
+		return l.certSource
+	}
+	return host.CertSourceSystem
+}
+
 // certSourceLabel reports the active trust store for about:config.
 func (b *Browser) certSourceLabel() string {
 	if b.loader != nil && b.loader.certSource != "" {
