@@ -192,7 +192,8 @@ destination; the tracker lists what remains.
 | `internal/host/certs.go` | `system`/`embedded` trust-store selection, the embedded Mozilla CA pool and the stable `CertTransport` wrapper. |
 | `internal/host/network.go` | Request metadata, local-network and mixed-content policy, dialers, pooled transport and HTTP client construction. |
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly is engine-owned; the host returns raw bytes. |
-| `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and about/PDF orchestration stay in the Loader. |
+| `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and the loader's fetch orchestration stay outside. |
+| `internal/engine/page_assemble.go` | About/blocked/PDF page assembly, the anti-bot response heuristic and `AboutPageName`. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
@@ -213,7 +214,7 @@ destination; the tracker lists what remains.
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
 | `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
-| `internal/browser/pdf.go` | PDF response to page-model integration: page slicing, `Page n/N` metadata and HTML assembly. |
+| `internal/browser/pdf.go` | Thin PDF loader bridge over `engine.AssemblePDFPage`. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
 | `internal/browser/version.go` | Injected build version and the help-page wrapper. |
 | `internal/browser/cache.go`, `cache_loader.go`, `certs.go`, `cookie_compat.go`, `network_compat.go`, `page_compat.go` | Browser shims and aliases over `internal/host` and `internal/engine`; delete or merge in Phase 6. |
@@ -223,7 +224,7 @@ destination; the tracker lists what remains.
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling and fetch budgets. Image source selection/task collection, task ordering, decoding/fit, placement and SVG serialization are engine-owned (`internal/engine/image_source.go`, `image_task.go`, `image_decode.go`, `placement.go`, `inline_svg.go`); raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
+| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. About/blocked/PDF page assembly lives in `internal/engine/page_assemble.go`; image source/task/decode/placement/SVG helpers are also engine-owned. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |

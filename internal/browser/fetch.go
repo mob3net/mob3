@@ -247,7 +247,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	// PDFs are decoded by their own reader, so they skip charset decoding and
 	// the anti-bot heuristics that only make sense for HTML.
 	if !l.noPDF && looksLikePDF(mediaType, data) {
-		page := l.loadPDFPage(ctx, data, finalURL, status)
+		page := l.loadPDFPage(ctx, data, finalURL, status, pageLocal)
 		if page != nil {
 			page.Local = pageLocal
 		}
@@ -256,18 +256,8 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	text := decodeBody(data, ctype)
 	rawHTML := text
 	if !ignoreBlocks {
-		if blocked, reason := blockedResponse(status, text); blocked {
-			root := ParseHTML(blockedPageHTML(finalURL.String(), reason, status))
-			page := &Page{
-				URL: finalURL, Base: finalURL, Root: root, RawHTML: rawHTML,
-				Title: "Site blocked", Status: status, Blocked: true, BlockReason: reason,
-				Local: pageLocal,
-			}
-			// The generated page carries its own stylesheet. Collect it like any
-			// other document, or the blocked page falls back to bare
-			// user-agent styles: full-width text and no warning box.
-			page.Author = l.collectStylesheets(ctx, root, page.Base)
-			return page, nil
+		if blocked, reason := engine.BlockedResponse(status, text); blocked {
+			return engine.AssembleBlockedPage(ctx, loaderPageFetcher{l}, finalURL, rawHTML, reason, status, pageLocal), nil
 		}
 	}
 	download := false
@@ -301,92 +291,22 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 	return page, nil
 }
 
-// blockedResponse recognizes anti-bot/CAPTCHA/firewall roadblocks. Vendor
-// names are only used as a hint; the page shown to the user stays generic.
-func blockedResponse(status int, body string) (bool, string) {
-	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusServiceUnavailable:
-	default:
-		return false, ""
-	}
-	head := strings.ToLower(body[:minInt(len(body), 24000)])
-	signatures := []struct {
-		key    string
-		reason string
-	}{
-		{"cf-chl", "Cloudflare browser challenge"},
-		{"challenge-platform", "Cloudflare browser challenge"},
-		{"just a moment", "browser challenge"},
-		{"enable javascript and cookies to continue", "browser challenge"},
-		{"datadome", "DataDome bot protection"},
-		{"captcha-delivery", "CAPTCHA challenge"},
-		{"px-captcha", "PerimeterX bot protection"},
-		{"perimeterx", "PerimeterX bot protection"},
-		{"incapsula", "Imperva firewall"},
-		{"sucuri website firewall", "Sucuri firewall"},
-		{"pardon our interruption", "anti-bot check"},
-		{"unusual traffic", "bot check"},
-		{"verify you are a human", "human verification"},
-		{"access denied", "access denied"},
-	}
-	for _, s := range signatures {
-		if strings.Contains(head, s.key) {
-			return true, s.reason
-		}
-	}
-	return false, ""
+// blockedPageHTML keeps the historical browser test surface.
+func blockedPageHTML(rawURL, reason string, status int) string {
+	return engine.BlockedPageHTML(rawURL, reason, status)
 }
 
-// aboutPageName returns the page part of an about: URL, ignoring a query.
-func aboutPageName(u *url.URL) string {
-	if u == nil || !strings.EqualFold(u.Scheme, "about") {
-		return ""
-	}
-	name := u.Opaque
-	if name == "" {
-		name = strings.TrimPrefix(u.Path, "/")
-	}
-	return strings.ToLower(name)
-}
+// aboutPageName keeps the historical browser call surface.
+func aboutPageName(u *url.URL) string { return engine.AboutPageName(u) }
 
 func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
-	var doc string
-	home := false
-	switch aboutPageName(u) {
-	case "blank":
-		doc = "<html><body></body></html>"
-	case "help":
-		doc = helpPageHTML()
-	case "history":
-		var urls []string
-		current := -1
-		if l.historyFn != nil {
-			urls, current = l.historyFn()
-		}
-		doc = historyPageHTML(urls, current)
-	default:
-		doc = startPageHTML
-		home = true
+	var urls []string
+	current := -1
+	if l.historyFn != nil {
+		urls, current = l.historyFn()
 	}
-	root := ParseHTML(doc)
-	if !l.noScripts {
-		removeNoscript(root)
-	}
-	title := "MOB³"
-	switch aboutPageName(u) {
-	case "help":
-		title = "Help — MOB³"
-	case "history":
-		title = "History — MOB³"
-	}
-	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
-	page.Author = l.collectStylesheets(ctx, root, page.Base)
-	if home {
-		// The start page uses the reader-mode stylesheet exactly, so it gets the
-		// same narrow article column and typography as an extracted article.
-		page.Author = append(page.Author, readerRules...)
-	}
-	l.loadInlineSVGs(root)
+	page := engine.AssembleAboutPage(ctx, loaderPageFetcher{l}, u, buildVersion, urls, current, l.noScripts)
+	l.loadInlineSVGs(page.Root)
 	return page, nil
 }
 
@@ -841,8 +761,4 @@ func helpPageHTML() string { return engine.HelpPageHTML(buildVersion) }
 
 func historyPageHTML(urls []string, current int) string {
 	return engine.HistoryPageHTML(urls, current)
-}
-
-func blockedPageHTML(rawURL, reason string, status int) string {
-	return engine.BlockedPageHTML(rawURL, reason, status)
 }
