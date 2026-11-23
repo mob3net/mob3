@@ -169,7 +169,7 @@ seam; the note names which part goes where.
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Engine fallback modals/hints/console drawing still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
-| `browser_forms.go` | engine + session | Constraint validation and form focus state moved to `internal/engine` (`validate.go`, `form_state.go`); Tab order, editing, range/select stepping and submission remain session-side. |
+| `browser_forms.go` | engine + session | Constraint validation, focus state and pure control/label/input-line helpers moved to `internal/engine` (`validate.go`, `form_state.go`, `form_edit.go`); Tab order, editing, range/select stepping and submission remain session-side. |
 | `browser_selection.go` | engine wrapper | Selection range, extraction and painting moved to `internal/engine/selection.go`; the browser keeps drag state and clipboard policy. |
 | `hints.go` | engine + session | Target discovery, glyph collection, label assignment, encoding and painting moved to `internal/engine/hints.go`; hint-mode keys, activation and F confirmation remain session-side. |
 | `find.go` | engine + session | Match streams, whitespace normalisation and match rectangles moved to `internal/engine/find.go`; find state, navigation, painting and front-end messages remain session-side. |
@@ -390,8 +390,9 @@ the engine keeps its fallback composition only for direct callers and tests.
       `internal/engine/find.go`; find navigation, painting and messages remain
       session-side.
 - [x] Form constraint validation moved to `internal/engine/validate.go`;
-      focus state moved to `internal/engine/form_state.go`; editing, Tab order
-      and submission remain session-side.
+      focus state moved to `internal/engine/form_state.go`; control predicates,
+      labels and input-line helpers moved to `internal/engine/form_edit.go`.
+- [ ] Form editing, Tab order and submission remain session-side.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
 - [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
       navigation to the front end), then rename to `Session`.
@@ -1113,3 +1114,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 7w | Batch 22: moved form constraint validation into `internal/engine/validate.go`: required fields, radio groups, typed date/month/week/time/datetime/color formats and pattern checks. The browser keeps form control state, editing, Tab/focus and submission. Added engine validation tests; browser form tests still cover submission integration. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Session type split, or form control state next |
 | 2026-11-23 | 7x | Batch 23: moved form focus state into `internal/engine/form_state.go`: focused text control, selection-all flag, control focus and active option, with `Current`/clear helpers. The browser still owns Tab order, editing, stepping and submission. Added an engine form-state test; all call sites use the engine state. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Session type split, or remaining form editing next |
 | 2026-11-23 | 7y | Batch 24: completed the hint content move. `internal/engine/hints.go` now owns target discovery, glyph collection, label painting and target rectangles; the browser keeps hint-mode key handling, activation, F confirmation and front-end messages. Browser hint tests drive the engine helpers; all tests green. | `go test ./...`, `go vet`, full `-race`, engine/browser hint tests, PTY f/F, dump/PNG hashes | Session type split, or form editing next |
+| 2026-11-23 | 7z | Batch 25: moved pure form helpers into `internal/engine/form_edit.go`: Tab control predicates/status, arrow-control detection, radio/select grouping, toggle/submit predicates, label lookup and input-line/caret helpers. Browser wrappers keep call sites stable; editing, Tab stepping and submission remain session-side. Added engine helper tests. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Session type split, or form editing next |

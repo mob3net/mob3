@@ -74,28 +74,6 @@ func (b *Browser) tabTargets() []tabTarget {
 	return out
 }
 
-// isTabControl reports whether n participates in the standard Tab order.
-func isTabControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
-		return false
-	}
-	for p := n; p != nil; p = p.Parent {
-		if p.Type != ElementNode || p.Style == nil {
-			continue
-		}
-		if p.Style.Display == "none" || p.Style.Hidden {
-			return false
-		}
-	}
-	switch n.Tag {
-	case "input":
-		return !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "hidden")
-	case "select", "textarea", "button":
-		return true
-	}
-	return false
-}
-
 func (b *Browser) currentTabNode() *Node {
 	if b.forms.InputFocus != nil {
 		return b.forms.InputFocus
@@ -188,34 +166,6 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 	b.status = tabControlStatus(t.node)
 }
 
-func tabControlStatus(n *Node) string {
-	if n == nil {
-		return ""
-	}
-	if n.Tag == "input" {
-		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
-		case "checkbox":
-			return "Checkbox: Space toggles · Tab moves · Esc clears"
-		case "radio":
-			return "Radio: arrows choose · Space selects"
-		case "range":
-			return "Range: arrows adjust · Tab moves"
-		case "file":
-			return "File input (uploads unsupported)"
-		}
-	}
-	switch n.Tag {
-	case "select":
-		if n.HasAttr("multiple") {
-			return "Multi-select: arrows move · Space toggles"
-		}
-		return "Select: arrows change · Enter opens"
-	case "button":
-		return "Button: Enter activates"
-	}
-	return "Tab moves · Esc clears"
-}
-
 func (b *Browser) clearControlFocus() {
 	b.forms.ControlFocus = nil
 	b.forms.ControlOption = nil
@@ -296,18 +246,6 @@ func (b *Browser) handleControlKey(k string) bool {
 	return b.HandleKey(k)
 }
 
-// controlUsesArrows reports whether the focused control reacts to arrow keys,
-// so h/j/k/l can stand in for them without stealing page navigation keys.
-func controlUsesArrows(n *Node) bool {
-	if n == nil {
-		return false
-	}
-	if isRangeInput(n) || n.Tag == "select" {
-		return true
-	}
-	return n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio")
-}
-
 func (b *Browser) activateControlFocus() {
 	n := b.forms.ControlFocus
 	if n == nil {
@@ -363,30 +301,6 @@ func (b *Browser) stepRadio(n *Node, dir int) {
 	b.status = tabControlStatus(next)
 }
 
-func radioGroupNodes(n *Node) []*Node {
-	if n == nil || n.Tag != "input" || n.Attr("name") == "" {
-		return []*Node{n}
-	}
-	scope := nearestForm(n)
-	if scope == nil {
-		for scope = n; scope.Parent != nil; scope = scope.Parent {
-		}
-	}
-	name := n.Attr("name")
-	var out []*Node
-	scope.FindAll(func(x *Node) bool {
-		if x.Tag == "input" && strings.EqualFold(strings.TrimSpace(x.Attr("type")), "radio") &&
-			x.Attr("name") == name && !isDisabledControl(x) && x.Style != nil && x.Style.Display != "none" {
-			out = append(out, x)
-		}
-		return false
-	})
-	if len(out) == 0 {
-		return []*Node{n}
-	}
-	return out
-}
-
 func (b *Browser) stepMultiSelect(sel *Node, dir int) {
 	opts := selectOptions(sel)
 	if len(opts) == 0 {
@@ -435,21 +349,6 @@ func (b *Browser) stepSingleSelect(sel *Node, dir int) {
 	b.fireSelectChange(sel)
 }
 
-func firstSelectOption(sel *Node) *Node {
-	opts := selectOptions(sel)
-	for _, opt := range opts {
-		if opt.HasAttr("selected") && !isDisabledControl(opt) && opt.Style != nil && opt.Style.Display != "none" {
-			return opt
-		}
-	}
-	for _, opt := range opts {
-		if !isDisabledControl(opt) && opt.Style != nil && opt.Style.Display != "none" {
-			return opt
-		}
-	}
-	return nil
-}
-
 func (b *Browser) ensureFocusVisible() {
 	li := b.focusedLink()
 	if li == nil || len(li.Rects) == 0 {
@@ -470,57 +369,6 @@ func (b *Browser) ensureFocusVisible() {
 }
 
 // isRangeInput reports an interactive range slider.
-
-func isSubmitControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
-		return false
-	}
-	if n.Tag == "button" {
-		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
-		case "", "submit":
-			return true
-		}
-		return false
-	}
-	if n.Tag != "input" {
-		return false
-	}
-	switch strings.ToLower(n.Attr("type")) {
-	case "submit", "image":
-		return true
-	}
-	return false
-}
-
-func isToggleControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
-		return false
-	}
-	if n.Tag == "option" {
-		sel := nearestSelect(n)
-		return sel != nil && sel.HasAttr("multiple") && !isDisabledControl(sel)
-	}
-	if n.Tag == "select" {
-		return true
-	}
-	if n.Tag != "input" {
-		return false
-	}
-	switch strings.ToLower(n.Attr("type")) {
-	case "checkbox", "radio":
-		return true
-	}
-	return false
-}
-
-func nearestSelect(n *Node) *Node {
-	for p := n; p != nil; p = p.Parent {
-		if p.Type == ElementNode && p.Tag == "select" {
-			return p
-		}
-	}
-	return nil
-}
 
 // toggleControl flips a checkbox, radio or multi-select option. A single select
 // opens its option popup instead of cycling through values blind.
@@ -902,57 +750,6 @@ func (b *Browser) queueFormSubmit(form *Node) {
 	b.js.SetPendingForm(&FormSubmission{Method: method, Target: target, Body: body, ContentType: contentType})
 }
 
-// isLabelable reports controls that a <label> can activate.
-func isLabelable(n *Node) bool {
-	if n == nil || n.Type != ElementNode {
-		return false
-	}
-	switch n.Tag {
-	case "input":
-		return !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "hidden")
-	case "button", "select", "textarea":
-		return true
-	}
-	return false
-}
-
-// findElementByID returns the first element with the given id below root.
-func findElementByID(root *Node, id string) *Node {
-	if root == nil || id == "" {
-		return nil
-	}
-	var found *Node
-	root.FindAll(func(n *Node) bool {
-		if found == nil && n.Attr("id") == id {
-			found = n
-		}
-		return false
-	})
-	return found
-}
-
-// labelControl returns the labelable control associated with a label: its for
-// target, or the first labelable descendant for a wrapping label.
-func labelControl(root, label *Node) *Node {
-	if label == nil || label.Tag != "label" {
-		return nil
-	}
-	if id := strings.TrimSpace(label.Attr("for")); id != "" {
-		if c := findElementByID(root, id); isLabelable(c) {
-			return c
-		}
-		return nil
-	}
-	var found *Node
-	label.FindAll(func(n *Node) bool {
-		if found == nil && isLabelable(n) {
-			found = n
-		}
-		return false
-	})
-	return found
-}
-
 // resolveLabelTarget maps a click on label text to its control. Clicks on the
 // control itself return nil so normal control handling is not duplicated.
 func (b *Browser) resolveLabelTarget(n *Node) *Node {
@@ -1099,12 +896,6 @@ func (b *Browser) handleInputKey(k string) bool {
 	return false
 }
 
-// inputAtMaxLength reports whether the control has reached its maxlength.
-func inputAtMaxLength(n *Node, value string) bool {
-	limit := maxLength(n)
-	return limit > 0 && utf8.RuneCountInString(value) >= limit
-}
-
 // handleRangeKey drives a focused range slider.
 func (b *Browser) handleRangeKey(n *Node, k string) bool {
 	switch k {
@@ -1178,59 +969,22 @@ func (b *Browser) refreshInputCursor(n *Node) {
 	}
 }
 
-// inputLineStart returns the byte offset of the start of the caret's line.
-func inputLineStart(s string, cur int) int {
-	if cur > len(s) {
-		cur = len(s)
-	}
-	if i := strings.LastIndexByte(s[:cur], '\n'); i >= 0 {
-		return i + 1
-	}
-	return 0
-}
-
-// inputLineEnd returns the byte offset of the end of the caret's line.
-func inputLineEnd(s string, cur int) int {
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(s) {
-		cur = len(s)
-	}
-	if i := strings.IndexByte(s[cur:], '\n'); i >= 0 {
-		return cur + i
-	}
-	return len(s)
-}
-
-// textareaVerticalOffset moves the caret one logical line up or down, keeping
-// its character column where the target line is long enough.
+// Form helpers live in the engine; these wrappers keep the session call sites
+// readable during the migration.
+func isTabControl(n *Node) bool                   { return engine.IsTabControl(n) }
+func tabControlStatus(n *Node) string             { return engine.TabControlStatus(n) }
+func controlUsesArrows(n *Node) bool              { return engine.ControlUsesArrows(n) }
+func radioGroupNodes(n *Node) []*Node             { return engine.RadioGroupNodes(n) }
+func firstSelectOption(n *Node) *Node             { return engine.FirstSelectOption(n) }
+func isSubmitControl(n *Node) bool                { return engine.IsSubmitControl(n) }
+func isToggleControl(n *Node) bool                { return engine.IsToggleControl(n) }
+func nearestSelect(n *Node) *Node                 { return engine.NearestSelect(n) }
+func isLabelable(n *Node) bool                    { return engine.IsLabelable(n) }
+func findElementByID(root *Node, id string) *Node { return engine.FindElementByID(root, id) }
+func labelControl(root, label *Node) *Node        { return engine.LabelControl(root, label) }
+func inputAtMaxLength(n *Node, value string) bool { return engine.InputAtMaxLength(n, value) }
+func inputLineStart(s string, cur int) int        { return engine.InputLineStart(s, cur) }
+func inputLineEnd(s string, cur int) int          { return engine.InputLineEnd(s, cur) }
 func textareaVerticalOffset(s string, cur, delta int) int {
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(s) {
-		cur = len(s)
-	}
-	start := inputLineStart(s, cur)
-	col := utf8.RuneCountInString(s[start:cur])
-	line := start
-	if delta < 0 {
-		if start == 0 {
-			return cur
-		}
-		line = inputLineStart(s, start-1)
-	} else {
-		end := inputLineEnd(s, cur)
-		if end == len(s) {
-			return cur
-		}
-		line = end + 1
-	}
-	end := inputLineEnd(s, line)
-	runes := []rune(s[line:end])
-	if col > len(runes) {
-		col = len(runes)
-	}
-	return line + len(string(runes[:col]))
+	return engine.TextareaVerticalOffset(s, cur, delta)
 }
