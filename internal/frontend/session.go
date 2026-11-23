@@ -42,6 +42,7 @@ type SessionLoop struct {
 	quitPending bool
 	quitBase    protocol.State
 	scrollDrag  bool
+	scrollGrab  int // rows between the thumb top and the grabbed row
 
 	// History is front-end-owned. AttestedURL reports the host's final URL for
 	// a document navigation; the engine's HistoryCommit supplies the title,
@@ -1496,6 +1497,23 @@ func (l *SessionLoop) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+	// A scrollbar drag owns the pointer until release: it keeps tracking when
+	// the pointer leaves the track or the content rows, and a release anywhere
+	// ends it so a lost release cannot leave the bar following the pointer.
+	if l.scrollDrag {
+		switch {
+		case ev.Wheel != 0:
+			l.scrollDrag = false
+		case !ev.Press || (ev.Motion && ev.Button != MouseButtonLeft):
+			l.scrollDrag = false
+			return true
+		default:
+			if l.handleScrollbarMouse(ev) {
+				return true
+			}
+			l.scrollDrag = false
+		}
+	}
 	if l.hintActive {
 		l.cancelHint()
 		return false
@@ -1593,44 +1611,44 @@ func (l *SessionLoop) handleScrollbarMouse(ev MouseEvent) bool {
 		return false
 	}
 	contentH := st.Height - st.HeaderRows - 1
-	if contentH < 2 || ev.X != st.Width {
+	if contentH < 2 || ev.Wheel != 0 {
 		return false
 	}
 	row := ev.Y - 1 - st.HeaderRows
-	if row < 0 || row >= contentH {
-		return false
-	}
-	if ev.Wheel != 0 {
-		return false
-	}
-	if !l.scrollDrag {
-		if !ev.Press || ev.Button != 0 {
-			return false
+	if l.scrollDrag {
+		// A held drag follows the pointer everywhere; scrollTo clamps the row.
+		if ev.Press || ev.Motion {
+			l.scrollTo(row, contentH)
+			return true
 		}
-		l.scrollDrag = true
-		l.scrollTo(row, contentH)
+		l.scrollDrag = false
 		return true
 	}
-	if ev.Press || ev.Motion {
-		l.scrollTo(row, contentH)
+	if ev.X != st.Width || row < 0 || row >= contentH {
+		return false
+	}
+	if !ev.Press || ev.Button != 0 {
+		return false
+	}
+	top, size := scrollThumb(contentH, st.MaxScroll, st.Scroll)
+	l.scrollDrag = true
+	if row >= top && row < top+size {
+		// Grab the thumb where it was pressed instead of recentering it.
+		l.scrollGrab = row - top
 		return true
 	}
-	l.scrollDrag = false
+	// A track press centers the thumb under the pointer, then keeps it there.
+	l.scrollGrab = size / 2
+	l.scrollTo(row, contentH)
 	return true
 }
 
 func (l *SessionLoop) scrollTo(row, contentH int) {
 	st := l.State.Page
 	max := st.MaxScroll
-	thumbH := contentH * contentH / (contentH + max)
-	if thumbH < 1 {
-		thumbH = 1
-	}
-	if thumbH > contentH {
-		thumbH = contentH
-	}
+	_, thumbH := scrollThumb(contentH, max, st.Scroll)
 	span := contentH - thumbH
-	rel := row - thumbH/2
+	rel := row - l.scrollGrab
 	if span <= 0 {
 		rel = 0
 	}

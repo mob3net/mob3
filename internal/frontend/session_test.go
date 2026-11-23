@@ -263,6 +263,116 @@ func TestScrollbarMouseSendsScroll(t *testing.T) {
 	}
 }
 
+func TestScrollbarDragGrabsThumb(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	// Content height 12, max scroll 6: an 8-row thumb with a 4-row travel.
+	loop.State.Page = protocol.State{
+		FrontendChrome: true, Width: 20, Height: 14, HeaderRows: 1,
+		MaxScroll: 6, Scroll: 2,
+	}
+	// Rows are content-relative; the thumb starts at row 1 with Scroll=2.
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 1 + 1 + 3, Press: true}) {
+		t.Fatal("thumb press not consumed")
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("thumb press moved the page: %#v", s.cmds)
+	}
+	if got := loop.scrollGrab; got != 2 {
+		t.Fatalf("grab offset = %d, want 2", got)
+	}
+	// Dragging two rows down moves the thumb two rows down: thumb top 1 -> 3.
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 1 + 1 + 5, Press: true, Motion: true}) {
+		t.Fatal("thumb drag not consumed")
+	}
+	sc, ok := s.cmds[0].Body.(protocol.Scroll)
+	if !ok || !sc.HasTo || sc.To != 4 {
+		t.Fatalf("drag scroll = %#v", s.cmds[0].Body)
+	}
+	// The grabbed offset holds at the track ends.
+	s.cmds = nil
+	loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 1 + 1, Press: true, Motion: true})
+	sc = s.cmds[0].Body.(protocol.Scroll)
+	if sc.To != 0 {
+		t.Fatalf("drag past the top = %d", sc.To)
+	}
+	s.cmds = nil
+	loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 13, Press: true, Motion: true})
+	sc = s.cmds[0].Body.(protocol.Scroll)
+	if sc.To != 6 {
+		t.Fatalf("drag past the bottom = %d", sc.To)
+	}
+	// A held drag keeps controlling the bar left of the track.
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 5, Y: 1 + 1 + 5, Press: true, Motion: true}) {
+		t.Fatal("off-track drag not consumed")
+	}
+	sc = s.cmds[0].Body.(protocol.Scroll)
+	if sc.To != 4 {
+		t.Fatalf("off-track drag = %d", sc.To)
+	}
+	// Moving into the header keeps dragging and clamps at the top.
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 5, Y: 1, Press: true, Motion: true}) {
+		t.Fatal("header drag not consumed")
+	}
+	sc = s.cmds[0].Body.(protocol.Scroll)
+	if sc.To != 0 {
+		t.Fatalf("drag into the header = %d", sc.To)
+	}
+}
+
+func TestScrollbarDragEndsOffTrack(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{
+		FrontendChrome: true, Width: 20, Height: 10, HeaderRows: 1,
+		MaxScroll: 100,
+	}
+	startDrag := func() {
+		t.Helper()
+		if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 5, Press: true}) || !loop.scrollDrag {
+			t.Fatal("press did not start a drag")
+		}
+	}
+	released := func() {
+		t.Helper()
+		s.cmds = nil
+		if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 10, Y: 6, Press: false}) {
+			t.Fatal("off-track release was not consumed")
+		}
+		if loop.scrollDrag {
+			t.Fatal("off-track release kept the drag active")
+		}
+		if loop.handleChromeMouse(MouseEvent{Button: 3, X: 20, Y: 6, Press: true, Motion: true}) {
+			t.Fatal("hover after release was consumed")
+		}
+		if len(s.cmds) != 0 {
+			t.Fatalf("hover after release scrolled: %d commands", len(s.cmds))
+		}
+	}
+	startDrag()
+	released()
+
+	startDrag()
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Button: 0, X: 20, Y: 1, Press: false}) || loop.scrollDrag {
+		t.Fatal("header release did not end the drag")
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("header release scrolled: %d commands", len(s.cmds))
+	}
+
+	startDrag()
+	if !loop.handleChromeMouse(MouseEvent{Button: 3, X: 20, Y: 6, Press: true, Motion: true}) {
+		t.Fatal("buttonless hover during drag was not consumed")
+	}
+	if loop.scrollDrag {
+		t.Fatal("buttonless hover kept the drag active")
+	}
+}
+
 func TestPromptEditsAndNavigates(t *testing.T) {
 	s := &recordSession{}
 	loop := &SessionLoop{Session: s}

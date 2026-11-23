@@ -274,28 +274,10 @@ func DrawScrollBarFrame(f *protocol.Frame, st protocol.State) {
 	if max <= 0 || f.W < 2 || f.H < 2 || len(f.Cells) < f.W*f.H {
 		return
 	}
-	vh := f.H
-	thumbH := vh * vh / (vh + max)
-	if thumbH < 1 {
-		thumbH = 1
-	}
-	if thumbH > vh {
-		thumbH = vh
-	}
-	scroll := st.Scroll
-	if scroll < 0 {
-		scroll = 0
-	}
-	if scroll > max {
-		scroll = max
-	}
-	thumbTop := 0
-	if vh > thumbH {
-		thumbTop = (vh - thumbH) * scroll / max
-	}
+	thumbTop, thumbH := scrollThumb(f.H, max, st.Scroll)
 	track := rgb(0xdd, 0xe3, 0xea)
 	thumb := rgb(0x7a, 0x8a, 0x9a)
-	for y := 0; y < vh; y++ {
+	for y := 0; y < f.H; y++ {
 		bg := track
 		if y >= thumbTop && y < thumbTop+thumbH {
 			bg = thumb
@@ -306,6 +288,32 @@ func DrawScrollBarFrame(f *protocol.Frame, st protocol.State) {
 		c.Flags &^= protocol.CellCont | protocol.CellSkip
 		c.Run = 0
 	}
+}
+
+// scrollThumb derives the page-scrollbar thumb geometry for a content height,
+// maximum scroll offset and current offset. The presenter paints it and the
+// mouse handler grabs it, so both must agree on the same rows.
+func scrollThumb(contentH, max, scroll int) (top, size int) {
+	if contentH <= 0 || max <= 0 {
+		return 0, contentH
+	}
+	size = contentH * contentH / (contentH + max)
+	if size < 1 {
+		size = 1
+	}
+	if size > contentH {
+		size = contentH
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll > max {
+		scroll = max
+	}
+	if span := contentH - size; span > 0 {
+		top = span * scroll / max
+	}
+	return top, size
 }
 
 // chromeRow mirrors the shell reservation while the engine still composes
