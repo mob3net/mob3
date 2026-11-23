@@ -214,25 +214,20 @@ type Browser struct {
 	lastRebuild time.Time
 	lastBuild   time.Duration
 
-	inputFocus *Node
-	// inputSelectAll marks the focused field's whole value as selected by
-	// Ctrl-A. Typing or deleting replaces the value; caret moves cancel it.
-	inputSelectAll bool
-	controlFocus   *Node
-	controlOption  *Node
-	consoleOpen    bool
-	consoleScroll  int
-	reqScroll      int
-	storageScroll  int
-	htmlScroll     int
-	toolScroll     int
-	toolLog        []string
-	consolePane    int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
-	consoleText    string
-	consoleCursor  int
-	consoleEdit    bool // the input row inside the logs or tools section has focus
-	consoleHist    consoleHistory
-	toolHist       consoleHistory
+	forms         engine.FormState
+	consoleOpen   bool
+	consoleScroll int
+	reqScroll     int
+	storageScroll int
+	htmlScroll    int
+	toolScroll    int
+	toolLog       []string
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
+	consoleText   string
+	consoleCursor int
+	consoleEdit   bool // the input row inside the logs or tools section has focus
+	consoleHist   consoleHistory
+	toolHist      consoleHistory
 
 	findActive  bool
 	findText    string

@@ -372,10 +372,10 @@ func (b *Browser) focusControlTarget(n *Node, option *Node) {
 		return
 	}
 	b.focus = -1
-	b.controlFocus = n
-	b.controlOption = option
+	b.forms.ControlFocus = n
+	b.forms.ControlOption = option
 	if n.Tag == "select" && n.HasAttr("multiple") && option == nil {
-		b.controlOption = firstSelectOption(n)
+		b.forms.ControlOption = firstSelectOption(n)
 	}
 	b.status = tabControlStatus(n)
 }

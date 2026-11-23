@@ -251,8 +251,8 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if !check.HasAttr("checked") {
 		t.Fatal("checkbox hint did not toggle it")
 	}
-	if b.controlFocus != check {
-		t.Fatalf("checkbox hint did not focus it: %v", b.controlFocus)
+	if b.forms.ControlFocus != check {
+		t.Fatalf("checkbox hint did not focus it: %v", b.forms.ControlFocus)
 	}
 	b.HandleKey(" ")
 	if check.HasAttr("checked") {
@@ -262,22 +262,22 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if !radios[1].HasAttr("checked") || radios[0].HasAttr("checked") {
 		t.Fatal("radio hint did not select it")
 	}
-	if b.controlFocus != radios[1] {
-		t.Fatalf("radio hint did not focus it: %v", b.controlFocus)
+	if b.forms.ControlFocus != radios[1] {
+		t.Fatalf("radio hint did not focus it: %v", b.forms.ControlFocus)
 	}
 	choose(func(n *Node) bool { return n == beta })
 	if !beta.HasAttr("selected") {
 		t.Fatal("multi-select hint did not toggle the option")
 	}
-	if b.controlFocus != multi || b.controlOption != beta {
-		t.Fatalf("multi-select hint did not focus the option: control=%v option=%v", b.controlFocus, b.controlOption)
+	if b.forms.ControlFocus != multi || b.forms.ControlOption != beta {
+		t.Fatalf("multi-select hint did not focus the option: control=%v option=%v", b.forms.ControlFocus, b.forms.ControlOption)
 	}
 	choose(func(n *Node) bool { return n == single[0] })
 	if b.selectMenu == nil {
 		t.Fatal("select hint did not open the option popup")
 	}
-	if b.controlFocus != single[0] {
-		t.Fatalf("select hint did not focus it: %v", b.controlFocus)
+	if b.forms.ControlFocus != single[0] {
+		t.Fatalf("select hint did not focus it: %v", b.forms.ControlFocus)
 	}
 }
 
@@ -306,8 +306,8 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 	for _, ch := range label {
 		b.HandleKey(string(ch))
 	}
-	if b.inputFocus != input {
-		t.Fatalf("hint did not focus the input: %v", b.inputFocus)
+	if b.forms.InputFocus != input {
+		t.Fatalf("hint did not focus the input: %v", b.forms.InputFocus)
 	}
 	if b.linkHints {
 		t.Fatal("hint mode stayed active after focusing a field")

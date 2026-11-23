@@ -97,11 +97,11 @@ func isTabControl(n *Node) bool {
 }
 
 func (b *Browser) currentTabNode() *Node {
-	if b.inputFocus != nil {
-		return b.inputFocus
+	if b.forms.InputFocus != nil {
+		return b.forms.InputFocus
 	}
-	if b.controlFocus != nil {
-		return b.controlFocus
+	if b.forms.ControlFocus != nil {
+		return b.forms.ControlFocus
 	}
 	if b.layout != nil && b.focus >= 0 && b.focus < len(b.layout.Links) {
 		return b.layout.Links[b.focus].Node
@@ -162,7 +162,7 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 		b.ensureInputVisible(t.node)
 		return
 	}
-	if b.inputFocus != nil {
+	if b.forms.InputFocus != nil {
 		// Leave the field through the normal blur path so change handlers run.
 		b.setInputFocus(nil)
 	} else {
@@ -176,14 +176,14 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 		return
 	}
 	b.focus = -1
-	b.controlFocus = t.node
+	b.forms.ControlFocus = t.node
 	if t.node.Tag == "select" && t.node.HasAttr("multiple") {
-		b.controlOption = firstSelectOption(t.node)
+		b.forms.ControlOption = firstSelectOption(t.node)
 	}
-	if b.controlOption != nil {
-		b.ensureInputVisible(b.controlOption)
+	if b.forms.ControlOption != nil {
+		b.ensureInputVisible(b.forms.ControlOption)
 	} else {
-		b.ensureInputVisible(b.controlFocus)
+		b.ensureInputVisible(b.forms.ControlFocus)
 	}
 	b.status = tabControlStatus(t.node)
 }
@@ -217,19 +217,19 @@ func tabControlStatus(n *Node) string {
 }
 
 func (b *Browser) clearControlFocus() {
-	b.controlFocus = nil
-	b.controlOption = nil
+	b.forms.ControlFocus = nil
+	b.forms.ControlOption = nil
 }
 
 // paintControlFocus highlights the focused non-text control, or the active
 // option inside a multi-select list box.
 func (b *Browser) paintControlFocus(g *Grid, top, bottom int) {
-	if b.layout == nil || b.controlFocus == nil {
+	if b.layout == nil || b.forms.ControlFocus == nil {
 		return
 	}
-	target := b.controlFocus
-	if b.controlOption != nil {
-		target = b.controlOption
+	target := b.forms.ControlFocus
+	if b.forms.ControlOption != nil {
+		target = b.forms.ControlOption
 	}
 	bg := RGB(0xff, 0xd7, 0x00)
 	fg := RGB(0x1f, 0x23, 0x28)
@@ -272,22 +272,22 @@ func (b *Browser) handleControlKey(k string) bool {
 		b.controlStep(1)
 		return false
 	case "h":
-		if controlUsesArrows(b.controlFocus) {
+		if controlUsesArrows(b.forms.ControlFocus) {
 			b.controlStep(-1)
 			return false
 		}
 	case "k":
-		if controlUsesArrows(b.controlFocus) {
+		if controlUsesArrows(b.forms.ControlFocus) {
 			b.controlStep(-1)
 			return false
 		}
 	case "l":
-		if controlUsesArrows(b.controlFocus) {
+		if controlUsesArrows(b.forms.ControlFocus) {
 			b.controlStep(1)
 			return false
 		}
 	case "j":
-		if controlUsesArrows(b.controlFocus) {
+		if controlUsesArrows(b.forms.ControlFocus) {
 			b.controlStep(1)
 			return false
 		}
@@ -309,21 +309,21 @@ func controlUsesArrows(n *Node) bool {
 }
 
 func (b *Browser) activateControlFocus() {
-	n := b.controlFocus
+	n := b.forms.ControlFocus
 	if n == nil {
 		return
 	}
 	top, bottom := b.viewport()
 	r, _ := b.visibleInputRect(n, top, bottom)
-	if n.Tag == "select" && n.HasAttr("multiple") && b.controlOption != nil {
-		b.toggleControl(b.controlOption)
+	if n.Tag == "select" && n.HasAttr("multiple") && b.forms.ControlOption != nil {
+		b.toggleControl(b.forms.ControlOption)
 		return
 	}
 	b.activateHintControl(n, r)
 }
 
 func (b *Browser) controlStep(dir int) {
-	n := b.controlFocus
+	n := b.forms.ControlFocus
 	if n == nil {
 		return
 	}
@@ -357,7 +357,7 @@ func (b *Browser) stepRadio(n *Node, dir int) {
 		}
 	}
 	next := group[(idx+dir+len(group))%len(group)]
-	b.controlFocus = next
+	b.forms.ControlFocus = next
 	b.toggleControl(next)
 	b.ensureInputVisible(next)
 	b.status = tabControlStatus(next)
@@ -394,7 +394,7 @@ func (b *Browser) stepMultiSelect(sel *Node, dir int) {
 	}
 	idx := 0
 	for i, opt := range opts {
-		if opt == b.controlOption {
+		if opt == b.forms.ControlOption {
 			idx = i
 			break
 		}
@@ -405,8 +405,8 @@ func (b *Browser) stepMultiSelect(sel *Node, dir int) {
 			break
 		}
 	}
-	b.controlOption = opts[idx]
-	b.ensureInputVisible(b.controlOption)
+	b.forms.ControlOption = opts[idx]
+	b.ensureInputVisible(b.forms.ControlOption)
 	b.status = tabControlStatus(sel)
 }
 
@@ -589,27 +589,27 @@ func (b *Browser) fireSelectChange(sel *Node) {
 }
 
 func (b *Browser) clearInputFocus() {
-	b.inputSelectAll = false
-	if b.inputFocus != nil {
-		b.inputFocus.InputFocused = false
-		b.inputFocus = nil
+	b.forms.InputSelectAll = false
+	if b.forms.InputFocus != nil {
+		b.forms.InputFocus.InputFocused = false
+		b.forms.InputFocus = nil
 	}
 }
 
 func (b *Browser) setInputFocus(n *Node) {
-	if b.inputFocus == n {
+	if b.forms.InputFocus == n {
 		return
 	}
-	b.inputSelectAll = false
+	b.forms.InputSelectAll = false
 	b.clearControlFocus()
-	if old := b.inputFocus; old != nil {
+	if old := b.forms.InputFocus; old != nil {
 		old.InputFocused = false
 		old.InputCursor = 0
 		if b.js != nil {
 			b.js.FireNodeEvent(old, "change")
 		}
 	}
-	b.inputFocus = n
+	b.forms.InputFocus = n
 	if n != nil {
 		n.InputFocused = true
 		if isRangeInput(n) {
@@ -1006,7 +1006,7 @@ func (b *Browser) rangeSideAt(n *Node, x, y int) int {
 }
 
 func (b *Browser) handleInputKey(k string) bool {
-	n := b.inputFocus
+	n := b.forms.InputFocus
 	if n == nil {
 		return false
 	}
@@ -1020,17 +1020,17 @@ func (b *Browser) handleInputKey(k string) bool {
 	}
 	switch k {
 	case "ctrl-a":
-		b.inputSelectAll = true
+		b.forms.InputSelectAll = true
 		return false
 	case "esc":
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		b.setInputFocus(nil)
 		b.status = exitHint
 		return false
 	case "enter":
 		if n.Tag == "textarea" {
-			all := b.inputSelectAll
-			b.inputSelectAll = false
+			all := b.forms.InputSelectAll
+			b.forms.InputSelectAll = false
 			if all {
 				value, cur = "", 0
 			}
@@ -1040,36 +1040,36 @@ func (b *Browser) handleInputKey(k string) bool {
 			}
 			return false
 		}
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		b.submitInput()
 		return false
 	case "tab":
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		b.tabStep(1)
 		return false
 	case "backtab":
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		b.tabStep(-1)
 		return false
 	case "ctrl-c":
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		return true
 	case "home":
 		if n.Tag == "textarea" {
-			b.inputSelectAll = false
+			b.forms.InputSelectAll = false
 			n.InputCursor = inputLineStart(value, cur)
 			b.refreshInputCursor(n)
 			return false
 		}
 	case "end":
 		if n.Tag == "textarea" {
-			b.inputSelectAll = false
+			b.forms.InputSelectAll = false
 			n.InputCursor = inputLineEnd(value, cur)
 			b.refreshInputCursor(n)
 			return false
 		}
 	case "up", "down":
-		b.inputSelectAll = false
+		b.forms.InputSelectAll = false
 		if n.Tag == "textarea" {
 			delta := -1
 			if k == "down" {
@@ -1085,7 +1085,7 @@ func (b *Browser) handleInputKey(k string) bool {
 		maxRunes = limit
 	}
 	newValue, newCur, handled := editLineKey(value, cur, k, editConfig{
-		selAll:   &b.inputSelectAll,
+		selAll:   &b.forms.InputSelectAll,
 		maxRunes: maxRunes,
 	})
 	if handled {

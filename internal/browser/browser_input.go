@@ -514,7 +514,7 @@ func promptParts(prefix, text string, cursor int, selectAll bool, width int) (he
 }
 
 func (b *Browser) submitInput() {
-	n := b.inputFocus
+	n := b.forms.InputFocus
 	if n == nil {
 		return
 	}
@@ -808,7 +808,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			case headerConfig:
 				b.Navigate("about:config", true)
 			case headerURL:
-				if b.inputFocus != nil {
+				if b.forms.InputFocus != nil {
 					b.setInputFocus(nil)
 				}
 				b.openURLPrompt()
@@ -937,7 +937,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					if isRangeInput(n) {
 						b.selecting = false
 						if dir := b.rangeSideAt(n, x, docY); dir != 0 {
-							if b.inputFocus != n {
+							if b.forms.InputFocus != n {
 								b.setInputFocus(n)
 							}
 							b.adjustRange(n, float64(dir))
@@ -1043,10 +1043,10 @@ func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 // handlePageKey routes keys that belong to page content, forms, links and
 // viewport movement.
 func (b *Browser) handlePageKey(k string) bool {
-	if b.inputFocus != nil {
+	if b.forms.InputFocus != nil {
 		return b.handleInputKey(k)
 	}
-	if b.controlFocus != nil {
+	if b.forms.ControlFocus != nil {
 		return b.handleControlKey(k)
 	}
 	if b.linkHints {

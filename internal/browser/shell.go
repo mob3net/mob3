@@ -75,7 +75,7 @@ func (b *Browser) keysEngine() bool {
 	return b.prompt || b.findActive || b.consoleOpen || b.dialog != nil ||
 		b.download != nil || b.notice != nil || b.selectMenu != nil ||
 		b.viewMenu != nil || b.zoomMenu != nil || b.quitPending ||
-		b.inputFocus != nil || b.controlFocus != nil || b.linkHints || b.hintConfirm
+		b.forms.InputFocus != nil || b.forms.ControlFocus != nil || b.linkHints || b.hintConfirm
 }
 
 // frontendChromeActive reports whether the front end composes the page chrome.

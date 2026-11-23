@@ -192,8 +192,8 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 // Ctrl-A. The brackets and any padding outside the value stay in the field's
 // normal focused colors.
 func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
-	n := b.inputFocus
-	if !b.inputSelectAll || n == nil || b.layout == nil {
+	n := b.forms.InputFocus
+	if !b.forms.InputSelectAll || n == nil || b.layout == nil {
 		return
 	}
 	selBG := RGB(0x1f, 0x4f, 0x9f)
@@ -225,7 +225,7 @@ func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
 
 // paintInputCursor draws the caret over a focused input or textarea.
 func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
-	if b.layout == nil || !b.layout.HasCursor || b.inputSelectAll {
+	if b.layout == nil || !b.layout.HasCursor || b.forms.InputSelectAll {
 		return
 	}
 	r := b.layout.Cursor
