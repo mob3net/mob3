@@ -28,6 +28,39 @@ func (s *FormState) ClearInput() {
 	s.InputSelectAll = false
 }
 
+// ClearInputFocus clears the focused text control, resetting its cursor and
+// focus marker, and returns the previous node.
+func (s *FormState) ClearInputFocus() *Node {
+	s.InputSelectAll = false
+	old := s.InputFocus
+	if old != nil {
+		old.InputFocused = false
+		old.InputCursor = 0
+		s.InputFocus = nil
+	}
+	return old
+}
+
+// FocusInput makes n the focused text control, resetting selection and cursor.
+// It returns the previous focused node, if any.
+func (s *FormState) FocusInput(n *Node) *Node {
+	if s.InputFocus == n {
+		return nil
+	}
+	s.InputSelectAll = false
+	old := s.InputFocus
+	if old != nil {
+		old.InputFocused = false
+		old.InputCursor = 0
+	}
+	s.InputFocus = n
+	if n != nil {
+		n.InputFocused = true
+		n.InputCursor = len(InputValue(n))
+	}
+	return old
+}
+
 // ClearControl drops non-text control focus.
 func (s *FormState) ClearControl() {
 	s.ControlFocus = nil

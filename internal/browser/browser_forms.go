@@ -12,11 +12,6 @@ import (
 // tabTarget is one stop in the standard Tab order.
 type tabTarget = engine.TabTarget
 
-type radioKey struct {
-	form *Node
-	name string
-}
-
 // tabTargets returns links and form controls in document order. Radio groups
 // take one stop at their first button; arrows move within the group.
 func (b *Browser) tabTargets() []tabTarget {
@@ -46,37 +41,7 @@ func (b *Browser) tabStep(delta int) {
 		b.status = "No focusable elements"
 		return
 	}
-	cur := b.currentTabNode()
-	idx := -1
-	for i, t := range targets {
-		if t.Node == cur {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 && cur != nil {
-		// Arrow movement can leave focus on a later radio in a group; Tab
-		// continues from the group's single stop.
-		if cur.Tag == "input" && strings.EqualFold(strings.TrimSpace(cur.Attr("type")), "radio") && cur.Attr("name") != "" {
-			key := radioKey{form: nearestForm(cur), name: cur.Attr("name")}
-			for i, t := range targets {
-				n := t.Node
-				if n != nil && n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") &&
-					nearestForm(n) == key.form && n.Attr("name") == key.name {
-					idx = i
-					break
-				}
-			}
-		}
-	}
-	next := 0
-	if idx < 0 {
-		if delta < 0 {
-			next = len(targets) - 1
-		}
-	} else {
-		next = (idx + delta + len(targets)) % len(targets)
-	}
+	next := engine.TabIndex(targets, b.currentTabNode(), delta)
 	b.setTabFocus(targets[next], next+1, len(targets))
 }
 
@@ -322,58 +287,22 @@ func (b *Browser) ensureFocusVisible() {
 // toggleControl flips a checkbox, radio or multi-select option. A single select
 // opens its option popup instead of cycling through values blind.
 func (b *Browser) toggleControl(n *Node) {
-	if n == nil || isDisabledControl(n) {
-		return
-	}
-	if n.Tag == "option" {
-		sel := nearestSelect(n)
-		if sel == nil || !sel.HasAttr("multiple") || n.HasAttr("disabled") {
-			return
-		}
-		if n.HasAttr("selected") {
-			removeAttr(n, "selected")
-		} else {
-			setAttr(n, "selected", "")
-		}
-		b.fireSelectChange(sel)
-		return
-	}
-	if n.Tag == "select" {
-		if n.HasAttr("multiple") {
-			return
-		}
+	res := engine.ToggleControl(n)
+	switch res.Action {
+	case engine.ToggleOpenSelect:
 		b.openSelectMenu(n)
 		return
-	}
-	typ := strings.ToLower(n.Attr("type"))
-	if typ == "radio" {
-		name := n.Attr("name")
-		// Radio groups are scoped to their form; controls outside any form share
-		// the whole document as their group.
-		scope := nearestForm(n)
-		if scope == nil {
-			for scope = n; scope.Parent != nil; scope = scope.Parent {
-			}
+	case engine.ToggleValue:
+		if res.Select != nil {
+			b.fireSelectChange(res.Select)
+			return
 		}
-		if name != "" {
-			scope.FindAll(func(x *Node) bool {
-				if x != n && x.Tag == "input" && strings.EqualFold(x.Attr("type"), "radio") && x.Attr("name") == name {
-					removeAttr(x, "checked")
-				}
-				return false
-			})
+		if b.js != nil {
+			b.js.FireNodeEvent(n, "input")
+			b.js.FireNodeEvent(n, "change")
 		}
-		setAttr(n, "checked", "")
-	} else if n.HasAttr("checked") {
-		removeAttr(n, "checked")
-	} else {
-		setAttr(n, "checked", "")
+		b.rebuild()
 	}
-	if b.js != nil {
-		b.js.FireNodeEvent(n, "input")
-		b.js.FireNodeEvent(n, "change")
-	}
-	b.rebuild()
 }
 
 // fireSelectChange notifies scripts and repaints after a select value changes.
@@ -386,34 +315,22 @@ func (b *Browser) fireSelectChange(sel *Node) {
 }
 
 func (b *Browser) clearInputFocus() {
-	b.forms.InputSelectAll = false
-	if b.forms.InputFocus != nil {
-		b.forms.InputFocus.InputFocused = false
-		b.forms.InputFocus = nil
-	}
+	b.forms.ClearInputFocus()
 }
 
 func (b *Browser) setInputFocus(n *Node) {
 	if b.forms.InputFocus == n {
 		return
 	}
-	b.forms.InputSelectAll = false
 	b.clearControlFocus()
-	if old := b.forms.InputFocus; old != nil {
-		old.InputFocused = false
-		old.InputCursor = 0
-		if b.js != nil {
-			b.js.FireNodeEvent(old, "change")
-		}
+	old := b.forms.FocusInput(n)
+	if old != nil && b.js != nil {
+		b.js.FireNodeEvent(old, "change")
 	}
-	b.forms.InputFocus = n
 	if n != nil {
-		n.InputFocused = true
 		if isRangeInput(n) {
-			n.InputCursor = 0
 			b.status = "+/− or arrows adjust · Esc finishes"
 		} else {
-			n.InputCursor = len(inputValue(n))
 			b.status = "Typing · Enter submits · Esc finishes"
 		}
 	} else {

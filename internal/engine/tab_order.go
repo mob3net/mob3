@@ -65,3 +65,37 @@ func BuildTabTargets(page *Page, layout *Layout) []TabTarget {
 	}
 	return out
 }
+
+// TabIndex returns the next target index for cur and delta, wrapping at the
+// ends. A radio whose group stop differs still continues from the group's
+// single stop.
+func TabIndex(targets []TabTarget, cur *Node, delta int) int {
+	if len(targets) == 0 {
+		return -1
+	}
+	idx := -1
+	for i, t := range targets {
+		if t.Node == cur {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 && cur != nil && ControlIsRadio(cur) && cur.Attr("name") != "" {
+		form := NearestForm(cur)
+		name := cur.Attr("name")
+		for i, t := range targets {
+			n := t.Node
+			if n != nil && ControlIsRadio(n) && NearestForm(n) == form && n.Attr("name") == name {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx < 0 {
+		if delta < 0 {
+			return len(targets) - 1
+		}
+		return 0
+	}
+	return (idx + delta + len(targets)) % len(targets)
+}
