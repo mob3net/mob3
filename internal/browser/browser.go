@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync/atomic"
@@ -94,6 +93,9 @@ type Browser struct {
 	promptHist      consoleHistory
 	skipDraw        bool
 	clipboardWriter io.Writer
+	// Output is the terminal writer for the legacy direct draw path. The app
+	// sets it to os.Stdout; tests use the package default hook.
+	Output io.Writer
 
 	color        bool
 	prev         []string
@@ -391,7 +393,7 @@ func (b *Browser) searchTemplate() string {
 // Navigate starts loading input in the background so the UI and Esc stay
 // responsive. Results are applied by finishLoad from the main loop.
 func (b *Browser) Navigate(input string, push bool) {
-	b.navigateRequest(http.MethodGet, input, nil, "", push)
+	b.navigateRequest(protocol.MethodGet, input, nil, "", push)
 }
 
 // nextHistoryID allocates an opaque ID for a new front-end history entry.
@@ -444,7 +446,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		return
 	}
 	if method == "" {
-		method = http.MethodGet
+		method = protocol.MethodGet
 	}
 	restoreScroll, hasRestoreScroll := b.NextScroll, b.NextScrollSet
 	b.NextScrollSet = false
@@ -471,7 +473,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		}
 		page := b.configPage(u, applied)
 		b.finishLoad(loadResult{
-			seq: b.LoadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: http.MethodGet,
+			seq: b.LoadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: protocol.MethodGet,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
 		})
 		return
@@ -638,7 +640,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		return
 	}
 	page := res.page
-	if page != nil && page.Download && res.method == http.MethodGet && page.URL != nil {
+	if page != nil && page.Download && res.method == protocol.MethodGet && page.URL != nil {
 		name := page.DownloadName
 		if res.downloadName != "" {
 			name = res.downloadName
@@ -677,7 +679,7 @@ func (b *Browser) finishLoad(res loadResult) {
 			// one history entry; Back should skip the redirecting page rather
 			// than land on it and be forwarded again.
 			b.AutoNavigations++
-			b.navigateRequestEntry(http.MethodGet, target, nil, "", res.entryID, res.historyPush, false)
+			b.navigateRequestEntry(protocol.MethodGet, target, nil, "", res.entryID, res.historyPush, false)
 			return
 		}
 	}
@@ -762,7 +764,7 @@ func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
 	case page.Blocked:
 		return "Site blocked — browser check not supported"
 	case page.Status >= 400:
-		return fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
+		return fmt.Sprintf("HTTP %d %s", page.Status, protocol.HTTPStatusText(page.Status))
 	case b.moduleErr:
 		return moduleFailedStatus
 	case b.Layout != nil && b.Layout.Truncated:
@@ -807,9 +809,9 @@ func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bo
 	}
 	b.AutoNavigations++
 	if duringLoad {
-		b.navigateRequestEntry(http.MethodGet, target, nil, "", entryID, historyPush, false)
+		b.navigateRequestEntry(protocol.MethodGet, target, nil, "", entryID, historyPush, false)
 	} else if replace {
-		b.navigateRequestEntry(http.MethodGet, target, nil, "", b.entryID, false, false)
+		b.navigateRequestEntry(protocol.MethodGet, target, nil, "", b.entryID, false, false)
 	} else {
 		b.Navigate(target, true)
 	}

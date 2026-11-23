@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/protocol"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -43,7 +44,7 @@ func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 func TestFetchCachesSubresources(t *testing.T) {
 	l := NewLoader()
 	tr := &countingTransport{body: "body { color: red; }"}
-	l.client.Transport = tr
+	l.client.HTTP().Transport = tr
 	l.setCacheLimitMB(1)
 	u := mustParse(t, "https://example.com/style.css")
 	ctx := withRequestKind(context.Background(), "css")
@@ -69,7 +70,7 @@ func TestFetchCachesSubresources(t *testing.T) {
 
 	tr2 := &countingTransport{body: "body { color: blue; }", noStore: true}
 	l2 := NewLoader()
-	l2.client.Transport = tr2
+	l2.client.HTTP().Transport = tr2
 	l2.setCacheLimitMB(1)
 	ctx = withRequestKind(context.Background(), "css")
 	for i := 0; i < 2; i++ {
@@ -213,7 +214,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 func TestLoaderPOST(t *testing.T) {
 	var gotMethod, gotBody, gotCT string
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		gotMethod = req.Method
 		gotCT = req.Header.Get("Content-Type")
 		b, _ := io.ReadAll(req.Body)
@@ -225,7 +226,7 @@ func TestLoaderPOST(t *testing.T) {
 			Body:    io.NopCloser(strings.NewReader(`<html><head><title>Posted</title></head><body>ok</body></html>`)),
 			Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadRequest(context.Background(), http.MethodPost, "https://example.com/submit", []byte("q=hi"), "application/x-www-form-urlencoded", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +241,7 @@ func TestLoaderPOST(t *testing.T) {
 
 func TestBlockedChallenge(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		body := `<html><head><title>Just a moment...</title></head><body>
@@ -250,7 +251,7 @@ func TestBlockedChallenge(t *testing.T) {
 			StatusCode: http.StatusForbidden, Status: "403 Forbidden", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +333,7 @@ func TestScriptMIMEGate(t *testing.T) {
 		"/csv.js":     "text/csv",
 		"/missing.js": "",
 	}
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		body := ""
 		if req.URL.Path == "/" {
@@ -359,7 +360,7 @@ func TestScriptMIMEGate(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -390,7 +391,7 @@ func TestScriptMIMEGate(t *testing.T) {
 
 func TestRequestLogRecordsPageResources(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		body := ""
 		switch req.URL.Path {
@@ -410,7 +411,7 @@ func TestRequestLogRecordsPageResources(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	if _, err := loader.LoadContext(context.Background(), "https://example.com/", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +443,7 @@ func TestRequestLogRecordsPageResources(t *testing.T) {
 func TestBlockedBypass(t *testing.T) {
 	newLoader := func() *Loader {
 		loader := NewLoader()
-		loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			h := make(http.Header)
 			h.Set("Content-Type", "text/html")
 			body := `<html><head><title>Just a moment...</title></head><body>
@@ -452,7 +453,7 @@ func TestBlockedBypass(t *testing.T) {
 				StatusCode: http.StatusForbidden, Status: "403 Forbidden", Header: h,
 				Body: io.NopCloser(strings.NewReader(body)), Request: req,
 			}, nil
-		})}
+		})})
 		return loader
 	}
 
@@ -500,7 +501,7 @@ func TestNoscriptMetaRefreshRemoved(t *testing.T) {
 
 func TestNoscriptStylesRemovedWithJS(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		body := `<html><head><noscript>
@@ -511,7 +512,7 @@ func TestNoscriptStylesRemovedWithJS(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -541,7 +542,7 @@ func TestLocalFilesRejected(t *testing.T) {
 func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 	loader := NewLoader()
 	loader.noImages = false
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		body := `<html><head><link rel="stylesheet" href="file:///etc/passwd"></head>
@@ -550,7 +551,7 @@ func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -566,7 +567,7 @@ func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 
 func TestOversizedResponseRejected(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		body := strings.NewReader(strings.Repeat("x", maxResourceSize+1))
@@ -574,7 +575,7 @@ func TestOversizedResponseRejected(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(body), Request: req,
 		}, nil
-	})}
+	})})
 	if _, err := loader.Load("https://example.com/big", nil); !errors.Is(err, errResourceTooLarge) {
 		t.Fatalf("error = %v, want errResourceTooLarge", err)
 	}
@@ -582,14 +583,14 @@ func TestOversizedResponseRejected(t *testing.T) {
 
 func TestBlockedGeneric(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		return &http.Response{
 			StatusCode: http.StatusForbidden, Status: "403 Forbidden", Header: h,
 			Body: io.NopCloser(strings.NewReader(`<html><body>Access Denied</body></html>`)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -907,6 +908,14 @@ func TestPageKeepsRawHTML(t *testing.T) {
 	}
 }
 
+func cookieViewMap(cookies []protocol.CookieView) map[string]string {
+	m := make(map[string]string, len(cookies))
+	for _, c := range cookies {
+		m[c.Name] = c.Value
+	}
+	return m
+}
+
 func cookieMap(cookies []*http.Cookie) map[string]string {
 	m := make(map[string]string, len(cookies))
 	for _, c := range cookies {
@@ -925,7 +934,7 @@ func TestCookieJarVisibility(t *testing.T) {
 		{Name: "path", Value: "foo", Path: "/foo"},
 	})
 
-	visible := cookieMap(jar.documentCookies(u))
+	visible := cookieViewMap(jar.DocumentCookieValues(u))
 	if _, ok := visible["session"]; ok {
 		t.Fatal("HttpOnly cookie was visible to document.cookie")
 	}
@@ -936,11 +945,11 @@ func TestCookieJarVisibility(t *testing.T) {
 	}
 
 	httpURL := mustURL(t, "http://example.com/foo/bar")
-	if _, ok := cookieMap(jar.documentCookies(httpURL))["secure"]; ok {
+	if _, ok := cookieViewMap(jar.DocumentCookieValues(httpURL))["secure"]; ok {
 		t.Fatal("Secure cookie was visible over HTTP")
 	}
 	root := mustURL(t, "https://example.com/")
-	if _, ok := cookieMap(jar.documentCookies(root))["path"]; ok {
+	if _, ok := cookieViewMap(jar.DocumentCookieValues(root))["path"]; ok {
 		t.Fatal("Path-scoped cookie leaked to the root path")
 	}
 }
@@ -951,7 +960,7 @@ func TestCookieJarHttpOnlyReplacement(t *testing.T) {
 	jar.SetCookies(u, []*http.Cookie{{Name: "token", Value: "visible", Path: "/"}})
 	jar.SetCookies(u, []*http.Cookie{{Name: "token", Value: "hidden", Path: "/", HttpOnly: true}})
 
-	if _, ok := cookieMap(jar.documentCookies(u))["token"]; ok {
+	if _, ok := cookieViewMap(jar.DocumentCookieValues(u))["token"]; ok {
 		t.Fatal("replaced HttpOnly cookie remained visible to document.cookie")
 	}
 	if got := cookieMap(jar.Cookies(u))["token"]; got != "hidden" {
@@ -1000,7 +1009,7 @@ func TestLocalNetworkControl(t *testing.T) {
 func TestLocalNetworkGuardBlocksPublicSubresource(t *testing.T) {
 	l := NewLoader()
 	reached := false
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		reached = true
 		return nil, errors.New("transport should not run")
 	})
@@ -1021,7 +1030,7 @@ func TestLocalNetworkGuardBlocksPublicSubresource(t *testing.T) {
 
 func TestLocalNetworkGuardAllowsLocalPageAndNavigation(t *testing.T) {
 	l := NewLoader()
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
 		h.Set("Access-Control-Allow-Origin", "*")
@@ -1044,7 +1053,7 @@ func TestLocalNetworkGuardAllowsLocalPageAndNavigation(t *testing.T) {
 
 func TestLoadRequestMarksLocalPage(t *testing.T) {
 	l := NewLoader()
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
 		return &http.Response{
@@ -1073,7 +1082,7 @@ func TestXHRLocalNetworkGuard(t *testing.T) {
 	loader := NewLoader()
 	b.loader = loader
 	reached := false
-	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		reached = true
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
@@ -1137,7 +1146,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	u := mustURL(t, "https://intranet.example/app.css")
 	l.cache.putBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
 	reached := false
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		reached = true
 		h := make(http.Header)
 		h.Set("Content-Type", "text/css")
@@ -1173,7 +1182,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 func TestMixedContentBlocksActiveSubresources(t *testing.T) {
 	l := NewLoader()
 	reached := false
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		reached = true
 		return nil, errors.New("transport should not run")
 	})
@@ -1192,7 +1201,7 @@ func TestMixedContentBlocksActiveSubresources(t *testing.T) {
 func TestMixedContentUpgradesImages(t *testing.T) {
 	l := NewLoader()
 	var got string
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		got = req.URL.String()
 		h := make(http.Header)
 		h.Set("Content-Type", "image/png")
@@ -1217,7 +1226,7 @@ func TestMixedContentUpgradesImages(t *testing.T) {
 
 func TestMixedContentAllowsInsecureDocument(t *testing.T) {
 	l := NewLoader()
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/javascript")
 		return &http.Response{
@@ -1234,7 +1243,7 @@ func TestMixedContentAllowsInsecureDocument(t *testing.T) {
 
 func TestMixedContentBlocksDowngradeRedirect(t *testing.T) {
 	l := NewLoader()
-	l.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	l.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Location", "http://example.com/next.js")
 		return &http.Response{
@@ -1255,7 +1264,7 @@ func TestXHRMixedContent(t *testing.T) {
 	loader := NewLoader()
 	b.loader = loader
 	reached := false
-	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		reached = true
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
@@ -1297,15 +1306,15 @@ func TestCookieJarDocumentCookieCannotReplaceHttpOnly(t *testing.T) {
 	u := mustURL(t, "https://example.com/foo/bar")
 	jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: "server", Path: "/", HttpOnly: true}})
 
-	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "evil", Path: "/"})
+	jar.SetDocumentCookie(u, &http.Cookie{Name: "session", Value: "evil", Path: "/"})
 	if got := cookieMap(jar.Cookies(u))["session"]; got != "server" {
 		t.Fatalf("document.cookie replaced the HttpOnly value with %q", got)
 	}
-	if _, ok := cookieMap(jar.documentCookies(u))["session"]; ok {
+	if _, ok := cookieViewMap(jar.DocumentCookieValues(u))["session"]; ok {
 		t.Fatal("replaced HttpOnly cookie became visible")
 	}
 
-	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "", Path: "/", MaxAge: -1})
+	jar.SetDocumentCookie(u, &http.Cookie{Name: "session", Value: "", Path: "/", MaxAge: -1})
 	if got := cookieMap(jar.Cookies(u))["session"]; got != "server" {
 		t.Fatalf("document.cookie deleted the HttpOnly cookie (got %q)", got)
 	}
@@ -1315,8 +1324,8 @@ func TestCookieJarDocumentCookieOtherPath(t *testing.T) {
 	jar := newCookieJar()
 	u := mustURL(t, "https://example.com/foo/bar")
 	jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: "server", Path: "/", HttpOnly: true}})
-	jar.setDocumentCookie(u, &http.Cookie{Name: "session", Value: "page", Path: "/foo"})
-	if got := cookieMap(jar.documentCookies(u))["session"]; got != "page" {
+	jar.SetDocumentCookie(u, &http.Cookie{Name: "session", Value: "page", Path: "/foo"})
+	if got := cookieViewMap(jar.DocumentCookieValues(u))["session"]; got != "page" {
 		t.Fatalf("script cookie on another path = %q, want page", got)
 	}
 	root := cookieMap(jar.Cookies(mustURL(t, "https://example.com/")))
@@ -1330,17 +1339,17 @@ func TestCookieJarHttpOnlyDisplayTracksIdentity(t *testing.T) {
 	u := mustURL(t, "https://example.com/")
 	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "a", Path: "/", HttpOnly: true}})
 	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "b", Path: "/", HttpOnly: true}})
-	if got := httpOnlyValue(jar.cookiesForDisplay(u), "sid"); got != "b" {
+	if got := httpOnlyValue(jar.CookieViews(u), "sid"); got != "b" {
 		t.Fatalf("displayed HttpOnly value = %q, want b", got)
 	}
 	// A server may replace the cookie without the flag; the inspector follows.
 	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "c", Path: "/"}})
-	if got := httpOnlyValue(jar.cookiesForDisplay(u), "sid"); got != "" {
+	if got := httpOnlyValue(jar.CookieViews(u), "sid"); got != "" {
 		t.Fatalf("server-demoted cookie is still marked HttpOnly (value %q)", got)
 	}
 }
 
-func httpOnlyValue(cookies []*http.Cookie, name string) string {
+func httpOnlyValue(cookies []protocol.CookieView, name string) string {
 	for _, c := range cookies {
 		if c.Name == name && c.HttpOnly {
 			return c.Value
@@ -1363,7 +1372,7 @@ func TestCookieJarDeletion(t *testing.T) {
 	u := mustURL(t, "https://example.com/")
 	jar.SetCookies(u, []*http.Cookie{{Name: "gone", Value: "1", Path: "/"}})
 	jar.SetCookies(u, []*http.Cookie{{Name: "gone", Value: "", Path: "/", MaxAge: -1}})
-	if _, ok := cookieMap(jar.documentCookies(u))["gone"]; ok {
+	if _, ok := cookieViewMap(jar.DocumentCookieValues(u))["gone"]; ok {
 		t.Fatal("deleted cookie remained visible")
 	}
 }
@@ -1371,7 +1380,7 @@ func TestCookieJarDeletion(t *testing.T) {
 func TestJSDocumentCookie(t *testing.T) {
 	loader := NewLoader()
 	var sentCookie string
-	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		sentCookie = req.Header.Get("Cookie")
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
@@ -1463,7 +1472,7 @@ func (brTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func TestUnsupportedContentEncoding(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: brTransport{}}
+	loader.client = newTestHTTPClient(&http.Client{Transport: brTransport{}})
 	_, err := loader.Load("https://example.com/", nil)
 	if err == nil || !strings.Contains(err.Error(), "unsupported Content-Encoding") {
 		t.Fatalf("err = %v, want an unsupported encoding error", err)
@@ -1532,7 +1541,7 @@ func TestLoaderResolvesCSSImports(t *testing.T) {
 		"https://fixture.test/b.css":     `.b{color:#0000ff}`,
 	}
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		body, ok := files[req.URL.String()]
 		if !ok {
 			return nil, errors.New("unexpected request " + req.URL.String())
@@ -1547,7 +1556,7 @@ func TestLoaderResolvesCSSImports(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)

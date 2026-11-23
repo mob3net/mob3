@@ -225,7 +225,7 @@ func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
 	b.loader = loader
 	// The first script makes a synchronous request; the transport stands in
 	// for the user pressing Esc while it runs.
-	loader.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client.HTTP().Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		b.abortGen.Add(1)
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
@@ -509,7 +509,7 @@ func TestJSElementConstructors(t *testing.T) {
 func TestJSFetch(t *testing.T) {
 	loader := NewLoader()
 	var gotMethod, gotPath, gotBody, gotHeader string
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		gotMethod = req.Method
 		gotPath = req.URL.Path
 		gotHeader = req.Header.Get("X-Test")
@@ -522,7 +522,7 @@ func TestJSFetch(t *testing.T) {
 			StatusCode: 201, Status: "201 Created", Header: h,
 			Body: io.NopCloser(strings.NewReader(`{"ok":true}`)), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		fetch("/api", {method: "POST", headers: {"X-Test": "yes"}, body: "abc"})
 			.then(function (r) {
@@ -546,13 +546,13 @@ func TestJSFetch(t *testing.T) {
 func TestJSFetchCrossOriginBlocked(t *testing.T) {
 	loader := NewLoader()
 	calls := 0
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		calls++
 		return &http.Response{
 			StatusCode: 200, Status: "200 OK", Header: make(http.Header),
 			Body: io.NopCloser(strings.NewReader("secret")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		fetch("https://other.example/account")
 			.then(function () { document.title = "leaked"; })
@@ -572,7 +572,7 @@ func TestJSFetchCrossOriginBlocked(t *testing.T) {
 func TestJSFetchCrossOriginCORS(t *testing.T) {
 	loader := NewLoader()
 	calls := 0
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		calls++
 		h := make(http.Header)
 		h.Set("Access-Control-Allow-Origin", "*")
@@ -580,7 +580,7 @@ func TestJSFetchCrossOriginCORS(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader("allowed")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		fetch("https://other.example/api")
 			.then(function (r) { return r.text(); })
@@ -652,7 +652,7 @@ func TestJSIntlSegmenter(t *testing.T) {
 func TestJSXMLHTTPRequest(t *testing.T) {
 	loader := NewLoader()
 	var gotMethod, gotPath, gotBody string
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		gotMethod = req.Method
 		gotPath = req.URL.Path
 		b, _ := io.ReadAll(req.Body)
@@ -664,7 +664,7 @@ func TestJSXMLHTTPRequest(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		var x = new XMLHttpRequest();
 		x.open("POST", "/api");
@@ -688,7 +688,7 @@ func TestJSXMLHTTPRequest(t *testing.T) {
 func TestJSXHRCrossOriginBlocked(t *testing.T) {
 	loader := NewLoader()
 	calls := 0
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		calls++
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
@@ -696,7 +696,7 @@ func TestJSXHRCrossOriginBlocked(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader("secret")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		var x = new XMLHttpRequest();
 		x.open("GET", "https://other.example/account");
@@ -717,7 +717,7 @@ func TestJSXHRCrossOriginBlocked(t *testing.T) {
 func TestJSXHRCrossOriginRedirectBlocked(t *testing.T) {
 	loader := NewLoader()
 	calls := 0
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		calls++
 		h := make(http.Header)
 		h.Set("Location", "https://other.example/secret")
@@ -725,7 +725,7 @@ func TestJSXHRCrossOriginRedirectBlocked(t *testing.T) {
 			StatusCode: 302, Status: "302 Found", Header: h,
 			Body: io.NopCloser(strings.NewReader("")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		var x = new XMLHttpRequest();
 		x.open("GET", "/start");
@@ -1466,14 +1466,14 @@ func TestJSFocusAndMicrotask(t *testing.T) {
 
 func TestJSRequestLog(t *testing.T) {
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/plain")
 		return &http.Response{
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
 		}, nil
-	})}
+	})})
 	page := newJSPage(`<html><body></body></html>`, `
 		fetch("/f");
 		var x = new XMLHttpRequest();
@@ -1501,7 +1501,7 @@ func TestExternalScriptCollected(t *testing.T) {
 		"https://fixture.test/app.js":    `document.getElementById("out").textContent = "external";`,
 	}
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		body, ok := files[req.URL.String()]
 		if !ok {
 			return nil, errors.New("unexpected request " + req.URL.String())
@@ -1516,7 +1516,7 @@ func TestExternalScriptCollected(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(strings.NewReader(body)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)

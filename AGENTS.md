@@ -203,10 +203,10 @@ published by the Pages build.
 - `internal/browser/` — package `browser` with the 296-method `Browser`, which
   embeds `engine.Session` for page/layout/URL/scroll, plus loader/session
   construction, navigation and form/JS load glue, fallback chrome/dialogs and
-  most integration tests until the boundary migration completes. The package
-  still imports `internal/host`, `net/http` and `os`, which blocks moving it
-  into `internal/engine`. Nothing under `internal` is imported from outside
-  this module.
+  most integration tests until the boundary migration completes. Production
+  code no longer imports `net/http` or `os`; `internal/host` remains in the
+  loader/policy shims, which blocks moving the package into `internal/engine`.
+  Nothing under `internal` is imported from outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),

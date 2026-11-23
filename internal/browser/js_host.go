@@ -3,9 +3,7 @@ package browser
 import (
 	"context"
 	"errors"
-	"net/http"
 	"net/url"
-	"strings"
 
 	"browser/internal/engine"
 	"browser/internal/protocol"
@@ -67,7 +65,7 @@ func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
 	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
 		return nil
 	}
-	cookies := h.b.loader.cookies.documentCookies(u)
+	cookies := h.b.loader.cookies.DocumentCookieValues(u)
 	out := make([]engine.Cookie, 0, len(cookies))
 	for _, c := range cookies {
 		out = append(out, engine.Cookie{Name: c.Name, Value: c.Value})
@@ -78,11 +76,7 @@ func (h browserJSHost) SetDocumentCookie(u *url.URL, raw string) {
 	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
 		return
 	}
-	c, err := http.ParseSetCookie(strings.TrimSpace(raw))
-	if err != nil || c.Name == "" {
-		return
-	}
-	h.b.loader.cookies.setDocumentCookie(u, c)
+	h.b.loader.cookies.setDocumentCookieRaw(u, raw)
 }
 func (h browserJSHost) FetchResource(ctx context.Context, u *url.URL) ([]byte, string, *url.URL, int, error) {
 	if h.b.loader == nil {

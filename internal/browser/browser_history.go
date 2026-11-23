@@ -2,7 +2,6 @@ package browser
 
 import (
 	"image"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -179,7 +178,7 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 	b.suspendCurrentPage()
 	b.NextScroll = scroll
 	b.NextScrollSet = true
-	b.navigateRequestEntry(http.MethodGet, rawURL, nil, "", entryID, false, false)
+	b.navigateRequestEntry(protocol.MethodGet, rawURL, nil, "", entryID, false, false)
 }
 
 // emitHistoryCommit reports a completed load to the front end list and any
@@ -199,7 +198,7 @@ func (b *Browser) reload() {
 	}
 	method := b.LastMethod
 	if method == "" {
-		method = http.MethodGet
+		method = protocol.MethodGet
 	}
 	b.navigateRequest(method, b.URL.String(), b.LastBody, b.LastContentType, false)
 }

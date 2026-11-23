@@ -120,7 +120,7 @@ func TestLayoutImportedCSSGolden(t *testing.T) {
 	}
 	pageFile := filepath.Join(dir, "page.html")
 	loader := NewLoader()
-	loader.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		rel := filepath.FromSlash(strings.TrimPrefix(req.URL.Path, "/"))
 		data, err := os.ReadFile(filepath.Join(dir, rel))
 		if err != nil {
@@ -136,7 +136,7 @@ func TestLayoutImportedCSSGolden(t *testing.T) {
 			StatusCode: 200, Status: "200 OK", Header: h,
 			Body: io.NopCloser(bytes.NewReader(data)), Request: req,
 		}, nil
-	})}
+	})})
 	page, err := loader.Load("https://fixture.test/page.html", nil)
 	if err != nil {
 		t.Fatal(err)

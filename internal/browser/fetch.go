@@ -11,12 +11,12 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"mime"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"browser/internal/protocol"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/text/encoding/charmap"
@@ -43,13 +43,10 @@ func imageConfigOK(cfg image.Config) bool { return engine.ImageConfigOK(cfg) }
 const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
 
 type Loader struct {
-	client    *http.Client
+	client    *host.Client
 	cookies   *cookieJar
 	settings  *host.Settings
 	noScripts bool
-	// transport is the stable RoundTripper whose base is replaced when the
-	// certificate source changes; client.Transport always points at it.
-	transport *certTransport
 	// certSource labels the active TLS trust store ("system" or "embedded")
 	// and certPool holds its roots. A nil pool means the platform store. See
 	// SetCertSource.
@@ -103,15 +100,14 @@ func (l *Loader) imageCap() (int, int)         { return l.settings.ImageCaps() }
 // client's transport is a stable wrapper so that swap never races a request.
 func NewLoader() *Loader {
 	jar := newCookieJar()
-	tr := newCertTransport(newHTTPTransport(nil))
+	client := host.NewClient(jar)
 	l := &Loader{
 		cache:           newResourceCache(resourceCacheBudget(effectiveMemoryLimit())),
 		cookies:         jar,
 		noImages:        true,
 		imageViewportPx: 800,
-		client:          host.NewHTTPClient(jar, tr),
+		client:          client,
 		settings:        host.NewSettings(defaultUserAgent, DefaultSearchURL),
-		transport:       tr,
 		requests:        host.NewRequestLog(),
 		certSource:      CertSourceSystem,
 	}
@@ -201,7 +197,7 @@ func (l *Loader) Load(input string, base *url.URL) (*Page, error) {
 // LoadContext is Load with cancellation support. Canceling ctx aborts the
 // page request, stylesheets, scripts and image downloads.
 func (l *Loader) LoadContext(ctx context.Context, input string, base *url.URL) (*Page, error) {
-	return l.LoadRequest(ctx, http.MethodGet, input, nil, "", base)
+	return l.LoadRequest(ctx, protocol.MethodGet, input, nil, "", base)
 }
 
 // LoadRequest loads a page with an explicit HTTP method and request body.
@@ -223,7 +219,7 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		return nil, err
 	}
 	if u.Scheme == "about" {
-		if !strings.EqualFold(method, http.MethodGet) {
+		if !strings.EqualFold(method, protocol.MethodGet) {
 			return nil, errors.New("POST is not supported for " + u.Scheme + " URLs")
 		}
 		return l.loadAbout(ctx, u)
@@ -315,7 +311,7 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 // mutating shared state.
 func (l *Loader) newFetcher() *host.Fetcher {
 	return &host.Fetcher{
-		Client:   l.client,
+		Client:   l.client.HTTP(),
 		Cache:    l.cache.ResourceCache,
 		Settings: l.settings,
 		Requests: l.requests,

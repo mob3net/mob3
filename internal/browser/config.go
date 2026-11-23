@@ -2,12 +2,12 @@ package browser
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"browser/internal/engine"
+	"browser/internal/protocol"
 )
 
 // configTokenParam carries the one-shot form token. It is a hidden input, so a
@@ -20,7 +20,7 @@ type configItem = engine.ConfigItem
 // form puts them in the query; the config form itself posts them.
 func configValues(method string, u *url.URL, body []byte) url.Values {
 	q := u.Query()
-	if method == http.MethodPost && len(body) > 0 {
+	if method == protocol.MethodPost && len(body) > 0 {
 		if vals, err := url.ParseQuery(string(body)); err == nil {
 			for k, v := range vals {
 				q[k] = v

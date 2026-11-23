@@ -2,8 +2,8 @@ package browser
 
 import (
 	"browser/internal/engine"
+	"browser/internal/protocol"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"unicode/utf8"
@@ -431,7 +431,7 @@ func (b *Browser) submitForm(form *Node) (started bool, reason string) {
 	if !ok {
 		return false, nonEmptyStatus(b.status)
 	}
-	if method == http.MethodPost {
+	if method == protocol.MethodPost {
 		b.navigateRequest(method, target, body, contentType, true)
 		return true, ""
 	}
@@ -461,7 +461,7 @@ func (b *Browser) queueFormSubmit(form *Node) {
 		return
 	}
 	if b.JS == nil {
-		if method == http.MethodPost {
+		if method == protocol.MethodPost {
 			b.navigateRequest(method, target, body, contentType, true)
 		} else {
 			b.Navigate(target, true)

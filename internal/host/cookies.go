@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/net/publicsuffix"
+
+	"browser/internal/protocol"
 )
 
 // CookieJar keeps all HTTP cookies in memory and maintains a second jar
@@ -229,6 +231,75 @@ func (j *CookieJar) CookiesForDisplay(u *url.URL) []*http.Cookie {
 		out = append(out, c)
 	}
 	return out
+}
+
+// DocumentCookieValues returns the document.cookie name/value pairs visible to
+// page scripts.
+func (j *CookieJar) DocumentCookieValues(u *url.URL) []protocol.CookieView {
+	cookies := j.DocumentCookies(u)
+	out := make([]protocol.CookieView, 0, len(cookies))
+	for _, c := range cookies {
+		out = append(out, protocol.CookieView{Name: c.Name, Value: c.Value})
+	}
+	return out
+}
+
+// CookieViews returns display-safe cookie rows for the storage inspector.
+func (j *CookieJar) CookieViews(u *url.URL) []protocol.CookieView {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	now := time.Now()
+	out := make([]protocol.CookieView, 0, len(j.cookies))
+	for id, m := range j.cookies {
+		if !m.expires.IsZero() && !m.expires.After(now) {
+			delete(j.cookies, id)
+			continue
+		}
+		if !cookieApplies(u, id, m) {
+			continue
+		}
+		domain := id.domain
+		if !m.hostOnly {
+			domain = "." + id.domain
+		}
+		out = append(out, protocol.CookieView{
+			Name:     id.name,
+			Value:    m.value,
+			Domain:   domain,
+			Path:     id.path,
+			SameSite: sameSiteLabel(m.sameSite),
+			HttpOnly: m.httpOnly,
+			Secure:   m.secure,
+			Expires:  m.expires,
+		})
+	}
+	return out
+}
+
+func sameSiteLabel(v http.SameSite) string {
+	switch v {
+	case http.SameSiteLaxMode:
+		return "lax"
+	case http.SameSiteStrictMode:
+		return "strict"
+	case http.SameSiteNoneMode:
+		return "none"
+	}
+	return ""
+}
+
+// SetDocumentCookieRaw parses and applies a document.cookie assignment. It
+// returns false when the assignment is malformed or empty.
+func (j *CookieJar) SetDocumentCookieRaw(u *url.URL, raw string) bool {
+	if u == nil {
+		return false
+	}
+	c, err := http.ParseSetCookie(strings.TrimSpace(raw))
+	if err != nil || c.Name == "" {
+		return false
+	}
+	j.SetDocumentCookie(u, c)
+	return true
 }
 
 // cookieApplies reports whether a stored cookie would be sent to u.

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,11 +129,11 @@ func (b *Browser) logJS(kind, msg string) {
 	}
 }
 
-func setMouseReporting(on bool) {
+func (b *Browser) setMouseReporting(on bool) {
 	if on {
-		_, _ = os.Stdout.WriteString("\x1b[?1000h\x1b[?1003h\x1b[?1006h")
+		_, _ = b.writer().Write([]byte("\x1b[?1000h\x1b[?1003h\x1b[?1006h"))
 	} else {
-		_, _ = os.Stdout.WriteString("\x1b[?1003l\x1b[?1000l\x1b[?1006l")
+		_, _ = b.writer().Write([]byte("\x1b[?1003l\x1b[?1000l\x1b[?1006l"))
 	}
 }
 
@@ -159,7 +157,7 @@ func (b *Browser) toggleConsole() {
 	}
 	// Keep mouse reporting on so the sections can be selected by clicking.
 	// Terminal text selection needs the usual Shift-drag override.
-	setMouseReporting(true)
+	b.setMouseReporting(true)
 	b.draw()
 }
 
@@ -833,7 +831,7 @@ func (b *Browser) storageLinesWidth(width int) []string {
 	if b.URL == nil || b.loader == nil || (b.URL.Scheme != "http" && b.URL.Scheme != "https") {
 		out = append(out, "  (not available for this page)")
 	} else {
-		cookies := b.loader.cookies.cookiesForDisplay(b.URL)
+		cookies := b.loader.cookies.cookieViews(b.URL)
 		sort.Slice(cookies, func(i, j int) bool {
 			if cookies[i].Name != cookies[j].Name {
 				return cookies[i].Name < cookies[j].Name
@@ -855,11 +853,11 @@ func (b *Browser) storageLinesWidth(width int) []string {
 				line += "  [Secure]"
 			}
 			switch c.SameSite {
-			case http.SameSiteLaxMode:
+			case "lax":
 				line += "  [SameSite=Lax]"
-			case http.SameSiteStrictMode:
+			case "strict":
 				line += "  [SameSite=Strict]"
-			case http.SameSiteNoneMode:
+			case "none":
 				line += "  [SameSite=None]"
 			}
 			line += "  " + sanitizeStorageText(c.Domain) + "  " + sanitizeStorageText(c.Path)

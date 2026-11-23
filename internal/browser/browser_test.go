@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/host"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -13,12 +14,19 @@ import (
 	"time"
 )
 
+func init() {
+	SetDefaultOutput(func(p []byte) (int, error) { return os.Stdout.Write(p) })
+}
+
 var testSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // plainLine removes SGR sequences from a rendered row.
 func plainLine(s string) string {
 	return testSGR.ReplaceAllString(s, "")
 }
+
+// newTestHTTPClient wraps an injected client for the loader.
+func newTestHTTPClient(c *http.Client) *host.Client { return host.NewClientFromHTTP(c) }
 
 // drawQuiet runs draw while discarding terminal output.
 func drawQuiet(b *Browser) {

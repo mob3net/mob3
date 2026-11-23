@@ -2,7 +2,6 @@ package browser
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"unicode"
@@ -824,7 +823,7 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.gfx.PlaceAll(&sb, b.Session.ProtocolPlacements(nil, placements, g.W, g.H))
 	}
 	if sb.Len() > 0 {
-		_, _ = os.Stdout.WriteString(sb.String())
+		_, _ = b.writer().Write([]byte(sb.String()))
 	}
 }
 

@@ -1,22 +1,21 @@
 package browser
 
 import (
-	"net/http"
 	"net/url"
 
 	"browser/internal/host"
+	"browser/internal/protocol"
 )
 
+// cookieJar is the host-owned session cookie jar with the browser's old API.
 type cookieJar struct{ *host.CookieJar }
 
 func newCookieJar() *cookieJar { return &cookieJar{host.NewCookieJar()} }
 
-func (j *cookieJar) documentCookies(u *url.URL) []*http.Cookie {
-	return j.DocumentCookies(u)
+func (j *cookieJar) setDocumentCookieRaw(u *url.URL, raw string) bool {
+	return j.SetDocumentCookieRaw(u, raw)
 }
-func (j *cookieJar) cookiesForDisplay(u *url.URL) []*http.Cookie {
-	return j.CookiesForDisplay(u)
-}
-func (j *cookieJar) setDocumentCookie(u *url.URL, c *http.Cookie) {
-	j.SetDocumentCookie(u, c)
+
+func (j *cookieJar) cookieViews(u *url.URL) []protocol.CookieView {
+	return j.CookieViews(u)
 }

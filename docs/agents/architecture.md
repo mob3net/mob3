@@ -104,9 +104,9 @@ destination; the tracker lists what remains.
   integration tests. `Browser` embeds `engine.Session`, which now owns page,
   layout, URL, scroll, focus/hover, reader, text-scaling and dark-mode state;
   the methods and shell fields are still being moved. MCP transport lives in
-  `internal/app`. The package still imports `internal/host`, `net/http` and
-  `os`; removing those is the prerequisite for moving it into
-  `internal/engine`.
+  `internal/app`. Production code no longer imports `net/http` or `os`; the
+  remaining `internal/host` dependency is in the loader/policy shims and is the
+  prerequisite for moving the package into `internal/engine`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -213,6 +213,10 @@ destination; the tracker lists what remains.
 | `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers and tests. Normal frames, interactive overlays and form-focused chrome are composed by the front end; removed when the remaining fallback moves. |
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
+| `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
+| `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
+| `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser holds this value without importing `net/http`. |
+| `internal/browser/output.go` | Injected terminal writer for the legacy direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
 | `internal/browser/pdf.go` | Thin PDF loader bridge over `engine.AssemblePDFPage`. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
@@ -224,7 +228,7 @@ destination; the tracker lists what remains.
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. About/blocked/PDF page assembly lives in `internal/engine/page_assemble.go`; image source/task/decode/placement/SVG helpers are also engine-owned. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
+| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. It holds `host.Client`, `host.Settings`, `host.ResourceCache` and `host.RequestLog`; about/blocked/PDF assembly and image helpers are engine-owned. Removing this host dependency is the remaining loader split. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |

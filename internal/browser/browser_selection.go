@@ -3,7 +3,6 @@ package browser
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -93,7 +92,7 @@ func (b *Browser) copyText(text string) bool {
 	} else {
 		w := b.clipboardWriter
 		if w == nil {
-			w = os.Stdout
+			w = b.writer()
 		}
 		if _, err := fmt.Fprint(w, osc52(text)); err != nil {
 			b.status = "Copy failed"
