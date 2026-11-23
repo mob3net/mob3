@@ -154,76 +154,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 // handleCommand applies one front-end command. It reports whether the session
 // should exit.
 func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
-	switch v := cmd.Body.(type) {
-	case protocol.Init:
-		if v.CellW > 0 {
-			b.CellW = v.CellW
-		}
-		if v.CellH > 0 {
-			b.CellH = v.CellH
-		}
-		if v.Zoom > 0 {
-			b.Zoom = v.Zoom
-			setLayoutZoom(v.Zoom)
-		}
-		b.color = v.Caps&protocol.CapColor != 0
-		b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
-	case protocol.Navigate:
-		b.Navigate(v.URL, v.Push)
-	case protocol.History:
-		b.setHistoryView(v)
-	case protocol.Restore:
-		b.restoreEntry(v.EntryID, v.URL, v.Scroll)
-	case protocol.Resize:
-		b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
-		if v.CellW > 0 {
-			b.CellW = v.CellW
-		}
-		if v.CellH > 0 {
-			b.CellH = v.CellH
-		}
-		b.applyImageCap()
-	case protocol.Key:
-		// Esc and Ctrl-C also arrive as keys; count them here as well so a
-		// reader cannot lose the abort when both messages are ready and the
-		// select picks the command first.
-		if v.Token == "esc" || v.Token == "ctrl-c" {
-			b.abortGen.Add(1)
-		}
-		return b.HandleKey(v.Token), nil
-	case protocol.Mouse:
-		return b.HandleMouse(b.protocolMouse(v)), nil
-	case protocol.Scroll:
-		switch {
-		case v.Top:
-			b.scrollBy(-b.Scroll)
-		case v.Bottom:
-			b.scrollBy(b.maxScroll() - b.Scroll)
-		case v.HasTo:
-			b.scrollBy(v.To - b.Scroll)
-		default:
-			b.scrollBy(v.Delta)
-		}
-	case protocol.App:
-		return b.handleAppAction(v)
-	case protocol.Abort:
-		b.abortGen.Add(1)
-	case protocol.Find:
-		b.applyFindCommand(v)
-	case protocol.SelectResult:
-		b.applySelectResult(v)
-	case protocol.ModalClose:
-		b.applyModalClose(v)
-	case protocol.HintResult:
-		b.applyHintResult(v)
-	case protocol.ConsoleAction:
-		b.applyConsoleAction(v)
-	case protocol.ClientError:
-		b.logEngineError(v.Message)
-	case protocol.Shutdown:
-		return true, nil
-	}
-	return false, nil
+	return b.Session.HandleCommand(cmd, b)
 }
 
 func (b *Browser) applyHintResult(v protocol.HintResult) {

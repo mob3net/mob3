@@ -65,3 +65,57 @@ func (b *Browser) ShowDownload(url, name string) { b.showDownload(url, name) }
 func (b *Browser) EmitHistoryCommit(c protocol.HistoryCommit) {
 	b.emitHistoryCommit(c)
 }
+
+func (b *Browser) Init(v protocol.Init) {
+	if v.CellW > 0 {
+		b.CellW = v.CellW
+	}
+	if v.CellH > 0 {
+		b.CellH = v.CellH
+	}
+	if v.Zoom > 0 {
+		b.Zoom = v.Zoom
+		setLayoutZoom(v.Zoom)
+	}
+	b.color = v.Caps&protocol.CapColor != 0
+	b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
+}
+
+func (b *Browser) Resize(v protocol.Resize) {
+	b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
+	if v.CellW > 0 {
+		b.CellW = v.CellW
+	}
+	if v.CellH > 0 {
+		b.CellH = v.CellH
+	}
+	b.applyImageCap()
+}
+
+func (b *Browser) SetHistoryView(v protocol.History) { b.setHistoryView(v) }
+func (b *Browser) RestoreEntry(entryID uint64, rawURL string, scroll int) {
+	b.restoreEntry(entryID, rawURL, scroll)
+}
+func (b *Browser) ProtocolMouse(v protocol.Mouse) bool {
+	return b.HandleMouse(b.protocolMouse(v))
+}
+func (b *Browser) ApplyScroll(v protocol.Scroll) {
+	switch {
+	case v.Top:
+		b.scrollBy(-b.Scroll)
+	case v.Bottom:
+		b.scrollBy(b.maxScroll() - b.Scroll)
+	case v.HasTo:
+		b.scrollBy(v.To - b.Scroll)
+	default:
+		b.scrollBy(v.Delta)
+	}
+}
+func (b *Browser) ApplyApp(v protocol.App) (bool, error) { return b.handleAppAction(v) }
+func (b *Browser) ApplyFind(v protocol.Find)             { b.applyFindCommand(v) }
+func (b *Browser) ApplySelect(v protocol.SelectResult)   { b.applySelectResult(v) }
+func (b *Browser) ApplyModal(v protocol.ModalClose)      { b.applyModalClose(v) }
+func (b *Browser) ApplyHint(v protocol.HintResult)       { b.applyHintResult(v) }
+func (b *Browser) ApplyConsole(v protocol.ConsoleAction) { b.applyConsoleAction(v) }
+func (b *Browser) LogClientError(msg string)             { b.logEngineError(msg) }
+func (b *Browser) Abort()                                { b.abortGen.Add(1) }

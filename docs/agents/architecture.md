@@ -99,7 +99,7 @@ destination; the tracker lists what remains.
   interactive terminal/session boot; it still imports `internal/browser` for
   loader/session construction, the dump handler, automation types and the build
   version. `app → browser` is the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 318-method `Browser`,
+- `internal/browser/` still holds the session shell: the 332-method `Browser`,
   input resolution and the config-page branch, form and JS lifecycle adapters,
   fallback chrome/overlay/dialog/console rendering, loader fetch orchestration
   through `protocol.Host`, automation, and most integration tests. `Browser` embeds `engine.Session`, which now owns page,
@@ -231,7 +231,7 @@ destination; the tracker lists what remains.
 | `internal/browser/certs.go`, `page_compat.go` | Thin browser wrappers over `protocol.Host`/`internal/engine`; delete or merge in Phase 6. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
-| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
+| `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Command dispatch is `engine.Session.HandleCommand` through `CommandHooks`. |
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
@@ -280,6 +280,7 @@ destination; the tracker lists what remains.
 | `internal/engine/session_apply.go` | Load-result application and cached-page restore, driven through the `SessionHooks` trusted-shell effects (JS, console, modals, rebuild, status, download and history commit). |
 | `internal/engine/forms.go` | Form editing and focus: Tab order, control activation/stepping, text/range editing, submission, label targets and form requests, with UI/JS effects supplied by `SessionHooks`. |
 | `internal/engine/js_life.go` | JS runtime lifecycle: start/stop, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. |
+| `internal/engine/commands.go` | Front-end command dispatch: navigation, history, resize, keys, mouse, scroll, app, find, select, modal, hint, console and error commands, with shell effects supplied by `CommandHooks`. |
 | `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
