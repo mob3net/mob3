@@ -2,33 +2,23 @@ package browser
 
 import (
 	"fmt"
-
-	"browser/internal/protocol"
 	"strings"
+
+	"browser/internal/engine"
+	"browser/internal/protocol"
 )
 
-// hintGlyph is one letter of a link's visible text, with the terminal cell it
-// occupies. Hints are chosen from these letters so the page text itself never
-// changes, only the styling of the chosen characters.
-type hintGlyph struct {
-	ch   byte // lowercase ASCII letter used for matching
-	r    rune // original glyph, so painting preserves the page text
-	x, y int  // document cell coordinates
-}
+// Hint assignment lives in the engine; these aliases keep the session-side
+// target collection, painting and activation readable during the migration.
+type hintGlyph = engine.HintGlyph
+type hintChar = engine.HintChar
+type linkHint = engine.LinkHint
 
-// hintChar records the cell of one highlighted hint letter.
-type hintChar struct {
-	r    rune
-	x, y int
+func hintLetter(r rune) (byte, bool) { return engine.HintLetter(r) }
+func buildLinkHints(links []int, glyphs map[int][]hintGlyph) []linkHint {
+	return engine.AssignLinkHints(links, glyphs)
 }
-
-// linkHint is one Vimium-style hint: the target it activates, the letters
-// that follow it, and the text cells to highlight. target indexes hintTargets.
-type linkHint struct {
-	target int
-	label  string
-	chars  []hintChar
-}
+func encodeLinkHint(i, length int) string { return engine.EncodeLinkHint(i, length) }
 
 // hintTarget is a link or editable field reachable through link hints.
 type hintTarget struct {
@@ -109,16 +99,16 @@ func (b *Browser) openLinkHints(ask bool) {
 func (b *Browser) sendHints(ask bool, top, bottom int) error {
 	items := make([]protocol.HintItem, 0, len(b.hintItems))
 	for _, h := range b.hintItems {
-		item := protocol.HintItem{Target: h.target, Label: h.label}
-		if r, ok := b.hintTargetRect(h.target, top, bottom); ok {
+		item := protocol.HintItem{Target: h.Target, Label: h.Label}
+		if r, ok := b.hintTargetRect(h.Target, top, bottom); ok {
 			item.X, item.Y = r.X, r.Y-b.scroll
 			item.W, item.H = r.W, r.H
 		}
-		item.Chars = make([]protocol.HintChar, len(h.chars))
-		for i, c := range h.chars {
-			item.Chars[i] = protocol.HintChar{R: c.r, X: c.x, Y: c.y - b.scroll}
+		item.Chars = make([]protocol.HintChar, len(h.Chars))
+		for i, c := range h.Chars {
+			item.Chars[i] = protocol.HintChar{R: c.R, X: c.X, Y: c.Y - b.scroll}
 		}
-		t := b.hintTargetAt(h.target)
+		t := b.hintTargetAt(h.Target)
 		if t.node == nil && t.link >= 0 && b.layout != nil && t.link < len(b.layout.Links) {
 			item.Link = true
 			item.Href = b.resolveHref(b.layout.Links[t.link].Href)
@@ -161,7 +151,7 @@ func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 	}
 	matches := 0
 	for _, h := range b.hintItems {
-		if strings.HasPrefix(h.label, prefix) {
+		if strings.HasPrefix(h.Label, prefix) {
 			matches++
 		}
 	}
@@ -220,153 +210,12 @@ func (b *Browser) collectHintGlyphs(targets []hintTarget, top, bottom int) map[i
 		x := f.X
 		for _, r := range f.Text {
 			if ch, ok := hintLetter(r); ok {
-				out[id] = append(out[id], hintGlyph{ch: ch, r: r, x: x, y: f.Y})
+				out[id] = append(out[id], hintGlyph{Ch: ch, R: r, X: x, Y: f.Y})
 			}
 			x += runeWidth(r)
 		}
 	}
 	return out
-}
-
-// hintLetter lowercases an ASCII letter and reports whether r is one.
-func hintLetter(r rune) (byte, bool) {
-	if r >= 'a' && r <= 'z' {
-		return byte(r), true
-	}
-	if r >= 'A' && r <= 'Z' {
-		return byte(r) + 'a' - 'A', true
-	}
-	return 0, false
-}
-
-// buildLinkHints assigns a unique hint to each link. Up to 26 links get a
-// single unused letter from their text. Larger pages start from two adjacent
-// letters but shorten any hint whose first letter is unique back to one
-// letter. If a link has no text letters at all, a generated label is used and
-// drawn inside its box.
-func buildLinkHints(links []int, glyphs map[int][]hintGlyph) []linkHint {
-	var hints []linkHint
-	if len(links) <= 26 {
-		if single, ok := assignSingleHints(links, glyphs); ok {
-			hints = single
-		}
-	}
-	if hints == nil {
-		hints = assignPairHints(links, glyphs)
-	}
-	shortenUniquePairs(hints)
-	return hints
-}
-
-// shortenUniquePairs turns a two-letter hint into a one-letter hint when no
-// other label starts with the same letter. The second letter is only needed to
-// distinguish links that share a prefix, so keeping it otherwise makes simple
-// links look more complicated than they are.
-func shortenUniquePairs(hints []linkHint) {
-	counts := make(map[byte]int, len(hints))
-	for _, h := range hints {
-		if h.label != "" {
-			counts[h.label[0]]++
-		}
-	}
-	for i := range hints {
-		h := &hints[i]
-		if len(h.label) != 2 || counts[h.label[0]] != 1 {
-			continue
-		}
-		h.label = h.label[:1]
-		if len(h.chars) > 0 {
-			h.chars = h.chars[:1]
-		}
-	}
-}
-
-func assignSingleHints(links []int, glyphs map[int][]hintGlyph) ([]linkHint, bool) {
-	used := [26]bool{}
-	hints := make([]linkHint, 0, len(links))
-	for _, link := range links {
-		chosen := false
-		for _, g := range glyphs[link] {
-			idx := int(g.ch - 'a')
-			if used[idx] {
-				continue
-			}
-			used[idx] = true
-			hints = append(hints, linkHint{
-				target: link,
-				label:  string(g.ch),
-				chars:  []hintChar{{r: g.r, x: g.x, y: g.y}},
-			})
-			chosen = true
-			break
-		}
-		if chosen {
-			continue
-		}
-		if len(glyphs[link]) > 0 {
-			// This link has text but no unused letter left. Let the caller
-			// switch the whole page to two-letter hints.
-			return nil, false
-		}
-		// A link with no text letters (for example an image) gets a free
-		// letter from the remaining alphabet, drawn inside its box.
-		free := -1
-		for i := range used {
-			if !used[i] {
-				free = i
-				break
-			}
-		}
-		if free < 0 {
-			return nil, false
-		}
-		used[free] = true
-		hints = append(hints, linkHint{target: link, label: string(byte('a' + free))})
-	}
-	return hints, true
-}
-
-func assignPairHints(links []int, glyphs map[int][]hintGlyph) []linkHint {
-	used := make(map[string]bool, len(links))
-	hints := make([]linkHint, 0, len(links))
-	fallback := 0
-	for _, link := range links {
-		gs := glyphs[link]
-		label, chars := pickPair(gs, used)
-		if label == "" {
-			for {
-				label = encodeLinkHint(fallback, 2)
-				fallback++
-				if !used[label] {
-					break
-				}
-			}
-			chars = nil
-		}
-		used[label] = true
-		hints = append(hints, linkHint{target: link, label: label, chars: chars})
-	}
-	return hints
-}
-
-// pickPair finds the first unique two-letter label made of adjacent letters
-// in the link text. Only neighbouring cells are considered, so the two
-// highlighted letters never have other characters or blanks between them.
-func pickPair(gs []hintGlyph, used map[string]bool) (string, []hintChar) {
-	for a := 0; a+1 < len(gs); a++ {
-		if gs[a].y != gs[a+1].y || gs[a+1].x != gs[a].x+1 {
-			continue
-		}
-		label := string(gs[a].ch) + string(gs[a+1].ch)
-		if used[label] {
-			continue
-		}
-		return label, []hintChar{
-			{r: gs[a].r, x: gs[a].x, y: gs[a].y},
-			{r: gs[a+1].r, x: gs[a+1].x, y: gs[a+1].y},
-		}
-	}
-	return "", nil
 }
 
 // clearLinkHints leaves hint mode without navigating. It is safe to call when
@@ -417,9 +266,9 @@ func (b *Browser) typeLinkHint(letter string) {
 	matches := 0
 	match := -1
 	for _, h := range b.hintItems {
-		if strings.HasPrefix(h.label, next) {
+		if strings.HasPrefix(h.Label, next) {
 			matches++
-			match = h.target
+			match = h.Target
 		}
 	}
 	if matches == 0 {
@@ -664,33 +513,33 @@ func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
 	fg := RGB(0x1f, 0x23, 0x28)
 	st := &Style{Bold: true, Underline: true, FontSize: 16, LineHeight: 1}
 	for _, h := range b.hintItems {
-		if !strings.HasPrefix(h.label, b.hintPrefix) {
+		if !strings.HasPrefix(h.Label, b.hintPrefix) {
 			continue
 		}
-		if len(h.chars) == 0 {
+		if len(h.Chars) == 0 {
 			b.paintLinkHintFallback(g, h, top, bottom)
 			continue
 		}
 		// The already typed prefix has done its job; repaint only the letters
 		// that still need to be chosen.
-		chars := h.chars
+		chars := h.Chars
 		if len(b.hintPrefix) < len(chars) {
 			chars = chars[len(b.hintPrefix):]
 		} else {
 			chars = nil
 		}
 		for _, c := range chars {
-			y := c.y - b.scroll + top
+			y := c.Y - b.scroll + top
 			if y < top || y >= bottom || y < 0 || y >= g.H {
 				continue
 			}
-			if c.x < 0 || c.x >= g.W {
+			if c.X < 0 || c.X >= g.W {
 				continue
 			}
-			g.Put(c.x, y, c.r, st, fg, bg)
+			g.Put(c.X, y, c.R, st, fg, bg)
 			if !b.color {
 				// Without colors, reverse video marks the hint letter.
-				g.Cells[y*g.W+c.x].Reverse = true
+				g.Cells[y*g.W+c.X].Reverse = true
 			}
 		}
 	}
@@ -699,11 +548,11 @@ func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
 // paintLinkHintFallback draws free label letters inside a target box that has
 // no usable text, such as an image link or an empty field.
 func (b *Browser) paintLinkHintFallback(g *Grid, h linkHint, top, bottom int) {
-	r, ok := b.hintTargetRect(h.target, top, bottom)
+	r, ok := b.hintTargetRect(h.Target, top, bottom)
 	if !ok {
 		return
 	}
-	label := h.label
+	label := h.Label
 	if len(b.hintPrefix) < len(label) {
 		label = label[len(b.hintPrefix):]
 	} else {
@@ -729,15 +578,4 @@ func (b *Browser) paintLinkHintFallback(g *Grid, h linkHint, top, bottom int) {
 			g.Cells[y*g.W+x+i].Reverse = true
 		}
 	}
-}
-
-// encodeLinkHint renders i in base 26 using letters, padded to length. Index 0
-// is "a" (or "aa" for two-letter hints).
-func encodeLinkHint(i, length int) string {
-	out := make([]byte, length)
-	for p := length - 1; p >= 0; p-- {
-		out[p] = byte('a' + i%26)
-		i /= 26
-	}
-	return string(out)
 }

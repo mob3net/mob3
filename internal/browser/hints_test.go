@@ -26,7 +26,7 @@ func TestLinkHintsPickLetterFromText(t *testing.T) {
 	if !b.linkHints || len(b.hintItems) != 1 {
 		t.Fatalf("hints = %v, want one active hint", b.linkHints)
 	}
-	if got := b.hintItems[0].label; got != "d" {
+	if got := b.hintItems[0].Label; got != "d" {
 		t.Fatalf("label = %q, want d from Documentation", got)
 	}
 	// The label is case-insensitive, even when the page uses an uppercase D.
@@ -55,10 +55,10 @@ func TestLinkHintsSkipUsedLetters(t *testing.T) {
 	if len(b.hintItems) != 2 {
 		t.Fatalf("hints = %d, want 2", len(b.hintItems))
 	}
-	if got := b.hintItems[0].label; got != "d" {
+	if got := b.hintItems[0].Label; got != "d" {
 		t.Fatalf("first label = %q, want d", got)
 	}
-	if got := b.hintItems[1].label; got != "o" {
+	if got := b.hintItems[1].Label; got != "o" {
 		t.Fatalf("second label = %q, want o because d is already used", got)
 	}
 	b.HandleKey("o")
@@ -84,32 +84,32 @@ func TestLinkHintsTwoLettersAndFiltering(t *testing.T) {
 	seen := map[string]bool{}
 	prefixes := map[byte]int{}
 	for _, h := range b.hintItems {
-		if len(h.label) < 1 || len(h.label) > 2 {
-			t.Fatalf("label %q is not one or two letters", h.label)
+		if len(h.Label) < 1 || len(h.Label) > 2 {
+			t.Fatalf("label %q is not one or two letters", h.Label)
 		}
-		if seen[h.label] {
-			t.Fatalf("duplicate label %q", h.label)
+		if seen[h.Label] {
+			t.Fatalf("duplicate label %q", h.Label)
 		}
-		seen[h.label] = true
-		prefixes[h.label[0]]++
-		if len(h.chars) != len(h.label) {
-			t.Fatalf("label %q highlights %d chars, want %d", h.label, len(h.chars), len(h.label))
+		seen[h.Label] = true
+		prefixes[h.Label[0]]++
+		if len(h.Chars) != len(h.Label) {
+			t.Fatalf("label %q highlights %d chars, want %d", h.Label, len(h.Chars), len(h.Label))
 		}
 	}
 	for _, h := range b.hintItems {
-		if prefixes[h.label[0]] == 1 && len(h.label) != 1 {
-			t.Fatalf("label %q has a unique first letter but is not shortened", h.label)
+		if prefixes[h.Label[0]] == 1 && len(h.Label) != 1 {
+			t.Fatalf("label %q has a unique first letter but is not shortened", h.Label)
 		}
 	}
 	h := b.hintItems[27]
-	for _, r := range h.label {
+	for _, r := range h.Label {
 		b.HandleKey(string(r))
 	}
 	if b.linkHints {
 		t.Fatal("typing the hint did not follow the link")
 	}
 	if b.focus != 27 {
-		t.Fatalf("focus = %d, want link 27 for %q", b.focus, h.label)
+		t.Fatalf("focus = %d, want link 27 for %q", b.focus, h.Label)
 	}
 }
 
@@ -163,42 +163,8 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 		t.Fatalf("page links = %d, want 2", len(b.layout.Links))
 	}
 	b.HandleKey("f")
-	if len(b.hintItems) != 1 || b.hintItems[0].target != 0 {
+	if len(b.hintItems) != 1 || b.hintItems[0].Target != 0 {
 		t.Fatalf("visible hints = %+v, want only the top link", b.hintItems)
-	}
-}
-
-func TestPickPairUsesAdjacentCells(t *testing.T) {
-	glyphs := []hintGlyph{
-		{ch: 'u', r: 'U', x: 1, y: 1},
-		{ch: 'p', r: 'p', x: 2, y: 1},
-		{ch: 'g', r: 'g', x: 3, y: 1},
-		{ch: 'r', r: 'r', x: 4, y: 1},
-	}
-	label, chars := pickPair(glyphs, map[string]bool{"up": true})
-	if label != "pg" {
-		t.Fatalf("label = %q, want pg", label)
-	}
-	if len(chars) != 2 || chars[0].r != 'p' || chars[1].r != 'g' {
-		t.Fatalf("chars = %+v, want p and g", chars)
-	}
-	if chars[0].y != chars[1].y || chars[1].x != chars[0].x+1 {
-		t.Fatalf("hint letters are not adjacent: %+v", chars)
-	}
-}
-
-func TestShortenUniquePairHints(t *testing.T) {
-	hints := []linkHint{
-		{label: "fi", chars: []hintChar{{r: 'F'}, {r: 'i'}}},
-		{label: "pg", chars: []hintChar{{r: 'p'}, {r: 'g'}}},
-		{label: "pa", chars: []hintChar{{r: 'p'}, {r: 'a'}}},
-	}
-	shortenUniquePairs(hints)
-	if hints[0].label != "f" || len(hints[0].chars) != 1 {
-		t.Fatalf("unique hint = %+v, want shortened to f", hints[0])
-	}
-	if hints[1].label != "pg" || hints[2].label != "pa" {
-		t.Fatalf("shared-prefix hints should stay two letters: %+v", hints)
 	}
 }
 
@@ -241,21 +207,6 @@ func TestModalsDisableInlineImages(t *testing.T) {
 	}
 }
 
-func TestLinkHintsNoTextFreeLetters(t *testing.T) {
-	hints := buildLinkHints([]int{0, 1}, map[int][]hintGlyph{
-		0: {{ch: 'd', r: 'D', x: 1, y: 1}},
-	})
-	if len(hints) != 2 {
-		t.Fatalf("hints = %d, want 2", len(hints))
-	}
-	if hints[0].label != "d" {
-		t.Fatalf("text link label = %q, want d", hints[0].label)
-	}
-	if hints[1].label != "a" || len(hints[1].chars) != 0 {
-		t.Fatalf("no-text link = %+v, want free letter a", hints[1])
-	}
-}
-
 func TestLinkHintsOperateFormControls(t *testing.T) {
 	b := hintTestBrowser(t, `<html><body>
 <form action="/go">
@@ -283,8 +234,8 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 		}
 		label := ""
 		for _, h := range b.hintItems {
-			if target := b.hintTargetAt(h.target); target.node != nil && match(target.node) {
-				label = h.label
+			if target := b.hintTargetAt(h.Target); target.node != nil && match(target.node) {
+				label = h.Label
 				break
 			}
 		}
@@ -343,9 +294,9 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 	var input *Node
 	label := ""
 	for _, h := range b.hintItems {
-		if target := b.hintTargetAt(h.target); target.node != nil {
+		if target := b.hintTargetAt(h.Target); target.node != nil {
 			input = target.node
-			label = h.label
+			label = h.Label
 			break
 		}
 	}
@@ -369,9 +320,9 @@ func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 	b.linkHints = true
 	b.hintPrefix = "g"
 	b.hintItems = []linkHint{
-		{target: 0, label: "ab", chars: []hintChar{{r: 'a', x: 1}, {r: 'b', x: 2}}},
-		{target: 1, label: "gx", chars: []hintChar{{r: 'g', x: 5}, {r: 'x', x: 6}}},
-		{target: 2, label: "gy", chars: []hintChar{{r: 'g', x: 8}, {r: 'y', x: 9}}},
+		{Target: 0, Label: "ab", Chars: []hintChar{{R: 'a', X: 1}, {R: 'b', X: 2}}},
+		{Target: 1, Label: "gx", Chars: []hintChar{{R: 'g', X: 5}, {R: 'x', X: 6}}},
+		{Target: 2, Label: "gy", Chars: []hintChar{{R: 'g', X: 8}, {R: 'y', X: 9}}},
 	}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
@@ -392,7 +343,7 @@ func TestPaintLinkHintFallbackInsideBox(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Links: []*LinkInfo{{Rects: []Rect{{X: 3, Y: 0, W: 10, H: 1}}}}}
 	b.linkHints = true
-	b.hintItems = []linkHint{{target: 0, label: "bx"}}
+	b.hintItems = []linkHint{{Target: 0, Label: "bx"}}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
 	for i, want := range "bx" {

@@ -227,9 +227,10 @@ destination; the tracker lists what remains.
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs, the page select popup, the `X` view/`Z` zoom windows and their rendering. Interactive presentation and input for all of these are front-end-owned. |
 | `find.go` | Page and console HTML match computation, scrolling and match highlights. The visible find bar, query, caret and next/previous are front-end-owned. |
-| `hints.go` | Engine-side target discovery and following for link hints: each visible link's own text, labels, glyph cells, case-insensitive prefix filtering and the F destination-confirmation step. The overlay painting and prefix input are front-end-owned (`frontend/hints.go`). |
+| `hints.go` | Session-side target discovery, glyph collection, following and the F destination-confirmation step; hint label assignment and encoding call `engine.AssignLinkHints`/`EncodeLinkHint`. The overlay painting and prefix input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
 | `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
+| `internal/engine/hints.go` | Link-hint label assignment: glyph types, single/pair assignment, unique-pair shortening and base-26 label encoding. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
