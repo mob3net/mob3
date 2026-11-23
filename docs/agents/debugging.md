@@ -41,7 +41,11 @@ temporary and remove them before handing work back.
 
 The transport validates every event after the engine produces it. If a frame
 fails (for example an image placement outside the frame), the transport swaps
-it for a `Crash` event instead of delivering unsafe cell data. The front end
+it for a `Crash` event instead of delivering unsafe cell data. A panic in the
+engine handler goroutine is caught at the same layer and also becomes a
+`Crash`; the event stream then closes, the front end unwinds normally and its
+deferred cleanup restores the terminal instead of leaving raw mode on.
+The front end
 prints the first identical message to stderr, sends it back as a `ClientError`
 command, and the engine adds `[engine] ...` to the `!` console and sets
 `Error: page engine — see ! console` in the footer. Identical repeats are

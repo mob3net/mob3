@@ -56,6 +56,26 @@ func TestInProcTransportRoundTrip(t *testing.T) {
 	}
 }
 
+func TestInProcTransportContainsHandlerPanic(t *testing.T) {
+	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
+		panic("boom")
+	})
+	s, err := (&InProc{}).Open(context.Background(), 3, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var crash Crash
+	for ev := range s.Events() {
+		if c, ok := ev.Body.(Crash); ok {
+			crash = c
+		}
+	}
+	if !strings.Contains(crash.Message, "boom") {
+		t.Fatalf("crash message = %q, want the panic value", crash.Message)
+	}
+}
+
 func TestInProcTransportRejectsInvalidCommand(t *testing.T) {
 	called := make(chan struct{}, 1)
 	h := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {

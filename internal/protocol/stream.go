@@ -143,7 +143,7 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 		}
 	}()
 
-	err := h.Serve(ctx, abortCh, in, sink)
+	err := runHandler(ctx, abortCh, in, sink, h)
 	if err != nil && ctx.Err() == nil {
 		_ = sink.Send(Event{Body: Crash{Message: err.Error()}})
 	}

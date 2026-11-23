@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -188,11 +189,24 @@ func (s *inProcSession) Close() error {
 	return nil
 }
 
+// runHandler runs one handler and turns a panic into an ordinary error. The
+// session then reports a Crash and closes its event stream, so the trusted
+// front end can unwind, restore the terminal and show the reason instead of
+// the process dying in the engine goroutine.
+func runHandler(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink, h Handler) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("page engine panic: %v", r)
+		}
+	}()
+	return h.Serve(ctx, abort, in, out)
+}
+
 func (s *inProcSession) serve(h Handler) {
 	defer close(s.serveDone)
 	out := newOutbox(s.ctx, s.events, cap(s.events))
 	sink := &eventSink{id: s.id, lim: s.lim, out: out}
-	err := h.Serve(s.ctx, s.abortCh, s.in, sink)
+	err := runHandler(s.ctx, s.abortCh, s.in, sink, h)
 	if err != nil && s.ctx.Err() == nil {
 		// A handler error is a contained engine failure. Report it before the
 		// event stream closes so the front end can show it.
