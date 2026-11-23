@@ -137,30 +137,6 @@ func ParseZoomPercent(s string) (float64, bool) { return parseZoomPercent(s) }
 // ZoomPercentLabel formats a zoom factor for the config page.
 func ZoomPercentLabel(z float64) string { return zoomPercentLabel(z) }
 
-// DumpOptions carries one non-interactive render.
-type DumpOptions struct {
-	Loader     *Loader
-	Target     string
-	Width      int
-	Height     int
-	NoColor    bool
-	Color      bool
-	NoJS       bool
-	Reader     bool
-	Dark       bool
-	PNG        bool
-	PDFPage    int
-	JSMemLimit int64
-	Budget     LayoutBudget
-	Zoom       float64
-}
-
-// Dump renders one page to stdout.
-func Dump(o DumpOptions) int {
-	return dumpPage(o.Loader, o.Target, o.Width, o.Height, o.NoColor, o.Color,
-		o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, o.JSMemLimit, o.Budget, o.Zoom)
-}
-
 // AutomationConfig is the headless session configuration used by MCP.
 type AutomationConfig struct {
 	Loader        *Loader

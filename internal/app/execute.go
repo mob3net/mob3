@@ -102,24 +102,16 @@ func execute(o runOptions) int {
 	}
 
 	if !interactive {
-		return browser.Dump(browser.DumpOptions{
-			Loader: loader, Target: o.Target, Width: o.Width, Height: o.Height,
-			NoColor: o.NoColor, Color: o.Color, NoJS: o.NoJS, Reader: o.Reader,
-			Dark: o.Dark, PNG: o.PNG, PDFPage: o.PDFPage, JSMemLimit: jsMemLimit,
-			Budget: budget, Zoom: zoomFactor,
-		})
+		return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color,
+			o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, jsMemLimit, budget, zoomFactor)
 	}
 
 	stdin := os.Stdin
 	state, err := frontend.MakeRaw(stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
-		return browser.Dump(browser.DumpOptions{
-			Loader: loader, Target: o.Target, Width: o.Width, Height: o.Height,
-			NoColor: o.NoColor, Color: o.Color, NoJS: o.NoJS, Reader: o.Reader,
-			Dark: o.Dark, PNG: o.PNG, PDFPage: o.PDFPage, JSMemLimit: jsMemLimit,
-			Budget: budget, Zoom: zoomFactor,
-		})
+		return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color,
+			o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, jsMemLimit, budget, zoomFactor)
 	}
 	w, h, ok := frontend.TerminalSize(os.Stdout)
 	if !ok {

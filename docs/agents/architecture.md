@@ -201,10 +201,11 @@ destination; the tracker lists what remains.
 | `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers and tests. Normal frames, interactive overlays and form-focused chrome are composed by the front end; removed when the remaining fallback moves. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
-| `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |
+| `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
+| `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |

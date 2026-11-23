@@ -4,6 +4,7 @@ import (
 	"browser/internal/frontend"
 	"browser/internal/protocol"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -76,11 +77,49 @@ func dumpBaseline(t *testing.T, png bool) []byte {
 		h = 35
 	}
 	return captureStdout(t, func() {
-		status := dumpPage(NewLoader(), boundaryBaselineURL(), 100, h, true, false, true, false, false, png, 0, 0, DefaultLayoutBudget, 1)
-		if status != 0 {
-			t.Fatalf("dumpPage status %d", status)
+		if status := dumpPageForTest(t, png, h); status != 0 {
+			t.Fatalf("dump handler status %d", status)
 		}
 	})
+}
+
+// dumpPageForTest mirrors the app's one-shot transport loop without importing
+// app from a browser test.
+func dumpPageForTest(t *testing.T, png bool, viewportH int) int {
+	t.Helper()
+	h := NewDumpHandler(DumpConfig{
+		Loader: NewLoader(), Target: boundaryBaselineURL(), Width: 100,
+		ViewportH: viewportH, NoJS: true, PNG: png,
+		Budget: DefaultLayoutBudget, Zoom: 1,
+	})
+	session, err := (&protocol.InProc{Limits: DumpLimits(100, png), EventQueue: 4}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	frames := 0
+	for ev := range session.Events() {
+		v, ok := ev.Body.(protocol.Frame)
+		if !ok {
+			continue
+		}
+		frames++
+		if png {
+			data, err := frontend.RenderPNG(v, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = os.Stdout.Write(data)
+			continue
+		}
+		for _, line := range frontend.EncodeFrame(v, false, false) {
+			fmt.Println(line)
+		}
+	}
+	if frames == 0 {
+		return 1
+	}
+	return 0
 }
 
 // TestBoundaryDumpBaseline freezes the text output of the synthetic page. It
