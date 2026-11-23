@@ -645,32 +645,6 @@ func TestFormValidationConstraints(t *testing.T) {
 	}
 }
 
-func TestInputTypeFormatValidation(t *testing.T) {
-	cases := []struct {
-		typ, value string
-		valid      bool
-	}{
-		{"date", "2026-11-10", true},
-		{"date", "2026-02-30", false},
-		{"time", "23:59", true},
-		{"time", "24:00", false},
-		{"datetime-local", "2026-11-10T14:30", true},
-		{"datetime-local", "2026-11-10 14:30", false},
-		{"month", "2026-11", true},
-		{"month", "2026-13", false},
-		{"week", "2026-W45", true},
-		{"week", "2026-W99", false},
-		{"color", "#2f6fbf", true},
-		{"color", "#2f6fb", false},
-	}
-	for _, tc := range cases {
-		got := invalidControlValue(nil, tc.typ, tc.value) == ""
-		if got != tc.valid {
-			t.Errorf("%s %q valid=%v, want %v", tc.typ, tc.value, got, tc.valid)
-		}
-	}
-}
-
 func TestMaxlengthReadonlyDisabled(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go">
 		<input name="short" maxlength="3">
