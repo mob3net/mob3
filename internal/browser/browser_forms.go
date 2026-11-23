@@ -9,11 +9,8 @@ import (
 	"unicode/utf8"
 )
 
-// tabTarget is one stop in the standard Tab order: a link or a form control.
-type tabTarget struct {
-	link int
-	node *Node
-}
+// tabTarget is one stop in the standard Tab order.
+type tabTarget = engine.TabTarget
 
 type radioKey struct {
 	form *Node
@@ -23,55 +20,7 @@ type radioKey struct {
 // tabTargets returns links and form controls in document order. Radio groups
 // take one stop at their first button; arrows move within the group.
 func (b *Browser) tabTargets() []tabTarget {
-	if b.page == nil || b.page.Root == nil || b.layout == nil {
-		return nil
-	}
-	linkByNode := make(map[*Node]int, len(b.layout.Links))
-	for i, li := range b.layout.Links {
-		if li.Node == nil {
-			continue
-		}
-		if _, ok := linkByNode[li.Node]; !ok {
-			linkByNode[li.Node] = i
-		}
-	}
-	var out []tabTarget
-	seenRadio := make(map[radioKey]bool)
-	b.page.Root.FindAll(func(n *Node) bool {
-		if link, ok := linkByNode[n]; ok {
-			out = append(out, tabTarget{link: link, node: n})
-			return false
-		}
-		if !isTabControl(n) {
-			return false
-		}
-		if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") && n.Tag == "input" {
-			name := n.Attr("name")
-			if name != "" {
-				key := radioKey{form: nearestForm(n), name: name}
-				if seenRadio[key] {
-					return false
-				}
-				seenRadio[key] = true
-			}
-		}
-		out = append(out, tabTarget{link: -1, node: n})
-		return false
-	})
-	// A radio group's Tab stop is its checked button, or the first one.
-	for i := range out {
-		n := out[i].node
-		if n == nil || n.Tag != "input" || !strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") {
-			continue
-		}
-		for _, r := range radioGroupNodes(n) {
-			if r.HasAttr("checked") {
-				out[i].node = r
-				break
-			}
-		}
-	}
-	return out
+	return engine.BuildTabTargets(b.page, b.layout)
 }
 
 func (b *Browser) currentTabNode() *Node {
@@ -100,7 +49,7 @@ func (b *Browser) tabStep(delta int) {
 	cur := b.currentTabNode()
 	idx := -1
 	for i, t := range targets {
-		if t.node == cur {
+		if t.Node == cur {
 			idx = i
 			break
 		}
@@ -111,7 +60,7 @@ func (b *Browser) tabStep(delta int) {
 		if cur.Tag == "input" && strings.EqualFold(strings.TrimSpace(cur.Attr("type")), "radio") && cur.Attr("name") != "" {
 			key := radioKey{form: nearestForm(cur), name: cur.Attr("name")}
 			for i, t := range targets {
-				n := t.node
+				n := t.Node
 				if n != nil && n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") &&
 					nearestForm(n) == key.form && n.Attr("name") == key.name {
 					idx = i
@@ -134,10 +83,10 @@ func (b *Browser) tabStep(delta int) {
 // setTabFocus makes one Tab target current: a link is focused visually, a text
 // field starts editing, and other controls get a highlight and key handling.
 func (b *Browser) setTabFocus(t tabTarget, index, total int) {
-	if t.link < 0 && isTextInput(t.node) {
+	if t.Link < 0 && isTextInput(t.Node) {
 		b.focus = -1
-		b.setInputFocus(t.node)
-		b.ensureInputVisible(t.node)
+		b.setInputFocus(t.Node)
+		b.ensureInputVisible(t.Node)
 		return
 	}
 	if b.forms.InputFocus != nil {
@@ -146,24 +95,24 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 	} else {
 		b.clearControlFocus()
 	}
-	if t.link >= 0 {
-		b.focus = t.link
+	if t.Link >= 0 {
+		b.focus = t.Link
 		b.ensureFocusVisible()
-		li := b.layout.Links[t.link]
+		li := b.layout.Links[t.Link]
 		b.status = fmt.Sprintf("%d/%d  %s", index, total, b.resolveHref(li.Href))
 		return
 	}
 	b.focus = -1
-	b.forms.ControlFocus = t.node
-	if t.node.Tag == "select" && t.node.HasAttr("multiple") {
-		b.forms.ControlOption = firstSelectOption(t.node)
+	b.forms.ControlFocus = t.Node
+	if t.Node.Tag == "select" && t.Node.HasAttr("multiple") {
+		b.forms.ControlOption = firstSelectOption(t.Node)
 	}
 	if b.forms.ControlOption != nil {
 		b.ensureInputVisible(b.forms.ControlOption)
 	} else {
 		b.ensureInputVisible(b.forms.ControlFocus)
 	}
-	b.status = tabControlStatus(t.node)
+	b.status = tabControlStatus(t.Node)
 }
 
 func (b *Browser) clearControlFocus() {
