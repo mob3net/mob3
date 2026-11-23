@@ -94,7 +94,7 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	}
 	SetZoom(o.Zoom)
 	root, author := page.Root, page.Author
-	if o.Reader && page.PDF == nil {
+	if o.Reader && page.PDF == nil && !readerPageSkipped(page.URL) {
 		if extracted, ok := ExtractReaderPage(page.Root, page.Title); ok {
 			root, author = extracted, ReaderRules
 		}

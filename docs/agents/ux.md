@@ -215,7 +215,10 @@ agreement, the non-negotiable constraints and the change protocol.
   page is extracted automatically, and a page with no usable article is shown
   normally with `Reader mode unavailable` while the preference remains on.
   PDF pages behave the same way: they keep their full extracted document
-  instead of being reduced to an article.
+  instead of being reduced to an article. The built-in history page is never
+  extracted and is shown normally with `Reader mode unavailable`, because its
+  links are its content; pressing `R` there reports
+  `Reader mode is unavailable on the history page`.
   Toggling off restores the normal page and its previous scroll position.
   `-reader` starts with the preference on, including `-dump` mode, which prints
   the extracted view when one is available. `about:config` is unavailable while

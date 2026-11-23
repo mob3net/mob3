@@ -412,6 +412,10 @@ func (b *Session) toggleReader() {
 		b.status = "Reader mode is unavailable on the config page"
 		return
 	}
+	if !b.Reader && readerPageSkipped(b.URL) {
+		b.status = "Reader mode is unavailable on the history page"
+		return
+	}
 	if b.Page == nil || b.Page.Root == nil {
 		b.status = "Reader mode unavailable"
 		return

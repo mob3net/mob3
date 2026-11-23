@@ -124,7 +124,7 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 	s.ReaderSavedScroll = 0
 	readerFailed := false
 	if s.Reader {
-		if page.PDF != nil {
+		if page.PDF != nil || readerPageSkipped(page.URL) {
 			readerFailed = true
 		} else if root, ok := ExtractReaderPage(page.Root, page.Title); ok {
 			s.ReaderRoot = root
@@ -174,6 +174,13 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 	} else {
 		s.FinishProgress()
 	}
+}
+
+// readerPageSkipped reports whether a page must be shown normally in reader
+// mode. The history page is a navigation list, so extracting it as an article
+// would break the links that are its only content.
+func readerPageSkipped(u *url.URL) bool {
+	return AboutPageName(u) == "history"
 }
 
 // RestoreEntry returns to a front-end history entry.
@@ -232,11 +239,11 @@ func (s *Session) ApplyCachedPage(entryID uint64, c *CachedPage, scroll int, h S
 	s.ReaderSavedScroll = 0
 	readerFailed := false
 	if s.Reader {
-		if c.ReaderRoot != nil {
+		if c.Page.PDF != nil || readerPageSkipped(c.Page.URL) {
+			readerFailed = true
+		} else if c.ReaderRoot != nil {
 			s.ReaderRoot = c.ReaderRoot
 			s.ReaderSavedScroll = c.ReaderSavedScroll
-		} else if c.Page.PDF != nil {
-			readerFailed = true
 		} else if root, ok := ExtractReaderPage(c.Page.Root, c.Page.Title); ok {
 			s.ReaderRoot = root
 		} else {

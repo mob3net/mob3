@@ -103,6 +103,43 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	}
 }
 
+func TestReaderSkipsHistoryPage(t *testing.T) {
+	u, _ := url.Parse("about:history")
+	doc := ParseHTML(`<html><body><h1>History</h1>
+		<ul><li><a href="https://example.com/a">Example A</a></li></ul>
+	</body></html>`)
+	b := newTestSession(60, 20)
+	b.Reader = true
+	b.finishLoad(LoadResult{
+		Page: &Page{URL: u, Base: u, Root: doc, Title: "History"},
+		URL:  u,
+	})
+	if !b.Reader {
+		t.Fatal("reader preference did not survive navigation")
+	}
+	if b.ReaderRoot != nil {
+		t.Fatal("history page was extracted as an article")
+	}
+	if b.status != "Reader mode unavailable" {
+		t.Fatalf("status = %q", b.status)
+	}
+	if len(b.Layout.Links) == 0 {
+		t.Fatal("history links are missing from the normal layout")
+	}
+
+	// Pressing R on the page must not extract it either.
+	off := newTestSession(60, 20)
+	off.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>history text</p>`), Title: "History"}
+	off.URL = u
+	off.toggleReader()
+	if off.Reader {
+		t.Fatal("reader mode was enabled on the history page")
+	}
+	if off.status != "Reader mode is unavailable on the history page" {
+		t.Fatalf("status = %q", off.status)
+	}
+}
+
 func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 	page := newJSPage(`<html><body><article>
 		<p>`+strings.Repeat("Reader prose before the link. ", 40)+`</p>
