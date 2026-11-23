@@ -85,19 +85,29 @@ func TestSendHistorySnapshotCapsAtLimit(t *testing.T) {
 
 func TestMouseSideButtonsUseHistory(t *testing.T) {
 	s := &recordSession{}
-	keys := make(chan string, 3)
+	keys := make(chan string, 9)
 	keys <- MouseToken(MouseEvent{Button: MouseButtonBack, X: 1, Y: 1, Press: true})
+	// A held side button also produces drag reports; each one must not step.
+	keys <- MouseToken(MouseEvent{Button: MouseButtonBack, X: 2, Y: 1, Press: true, Motion: true})
+	keys <- MouseToken(MouseEvent{Button: MouseButtonBack, X: 3, Y: 1, Press: true, Motion: true})
+	keys <- MouseToken(MouseEvent{Button: MouseButtonBack, X: 3, Y: 1, Press: false})
 	keys <- MouseToken(MouseEvent{Button: MouseButtonForward, X: 1, Y: 1, Press: true})
+	keys <- MouseToken(MouseEvent{Button: MouseButtonForward, X: 2, Y: 1, Press: true, Motion: true})
+	keys <- MouseToken(MouseEvent{Button: MouseButtonForward, X: 2, Y: 1, Press: false})
 	keys <- "eof"
 	loop := &SessionLoop{Session: s, Keys: keys, Stderr: io.Discard}
-	loop.history = []historyEntry{{id: 1, url: "https://example.com/a"}, {id: 2, url: "https://example.com/b"}}
-	loop.historyIndex = 1
+	loop.history = []historyEntry{
+		{id: 1, url: "https://example.com/a"},
+		{id: 2, url: "https://example.com/b"},
+		{id: 3, url: "https://example.com/c"},
+	}
+	loop.historyIndex = 2
 	if err := loop.Run(); err != nil {
 		t.Fatal(err)
 	}
 	want := []protocol.CommandBody{
-		protocol.Restore{EntryID: 1, URL: "https://example.com/a"},
 		protocol.Restore{EntryID: 2, URL: "https://example.com/b"},
+		protocol.Restore{EntryID: 3, URL: "https://example.com/c"},
 	}
 	if len(s.cmds) != len(want) {
 		t.Fatalf("commands = %#v", s.cmds)

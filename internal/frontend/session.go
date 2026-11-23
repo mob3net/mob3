@@ -124,12 +124,20 @@ func (l *SessionLoop) Run() error {
 				return nil
 			}
 			if ev, ok := ParseMouseToken(k); ok {
-				if ev.Press && ev.Button == MouseButtonBack {
-					l.historyBack()
+				// All-motion reporting sends drag reports for a held side
+				// button too; only the initial press may step through history,
+				// or one click would skip several entries. The rest of the
+				// report is still a side-button event, so keep it off the page.
+				if ev.Button == MouseButtonBack {
+					if ev.Press && !ev.Motion {
+						l.historyBack()
+					}
 					continue
 				}
-				if ev.Press && ev.Button == MouseButtonForward {
-					l.historyForward()
+				if ev.Button == MouseButtonForward {
+					if ev.Press && !ev.Motion {
+						l.historyForward()
+					}
 					continue
 				}
 				if l.handleChromeMouse(ev) {
