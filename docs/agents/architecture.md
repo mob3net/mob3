@@ -235,7 +235,7 @@ destination; the tracker lists what remains.
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. Host fetching, settings, cache, cookies, certificates and request accounting go through `protocol.Host`; about/blocked/PDF assembly and image helpers are engine-owned. |
+| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. Host fetching, settings, cache, cookies, certificates and request accounting go through `protocol.Host`; about/blocked/PDF assembly, image helpers and typed-URL resolution are engine-owned. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |
@@ -274,6 +274,7 @@ destination; the tracker lists what remains.
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/grid_text.go` | Plain-text grid rows used by headless snapshots and copy-page output. |
 | `internal/engine/load.go` | Load lifecycle: `LoadFunc`/`LoadResult`, history entry ID allocation, background request start/cancel, loading progress and the result channel. |
+| `internal/engine/url_input.go` | Typed-URL resolution: absolute/relative input, scheme rejection, host:port handling, data/about URLs and search-template fallback. |
 | `internal/engine/layout_rebuild.go` | Engine-side rebuild: dynamic styles, image refresh, layout pass, scaled-text fallback, PDF page starts, hover-rule detection, build timing, fixed scroll and deferred-image scheduling. |
 | `internal/engine/hit.go` | Page hit testing (`LinkAt`, `NodeAt`), overlay layering, scroll stepping and href resolution. |
 | `internal/engine/history_cache.go` | Back/forward cache glue: cache limit and page cap, cache/suspend the current page, entry removal, drop-all and the one-shot scavenge request. |

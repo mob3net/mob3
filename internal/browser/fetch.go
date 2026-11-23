@@ -110,77 +110,13 @@ func NewLoader() *Loader {
 	return l
 }
 
-// ResolveURL turns user input into an absolute URL without search fallback.
-func ResolveURL(input string, base *url.URL) (*url.URL, error) {
-	return resolveURL(input, base, "")
-}
-
-// ResolveInput is like ResolveURL but falls back to searchURL when the input
-// looks like a search query rather than a URL. An empty searchURL disables it.
+// ResolveInput and ResolveURL keep the historical browser call surface.
 func ResolveInput(input string, base *url.URL, searchURL string) (*url.URL, error) {
-	return resolveURL(input, base, searchURL)
+	return engine.ResolveInput(input, base, searchURL)
 }
 
-func resolveURL(input string, base *url.URL, searchURL string) (*url.URL, error) {
-	s := strings.TrimSpace(input)
-	if s == "" {
-		return nil, errors.New("empty URL")
-	}
-	lower := strings.ToLower(s)
-	if strings.HasPrefix(lower, "file:") {
-		return nil, errors.New("local files are not supported")
-	}
-	if strings.HasPrefix(lower, "about:") || strings.HasPrefix(lower, "data:") {
-		return url.Parse(s)
-	}
-	for _, bad := range []string{"javascript:", "mailto:", "tel:", "ftp:"} {
-		if strings.HasPrefix(lower, bad) {
-			return nil, errors.New("unsupported URL scheme: " + bad[:len(bad)-1])
-		}
-	}
-	// Fragment/query/relative references only make sense against a base.
-	if base != nil && (strings.HasPrefix(s, "#") || strings.HasPrefix(s, "?") || strings.HasPrefix(s, "/") || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../")) {
-		if r, err := base.Parse(s); err == nil {
-			return r, nil
-		}
-	}
-	if strings.HasPrefix(s, "//") {
-		scheme := "https"
-		if base != nil && base.Scheme != "" {
-			scheme = base.Scheme
-		}
-		s = scheme + ":" + s
-	}
-	if strings.Contains(s, "://") {
-		return url.Parse(s)
-	}
-	if strings.Contains(s, ":") && !strings.ContainsAny(s, " /") {
-		// host:port, most likely a local development server
-		return url.Parse("http://" + s)
-	}
-	if searchURL != "" && looksLikeSearch(s) {
-		return searchURLFor(searchURL, s)
-	}
-	return url.Parse("https://" + s)
-}
-
-// looksLikeSearch reports whether input is a query rather than a host or path:
-// it contains whitespace, or has no dot to form a host name.
-func looksLikeSearch(s string) bool {
-	if strings.ContainsAny(s, " \t\n\r") {
-		return true
-	}
-	return !strings.Contains(s, ".")
-}
-
-// searchURLFor substitutes the escaped query into the search template. A
-// template without %s gets the query appended.
-func searchURLFor(template, query string) (*url.URL, error) {
-	q := url.QueryEscape(query)
-	if strings.Contains(template, "%s") {
-		return url.Parse(strings.ReplaceAll(template, "%s", q))
-	}
-	return url.Parse(template + q)
+func ResolveURL(input string, base *url.URL) (*url.URL, error) {
+	return engine.ResolveURL(input, base)
 }
 
 // Load fetches a page and all of its stylesheets and images.

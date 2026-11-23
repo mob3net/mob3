@@ -18,7 +18,7 @@ the front end keeps the chrome. Remaining: host-attested final URLs, remaining f
 select), loader/automation packaging, the `Browser` → `Session` split (332
 methods), direct app wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (batch 55 landed).
+Last updated: 2026-11-23 (batch 56 landed).
 
 ## 1. Goal
 
@@ -422,6 +422,7 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Front-end command dispatch moved to `engine.Session.HandleCommand` through `CommandHooks`; the browser supplies resize/navigation/UI effects.
 - [x] The transport event loop moved to `engine.Session.Serve` (`serve.go`) behind `RuntimeHooks`; the browser supplies draw/state/frame/usage effects and the direct-key dialog fallback.
 - [x] Removed the engine fallback view/zoom windows and their mouse/keyboard/draw code; `X`/`Z` are front-end-only. Fallback console, dialogs and select popup remain.
+- [x] Typed-URL resolution moved to `internal/engine/url_input.go`; browser constructors keep thin wrappers. This is loader-extraction preparation.
 - [ ] Form editing decisions, Tab focus effects and submission remain
       session-side with the other shell effects (JS events, navigation, status
       and rebuilds).
@@ -1180,5 +1181,6 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 9c | Batch 53: moved front-end command dispatch into `internal/engine/commands.go` (`Session.HandleCommand`) behind `CommandHooks`: init/resize, navigation/history/restore, key/mouse/scroll, app actions, find/select/modal/hint/console results, abort and client errors. Browser `handleCommand` is a wrapper; the `Serve` event loop remains. | `go test ./...`, `go vet`, full `-race`, browser command/input/console tests, PTY keys/mouse/scroll, dump/PNG hashes | Batch 54: `Serve` loop and fallback UI removal |
 | 2026-11-23 | 9d | Batch 54: moved the transport event loop into `internal/engine/serve.go` (`Session.Serve`) behind `RuntimeHooks`: load/image/import/timer/progress/usage events, draw/state/frame emission and shutdown. Browser `Serve` is a wrapper; terminal/shell effects and the direct-key dialog fallback remain. | `go test ./...`, `go vet`, full `-race`, browser session transport tests, PTY navigation/console, dump/PNG hashes | Batch 55: fallback UI removal |
 | 2026-11-23 | 9e | Batch 55: removed the engine fallback view and zoom windows: menu state, hit regions, drawing, keyboard/mouse handling and app-action entry points. `X`/`Z` and the zoom badge are front-end-only. Removed the corresponding engine menu tests; front-end menu tests remain. | `go test ./...`, `go vet`, full `-race`, browser/front-end menu tests, PTY X/Z and zoom, dump/PNG hashes | Batch 56: fallback select/dialog/console removal |
+| 2026-11-23 | 9f | Batch 56: moved typed-URL resolution into `internal/engine/url_input.go` (absolute/relative input, scheme rejection, host:port, data/about, search fallback). Browser `ResolveInput`/`ResolveURL` are wrappers. This prepares the loader move; fallback select/dialog/console removal remains the next UI batch. | `go test ./...`, `go vet`, full `-race`, browser URL/search tests, PTY prompt navigation, dump/PNG hashes | Batch 57: fallback select/dialog/console removal |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 50: updated the `Browser` method count (296 → 309), documented the new engine load/layout/hit/cache/apply files and protocol/browser host/test files, corrected remaining ownership (load-result application, restore, hit testing, layout rebuild), and recorded the command-routing/fallback/rename work still ahead. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 51: forms, input and JS lifecycle |
