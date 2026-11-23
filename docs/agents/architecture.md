@@ -100,12 +100,13 @@ destination; the tracker lists what remains.
   loader/session construction, the dump handler, automation types and the build
   version. `app → browser` is the temporary wiring exception.
 - `internal/browser/` still holds the session shell: the 328-method `Browser`,
-  input resolution and the config-page branch, form and JS lifecycle adapters,
-  fallback chrome/overlay/dialog/console rendering, loader fetch orchestration
-  through `protocol.Host`, automation, and most integration tests. `Browser` embeds `engine.Session`, which now owns page,
-  layout, URL, scroll, load start/cancel/progress, focus/hover, reader,
-  text-scaling and dark-mode state;
-  the methods and shell fields are still being moved. MCP transport lives in
+  input resolution and the config-page branch, form/JS wrappers, fallback
+  chrome/overlay/dialog/console rendering, loader fetch orchestration through
+  `protocol.Host`, automation, and most integration tests. `Browser` embeds
+  `engine.Session`, which now owns page, layout, URL, scroll, load lifecycle,
+  load-result application, forms, JS lifecycle, hit testing, find and hint
+  state, reader, text-scaling and dark-mode state; the remaining shell fields
+  are still being moved. MCP transport lives in
   `internal/app`. Production code imports only `internal/engine` and
   `internal/protocol`; the dependency test enforces this, so the package is
   ready to move into `internal/engine`.

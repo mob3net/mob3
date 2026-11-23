@@ -14,11 +14,11 @@ surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
 select, download/notice, hints, the console and the session history list) are
 landed, and the front end renders the displayed URL/title from validated
 history commits. A focused page form still sends keys through the engine, but
-the front end keeps the chrome. Remaining: host-attested final URLs, remaining fallback UI (console/dialogs/
-select), loader/automation packaging, the `Browser` → `Session` split (332
-methods), direct app wiring and Phase 6 cleanup.
+the front end keeps the chrome. Remaining: host-attested final URLs, fallback console/dialog UI, loader/
+automation packaging, the `Browser` → `Session` split (328 methods), direct app
+wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (batch 57 landed).
+Last updated: 2026-11-23 (audited after batch 57).
 
 ## 1. Goal
 
@@ -170,7 +170,7 @@ seam; the note names which part goes where.
 | --- | --- | --- |
 | `internal/app/app.go`, `internal/app/execute.go` | app + frontend | `app` owns flags/validation, the build `Version`, mode dispatch and the interactive boot. It still calls `browser.NewConfiguredLoader`, `NewSession`, `NewAutomationWithConfig`, `NewDumpHandler`/`DumpLimits` and the layout/zoom/version helpers; direct engine/host/frontend construction follows the session split. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load start/cancel/progress, load-result application, entry IDs and layout rebuild are engine. Command routing, input resolution/config submission, hook implementations, hint/status effects and shell state still move; content-rect geometry already moved. `Browser` becomes `Session`. |
-| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Page hit testing moved to `engine/hit.go`; engine fallback modals/hints/console drawing still live here; shared line editing is `engine.EditLineKey`; form editing remains. |
+| `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Page hit testing moved to `engine/hit.go`; form editing is `engine/forms.go`; engine fallback dialogs/console drawing still live here; shared line editing is `engine.EditLineKey`. |
 | `browser_history.go` | engine + frontend | Page cache, limits, suspend/cache, restore application and scavenge are engine-owned; history commits, reload and `about:history` data remain. The ordered back/forward list and scroll offsets are front-end-owned (D54/D72). |
 | `browser_pdf.go` | engine + frontend | PDF page tracking feeds the engine footer state; the download/curl shortcut is presentation (D54). |
 | `browser_forms.go` | engine wrapper | Tab stepping, control activation, text/range editing, submission, label targets and form requests moved to `internal/engine/forms.go`; the browser keeps wrappers and the control-focus highlight painter. |
@@ -421,12 +421,11 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] JS runtime lifecycle moved to `internal/engine/js_life.go`: start/stop, timer deadlines, redraw throttling, hover rebuilds, pending-navigation drain and dynamic-import completion. The browser supplies the `JSHost` adapter and UI state through `SessionHooks`.
 - [x] Front-end command dispatch moved to `engine.Session.HandleCommand` through `CommandHooks`; the browser supplies resize/navigation/UI effects.
 - [x] The transport event loop moved to `engine.Session.Serve` (`serve.go`) behind `RuntimeHooks`; the browser supplies draw/state/frame/usage effects and the direct-key dialog fallback.
-- [x] Removed the engine fallback view/zoom windows and their mouse/keyboard/draw code; `X`/`Z` are front-end-only. Fallback console, dialogs and select popup remain.
+- [x] Removed the engine fallback view/zoom windows and their mouse/keyboard/draw code; `X`/`Z` are front-end-only. Fallback console and dialogs remain.
 - [x] Typed-URL resolution moved to `internal/engine/url_input.go`; browser constructors keep thin wrappers. This is loader-extraction preparation.
 - [x] Removed the engine fallback select popup: option-row hits, keyboard/mouse selection, scrolled chooser drawing and shared choice-menu painting. The engine keeps only the pending select choice for the front-end `SelectResult`; front-end selection tests remain.
-- [ ] Form editing decisions, Tab focus effects and submission remain
-      session-side with the other shell effects (JS events, navigation, status
-      and rebuilds).
+- [x] Form editing decisions, Tab focus effects and submission moved to
+      `engine/forms.go`; the shell supplies navigation/status/rebuild effects.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
 - [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
       navigation to the front end), then rename to `Session`.
@@ -555,7 +554,8 @@ trusted-shell split, then Phase 6. Dependency order:
 **C. Session split and app wiring**
 
 - [ ] Split `Browser` (328 methods): page/content state → `engine.Session`;
-      chrome, navigation, prompts, menus, console and form focus → front end.
+      command/hook implementations, chrome, navigation, prompts, menus and
+      console → front end.
 - [x] Move Loader image/SVG/about/PDF assembly into the engine; the host keeps
       fetch, cache, cookies, settings and policy.
 - [x] Replace the browser loader host fields with the `protocol.Host` port,
@@ -1186,3 +1186,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 9g | Batch 57: removed the engine fallback select popup: hit rows, key/mouse handling, scrolling chooser drawing and the shared choice-menu painter. The engine keeps the pending select options for `SelectResult`; direct select changes use the engine stepping path, and front-end select transport tests remain. | `go test ./...`, `go vet`, full `-race`, browser select/form/JS tests, front-end select tests, PTY select, dump/PNG hashes | Batch 58: fallback console/dialog removal |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 50: updated the `Browser` method count (296 → 309), documented the new engine load/layout/hit/cache/apply files and protocol/browser host/test files, corrected remaining ownership (load-result application, restore, hit testing, layout rebuild), and recorded the command-routing/fallback/rename work still ahead. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 51: forms, input and JS lifecycle |
+| 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 57: corrected the method count to 328, updated the browser-shell description, removed stale form-editing/select-popup claims, clarified the remaining fallback UI and recorded the next batches. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 58: fallback console/dialog removal |
