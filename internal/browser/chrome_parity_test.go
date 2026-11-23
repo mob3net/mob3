@@ -168,12 +168,12 @@ func TestStateKeysEngineFlag(t *testing.T) {
 		t.Fatal("prompt did not mark engine keys")
 	}
 	b.prompt = false
-	b.findActive = true
+	b.FindActive = true
 	if st := b.stateMessage(); !st.KeysEngine {
 		t.Fatal("find did not mark engine keys")
 	}
-	b.findActive = false
-	b.forms.InputFocus = &Node{}
+	b.FindActive = false
+	b.Forms.InputFocus = &Node{}
 	if st := b.stateMessage(); !st.KeysEngine {
 		t.Fatal("input focus did not mark engine keys")
 	}
@@ -310,7 +310,7 @@ func TestFormFocusKeepsFrontendChrome(t *testing.T) {
 	b := NewBrowser(80, 24)
 	b.emitFrames = true
 	b.frontendChrome = true
-	b.forms.InputFocus = &Node{Tag: "input"}
+	b.Forms.InputFocus = &Node{Tag: "input"}
 	st := b.stateMessage()
 	if !st.KeysEngine {
 		t.Fatal("form focus did not keep engine keys")

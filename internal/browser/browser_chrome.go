@@ -181,8 +181,8 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 // Ctrl-A. The brackets and any padding outside the value stay in the field's
 // normal focused colors.
 func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
-	n := b.forms.InputFocus
-	if !b.forms.InputSelectAll || n == nil || b.Layout == nil {
+	n := b.Forms.InputFocus
+	if !b.Forms.InputSelectAll || n == nil || b.Layout == nil {
 		return
 	}
 	selBG := RGB(0x1f, 0x4f, 0x9f)
@@ -214,7 +214,7 @@ func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
 
 // paintInputCursor draws the caret over a focused input or textarea.
 func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
-	if b.Layout == nil || !b.Layout.HasCursor || b.forms.InputSelectAll {
+	if b.Layout == nil || !b.Layout.HasCursor || b.Forms.InputSelectAll {
 		return
 	}
 	r := b.Layout.Cursor
@@ -406,12 +406,12 @@ func (b *Browser) footerModel() footerModel {
 	}
 	level := statusNormal
 	statusHit := false
-	if b.hintConfirm {
+	if b.HintConfirm {
 		level = statusWarning
 	} else if b.status != "" && (b.quitPending || b.hoveredLink() == nil) {
 		level = statusLevelFor(b.status)
 	}
-	if b.status != "" && !b.hintConfirm && !b.quitPending && b.hoveredLink() == nil {
+	if b.status != "" && !b.HintConfirm && !b.quitPending && b.hoveredLink() == nil {
 		if level == statusWarning || level == statusError {
 			statusHit = true
 		}
@@ -639,7 +639,7 @@ func (b *Browser) drawChrome(g *Grid) {
 		// Footer.
 		fy := h - 1
 		g.Fill(0, fy, w, 1, footerBG)
-		if b.findActive {
+		if b.FindActive {
 			b.drawFindBar(g, fy, w)
 		} else {
 			fm := b.footerModel()
@@ -915,7 +915,7 @@ func drawStatusShortcut(g *Grid, x, y, avail int, text string, st *Style, fg Col
 }
 
 func (b *Browser) footerLeft() string {
-	if (b.hintConfirm || b.quitPending) && b.status != "" {
+	if (b.HintConfirm || b.quitPending) && b.status != "" {
 		return " " + b.status
 	}
 	if li := b.hoveredLink(); li != nil {

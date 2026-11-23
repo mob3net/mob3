@@ -1183,7 +1183,7 @@ func TestViewMenuIsNotCtrlX(t *testing.T) {
 
 func TestViewMenuIgnoredWhileEditingField(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.forms.InputFocus = &Node{}
+	b.Forms.InputFocus = &Node{}
 	b.HandleKey("X")
 	if b.viewMenu != nil {
 		t.Fatal("X should stay literal text while a field has focus")

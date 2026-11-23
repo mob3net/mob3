@@ -61,7 +61,7 @@ func TestMouseDragSelection(t *testing.T) {
 	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: row, Press: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: true, Motion: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: false, Motion: true})
-	if b.selecting {
+	if b.Selecting {
 		t.Fatal("release with motion bit kept the selection drag active")
 	}
 	if !b.hasSelection() {
@@ -73,7 +73,7 @@ func TestMouseDragSelection(t *testing.T) {
 	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: row, Press: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: true, Motion: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: 1, Press: false})
-	if b.selecting {
+	if b.Selecting {
 		t.Fatal("release over the toolbar kept the selection drag active")
 	}
 
@@ -108,8 +108,8 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	if first == nil || middle == nil || last == nil {
 		t.Fatalf("missing paragraph fragments: %v %v %v", first, middle, last)
 	}
-	b.selection.Anchor = engine.CellPos{X: first.X, Y: first.Y}
-	b.selection.Cursor = engine.CellPos{X: last.X + last.W - 1, Y: last.Y}
+	b.Selection.Anchor = engine.CellPos{X: first.X, Y: first.Y}
+	b.Selection.Cursor = engine.CellPos{X: last.X + last.W - 1, Y: last.Y}
 	top, bottom := b.viewport()
 	g := NewGrid(40, 16, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintSelection(g, top, bottom)
@@ -126,8 +126,8 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
-	b.selection.Anchor = engine.CellPos{X: 0, Y: 0}
-	b.selection.Cursor = engine.CellPos{X: 4, Y: 0}
+	b.Selection.Anchor = engine.CellPos{X: 0, Y: 0}
+	b.Selection.Cursor = engine.CellPos{X: 4, Y: 0}
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 	b.HandleKey("y")

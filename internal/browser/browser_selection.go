@@ -14,17 +14,14 @@ import (
 // Selection ordering, text extraction and painting live in the engine. The
 // browser keeps the drag state and clipboard policy.
 
-func (b *Browser) hasSelection() bool { return b.selection.Has() }
+func (b *Browser) hasSelection() bool { return b.Session.HasSelection() }
 
-func (b *Browser) clearSelection() {
-	b.selection.Clear()
-	b.selecting = false
-}
+func (b *Browser) clearSelection() { b.Session.ClearSelection() }
 
 func (b *Browser) startSelection(p engine.CellPos) {
-	b.selection.Anchor = p
-	b.selection.Cursor = p
-	b.selecting = true
+	b.Selection.Anchor = p
+	b.Selection.Cursor = p
+	b.Selecting = true
 }
 
 // updateSelection moves the drag endpoint, auto-scrolling when it leaves the
@@ -47,10 +44,10 @@ func (b *Browser) updateSelection(x, y, top, bottom int) {
 	if docY < 0 {
 		docY = 0
 	}
-	b.selection.SetCursor(engine.CellPos{X: x, Y: docY})
+	b.Selection.SetCursor(engine.CellPos{X: x, Y: docY})
 }
 
-func (b *Browser) selectedText() string { return b.selection.Text(b.Layout) }
+func (b *Browser) selectedText() string { return b.Selection.Text(b.Layout) }
 
 // copySelection sends the selected page text to the terminal clipboard with
 // OSC 52. Terminals and multiplexers must support it for the copy to arrive.
@@ -112,11 +109,11 @@ func (b *Browser) copyText(text string) bool {
 	return true
 }
 
-func (b *Browser) selectionSummary() string { return b.selection.Summary(b.Layout) }
+func (b *Browser) selectionSummary() string { return b.Selection.Summary(b.Layout) }
 
 // paintSelection highlights selected cells in the content viewport.
 func (b *Browser) paintSelection(g *Grid, top, bottom int) {
-	b.selection.Paint(g, b.Layout, b.Scroll, top, bottom)
+	b.Selection.Paint(g, b.Layout, b.Scroll, top, bottom)
 }
 
 // copyPageText copies the whole rendered page as plain text: the rows -dump

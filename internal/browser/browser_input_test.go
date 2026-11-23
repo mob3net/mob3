@@ -241,7 +241,7 @@ func TestEscapeFromInputShowsExitHint(t *testing.T) {
 	}
 	b.setInputFocus(q)
 	b.HandleKey("esc")
-	if b.forms.InputFocus != nil {
+	if b.Forms.InputFocus != nil {
 		t.Fatal("escape did not leave the input")
 	}
 	if b.status != exitHint {

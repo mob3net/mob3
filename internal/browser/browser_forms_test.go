@@ -191,7 +191,7 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	b.HandleMouse(MouseEvent{
 		Button: 0, X: field.X + 1, Y: top + field.Y - b.Scroll + 1, Press: false,
 	})
-	if b.forms.InputFocus != q || !q.InputFocused {
+	if b.Forms.InputFocus != q || !q.InputFocused {
 		t.Fatal("clicking the input did not focus it")
 	}
 	if strings.Contains(formLabel(q), "try typing here") {
@@ -229,7 +229,7 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("form was not submitted")
 	}
-	if b.forms.InputFocus != nil {
+	if b.Forms.InputFocus != nil {
 		t.Fatal("input focus was not cleared after submit")
 	}
 }
@@ -297,23 +297,23 @@ func TestTabReachesAllFormControls(t *testing.T) {
 		t.Fatalf("first tab focused link %d", b.Focus)
 	}
 	b.HandleKey("tab")
-	if b.forms.ControlFocus != check {
-		t.Fatalf("tab did not reach checkbox: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != check {
+		t.Fatalf("tab did not reach checkbox: %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey(" ")
 	if !check.HasAttr("checked") {
 		t.Fatal("space did not toggle the checkbox")
 	}
 	b.HandleKey("tab")
-	if b.forms.ControlFocus != radios[0] {
-		t.Fatalf("tab did not reach radio group: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != radios[0] {
+		t.Fatalf("tab did not reach radio group: %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey("l")
-	if !radios[1].HasAttr("checked") || b.forms.ControlFocus != radios[1] {
+	if !radios[1].HasAttr("checked") || b.Forms.ControlFocus != radios[1] {
 		t.Fatal("l did not move the radio selection")
 	}
 	b.HandleKey("h")
-	if !radios[0].HasAttr("checked") || b.forms.ControlFocus != radios[0] {
+	if !radios[0].HasAttr("checked") || b.Forms.ControlFocus != radios[0] {
 		t.Fatal("h did not move the radio selection back")
 	}
 	b.HandleKey("right")
@@ -321,8 +321,8 @@ func TestTabReachesAllFormControls(t *testing.T) {
 		t.Fatal("arrow did not move the radio selection")
 	}
 	b.HandleKey("tab")
-	if b.forms.ControlFocus != single {
-		t.Fatalf("tab from radio group reached %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != single {
+		t.Fatalf("tab from radio group reached %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey("j")
 	if !selectOptions(single)[1].HasAttr("selected") {
@@ -337,24 +337,24 @@ func TestTabReachesAllFormControls(t *testing.T) {
 		t.Fatal("right arrow did not change the single select")
 	}
 	b.HandleKey("tab")
-	if b.forms.ControlFocus != multi {
-		t.Fatalf("tab did not reach multi-select: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != multi {
+		t.Fatalf("tab did not reach multi-select: %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey("j")
 	beta := selectOptions(multi)[1]
-	if b.forms.ControlOption != beta {
-		t.Fatalf("j did not move the active option: %v", b.forms.ControlOption)
+	if b.Forms.ControlOption != beta {
+		t.Fatalf("j did not move the active option: %v", b.Forms.ControlOption)
 	}
 	b.HandleKey(" ")
 	if !beta.HasAttr("selected") {
 		t.Fatal("space did not toggle the multi-select option")
 	}
 	b.HandleKey("tab")
-	if b.forms.ControlFocus != btn {
-		t.Fatalf("tab did not reach button: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != btn {
+		t.Fatalf("tab did not reach button: %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey("esc")
-	if b.forms.ControlFocus != nil {
+	if b.Forms.ControlFocus != nil {
 		t.Fatal("escape did not clear control focus")
 	}
 }
@@ -378,28 +378,28 @@ func TestInputTabMovesFocus(t *testing.T) {
 	b.setInputFocus(a)
 
 	b.HandleKey("tab")
-	if b.forms.InputFocus == nil || b.forms.InputFocus.Attr("name") != "b" {
-		t.Fatalf("tab from a landed on %v", b.forms.InputFocus)
+	if b.Forms.InputFocus == nil || b.Forms.InputFocus.Attr("name") != "b" {
+		t.Fatalf("tab from a landed on %v", b.Forms.InputFocus)
 	}
 	b.HandleKey("tab")
-	if b.forms.InputFocus == nil || b.forms.InputFocus.Attr("name") != "c" {
-		t.Fatalf("tab from b landed on %v", b.forms.InputFocus)
+	if b.Forms.InputFocus == nil || b.Forms.InputFocus.Attr("name") != "c" {
+		t.Fatalf("tab from b landed on %v", b.Forms.InputFocus)
 	}
 	b.HandleKey("tab")
-	if b.forms.InputFocus != nil || b.forms.ControlFocus == nil || b.forms.ControlFocus.Attr("name") != "readonly" {
-		t.Fatalf("tab from textarea landed on input=%v control=%v", b.forms.InputFocus, b.forms.ControlFocus)
+	if b.Forms.InputFocus != nil || b.Forms.ControlFocus == nil || b.Forms.ControlFocus.Attr("name") != "readonly" {
+		t.Fatalf("tab from textarea landed on input=%v control=%v", b.Forms.InputFocus, b.Forms.ControlFocus)
 	}
 	b.HandleKey("tab")
-	if b.forms.InputFocus == nil || b.forms.InputFocus.Attr("name") != "d" {
-		t.Fatalf("tab from readonly landed on %v", b.forms.InputFocus)
+	if b.Forms.InputFocus == nil || b.Forms.InputFocus.Attr("name") != "d" {
+		t.Fatalf("tab from readonly landed on %v", b.Forms.InputFocus)
 	}
 	b.HandleKey("tab")
-	if b.forms.InputFocus == nil || b.forms.InputFocus.Attr("name") != "a" {
-		t.Fatalf("tab did not wrap to a: %v", b.forms.InputFocus)
+	if b.Forms.InputFocus == nil || b.Forms.InputFocus.Attr("name") != "a" {
+		t.Fatalf("tab did not wrap to a: %v", b.Forms.InputFocus)
 	}
 	b.HandleKey("backtab")
-	if b.forms.InputFocus == nil || b.forms.InputFocus.Attr("name") != "d" {
-		t.Fatalf("backtab did not wrap to d: %v", b.forms.InputFocus)
+	if b.Forms.InputFocus == nil || b.Forms.InputFocus.Attr("name") != "d" {
+		t.Fatalf("backtab did not wrap to d: %v", b.Forms.InputFocus)
 	}
 }
 
@@ -415,7 +415,7 @@ func TestInputCtrlASelectsAll(t *testing.T) {
 	b.setInputFocus(q)
 
 	b.HandleKey("ctrl-a")
-	if !b.forms.InputSelectAll {
+	if !b.Forms.InputSelectAll {
 		t.Fatal("ctrl-a did not select the field value")
 	}
 	drawQuiet(b)
@@ -435,7 +435,7 @@ func TestInputCtrlASelectsAll(t *testing.T) {
 	if got := inputValue(q); got != "Z" {
 		t.Fatalf("typing over selection = %q, want Z", got)
 	}
-	if b.forms.InputSelectAll {
+	if b.Forms.InputSelectAll {
 		t.Fatal("selection survived typing")
 	}
 	if q.InputCursor != 1 {
@@ -463,7 +463,7 @@ func TestInputCtrlASelectsAll(t *testing.T) {
 	q.InputCursor = 5
 	b.HandleKey("ctrl-a")
 	b.HandleKey("left")
-	if b.forms.InputSelectAll {
+	if b.Forms.InputSelectAll {
 		t.Fatal("cursor movement kept the selection")
 	}
 	if got := inputValue(q); got != "hello" {
@@ -690,7 +690,7 @@ func TestRangeKeyboardControl(t *testing.T) {
 	b.rebuild()
 	r := inputByName(doc, "r")
 	b.setInputFocus(r)
-	if b.forms.InputFocus != r {
+	if b.Forms.InputFocus != r {
 		t.Fatal("range was not focused")
 	}
 	b.HandleKey("right")
@@ -770,7 +770,7 @@ func TestLabelAssociations(t *testing.T) {
 	}
 	query := inputByName(doc, "q")
 	clickText("Query")
-	if b.forms.InputFocus != query {
+	if b.Forms.InputFocus != query {
 		t.Fatal("label for= did not focus the input")
 	}
 	agree := inputByName(doc, "agree")
@@ -780,7 +780,7 @@ func TestLabelAssociations(t *testing.T) {
 	}
 	b.HandleKey("esc")
 	clickText("Disabled")
-	if b.forms.InputFocus != nil {
+	if b.Forms.InputFocus != nil {
 		t.Fatal("label focused a disabled control")
 	}
 }
@@ -1032,14 +1032,14 @@ func TestTextareaEnterInsertsNewlineAndEscExits(t *testing.T) {
 	if got := inputValue(area); got != "a\nb" {
 		t.Fatalf("value = %q, want %q", got, "a\nb")
 	}
-	if b.forms.InputFocus != area {
+	if b.Forms.InputFocus != area {
 		t.Fatal("Enter left the textarea")
 	}
 	if b.URL.String() != "https://example.com/form" {
 		t.Fatalf("Enter navigated to %s", b.URL)
 	}
 	b.HandleKey("esc")
-	if b.forms.InputFocus != nil || area.InputFocused {
+	if b.Forms.InputFocus != nil || area.InputFocused {
 		t.Fatal("Esc did not exit the textarea")
 	}
 }

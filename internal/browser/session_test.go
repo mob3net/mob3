@@ -477,12 +477,12 @@ func TestHintTransportRoundTrip(t *testing.T) {
 	sink := &hintSink{}
 	b.sessionOut = sink
 	b.HandleKey("f")
-	if len(sink.hints.Items) != 1 || sink.hints.Items[0].Label != "d" || !b.hintsFrontend {
-		t.Fatalf("hints = %+v frontend=%v", sink.hints, b.hintsFrontend)
+	if len(sink.hints.Items) != 1 || sink.hints.Items[0].Label != "d" || !b.HintsFrontend {
+		t.Fatalf("hints = %+v frontend=%v", sink.hints, b.HintsFrontend)
 	}
 	b.applyHintResult(protocol.HintResult{Target: sink.hints.Items[0].Target})
-	if b.linkHints || b.hintsFrontend || b.Focus != 0 {
-		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.linkHints, b.hintsFrontend, b.Focus)
+	if b.LinkHints || b.HintsFrontend || b.Focus != 0 {
+		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.LinkHints, b.HintsFrontend, b.Focus)
 	}
 }
 
@@ -551,8 +551,8 @@ func TestConsoleHTMLFindCommand(t *testing.T) {
 	sink := &consoleSink{}
 	b.sessionOut = sink
 	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Query: "needle"})
-	if b.findScope != findScopeHTML || len(b.findMatches) != 2 {
-		t.Fatalf("scope=%d matches=%d", b.findScope, len(b.findMatches))
+	if b.FindScope != findScopeHTML || len(b.FindMatches) != 2 {
+		t.Fatalf("scope=%d matches=%d", b.FindScope, len(b.FindMatches))
 	}
 	b.emitConsoleView()
 	if !sink.got || sink.view.FindText != "needle" || sink.view.FindTotal != 2 || len(sink.view.Highlights) == 0 {

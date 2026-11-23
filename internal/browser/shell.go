@@ -67,15 +67,15 @@ func (b *Browser) viewportHeight() int {
 // use: no overlay, console or find bar, and enough rows for a header/footer.
 func (b *Browser) frontendChromePath() bool {
 	return b.emitFrames && b.frontendChrome && b.height >= 3 &&
-		!b.overlayOpen() && !b.consoleOpen && !b.findActive
+		!b.overlayOpen() && !b.consoleOpen && !b.FindActive
 }
 
 // keysEngine reports whether the engine currently owns key interpretation.
 func (b *Browser) keysEngine() bool {
-	return b.prompt || b.findActive || b.consoleOpen || b.dialog != nil ||
+	return b.prompt || b.FindActive || b.consoleOpen || b.dialog != nil ||
 		b.download != nil || b.notice != nil || b.selectMenu != nil ||
 		b.viewMenu != nil || b.zoomMenu != nil || b.quitPending ||
-		b.forms.InputFocus != nil || b.forms.ControlFocus != nil || b.linkHints || b.hintConfirm
+		b.Forms.InputFocus != nil || b.Forms.ControlFocus != nil || b.LinkHints || b.HintConfirm
 }
 
 // frontendChromeActive reports whether the front end composes the page chrome.
@@ -169,7 +169,7 @@ func (b *Browser) stateMessage() protocol.State {
 	st.PromptText = b.promptText
 	st.PromptCursor = b.promptCursor
 	st.PromptSelectAll = b.promptSelectAll
-	st.FindActive = b.findActive
+	st.FindActive = b.FindActive
 	st.QuitPending = b.quitPending
 	st.KeysEngine = b.keysEngine()
 	fm := b.footerModel()

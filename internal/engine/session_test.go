@@ -34,3 +34,49 @@ func TestSessionPageState(t *testing.T) {
 		t.Fatal("page colors not set")
 	}
 }
+
+func TestSessionFindHintsAndSelection(t *testing.T) {
+	link := &Node{Type: ElementNode, Tag: "a"}
+	s := Session{Layout: &Layout{
+		Frags: []Frag{{Kind: FragText, Text: "x", Link: &LinkInfo{Index: 3}}},
+		Links: []*LinkInfo{{Node: link}, {}},
+	}}
+	s.OpenFind(FindScopePage)
+	s.FindText = "x"
+	s.FindMatches = []FindMatch{{Frag: 0}}
+	if got := s.FindBarCount(); got != " 1/1 " {
+		t.Fatalf("count = %q", got)
+	}
+	if s.CurrentFindLink() == nil {
+		t.Fatal("current find link missing")
+	}
+	s.ClearFind()
+	if s.FindActive || s.FindText != "" || s.FindMatches != nil {
+		t.Fatalf("clear find = %+v", s)
+	}
+
+	s.HintTargets = []HintTarget{{Link: 0}}
+	if !s.LinkHints {
+		// ClearHints reports whether it was active.
+		if s.ClearHints() {
+			t.Fatal("clear inactive hints reported active")
+		}
+	}
+	s.LinkHints = true
+	if !s.ClearHints() || s.LinkHints || s.HintTargets != nil {
+		t.Fatal("hints not cleared")
+	}
+	if s.HintTargetAt(0).Link != 0 || s.HintTargetAt(1).Link != 1 {
+		t.Fatal("hint target fallback failed")
+	}
+
+	s.Selection.Anchor = CellPos{X: 0}
+	s.Selection.Cursor = CellPos{X: 1}
+	if !s.HasSelection() {
+		t.Fatal("selection missing")
+	}
+	s.ClearSelection()
+	if s.HasSelection() || s.Selecting {
+		t.Fatal("selection not cleared")
+	}
+}

@@ -50,14 +50,14 @@ func (b *Browser) openLinkHints(ask bool) {
 	for i := range targets {
 		ids[i] = i
 	}
-	b.hintTargets = targets
-	b.hintItems = b.hintItems[:0]
-	b.hintItems = append(b.hintItems, buildLinkHints(ids, engine.CollectHintGlyphs(b.Layout, targets, b.Scroll, top, bottom))...)
-	b.linkHints = true
-	b.hintPrefix = ""
-	b.hintAsk = ask
-	b.hintConfirm = false
-	b.hintConfirmLink = -1
+	b.HintTargets = targets
+	b.HintItems = b.HintItems[:0]
+	b.HintItems = append(b.HintItems, buildLinkHints(ids, engine.CollectHintGlyphs(b.Layout, targets, b.Scroll, top, bottom))...)
+	b.LinkHints = true
+	b.HintPrefix = ""
+	b.HintAsk = ask
+	b.HintConfirm = false
+	b.HintConfirmLink = -1
 	b.status = "Choose link or control (Esc cancels)"
 	if b.sessionOut != nil {
 		if err := b.sendHints(ask, top, bottom); err != nil {
@@ -65,13 +65,13 @@ func (b *Browser) openLinkHints(ask bool) {
 			b.status = "No links or controls in view"
 			return
 		}
-		b.hintsFrontend = true
+		b.HintsFrontend = true
 	}
 }
 
 func (b *Browser) sendHints(ask bool, top, bottom int) error {
-	items := make([]protocol.HintItem, 0, len(b.hintItems))
-	for _, h := range b.hintItems {
+	items := make([]protocol.HintItem, 0, len(b.HintItems))
+	for _, h := range b.HintItems {
 		item := protocol.HintItem{Target: h.Target, Label: h.Label}
 		if r, ok := b.hintTargetRect(h.Target, top, bottom); ok {
 			item.X, item.Y = r.X, r.Y-b.Scroll
@@ -89,7 +89,7 @@ func (b *Browser) sendHints(ask bool, top, bottom int) error {
 		items = append(items, item)
 	}
 	return b.sessionOut.Send(protocol.Event{Body: protocol.Hints{
-		Ask: ask, Prefix: b.hintPrefix, Items: items,
+		Ask: ask, Prefix: b.HintPrefix, Items: items,
 	}})
 }
 
@@ -98,11 +98,11 @@ func (b *Browser) sendHints(ask bool, top, bottom int) error {
 // only state the interactive key handler leaves active.
 func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 	b.openLinkHints(ask)
-	if !b.linkHints || prefix == "" {
+	if !b.LinkHints || prefix == "" {
 		return
 	}
 	matches := 0
-	for _, h := range b.hintItems {
+	for _, h := range b.HintItems {
 		if strings.HasPrefix(h.Label, prefix) {
 			matches++
 		}
@@ -110,28 +110,21 @@ func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 	if matches < 2 {
 		return
 	}
-	b.hintPrefix = prefix
+	b.HintPrefix = prefix
 	b.status = fmt.Sprintf("Choose hint: %s (Esc cancels)", prefix)
 }
 
 // hintTargetRect returns the visible box of a hint target.
 func (b *Browser) hintTargetRect(target int, top, bottom int) (Rect, bool) {
-	return engine.HintTargetRect(b.Layout, b.hintTargets, target, b.Scroll, top, bottom)
+	return engine.HintTargetRect(b.Layout, b.HintTargets, target, b.Scroll, top, bottom)
 }
 
 // clearLinkHints leaves hint mode without navigating. It is safe to call when
 // hints are not active.
 func (b *Browser) clearLinkHints() {
-	if !b.linkHints {
-		return
+	if b.Session.ClearHints() {
+		b.status = ""
 	}
-	b.linkHints = false
-	b.hintsFrontend = false
-	b.hintItems = nil
-	b.hintTargets = nil
-	b.hintPrefix = ""
-	b.hintAsk = false
-	b.status = ""
 }
 
 // handleLinkHintKey consumes keys while hints are shown. Letters extend or
@@ -163,10 +156,10 @@ func (b *Browser) handleLinkHintKey(k string) bool {
 // typeLinkHint narrows the visible hints by one letter and activates the
 // target when only one hint still matches.
 func (b *Browser) typeLinkHint(letter string) {
-	next := b.hintPrefix + letter
+	next := b.HintPrefix + letter
 	matches := 0
 	match := -1
-	for _, h := range b.hintItems {
+	for _, h := range b.HintItems {
 		if strings.HasPrefix(h.Label, next) {
 			matches++
 			match = h.Target
@@ -175,7 +168,7 @@ func (b *Browser) typeLinkHint(letter string) {
 	if matches == 0 {
 		return
 	}
-	b.hintPrefix = next
+	b.HintPrefix = next
 	if matches == 1 {
 		b.chooseHint(match)
 		return
@@ -187,7 +180,7 @@ func (b *Browser) typeLinkHint(letter string) {
 // links wait for destination confirmation; controls act immediately.
 func (b *Browser) chooseHint(target int) {
 	t := b.hintTargetAt(target)
-	ask := b.hintAsk
+	ask := b.HintAsk
 	top, bottom := b.viewport()
 	r, _ := b.hintTargetRect(target, top, bottom)
 	b.clearLinkHints()
@@ -247,10 +240,10 @@ func (b *Browser) focusControlTarget(n *Node, option *Node) {
 		return
 	}
 	b.Focus = -1
-	b.forms.ControlFocus = n
-	b.forms.ControlOption = option
+	b.Forms.ControlFocus = n
+	b.Forms.ControlOption = option
 	if n.Tag == "select" && n.HasAttr("multiple") && option == nil {
-		b.forms.ControlOption = firstSelectOption(n)
+		b.Forms.ControlOption = firstSelectOption(n)
 	}
 	b.status = tabControlStatus(n)
 }
@@ -274,20 +267,12 @@ func isButtonControl(n *Node) bool {
 
 // hintTargetAt resolves a hint target index. Tests and older hint-only pages
 // without hintTargets fall back to treating the index as a link index.
-func (b *Browser) hintTargetAt(i int) hintTarget {
-	if i >= 0 && i < len(b.hintTargets) {
-		return b.hintTargets[i]
-	}
-	if b.Layout != nil && i >= 0 && i < len(b.Layout.Links) {
-		return hintTarget{Link: i}
-	}
-	return hintTarget{Link: -1}
-}
+func (b *Browser) hintTargetAt(i int) hintTarget { return b.Session.HintTargetAt(i) }
 
 // beginHintConfirm shows a chosen F link and waits for confirmation.
 func (b *Browser) beginHintConfirm(link int) {
-	b.hintConfirm = true
-	b.hintConfirmLink = link
+	b.HintConfirm = true
+	b.HintConfirmLink = link
 	target := ""
 	if b.Layout != nil && link >= 0 && link < len(b.Layout.Links) {
 		target = b.resolveHref(b.Layout.Links[link].Href)
@@ -318,18 +303,18 @@ func (b *Browser) findHintLink(node *Node, href string) int {
 
 // clearHintConfirm cancels a pending F confirmation without navigating.
 func (b *Browser) clearHintConfirm() {
-	if !b.hintConfirm {
+	if !b.HintConfirm {
 		return
 	}
-	b.hintConfirm = false
-	b.hintConfirmLink = -1
+	b.HintConfirm = false
+	b.HintConfirmLink = -1
 	b.status = ""
 }
 
 // handleHintConfirmKey accepts Enter/y to follow the chosen link. Escape, n or
 // any other key cancels the confirmation; the key is then processed normally.
 func (b *Browser) handleHintConfirmKey(k string) bool {
-	link := b.hintConfirmLink
+	link := b.HintConfirmLink
 	switch k {
 	case "enter", "y", "Y":
 		b.clearHintConfirm()
@@ -354,7 +339,7 @@ func (b *Browser) handleHintConfirmKey(k string) bool {
 // terminal image protocols. Hint mode and any open modal fall back to
 // half-block art so text painted above the images cannot be covered by them.
 func (b *Browser) inlineImagesEnabled() bool {
-	if b.gfx == nil || b.linkHints {
+	if b.gfx == nil || b.LinkHints {
 		return false
 	}
 	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil && b.viewMenu == nil && b.zoomMenu == nil
@@ -364,8 +349,8 @@ func (b *Browser) inlineImagesEnabled() bool {
 // background and underline. The page text itself is never replaced unless a
 // link has no text letters at all.
 func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
-	if !b.linkHints || b.hintsFrontend {
+	if !b.LinkHints || b.HintsFrontend {
 		return
 	}
-	engine.PaintHintLabels(g, b.Layout, b.hintTargets, b.hintItems, b.hintPrefix, b.Scroll, top, bottom, b.color)
+	engine.PaintHintLabels(g, b.Layout, b.HintTargets, b.HintItems, b.HintPrefix, b.Scroll, top, bottom, b.color)
 }

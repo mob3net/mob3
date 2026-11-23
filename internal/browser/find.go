@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	findScopePage = iota
-	findScopeHTML
+	findScopePage = engine.FindScopePage
+	findScopeHTML = engine.FindScopeHTML
 )
 
 // findRect is one highlight rectangle inside a match. A multi-word match can
@@ -19,37 +19,24 @@ const (
 type findRect = engine.FindRect
 type findMatch = engine.FindMatch
 
-func (b *Browser) openFind(scope int) {
-	b.findActive = true
-	b.findScope = scope
-	b.findText = ""
-	b.findCursor = 0
-	b.findMatches = nil
-	b.findIdx = -1
-}
+func (b *Browser) openFind(scope int) { b.Session.OpenFind(scope) }
 
 // clearFind removes the query, matches and highlights.
-func (b *Browser) clearFind() {
-	b.findActive = false
-	b.findText = ""
-	b.findCursor = 0
-	b.findMatches = nil
-	b.findIdx = -1
-}
+func (b *Browser) clearFind() { b.Session.ClearFind() }
 
 // findStatusText describes the current match for the footer.
 func (b *Browser) findStatusText() string {
-	if b.findText == "" {
+	if b.FindText == "" {
 		return ""
 	}
-	if len(b.findMatches) == 0 {
+	if len(b.FindMatches) == 0 {
 		return "Find: no matches"
 	}
-	idx := b.findIdx
-	if idx < 0 || idx >= len(b.findMatches) {
+	idx := b.FindIdx
+	if idx < 0 || idx >= len(b.FindMatches) {
 		idx = 0
 	}
-	status := fmt.Sprintf("Find %d/%d: %s", idx+1, len(b.findMatches), b.findText)
+	status := fmt.Sprintf("Find %d/%d: %s", idx+1, len(b.FindMatches), b.FindText)
 	if li := b.currentFindLink(); li != nil {
 		if target := b.resolveHref(li.Href); target != "" && target != "#" {
 			status += " (f → " + target + ")"
@@ -61,44 +48,22 @@ func (b *Browser) findStatusText() string {
 }
 
 // currentFindLink returns the link containing the current page find match.
-func (b *Browser) currentFindLink() *LinkInfo {
-	if b.findScope != findScopePage || b.Layout == nil || len(b.findMatches) == 0 {
-		return nil
-	}
-	idx := b.findIdx
-	if idx < 0 || idx >= len(b.findMatches) {
-		idx = 0
-	}
-	m := b.findMatches[idx]
-	if m.Frag < 0 || m.Frag >= len(b.Layout.Frags) {
-		return nil
-	}
-	return b.Layout.Frags[m.Frag].Link
-}
+func (b *Browser) currentFindLink() *LinkInfo { return b.Session.CurrentFindLink() }
 
-func (b *Browser) findBarCount() string {
-	if b.findText == "" || len(b.findMatches) == 0 {
-		return " 0/0 "
-	}
-	idx := b.findIdx
-	if idx < 0 || idx >= len(b.findMatches) {
-		idx = 0
-	}
-	return fmt.Sprintf(" %d/%d ", idx+1, len(b.findMatches))
-}
+func (b *Browser) findBarCount() string { return b.Session.FindBarCount() }
 
 // handleFindKey edits the find query and navigates matches.
 func (b *Browser) handleFindKey(k string) bool {
-	text := b.findText
-	cur := b.findCursor
+	text := b.FindText
+	cur := b.FindCursor
 	switch k {
 	case "esc":
-		b.findActive = false
+		b.FindActive = false
 		b.status = b.findStatusText()
 		return false
 	case "enter":
 		// Confirm the query and return to normal keys; n/N now navigate.
-		b.findActive = false
+		b.FindActive = false
 		b.status = b.findStatusText()
 		return false
 	case "down":
@@ -108,7 +73,7 @@ func (b *Browser) handleFindKey(k string) bool {
 		b.findNext(-1)
 		return false
 	case "tab", "backtab":
-		b.findActive = false
+		b.FindActive = false
 		b.status = b.findStatusText()
 		return false
 	}
@@ -117,12 +82,12 @@ func (b *Browser) handleFindKey(k string) bool {
 		k = "home"
 	}
 	text, cur, _ = editLineKey(text, cur, k, editConfig{maxRunes: 512})
-	changed := text != b.findText
-	b.findText = text
+	changed := text != b.FindText
+	b.FindText = text
 	if cur > len(text) {
 		cur = len(text)
 	}
-	b.findCursor = cur
+	b.FindCursor = cur
 	if changed {
 		b.refreshFind()
 	}
@@ -132,16 +97,16 @@ func (b *Browser) handleFindKey(k string) bool {
 // refreshFind recomputes matches and jumps to the first one at or after the
 // current match/viewport.
 func (b *Browser) refreshFind() {
-	if b.findText == "" {
-		b.findMatches = nil
-		b.findIdx = -1
+	if b.FindText == "" {
+		b.FindMatches = nil
+		b.FindIdx = -1
 		return
 	}
 	anchor := b.findAnchor()
 	matches := b.computeFindMatches()
-	b.findMatches = matches
+	b.FindMatches = matches
 	if len(matches) == 0 {
-		b.findIdx = -1
+		b.FindIdx = -1
 		return
 	}
 	idx := 0
@@ -155,10 +120,10 @@ func (b *Browser) refreshFind() {
 }
 
 func (b *Browser) findAnchor() int {
-	if b.findIdx >= 0 && b.findIdx < len(b.findMatches) {
-		return b.findMatches[b.findIdx].Y
+	if b.FindIdx >= 0 && b.FindIdx < len(b.FindMatches) {
+		return b.FindMatches[b.FindIdx].Y
 	}
-	if b.findScope == findScopeHTML {
+	if b.FindScope == findScopeHTML {
 		l := newConsoleLayout(b.height, consoleHTML)
 		return paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
 	}
@@ -167,55 +132,55 @@ func (b *Browser) findAnchor() int {
 
 // reindexFind keeps highlights valid after a layout rebuild.
 func (b *Browser) reindexFind() {
-	if b.findText == "" || b.findScope != findScopePage {
+	if b.FindText == "" || b.FindScope != findScopePage {
 		return
 	}
-	b.findMatches = b.computeFindMatches()
-	if len(b.findMatches) == 0 {
-		b.findIdx = -1
+	b.FindMatches = b.computeFindMatches()
+	if len(b.FindMatches) == 0 {
+		b.FindIdx = -1
 		return
 	}
-	if b.findIdx < 0 || b.findIdx >= len(b.findMatches) {
-		b.findIdx = 0
+	if b.FindIdx < 0 || b.FindIdx >= len(b.FindMatches) {
+		b.FindIdx = 0
 	}
 }
 
 func (b *Browser) computeFindMatches() []findMatch {
-	if b.findScope == findScopeHTML {
-		return engine.FindHTMLMatches(b.htmlLines(b.width-2), b.findText)
+	if b.FindScope == findScopeHTML {
+		return engine.FindHTMLMatches(b.htmlLines(b.width-2), b.FindText)
 	}
-	return engine.FindPageMatches(b.Layout, b.findText, b.BigText)
+	return engine.FindPageMatches(b.Layout, b.FindText, b.BigText)
 }
 
 func (b *Browser) findNext(dir int) {
-	if b.findText == "" {
+	if b.FindText == "" {
 		return
 	}
-	if len(b.findMatches) == 0 {
+	if len(b.FindMatches) == 0 {
 		b.status = "Find: no matches"
 		return
 	}
-	idx := b.findIdx
+	idx := b.FindIdx
 	if idx < 0 {
 		if dir < 0 {
-			idx = len(b.findMatches) - 1
+			idx = len(b.FindMatches) - 1
 		} else {
 			idx = 0
 		}
 	} else {
-		idx = (idx + dir + len(b.findMatches)) % len(b.findMatches)
+		idx = (idx + dir + len(b.FindMatches)) % len(b.FindMatches)
 	}
 	b.focusFindMatch(idx)
 	b.status = b.findStatusText()
 }
 
 func (b *Browser) focusFindMatch(idx int) {
-	if idx < 0 || idx >= len(b.findMatches) {
+	if idx < 0 || idx >= len(b.FindMatches) {
 		return
 	}
-	b.findIdx = idx
-	m := b.findMatches[idx]
-	if b.findScope == findScopeHTML {
+	b.FindIdx = idx
+	m := b.FindMatches[idx]
+	if b.FindScope == findScopeHTML {
 		rows := newConsoleLayout(b.height, consoleHTML).bodyRows
 		if rows < 1 {
 			return
@@ -266,7 +231,7 @@ func (b *Browser) drawFindBar(g *Grid, y, w int) {
 	if contentW < 1 {
 		return
 	}
-	runes, start, end, cur := promptWindow(b.findText, b.findCursor, contentW, false)
+	runes, start, end, cur := promptWindow(b.FindText, b.FindCursor, contentW, false)
 	xx := x
 	for i := start; i < end; i++ {
 		if i == cur {
@@ -317,10 +282,10 @@ func (b *Browser) fillFindCells(g *Grid, x, y, w int, current bool) {
 
 // paintFindPage highlights page matches in the current frame.
 func (b *Browser) paintFindPage(g *Grid, top, bottom int) {
-	if b.findText == "" || b.findScope != findScopePage {
+	if b.FindText == "" || b.FindScope != findScopePage {
 		return
 	}
-	for i, m := range b.findMatches {
+	for i, m := range b.FindMatches {
 		rects := m.Rects
 		if len(rects) == 0 {
 			rects = []findRect{{X: m.X, Y: m.Y, W: m.W, H: m.H}}
@@ -334,7 +299,7 @@ func (b *Browser) paintFindPage(g *Grid, top, bottom int) {
 				if y+dy >= bottom || y+dy >= g.H {
 					break
 				}
-				b.fillFindCells(g, r.X, y+dy, r.W, i == b.findIdx)
+				b.fillFindCells(g, r.X, y+dy, r.W, i == b.FindIdx)
 			}
 		}
 	}
@@ -342,10 +307,10 @@ func (b *Browser) paintFindPage(g *Grid, top, bottom int) {
 
 // paintFindHTML highlights matches in the visible HTML console body.
 func (b *Browser) paintFindHTML(g *Grid, start, bodyY, rows int) {
-	if b.findText == "" || b.findScope != findScopeHTML {
+	if b.FindText == "" || b.FindScope != findScopeHTML {
 		return
 	}
-	for i, m := range b.findMatches {
+	for i, m := range b.FindMatches {
 		rects := m.Rects
 		if len(rects) == 0 {
 			rects = []findRect{{X: m.X, Line: m.Line, W: m.W}}
@@ -355,7 +320,7 @@ func (b *Browser) paintFindHTML(g *Grid, start, bodyY, rows int) {
 			if rel < 0 || rel >= rows {
 				continue
 			}
-			b.fillFindCells(g, 1+r.X, bodyY+rel, r.W, i == b.findIdx)
+			b.fillFindCells(g, 1+r.X, bodyY+rel, r.W, i == b.FindIdx)
 		}
 	}
 }
@@ -373,13 +338,13 @@ func (b *Browser) applyFindCommand(v protocol.Find) {
 	if v.Scope == protocol.FindHTML {
 		scope = findScopeHTML
 	}
-	changed := scope != b.findScope
-	b.findScope = scope
-	if changed || v.Query != b.findText {
-		b.findText = v.Query
-		b.findCursor = len(v.Query)
-		b.findMatches = nil
-		b.findIdx = -1
+	changed := scope != b.FindScope
+	b.FindScope = scope
+	if changed || v.Query != b.FindText {
+		b.FindText = v.Query
+		b.FindCursor = len(v.Query)
+		b.FindMatches = nil
+		b.FindIdx = -1
 		b.refreshFind()
 	}
 	if v.Next {
@@ -395,13 +360,13 @@ func (b *Browser) sendFindResults() {
 		return
 	}
 	cur := 0
-	if len(b.findMatches) > 0 {
-		cur = b.findIdx + 1
+	if len(b.FindMatches) > 0 {
+		cur = b.FindIdx + 1
 		if cur < 1 {
 			cur = 1
 		}
 	}
 	_ = b.sessionOut.Send(protocol.Event{Body: protocol.FindResults{
-		Query: b.findText, Current: cur, Total: len(b.findMatches),
+		Query: b.FindText, Current: cur, Total: len(b.FindMatches),
 	}})
 }

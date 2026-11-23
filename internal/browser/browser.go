@@ -201,7 +201,6 @@ type Browser struct {
 	lastRebuild time.Time
 	lastBuild   time.Duration
 
-	forms         engine.FormState
 	consoleOpen   bool
 	consoleScroll int
 	reqScroll     int
@@ -215,23 +214,6 @@ type Browser struct {
 	consoleEdit   bool // the input row inside the logs or tools section has focus
 	consoleHist   consoleHistory
 	toolHist      consoleHistory
-
-	findActive  bool
-	findText    string
-	findCursor  int
-	findScope   int
-	findMatches []findMatch
-	findIdx     int
-
-	// Vimium-style link hints for the links visible in the viewport.
-	linkHints   bool
-	hintItems   []linkHint
-	hintTargets []hintTarget
-	hintPrefix  string
-	// hintAsk is set by F; choosing a hint then waits for confirmation.
-	hintAsk         bool
-	hintConfirm     bool
-	hintConfirmLink int
 
 	htmlPage  *Page
 	htmlWidth int
@@ -310,9 +292,6 @@ type Browser struct {
 	headerHits     []headerHit
 	footerHits     []headerHit
 	consoleTabHits []consoleTabHit
-
-	selection engine.Selection
-	selecting bool
 }
 
 type loadResult struct {
@@ -674,7 +653,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.selectID = 0
 	b.downloadFrontend = false
 	b.noticeFrontend = false
-	b.hintsFrontend = false
+	b.HintsFrontend = false
 	b.viewMenu = nil
 	b.viewMenuHits = nil
 	b.zoomMenu = nil
@@ -902,14 +881,14 @@ func (b *Browser) rebuild() {
 	// Timer-driven DOM changes (for example marquee animations) rebuild the
 	// page constantly. Keep an active hint session alive and recompute its
 	// hints against the new layout instead of dismissing it.
-	wasHints := b.linkHints
-	hintAsk := b.hintAsk
-	hintPrefix := b.hintPrefix
-	wasConfirm := b.hintConfirm
+	wasHints := b.LinkHints
+	hintAsk := b.HintAsk
+	hintPrefix := b.HintPrefix
+	wasConfirm := b.HintConfirm
 	var confirmNode *Node
 	confirmHref := ""
-	if wasConfirm && b.Layout != nil && b.hintConfirmLink >= 0 && b.hintConfirmLink < len(b.Layout.Links) {
-		li := b.Layout.Links[b.hintConfirmLink]
+	if wasConfirm && b.Layout != nil && b.HintConfirmLink >= 0 && b.HintConfirmLink < len(b.Layout.Links) {
+		li := b.Layout.Links[b.HintConfirmLink]
 		confirmNode = li.Node
 		confirmHref = li.Href
 	}
@@ -1177,7 +1156,7 @@ func (b *Browser) scrollBy(n int) {
 	b.Scroll += n
 	b.clampScroll()
 	switch {
-	case b.findText != "":
+	case b.FindText != "":
 		// Keep the confirmed find status visible while scrolling; only Esc
 		// clears the search and its footer line.
 		b.status = b.findStatusText()

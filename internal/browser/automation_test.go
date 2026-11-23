@@ -119,19 +119,19 @@ func TestAutomationClickSelectorAndType(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Selector: `input[name="q"]`}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.forms.InputFocus == nil {
+	if a.b.Forms.InputFocus == nil {
 		t.Fatal("clicking the selector did not focus the input")
 	}
 	if err := a.Type(ctx, "hello"); err != nil {
 		t.Fatal(err)
 	}
-	if got := inputValue(a.b.forms.InputFocus); got != "hello" {
+	if got := inputValue(a.b.Forms.InputFocus); got != "hello" {
 		t.Fatalf("typed value = %q", got)
 	}
 	if err := a.Press(ctx, "Backspace"); err != nil {
 		t.Fatal(err)
 	}
-	if got := inputValue(a.b.forms.InputFocus); got != "hell" {
+	if got := inputValue(a.b.Forms.InputFocus); got != "hell" {
 		t.Fatalf("after Backspace = %q", got)
 	}
 }
@@ -616,7 +616,7 @@ func TestAutomationClickSelectorScrollsIntoView(t *testing.T) {
 	if a.b.Scroll == 0 {
 		t.Fatal("selector click did not scroll the field into view")
 	}
-	if a.b.forms.InputFocus == nil {
+	if a.b.Forms.InputFocus == nil {
 		t.Fatal("selector click did not focus the off-screen field")
 	}
 }

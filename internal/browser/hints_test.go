@@ -24,15 +24,15 @@ func TestLinkHintsPickLetterFromText(t *testing.T) {
 </body></html>`, 50, 20)
 
 	b.HandleKey("f")
-	if !b.linkHints || len(b.hintItems) != 1 {
-		t.Fatalf("hints = %v, want one active hint", b.linkHints)
+	if !b.LinkHints || len(b.HintItems) != 1 {
+		t.Fatalf("hints = %v, want one active hint", b.LinkHints)
 	}
-	if got := b.hintItems[0].Label; got != "d" {
+	if got := b.HintItems[0].Label; got != "d" {
 		t.Fatalf("label = %q, want d from Documentation", got)
 	}
 	// The label is case-insensitive, even when the page uses an uppercase D.
 	b.HandleKey("D")
-	if b.linkHints {
+	if b.LinkHints {
 		t.Fatal("following a hint left hint mode on")
 	}
 	if b.Focus != 0 {
@@ -42,8 +42,8 @@ func TestLinkHintsPickLetterFromText(t *testing.T) {
 	// Reopening and typing the lowercase form works too.
 	b.HandleKey("f")
 	b.HandleKey("d")
-	if b.linkHints || b.Focus != 0 {
-		t.Fatalf("lowercase hint: active=%v focus=%d", b.linkHints, b.Focus)
+	if b.LinkHints || b.Focus != 0 {
+		t.Fatalf("lowercase hint: active=%v focus=%d", b.LinkHints, b.Focus)
 	}
 }
 
@@ -53,18 +53,18 @@ func TestLinkHintsSkipUsedLetters(t *testing.T) {
 </body></html>`, 50, 20)
 
 	b.HandleKey("f")
-	if len(b.hintItems) != 2 {
-		t.Fatalf("hints = %d, want 2", len(b.hintItems))
+	if len(b.HintItems) != 2 {
+		t.Fatalf("hints = %d, want 2", len(b.HintItems))
 	}
-	if got := b.hintItems[0].Label; got != "d" {
+	if got := b.HintItems[0].Label; got != "d" {
 		t.Fatalf("first label = %q, want d", got)
 	}
-	if got := b.hintItems[1].Label; got != "o" {
+	if got := b.HintItems[1].Label; got != "o" {
 		t.Fatalf("second label = %q, want o because d is already used", got)
 	}
 	b.HandleKey("o")
-	if b.linkHints || b.Focus != 1 {
-		t.Fatalf("following o: active=%v focus=%d", b.linkHints, b.Focus)
+	if b.LinkHints || b.Focus != 1 {
+		t.Fatalf("following o: active=%v focus=%d", b.LinkHints, b.Focus)
 	}
 }
 
@@ -79,12 +79,12 @@ func TestLinkHintsTwoLettersAndFiltering(t *testing.T) {
 	doc.WriteString("</body></html>")
 	b := hintTestBrowser(t, doc.String(), 40, 60)
 	b.HandleKey("f")
-	if len(b.hintItems) != 28 {
-		t.Fatalf("hints = %d, want 28", len(b.hintItems))
+	if len(b.HintItems) != 28 {
+		t.Fatalf("hints = %d, want 28", len(b.HintItems))
 	}
 	seen := map[string]bool{}
 	prefixes := map[byte]int{}
-	for _, h := range b.hintItems {
+	for _, h := range b.HintItems {
 		if len(h.Label) < 1 || len(h.Label) > 2 {
 			t.Fatalf("label %q is not one or two letters", h.Label)
 		}
@@ -97,16 +97,16 @@ func TestLinkHintsTwoLettersAndFiltering(t *testing.T) {
 			t.Fatalf("label %q highlights %d chars, want %d", h.Label, len(h.Chars), len(h.Label))
 		}
 	}
-	for _, h := range b.hintItems {
+	for _, h := range b.HintItems {
 		if prefixes[h.Label[0]] == 1 && len(h.Label) != 1 {
 			t.Fatalf("label %q has a unique first letter but is not shortened", h.Label)
 		}
 	}
-	h := b.hintItems[27]
+	h := b.HintItems[27]
 	for _, r := range h.Label {
 		b.HandleKey(string(r))
 	}
-	if b.linkHints {
+	if b.LinkHints {
 		t.Fatal("typing the hint did not follow the link")
 	}
 	if b.Focus != 27 {
@@ -120,8 +120,8 @@ func TestLinkHintsIgnoreUnknownLetter(t *testing.T) {
 </body></html>`, 50, 20)
 	b.HandleKey("f")
 	b.HandleKey("z")
-	if !b.linkHints || b.hintPrefix != "" {
-		t.Fatalf("unknown letter changed hint state: active=%v prefix=%q", b.linkHints, b.hintPrefix)
+	if !b.LinkHints || b.HintPrefix != "" {
+		t.Fatalf("unknown letter changed hint state: active=%v prefix=%q", b.LinkHints, b.HintPrefix)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestLinkHintsClearOnEscapeAndScroll(t *testing.T) {
 	b := hintTestBrowser(t, doc.String(), 50, 10)
 	b.HandleKey("f")
 	b.HandleKey("esc")
-	if b.linkHints || len(b.hintItems) != 0 {
+	if b.LinkHints || len(b.HintItems) != 0 {
 		t.Fatal("Esc did not clear link hints")
 	}
 	if b.status != exitHint {
@@ -144,7 +144,7 @@ func TestLinkHintsClearOnEscapeAndScroll(t *testing.T) {
 
 	b.HandleKey("f")
 	b.HandleMouse(MouseEvent{X: 5, Y: 5, Wheel: 1})
-	if b.linkHints {
+	if b.LinkHints {
 		t.Fatal("mouse wheel scrolling did not clear link hints")
 	}
 	if b.Scroll != 3 {
@@ -164,8 +164,8 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 		t.Fatalf("page links = %d, want 2", len(b.Layout.Links))
 	}
 	b.HandleKey("f")
-	if len(b.hintItems) != 1 || b.hintItems[0].Target != 0 {
-		t.Fatalf("visible hints = %+v, want only the top link", b.hintItems)
+	if len(b.HintItems) != 1 || b.HintItems[0].Target != 0 {
+		t.Fatalf("visible hints = %+v, want only the top link", b.HintItems)
 	}
 }
 
@@ -175,7 +175,7 @@ func TestLinkHintsDisableInlineImages(t *testing.T) {
 	if !b.inlineImagesEnabled() {
 		t.Fatal("inline images should be enabled outside hint mode")
 	}
-	b.linkHints = true
+	b.LinkHints = true
 	if b.inlineImagesEnabled() {
 		t.Fatal("inline images should be disabled while hints are shown")
 	}
@@ -230,11 +230,11 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	choose := func(match func(*Node) bool) {
 		t.Helper()
 		b.HandleKey("f")
-		if !b.linkHints {
+		if !b.LinkHints {
 			t.Fatal("f did not open hints")
 		}
 		label := ""
-		for _, h := range b.hintItems {
+		for _, h := range b.HintItems {
 			if target := b.hintTargetAt(h.Target); target.Node != nil && match(target.Node) {
 				label = h.Label
 				break
@@ -252,8 +252,8 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if !check.HasAttr("checked") {
 		t.Fatal("checkbox hint did not toggle it")
 	}
-	if b.forms.ControlFocus != check {
-		t.Fatalf("checkbox hint did not focus it: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != check {
+		t.Fatalf("checkbox hint did not focus it: %v", b.Forms.ControlFocus)
 	}
 	b.HandleKey(" ")
 	if check.HasAttr("checked") {
@@ -263,22 +263,22 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if !radios[1].HasAttr("checked") || radios[0].HasAttr("checked") {
 		t.Fatal("radio hint did not select it")
 	}
-	if b.forms.ControlFocus != radios[1] {
-		t.Fatalf("radio hint did not focus it: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != radios[1] {
+		t.Fatalf("radio hint did not focus it: %v", b.Forms.ControlFocus)
 	}
 	choose(func(n *Node) bool { return n == beta })
 	if !beta.HasAttr("selected") {
 		t.Fatal("multi-select hint did not toggle the option")
 	}
-	if b.forms.ControlFocus != multi || b.forms.ControlOption != beta {
-		t.Fatalf("multi-select hint did not focus the option: control=%v option=%v", b.forms.ControlFocus, b.forms.ControlOption)
+	if b.Forms.ControlFocus != multi || b.Forms.ControlOption != beta {
+		t.Fatalf("multi-select hint did not focus the option: control=%v option=%v", b.Forms.ControlFocus, b.Forms.ControlOption)
 	}
 	choose(func(n *Node) bool { return n == single[0] })
 	if b.selectMenu == nil {
 		t.Fatal("select hint did not open the option popup")
 	}
-	if b.forms.ControlFocus != single[0] {
-		t.Fatalf("select hint did not focus it: %v", b.forms.ControlFocus)
+	if b.Forms.ControlFocus != single[0] {
+		t.Fatalf("select hint did not focus it: %v", b.Forms.ControlFocus)
 	}
 }
 
@@ -289,12 +289,12 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 </body></html>`, 50, 20)
 
 	b.HandleKey("f")
-	if !b.linkHints {
+	if !b.LinkHints {
 		t.Fatal("f did not open hints")
 	}
 	var input *Node
 	label := ""
-	for _, h := range b.hintItems {
+	for _, h := range b.HintItems {
 		if target := b.hintTargetAt(h.Target); target.Node != nil {
 			input = target.Node
 			label = h.Label
@@ -302,15 +302,15 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 		}
 	}
 	if input == nil || label == "" {
-		t.Fatalf("input field has no hint: %+v", b.hintItems)
+		t.Fatalf("input field has no hint: %+v", b.HintItems)
 	}
 	for _, ch := range label {
 		b.HandleKey(string(ch))
 	}
-	if b.forms.InputFocus != input {
-		t.Fatalf("hint did not focus the input: %v", b.forms.InputFocus)
+	if b.Forms.InputFocus != input {
+		t.Fatalf("hint did not focus the input: %v", b.Forms.InputFocus)
 	}
-	if b.linkHints {
+	if b.LinkHints {
 		t.Fatal("hint mode stayed active after focusing a field")
 	}
 }
@@ -318,9 +318,9 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Layout = &Layout{Links: make([]*LinkInfo, 3)}
-	b.linkHints = true
-	b.hintPrefix = "g"
-	b.hintItems = []linkHint{
+	b.LinkHints = true
+	b.HintPrefix = "g"
+	b.HintItems = []linkHint{
 		{Target: 0, Label: "ab", Chars: []hintChar{{R: 'a', X: 1}, {R: 'b', X: 2}}},
 		{Target: 1, Label: "gx", Chars: []hintChar{{R: 'g', X: 5}, {R: 'x', X: 6}}},
 		{Target: 2, Label: "gy", Chars: []hintChar{{R: 'g', X: 8}, {R: 'y', X: 9}}},
@@ -343,8 +343,8 @@ func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 func TestPaintLinkHintFallbackInsideBox(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Layout = &Layout{Links: []*LinkInfo{{Rects: []Rect{{X: 3, Y: 0, W: 10, H: 1}}}}}
-	b.linkHints = true
-	b.hintItems = []linkHint{{Target: 0, Label: "bx"}}
+	b.LinkHints = true
+	b.HintItems = []linkHint{{Target: 0, Label: "bx"}}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
 	for i, want := range "bx" {
@@ -355,7 +355,7 @@ func TestPaintLinkHintFallbackInsideBox(t *testing.T) {
 	}
 
 	// After the first letter, only the remaining letter stays visible.
-	b.hintPrefix = "b"
+	b.HintPrefix = "b"
 	g = NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintLinkHints(g, 0, 10)
 	if c := g.Cells[3]; c.R != 'x' || c.BG != RGB(0xff, 0xd7, 0x00) {
@@ -399,12 +399,12 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 <div id="one">target</div>
 </body></html>`, 50, 20)
 	b.HandleKey("F")
-	if !b.linkHints || !b.hintAsk {
+	if !b.LinkHints || !b.HintAsk {
 		t.Fatal("F did not open confirmation hint mode")
 	}
 	b.HandleKey("d")
-	if b.linkHints || !b.hintConfirm {
-		t.Fatalf("choosing a hint: active=%v confirm=%v", b.linkHints, b.hintConfirm)
+	if b.LinkHints || !b.HintConfirm {
+		t.Fatalf("choosing a hint: active=%v confirm=%v", b.LinkHints, b.HintConfirm)
 	}
 	if b.Focus != -1 {
 		t.Fatalf("focus = %d, want no navigation before confirmation", b.Focus)
@@ -418,7 +418,7 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 
 	// Timer-driven rebuilds must not discard the pending confirmation.
 	b.rebuild()
-	if !b.hintConfirm {
+	if !b.HintConfirm {
 		t.Fatal("rebuild cleared the confirmation")
 	}
 	if !strings.Contains(b.status, "https://example.com/#one") {
@@ -426,7 +426,7 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 	}
 
 	b.HandleKey("enter")
-	if b.hintConfirm {
+	if b.HintConfirm {
 		t.Fatal("Enter did not confirm the link")
 	}
 	if b.Focus != 0 {
@@ -442,7 +442,7 @@ func TestCapitalFConfirmationCancel(t *testing.T) {
 	b.HandleKey("F")
 	b.HandleKey("d")
 	b.HandleKey("esc")
-	if b.hintConfirm {
+	if b.HintConfirm {
 		t.Fatal("Esc left the confirmation open")
 	}
 	if b.Focus != -1 {
@@ -462,26 +462,26 @@ func TestLinkHintsSurviveRebuild(t *testing.T) {
 	doc.WriteString("</body></html>")
 	b := hintTestBrowser(t, doc.String(), 40, 60)
 	b.HandleKey("f")
-	if !b.linkHints {
+	if !b.LinkHints {
 		t.Fatal("f did not open hint mode")
 	}
 	b.rebuild()
-	if !b.linkHints || len(b.hintItems) != 27 {
-		t.Fatalf("rebuild dismissed hints: active=%v hints=%d", b.linkHints, len(b.hintItems))
+	if !b.LinkHints || len(b.HintItems) != 27 {
+		t.Fatalf("rebuild dismissed hints: active=%v hints=%d", b.LinkHints, len(b.HintItems))
 	}
 
 	b.HandleKey("a")
-	if !b.linkHints || b.hintPrefix != "a" {
-		t.Fatalf("typing a: active=%v prefix=%q", b.linkHints, b.hintPrefix)
+	if !b.LinkHints || b.HintPrefix != "a" {
+		t.Fatalf("typing a: active=%v prefix=%q", b.LinkHints, b.HintPrefix)
 	}
 	b.rebuild()
-	if !b.linkHints || b.hintPrefix != "a" {
-		t.Fatalf("rebuild lost the typed prefix: active=%v prefix=%q", b.linkHints, b.hintPrefix)
+	if !b.LinkHints || b.HintPrefix != "a" {
+		t.Fatalf("rebuild lost the typed prefix: active=%v prefix=%q", b.LinkHints, b.HintPrefix)
 	}
 
 	// Scrolling is still an explicit dismissal.
 	b.scrollBy(1)
-	if b.linkHints {
+	if b.LinkHints {
 		t.Fatal("scrolling did not dismiss the hints")
 	}
 }
@@ -497,7 +497,7 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 
 	find := func() (button, link bool) {
 		b.openLinkHints(false)
-		for _, tgt := range b.hintTargets {
+		for _, tgt := range b.HintTargets {
 			if tgt.Node != nil && tgt.Node.Attr("id") == "ok" {
 				button = true
 			}
@@ -548,7 +548,7 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 		t.Fatal("fixed column-flex button has no widget fragment")
 	}
 	b.openLinkHints(false)
-	for _, target := range b.hintTargets {
+	for _, target := range b.HintTargets {
 		if target.Node == btn {
 			return
 		}

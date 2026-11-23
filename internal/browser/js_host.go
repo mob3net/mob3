@@ -36,9 +36,9 @@ func (h browserJSHost) Scroll() int     { return h.b.Scroll }
 func (h browserJSHost) SetScroll(v int) { h.b.Scroll = v }
 func (h browserJSHost) ClampScroll()    { h.b.clampScroll() }
 func (h browserJSHost) InputFocus() *Node {
-	return h.b.forms.InputFocus
+	return h.b.Forms.InputFocus
 }
-func (h browserJSHost) SetInputFocus(n *Node) { h.b.forms.InputFocus = n }
+func (h browserJSHost) SetInputFocus(n *Node) { h.b.Forms.InputFocus = n }
 func (h browserJSHost) NodeAt(x, y int) *Node { return h.b.nodeAt(x, y) }
 
 func (h browserJSHost) Status() string     { return h.b.status }

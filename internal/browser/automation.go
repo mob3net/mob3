@@ -581,7 +581,7 @@ func (a *Automation) Type(ctx context.Context, text string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.forms.InputFocus == nil && !b.prompt {
+	if b.Forms.InputFocus == nil && !b.prompt {
 		return errors.New("no focused input; click a text field first")
 	}
 	if utf8LenString(text) > 20000 {
@@ -1301,8 +1301,8 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 	}
 	var form *Node
 	if selector == "" {
-		if b.forms.InputFocus != nil {
-			form = nearestForm(b.forms.InputFocus)
+		if b.Forms.InputFocus != nil {
+			form = nearestForm(b.Forms.InputFocus)
 		}
 		if form == nil {
 			forms := b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "form" })

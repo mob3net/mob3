@@ -227,7 +227,7 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 }
 
 func (b *Browser) applyHintResult(v protocol.HintResult) {
-	if !b.hintsFrontend || !b.linkHints {
+	if !b.HintsFrontend || !b.LinkHints {
 		return
 	}
 	if v.Cancel {

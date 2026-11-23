@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -27,6 +28,29 @@ type Session struct {
 	BigText           bool
 	BigTextBlocked    bool
 	Dark              bool
+
+	// Interaction state.
+	Forms     FormState
+	Selection Selection
+	Selecting bool
+
+	// Find state.
+	FindActive  bool
+	FindText    string
+	FindCursor  int
+	FindScope   int
+	FindMatches []FindMatch
+	FindIdx     int
+
+	// Link-hint state.
+	LinkHints       bool
+	HintItems       []LinkHint
+	HintTargets     []HintTarget
+	HintPrefix      string
+	HintAsk         bool
+	HintConfirm     bool
+	HintConfirmLink int
+	HintsFrontend   bool
 }
 
 // NewSession creates an empty page session.
@@ -122,4 +146,91 @@ func MetaRefreshTarget(page *Page) string {
 		}
 	}
 	return ""
+}
+
+// Find scopes.
+const (
+	FindScopePage = iota
+	FindScopeHTML
+)
+
+// OpenFind starts a fresh find in the given scope.
+func (s *Session) OpenFind(scope int) {
+	s.FindActive = true
+	s.FindScope = scope
+	s.FindText = ""
+	s.FindCursor = 0
+	s.FindMatches = nil
+	s.FindIdx = -1
+}
+
+// ClearFind removes the query, matches and highlights.
+func (s *Session) ClearFind() {
+	s.FindActive = false
+	s.FindText = ""
+	s.FindCursor = 0
+	s.FindMatches = nil
+	s.FindIdx = -1
+}
+
+// CurrentFindLink returns the link containing the current page find match.
+func (s *Session) CurrentFindLink() *LinkInfo {
+	if s.FindScope != FindScopePage || s.Layout == nil || len(s.FindMatches) == 0 {
+		return nil
+	}
+	idx := s.FindIdx
+	if idx < 0 || idx >= len(s.FindMatches) {
+		idx = 0
+	}
+	m := s.FindMatches[idx]
+	if m.Frag < 0 || m.Frag >= len(s.Layout.Frags) {
+		return nil
+	}
+	return s.Layout.Frags[m.Frag].Link
+}
+
+// FindBarCount formats the current/total find count.
+func (s *Session) FindBarCount() string {
+	if s.FindText == "" || len(s.FindMatches) == 0 {
+		return " 0/0 "
+	}
+	idx := s.FindIdx
+	if idx < 0 || idx >= len(s.FindMatches) {
+		idx = 0
+	}
+	return fmt.Sprintf(" %d/%d ", idx+1, len(s.FindMatches))
+}
+
+// ClearHints resets hint mode and reports whether it was active.
+func (s *Session) ClearHints() bool {
+	if !s.LinkHints {
+		return false
+	}
+	s.LinkHints = false
+	s.HintsFrontend = false
+	s.HintItems = nil
+	s.HintTargets = nil
+	s.HintPrefix = ""
+	s.HintAsk = false
+	return true
+}
+
+// HintTargetAt resolves a hint target index, falling back to a link index.
+func (s *Session) HintTargetAt(i int) HintTarget {
+	if i >= 0 && i < len(s.HintTargets) {
+		return s.HintTargets[i]
+	}
+	if s.Layout != nil && i >= 0 && i < len(s.Layout.Links) {
+		return HintTarget{Link: i}
+	}
+	return HintTarget{Link: -1}
+}
+
+// HasSelection reports whether a page selection exists.
+func (s *Session) HasSelection() bool { return s.Selection.Has() }
+
+// ClearSelection resets the page selection and drag state.
+func (s *Session) ClearSelection() {
+	s.Selection.Clear()
+	s.Selecting = false
 }

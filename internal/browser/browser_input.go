@@ -307,7 +307,7 @@ func promptParts(prefix, text string, cursor int, selectAll bool, width int) (he
 }
 
 func (b *Browser) submitInput() {
-	n := b.forms.InputFocus
+	n := b.Forms.InputFocus
 	if n == nil {
 		return
 	}
@@ -537,10 +537,10 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.handleConsoleMouse(ev)
 		return false
 	}
-	if b.linkHints && (ev.Press || ev.Wheel != 0) {
+	if b.LinkHints && (ev.Press || ev.Wheel != 0) {
 		b.clearLinkHints()
 	}
-	if b.hintConfirm && (ev.Press || ev.Wheel != 0) {
+	if b.HintConfirm && (ev.Press || ev.Wheel != 0) {
 		b.clearHintConfirm()
 	}
 	x := ev.X - 1
@@ -549,10 +549,10 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.setPageHover(nil)
 		return false
 	}
-	if !ev.Press && b.selecting {
+	if !ev.Press && b.Selecting {
 		top, bottom := b.viewport()
 		if y < top || y >= bottom {
-			b.selecting = false
+			b.Selecting = false
 			if b.hasSelection() {
 				b.status = b.selectionSummary()
 			}
@@ -601,7 +601,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			case headerConfig:
 				b.Navigate("about:config", true)
 			case headerURL:
-				if b.forms.InputFocus != nil {
+				if b.Forms.InputFocus != nil {
 					b.setInputFocus(nil)
 				}
 				b.openURLPrompt()
@@ -670,7 +670,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.scrollDrag = false
 		return false
 	}
-	if ev.Motion && !b.selecting {
+	if ev.Motion && !b.Selecting {
 		docY := b.Scroll + (y - top)
 		b.setPageHover(b.nodeAt(x, docY))
 		b.updateHover(x, y, top, bottom)
@@ -713,24 +713,24 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 						n = target
 					}
 					if isFileInput(n) {
-						b.selecting = false
+						b.Selecting = false
 						b.showUploadNotice()
 						return false
 					}
 					if isToggleControl(n) {
-						b.selecting = false
+						b.Selecting = false
 						b.toggleControl(n)
 						return false
 					}
 					if isTextInput(n) {
-						b.selecting = false
+						b.Selecting = false
 						b.setInputFocus(n)
 						return false
 					}
 					if isRangeInput(n) {
-						b.selecting = false
+						b.Selecting = false
 						if dir := b.rangeSideAt(n, x, docY); dir != 0 {
-							if b.forms.InputFocus != n {
+							if b.Forms.InputFocus != n {
 								b.setInputFocus(n)
 							}
 							b.adjustRange(n, float64(dir))
@@ -748,9 +748,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		return false
 	}
 	// Button release: a drag keeps the selection, a plain click acts.
-	if b.selecting {
+	if b.Selecting {
 		moved := b.hasSelection()
-		b.selecting = false
+		b.Selecting = false
 		if moved {
 			b.status = b.selectionSummary()
 		} else if y >= top && y < bottom {
@@ -827,7 +827,7 @@ func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 	if b.prompt {
 		return true, b.handlePromptKey(k)
 	}
-	if b.findActive {
+	if b.FindActive {
 		return true, b.handleFindKey(k)
 	}
 	return false, false
@@ -836,16 +836,16 @@ func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 // handlePageKey routes keys that belong to page content, forms, links and
 // viewport movement.
 func (b *Browser) handlePageKey(k string) bool {
-	if b.forms.InputFocus != nil {
+	if b.Forms.InputFocus != nil {
 		return b.handleInputKey(k)
 	}
-	if b.forms.ControlFocus != nil {
+	if b.Forms.ControlFocus != nil {
 		return b.handleControlKey(k)
 	}
-	if b.linkHints {
+	if b.LinkHints {
 		return b.handleLinkHintKey(k)
 	}
-	if b.hintConfirm {
+	if b.HintConfirm {
 		return b.handleHintConfirmKey(k)
 	}
 	if k == "/" {
@@ -924,11 +924,11 @@ func (b *Browser) handlePageKey(k string) bool {
 			b.status = b.URL.String()
 		}
 	case "n":
-		if b.findText != "" && b.findScope == findScopePage {
+		if b.FindText != "" && b.FindScope == findScopePage {
 			b.findNext(1)
 		}
 	case "N":
-		if b.findText != "" && b.findScope == findScopePage {
+		if b.FindText != "" && b.FindScope == findScopePage {
 			b.findNext(-1)
 		}
 	case "d":
@@ -940,7 +940,7 @@ func (b *Browser) handlePageKey(k string) bool {
 	case "ctrl-y":
 		b.copyViewportText()
 	case "esc":
-		if b.findText != "" {
+		if b.FindText != "" {
 			b.clearFind()
 		}
 		b.Focus = -1

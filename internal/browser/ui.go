@@ -141,7 +141,7 @@ func setMouseReporting(on bool) {
 
 func (b *Browser) toggleConsole() {
 	b.consoleOpen = !b.consoleOpen
-	if !b.consoleOpen && b.findScope == findScopeHTML {
+	if !b.consoleOpen && b.FindScope == findScopeHTML {
 		b.clearFind()
 	}
 	b.consoleScroll = 0
@@ -210,7 +210,7 @@ func (b *Browser) applyConsoleAction(v protocol.ConsoleAction) {
 }
 
 func (b *Browser) handleConsoleKey(k string) bool {
-	if b.findActive {
+	if b.FindActive {
 		return b.handleFindKey(k)
 	}
 	if b.consoleEdit {
@@ -237,11 +237,11 @@ func (b *Browser) handleConsoleKey(k string) bool {
 	case ":", "enter":
 		b.focusConsoleInput()
 	case "n":
-		if b.findText != "" && b.findScope == findScopeHTML {
+		if b.FindText != "" && b.FindScope == findScopeHTML {
 			b.findNext(1)
 		}
 	case "N":
-		if b.findText != "" && b.findScope == findScopeHTML {
+		if b.FindText != "" && b.FindScope == findScopeHTML {
 			b.findNext(-1)
 		}
 	case "k", "up":
@@ -340,8 +340,8 @@ func (b *Browser) selectConsolePane(pane int) {
 	if pane == consoleHTML && b.consolePane != consoleHTML {
 		b.htmlScroll = len(b.htmlLines(b.width - 2))
 	}
-	if b.findActive && b.findScope == findScopeHTML && pane != consoleHTML {
-		b.findActive = false
+	if b.FindActive && b.FindScope == findScopeHTML && pane != consoleHTML {
+		b.FindActive = false
 	}
 	if pane == consoleTools && len(b.toolLog) == 0 {
 		for _, line := range toolsHelpLines() {
@@ -1135,7 +1135,7 @@ func paneStart(total, scroll, rows int) int {
 // consoleEngineFallback keeps the engine drawing the console while a console
 // HTML find or an engine-owned modal needs its cell overlay.
 func (b *Browser) consoleEngineFallback() bool {
-	return b.findActive || b.viewMenu != nil || b.zoomMenu != nil ||
+	return b.FindActive || b.viewMenu != nil || b.zoomMenu != nil ||
 		(b.selectMenu != nil && !b.selectFrontend) ||
 		(b.download != nil && !b.downloadFrontend) ||
 		(b.notice != nil && !b.noticeFrontend)
@@ -1209,17 +1209,17 @@ func (b *Browser) emitConsoleView() {
 			v.Quit = true
 		}
 	}
-	if b.findScope == findScopeHTML && b.findText != "" {
-		v.FindText = b.findText
-		v.FindCursor = b.findCursor
-		v.FindCurrent = b.findIdx + 1
+	if b.FindScope == findScopeHTML && b.FindText != "" {
+		v.FindText = b.FindText
+		v.FindCursor = b.FindCursor
+		v.FindCurrent = b.FindIdx + 1
 		if v.FindCurrent < 1 {
 			v.FindCurrent = 1
 		}
-		v.FindTotal = len(b.findMatches)
+		v.FindTotal = len(b.FindMatches)
 		lines := b.htmlLines(w - 2)
 		start := paneStart(len(lines), b.htmlScroll, l.bodyRows)
-		for i, m := range b.findMatches {
+		for i, m := range b.FindMatches {
 			rects := m.Rects
 			if len(rects) == 0 {
 				rects = []findRect{{X: m.X, Line: m.Line, W: m.W}}
@@ -1230,7 +1230,7 @@ func (b *Browser) emitConsoleView() {
 					continue
 				}
 				v.Highlights = append(v.Highlights, protocol.ConsoleHighlight{
-					Line: rel, X: 1 + r.X, W: r.W, Current: i == b.findIdx,
+					Line: rel, X: 1 + r.X, W: r.W, Current: i == b.FindIdx,
 				})
 			}
 		}
@@ -1329,7 +1329,7 @@ func (b *Browser) drawConsole(w, h int) {
 		}
 	}
 	if h >= 2 {
-		if b.findActive && b.findScope == findScopeHTML {
+		if b.FindActive && b.FindScope == findScopeHTML {
 			b.drawFindBar(g, h-1, w)
 			b.paintShellOverlays(g)
 			b.presentGrid(g, nil)

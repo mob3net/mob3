@@ -10,7 +10,7 @@ import (
 func typeFindQuery(t *testing.T, b *Browser, open func(), query string) {
 	t.Helper()
 	open()
-	if !b.findActive {
+	if !b.FindActive {
 		t.Fatal("find bar did not open")
 	}
 	for _, r := range query {
@@ -26,48 +26,48 @@ func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	b.Layout = BuildLayout(root, nil, 60)
 
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha")
-	if got := len(b.findMatches); got != 2 {
+	if got := len(b.FindMatches); got != 2 {
 		t.Fatalf("matches = %d, want 2 (case-insensitive)", got)
 	}
-	first := b.findIdx
+	first := b.FindIdx
 	b.handleFindKey("down")
-	if b.findIdx == first {
+	if b.FindIdx == first {
 		t.Fatal("Down did not move to the next match")
 	}
 	b.handleFindKey("up")
-	if b.findIdx != first {
-		t.Fatalf("Up = %d, want %d", b.findIdx, first)
+	if b.FindIdx != first {
+		t.Fatalf("Up = %d, want %d", b.FindIdx, first)
 	}
 	// Enter confirms the query, closes the bar and leaves n/N in charge.
 	b.handleFindKey("enter")
-	if b.findActive {
+	if b.FindActive {
 		t.Fatal("Enter left the find bar open")
 	}
-	if b.findIdx != first {
-		t.Fatalf("Enter changed the current match to %d, want %d", b.findIdx, first)
+	if b.FindIdx != first {
+		t.Fatalf("Enter changed the current match to %d, want %d", b.FindIdx, first)
 	}
 
 	// Highlights use the match cell rectangle.
 	g := NewGrid(60, 20, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintFindPage(g, 0, 20)
-	m := b.findMatches[b.findIdx]
+	m := b.FindMatches[b.FindIdx]
 	if got := g.Cells[m.Y*g.W+m.X].BG; got != b.findMatchBG(true) {
 		t.Fatalf("current match background = %+v, want %+v", got, b.findMatchBG(true))
 	}
 
 	// Closing keeps matches; n/N still navigate.
-	if len(b.findMatches) != 2 {
+	if len(b.FindMatches) != 2 {
 		t.Fatal("closing the find bar cleared the matches")
 	}
-	prev := b.findIdx
+	prev := b.FindIdx
 	b.HandleKey("n")
-	if b.findIdx == prev {
+	if b.FindIdx == prev {
 		t.Fatal("n did not navigate after closing the find bar")
 	}
 	// Esc clears the retained highlights.
 	b.HandleKey("esc")
-	if b.findText != "" || len(b.findMatches) != 0 {
-		t.Fatalf("second Esc did not clear find state: %q %d", b.findText, len(b.findMatches))
+	if b.FindText != "" || len(b.FindMatches) != 0 {
+		t.Fatalf("second Esc did not clear find state: %q %d", b.FindText, len(b.FindMatches))
 	}
 }
 
@@ -80,21 +80,21 @@ func TestFindWordEditing(t *testing.T) {
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha beta gamma")
 
 	b.handleFindKey("alt-backspace")
-	if b.findText != "alpha beta " {
-		t.Fatalf("alt-backspace = %q", b.findText)
+	if b.FindText != "alpha beta " {
+		t.Fatalf("alt-backspace = %q", b.FindText)
 	}
 	b.handleFindKey("ctrl-w")
-	if b.findText != "alpha " {
-		t.Fatalf("ctrl-w = %q", b.findText)
+	if b.FindText != "alpha " {
+		t.Fatalf("ctrl-w = %q", b.FindText)
 	}
 	b.handleFindKey("alt-left")
 	b.handleFindKey("Z")
-	if b.findText != "Zalpha " {
-		t.Fatalf("word motion = %q", b.findText)
+	if b.FindText != "Zalpha " {
+		t.Fatalf("word motion = %q", b.FindText)
 	}
 	b.handleFindKey("alt-d")
-	if b.findText != "Z" {
-		t.Fatalf("alt-d = %q", b.findText)
+	if b.FindText != "Z" {
+		t.Fatalf("alt-d = %q", b.FindText)
 	}
 }
 
@@ -114,10 +114,10 @@ func TestFindMultiWordQuery(t *testing.T) {
 			b.Page = &Page{URL: u, Base: u, Root: root}
 			b.Layout = BuildLayout(root, nil, tc.width)
 			typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
-			if got := len(b.findMatches); got != 2 {
+			if got := len(b.FindMatches); got != 2 {
 				t.Fatalf("matches = %d, want 2", got)
 			}
-			if got := len(b.findMatches[0].Rects); got < tc.minRects {
+			if got := len(b.FindMatches[0].Rects); got < tc.minRects {
 				t.Fatalf("highlight rects = %d, want at least %d", got, tc.minRects)
 			}
 		})
@@ -131,7 +131,7 @@ func TestFindMultiWordNormalisesWhitespace(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, 60)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader  mode")
-	if got := len(b.findMatches); got != 1 {
+	if got := len(b.FindMatches); got != 1 {
 		t.Fatalf("matches = %d, want 1", got)
 	}
 }
@@ -146,7 +146,7 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 	b.Page = help
 	b.Layout = BuildLayout(help.Root, help.Author, 80)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
-	if len(b.findMatches) == 0 {
+	if len(b.FindMatches) == 0 {
 		t.Fatal("help page multi-word search found no matches")
 	}
 }
@@ -157,10 +157,10 @@ func TestFindHTMLConsole(t *testing.T) {
 	b.consolePane = consoleHTML
 	b.Page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
 	typeFindQuery(t, b, func() { b.handleConsoleKey("/") }, "needle")
-	if b.findScope != findScopeHTML {
-		t.Fatalf("find scope = %d, want HTML", b.findScope)
+	if b.FindScope != findScopeHTML {
+		t.Fatalf("find scope = %d, want HTML", b.FindScope)
 	}
-	if got := len(b.findMatches); got != 2 {
+	if got := len(b.FindMatches); got != 2 {
 		t.Fatalf("HTML matches = %d, want 2", got)
 	}
 	joined := strings.Join(b.htmlLines(b.width-2), "\n")
@@ -176,7 +176,7 @@ func TestFindHTMLConsole(t *testing.T) {
 	l := newConsoleLayout(20, consoleHTML)
 	start := paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
 	b.paintFindHTML(g, start, l.bodyY, l.bodyRows)
-	m := b.findMatches[b.findIdx]
+	m := b.FindMatches[b.FindIdx]
 	y := l.bodyY + m.Line - start
 	if got := g.Cells[y*g.W+1+m.X].BG; got != b.findMatchBG(true) {
 		t.Fatalf("HTML match background = %+v, want %+v", got, b.findMatchBG(true))
@@ -200,13 +200,13 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 
 	// f follows the matched link rather than opening hint mode.
 	b.HandleKey("f")
-	if b.findActive || b.URL == nil || b.URL.Fragment != "one" {
-		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.findActive, b.URL)
+	if b.FindActive || b.URL == nil || b.URL.Fragment != "one" {
+		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.FindActive, b.URL)
 	}
 
 	// The second match is plain text, so the hint disappears.
 	b.HandleKey("/")
-	b.findCursor = len(b.findText)
+	b.FindCursor = len(b.FindText)
 	b.handleFindKey("ctrl-u")
 	for _, r := range "plain" {
 		b.handleFindKey(string(r))
@@ -216,7 +216,7 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 		t.Fatalf("plain match status = %q", b.status)
 	}
 	b.HandleKey("f")
-	if !b.linkHints {
+	if !b.LinkHints {
 		t.Fatal("f on a plain match did not open link hints")
 	}
 }
@@ -255,14 +255,14 @@ func TestFindStatusPersistsWhileScrolling(t *testing.T) {
 
 	// n/N still navigate and describe the new match.
 	b.HandleKey("n")
-	if b.findText == "" || b.status != b.findStatusText() {
+	if b.FindText == "" || b.status != b.findStatusText() {
 		t.Fatalf("after n status = %q, want %q", b.status, b.findStatusText())
 	}
 
 	// Escape is the only key that resets the search.
 	b.HandleKey("esc")
-	if b.findText != "" || len(b.findMatches) != 0 {
-		t.Fatalf("Esc did not clear find state: %q %d", b.findText, len(b.findMatches))
+	if b.FindText != "" || len(b.FindMatches) != 0 {
+		t.Fatalf("Esc did not clear find state: %q %d", b.FindText, len(b.FindMatches))
 	}
 	if b.status == want {
 		t.Fatalf("Esc kept the find status %q", b.status)
@@ -279,20 +279,20 @@ func TestApplyFindCommand(t *testing.T) {
 	b.frontendChrome = true
 
 	b.applyFindCommand(protocol.Find{Query: "alpha"})
-	if b.findText != "alpha" || len(b.findMatches) != 2 {
-		t.Fatalf("query = %q matches = %d", b.findText, len(b.findMatches))
+	if b.FindText != "alpha" || len(b.FindMatches) != 2 {
+		t.Fatalf("query = %q matches = %d", b.FindText, len(b.FindMatches))
 	}
-	first := b.findIdx
+	first := b.FindIdx
 	b.applyFindCommand(protocol.Find{Query: "alpha", Next: true})
-	if b.findIdx == first {
+	if b.FindIdx == first {
 		t.Fatal("next did not move the match")
 	}
 	b.applyFindCommand(protocol.Find{Query: "alpha", Prev: true})
-	if b.findIdx != first {
-		t.Fatalf("prev = %d, want %d", b.findIdx, first)
+	if b.FindIdx != first {
+		t.Fatalf("prev = %d, want %d", b.FindIdx, first)
 	}
 	b.applyFindCommand(protocol.Find{Close: true})
-	if b.findText != "" || len(b.findMatches) != 0 {
-		t.Fatalf("close left find state: %q %d", b.findText, len(b.findMatches))
+	if b.FindText != "" || len(b.FindMatches) != 0 {
+		t.Fatalf("close left find state: %q %d", b.FindText, len(b.FindMatches))
 	}
 }
