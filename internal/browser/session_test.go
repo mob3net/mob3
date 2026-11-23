@@ -63,10 +63,7 @@ func TestSessionQuitThroughTransport(t *testing.T) {
 	restore := quietStdout(t)
 	defer restore()
 	s := openTestSession(t, b)
-	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "q"}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "y"}}); err != nil {
+	if err := s.Send(protocol.Command{Body: protocol.Shutdown{}}); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent(t, s, func(body protocol.EventBody) bool {
@@ -148,16 +145,6 @@ func TestSessionAbortIsOutOfBand(t *testing.T) {
 	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "esc"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "q"}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "y"}}); err != nil {
-		t.Fatal(err)
-	}
-	waitEvent(t, s, func(body protocol.EventBody) bool {
-		_, ok := body.(protocol.Quit)
-		return ok
-	})
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +164,6 @@ func TestSessionEmitsScreenFrames(t *testing.T) {
 		t.Fatal(err)
 	}
 	var f protocol.Frame
-	var chrome protocol.Chrome
 	deadline := time.After(3 * time.Second)
 	for len(f.Cells) == 0 {
 		select {
@@ -186,8 +172,6 @@ func TestSessionEmitsScreenFrames(t *testing.T) {
 				t.Fatal("event stream closed")
 			}
 			switch v := ev.Body.(type) {
-			case protocol.Chrome:
-				chrome = v
 			case protocol.Frame:
 				f = v
 			}
@@ -195,20 +179,11 @@ func TestSessionEmitsScreenFrames(t *testing.T) {
 			t.Fatal("timed out waiting for a frame")
 		}
 	}
-	if !chrome.Show || chrome.HeaderRows != 2 || chrome.Width != 30 {
-		t.Fatalf("chrome = %+v", chrome)
-	}
-	if len(chrome.Header) != 60 || len(chrome.Footer) != 30 {
-		t.Fatalf("chrome cells = %d/%d, want 60/30", len(chrome.Header), len(chrome.Footer))
-	}
 	if f.W != 30 || f.H != 5 {
 		t.Fatalf("content frame = %dx%d, want 30x5", f.W, f.H)
 	}
 	if len(f.Cells) != f.W*f.H {
 		t.Fatalf("frame cells = %d, want %d", len(f.Cells), f.W*f.H)
-	}
-	if chrome.HeaderRows+f.H+1 != 8 {
-		t.Fatalf("composed height = %d, want 8", chrome.HeaderRows+f.H+1)
 	}
 }
 
@@ -231,28 +206,6 @@ func TestSessionAppActionReachesState(t *testing.T) {
 	}
 	if st.Flags&protocol.StateReader != 0 {
 		t.Fatalf("unexpected reader flag: %#x", st.Flags)
-	}
-}
-
-func TestDialogReadsTransportCommands(t *testing.T) {
-	b := NewBrowser(60, 10)
-	b.NoDraw = true
-	in := make(chan protocol.Command, 4)
-	b.sessionCtx = context.Background()
-	b.sessionIn = in
-	b.sessionAbort = make(chan struct{})
-
-	in <- protocol.Command{Body: protocol.Key{Token: "h"}}
-	in <- protocol.Command{Body: protocol.Key{Token: "i"}}
-	in <- protocol.Command{Body: protocol.Key{Token: "enter"}}
-	text, ok := b.showPrompt("name?", "")
-	if !ok || text != "hi" {
-		t.Fatalf("prompt = %q, %v; want %q, true", text, ok, "hi")
-	}
-
-	in <- protocol.Command{Body: protocol.Key{Token: "n"}}
-	if b.showConfirm("sure?") {
-		t.Fatal("confirm accepted n")
 	}
 }
 

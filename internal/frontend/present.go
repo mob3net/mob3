@@ -20,7 +20,6 @@ type Presenter struct {
 	lastScroll    int
 	lastNative    bool
 	nativeSet     bool
-	chrome        protocol.Chrome
 	state         protocol.State
 	dialog        *DialogView
 	selectView    *SelectView
@@ -57,18 +56,8 @@ func (p *Presenter) ClearGraphics(sb *strings.Builder) {
 // callers that have written over the screen out of band.
 func (p *Presenter) Reset() { p.prev = nil }
 
-// SetChrome stores the shell layer that accompanies content-only frames. A
-// change in composition or geometry forces a full repaint.
-func (p *Presenter) SetChrome(c protocol.Chrome) {
-	if p.chrome.Show != c.Show || p.chrome.Width != c.Width || p.chrome.HeaderRows != c.HeaderRows {
-		p.prev = nil
-	}
-	p.chrome = c
-}
-
 // SetState stores the chrome snapshot. Normal frames are composed from it when
-// State.FrontendChrome is set; the Chrome event remains the fallback for
-// overlays, the console and older tests.
+// State.FrontendChrome is set.
 // SetDialog installs or clears the modal dialog layer. The next Present or
 // Refresh composes it over the content frame.
 func (p *Presenter) SetDialog(d *DialogView) {
@@ -178,7 +167,6 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	}
 	placements := f.Placements
 	headerRows := 0
-	composed := false
 	if p.state.FrontendChrome && p.state.Width == f.W &&
 		p.state.HeaderRows > 0 && p.state.Height == f.H+p.state.HeaderRows+1 {
 		layout := LayoutChrome(p.state)
@@ -189,35 +177,30 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			} else if p.dialog != nil {
 				if full, ok := ComposeDialogFrame(p.state, f, p.dialog); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			} else if p.selectView != nil {
 				if full, ok := ComposeSelectFrame(p.state, f, p.selectView); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			} else if p.download != nil {
 				if full, ok := ComposeDownloadFrame(p.state, f, p.download); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			} else if p.notice != nil {
 				if full, ok := ComposeNoticeFrame(p.state, f, p.notice); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			} else {
 				header := protocol.Frame{W: p.state.Width, H: p.state.HeaderRows, Cells: layout.Header}
@@ -231,26 +214,8 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 					next = append(next, fline...)
 					lines = next
 					headerRows = p.state.HeaderRows
-					composed = true
 				}
 			}
-		}
-	}
-	if !composed && p.chrome.Show && p.chrome.Width == f.W {
-		header := protocol.Frame{W: p.chrome.Width, H: p.chrome.HeaderRows, Cells: p.chrome.Header}
-		footer := protocol.Frame{W: p.chrome.Width, H: 1, Cells: p.chrome.Footer}
-		hline := EncodeFrame(header, p.color, !p.color)
-		fline := EncodeFrame(footer, p.color, !p.color)
-		if len(hline) != p.chrome.HeaderRows || len(fline) != 1 {
-			// Malformed chrome is not worth rendering; fall back to the frame.
-			p.chrome = protocol.Chrome{}
-		} else {
-			next := make([]string, 0, len(hline)+len(lines)+1)
-			next = append(next, hline...)
-			next = append(next, lines...)
-			next = append(next, fline...)
-			lines = next
-			headerRows = p.chrome.HeaderRows
 		}
 	}
 	if headerRows > 0 && len(placements) > 0 {

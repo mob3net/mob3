@@ -219,16 +219,11 @@ func BenchmarkBoundaryContentFrame(b *testing.B) {
 // transport without a goroutine, so the benchmark measures the frame boundary
 // itself.
 type codecSink struct {
-	buf        []byte
-	last       protocol.Frame
-	lastChrome protocol.Chrome
+	buf  []byte
+	last protocol.Frame
 }
 
 func (s *codecSink) Send(ev protocol.Event) error {
-	if c, ok := ev.Body.(protocol.Chrome); ok {
-		s.lastChrome = c
-		return nil
-	}
 	if f, ok := ev.Body.(protocol.Frame); ok {
 		if err := f.Validate(protocol.DefaultLimits); err != nil {
 			return err
@@ -368,7 +363,6 @@ func BenchmarkBoundaryComposedRepaint(b *testing.B) {
 		br.prev = nil
 		br.draw()
 		br.emitPendingFrame()
-		p.SetChrome(sink.lastChrome)
 		p.Reset()
 		if err := p.Present(sink.last, 0, false); err != nil {
 			b.Fatal(err)

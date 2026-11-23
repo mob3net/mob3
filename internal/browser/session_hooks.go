@@ -129,7 +129,6 @@ func (b *Browser) EndSession() {
 	b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
 	b.sessionOut = nil
 	b.frameReady = false
-	b.chromeReady = false
 	b.emitFrames = false
 	b.frontendChrome = false
 }

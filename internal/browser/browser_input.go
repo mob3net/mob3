@@ -4,54 +4,10 @@ import (
 	"browser/internal/engine"
 	"browser/internal/protocol"
 	"strings"
-	"unicode/utf8"
 )
-
-// modalMouseAction classifies a press on an open modal: "close" for the ×,
-// "outside" for a click on the backdrop, and "" for a click inside the body.
-func (b *Browser) modalMouseAction(ev MouseEvent) string {
-	if !ev.Press || ev.Motion || ev.Button != MouseButtonLeft {
-		return ""
-	}
-	x, y := ev.X-1, ev.Y-1
-	inRect := func(r Rect) bool {
-		return r.W > 0 && r.H > 0 && x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
-	}
-	if inRect(b.modalClose) {
-		return "close"
-	}
-	if !inRect(b.modalBox) {
-		return "outside"
-	}
-	return ""
-}
 
 // linkAt returns the index of the link covering document cell (x, y), or -1.
 func (b *Browser) linkAt(x, y int) int { return b.Session.LinkAt(x, y) }
-
-// openURLPrompt opens the URL field prefilled with the current URL, selected
-// so typing replaces it like a normal browser address bar.
-func (b *Browser) openURLPrompt() {
-	b.openURLPromptMode(false)
-}
-
-// openVimPrompt opens the URL prompt from `:` so `q` can quit.
-func (b *Browser) openVimPrompt() {
-	b.openURLPromptMode(true)
-}
-
-func (b *Browser) openURLPromptMode(vim bool) {
-	b.prompt = true
-	b.promptVim = vim
-	b.promptText = ""
-	if b.URL != nil {
-		b.promptText = b.URL.String()
-	}
-	b.promptCursor = len(b.promptText)
-	b.promptSelectAll = true
-	b.promptHist.reset()
-	b.status = ""
-}
 
 // editConfig selects the per-control differences for editLineKey.
 type editConfig struct {
@@ -64,227 +20,6 @@ func editLineKey(value string, caret int, k string, cfg editConfig) (string, int
 	return engine.EditLineKey(value, caret, k, engine.EditConfig{
 		SelAll: cfg.selAll, CollapseSelection: cfg.collapseSelection, MaxRunes: cfg.maxRunes,
 	})
-}
-
-func (b *Browser) handlePromptKey(k string) bool {
-	text := b.promptText
-	cur := b.promptCursor
-	switch k {
-	case "enter":
-		text = strings.TrimSpace(text)
-		quit := b.promptVim && (text == "q" || text == ":q")
-		b.prompt = false
-		b.promptVim = false
-		b.promptText = ""
-		b.promptCursor = 0
-		b.promptSelectAll = false
-		if quit {
-			// :q exits immediately, unlike plain q which asks first.
-			return true
-		}
-		if text != "" {
-			b.promptHist.record(text)
-			b.Navigate(text, true)
-		}
-		return false
-	case "esc":
-		b.closeURLPrompt()
-		b.status = exitHint
-		return false
-	case "up", "ctrl-p":
-		if prev, ok := b.promptHist.up(text); ok {
-			text = prev
-			cur = len(text)
-		}
-		b.promptSelectAll = false
-	case "down", "ctrl-n":
-		if next, ok := b.promptHist.down(text); ok {
-			text = next
-			cur = len(text)
-		}
-		b.promptSelectAll = false
-	case "ctrl-c":
-		b.closeURLPrompt()
-		return false
-	}
-	text, cur, _ = editLineKey(text, cur, k, editConfig{
-		selAll:            &b.promptSelectAll,
-		collapseSelection: true,
-	})
-	b.promptText = text
-	if cur > len(text) {
-		cur = len(text)
-	}
-	b.promptCursor = cur
-	return false
-}
-
-// closeURLPrompt dismisses the URL prompt and clears its editing state.
-func (b *Browser) closeURLPrompt() {
-	b.prompt = false
-	b.promptVim = false
-	b.promptText = ""
-	b.promptCursor = 0
-	b.promptSelectAll = false
-}
-
-// promptWindow returns the visible rune range for the URL text and the cursor
-// rune position. cur is -1 for the full-selection view, which shows the tail of
-// a long URL without a cursor.
-func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []rune, start, end, cur int) {
-	runes = []rune(text)
-	if contentW < 1 {
-		return runes, 0, 0, 0
-	}
-	if selectAll {
-		visible := text
-		if stringWidth(visible) > contentW {
-			visible = tailWidth(visible, contentW)
-		}
-		start = len(runes) - utf8.RuneCountInString(visible)
-		return runes, start, len(runes), -1
-	}
-	if cursor < 0 {
-		cursor = 0
-	}
-	if cursor > len(text) {
-		cursor = len(text)
-	}
-	cur = utf8.RuneCountInString(text[:cursor])
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(runes) {
-		cur = len(runes)
-	}
-	start = cur
-	used := 0
-	for start > 0 {
-		rw := runeWidth(runes[start-1])
-		if used+rw > contentW-1 {
-			break
-		}
-		used += rw
-		start--
-	}
-	after := cur
-	if cur < len(runes) {
-		after = cur + 1
-	}
-	used++
-	end = after
-	for end < len(runes) {
-		rw := runeWidth(runes[end])
-		if used+rw > contentW {
-			break
-		}
-		used += rw
-		end++
-	}
-	return runes, start, end, cur
-}
-
-func runeIndexToByte(runes []rune, i int) int {
-	if i <= 0 {
-		return 0
-	}
-	if i > len(runes) {
-		i = len(runes)
-	}
-	return len(string(runes[:i]))
-}
-
-// promptOffsetAt maps a cell inside the URL field to a byte offset in the
-// prompt text, using the same visible window that is currently drawn.
-func (b *Browser) promptOffsetAt(x, width int) int {
-	prefixW := stringWidth(" Open: ")
-	contentW := width - prefixW
-	if contentW < 1 {
-		return 0
-	}
-	rel := x - prefixW
-	if rel <= 0 {
-		return 0
-	}
-	runes, start, end, cur := promptWindow(b.promptText, b.promptCursor, contentW, b.promptSelectAll)
-	used := 0
-	for i := start; i < end; i++ {
-		if i == cur {
-			if rel < used+1 {
-				return runeIndexToByte(runes, i)
-			}
-			used++
-			continue
-		}
-		rw := runeWidth(runes[i])
-		if rel < used+rw {
-			return runeIndexToByte(runes, i)
-		}
-		used += rw
-	}
-	return runeIndexToByte(runes, end)
-}
-
-// promptParts splits the visible URL field around the cursor. The cursor is an
-// overlay cell rather than an inserted character, so moving it does not shift
-// the text.
-func promptParts(prefix, text string, cursor int, selectAll bool, width int) (head string, at rune, tail string, show bool) {
-	prefixW := stringWidth(prefix)
-	if width <= prefixW {
-		return truncateWidth(prefix, width), 0, "", false
-	}
-	contentW := width - prefixW
-	runes := []rune(text)
-	if cursor < 0 {
-		cursor = 0
-	}
-	if cursor > len(text) {
-		cursor = len(text)
-	}
-	cur := utf8.RuneCountInString(text[:cursor])
-	if cur < 0 {
-		cur = 0
-	}
-	if cur > len(runes) {
-		cur = len(runes)
-	}
-	if selectAll {
-		visible := text
-		if stringWidth(visible) > contentW {
-			visible = tailWidth(visible, contentW)
-		}
-		return prefix + visible, 0, "", false
-	}
-	start := cur
-	used := 0
-	for start > 0 {
-		rw := runeWidth(runes[start-1])
-		if used+rw > contentW-1 {
-			break
-		}
-		used += rw
-		start--
-	}
-	at = ' '
-	after := cur
-	if cur < len(runes) {
-		at = runes[cur]
-		if runeWidth(at) != 1 {
-			at = ' '
-		}
-		after = cur + 1
-	}
-	used++
-	end := after
-	for end < len(runes) {
-		rw := runeWidth(runes[end])
-		if used+rw > contentW {
-			break
-		}
-		used += rw
-		end++
-	}
-	return prefix + string(runes[start:cur]), at, string(runes[after:end]), true
 }
 
 func (b *Browser) submitInput() {
@@ -380,61 +115,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		// Most terminals handle Shift+drag themselves and never send this. If
 		// one does forward it, leave the event alone and write nothing so a
 		// terminal-native selection is not cleared by a redraw.
-		b.skipDraw = true
 		return false
 	}
 	// The copy confirmation holds the footer line until the pointer moves or
 	// the page scrolls, then normal hover/status reporting resumes.
 	if (ev.Motion || ev.Wheel != 0) && b.status == "Copied URL" {
 		b.status = ""
-	}
-	// A release always ends a scrollbar drag, even when the report also
-	// carries the motion bit or lands on the toolbar, footer or outside the
-	// page. Otherwise the next pointer move would keep scrolling.
-	if b.scrollDrag && !ev.Press {
-		b.scrollDrag = false
-		return false
-	}
-	if b.download != nil {
-		switch b.modalMouseAction(ev) {
-		case "close", "outside":
-			b.download = nil
-			b.status = ""
-		}
-		return false
-	}
-	if b.notice != nil {
-		switch b.modalMouseAction(ev) {
-		case "close", "outside":
-			b.notice = nil
-			b.status = ""
-		}
-		return false
-	}
-	if b.prompt {
-		if ev.Motion || ev.Wheel != 0 || !ev.Press {
-			return false
-		}
-		x := ev.X - 1
-		y := ev.Y - 1
-		for _, hit := range b.headerHits {
-			if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
-				continue
-			}
-			if hit.kind == headerURL {
-				b.promptCursor = b.promptOffsetAt(x-hit.x, hit.w)
-				b.promptSelectAll = false
-				b.status = ""
-				return false
-			}
-		}
-		b.closeURLPrompt()
-		b.status = exitHint
-		return false
-	}
-	if b.consoleOpen {
-		b.handleConsoleMouse(ev)
-		return false
 	}
 	if b.LinkHints && (ev.Press || ev.Wheel != 0) {
 		b.clearLinkHints()
@@ -467,104 +153,12 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.updateHover(x, y, top, bottom)
 		return false
 	}
-	if y < b.headerRows() && b.Height >= 2 {
-		if ev.Motion {
-			b.Hover = -1
-			b.setPageHover(nil)
-		}
-		if !ev.Press || ev.Motion {
-			return false
-		}
-		for _, hit := range b.headerHits {
-			if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
-				continue
-			}
-			switch hit.kind {
-			case headerBack, headerForward:
-				// History is front-end-owned; the direct engine mouse path has
-				// no session list to move through.
-			case headerReload:
-				b.reload()
-			case headerStop:
-				b.stopLoading()
-			case headerHome:
-				target := b.home
-				if target == "" {
-					target = "about:home"
-				}
-				b.Navigate(target, true)
-			case headerHistory:
-				b.Navigate("about:history", true)
-			case headerHelp:
-				b.Navigate("about:help", true)
-			case headerConfig:
-				b.Navigate("about:config", true)
-			case headerURL:
-				if b.Forms.InputFocus != nil {
-					b.setInputFocus(nil)
-				}
-				b.openURLPrompt()
-			}
-			return false
-		}
-		return false
-	}
-	if y == b.Height-1 {
-		if ev.Motion {
-			b.Hover = -1
-			b.setPageHover(nil)
-			return false
-		}
-		if ev.Press {
-			for _, hit := range b.footerHits {
-				if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
-					continue
-				}
-				switch hit.kind {
-				case headerConsole:
-					b.toggleConsole()
-					return false
-				case headerJS:
-					b.toggleJavaScript()
-					return false
-				case headerReader:
-					b.toggleReader()
-					return false
-				case headerDark:
-					b.toggleDark()
-					return false
-				case headerGraphics:
-					b.cycleGraphics()
-					return false
-				case headerDownload:
-					b.downloadCurrentPDF()
-					return false
-				case headerStatus:
-					b.showStatusDetails()
-					return false
-				}
-			}
-		}
-		return false
-	}
 	top, bottom := b.viewport()
-	if info := b.scrollBar; info != nil && x == b.Width-1 && y >= info.trackTop && y < info.trackTop+info.trackH {
-		if ev.Press && ev.Button == 0 {
-			b.scrollDrag = true
-			b.scrollBarTo(y)
-			return false
-		}
-		if ev.Motion && b.scrollDrag {
-			b.scrollBarTo(y)
-			return false
-		}
-	}
-	if b.scrollDrag {
+	if y < top || y >= bottom {
 		if ev.Motion {
-			b.scrollBarTo(y)
-			return false
+			b.Hover = -1
+			b.setPageHover(nil)
 		}
-		b.scrollDrag = false
 		return false
 	}
 	if ev.Motion && !b.Selecting {
@@ -583,64 +177,60 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			// Copy the link under the pointer instead of navigating; a
 			// right-click away from a link leaves the page alone. Back stays
 			// on the mouse back button and h.
-			if y >= top && y < bottom {
-				docY := b.Scroll + (y - top)
-				if n := b.nodeAt(x, docY); n != nil {
-					if a := nearestAnchor(n); a != nil {
-						if href := strings.TrimSpace(a.Attr("href")); href != "" {
-							b.clearInputFocus()
-							target := b.resolveHref(href)
-							if b.copyText(target) {
-								b.status = "Copied URL"
-								// Drop the hovered-link line so the copy
-								// confirmation replaces it in the footer.
-								b.Hover = -1
-								b.setPageHover(nil)
-							}
+			docY := b.Scroll + (y - top)
+			if n := b.nodeAt(x, docY); n != nil {
+				if a := nearestAnchor(n); a != nil {
+					if href := strings.TrimSpace(a.Attr("href")); href != "" {
+						b.clearInputFocus()
+						target := b.resolveHref(href)
+						if b.copyText(target) {
+							b.status = "Copied URL"
+							// Drop the hovered-link line so the copy
+							// confirmation replaces it in the footer.
+							b.Hover = -1
+							b.setPageHover(nil)
 						}
 					}
 				}
 			}
 			return false
 		case MouseButtonLeft:
-			if y >= top && y < bottom {
-				docY := b.Scroll + (y - top)
-				if n := b.nodeAt(x, docY); n != nil {
-					if target := b.resolveLabelTarget(n); target != nil {
-						n = target
-					}
-					if isFileInput(n) {
-						b.Selecting = false
-						b.showUploadNotice()
-						return false
-					}
-					if isToggleControl(n) {
-						b.Selecting = false
-						b.toggleControl(n)
-						return false
-					}
-					if isTextInput(n) {
-						b.Selecting = false
-						b.setInputFocus(n)
-						return false
-					}
-					if isRangeInput(n) {
-						b.Selecting = false
-						if dir := b.rangeSideAt(n, x, docY); dir != 0 {
-							if b.Forms.InputFocus != n {
-								b.setInputFocus(n)
-							}
-							b.adjustRange(n, float64(dir))
-						} else {
+			docY := b.Scroll + (y - top)
+			if n := b.nodeAt(x, docY); n != nil {
+				if target := b.resolveLabelTarget(n); target != nil {
+					n = target
+				}
+				if isFileInput(n) {
+					b.Selecting = false
+					b.showUploadNotice()
+					return false
+				}
+				if isToggleControl(n) {
+					b.Selecting = false
+					b.toggleControl(n)
+					return false
+				}
+				if isTextInput(n) {
+					b.Selecting = false
+					b.setInputFocus(n)
+					return false
+				}
+				if isRangeInput(n) {
+					b.Selecting = false
+					if dir := b.rangeSideAt(n, x, docY); dir != 0 {
+						if b.Forms.InputFocus != n {
 							b.setInputFocus(n)
 						}
-						return false
+						b.adjustRange(n, float64(dir))
+					} else {
+						b.setInputFocus(n)
 					}
+					return false
 				}
-				b.setInputFocus(nil)
-				b.startSelection(engine.CellPos{X: x, Y: docY})
-				b.status = ""
 			}
+			b.setInputFocus(nil)
+			b.startSelection(engine.CellPos{X: x, Y: docY})
+			b.status = ""
 		}
 		return false
 	}
@@ -669,60 +259,17 @@ const exitHint = "q Quit / ? Help"
 // quitConfirmText is shown before quitting; only y/Y confirms.
 const quitConfirmText = "Are you sure you want to quit? (y)"
 
-// HandleKey processes one key. It returns true when the browser should quit.
+// HandleKey processes one content key. Shell keys are front-end-owned; this
+// path keeps page movement, forms, find navigation, hints and selection.
 func (b *Browser) HandleKey(k string) bool {
 	if ev, ok := ParseMouseToken(k); ok {
 		return b.HandleMouse(ev)
 	}
-	if handled, quit := b.handleShellKey(k); handled {
-		return quit
-	}
 	return b.handlePageKey(k)
 }
 
-// handleShellKey consumes keys owned by the trusted shell: quit confirmation,
-// downloads, notices, menus, the console, the prompt and the find bar. It
-// returns handled=false for keys that belong to the page.
-func (b *Browser) handleShellKey(k string) (handled, quit bool) {
-	if b.quitPending {
-		b.quitPending = false
-		b.status = ""
-		return true, k == "y" || k == "Y" || k == "enter"
-	}
-	if b.download != nil {
-		switch k {
-		case "y", "Y":
-			if b.copyText(b.download.command) {
-				b.download = nil
-			}
-		case "esc", "enter", "q", "ctrl-c":
-			b.download = nil
-			b.status = ""
-		}
-		return true, false
-	}
-	if b.notice != nil {
-		switch k {
-		case "esc", "enter", "q", "ctrl-c":
-			b.notice = nil
-			b.status = ""
-		}
-		return true, false
-	}
-	if b.consoleOpen {
-		return true, b.handleConsoleKey(k)
-	}
-	if b.prompt {
-		return true, b.handlePromptKey(k)
-	}
-	if b.FindActive {
-		return true, b.handleFindKey(k)
-	}
-	return false, false
-}
-
-// handlePageKey routes keys that belong to page content, forms, links and
-// viewport movement.
+// handlePageKey routes keys that belong to page content, forms, links, find
+// navigation and viewport movement.
 func (b *Browser) handlePageKey(k string) bool {
 	if b.Forms.InputFocus != nil {
 		return b.handleInputKey(k)
@@ -736,20 +283,12 @@ func (b *Browser) handlePageKey(k string) bool {
 	if b.HintConfirm {
 		return b.handleHintConfirmKey(k)
 	}
-	if k == "/" {
-		b.openFind(findScopePage)
-		return false
-	}
 	if k == "esc" && (b.Loading || b.DeferredImages) {
 		b.stopLoading()
 		return false
 	}
 
 	switch k {
-	case "q", "ctrl-c":
-		b.quitPending = true
-		b.status = quitConfirmText
-		return false
 	case "j", "down", "ctrl-n":
 		b.scrollBy(1)
 	case "k", "up", "ctrl-p":
@@ -772,26 +311,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.tabStep(-1)
 	case "enter":
 		b.followFocused()
-	case "r":
-		b.reload()
-	case "E":
-		b.showStatusDetails()
-	case "R":
-		b.toggleReader()
-	case "D":
-		b.toggleDark()
-	case "+":
-		b.zoomBy(1)
-	case "-":
-		b.zoomBy(-1)
-	case "0":
-		b.resetZoom()
-	case "J":
-		b.toggleJavaScript()
-	case "o", "ctrl-l":
-		b.openURLPrompt()
-	case ":":
-		b.openVimPrompt()
 	case "f":
 		if li := b.currentFindLink(); li != nil {
 			b.Focus = li.Index
@@ -801,8 +320,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.openLinkHints(false)
 	case "F":
 		b.openLinkHints(true)
-	case "i":
-		b.cycleGraphics()
 	case "u":
 		if b.URL != nil {
 			b.status = b.URL.String()
@@ -815,8 +332,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		if b.FindText != "" && b.FindScope == findScopePage {
 			b.findNext(-1)
 		}
-	case "d":
-		b.downloadCurrentPDF()
 	case "y":
 		b.copySelection()
 	case "Y":
@@ -831,12 +346,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.clearControlFocus()
 		b.clearSelection()
 		b.status = exitHint
-	case "!":
-		b.toggleConsole()
-	case "?":
-		b.Navigate("about:help", true)
-	case "H":
-		b.Navigate("about:history", true)
 	}
 	return false
 }

@@ -84,17 +84,6 @@ func protoColor(c Color) protocol.Color {
 	return protocol.Color{R: c.R, G: c.G, B: c.B, A: c.A, Set: c.Set}
 }
 
-func protoCell(c Cell) protocol.Cell {
-	return protocol.Cell{
-		R:     c.R,
-		FG:    protoColor(c.FG),
-		BG:    protoColor(c.BG),
-		Attrs: protoAttrs(c.Bold, c.Italic, c.Underline, c.Strike, c.Reverse),
-		Flags: protoFlags(c.Cont, c.Img, c.Skip),
-		Run:   c.Run,
-	}
-}
-
 func protoAttrs(bold, italic, underline, strike, reverse bool) uint8 {
 	var a uint8
 	if bold {

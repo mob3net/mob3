@@ -344,13 +344,3 @@ func (b *Browser) inlineImagesEnabled() bool {
 	}
 	return b.dialog == nil && b.download == nil && b.notice == nil
 }
-
-// paintLinkHints draws the chosen letters of each matching link with a yellow
-// background and underline. The page text itself is never replaced unless a
-// link has no text letters at all.
-func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
-	if !b.LinkHints || b.HintsFrontend {
-		return
-	}
-	engine.PaintHintLabels(g, b.Layout, b.HintTargets, b.HintItems, b.HintPrefix, b.Scroll, top, bottom, b.color)
-}

@@ -504,5 +504,3 @@ type AutomationResult struct {
 }
 
 func (AutomationResult) eventKind() Kind { return EvAutomationResult }
-
-func (Chrome) eventKind() Kind { return EvChrome }

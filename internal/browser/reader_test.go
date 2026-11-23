@@ -19,9 +19,7 @@ func TestReaderToggle(t *testing.T) {
 	b.Scroll = 5
 	b.clampScroll()
 	originalScroll := b.Scroll
-	if b.HandleKey("R") {
-		t.Fatal("R asked to quit")
-	}
+	b.toggleReader()
 	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
@@ -39,7 +37,7 @@ func TestReaderToggle(t *testing.T) {
 		t.Fatal("reader layout is missing article text")
 	}
 	b.Scroll = 4
-	b.HandleKey("R")
+	b.toggleReader()
 	if b.Reader {
 		t.Fatal("reader mode did not turn off")
 	}
@@ -58,7 +56,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Old"}
 	b.rebuild()
-	b.HandleKey("R")
+	b.toggleReader()
 	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
@@ -100,7 +98,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	if !b.Reader || b.ReaderRoot == nil {
 		t.Fatal("reader mode did not resume on the next article")
 	}
-	b.HandleKey("R")
+	b.toggleReader()
 	if b.Reader || b.ReaderRoot != nil {
 		t.Fatal("R did not turn reader mode off")
 	}
@@ -122,7 +120,7 @@ func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 	b.URL = page.URL
 	b.startJS(page)
 	b.rebuild()
-	b.HandleKey("R")
+	b.toggleReader()
 	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
@@ -152,34 +150,19 @@ func TestReaderFooterLabel(t *testing.T) {
 	b := NewBrowser(80, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.rebuild()
-	drawQuiet(b)
-
-	var readerHit, consoleHit *headerHit
-	for i := range b.footerHits {
-		switch b.footerHits[i].kind {
-		case headerReader:
-			readerHit = &b.footerHits[i]
-		case headerConsole:
-			consoleHit = &b.footerHits[i]
-		}
+	if !strings.Contains(b.footerRight(80), "Reader:off") {
+		t.Fatalf("footer right = %q", b.footerRight(80))
 	}
-	if readerHit == nil {
-		t.Fatalf("reader label has no click region: %+v", b.footerHits)
-	}
-	if consoleHit != nil && readerHit.x+readerHit.w >= consoleHit.x {
-		t.Fatalf("reader label overlaps console icon: %+v %+v", *readerHit, *consoleHit)
-	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
-	})
+	b.toggleReader()
 	if !b.Reader {
-		t.Fatal("clicking the reader label did not enable reader mode")
+		t.Fatal("reader mode did not enable")
 	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
-	})
+	if !strings.Contains(b.footerRight(80), "Reader:on") {
+		t.Fatalf("footer right = %q", b.footerRight(80))
+	}
+	b.toggleReader()
 	if b.Reader {
-		t.Fatal("clicking the reader label did not disable reader mode")
+		t.Fatal("reader mode did not disable")
 	}
 }
 

@@ -28,31 +28,18 @@ func TestContentRect(t *testing.T) {
 func TestShellKeyRouting(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.Layout = &Layout{Height: 100}
-	b.prompt = true
-	b.promptText = ""
-
 	if quit := b.HandleKey("j"); quit {
-		t.Fatal("prompt key quit the browser")
+		t.Fatal("content key quit the browser")
 	}
-	if b.Scroll != 0 {
-		t.Fatalf("prompt key scrolled the page: %d", b.Scroll)
-	}
-	if b.promptText != "j" {
-		t.Fatalf("prompt text = %q, want j", b.promptText)
-	}
-
-	b.prompt = false
-	b.HandleKey("j")
 	if b.Scroll != 1 {
 		t.Fatalf("page key did not scroll: %d", b.Scroll)
 	}
-
-	b.quitPending = true
-	if !b.HandleKey("y") {
-		t.Fatal("quit confirmation was not consumed")
+	// Shell keys are front-end-owned; the engine must not act on them.
+	if quit := b.HandleKey("q"); quit {
+		t.Fatal("shell quit key quit the engine directly")
 	}
 	if b.quitPending {
-		t.Fatal("quit confirmation did not clear")
+		t.Fatal("shell quit key set engine quit state")
 	}
 }
 

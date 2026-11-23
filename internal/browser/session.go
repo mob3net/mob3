@@ -91,12 +91,6 @@ func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 		b.reload()
 	case protocol.AppStop:
 		b.stopLoading()
-	case protocol.AppOpenURL:
-		b.clearInputFocus()
-		b.openURLPrompt()
-	case protocol.AppOpenVimPrompt:
-		b.clearInputFocus()
-		b.openVimPrompt()
 	case protocol.AppToggleConsole:
 		b.toggleConsole()
 	case protocol.AppToggleJS:
@@ -178,13 +172,8 @@ func (b *Browser) AbortSession() { b.abortGen.Add(1) }
 // it before returning, so the frame buffer can be reused immediately.
 func (b *Browser) emitPendingFrame() {
 	if b.sessionOut == nil {
-		b.chromeReady = false
 		b.frameReady = false
 		return
-	}
-	if b.chromeReady {
-		b.chromeReady = false
-		_ = b.sessionOut.Send(protocol.Event{Body: b.chromeBuf})
 	}
 	if !b.frameReady {
 		return

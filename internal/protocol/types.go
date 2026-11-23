@@ -71,7 +71,6 @@ const (
 	EvDownload
 	EvQuit
 	EvAutomationResult
-	EvChrome
 	EvSelect
 	EvNotice
 	EvHints
@@ -204,56 +203,6 @@ const (
 	// image placements itself, so the front end must leave those frames alone.
 	StateNativeImages
 )
-
-// Chrome is the shell layer for a content-only frame. Header holds the rows
-// above the content; Footer holds the bottom row. Show=false means the engine
-// sent a full-screen frame (an overlay or console is open) and the front end
-// must present it unchanged.
-type Chrome struct {
-	Show       bool
-	Width      int
-	HeaderRows int
-	Header     []Cell
-	Footer     []Cell
-}
-
-// Validate checks a chrome layer against the same cell and size limits as a
-// frame.
-func (c Chrome) Validate(lim Limits) error {
-	lim = lim.normalized()
-	if !c.Show {
-		return nil
-	}
-	if c.Width <= 0 || c.Width > lim.MaxFrameWidth {
-		return fmt.Errorf("protocol: chrome width %d out of range", c.Width)
-	}
-	if c.HeaderRows < 0 || c.HeaderRows > lim.MaxFrameHeight {
-		return fmt.Errorf("protocol: chrome header rows %d out of range", c.HeaderRows)
-	}
-	if len(c.Header) != c.Width*c.HeaderRows {
-		return fmt.Errorf("protocol: chrome has %d header cells, want %d", len(c.Header), c.Width*c.HeaderRows)
-	}
-	if len(c.Footer) != c.Width {
-		return fmt.Errorf("protocol: chrome has %d footer cells, want %d", len(c.Footer), c.Width)
-	}
-	for i, cell := range c.Header {
-		if !SafeRune(cell.R) {
-			return fmt.Errorf("protocol: chrome header cell %d has unsafe rune %U", i, cell.R)
-		}
-		if cell.Run != 0 {
-			return fmt.Errorf("protocol: chrome header cell %d has a scaled run", i)
-		}
-	}
-	for i, cell := range c.Footer {
-		if !SafeRune(cell.R) {
-			return fmt.Errorf("protocol: chrome footer cell %d has unsafe rune %U", i, cell.R)
-		}
-		if cell.Run != 0 {
-			return fmt.Errorf("protocol: chrome footer cell %d has a scaled run", i)
-		}
-	}
-	return nil
-}
 
 // MenuKind identifies a front-end-owned choice window.
 type MenuKind uint8

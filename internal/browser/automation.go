@@ -582,7 +582,7 @@ func (a *Automation) Type(ctx context.Context, text string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.Forms.InputFocus == nil && !b.prompt {
+	if b.Forms.InputFocus == nil {
 		return errors.New("no focused input; click a text field first")
 	}
 	if utf8LenString(text) > 20000 {

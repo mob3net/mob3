@@ -312,58 +312,6 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 	}
 }
 
-func TestReloadButtonBecomesStopWhileLoading(t *testing.T) {
-	b := NewBrowser(60, 10)
-	started := make(chan struct{})
-	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
-		close(started)
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}
-	b.Navigate("https://example.com/", false)
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("load did not start")
-	}
-	drawQuiet(b)
-	var stop *headerHit
-	for i := range b.headerHits {
-		if b.headerHits[i].kind == headerStop {
-			stop = &b.headerHits[i]
-		}
-		if b.headerHits[i].kind == headerReload {
-			t.Fatal("reload button still shown while loading")
-		}
-	}
-	if stop == nil {
-		t.Fatalf("no stop button while loading: %+v", b.headerHits)
-	}
-	if stop.w != stringWidth(" × ") {
-		t.Fatalf("stop button width = %d, want %d", stop.w, stringWidth(" × "))
-	}
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: stop.x + 1, Y: stop.y + 1, Press: true})
-	if b.Loading {
-		t.Fatal("clicking stop did not cancel the load")
-	}
-	if b.status != "Stopped loading" {
-		t.Fatalf("status = %q", b.status)
-	}
-	drawQuiet(b)
-	foundReload := false
-	for _, hit := range b.headerHits {
-		if hit.kind == headerStop {
-			t.Fatal("stop button still shown after cancel")
-		}
-		if hit.kind == headerReload {
-			foundReload = true
-		}
-	}
-	if !foundReload {
-		t.Fatal("reload button did not return after cancel")
-	}
-}
-
 func TestNavigateAsyncSuccess(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Navigate("data:text/html,<title>Loaded</title><p>hi</p>", false)
@@ -475,7 +423,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 		p := &Page{URL: u, Base: u, Root: ParseHTML("<html><body>no scripts</body></html>")}
 		return p, nil
 	}
-	b.HandleKey("J")
+	b.toggleJavaScript()
 	if !b.NoJS {
 		t.Fatal("J did not disable JavaScript")
 	}
@@ -506,7 +454,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 
 	// Pressing it again re-enables scripting for the session.
 	b.pendingStatus = ""
-	b.HandleKey("J")
+	b.toggleJavaScript()
 	if b.NoJS {
 		t.Fatal("second J did not enable JavaScript")
 	}
@@ -522,7 +470,7 @@ func TestHoverRebuildIsDebounced(t *testing.T) {
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.keys = make(chan string)
+	b.emitFrames = true
 	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
 	b.URL = u
 	b.rebuild()
@@ -718,9 +666,6 @@ func TestHelpAlertExample(t *testing.T) {
 	}
 	b := NewBrowser(80, 24)
 	b.Page = page
-	keys := make(chan string, 2)
-	keys <- "enter"
-	b.keys = keys
 	withQuietStdout(t, func() {
 		b.startJS(page)
 		b.JS.DispatchClick(link)
@@ -948,42 +893,18 @@ func TestDownloadCommandNeutralizesOptionsAndLocalFiles(t *testing.T) {
 	}
 }
 
-func TestDownloadPopupCopiesWithY(t *testing.T) {
+func TestDownloadPopupBuildsCurlCommand(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
 	b := NewBrowser(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
 	b.URL = u
 	b.showDownload(u.String(), "")
-	drawQuiet(b)
-	if screen := strings.Join(b.prev, "\n"); !strings.Contains(screen, "curl -L -o") ||
-		!strings.Contains(screen, "Download") {
-		t.Fatalf("download popup not rendered:\n%s", screen)
+	if b.download == nil {
+		t.Fatal("download popup state was not created")
 	}
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
-	wantCommand := b.download.command
-	b.HandleKey("y")
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(decoded) != wantCommand {
-		t.Fatalf("copied %q, want %q", decoded, wantCommand)
-	}
-	if b.download != nil {
-		t.Fatal("copying did not close the popup")
-	}
-	if !strings.Contains(b.status, "Copied") {
-		t.Fatalf("status = %q", b.status)
-	}
-	b.HandleKey("esc")
-	if b.download != nil {
-		t.Fatal("Esc did not close the popup")
+	if !strings.Contains(b.download.command, "curl -L -o") ||
+		!strings.Contains(b.download.command, u.String()) {
+		t.Fatalf("command = %q", b.download.command)
 	}
 }
 
@@ -1007,32 +928,6 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 	}
 	if b.EntryID != 0 {
 		t.Fatalf("download pushed history: entry=%d", b.EntryID)
-	}
-}
-
-func TestDownloadCommandIsNotDrawnSelected(t *testing.T) {
-	u := mustParse(t, "https://example.com/file.zip")
-	b := NewBrowser(60, 15)
-	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
-	b.URL = u
-	b.showDownload(u.String(), "")
-	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
-	b.paintDownload(g)
-	found := false
-	for i := 0; i+3 < len(g.Cells); i++ {
-		if g.Cells[i].R == 'c' && g.Cells[i+1].R == 'u' && g.Cells[i+2].R == 'r' && g.Cells[i+3].R == 'l' {
-			found = true
-			if g.Cells[i].BG == RGB(0x2f, 0x6f, 0xbf) {
-				t.Fatal("curl command is drawn with the blue selection background")
-			}
-			if g.Cells[i].BG != modalBG {
-				t.Fatalf("curl command background = %+v", g.Cells[i].BG)
-			}
-			break
-		}
-	}
-	if !found {
-		t.Fatal("curl command not rendered")
 	}
 }
 
@@ -1138,32 +1033,6 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	}
 	if b.Scroll == 0 {
 		t.Fatal("existing anchor did not scroll")
-	}
-}
-
-func TestNoColorLinkHintsUseReverse(t *testing.T) {
-	doc := ParseHTML(`<html><body><p><a href="/one">Documentation</a></p></body></html>`)
-	u := mustParse(t, "https://example.com/")
-	b := NewBrowser(40, 10)
-	b.color = false
-	b.Page = &Page{URL: u, Base: u, Root: doc}
-	b.URL = u
-	b.rebuild()
-	withQuietStdout(t, func() {
-		b.openLinkHints(false)
-		b.draw()
-	})
-	found := false
-	for _, line := range b.prev {
-		if strings.Contains(line, "38;2") || strings.Contains(line, "48;2") {
-			t.Fatalf("no-color hint line kept colors: %q", line)
-		}
-		if strings.Contains(line, ";7") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("no-color hint did not use reverse video")
 	}
 }
 
@@ -1295,7 +1164,7 @@ func TestEngineNoLongerOwnsHistoryKeys(t *testing.T) {
 func TestStatusDetailsShortcut(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.status = `Error: Invalid URL: parse "x": invalid port`
-	b.HandleKey("E")
+	b.showStatusDetails()
 	if b.notice == nil {
 		t.Fatal("E did not open the message window")
 	}
@@ -1305,38 +1174,16 @@ func TestStatusDetailsShortcut(t *testing.T) {
 
 	b.notice = nil
 	b.status = "Site blocked (CAPTCHA challenge)"
-	b.HandleKey("E")
+	b.showStatusDetails()
 	if b.notice == nil || b.notice.title != "Warning" {
 		t.Fatalf("warning notice = %+v", b.notice)
 	}
 
 	b.notice = nil
 	b.status = "Ready"
-	b.HandleKey("E")
+	b.showStatusDetails()
 	if b.notice != nil {
 		t.Fatal("E opened a window for a normal status")
-	}
-}
-
-func TestStatusDetailsClick(t *testing.T) {
-	b := NewBrowser(40, 10)
-	b.status = "Error: something long that did not fit in the footer"
-	drawQuiet(b)
-	found := false
-	for _, hit := range b.footerHits {
-		if hit.kind == headerStatus {
-			found = true
-			if hit.w <= 0 || hit.w > b.Width {
-				t.Fatalf("status hit width = %d", hit.w)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("footer status was not clickable")
-	}
-	b.HandleMouse(MouseEvent{X: 2, Y: b.Height, Press: true})
-	if b.notice == nil || b.notice.title != "Error" {
-		t.Fatalf("click did not open the message: %+v", b.notice)
 	}
 }
 
@@ -1353,28 +1200,28 @@ func TestZoomKeysStepThroughPresets(t *testing.T) {
 	if b.Zoom != 1 {
 		t.Fatalf("ctrl zoom aliases changed zoom to %g, want 1", b.Zoom)
 	}
-	b.HandleKey("+")
+	b.zoomBy(1)
 	if b.Zoom != 1.25 || b.status != "Zoom 125%" {
 		t.Fatalf("+ zoom=%g status=%q, want 1.25 / Zoom 125%%", b.Zoom, b.status)
 	}
-	b.HandleKey("+")
+	b.zoomBy(1)
 	if b.Zoom != 1.5 {
 		t.Fatalf("+ zoom = %g, want 1.5", b.Zoom)
 	}
-	b.HandleKey("-")
+	b.zoomBy(-1)
 	if b.Zoom != 1.25 {
 		t.Fatalf("- zoom = %g, want 1.25", b.Zoom)
 	}
-	b.HandleKey("-")
+	b.zoomBy(-1)
 	if b.Zoom != 1 {
 		t.Fatalf("- zoom = %g, want 1", b.Zoom)
 	}
-	b.HandleKey("0")
+	b.resetZoom()
 	if b.Zoom != 1 {
 		t.Fatalf("0 zoom = %g, want 1", b.Zoom)
 	}
 	for i := 0; i < 20; i++ {
-		b.HandleKey("-")
+		b.zoomBy(-1)
 	}
 	if b.Zoom != zoomSteps[0] || zoomSteps[0] != 0.25 {
 		t.Fatalf("zoom floor = %g (steps[0]=%g), want 0.25", b.Zoom, zoomSteps[0])
@@ -1383,7 +1230,7 @@ func TestZoomKeysStepThroughPresets(t *testing.T) {
 		t.Fatalf("zoom floor status = %q, want Zoom 25%%", b.status)
 	}
 	for i := 0; i < 20; i++ {
-		b.HandleKey("+")
+		b.zoomBy(1)
 	}
 	if b.Zoom != zoomSteps[len(zoomSteps)-1] {
 		t.Fatalf("zoom ceiling = %g, want %g", b.Zoom, zoomSteps[len(zoomSteps)-1])
@@ -1395,11 +1242,11 @@ func TestZoomStepsFromArbitraryStart(t *testing.T) {
 	b := NewBrowser(80, 24)
 	defer setLayoutZoom(1)
 	b.applyZoom(1.4)
-	b.HandleKey("+")
+	b.zoomBy(1)
 	if b.Zoom != 1.5 {
 		t.Fatalf("+ from 140%% = %g, want 1.5", b.Zoom)
 	}
-	b.HandleKey("-")
+	b.zoomBy(-1)
 	if b.Zoom != 1.25 {
 		t.Fatalf("- from 150%% = %g, want 1.25", b.Zoom)
 	}

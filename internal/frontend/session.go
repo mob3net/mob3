@@ -327,10 +327,6 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		}
 	case protocol.HistoryCommit:
 		l.applyHistoryCommit(v)
-	case protocol.Chrome:
-		if l.Presenter != nil {
-			l.Presenter.SetChrome(v)
-		}
 	case protocol.Clipboard:
 		if l.State.Clipboard != nil {
 			_, _ = l.State.Clipboard.Write([]byte(OSC52(v.Text)))

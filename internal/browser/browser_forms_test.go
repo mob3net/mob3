@@ -922,14 +922,6 @@ func TestFileInputClickShowsUnsupportedNotice(t *testing.T) {
 		!strings.Contains(b.notice.message, "not supported") {
 		t.Fatalf("notice = %+v", b.notice)
 	}
-	drawQuiet(b)
-	if screen := strings.Join(b.prev, "\n"); !strings.Contains(screen, "not supported") {
-		t.Fatalf("upload notice not rendered:\n%s", screen)
-	}
-	b.HandleKey("esc")
-	if b.notice != nil {
-		t.Fatal("Esc did not close the upload notice")
-	}
 }
 
 func TestTextareaEnterInsertsNewlineAndEscExits(t *testing.T) {

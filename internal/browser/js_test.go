@@ -880,10 +880,8 @@ func TestJSConsoleLogAndView(t *testing.T) {
 	if len(b.jsLog) != 1 || !strings.Contains(b.jsLog[0], "navigator is not defined") {
 		t.Fatalf("log = %v", b.jsLog)
 	}
-	b.consoleOpen = true
-	drawQuiet(b)
-	if !strings.Contains(strings.Join(b.prev, "\n"), "navigator is not defined") {
-		t.Fatal("console view did not show the log")
+	if !strings.Contains(strings.Join(b.consoleLines(40), "\n"), "navigator is not defined") {
+		t.Fatal("console lines did not show the log")
 	}
 }
 

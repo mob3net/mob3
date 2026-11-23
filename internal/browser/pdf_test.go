@@ -6,7 +6,6 @@ import (
 	"compress/zlib"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -504,7 +503,7 @@ func TestPDFDownloadKey(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
 	b := NewBrowser(100, 20)
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body></body></html>`), PDF: &PDFDocument{}}
-	b.HandleKey("d")
+	b.downloadCurrentPDF()
 	if b.download == nil {
 		t.Fatal("d did not open the download dialog")
 	}
@@ -518,7 +517,7 @@ func TestPDFDownloadKeyOnlyWorksInViewer(t *testing.T) {
 	b := NewBrowser(100, 20)
 	b.Page = &Page{URL: mustParse(t, "https://example.com/page"), Root: ParseHTML(`<html><body>text</body></html>`)}
 	b.status = ""
-	b.HandleKey("d")
+	b.downloadCurrentPDF()
 	if b.download != nil {
 		t.Fatal("d opened the download dialog outside the PDF viewer")
 	}
@@ -534,41 +533,12 @@ func TestPDFFooterDownloadHit(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
 	b.Layout = &Layout{Height: 20}
 	b.PDFStarts = []int{0}
-
-	// Draw into a pipe so both the painted line and its hit region are real.
-	old := os.Stdout
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	fm := b.footerModel()
+	if !strings.Contains(fm.left, " Page 1/1 ") {
+		t.Fatalf("PDF footer left = %q", fm.left)
 	}
-	os.Stdout = pw
-	b.draw()
-	pw.Close()
-	os.Stdout = old
-	painted, _ := io.ReadAll(pr)
-	pr.Close()
-	// The hint is painted as its own bold run, so check both halves. The
-	// leading space keeps the status off the terminal edge.
-	if !strings.Contains(string(painted), " Page 1/1 ") ||
-		!strings.Contains(string(painted), "(d -> Download report.pdf)") {
-		t.Fatalf("PDF footer line was not painted: %.400q", painted)
-	}
-
-	var hit *headerHit
-	for i := range b.footerHits {
-		if b.footerHits[i].kind == headerDownload {
-			hit = &b.footerHits[i]
-			break
-		}
-	}
-	if hit == nil {
-		t.Fatalf("PDF footer has no download region: %+v", b.footerHits)
-	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: 0, X: hit.x + 1, Y: hit.y + 1, Press: true})
-	})
-	if b.download == nil {
-		t.Fatal("clicking the PDF download hint did not open the dialog")
+	if fm.pdfHint != "(d -> Download report.pdf)" || fm.pdfHintX < 0 {
+		t.Fatalf("PDF footer hint = %q at %d", fm.pdfHint, fm.pdfHintX)
 	}
 }
 

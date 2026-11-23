@@ -2,6 +2,7 @@ package browser
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,7 +88,7 @@ func TestDarkReaderMode(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.Dark = true
-	b.HandleKey("R")
+	b.toggleReader()
 	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
@@ -113,11 +114,9 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	b := NewBrowser(120, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Dark"}
 	b.rebuild()
-	if b.HandleKey("D") {
-		t.Fatal("D asked to quit")
-	}
+	b.toggleDark()
 	if !b.Dark {
-		t.Fatal("D did not enable dark mode")
+		t.Fatal("dark mode did not enable")
 	}
 	if b.status != "Dark mode on" {
 		t.Fatalf("status = %q", b.status)
@@ -125,22 +124,15 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	if colorLum(b.Layout.PageBG) > 0.2 {
 		t.Fatalf("dark layout background = %+v", b.Layout.PageBG)
 	}
-	drawQuiet(b)
-	var hit *headerHit
-	for i := range b.footerHits {
-		if b.footerHits[i].kind == headerDark {
-			hit = &b.footerHits[i]
-			break
-		}
+	if got := b.darkStatusText(); got != "Dark:on" {
+		t.Fatalf("dark status text = %q", got)
 	}
-	if hit == nil {
-		t.Fatalf("dark footer label has no click region: %+v", b.footerHits)
+	if !strings.Contains(b.footerRight(120), "Dark:on") {
+		t.Fatalf("footer right = %q", b.footerRight(120))
 	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
-	})
+	b.toggleDark()
 	if b.Dark {
-		t.Fatal("clicking the dark label did not disable dark mode")
+		t.Fatal("dark mode did not disable")
 	}
 	if b.status != "Dark mode off" {
 		t.Fatalf("status = %q", b.status)

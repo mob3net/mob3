@@ -78,14 +78,6 @@ type Browser struct {
 	// about:config with a query.
 	configToken protocol.ConfigToken
 
-	prompt          bool
-	promptText      string
-	promptCursor    int
-	promptSelectAll bool
-	// promptVim marks a prompt opened with `:`, where `q` quits.
-	promptVim       bool
-	promptHist      consoleHistory
-	skipDraw        bool
 	clipboardWriter io.Writer
 	// Output is the terminal writer for the legacy direct draw path. The app
 	// sets it to os.Stdout; tests use the package default hook.
@@ -97,9 +89,7 @@ type Browser struct {
 	newGraphics  func(GraphicsMode, int, int) Graphics
 	frameEncoder func(protocol.Frame, bool, bool) []string
 	pngEncoder   func(protocol.Frame, int) ([]byte, error)
-	// screenGrid and contentGrid are reused between frames. The content grid
-	// is exactly the page viewport; the screen grid adds chrome and overlays.
-	screenGrid  *Grid
+	// contentGrid is reused between frames and is exactly the page viewport.
 	contentGrid *Grid
 	frameBuf    frameScratch
 	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
@@ -165,7 +155,6 @@ type Browser struct {
 	htmlCache []string
 	jsLog     []string
 
-	keys   <-chan string
 	dialog *jsDialog
 	// sessionCtx, sessionIn and sessionAbort are set while Serve owns the
 	// event loop. A modal dialog then reads keys from the command stream
@@ -174,7 +163,6 @@ type Browser struct {
 	sessionIn    <-chan protocol.Command
 	sessionAbort <-chan struct{}
 	sessionQuit  bool
-	lastState    protocol.State
 	// emitFrames switches presentation to the front end: draw stashes the
 	// screen frame and sends it over the transport instead of writing stdout.
 	// Native image modes keep the engine-side writer until placements cross the
@@ -183,12 +171,8 @@ type Browser struct {
 	frameReady bool
 	sessionOut protocol.EventSink
 	// frontendChrome lets the normal path emit a content-only frame and a
-	// State snapshot; the front end draws the header/footer from it. Chrome
-	// rows remain the fallback for overlays, the console, the find bar and
-	// tests.
+	// State snapshot; the front end draws the header/footer from it.
 	frontendChrome   bool
-	chromeBuf        protocol.Chrome
-	chromeReady      bool
 	nextDialogID     uint32
 	nextSelectID     uint32
 	selectFrontend   bool
@@ -207,21 +191,10 @@ type Browser struct {
 	// file-upload message.
 	notice *noticeDialog
 	// selectMenu is the pending single-select choice awaiting the front end.
-	selectMenu *selectMenuDialog
-	// modalClose is the close-button hit region of the modal drawn last.
-	modalClose Rect
-	// modalBox is the full modal rectangle, used to close on backdrop clicks.
-	modalBox Rect
-
+	selectMenu  *selectMenuDialog
 	lastScroll  int
 	usage       procUsage
-	scrollBar   *scrollBarInfo
-	scrollDrag  bool
 	quitPending bool
-
-	headerHits     []headerHit
-	footerHits     []headerHit
-	consoleTabHits []consoleTabHit
 }
 
 // NewBrowser creates a browser with a viewport size.
@@ -817,7 +790,7 @@ func (b *Browser) setPageHover(n *Node) {
 	// pointer movement does not rebuild the page for every cell. Automation
 	// and tests without an event loop need the result synchronously.
 	if b.PageHasHover || dirty {
-		if b.keys != nil || b.sessionIn != nil {
+		if b.emitFrames || b.sessionIn != nil {
 			b.hoverRebuildPending = true
 			b.hoverRebuildAt = time.Now().Add(hoverRebuildDelay)
 		} else {

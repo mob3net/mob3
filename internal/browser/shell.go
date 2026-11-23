@@ -72,7 +72,7 @@ func (b *Browser) frontendChromePath() bool {
 
 // keysEngine reports whether the engine currently owns key interpretation.
 func (b *Browser) keysEngine() bool {
-	return b.prompt || b.FindActive || b.consoleOpen || b.dialog != nil ||
+	return b.FindActive || b.consoleOpen || b.dialog != nil ||
 		b.download != nil || b.notice != nil || b.selectMenu != nil ||
 		b.quitPending ||
 		b.Forms.InputFocus != nil || b.Forms.ControlFocus != nil || b.LinkHints || b.HintConfirm
@@ -165,10 +165,6 @@ func (b *Browser) stateMessage() protocol.State {
 	if !b.HideBackgrounds {
 		st.ViewFlags |= protocol.ViewFlagBackgrounds
 	}
-	st.PromptActive = b.prompt
-	st.PromptText = b.promptText
-	st.PromptCursor = b.promptCursor
-	st.PromptSelectAll = b.promptSelectAll
 	st.FindActive = b.FindActive
 	st.QuitPending = b.quitPending
 	st.KeysEngine = b.keysEngine()

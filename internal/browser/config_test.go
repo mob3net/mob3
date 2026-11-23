@@ -212,7 +212,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 	cfgURL := mustParse(t, "about:config")
 	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
 	cfg.URL = cfgURL
-	cfg.HandleKey("R")
+	cfg.toggleReader()
 	if cfg.Reader {
 		t.Fatal("reader mode was enabled on the config page")
 	}
