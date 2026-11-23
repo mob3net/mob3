@@ -33,7 +33,7 @@ func openTestSession(t *testing.T, b *Browser) protocol.Session {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Send(protocol.Command{Body: protocol.Init{Width: b.width, Height: b.height, CellW: b.cellW, CellH: b.cellH, Zoom: b.zoom}}); err != nil {
+	if err := s.Send(protocol.Command{Body: protocol.Init{Width: b.Width, Height: b.Height, CellW: b.CellW, CellH: b.CellH, Zoom: b.Zoom}}); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -59,7 +59,7 @@ func waitEvent(t *testing.T, s protocol.Session, match func(protocol.EventBody) 
 
 func TestSessionQuitThroughTransport(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noJS = true
+	b.NoJS = true
 	restore := quietStdout(t)
 	defer restore()
 	s := openTestSession(t, b)
@@ -81,7 +81,7 @@ func TestSessionQuitThroughTransport(t *testing.T) {
 func TestSessionInitResizeAndScroll(t *testing.T) {
 	root := ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 200) + `</body></html>`)
 	b := NewBrowser(60, 10)
-	b.noJS = true
+	b.NoJS = true
 	b.Page = &Page{Root: root, Title: "t"}
 	b.Layout = BuildLayout(root, nil, 60)
 	restore := quietStdout(t)
@@ -138,7 +138,7 @@ func TestSessionInitResizeAndScroll(t *testing.T) {
 
 func TestSessionAbortIsOutOfBand(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noJS = true
+	b.NoJS = true
 	restore := quietStdout(t)
 	defer restore()
 	s := openTestSession(t, b)
@@ -168,7 +168,7 @@ func TestSessionAbortIsOutOfBand(t *testing.T) {
 
 func TestSessionEmitsScreenFrames(t *testing.T) {
 	b := NewBrowser(30, 8)
-	b.noJS = true
+	b.NoJS = true
 	restore := quietStdout(t)
 	defer restore()
 	s := openTestSession(t, b)
@@ -214,7 +214,7 @@ func TestSessionEmitsScreenFrames(t *testing.T) {
 
 func TestSessionAppActionReachesState(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noJS = true
+	b.NoJS = true
 	restore := quietStdout(t)
 	defer restore()
 	s := openTestSession(t, b)
@@ -236,7 +236,7 @@ func TestSessionAppActionReachesState(t *testing.T) {
 
 func TestDialogReadsTransportCommands(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noDraw = true
+	b.NoDraw = true
 	in := make(chan protocol.Command, 4)
 	b.sessionCtx = context.Background()
 	b.sessionIn = in
@@ -268,7 +268,7 @@ func (s *frameCapture) Send(ev protocol.Event) error {
 func TestSessionFrameCarriesNativePlacements(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 32, 64))
 	b := NewBrowser(40, 12)
-	b.noJS = true
+	b.NoJS = true
 	b.color = true
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
 	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: 1, Y: 0, W: 4, H: 4, Img: img}}}
@@ -299,8 +299,8 @@ func TestSessionFrameCarriesNativePlacements(t *testing.T) {
 func TestSessionClipsOutOfBoundsPlacements(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	b := NewBrowser(10, 8)
-	b.noJS = true
-	b.noDraw = false
+	b.NoJS = true
+	b.NoDraw = false
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "clip"}
 	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: -5, Y: 1, W: 20, H: 3, Img: img}}}
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
@@ -344,7 +344,7 @@ func TestClientErrorLogsOnce(t *testing.T) {
 
 func TestConsoleDrawEmitsView(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.noJS = true
+	b.NoJS = true
 	b.emitFrames = true
 	b.consoleOpen = true
 	capture := &consoleSink{}
@@ -369,7 +369,7 @@ func (s *dialogSink) Send(ev protocol.Event) error {
 
 func TestDialogTransportRoundTrip(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noDraw = true
+	b.NoDraw = true
 	in := make(chan protocol.Command, 2)
 	sink := &dialogSink{}
 	b.sessionCtx = context.Background()
@@ -401,7 +401,7 @@ func TestSelectTransportRoundTrip(t *testing.T) {
 		{Type: ElementNode, Tag: "option", Text: "Two", Attrs: []Attr{{Key: "selected", Value: ""}}},
 	}}
 	b := NewBrowser(60, 10)
-	b.noDraw = true
+	b.NoDraw = true
 	sink := &selectSink{}
 	in := make(chan protocol.Command, 2)
 	b.sessionCtx = context.Background()
@@ -438,7 +438,7 @@ func (s *modalSink) Send(ev protocol.Event) error {
 
 func TestDownloadAndNoticeTransport(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.noDraw = true
+	b.NoDraw = true
 	sink := &modalSink{}
 	b.sessionOut = sink
 	b.showDownload("https://example.com/f.bin", "f.bin")
@@ -519,7 +519,7 @@ func TestConsoleViewTransport(t *testing.T) {
 
 func TestConsoleActionInputAndTabs(t *testing.T) {
 	b := NewBrowser(80, 24)
-	b.noDraw = true
+	b.NoDraw = true
 	b.toggleConsole()
 	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleFocus})
 	if !b.consoleEdit {
@@ -578,7 +578,7 @@ func TestInitAndResizeUseContentGeometry(t *testing.T) {
 	if top, bottom := b.viewport(); top != 2 || bottom != 39 {
 		t.Fatalf("resize viewport = %d,%d", top, bottom)
 	}
-	if b.width != 100 || b.height != 40 {
-		t.Fatalf("terminal = %dx%d", b.width, b.height)
+	if b.Width != 100 || b.Height != 40 {
+		t.Fatalf("terminal = %dx%d", b.Width, b.Height)
 	}
 }

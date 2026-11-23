@@ -76,10 +76,10 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 		runner := NewBrowser(o.width, 3)
 		// NewBrowser resets the package-wide cell ratio; restore the run's zoom
 		// before scripts run so script-visible viewport sizes match the dump.
-		runner.zoom = o.zoom
+		runner.Zoom = o.zoom
 		setLayoutZoom(o.zoom)
-		runner.noJS = false
-		runner.jsMemLimit = o.jsMem
+		runner.NoJS = false
+		runner.JSMemLimit = o.jsMem
 		runner.startJS(page)
 		defer runner.stopJS()
 		page.CollectDynamicStyles()

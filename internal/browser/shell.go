@@ -20,13 +20,13 @@ type contentRect struct {
 // supplies the content rectangle; the legacy rule remains for direct callers
 // and tests.
 func (b *Browser) headerRows() int {
-	if b.contentTop >= 0 {
-		return b.contentTop
+	if b.ContentTop >= 0 {
+		return b.ContentTop
 	}
-	if b.height < 3 {
+	if b.Height < 3 {
 		return 0
 	}
-	if b.height < 5 {
+	if b.Height < 5 {
 		return 1
 	}
 	return 2
@@ -34,13 +34,13 @@ func (b *Browser) headerRows() int {
 
 // viewport returns the first content row and the exclusive end row.
 func (b *Browser) viewport() (int, int) {
-	if b.contentTop >= 0 && b.contentHeight > 0 {
-		return b.contentTop, b.contentTop + b.contentHeight
+	if b.ContentTop >= 0 && b.ContentHeight > 0 {
+		return b.ContentTop, b.ContentTop + b.ContentHeight
 	}
-	if b.height < 3 {
-		return 0, b.height
+	if b.Height < 3 {
+		return 0, b.Height
 	}
-	return b.headerRows(), b.height - 1
+	return b.headerRows(), b.Height - 1
 }
 
 // normalizeContentRect validates the front-end rectangle against the terminal
@@ -66,7 +66,7 @@ func (b *Browser) viewportHeight() int {
 // frontendChromePath reports whether the normal front-end chrome path is in
 // use: no overlay, console or find bar, and enough rows for a header/footer.
 func (b *Browser) frontendChromePath() bool {
-	return b.emitFrames && b.frontendChrome && b.height >= 3 &&
+	return b.emitFrames && b.frontendChrome && b.Height >= 3 &&
 		!b.overlayOpen() && !b.consoleOpen && !b.FindActive
 }
 
@@ -90,7 +90,7 @@ func (b *Browser) frontendChromeActive() bool {
 // the front end computes it and the engine receives only this rectangle.
 func (b *Browser) contentRect() contentRect {
 	top, bottom := b.viewport()
-	return contentRect{Top: top, Bottom: bottom, Width: b.width, Height: bottom - top}
+	return contentRect{Top: top, Bottom: bottom, Width: b.Width, Height: bottom - top}
 }
 
 // stateMessage builds the trusted shell snapshot from page state. It is the
@@ -151,18 +151,18 @@ func (b *Browser) stateMessage() protocol.State {
 	// Chrome state. The front end draws the normal header and footer from this
 	// snapshot; overlays, the console and the find bar keep the full-frame or
 	// engine-composed fallback for now.
-	st.Width, st.Height = b.width, b.height
+	st.Width, st.Height = b.Width, b.Height
 	st.HeaderRows = b.headerRows()
 	st.FrontendChrome = b.frontendChromeActive()
 	st.ZoomLabel = b.zoomBadge()
-	st.ZoomPercent = int(b.zoom*100 + 0.5)
-	if !b.hideFixed {
+	st.ZoomPercent = int(b.Zoom*100 + 0.5)
+	if !b.HideFixed {
 		st.ViewFlags |= protocol.ViewFlagFixed
 	}
-	if !b.noSticky {
+	if !b.NoSticky {
 		st.ViewFlags |= protocol.ViewFlagSticky
 	}
-	if !b.hideBackgrounds {
+	if !b.HideBackgrounds {
 		st.ViewFlags |= protocol.ViewFlagBackgrounds
 	}
 	st.PromptActive = b.prompt

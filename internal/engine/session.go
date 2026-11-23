@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"browser/internal/protocol"
 )
@@ -16,6 +17,25 @@ type Session struct {
 	Layout *Layout
 	URL    *url.URL
 	Scroll int
+
+	// Terminal/content geometry and rendering configuration.
+	Width, Height   int
+	ContentTop      int
+	ContentHeight   int
+	CellW, CellH    int
+	Zoom            float64
+	NoJS            bool
+	NoPDF           bool
+	NoBigText       bool
+	JSMemLimit      int64
+	JSPageBudget    time.Duration
+	LayoutBudget    LayoutBudget
+	HideFixed       bool
+	NoSticky        bool
+	HideBackgrounds bool
+	Interactive     bool
+	NoDraw          bool
+	ScaledLayout    bool
 
 	// View and page-display state.
 	Focus             int

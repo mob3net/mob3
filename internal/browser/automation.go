@@ -46,7 +46,7 @@ type ClickTarget struct {
 // NewAutomation creates a headless browser with a virtual text viewport.
 func NewAutomation(width, height int) *Automation {
 	b := NewBrowser(width, height)
-	b.noDraw = true
+	b.NoDraw = true
 	if b.loader != nil {
 		// Automation exposes text; image downloads would only slow it down.
 		b.loader.noImages = true
@@ -147,7 +147,7 @@ func (a *Automation) Snapshot() string {
 	if vh < 1 {
 		vh = 1
 	}
-	fmt.Fprintf(&sb, "Viewport: %dx%d  Scroll: %d%%\n\n", b.width, vh, b.scrollPercent())
+	fmt.Fprintf(&sb, "Viewport: %dx%d  Scroll: %d%%\n\n", b.Width, vh, b.scrollPercent())
 	sb.WriteString(a.pageTextLocked(vh))
 	if lines := a.linkLinesLocked(vh); len(lines) > 0 {
 		sb.WriteString("\nLinks:\n")
@@ -169,7 +169,7 @@ func (a *Automation) viewportGridLocked(vh int) *Grid {
 		return nil
 	}
 	b.Layout.SetFixedScroll(b.Scroll)
-	g := NewGrid(b.width, vh, b.pageFG(), b.pageBG())
+	g := NewGrid(b.Width, vh, b.pageFG(), b.pageBG())
 	PaintLayout(g, b.Layout, b.Scroll, 0, vh, nil, b.pageFG())
 	return g
 }
@@ -377,7 +377,7 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 		return a.waitLoad(ctx)
 	case target.HasCoords:
 		top, _ := b.viewport()
-		if target.X < 0 || target.X >= b.width || target.Y < 0 || target.Y >= b.viewportHeight() {
+		if target.X < 0 || target.X >= b.Width || target.Y < 0 || target.Y >= b.viewportHeight() {
 			return fmt.Errorf("coordinates (%d,%d) outside the page viewport", target.X, target.Y)
 		}
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: target.X + 1, Y: top + target.Y + 1, Press: true})
@@ -1793,10 +1793,10 @@ func (a *Automation) Logs(limit int) string {
 	var sb strings.Builder
 	sb.WriteString(header)
 	sb.WriteString("\n")
-	if b.noJS {
+	if b.NoJS {
 		sb.WriteString("(JavaScript is disabled)\n")
 	}
-	if len(entries) == 0 && !b.noJS {
+	if len(entries) == 0 && !b.NoJS {
 		sb.WriteString("(no JavaScript messages)\n")
 	}
 	for _, entry := range entries {

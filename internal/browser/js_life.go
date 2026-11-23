@@ -5,12 +5,12 @@ import "time"
 // startJS creates a fresh runtime and runs the page's scripts in order.
 func (b *Browser) startJS(page *Page) {
 	b.stopJS()
-	if b.noJS || page == nil {
+	if b.NoJS || page == nil {
 		return
 	}
 	j := newJSRuntime(b, page)
-	if b.jsPageBudget > 0 {
-		j.SetPageBudget(b.jsPageBudget)
+	if b.JSPageBudget > 0 {
+		j.SetPageBudget(b.JSPageBudget)
 	}
 	b.JS = j
 	j.StartPage(page)

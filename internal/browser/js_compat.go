@@ -15,7 +15,7 @@ type FormSubmission = engine.FormSubmission
 func newJSRuntime(b *Browser, page *Page) *jsRuntime {
 	j := engine.NewJSRuntime(newJSHost(b), page)
 	if b != nil {
-		j.SetMemLimit(b.jsMemLimit)
+		j.SetMemLimit(b.JSMemLimit)
 	}
 	return j
 }

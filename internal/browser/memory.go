@@ -109,9 +109,9 @@ func (b *Browser) setMemoryLimitMB(mb int) {
 		debug.SetMemoryLimit(b.memLimitBytes)
 	}
 	base := effectiveMemoryLimit()
-	b.jsMemLimit = jsHeapBudget(base)
+	b.JSMemLimit = jsHeapBudget(base)
 	if b.JS != nil {
-		b.JS.SetMemLimit(b.jsMemLimit)
+		b.JS.SetMemLimit(b.JSMemLimit)
 	}
 	b.historyCacheBytes = historyCacheBudget(base)
 	b.histMu.Lock()

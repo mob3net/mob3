@@ -373,10 +373,10 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Move the PDF parser and document model (3b4a).
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
 - [~] Split the session: `engine.Session` now owns page/layout/URL/scroll,
-      JS runtime, PDF page starts, load lifecycle, deferred-image counters,
-      focus/hover, reader, text-scaling, dark-mode, form/selection, find and
-      hint state plus scroll/page/find/hint/PDF helpers; `Browser` embeds it.
-      Methods and shell fields still need to move.
+      geometry, rendering configuration, JS runtime, PDF page starts, load
+      lifecycle, deferred-image counters, focus/hover, reader, text-scaling,
+      dark-mode, form/selection, find and hint state plus helper methods;
+      `Browser` embeds it. Methods and shell fields still need to move.
 - [ ] Rename `Browser` → `Session` and remove `internal/browser`. Still
       306 methods.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
@@ -1139,3 +1139,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8i | Batch 34: moved form/selection/find/hint state into `engine.Session` and added session helpers for find open/clear/count/current-link, hint clear/target lookup and selection clear/has. Browser wrappers keep call sites stable. Added engine session tests. | `go test ./...`, `go vet`, full `-race`, engine/browser find/hint/selection/form tests, PTY find/hints, dump/PNG hashes | Move remaining methods and shell fields |
 | 2026-11-23 | 8j | Batch 35: moved the JS runtime and PDF page-start state into `engine.Session`, and moved PDF page-start/page-number helpers there. Browser wrappers keep call sites stable. Added engine PDF tracking test. | `go test ./...`, `go vet`, full `-race`, engine/browser JS/PDF tests, PTY PDF/navigation, dump/PNG hashes | Move remaining methods and shell fields |
 | 2026-11-23 | 8k | Batch 36: moved scroll math (`MaxScroll`, `ClampScroll`, `ScrollPercent`, `ScrollToAnchor`), load lifecycle state and deferred-image counters into `engine.Session`. Browser wrappers keep call sites stable. Added engine scroll tests. | `go test ./...`, `go vet`, full `-race`, engine/browser load/scroll/image tests, PTY navigation, dump/PNG hashes | Move remaining methods and shell fields |
+| 2026-11-23 | 8l | Batch 37: moved terminal/content geometry and rendering configuration into `engine.Session`: width/height, content rectangle, cell size, zoom, JS and PDF flags, layout budget, fixed/sticky/background toggles, interactive/no-draw and scaled-layout state. Browser fields now mostly shell/navigation/chrome. | `go test ./...`, `go vet`, full `-race`, engine/browser layout/render/config tests, PTY resize/zoom/graphics, dump/PNG hashes | Move remaining methods and shell fields |

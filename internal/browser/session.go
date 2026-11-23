@@ -157,13 +157,13 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 	switch v := cmd.Body.(type) {
 	case protocol.Init:
 		if v.CellW > 0 {
-			b.cellW = v.CellW
+			b.CellW = v.CellW
 		}
 		if v.CellH > 0 {
-			b.cellH = v.CellH
+			b.CellH = v.CellH
 		}
 		if v.Zoom > 0 {
-			b.zoom = v.Zoom
+			b.Zoom = v.Zoom
 			setLayoutZoom(v.Zoom)
 		}
 		b.color = v.Caps&protocol.CapColor != 0
@@ -177,10 +177,10 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 	case protocol.Resize:
 		b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
 		if v.CellW > 0 {
-			b.cellW = v.CellW
+			b.CellW = v.CellW
 		}
 		if v.CellH > 0 {
-			b.cellH = v.CellH
+			b.CellH = v.CellH
 		}
 		b.applyImageCap()
 	case protocol.Key:
@@ -324,25 +324,25 @@ func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 	case protocol.AppToggleImages:
 		b.cycleGraphics()
 	case protocol.AppToggleFixed:
-		b.hideFixed = !b.hideFixed
+		b.HideFixed = !b.HideFixed
 		b.rebuild()
-		if b.hideFixed {
+		if b.HideFixed {
 			b.status = "Fixed elements hidden"
 		} else {
 			b.status = "Fixed elements shown"
 		}
 	case protocol.AppToggleSticky:
-		b.noSticky = !b.noSticky
+		b.NoSticky = !b.NoSticky
 		b.rebuild()
-		if b.noSticky {
+		if b.NoSticky {
 			b.status = "Sticky elements disabled"
 		} else {
 			b.status = "Sticky elements enabled"
 		}
 	case protocol.AppToggleBackgrounds:
-		b.hideBackgrounds = !b.hideBackgrounds
+		b.HideBackgrounds = !b.HideBackgrounds
 		b.rebuild()
-		if b.hideBackgrounds {
+		if b.HideBackgrounds {
 			b.status = "Background images hidden"
 		} else {
 			b.status = "Background images shown"

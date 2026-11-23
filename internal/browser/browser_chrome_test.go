@@ -28,9 +28,9 @@ func TestHeaderHitRegions(t *testing.T) {
 		{headerForward, 3, 0, 3, 1},
 		{headerReload, 6, 0, 3, 1},
 		{headerHome, 9, 0, 3, 1},
-		{headerHistory, b.width - cfgW - helpW - histW, 0, histW, 1},
-		{headerHelp, b.width - cfgW - helpW, 0, helpW, 1},
-		{headerConfig, b.width - cfgW, 0, cfgW, 1},
+		{headerHistory, b.Width - cfgW - helpW - histW, 0, histW, 1},
+		{headerHelp, b.Width - cfgW - helpW, 0, helpW, 1},
+		{headerConfig, b.Width - cfgW, 0, cfgW, 1},
 		{headerURL, 0, 1, 60 - zoomW, 1},
 		{headerZoom, 60 - zoomW, 1, zoomW, 1},
 	}
@@ -39,7 +39,7 @@ func TestHeaderHitRegions(t *testing.T) {
 			t.Errorf("hit %d = %+v, want %+v", i, b.headerHits[i], want[i])
 		}
 	}
-	if b.headerHits[6].x+b.headerHits[6].w != b.width {
+	if b.headerHits[6].x+b.headerHits[6].w != b.Width {
 		t.Error("config is not at the far right")
 	}
 	if top, _ := b.viewport(); top != 2 {
@@ -84,17 +84,17 @@ func TestHeaderNarrow(t *testing.T) {
 		b.headerHits[4].kind != headerURL || b.headerHits[5].kind != headerZoom {
 		t.Fatalf("narrow header hits = %+v", b.headerHits)
 	}
-	if b.headerHits[3].x+b.headerHits[3].w != b.width {
+	if b.headerHits[3].x+b.headerHits[3].w != b.Width {
 		t.Error("narrow config is not at the far right")
 	}
 	b2 := NewBrowser(20, 10)
-	b2.width = 4
+	b2.Width = 4
 	drawQuiet(b2)
 	if len(b2.headerHits) != 1 || b2.headerHits[0].kind != headerURL {
 		t.Fatalf("tiny header hits = %+v", b2.headerHits)
 	}
 	b3 := NewBrowser(60, 10)
-	b3.height = 4
+	b3.Height = 4
 	drawQuiet(b3)
 	if top, _ := b3.viewport(); top != 1 {
 		t.Errorf("short terminal viewport top = %d, want 1", top)
@@ -124,12 +124,12 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
-	b.noBigText = true
+	b.NoBigText = true
 	b.rebuild()
 	if b.BigText {
 		t.Fatal("scaled text was not disabled")
 	}
-	b.noBigText = false
+	b.NoBigText = false
 	b.rebuild()
 	if !b.BigText {
 		t.Fatal("scaled text should be enabled in kitty by default")
@@ -191,18 +191,18 @@ func TestPageScrollbarMouse(t *testing.T) {
 	if info.trackTop != 2 || info.trackH != 7 {
 		t.Fatalf("scrollbar track = %+v", info)
 	}
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + info.trackH, Press: true})
 	if b.Scroll != b.maxScroll() || b.Scroll == 0 {
 		t.Fatalf("bottom click scroll = %d, max = %d", b.Scroll, b.maxScroll())
 	}
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 1, Press: true})
 	if b.Scroll != 0 {
 		t.Fatalf("top click scroll = %d", b.Scroll)
 	}
 
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true, Motion: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 3, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + info.trackH, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + info.trackH, Press: false})
 	if b.Scroll != b.maxScroll() {
 		t.Fatalf("drag scroll = %d, max = %d", b.Scroll, b.maxScroll())
 	}
@@ -211,22 +211,22 @@ func TestPageScrollbarMouse(t *testing.T) {
 	}
 
 	// A release report may carry the motion bit; it must still end the drag.
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: true, Motion: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: false, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 3, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 3, Press: false, Motion: true})
 	if b.scrollDrag {
 		t.Fatal("release with motion bit kept the scrollbar drag active")
 	}
 	dragEnd := b.Scroll
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + info.trackH, Press: false, Motion: true})
 	if b.Scroll != dragEnd {
 		t.Fatalf("pointer motion after release scrolled: %d -> %d", dragEnd, b.Scroll)
 	}
 
 	// Releasing over the toolbar also ends the drag.
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 2, Press: true, Motion: true})
-	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: 0, Press: false})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 1, Press: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: info.trackTop + 2, Press: true, Motion: true})
+	b.HandleMouse(MouseEvent{Button: 0, X: b.Width, Y: 0, Press: false})
 	if b.scrollDrag {
 		t.Fatal("release over the toolbar kept the scrollbar drag active")
 	}
@@ -250,7 +250,7 @@ func TestFooterConsoleIcon(t *testing.T) {
 			break
 		}
 	}
-	if hit == nil || hit.x+hit.w != b.width {
+	if hit == nil || hit.x+hit.w != b.Width {
 		t.Fatalf("console hit = %+v", b.footerHits)
 	}
 	withQuietStdout(t, func() {
@@ -399,7 +399,7 @@ func TestJSErrorFooterLabel(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
 	})
-	if !b.noJS {
+	if !b.NoJS {
 		t.Fatal("clicking JavaScript state did not turn scripts off")
 	}
 	if b.consoleOpen {
@@ -423,7 +423,7 @@ func TestJavaScriptFooterLabelClick(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
 	})
-	if !b.noJS {
+	if !b.NoJS {
 		t.Fatal("clicking JavaScript:on did not disable scripts")
 	}
 	if b.loader == nil || !b.loader.noScripts {
@@ -436,7 +436,7 @@ func TestJavaScriptFooterLabelClick(t *testing.T) {
 
 func TestGraphicsFooterLabelClick(t *testing.T) {
 	b := NewBrowser(180, 10)
-	b.cellW, b.cellH = 8, 16
+	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
@@ -578,7 +578,7 @@ func TestFooterShowsJSAndGraphicsState(t *testing.T) {
 	if got := b.footerRight(120); !strings.Contains(got, "Graphics:kitty") {
 		t.Fatalf("resolved graphics footer = %q", got)
 	}
-	b.noJS = true
+	b.NoJS = true
 	if got := b.footerRight(120); !strings.Contains(got, "JavaScript:off") {
 		t.Fatalf("JavaScript-off footer = %q", got)
 	}
@@ -734,7 +734,7 @@ func TestFooterStatusColors(t *testing.T) {
 
 func TestCycleGraphicsModes(t *testing.T) {
 	b := NewBrowser(80, 20)
-	b.cellW, b.cellH = 8, 16
+	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
@@ -769,7 +769,7 @@ func TestCycleGraphicsModes(t *testing.T) {
 
 func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	b := NewBrowser(80, 20)
-	b.cellW, b.cellH = 8, 16
+	b.CellW, b.CellH = 8, 16
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<html><body><p>before</p><img alt="pic" src="pic.png"><p>after</p></body></html>`)
 	for _, img := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
@@ -870,7 +870,7 @@ func TestModalDisablesScaledText(t *testing.T) {
 
 func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.zoom = 1.5
+	b.Zoom = 1.5
 	drawQuiet(b)
 	var badge, field *headerHit
 	for i := range b.headerHits {
@@ -884,7 +884,7 @@ func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	if badge == nil || field == nil {
 		t.Fatalf("zoom badge missing at 150%%: %+v", b.headerHits)
 	}
-	if badge.y != 1 || badge.x+badge.w != b.width {
+	if badge.y != 1 || badge.x+badge.w != b.Width {
 		t.Fatalf("zoom badge = %+v, want the far right of the URL row", *badge)
 	}
 	if want := stringWidth(" 150% "); badge.w != want {
@@ -902,8 +902,8 @@ func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	if b.zoomMenu == nil {
 		t.Fatal("clicking the zoom badge did not open the zoom window")
 	}
-	if b.zoom != 1.5 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	if b.Zoom != 1.5 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
 	}
 	drawQuiet(b)
 	var row *zoomMenuHit
@@ -919,8 +919,8 @@ func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: row.rect.X + 1, Y: row.rect.Y + 1, Press: true})
 	})
-	if b.zoom != 1 {
-		t.Fatalf("clicking 100%% left zoom at %g, want 1", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("clicking 100%% left zoom at %g, want 1", b.Zoom)
 	}
 	if b.zoomMenu != nil {
 		t.Fatal("the zoom window stayed open after a choice")
@@ -947,8 +947,8 @@ func TestShiftZOpensZoomMenu(t *testing.T) {
 	if b.zoomMenu == nil {
 		t.Fatal("Z did not open the zoom window")
 	}
-	if b.zoom != 1 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
 	}
 	b.HandleKey("esc")
 	if b.zoomMenu != nil {
@@ -964,18 +964,18 @@ func TestZoomMenuKeyboard(t *testing.T) {
 	}
 	b.HandleKey("down")
 	b.HandleKey("enter")
-	if b.zoom != 1.25 || b.zoomMenu != nil {
-		t.Fatalf("zoom=%g menu=%+v, want 1.25 and closed", b.zoom, b.zoomMenu)
+	if b.Zoom != 1.25 || b.zoomMenu != nil {
+		t.Fatalf("zoom=%g menu=%+v, want 1.25 and closed", b.Zoom, b.zoomMenu)
 	}
 	if b.status != "Zoom 125%" {
 		t.Fatalf("status = %q, want Zoom 125%%", b.status)
 	}
 	b.openZoomMenu()
 	b.HandleKey("esc")
-	if b.zoomMenu != nil || b.zoom != 1.25 {
-		t.Fatalf("Esc changed zoom or left the menu open: zoom=%g menu=%+v", b.zoom, b.zoomMenu)
+	if b.zoomMenu != nil || b.Zoom != 1.25 {
+		t.Fatalf("Esc changed zoom or left the menu open: zoom=%g menu=%+v", b.Zoom, b.zoomMenu)
 	}
-	b.zoom = 1.4 // not a preset, from a -zoom value
+	b.Zoom = 1.4 // not a preset, from a -zoom value
 	b.openZoomMenu()
 	if b.zoomMenu == nil || b.zoomMenu.idx != 6 {
 		t.Fatalf("zoom menu at 140%% = %+v, want nearest preset 150%%", b.zoomMenu)
@@ -984,7 +984,7 @@ func TestZoomMenuKeyboard(t *testing.T) {
 
 func TestZoomBadgeClickClosesPrompt(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.zoom = 2
+	b.Zoom = 2
 	b.openURLPrompt()
 	drawQuiet(b)
 	var badge *headerHit
@@ -1005,15 +1005,15 @@ func TestZoomBadgeClickClosesPrompt(t *testing.T) {
 	if b.zoomMenu == nil {
 		t.Fatal("clicking the zoom badge did not open the zoom window")
 	}
-	if b.zoom != 2 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.zoom)
+	if b.Zoom != 2 {
+		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
 	}
 }
 
 func TestZoomBadgeSingleRowHeader(t *testing.T) {
 	b := NewBrowser(60, 24)
-	b.height = 4
-	b.zoom = 0.5
+	b.Height = 4
+	b.Zoom = 0.5
 	drawQuiet(b)
 	var badge *headerHit
 	for i := range b.headerHits {

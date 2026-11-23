@@ -288,7 +288,7 @@ func TestConsoleScrollReachesFirstWrappedLine(t *testing.T) {
 	b.jsLog = []string{strings.Repeat("x", 400)}
 	b.consoleOpen = true
 	b.handleConsoleKey("g")
-	want := len(b.consoleLines(b.width - 2))
+	want := len(b.consoleLines(b.Width - 2))
 	if b.consoleScroll != want {
 		t.Fatalf("console scroll = %d, want %d", b.consoleScroll, want)
 	}
@@ -759,7 +759,7 @@ func TestConsoleToolsTab(t *testing.T) {
 		!strings.Contains(help, "links main a") || !strings.Contains(help, "source #content") {
 		t.Fatalf("tools help lacks selector examples = %q", help)
 	}
-	l := newConsoleLayout(b.height, consoleTools)
+	l := newConsoleLayout(b.Height, consoleTools)
 	if l.inputY < 0 {
 		t.Fatal("tools tab has no input row")
 	}
@@ -893,7 +893,7 @@ func TestConsoleToolsHistorySeparateAndStable(t *testing.T) {
 	}
 
 	// Clicking the input row keeps the history position instead of resetting it.
-	l := newConsoleLayout(b.height, consoleTools)
+	l := newConsoleLayout(b.Height, consoleTools)
 	b.handleConsoleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: l.inputY + 1, Press: true})
 	b.handleConsoleKey("up")
 	if b.consoleText != "help" {

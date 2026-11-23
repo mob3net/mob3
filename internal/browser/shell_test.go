@@ -17,7 +17,7 @@ func TestContentRect(t *testing.T) {
 	}
 	for _, tc := range cases {
 		b := NewBrowser(100, 24)
-		b.height = tc.h
+		b.Height = tc.h
 		cr := b.contentRect()
 		if cr.Top != tc.top || cr.Bottom != tc.bottom || cr.Height != tc.bottom-tc.top || cr.Width != 100 {
 			t.Fatalf("height %d: rect = %+v", tc.h, cr)

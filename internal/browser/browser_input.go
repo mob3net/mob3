@@ -545,7 +545,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	}
 	x := ev.X - 1
 	y := ev.Y - 1
-	if x < 0 || y < 0 || x >= b.width || y >= b.height {
+	if x < 0 || y < 0 || x >= b.Width || y >= b.Height {
 		b.setPageHover(nil)
 		return false
 	}
@@ -568,7 +568,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.updateHover(x, y, top, bottom)
 		return false
 	}
-	if y < b.headerRows() && b.height >= 2 {
+	if y < b.headerRows() && b.Height >= 2 {
 		if ev.Motion {
 			b.Hover = -1
 			b.setPageHover(nil)
@@ -612,7 +612,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		}
 		return false
 	}
-	if y == b.height-1 {
+	if y == b.Height-1 {
 		if ev.Motion {
 			b.Hover = -1
 			b.setPageHover(nil)
@@ -651,7 +651,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		return false
 	}
 	top, bottom := b.viewport()
-	if info := b.scrollBar; info != nil && x == b.width-1 && y >= info.trackTop && y < info.trackTop+info.trackH {
+	if info := b.scrollBar; info != nil && x == b.Width-1 && y >= info.trackTop && y < info.trackTop+info.trackH {
 		if ev.Press && ev.Button == 0 {
 			b.scrollDrag = true
 			b.scrollBarTo(y)

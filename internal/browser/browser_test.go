@@ -465,7 +465,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 		return p, nil
 	}
 	b.HandleKey("J")
-	if !b.noJS {
+	if !b.NoJS {
 		t.Fatal("J did not disable JavaScript")
 	}
 	if b.loader == nil || !b.loader.noScripts {
@@ -486,7 +486,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 		t.Fatal("reload result did not arrive")
 	}
 	b.finishLoad(res)
-	if b.noJS != true {
+	if b.NoJS != true {
 		t.Fatal("applying the reload enabled JavaScript again")
 	}
 	if b.status != "JavaScript off — press J to re-enable" {
@@ -496,7 +496,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	// Pressing it again re-enables scripting for the session.
 	b.pendingStatus = ""
 	b.HandleKey("J")
-	if b.noJS {
+	if b.NoJS {
 		t.Fatal("second J did not enable JavaScript")
 	}
 	if b.loader.noScripts {
@@ -673,7 +673,7 @@ func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 	if got, want := b.footerLeft(), " → https://example.com/target"; got != want {
 		t.Fatalf("footer = %q, want %q", got, want)
 	}
-	b.HandleMouse(MouseEvent{X: b.width - 1, Y: top + 1, Motion: true})
+	b.HandleMouse(MouseEvent{X: b.Width - 1, Y: top + 1, Motion: true})
 	if b.Hover != -1 {
 		t.Fatalf("hover = %d after leaving link", b.Hover)
 	}
@@ -1056,7 +1056,7 @@ func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
 	if b.Layout.Width != 19 {
 		t.Fatalf("interactive layout width = %d, want 19", b.Layout.Width)
 	}
-	b.noDraw = true
+	b.NoDraw = true
 	b.rebuild()
 	if b.Layout.Width != 20 {
 		t.Fatalf("headless layout width = %d, want 20", b.Layout.Width)
@@ -1136,19 +1136,19 @@ func TestViewMenuTogglesFixedElements(t *testing.T) {
 	if b.viewMenu == nil {
 		t.Fatal("X did not open the view menu")
 	}
-	if b.hideFixed {
+	if b.HideFixed {
 		t.Fatal("fixed elements should start shown, and opening the menu must not toggle")
 	}
 	b.HandleKey(" ")
-	if !b.hideFixed || b.status != "Fixed elements hidden" {
-		t.Fatalf("after Space: hideFixed=%v status=%q", b.hideFixed, b.status)
+	if !b.HideFixed || b.status != "Fixed elements hidden" {
+		t.Fatalf("after Space: hideFixed=%v status=%q", b.HideFixed, b.status)
 	}
 	if b.viewMenu == nil {
 		t.Fatal("toggling should keep the view menu open")
 	}
 	b.HandleKey("enter")
-	if b.hideFixed || b.status != "Fixed elements shown" {
-		t.Fatalf("after Enter: hideFixed=%v status=%q", b.hideFixed, b.status)
+	if b.HideFixed || b.status != "Fixed elements shown" {
+		t.Fatalf("after Enter: hideFixed=%v status=%q", b.HideFixed, b.status)
 	}
 	b.HandleKey("esc")
 	if b.viewMenu != nil {
@@ -1164,12 +1164,12 @@ func TestViewMenuTogglesStickyElements(t *testing.T) {
 	b.HandleKey("X")
 	b.HandleKey("down")
 	b.HandleKey(" ")
-	if !b.noSticky || b.status != "Sticky elements disabled" {
-		t.Fatalf("after Space: noSticky=%v status=%q", b.noSticky, b.status)
+	if !b.NoSticky || b.status != "Sticky elements disabled" {
+		t.Fatalf("after Space: noSticky=%v status=%q", b.NoSticky, b.status)
 	}
 	b.HandleKey("enter")
-	if b.noSticky || b.status != "Sticky elements enabled" {
-		t.Fatalf("after Enter: noSticky=%v status=%q", b.noSticky, b.status)
+	if b.NoSticky || b.status != "Sticky elements enabled" {
+		t.Fatalf("after Enter: noSticky=%v status=%q", b.NoSticky, b.status)
 	}
 }
 
@@ -1209,7 +1209,7 @@ func TestViewMenuMouseTogglesRow(t *testing.T) {
 	}
 	r := b.viewMenuHits[0].rect
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
-	if !b.hideFixed {
+	if !b.HideFixed {
 		t.Fatal("clicking the fixed-elements row did not hide them")
 	}
 	if b.viewMenu == nil {
@@ -1220,7 +1220,7 @@ func TestViewMenuMouseTogglesRow(t *testing.T) {
 	if b.viewMenu != nil {
 		t.Fatal("clicking the backdrop did not close the view menu")
 	}
-	if !b.hideFixed {
+	if !b.HideFixed {
 		t.Fatal("backdrop click should not toggle the option")
 	}
 }
@@ -1256,7 +1256,7 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 	u := mustParse(t, "https://example.com/news")
 	b := NewBrowser(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
-	b.Layout = BuildLayout(doc, nil, b.width)
+	b.Layout = BuildLayout(doc, nil, b.Width)
 
 	var frag *Frag
 	for i := range b.Layout.Frags {
@@ -1301,7 +1301,7 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
-	b.Layout = BuildLayout(doc, nil, b.width)
+	b.Layout = BuildLayout(doc, nil, b.Width)
 
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
@@ -1324,7 +1324,7 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 	u := mustParse(t, "https://example.com/news")
 	b := NewBrowser(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
-	b.Layout = BuildLayout(doc, nil, b.width)
+	b.Layout = BuildLayout(doc, nil, b.Width)
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 
@@ -1410,7 +1410,7 @@ func TestStatusDetailsClick(t *testing.T) {
 	for _, hit := range b.footerHits {
 		if hit.kind == headerStatus {
 			found = true
-			if hit.w <= 0 || hit.w > b.width {
+			if hit.w <= 0 || hit.w > b.Width {
 				t.Fatalf("status hit width = %d", hit.w)
 			}
 		}
@@ -1418,7 +1418,7 @@ func TestStatusDetailsClick(t *testing.T) {
 	if !found {
 		t.Fatal("footer status was not clickable")
 	}
-	b.HandleMouse(MouseEvent{X: 2, Y: b.height, Press: true})
+	b.HandleMouse(MouseEvent{X: 2, Y: b.Height, Press: true})
 	if b.notice == nil || b.notice.title != "Error" {
 		t.Fatalf("click did not open the message: %+v", b.notice)
 	}
@@ -1434,7 +1434,7 @@ func TestViewMenuTogglesBackgrounds(t *testing.T) {
 	}
 	r := b.viewMenuHits[2].rect
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: r.X + 1, Y: r.Y + 1, Press: true})
-	if !b.hideBackgrounds {
+	if !b.HideBackgrounds {
 		t.Fatal("clicking Background images did not hide them")
 	}
 	if b.status != "Background images hidden" {
@@ -1444,42 +1444,42 @@ func TestViewMenuTogglesBackgrounds(t *testing.T) {
 
 func TestZoomKeysStepThroughPresets(t *testing.T) {
 	b := NewBrowser(80, 24)
-	if b.zoom != 1 {
-		t.Fatalf("new browser zoom = %g, want 1", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("new browser zoom = %g, want 1", b.Zoom)
 	}
 	// Control-modified aliases are deliberately not bound.
 	b.HandleKey("ctrl-=")
 	b.HandleKey("ctrl-+")
 	b.HandleKey("ctrl--")
 	b.HandleKey("ctrl-0")
-	if b.zoom != 1 {
-		t.Fatalf("ctrl zoom aliases changed zoom to %g, want 1", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("ctrl zoom aliases changed zoom to %g, want 1", b.Zoom)
 	}
 	b.HandleKey("+")
-	if b.zoom != 1.25 || b.status != "Zoom 125%" {
-		t.Fatalf("+ zoom=%g status=%q, want 1.25 / Zoom 125%%", b.zoom, b.status)
+	if b.Zoom != 1.25 || b.status != "Zoom 125%" {
+		t.Fatalf("+ zoom=%g status=%q, want 1.25 / Zoom 125%%", b.Zoom, b.status)
 	}
 	b.HandleKey("+")
-	if b.zoom != 1.5 {
-		t.Fatalf("+ zoom = %g, want 1.5", b.zoom)
+	if b.Zoom != 1.5 {
+		t.Fatalf("+ zoom = %g, want 1.5", b.Zoom)
 	}
 	b.HandleKey("-")
-	if b.zoom != 1.25 {
-		t.Fatalf("- zoom = %g, want 1.25", b.zoom)
+	if b.Zoom != 1.25 {
+		t.Fatalf("- zoom = %g, want 1.25", b.Zoom)
 	}
 	b.HandleKey("-")
-	if b.zoom != 1 {
-		t.Fatalf("- zoom = %g, want 1", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("- zoom = %g, want 1", b.Zoom)
 	}
 	b.HandleKey("0")
-	if b.zoom != 1 {
-		t.Fatalf("0 zoom = %g, want 1", b.zoom)
+	if b.Zoom != 1 {
+		t.Fatalf("0 zoom = %g, want 1", b.Zoom)
 	}
 	for i := 0; i < 20; i++ {
 		b.HandleKey("-")
 	}
-	if b.zoom != zoomSteps[0] || zoomSteps[0] != 0.25 {
-		t.Fatalf("zoom floor = %g (steps[0]=%g), want 0.25", b.zoom, zoomSteps[0])
+	if b.Zoom != zoomSteps[0] || zoomSteps[0] != 0.25 {
+		t.Fatalf("zoom floor = %g (steps[0]=%g), want 0.25", b.Zoom, zoomSteps[0])
 	}
 	if b.status != "Zoom 25%" {
 		t.Fatalf("zoom floor status = %q, want Zoom 25%%", b.status)
@@ -1487,8 +1487,8 @@ func TestZoomKeysStepThroughPresets(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		b.HandleKey("+")
 	}
-	if b.zoom != zoomSteps[len(zoomSteps)-1] {
-		t.Fatalf("zoom ceiling = %g, want %g", b.zoom, zoomSteps[len(zoomSteps)-1])
+	if b.Zoom != zoomSteps[len(zoomSteps)-1] {
+		t.Fatalf("zoom ceiling = %g, want %g", b.Zoom, zoomSteps[len(zoomSteps)-1])
 	}
 	b.applyZoom(1)
 }
@@ -1498,11 +1498,11 @@ func TestZoomStepsFromArbitraryStart(t *testing.T) {
 	defer setLayoutZoom(1)
 	b.applyZoom(1.4)
 	b.HandleKey("+")
-	if b.zoom != 1.5 {
-		t.Fatalf("+ from 140%% = %g, want 1.5", b.zoom)
+	if b.Zoom != 1.5 {
+		t.Fatalf("+ from 140%% = %g, want 1.5", b.Zoom)
 	}
 	b.HandleKey("-")
-	if b.zoom != 1.25 {
-		t.Fatalf("- from 150%% = %g, want 1.25", b.zoom)
+	if b.Zoom != 1.25 {
+		t.Fatalf("- from 150%% = %g, want 1.25", b.Zoom)
 	}
 }

@@ -170,7 +170,7 @@ func scriptPage(n int) *Page {
 func TestJSScriptLimit(t *testing.T) {
 	page := scriptPage(jsMaxScripts + 5)
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
+	b.JSMemLimit = 0
 	b.startJS(page)
 	n := int64(0)
 	if v := b.JS.VM().Get("count"); v != nil {
@@ -187,8 +187,8 @@ func TestJSScriptLimit(t *testing.T) {
 func TestJSPageBudgetSkipsScripts(t *testing.T) {
 	page := scriptPage(3)
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
-	b.jsPageBudget = time.Nanosecond
+	b.JSMemLimit = 0
+	b.JSPageBudget = time.Nanosecond
 	b.startJS(page)
 	if v := b.JS.VM().Get("count"); v != nil && v.ToInteger() != 0 {
 		t.Fatalf("executed %d scripts after the budget expired, want 0", v.ToInteger())
@@ -200,7 +200,7 @@ func TestJSPageBudgetSkipsScripts(t *testing.T) {
 
 func TestJSUserAbortInterruptsScript(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
+	b.JSMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	j.SetTimeout(20 * time.Millisecond)
 	go func() {
@@ -220,7 +220,7 @@ func TestJSUserAbortInterruptsScript(t *testing.T) {
 
 func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
+	b.JSMemLimit = 0
 	loader := NewLoader()
 	b.loader = loader
 	// The first script makes a synchronous request; the transport stands in
@@ -398,7 +398,7 @@ func TestJSTextNodeIsANode(t *testing.T) {
 		].join(":");
 	`)
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
+	b.JSMemLimit = 0
 	b.startJS(page)
 	want := "3:true:0:false:true:parent:1:11"
 	if page.Title != want {
@@ -1061,7 +1061,7 @@ func TestNoscriptHiddenWhenJSEnabled(t *testing.T) {
 	}
 	page2 := &Page{Root: ParseHTML(`<html><body><noscript>fallback</noscript></body></html>`)}
 	b2 := NewBrowser(40, 10)
-	b2.noJS = true
+	b2.NoJS = true
 	b2.startJS(page2)
 	if page2.Root.FindFirst("noscript") == nil {
 		t.Fatal("noscript should remain visible with -no-js")
@@ -1072,7 +1072,7 @@ func TestNoJSDisablesRuntime(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out">before</p></body></html>`,
 		`document.getElementById("out").textContent = "after";`)
 	b := NewBrowser(40, 10)
-	b.noJS = true
+	b.NoJS = true
 	b.startJS(page)
 	if b.JS != nil {
 		t.Fatal("runtime created despite -no-js")
@@ -1084,14 +1084,14 @@ func TestNoJSDisablesRuntime(t *testing.T) {
 
 func TestJSMemoryLimitDefault(t *testing.T) {
 	b := NewBrowser(40, 10)
-	if want := jsHeapBudget(effectiveMemoryLimit()); b.jsMemLimit != want {
-		t.Fatalf("jsMemLimit = %d, want %d", b.jsMemLimit, want)
+	if want := jsHeapBudget(effectiveMemoryLimit()); b.JSMemLimit != want {
+		t.Fatalf("jsMemLimit = %d, want %d", b.JSMemLimit, want)
 	}
 }
 
 func TestJSMemoryLimitExceeded(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 1
+	b.JSMemLimit = 1
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	_, err := j.RunCode("alloc", `var a = []; for (;;) { a.push(new Array(4096).fill("x")); }`)
 	if err == nil || !strings.Contains(err.Error(), "memory limit exceeded") {
@@ -1101,7 +1101,7 @@ func TestJSMemoryLimitExceeded(t *testing.T) {
 
 func TestJSMemoryLimitZeroDisables(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 0
+	b.JSMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	_, err := j.RunCode("alloc", `var a = []; for (var i = 0; i < 1000; i++) { a.push(new Array(1024).fill(i)); }`)
 	if err != nil {

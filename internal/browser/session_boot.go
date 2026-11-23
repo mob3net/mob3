@@ -62,9 +62,9 @@ type SessionConfig struct {
 // still in transition.
 func NewSession(c SessionConfig) *Browser {
 	b := NewBrowser(c.Width, c.Height)
-	b.zoom = c.Zoom
+	b.Zoom = c.Zoom
 	SetLayoutZoom(c.Zoom)
-	b.interactive = c.Interactive
+	b.Interactive = c.Interactive
 	if c.Loader != nil {
 		b.setLoader(c.Loader)
 	}
@@ -76,19 +76,19 @@ func NewSession(c SessionConfig) *Browser {
 	}
 	b.cliConfig = c.CLIConfig
 	b.color = c.Color
-	b.noJS = c.NoJS
-	b.noPDF = c.NoPDF
-	b.jsMemLimit = c.JSMemLimit
-	b.layoutBudget = c.LayoutBudget
+	b.NoJS = c.NoJS
+	b.NoPDF = c.NoPDF
+	b.JSMemLimit = c.JSMemLimit
+	b.LayoutBudget = c.LayoutBudget
 	b.memLimitBytes = c.MemLimitBytes
-	b.noBigText = c.NoBigText
+	b.NoBigText = c.NoBigText
 	if c.CellW > 0 {
-		b.cellW = c.CellW
+		b.CellW = c.CellW
 	}
 	if c.CellH > 0 {
-		b.cellH = c.CellH
+		b.CellH = c.CellH
 	}
-	b.gfx = NewGFXRenderer(c.Graphics, b.cellW, b.cellH)
+	b.gfx = NewGFXRenderer(c.Graphics, b.CellW, b.CellH)
 	b.initGraphicsModes(c.Graphics)
 	return b
 }
@@ -184,17 +184,17 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 		h = 30
 	}
 	a := NewAutomation(w, h)
-	a.b.zoom = c.Zoom
+	a.b.Zoom = c.Zoom
 	SetLayoutZoom(c.Zoom)
 	if c.Loader != nil {
 		a.b.setLoader(c.Loader)
 		c.Loader.noImages = true
 	}
-	a.b.noJS = c.NoJS
-	a.b.noPDF = c.NoPDF
-	a.b.jsMemLimit = c.JSMemLimit
+	a.b.NoJS = c.NoJS
+	a.b.NoPDF = c.NoPDF
+	a.b.JSMemLimit = c.JSMemLimit
 	a.b.memLimitBytes = c.MemLimitBytes
-	a.b.layoutBudget = c.LayoutBudget
+	a.b.LayoutBudget = c.LayoutBudget
 	a.b.home = c.Home
 	a.b.Reader = c.Reader
 	a.b.Dark = c.Dark

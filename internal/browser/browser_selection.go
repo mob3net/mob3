@@ -37,8 +37,8 @@ func (b *Browser) updateSelection(x, y, top, bottom int) {
 	if x < 0 {
 		x = 0
 	}
-	if x >= b.width {
-		x = b.width - 1
+	if x >= b.Width {
+		x = b.Width - 1
 	}
 	docY := b.Scroll + (y - top)
 	if docY < 0 {
@@ -140,7 +140,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	}
 	width := ly.Width
 	if width < 1 {
-		width = b.width
+		width = b.Width
 	}
 	start := 0
 	docRows := ly.Height
@@ -223,9 +223,9 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	}
 	header := fmt.Sprintf(
 		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d scroll=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
-		url, buildVersion, b.width, b.height, width, b.viewportHeight(), docRows,
-		b.Scroll, zoomPercentLabel(b.zoom), onOff(b.Dark), onOff(b.Reader), onOff(!b.noJS),
-		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.cellW, b.cellH,
+		url, buildVersion, b.Width, b.Height, width, b.viewportHeight(), docRows,
+		b.Scroll, zoomPercentLabel(b.Zoom), onOff(b.Dark), onOff(b.Reader), onOff(!b.NoJS),
+		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.CellW, b.CellH,
 		ly.Truncated, copyTruncated, pageLines)
 	text = header + "\n" + text
 	if !b.copyText(text) {

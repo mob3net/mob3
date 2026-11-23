@@ -124,8 +124,8 @@ func (b *Browser) findAnchor() int {
 		return b.FindMatches[b.FindIdx].Y
 	}
 	if b.FindScope == findScopeHTML {
-		l := newConsoleLayout(b.height, consoleHTML)
-		return paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
+		l := newConsoleLayout(b.Height, consoleHTML)
+		return paneStart(len(b.htmlLines(b.Width-2)), b.htmlScroll, l.bodyRows)
 	}
 	return b.Scroll
 }
@@ -147,7 +147,7 @@ func (b *Browser) reindexFind() {
 
 func (b *Browser) computeFindMatches() []findMatch {
 	if b.FindScope == findScopeHTML {
-		return engine.FindHTMLMatches(b.htmlLines(b.width-2), b.FindText)
+		return engine.FindHTMLMatches(b.htmlLines(b.Width-2), b.FindText)
 	}
 	return engine.FindPageMatches(b.Layout, b.FindText, b.BigText)
 }
@@ -181,11 +181,11 @@ func (b *Browser) focusFindMatch(idx int) {
 	b.FindIdx = idx
 	m := b.FindMatches[idx]
 	if b.FindScope == findScopeHTML {
-		rows := newConsoleLayout(b.height, consoleHTML).bodyRows
+		rows := newConsoleLayout(b.Height, consoleHTML).bodyRows
 		if rows < 1 {
 			return
 		}
-		total := len(b.htmlLines(b.width - 2))
+		total := len(b.htmlLines(b.Width - 2))
 		start := paneStart(total, b.htmlScroll, rows)
 		if m.Line < start || m.Line >= start+rows {
 			b.htmlScroll = total - rows - m.Line

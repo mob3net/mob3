@@ -38,12 +38,8 @@ type Browser struct {
 	*engine.Session
 	loader *Loader
 
-	width, height int
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
 	// negative top means direct callers/tests use the legacy derivation.
-	contentTop    int
-	contentHeight int
-	cellW, cellH  int
 	// pdfStarts holds the layout row where each PDF page begins, so the footer
 	// can name the page under the viewport.
 	pdfStarts []int
@@ -103,7 +99,6 @@ type Browser struct {
 	promptVim       bool
 	promptHist      consoleHistory
 	skipDraw        bool
-	noDraw          bool
 	clipboardWriter io.Writer
 
 	color bool
@@ -116,10 +111,8 @@ type Browser struct {
 	frameBuf    frameScratch
 	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
 	// per terminal cell for everything except text metrics.
-	zoom float64
 	// scaledLayout records whether the current layout was built with kitty
 	// scaled text, so draw can rebuild when an overlay toggles it.
-	scaledLayout bool
 	// bigTextBlocked disables kitty scaled text for a page whose scaled runs
 	// overlap neighbouring columns.
 
@@ -129,37 +122,27 @@ type Browser struct {
 	graphicsMode  GraphicsMode
 
 	// hideFixed suppresses position:fixed boxes for the current page.
-	hideFixed bool
 	// noSticky lays position:sticky boxes out as normal flow, so they scroll
 	// with the page instead of following a top offset.
-	noSticky bool
 	// hideBackgrounds paints CSS background images as a neutral placeholder
 	// instead of their pixels; the images stay loaded and laid out.
-	hideBackgrounds bool
 
 	// lastNativeImages tracks graphics-mode transitions (hints or a modal
 	// opening/closing) so the next frame is fully repainted and no stale
 	// terminal image survives.
 	lastNativeImages bool
 
-	noJS bool
 	// noPDF disables the built-in PDF text viewer, restoring the download
 	// prompt for PDF responses.
-	noPDF bool
 	// pendingStatus replaces the computed load status once, so a JavaScript
 	// toggle can report its new state instead of clearing the footer.
 	pendingStatus string
-	noBigText     bool
-	jsMemLimit    int64
 	// jsPageBudget caps one page's load-time script phase. It defaults to
 	// jsPageBudget and exists as a field so tests can shorten it.
-	jsPageBudget time.Duration
-	layoutBudget LayoutBudget
 
 	loadCh chan loadResult
 	// interactive marks the terminal UI, where a background dynamic import can
 	// wait for the event loop instead of blocking it.
-	interactive bool
 	// importCh delivers completed background dynamic imports to the event loop.
 	importCh chan jsImportTask
 	// imageCh delivers background image loads for the current page.
@@ -309,14 +292,15 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		Session: &engine.Session{Focus: -1, Hover: -1},
-		loader:  NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, zoom: 1,
+		Session: &engine.Session{
+			Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
+			CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
+			JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
+		},
+		loader:            NewLoader(),
 		nextEntryID:       1,
 		historyCache:      make(map[uint64]*cachedPage),
 		historyViewCur:    -1,
-		jsMemLimit:        jsHeapBudget(effectiveMemoryLimit()),
-		jsPageBudget:      jsPageBudget,
-		layoutBudget:      DefaultLayoutBudget,
 		historyCacheBytes: historyCacheBudget(effectiveMemoryLimit()),
 		loadCh:            make(chan loadResult, 1),
 		importCh:          make(chan jsImportTask, 16),
@@ -325,7 +309,7 @@ func NewBrowser(w, h int) *Browser {
 		configToken:       host.NewConfigToken(),
 	}
 	b.setLoader(b.loader)
-	setLayoutZoom(b.zoom)
+	setLayoutZoom(b.Zoom)
 	return b
 }
 
@@ -337,8 +321,8 @@ func (b *Browser) setLoader(l *Loader) {
 	if l != nil {
 		l.historyFn = b.historyViewSnapshot
 		l.setMemoryBudget(effectiveMemoryLimit())
-		if b.width > 0 {
-			l.imageViewportPx = cssWidthPx(b.width)
+		if b.Width > 0 {
+			l.imageViewportPx = cssWidthPx(b.Width)
 		}
 		b.applyImageCap()
 	}
@@ -348,14 +332,14 @@ func (b *Browser) setLoader(l *Loader) {
 // pixels. The floors keep a small terminal from hardening every image it
 // loads; larger terminals get proportionally more pixels.
 func (b *Browser) imageCapPx() (int, int) {
-	cw, ch := b.cellW, b.cellH
+	cw, ch := b.CellW, b.CellH
 	if cw <= 0 {
 		cw = 8
 	}
 	if ch <= 0 {
 		ch = 16
 	}
-	w, h := b.width*cw, b.height*ch
+	w, h := b.Width*cw, b.Height*ch
 	if w < 1024 {
 		w = 1024
 	}
@@ -689,7 +673,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	// <noscript> is not active when scripting is enabled. Remove it before
 	// evaluating meta refresh, otherwise no-JS bypass pages redirect us to
 	// their "enable JavaScript" endpoint.
-	if !b.noJS {
+	if !b.NoJS {
 		removeNoscript(page.Root)
 	}
 	loopStopped := false
@@ -883,19 +867,19 @@ func (b *Browser) rebuild() {
 		root, author = b.ReaderRoot, readerRules
 	}
 	deadline := time.Time{}
-	if b.layoutBudget.Time > 0 {
-		deadline = start.Add(b.layoutBudget.Time)
+	if b.LayoutBudget.Time > 0 {
+		deadline = start.Add(b.LayoutBudget.Time)
 	}
-	layoutWidth := b.width
+	layoutWidth := b.Width
 	// Interactive pages reserve the rightmost column for the scrollbar, so
 	// text and images wrap before it instead of painting underneath it.
-	if !b.noDraw && layoutWidth >= 2 {
+	if !b.NoDraw && layoutWidth >= 2 {
 		layoutWidth--
 	}
 	b.BigText = b.scaledTextWanted()
 	imagesOff := b.loader != nil && b.loader.noImages
-	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.BigText, b.Dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
-	b.Layout.BackgroundsOff = b.hideBackgrounds
+	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.BigText, b.Dark, b.HideFixed, b.NoSticky, imagesOff, deadline, b.LayoutBudget)
+	b.Layout.BackgroundsOff = b.HideBackgrounds
 	b.updatePDFPageStarts()
 	if b.BigText && layoutTextOverlaps(b.Layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
@@ -905,14 +889,14 @@ func (b *Browser) rebuild() {
 		b.BigText = false
 		start = time.Now()
 		deadline = time.Time{}
-		if b.layoutBudget.Time > 0 {
-			deadline = start.Add(b.layoutBudget.Time)
+		if b.LayoutBudget.Time > 0 {
+			deadline = start.Add(b.LayoutBudget.Time)
 		}
-		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.Dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
-		b.Layout.BackgroundsOff = b.hideBackgrounds
+		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.Dark, b.HideFixed, b.NoSticky, imagesOff, deadline, b.LayoutBudget)
+		b.Layout.BackgroundsOff = b.HideBackgrounds
 		b.updatePDFPageStarts()
 	}
-	b.scaledLayout = b.BigText
+	b.ScaledLayout = b.BigText
 	b.PageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
@@ -956,7 +940,7 @@ func (b *Browser) overlayOpen() bool {
 // Modals disable it because terminal-side scaled glyphs composite above the
 // cell grid and would paint over the modal.
 func (b *Browser) scaledTextWanted() bool {
-	return b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.BigTextBlocked && !b.overlayOpen()
+	return b.gfx != nil && b.gfx.TextSizing() && !b.NoBigText && !b.BigTextBlocked && !b.overlayOpen()
 }
 
 // toggleReader switches between the page and an extracted article view without
@@ -1017,7 +1001,7 @@ var zoomSteps = []float64{0.25, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 1.75, 2}
 func (b *Browser) zoomBy(dir int) {
 	if dir > 0 {
 		for _, s := range zoomSteps {
-			if s > b.zoom+1e-9 {
+			if s > b.Zoom+1e-9 {
 				b.applyZoom(s)
 				return
 			}
@@ -1026,7 +1010,7 @@ func (b *Browser) zoomBy(dir int) {
 		return
 	}
 	for i := len(zoomSteps) - 1; i >= 0; i-- {
-		if zoomSteps[i] < b.zoom-1e-9 {
+		if zoomSteps[i] < b.Zoom-1e-9 {
 			b.applyZoom(zoomSteps[i])
 			return
 		}
@@ -1042,8 +1026,8 @@ func (b *Browser) resetZoom() {
 // applyZoom installs a layout zoom factor and rebuilds the page so media
 // queries and every pixel-based length see the new cell ratio.
 func (b *Browser) applyZoom(z float64) {
-	if b.zoom != z {
-		b.zoom = z
+	if b.Zoom != z {
+		b.Zoom = z
 		setLayoutZoom(z)
 		// A page whose scaled runs overlapped may be fine at another zoom, so
 		// re-evaluate the fallback instead of keeping it for the session.
@@ -1064,11 +1048,11 @@ func (b *Browser) applyZoom(z float64) {
 // current document is fetched again so its no-script or scripted variant is
 // applied; the page's existing DOM is not reused.
 func (b *Browser) toggleJavaScript() {
-	b.noJS = !b.noJS
+	b.NoJS = !b.NoJS
 	if b.loader != nil {
-		b.loader.noScripts = b.noJS
+		b.loader.noScripts = b.NoJS
 	}
-	if b.noJS {
+	if b.NoJS {
 		b.pendingStatus = "JavaScript off — press J to re-enable"
 	} else {
 		b.pendingStatus = "JavaScript on"
@@ -1099,11 +1083,11 @@ func (b *Browser) resizeWithContent(w, h, top, contentH int) {
 		h = 3
 	}
 	top, contentH = normalizeContentRect(h, top, contentH)
-	if w == b.width && h == b.height && top == b.contentTop && contentH == b.contentHeight {
+	if w == b.Width && h == b.Height && top == b.ContentTop && contentH == b.ContentHeight {
 		return
 	}
-	b.width, b.height = w, h
-	b.contentTop, b.contentHeight = top, contentH
+	b.Width, b.Height = w, h
+	b.ContentTop, b.ContentHeight = top, contentH
 	b.applyImageCap()
 	b.prev = nil
 	b.clearSelection()

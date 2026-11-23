@@ -317,7 +317,7 @@ func (b *Browser) scrollConsoleToEnd(pane int, end bool) {
 		return
 	}
 	if end {
-		*p = len(b.consolePaneLines(pane, b.width-2))
+		*p = len(b.consolePaneLines(pane, b.Width-2))
 	} else {
 		*p = 0
 	}
@@ -338,7 +338,7 @@ func (b *Browser) selectConsolePane(pane int) {
 		pane = consoleLogs
 	}
 	if pane == consoleHTML && b.consolePane != consoleHTML {
-		b.htmlScroll = len(b.htmlLines(b.width - 2))
+		b.htmlScroll = len(b.htmlLines(b.Width - 2))
 	}
 	if b.FindActive && b.FindScope == findScopeHTML && pane != consoleHTML {
 		b.FindActive = false
@@ -347,7 +347,7 @@ func (b *Browser) selectConsolePane(pane int) {
 		for _, line := range toolsHelpLines() {
 			b.appendToolLine(line)
 		}
-		b.toolScroll = len(b.toolLines(b.width - 2))
+		b.toolScroll = len(b.toolLines(b.Width - 2))
 	}
 	b.consolePane = pane
 }
@@ -1059,15 +1059,15 @@ func (b *Browser) drawConsoleTabs(g *Grid, y, w int, normal, active Color, st *S
 // handleConsoleMouse opens the clicked tab and scrolls the active section
 // under the wheel. Plain left clicks only; dragging is left to the terminal.
 func (b *Browser) handleConsoleMouse(ev MouseEvent) {
-	if b.width < 1 || b.height < 1 {
+	if b.Width < 1 || b.Height < 1 {
 		return
 	}
 	x := ev.X - 1
 	y := ev.Y - 1
-	if x < 0 || y < 0 || x >= b.width || y >= b.height {
+	if x < 0 || y < 0 || x >= b.Width || y >= b.Height {
 		return
 	}
-	l := newConsoleLayout(b.height, b.consolePane)
+	l := newConsoleLayout(b.Height, b.consolePane)
 	if ev.Wheel != 0 {
 		if l.bodyY < 0 || y < l.bodyY || y >= l.bodyY+l.bodyRows {
 			return
@@ -1155,7 +1155,7 @@ func visibleConsoleLines(items []string, scroll, rows, width int) []string {
 
 // emitConsoleView sends the text model of the console to the front end.
 func (b *Browser) emitConsoleView() {
-	w, h := b.width, b.height
+	w, h := b.Width, b.Height
 	if w < 1 {
 		w = 1
 	}
@@ -1619,9 +1619,9 @@ func viewOptions() []viewOption {
 	return []viewOption{
 		{
 			label: "Fixed elements",
-			on:    func(b *Browser) bool { return !b.hideFixed },
+			on:    func(b *Browser) bool { return !b.HideFixed },
 			set: func(b *Browser, on bool) {
-				b.hideFixed = !on
+				b.HideFixed = !on
 				b.rebuild()
 				if on {
 					b.status = "Fixed elements shown"
@@ -1632,11 +1632,11 @@ func viewOptions() []viewOption {
 		},
 		{
 			label: "Sticky elements",
-			on:    func(b *Browser) bool { return !b.noSticky },
+			on:    func(b *Browser) bool { return !b.NoSticky },
 			set: func(b *Browser, on bool) {
 				// Off keeps the boxes in normal flow: they scroll with the page
 				// instead of following their top offset.
-				b.noSticky = !on
+				b.NoSticky = !on
 				b.rebuild()
 				if on {
 					b.status = "Sticky elements enabled"
@@ -1647,11 +1647,11 @@ func viewOptions() []viewOption {
 		},
 		{
 			label: "Background images",
-			on:    func(b *Browser) bool { return !b.hideBackgrounds },
+			on:    func(b *Browser) bool { return !b.HideBackgrounds },
 			set: func(b *Browser, on bool) {
 				// The images stay loaded and laid out; the switch only replaces
 				// their pixels with a neutral placeholder.
-				b.hideBackgrounds = !on
+				b.HideBackgrounds = !on
 				b.rebuild()
 				if on {
 					b.status = "Background images shown"
@@ -1786,9 +1786,9 @@ type zoomMenuDialog struct {
 // openZoomMenu shows the zoom presets with the current level selected.
 func (b *Browser) openZoomMenu() {
 	idx := 0
-	best := math.Abs(zoomSteps[0] - b.zoom)
+	best := math.Abs(zoomSteps[0] - b.Zoom)
 	for i, z := range zoomSteps[1:] {
-		if d := math.Abs(z - b.zoom); d < best {
+		if d := math.Abs(z - b.Zoom); d < best {
 			idx = i + 1
 			best = d
 		}
@@ -1868,7 +1868,7 @@ func (b *Browser) paintZoomMenu(g *Grid) {
 	if m == nil {
 		return
 	}
-	current := zoomPercentLabel(b.zoom)
+	current := zoomPercentLabel(b.Zoom)
 	rows := make([]menuRow, len(zoomSteps))
 	for i, z := range zoomSteps {
 		rows[i] = menuRow{label: zoomPercentLabel(z), marker: "  "}
@@ -2030,10 +2030,10 @@ func (b *Browser) runTransportDialog(d *jsDialog) (string, bool) {
 			case protocol.Resize:
 				b.resize(v.Width, v.Height)
 				if v.CellW > 0 {
-					b.cellW = v.CellW
+					b.CellW = v.CellW
 				}
 				if v.CellH > 0 {
-					b.cellH = v.CellH
+					b.CellH = v.CellH
 				}
 				b.applyImageCap()
 			case protocol.Shutdown:
@@ -2080,10 +2080,10 @@ func (b *Browser) nextDialogInput() (string, *MouseEvent, bool) {
 			case protocol.Resize:
 				b.resize(v.Width, v.Height)
 				if v.CellW > 0 {
-					b.cellW = v.CellW
+					b.CellW = v.CellW
 				}
 				if v.CellH > 0 {
-					b.cellH = v.CellH
+					b.CellH = v.CellH
 				}
 				b.applyImageCap()
 				b.draw()

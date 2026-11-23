@@ -93,7 +93,7 @@ func TestAsyncImportsShareModuleRecords(t *testing.T) {
 	dep := "data:text/javascript,globalThis.hits = (globalThis.hits || 0) + 1;export const n = 1;"
 	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
 	b := NewBrowser(40, 10)
-	b.interactive = true
+	b.Interactive = true
 	b.startJS(page)
 	for i := 0; i < 2; i++ {
 		if _, err := b.JS.RunCode("test",
@@ -118,7 +118,7 @@ func TestAsyncDynamicImportCompletes(t *testing.T) {
 	// event loop completes it and the promise continuation runs.
 	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
 	b := NewBrowser(40, 10)
-	b.interactive = true
+	b.Interactive = true
 	b.startJS(page)
 	if _, err := b.JS.RunCode("test",
 		`import("data:text/javascript,export const v = 9;").then(function (m) {`+

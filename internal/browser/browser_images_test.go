@@ -239,7 +239,7 @@ func TestBrowserSetsImageCapFromViewport(t *testing.T) {
 	if b.loader.imageCapW() != 177*8 || b.loader.imageCapH() != 42*16 {
 		t.Fatalf("cap = %dx%d, want %dx%d", b.loader.imageCapW(), b.loader.imageCapH(), 177*8, 42*16)
 	}
-	b.width, b.height = 80, 24
+	b.Width, b.Height = 80, 24
 	b.applyImageCap()
 	if b.loader.imageCapW() != 1024 || b.loader.imageCapH() != 512 {
 		t.Fatalf("small viewport cap = %dx%d, want the 1024x512 floor", b.loader.imageCapW(), b.loader.imageCapH())
@@ -460,14 +460,14 @@ func TestBelowViewportImageBatchKeepsVisibleRows(t *testing.T) {
 	out := capturedDraw(t, b)
 	// Progress lives in the URL row and the footer; the page area must not be
 	// rewritten, or the terminal would visibly blink for an offscreen image.
-	for i := b.headerRows(); i < b.height-1 && i < len(b.prev); i++ {
+	for i := b.headerRows(); i < b.Height-1 && i < len(b.prev); i++ {
 		if b.prev[i] != before[i] {
 			t.Fatalf("page row %d changed for a below-fold image:\nbefore %q\nafter  %q",
 				i, before[i], b.prev[i])
 		}
 	}
 	for _, row := range writtenRows(out) {
-		if row >= b.headerRows()+1 && row <= b.height-1 {
+		if row >= b.headerRows()+1 && row <= b.Height-1 {
 			t.Fatalf("viewport row %d was rewritten for a below-fold image:\n%q", row, out)
 		}
 	}

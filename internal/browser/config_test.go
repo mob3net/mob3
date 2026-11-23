@@ -11,9 +11,9 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
 	b.home = "https://example.com/home"
-	b.noJS = true
-	b.jsMemLimit = 64 << 20
-	b.noBigText = true
+	b.NoJS = true
+	b.JSMemLimit = 64 << 20
+	b.NoBigText = true
 	b.loader.setUserAgent("TestUA")
 	b.loader.setSearchURL("https://search.example/?q=%s")
 	b.cliConfig = map[string]string{
@@ -74,7 +74,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 
 func TestConfigPageShowsPixelViewport(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.cellW, b.cellH = 10, 20
+	b.CellW, b.CellH = 10, 20
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
 	for _, want := range []string{"80x7 characters", "800x140 pixels", "10x20 per cell"} {
@@ -97,7 +97,7 @@ func TestApplyConfig(t *testing.T) {
 		"search":        {""},
 	}
 	b.applyConfig(q)
-	if !b.noJS || !b.loader.noScripts {
+	if !b.NoJS || !b.loader.noScripts {
 		t.Fatal("-no-js was not applied")
 	}
 	if !b.loader.ignoreBlocks {
@@ -106,11 +106,11 @@ func TestApplyConfig(t *testing.T) {
 	if b.home != "https://example.com/start" {
 		t.Fatalf("home = %q", b.home)
 	}
-	if !b.noBigText {
+	if !b.NoBigText {
 		t.Fatal("text-scale off was not applied")
 	}
-	if b.layoutBudget.Name != "high" {
-		t.Fatalf("layout budget = %q, want high", b.layoutBudget.Name)
+	if b.LayoutBudget.Name != "high" {
+		t.Fatalf("layout budget = %q, want high", b.LayoutBudget.Name)
 	}
 	if b.loader.requestUserAgent() != "TestUA" {
 		t.Fatalf("ua = %q", b.loader.requestUserAgent())
@@ -123,13 +123,13 @@ func TestApplyConfig(t *testing.T) {
 func TestConfigNavigation(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
-	oldHome, oldMem := b.home, b.jsMemLimit
+	oldHome, oldMem := b.home, b.JSMemLimit
 	// A typed query without the form token applies nothing.
 	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome", true)
 	if b.Page == nil || b.Page.Title != "Config — MOB³" {
 		t.Fatalf("config page = %+v", b.Page)
 	}
-	if b.home != oldHome || b.jsMemLimit != oldMem {
+	if b.home != oldHome || b.JSMemLimit != oldMem {
 		t.Fatal("typed about:config query changed settings without a token")
 	}
 	if !strings.Contains(b.Page.Root.TextContent(), "Settings not changed") {
@@ -224,10 +224,10 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 func TestConfigCheckboxForm(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
-	b.noJS = true
+	b.NoJS = true
 	b.loader.ignoreBlocks = true
 	b.applyConfig(url.Values{"config-form": {"1"}})
-	if b.noJS || b.loader.noScripts {
+	if b.NoJS || b.loader.noScripts {
 		t.Fatal("unchecked no-js did not turn JS on")
 	}
 	if b.loader.ignoreBlocks {
@@ -239,8 +239,8 @@ func TestConfigAppliesZoom(t *testing.T) {
 	b := NewBrowser(80, 24)
 	defer setLayoutZoom(1)
 	b.applyConfig(url.Values{"zoom": {"150%"}})
-	if b.zoom != 1.5 {
-		t.Fatalf("zoom = %g, want 1.5", b.zoom)
+	if b.Zoom != 1.5 {
+		t.Fatalf("zoom = %g, want 1.5", b.Zoom)
 	}
 	if got := px(16).ResolveH(0, 16); got != 3 {
 		t.Fatalf("16px at 150%% = %d cells, want 3", got)
@@ -259,7 +259,7 @@ func TestConfigAppliesZoom(t *testing.T) {
 	}
 	// Out-of-range values are ignored.
 	b.applyConfig(url.Values{"zoom": {"10"}})
-	if b.zoom != 1.5 {
-		t.Fatalf("invalid zoom changed value to %g", b.zoom)
+	if b.Zoom != 1.5 {
+		t.Fatalf("invalid zoom changed value to %g", b.Zoom)
 	}
 }

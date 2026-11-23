@@ -132,7 +132,7 @@ func TestDynamicStyleRuleCap(t *testing.T) {
 
 func TestJSMemorySamplerLifecycle(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 1 << 20
+	b.JSMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	if !j.MemSamplerActive() {
 		t.Fatal("memory sampler did not start")
@@ -153,7 +153,7 @@ func TestJSMemorySamplerLifecycle(t *testing.T) {
 
 func TestJSMemorySamplerInterrupts(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.jsMemLimit = 1 << 20
+	b.JSMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	defer j.Stop()
 	j.SetMemBase(0)

@@ -163,7 +163,7 @@ func TestFindHTMLConsole(t *testing.T) {
 	if got := len(b.FindMatches); got != 2 {
 		t.Fatalf("HTML matches = %d, want 2", got)
 	}
-	joined := strings.Join(b.htmlLines(b.width-2), "\n")
+	joined := strings.Join(b.htmlLines(b.Width-2), "\n")
 	if !strings.Contains(joined, "Needle") {
 		t.Fatalf("HTML lines = %q", joined)
 	}
@@ -174,7 +174,7 @@ func TestFindHTMLConsole(t *testing.T) {
 	// The current match is highlighted in the HTML body.
 	g := NewGrid(60, 20, RGB(0, 0, 0), RGB(255, 255, 255))
 	l := newConsoleLayout(20, consoleHTML)
-	start := paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
+	start := paneStart(len(b.htmlLines(b.Width-2)), b.htmlScroll, l.bodyRows)
 	b.paintFindHTML(g, start, l.bodyY, l.bodyRows)
 	m := b.FindMatches[b.FindIdx]
 	y := l.bodyY + m.Line - start

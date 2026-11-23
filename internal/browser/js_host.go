@@ -26,10 +26,10 @@ func newJSHost(b *Browser) jsHost {
 	return browserJSHost{b: b}
 }
 
-func (h browserJSHost) Width() int      { return h.b.width }
-func (h browserJSHost) Height() int     { return h.b.height }
-func (h browserJSHost) CellW() int      { return h.b.cellW }
-func (h browserJSHost) CellH() int      { return h.b.cellH }
+func (h browserJSHost) Width() int      { return h.b.Width }
+func (h browserJSHost) Height() int     { return h.b.Height }
+func (h browserJSHost) CellW() int      { return h.b.CellW }
+func (h browserJSHost) CellH() int      { return h.b.CellH }
 func (h browserJSHost) Dark() bool      { return h.b.Dark }
 func (h browserJSHost) Layout() *Layout { return h.b.Layout }
 func (h browserJSHost) Scroll() int     { return h.b.Scroll }
@@ -53,7 +53,7 @@ func (h browserJSHost) ShowPrompt(msg, def string) (string, bool) {
 }
 func (h browserJSHost) ShowUploadNotice()             { h.b.showUploadNotice() }
 func (h browserJSHost) QueueFormSubmit(form *Node)    { h.b.queueFormSubmit(form) }
-func (h browserJSHost) Interactive() bool             { return h.b.interactive }
+func (h browserJSHost) Interactive() bool             { return h.b.Interactive }
 func (h browserJSHost) AbortGen() uint64              { return h.b.abortGen.Load() }
 func (h browserJSHost) ImportCh() chan<- jsImportTask { return h.b.importCh }
 

@@ -75,20 +75,20 @@ func (b *Browser) configItems() []configItem {
 	return []configItem{
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
 		{Flag: "-png", Value: get("-png", "off"), Note: "dump only"},
-		{Flag: "-width", Value: get("-width", strconv.Itoa(b.width)), Note: "startup"},
+		{Flag: "-width", Value: get("-width", strconv.Itoa(b.Width)), Note: "startup"},
 		{Flag: "-height", Value: get("-height", "0"), Note: "startup; dump/PNG/MCP only"},
 		{Flag: "-pdf-page", Value: get("-pdf-page", "auto"), Note: "dump/PNG only"},
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
-		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
-		{Flag: "-no-pdf", Value: onOff(b.noPDF), Note: "checkbox", Editable: true, Checkbox: true},
+		{Flag: "-no-js", Value: onOff(b.NoJS), Note: "checkbox", Editable: true, Checkbox: true},
+		{Flag: "-no-pdf", Value: onOff(b.NoPDF), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-reader", Value: onOff(b.Reader), Note: "startup; R toggles"},
 		{Flag: "-dark", Value: onOff(b.Dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
-		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.jsMemLimit>>20), cacheMB, int(b.historyCacheBytes>>20)), Editable: true},
-		{Flag: "-layout-budget", Value: b.layoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
-		{Flag: "-zoom", Value: zoomPercentLabel(b.zoom), Note: "percent, 25-200; + - step", Editable: true},
-		{Flag: "-text-scale", Value: textScaleValue(b.noBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
+		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.JSMemLimit>>20), cacheMB, int(b.historyCacheBytes>>20)), Editable: true},
+		{Flag: "-layout-budget", Value: b.LayoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
+		{Flag: "-zoom", Value: zoomPercentLabel(b.Zoom), Note: "percent, 25-200; + - step", Editable: true},
+		{Flag: "-text-scale", Value: textScaleValue(b.NoBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
 		{Flag: "-color", Value: get("-color", "off"), Note: "dump only"},
 		{Flag: "-no-color", Value: get("-no-color", "off"), Note: "dump only"},
 		{Flag: "-ua", Value: ua, Note: "next request", Editable: true},
@@ -133,12 +133,12 @@ func (b *Browser) applyConfig(q url.Values) {
 	form := q.Has("config-form")
 	if v, ok := q["no-js"]; (ok && len(v) > 0) || form {
 		if form {
-			b.noJS = q.Has("no-js")
+			b.NoJS = q.Has("no-js")
 			if b.loader != nil {
-				b.loader.noScripts = b.noJS
+				b.loader.noScripts = b.NoJS
 			}
 		} else if on, ok := parseOnOff(v[0]); ok {
-			b.noJS = on
+			b.NoJS = on
 			if b.loader != nil {
 				b.loader.noScripts = on
 			}
@@ -146,12 +146,12 @@ func (b *Browser) applyConfig(q url.Values) {
 	}
 	if v, ok := q["no-pdf"]; (ok && len(v) > 0) || form {
 		if form {
-			b.noPDF = q.Has("no-pdf")
+			b.NoPDF = q.Has("no-pdf")
 			if b.loader != nil {
-				b.loader.noPDF = b.noPDF
+				b.loader.noPDF = b.NoPDF
 			}
 		} else if on, ok := parseOnOff(v[0]); ok {
-			b.noPDF = on
+			b.NoPDF = on
 			if b.loader != nil {
 				b.loader.noPDF = on
 			}
@@ -180,22 +180,22 @@ func (b *Browser) applyConfig(q url.Values) {
 	}
 	if v, ok := q["layout-budget"]; ok && len(v) > 0 {
 		if budget, ok := ParseLayoutBudget(v[0]); ok {
-			b.layoutBudget = budget
+			b.LayoutBudget = budget
 		}
 	}
 	if v, ok := q["zoom"]; ok && len(v) > 0 {
 		if pct, valid := parseZoomPercent(v[0]); valid {
-			b.zoom = pct / 100
-			setLayoutZoom(b.zoom)
+			b.Zoom = pct / 100
+			setLayoutZoom(b.Zoom)
 			b.BigTextBlocked = false
 		}
 	}
 	if v, ok := q["text-scale"]; ok && len(v) > 0 {
 		switch strings.ToLower(strings.TrimSpace(v[0])) {
 		case "off", "none", "false":
-			b.noBigText = true
+			b.NoBigText = true
 		case "auto", "on", "true", "":
-			b.noBigText = false
+			b.NoBigText = false
 			b.BigTextBlocked = false
 		}
 	}
@@ -230,7 +230,7 @@ func (b *Browser) configPage(u *url.URL, updated bool) *Page {
 	if b.configToken != nil {
 		token = b.configToken.Current()
 	}
-	doc := configPageHTML(b.configItems(), updated, b.configNotice, token, b.width, b.viewportHeight(), b.cellW, b.cellH)
+	doc := configPageHTML(b.configItems(), updated, b.configNotice, token, b.Width, b.viewportHeight(), b.CellW, b.CellH)
 	root := ParseHTML(doc)
 	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
 	engine.ApplyPageStyles(root, page)

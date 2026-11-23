@@ -46,7 +46,7 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 			b.Hover = 0
 		}},
 		{"zoom", func(b *Browser) {
-			b.zoom = 1.5
+			b.Zoom = 1.5
 		}},
 	}
 	for _, tc := range cases {
@@ -61,12 +61,12 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 
 			st := b.stateMessage()
 			layout := frontend.LayoutChrome(st)
-			g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+			g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 			b.drawChrome(g)
 
 			rows := b.headerRows()
-			if len(layout.Header) != rows*b.width {
-				t.Fatalf("header cells = %d, want %d", len(layout.Header), rows*b.width)
+			if len(layout.Header) != rows*b.Width {
+				t.Fatalf("header cells = %d, want %d", len(layout.Header), rows*b.Width)
 			}
 			for i := range layout.Header {
 				got, want := layout.Header[i], protoCell(g.Cells[i])
@@ -74,12 +74,12 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 					t.Fatalf("header cell %d = %+v, want %+v", i, got, want)
 				}
 			}
-			if len(layout.Footer) != b.width {
-				t.Fatalf("footer cells = %d, want %d", len(layout.Footer), b.width)
+			if len(layout.Footer) != b.Width {
+				t.Fatalf("footer cells = %d, want %d", len(layout.Footer), b.Width)
 			}
-			fy := b.height - 1
-			for x := 0; x < b.width; x++ {
-				got, want := layout.Footer[x], protoCell(g.Cells[fy*b.width+x])
+			fy := b.Height - 1
+			for x := 0; x < b.Width; x++ {
+				got, want := layout.Footer[x], protoCell(g.Cells[fy*b.Width+x])
 				if !sameChromeCell(got, want) {
 					t.Fatalf("footer cell %d = %+v, want %+v", x, got, want)
 				}
@@ -138,9 +138,9 @@ func TestFrontendScrollBarMatchesEngine(t *testing.T) {
 	b.Layout = &Layout{Height: 200}
 	b.Scroll = 50
 	contentH := b.viewportHeight()
-	g := NewGrid(b.width, contentH, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, contentH, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawScrollBar(g, 0, contentH)
-	f := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	f := protocol.Frame{W: b.Width, H: contentH, Cells: make([]protocol.Cell, b.Width*contentH)}
 	for i := range f.Cells {
 		f.Cells[i].R = ' '
 	}
@@ -148,8 +148,8 @@ func TestFrontendScrollBarMatchesEngine(t *testing.T) {
 		FrontendChrome: true, MaxScroll: b.maxScroll(), Scroll: b.Scroll,
 	})
 	for y := 0; y < contentH; y++ {
-		got := f.Cells[y*b.width+b.width-1]
-		want := protoCell(g.Cells[y*b.width+b.width-1])
+		got := f.Cells[y*b.Width+b.Width-1]
+		want := protoCell(g.Cells[y*b.Width+b.Width-1])
 		if !sameChromeCell(got, want) {
 			t.Fatalf("scrollbar row %d = %+v, want %+v", y, got, want)
 		}
@@ -186,13 +186,13 @@ func TestFrontendMenuMatchesEngine(t *testing.T) {
 	b.URL, _ = url.Parse("https://example.com/")
 	b.Page = &Page{Title: "Example", Root: &Node{}}
 	b.viewMenu = &viewMenuDialog{idx: 1}
-	b.hideFixed = true
+	b.HideFixed = true
 	st := b.stateMessage()
 	st.Menu = protocol.MenuView
 	st.MenuIndex = 1
 	st.FrontendChrome = true
-	contentH := b.height - b.headerRows() - 1
-	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	contentH := b.Height - b.headerRows() - 1
+	content := protocol.Frame{W: b.Width, H: contentH, Cells: make([]protocol.Cell, b.Width*contentH)}
 	for i := range content.Cells {
 		content.Cells[i].R = ' '
 	}
@@ -200,7 +200,7 @@ func TestFrontendMenuMatchesEngine(t *testing.T) {
 	if !ok {
 		t.Fatal("menu frame was not composed")
 	}
-	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawChrome(g)
 	for i := range full.Cells {
 		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {
@@ -218,8 +218,8 @@ func TestFrontendDialogMatchesEngine(t *testing.T) {
 	b.dialog = &jsDialog{kind: "prompt", message: "Type your name here", text: "Alice", cursor: 5, selectAll: true}
 	st := b.stateMessage()
 	st.FrontendChrome = true
-	contentH := b.height - b.headerRows() - 1
-	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	contentH := b.Height - b.headerRows() - 1
+	content := protocol.Frame{W: b.Width, H: contentH, Cells: make([]protocol.Cell, b.Width*contentH)}
 	for i := range content.Cells {
 		content.Cells[i].R = ' '
 	}
@@ -229,7 +229,7 @@ func TestFrontendDialogMatchesEngine(t *testing.T) {
 	if !ok {
 		t.Fatal("dialog frame was not composed")
 	}
-	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawChrome(g)
 	for i := range full.Cells {
 		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {
@@ -253,8 +253,8 @@ func TestFrontendSelectMatchesEngine(t *testing.T) {
 	b.selectFrontend = false
 	st := b.stateMessage()
 	st.FrontendChrome = true
-	contentH := b.height - b.headerRows() - 1
-	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	contentH := b.Height - b.headerRows() - 1
+	content := protocol.Frame{W: b.Width, H: contentH, Cells: make([]protocol.Cell, b.Width*contentH)}
 	for i := range content.Cells {
 		content.Cells[i].R = ' '
 	}
@@ -264,7 +264,7 @@ func TestFrontendSelectMatchesEngine(t *testing.T) {
 	if !ok {
 		t.Fatal("select frame was not composed")
 	}
-	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawChrome(g)
 	for i := range full.Cells {
 		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {
@@ -286,8 +286,8 @@ func TestFrontendDownloadMatchesEngine(t *testing.T) {
 	b.downloadFrontend = false
 	st := b.stateMessage()
 	st.FrontendChrome = true
-	contentH := b.height - b.headerRows() - 1
-	content := protocol.Frame{W: b.width, H: contentH, Cells: make([]protocol.Cell, b.width*contentH)}
+	contentH := b.Height - b.headerRows() - 1
+	content := protocol.Frame{W: b.Width, H: contentH, Cells: make([]protocol.Cell, b.Width*contentH)}
 	for i := range content.Cells {
 		content.Cells[i].R = ' '
 	}
@@ -297,7 +297,7 @@ func TestFrontendDownloadMatchesEngine(t *testing.T) {
 	if !ok {
 		t.Fatal("download frame was not composed")
 	}
-	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawChrome(g)
 	for i := range full.Cells {
 		if got, want := full.Cells[i], protoCell(g.Cells[i]); !sameChromeCell(got, want) {

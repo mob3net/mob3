@@ -370,7 +370,7 @@ func TestPaintLinkHintsHighlightsText(t *testing.T) {
 	b := hintTestBrowser(t, `<html><body><p><a href="#one">Documentation</a></p></body></html>`, 40, 10)
 	b.HandleKey("f")
 	top, bottom := b.viewport()
-	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
+	g := NewGrid(b.Width, b.Height, RGB(0, 0, 0), RGB(255, 255, 255))
 	PaintLayoutBig(g, b.Layout, b.Scroll, top, bottom, nil, RGB(0, 0, 0), nil, false)
 	b.paintLinkHints(g, top, bottom)
 	r := b.Layout.Links[0].Rects[0]

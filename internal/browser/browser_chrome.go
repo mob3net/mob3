@@ -157,7 +157,7 @@ func drawUnderlinedRune(g *Grid, x, y int, label string, target rune, st *Style,
 // zoomBadge returns the URL-row zoom label with one space on each side. The
 // badge is always shown and clicking it opens the zoom preset window.
 func (b *Browser) zoomBadge() string {
-	return " " + zoomPercentLabel(b.zoom) + " "
+	return " " + zoomPercentLabel(b.Zoom) + " "
 }
 
 // drawHeaderButton paints one top-bar button and records its click region.
@@ -230,10 +230,10 @@ func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
 }
 
 func (b *Browser) draw() {
-	if b.noDraw {
+	if b.NoDraw {
 		return
 	}
-	w, h := b.width, b.height
+	w, h := b.Width, b.Height
 	if w < 1 {
 		w = 1
 	}
@@ -252,7 +252,7 @@ func (b *Browser) draw() {
 	// a modal cannot hide a large heading that runs across it. Rebuild the page
 	// without scaled text while a modal or popup is open, and restore it when
 	// the overlay closes.
-	if b.Layout != nil && b.scaledTextWanted() != b.scaledLayout {
+	if b.Layout != nil && b.scaledTextWanted() != b.ScaledLayout {
 		b.rebuild()
 	}
 	// Deferred image batches keep their layout until the viewport can see them.
@@ -287,7 +287,7 @@ func (b *Browser) draw() {
 	b.paintSelection(cg, 0, contentH)
 	b.paintFindPage(cg, 0, contentH)
 	b.paintLinkHints(cg, 0, contentH)
-	if !b.noDraw && b.width >= 2 {
+	if !b.NoDraw && b.Width >= 2 {
 		// Overflowing content (wide nowrap blocks, absolute boxes) may still
 		// reach the terminal edge. Keep the reserved scrollbar column blank.
 		cg.ClearGlyphs(w-1, 0, 1, contentH)
@@ -382,7 +382,7 @@ type footerModel struct {
 }
 
 func (b *Browser) footerModel() footerModel {
-	w := b.width
+	w := b.Width
 	consoleW := 2
 	reserve := 0
 	if w >= 6 {
@@ -690,7 +690,7 @@ func (b *Browser) drawChrome(g *Grid) {
 					err  bool
 				}{
 					{b.graphicsStatusText(), headerGraphics, false, false},
-					{b.jsStatusText(), headerJS, !b.noJS, b.jsErr},
+					{b.jsStatusText(), headerJS, !b.NoJS, b.jsErr},
 					{b.darkStatusText(), headerDark, b.Dark, false},
 					{b.readerStatusText(), headerReader, b.Reader, false},
 				}
@@ -790,7 +790,7 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		}
 	}
 	chrome := func(i int) bool {
-		if b.height >= 2 && i == b.height-1 {
+		if b.Height >= 2 && i == b.Height-1 {
 			return true
 		}
 		rows := b.headerRows()
@@ -941,7 +941,7 @@ func (b *Browser) jsStatusText() string {
 	if b.jsErr {
 		return "JavaScript:Error"
 	}
-	if b.noJS {
+	if b.NoJS {
 		return "JavaScript:off"
 	}
 	return "JavaScript:on"
@@ -996,7 +996,7 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	}
 	b.graphicsMode = mode
 	b.ImagesPaused = false
-	b.gfx = NewGFXRenderer(mode, b.cellW, b.cellH)
+	b.gfx = NewGFXRenderer(mode, b.CellW, b.CellH)
 	hideImages := mode == GraphicsNone
 	if b.loader != nil {
 		b.loader.noImages = hideImages
