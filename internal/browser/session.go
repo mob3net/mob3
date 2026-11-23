@@ -170,6 +170,10 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 		b.resize(v.Width, v.Height)
 	case protocol.Navigate:
 		b.Navigate(v.URL, v.Push)
+	case protocol.History:
+		b.setHistoryView(v)
+	case protocol.Restore:
+		b.restoreEntry(v.EntryID, v.URL, v.Scroll)
 	case protocol.Resize:
 		b.resize(v.Width, v.Height)
 		if v.CellW > 0 {
@@ -285,12 +289,6 @@ func (b *Browser) applySelectResult(v protocol.SelectResult) {
 // handleAppAction applies an application-level action from the front end.
 func (b *Browser) handleAppAction(a protocol.App) (bool, error) {
 	switch a.Action {
-	case protocol.AppBack:
-		b.clearInputFocus()
-		b.back()
-	case protocol.AppForward:
-		b.clearInputFocus()
-		b.forward()
 	case protocol.AppReload:
 		b.reload()
 	case protocol.AppStop:

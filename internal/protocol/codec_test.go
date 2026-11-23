@@ -36,6 +36,8 @@ func testCommands() []Command {
 		{Session: 12, Seq: 12, Body: ModalClose{Kind: ModalDownload, Copied: true, Chars: 12}},
 		{Session: 13, Seq: 13, Body: HintResult{Target: 2}},
 		{Session: 15, Seq: 15, Body: ConsoleAction{Op: ConsoleInput, Text: "1+1"}},
+		{Session: 16, Seq: 16, Body: History{Entries: []HistoryEntry{{URL: "https://example.test/a"}, {URL: "about:help"}}, Current: 1}},
+		{Session: 17, Seq: 17, Body: Restore{EntryID: 42, URL: "https://example.test/a", Scroll: 9}},
 		{Session: 8, Seq: 8, Body: Find{Scope: FindHTML, Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},
@@ -75,6 +77,7 @@ func testEvents() []Event {
 			Target: 2, Label: "d", X: 1, Y: 2, W: 3, H: 1,
 			Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
 		}}}},
+		{Session: 15, Seq: 15, Body: HistoryCommit{EntryID: 42, URL: "https://example.test/a", Scroll: 9, Push: true}},
 		{Session: 14, Seq: 14, Body: ConsoleView{
 			Width: 80, Height: 24, Pane: 0, Tabs: []string{" JS logs (1) ", " Requests (0) "},
 			Lines: []string{"[log] hi"}, Input: "1+1", Cursor: 3, Edit: true,

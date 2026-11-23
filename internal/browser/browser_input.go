@@ -787,10 +787,9 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 				continue
 			}
 			switch hit.kind {
-			case headerBack:
-				b.back()
-			case headerForward:
-				b.forward()
+			case headerBack, headerForward:
+				// History is front-end-owned; the direct engine mouse path has
+				// no session list to move through.
 			case headerReload:
 				b.reload()
 			case headerStop:
@@ -889,14 +888,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	}
 	if ev.Press {
 		switch ev.Button {
-		case MouseButtonBack:
-			b.clearInputFocus()
-			b.back()
-			return false
-		case MouseButtonForward:
-			b.clearInputFocus()
-			b.forward()
-			return false
 		case MouseButtonRight:
 			// Copy the link under the pointer instead of navigating; a
 			// right-click away from a link leaves the page alone. Back stays
@@ -1102,10 +1093,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.tabStep(-1)
 	case "enter":
 		b.followFocused()
-	case "ctrl-o", "[":
-		b.back()
-	case "ctrl-i", "]":
-		b.forward()
 	case "r":
 		b.reload()
 	case "E":

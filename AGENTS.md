@@ -197,17 +197,18 @@ published by the Pages build.
 - `internal/app/` — flag parsing, validation and dispatch into the session
   (still `browser.Execute` during the migration).
 - `internal/browser/` — package `browser` with session construction, the
-  303-method `Browser`, chrome/dialogs/navigation and tests until the boundary
-  migration completes. Nothing under `internal` is imported from outside this
-  module.
+  304-method `Browser`, chrome/dialogs/navigation loads and tests until the
+  boundary migration completes. Nothing under `internal` is imported from
+  outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),
   `internal/host` (network, cookies, cache, certificates, settings, request
   log), `internal/frontend` (terminal, input, chrome, ANSI encoding, native
   images, dialogs) and `internal/app` (wiring). Session back/forward history
-  and the download/curl hint stay with the session/front end; MOB³ keeps no
-  global visited list or download history. The allowed
+  lives in the front end and the download/curl hint is presentation; the
+  engine keeps only a memory-only page cache. MOB³ keeps no global visited list
+  or download history. The allowed
   imports are `app` → the other four and each of them → `protocol`; the front
   end and the host never import `engine`, and `engine` never imports
   `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
@@ -215,14 +216,16 @@ published by the Pages build.
   leaves `internal/browser` unrestricted; both exceptions end with the session
   split. The front end never names an engine type, and `internal/protocol` is
   canonical for the message set. The engine no longer imports `net/http`:
-  JS `fetch`/XHR and cookie parsing use the host broker. Session construction and
-  navigation still live in `internal/browser`; the terminal loop, normal
-  header/footer chrome, base shell keys, scrollbar, URL/vim prompt, page find,
-  view/zoom windows, JS dialogs, the select popup, download/notice modals,
-  link hints and the console (composition, input and find) are
-  `frontend.SessionLoop`, `frontend/chrome.go`, `frontend/prompt.go`,
-  `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`,
-  `frontend/download.go`, `frontend/hints.go` and `frontend/console.go`. The
+  JS `fetch`/XHR and cookie parsing use the host broker. Session construction,
+  the trusted URL/title and content-rectangle geometry still live in
+  `internal/browser`; the terminal loop, normal header/footer chrome, base
+  shell keys, scrollbar, URL/vim prompt, page find, view/zoom windows, JS
+  dialogs, the select popup, download/notice modals, link hints, the console
+  (composition, input and find) and session history (list, index, scroll and
+  the `about:history` snapshot) are `frontend.SessionLoop`,
+  `frontend/chrome.go`, `frontend/prompt.go`, `frontend/menu.go`,
+  `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`,
+  `frontend/hints.go`, `frontend/console.go` and `frontend/history.go`. The
   tracker records the remaining split.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).

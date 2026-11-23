@@ -225,8 +225,8 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 	if body == nil || body.Attr("data-clicked") != "yes" {
 		t.Fatal("keyboard follow did not run the link click handler")
 	}
-	if len(b.history) != 0 {
-		t.Fatalf("prevented click navigated: history=%d", len(b.history))
+	if b.entryID != 0 {
+		t.Fatalf("prevented click navigated: entry=%d", b.entryID)
 	}
 }
 
@@ -431,8 +431,8 @@ func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 	if got != "https://example.com/challenge" {
 		t.Fatalf("retry target = %q", got)
 	}
-	if len(b.history) != 0 {
-		t.Fatalf("retry pushed history: %v", b.history)
+	if b.entryID != 0 {
+		t.Fatalf("retry pushed history: entry=%d", b.entryID)
 	}
 }
 
@@ -984,7 +984,7 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 		Download: true, DownloadName: "archive.zip",
 	}
 	b.loadSeq = 1
-	b.finishLoad(loadResult{seq: 1, page: page, u: u, push: true, method: http.MethodGet})
+	b.finishLoad(loadResult{seq: 1, page: page, u: u, entryID: b.nextHistoryID(), historyPush: true, method: http.MethodGet})
 	if b.download == nil {
 		t.Fatal("non-HTML response did not offer the curl popup")
 	}
@@ -994,8 +994,8 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 	if !strings.Contains(b.download.command, "archive.zip") || !strings.Contains(b.download.command, u.String()) {
 		t.Fatalf("command = %q", b.download.command)
 	}
-	if len(b.history) != 0 {
-		t.Fatalf("download pushed history: %v", b.history)
+	if b.entryID != 0 {
+		t.Fatalf("download pushed history: entry=%d", b.entryID)
 	}
 }
 
@@ -1314,8 +1314,8 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	if b.status != "" {
 		t.Fatalf("status = %q, want empty", b.status)
 	}
-	if len(b.history) != 0 {
-		t.Fatalf("right-click navigated: %d history entries", len(b.history))
+	if b.entryID != 0 {
+		t.Fatalf("right-click navigated: entry=%d", b.entryID)
 	}
 }
 
@@ -1365,50 +1365,14 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 	}
 }
 
-func TestBackForwardUseVimJumplistKeys(t *testing.T) {
+func TestEngineNoLongerOwnsHistoryKeys(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.HandleKey("ctrl-o")
-	if b.status != "No previous page" {
-		t.Fatalf("ctrl-o status = %q", b.status)
-	}
-	b.status = ""
-	b.HandleKey("ctrl-i")
-	if b.status != "No next page" {
-		t.Fatalf("ctrl-i status = %q", b.status)
-	}
-
-	// h/l no longer navigate; they are free for other uses.
-	b.status = ""
-	b.HandleKey("h")
-	if b.status != "" {
-		t.Fatalf("h still navigates: %q", b.status)
-	}
-	b.HandleKey("l")
-	if b.status != "" {
-		t.Fatalf("l still navigates: %q", b.status)
-	}
-
-	// Brackets are the portable fallback where Ctrl-I arrives as Tab.
-	b.status = ""
-	b.HandleKey("[")
-	if b.status != "No previous page" {
-		t.Fatalf("[ status = %q", b.status)
-	}
-	b.status = ""
-	b.HandleKey("]")
-	if b.status != "No next page" {
-		t.Fatalf("] status = %q", b.status)
-	}
-
-	// Arrow keys no longer navigate.
-	b.status = ""
-	b.HandleKey("left")
-	if b.status != "" {
-		t.Fatalf("left arrow still navigates: %q", b.status)
-	}
-	b.HandleKey("right")
-	if b.status != "" {
-		t.Fatalf("right arrow still navigates: %q", b.status)
+	for _, k := range []string{"ctrl-o", "ctrl-i", "[", "]", "h", "l", "left", "right"} {
+		b.status = ""
+		b.HandleKey(k)
+		if b.status != "" {
+			t.Fatalf("%q still changes history status: %q", k, b.status)
+		}
 	}
 }
 

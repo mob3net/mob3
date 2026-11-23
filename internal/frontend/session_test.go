@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -146,7 +147,6 @@ func TestShellKeysSendAppActions(t *testing.T) {
 		"d": protocol.App{Action: protocol.AppDownload},
 		"!": protocol.App{Action: protocol.AppToggleConsole},
 		"?": protocol.Navigate{URL: "about:help", Push: true},
-		"H": protocol.Navigate{URL: "about:history", Push: true},
 	}
 	for key, want := range cases {
 		s.cmds = nil
@@ -156,6 +156,64 @@ func TestShellKeysSendAppActions(t *testing.T) {
 		if len(s.cmds) != 1 || s.cmds[0].Body != want {
 			t.Fatalf("%q sent %#v, want %#v", key, s.cmds, want)
 		}
+	}
+}
+
+func TestShellKeyHistory(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2, Scroll: 4}
+	loop.State.Scroll = 4
+	loop.history = []historyEntry{
+		{id: 1, url: "https://example.com/a", scroll: 2},
+		{id: 2, url: "https://example.com/b"},
+	}
+	loop.historyIndex = 1
+
+	// H sends the display snapshot and then the normal navigation.
+	if handled, quit := loop.handleShellKey("H"); !handled || quit {
+		t.Fatal("H not handled")
+	}
+	want := []protocol.CommandBody{
+		protocol.History{Entries: []protocol.HistoryEntry{{URL: "https://example.com/a"}, {URL: "https://example.com/b"}}, Current: 1},
+		protocol.Navigate{URL: "about:history", Push: true},
+	}
+	if len(s.cmds) != len(want) {
+		t.Fatalf("H commands = %#v", s.cmds)
+	}
+	for i := range want {
+		if !reflect.DeepEqual(s.cmds[i].Body, want[i]) {
+			t.Fatalf("H command %d = %#v, want %#v", i, s.cmds[i].Body, want[i])
+		}
+	}
+
+	// Back records the current scroll and restores the target entry.
+	s.cmds = nil
+	if handled, quit := loop.handleShellKey("ctrl-o"); !handled || quit {
+		t.Fatal("ctrl-o not handled")
+	}
+	if loop.historyIndex != 0 || loop.history[1].scroll != 4 {
+		t.Fatalf("index=%d history=%+v", loop.historyIndex, loop.history)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Restore{EntryID: 1, URL: "https://example.com/a", Scroll: 2}) {
+		t.Fatalf("back command = %#v", s.cmds)
+	}
+	s.cmds = nil
+	if handled, quit := loop.handleShellKey("]"); !handled || quit {
+		t.Fatal("] not handled")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Restore{EntryID: 2, URL: "https://example.com/b", Scroll: 4}) {
+		t.Fatalf("forward command = %#v", s.cmds)
+	}
+
+	// Boundary keys stay local and do not send a command.
+	s.cmds = nil
+	loop.historyIndex = 0
+	if handled, quit := loop.handleShellKey("["); !handled || quit {
+		t.Fatal("[ not handled")
+	}
+	if len(s.cmds) != 0 || loop.State.Page.Status != "No previous page" {
+		t.Fatalf("boundary back = %#v status=%q", s.cmds, loop.State.Page.Status)
 	}
 }
 

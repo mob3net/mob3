@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"browser/internal/protocol"
 )
 
 // Automation drives one headless Browser for scripted clients. Commands are
@@ -17,6 +19,17 @@ import (
 type Automation struct {
 	mu sync.Mutex
 	b  *Browser
+
+	// History is the headless client's own list. The engine owns only the page
+	// cache, keyed by these entry IDs.
+	history      []automationHistoryEntry
+	historyIndex int
+}
+
+type automationHistoryEntry struct {
+	id     uint64
+	url    string
+	scroll int
 }
 
 // ClickTarget selects what to click. Exactly one of Link, Text, Selector or
@@ -38,7 +51,9 @@ func NewAutomation(width, height int) *Automation {
 		// Automation exposes text; image downloads would only slow it down.
 		b.loader.noImages = true
 	}
-	return &Automation{b: b}
+	a := &Automation{b: b}
+	b.historyObserver = a.applyHistoryCommit
+	return a
 }
 
 // Close stops pending work and releases the page runtime.
@@ -63,6 +78,7 @@ func (a *Automation) Navigate(ctx context.Context, target string) error {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.recordHistoryScrollLocked()
 	before := a.b.loadSeq
 	a.b.Navigate(target, true)
 	if err := a.waitLoad(ctx); err != nil {
@@ -673,17 +689,71 @@ func (a *Automation) Scroll(lines, pages int, top, bottom bool) {
 
 // Back navigates backward in session history.
 func (a *Automation) Back(ctx context.Context) error {
-	return a.historyAction(ctx, func(b *Browser) { b.back() })
+	return a.historyMove(ctx, -1)
 }
 
 // Forward navigates forward in session history.
 func (a *Automation) Forward(ctx context.Context) error {
-	return a.historyAction(ctx, func(b *Browser) { b.forward() })
+	return a.historyMove(ctx, 1)
 }
 
 // Reload reloads the current page.
 func (a *Automation) Reload(ctx context.Context) error {
 	return a.historyAction(ctx, func(b *Browser) { b.reload() })
+}
+
+func (a *Automation) historyMove(ctx context.Context, delta int) error {
+	if a == nil || a.b == nil {
+		return errors.New("automation is closed")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	next := a.historyIndex + delta
+	if next < 0 || next >= len(a.history) {
+		return nil
+	}
+	a.recordHistoryScrollLocked()
+	a.historyIndex = next
+	e := a.history[next]
+	a.b.restoreEntry(e.id, e.url, e.scroll)
+	return a.waitLoad(ctx)
+}
+
+func (a *Automation) recordHistoryScrollLocked() {
+	if a.historyIndex < 0 || a.historyIndex >= len(a.history) {
+		return
+	}
+	a.history[a.historyIndex].scroll = a.b.scroll
+}
+
+// applyHistoryCommit updates the headless history list from the engine.
+func (a *Automation) applyHistoryCommit(v protocol.HistoryCommit) {
+	if v.URL == "" || v.EntryID == 0 {
+		return
+	}
+	e := automationHistoryEntry{id: v.EntryID, url: v.URL, scroll: v.Scroll}
+	if v.Push {
+		if a.historyIndex >= 0 && a.historyIndex < len(a.history) &&
+			a.history[a.historyIndex].url == v.URL {
+			a.history[a.historyIndex] = e
+			return
+		}
+		if a.historyIndex+1 < len(a.history) {
+			a.history = a.history[:a.historyIndex+1]
+		}
+		a.history = append(a.history, e)
+		a.historyIndex = len(a.history) - 1
+		return
+	}
+	if len(a.history) == 0 {
+		a.history = append(a.history, e)
+		a.historyIndex = 0
+		return
+	}
+	if a.historyIndex < 0 || a.historyIndex >= len(a.history) {
+		a.historyIndex = len(a.history) - 1
+	}
+	a.history[a.historyIndex] = e
 }
 
 func (a *Automation) historyAction(ctx context.Context, action func(*Browser)) error {
@@ -2099,14 +2169,13 @@ func (a *Automation) History() string {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	urls, idx := a.b.historySnapshot()
 	var sb strings.Builder
-	for i := len(urls) - 1; i >= 0; i-- {
+	for i := len(a.history) - 1; i >= 0; i-- {
 		mark := "  "
-		if i == idx {
+		if i == a.historyIndex {
 			mark = "* "
 		}
-		fmt.Fprintf(&sb, "%s%s\n", mark, urls[i])
+		fmt.Fprintf(&sb, "%s%s\n", mark, a.history[i].url)
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }

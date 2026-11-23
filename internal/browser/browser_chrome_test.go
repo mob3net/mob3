@@ -296,13 +296,12 @@ func TestHeaderClicks(t *testing.T) {
 	b.prompt = false
 	b.promptSelectAll = false
 
+	// History is front-end-owned; the direct engine header path does not move
+	// through a list it no longer has.
 	b.HandleMouse(MouseEvent{Button: 0, X: 2, Y: 1, Press: true})
-	if b.status != "No previous page" {
-		t.Fatalf("back button status = %q", b.status)
-	}
 	b.HandleMouse(MouseEvent{Button: 0, X: 4, Y: 1, Press: true})
-	if b.status != "No next page" {
-		t.Fatalf("forward button status = %q", b.status)
+	if b.status != "" {
+		t.Fatalf("engine header moved history: %q", b.status)
 	}
 
 	targetCh := make(chan string, 1)

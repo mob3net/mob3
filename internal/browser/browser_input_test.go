@@ -251,8 +251,6 @@ func TestEscapeFromInputShowsExitHint(t *testing.T) {
 
 func TestHistoryShortcutKey(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.history = []historyEntry{{URL: "https://example.com/a"}}
-	b.histIdx = 0
 	b.HandleKey("H")
 	select {
 	case res := <-b.loadCh:
@@ -316,15 +314,12 @@ func TestParseX10Mouse(t *testing.T) {
 	}
 }
 
-func TestMouseSideButtonsNavigate(t *testing.T) {
+func TestMouseSideButtonsAreFrontendOwned(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.HandleMouse(MouseEvent{Button: MouseButtonBack, X: 5, Y: 5, Press: true})
-	if b.status != "No previous page" {
-		t.Fatalf("back status = %q", b.status)
-	}
 	b.HandleMouse(MouseEvent{Button: MouseButtonForward, X: 5, Y: 5, Press: true})
-	if b.status != "No next page" {
-		t.Fatalf("forward status = %q", b.status)
+	if b.status != "" {
+		t.Fatalf("engine handled side buttons: status = %q", b.status)
 	}
 }
 

@@ -43,6 +43,11 @@ type SessionLoop struct {
 	quitBase    protocol.State
 	scrollDrag  bool
 
+	// History is front-end-owned: the engine receives entry IDs for its page
+	// cache and reports the final URL with HistoryCommit.
+	history      []historyEntry
+	historyIndex int
+
 	findActive  bool
 	findText    string
 	findCursor  int
@@ -115,8 +120,18 @@ func (l *SessionLoop) Run() error {
 			if k == "eof" {
 				return nil
 			}
-			if ev, ok := ParseMouseToken(k); ok && l.handleChromeMouse(ev) {
-				continue
+			if ev, ok := ParseMouseToken(k); ok {
+				if ev.Press && ev.Button == MouseButtonBack {
+					l.historyBack()
+					continue
+				}
+				if ev.Press && ev.Button == MouseButtonForward {
+					l.historyForward()
+					continue
+				}
+				if l.handleChromeMouse(ev) {
+					continue
+				}
 			}
 			if handled, quit := l.handleShellKey(k); handled {
 				if quit {
@@ -280,6 +295,7 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 		l.State.Page = v
 		l.State.Scroll = v.Scroll
 		l.State.Native = v.Flags&protocol.StateNativeImages != 0
+		l.recordHistoryScroll()
 		if l.Presenter != nil {
 			l.Presenter.SetState(v)
 		}
@@ -300,6 +316,8 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			l.findCurrent, l.findTotal = v.Current, v.Total
 			l.syncFind()
 		}
+	case protocol.HistoryCommit:
+		l.applyHistoryCommit(v)
 	case protocol.Chrome:
 		if l.Presenter != nil {
 			l.Presenter.SetChrome(v)
@@ -363,6 +381,14 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 			return true, false
 		}
 	}
+	switch k {
+	case "ctrl-o", "[":
+		l.historyBack()
+		return true, false
+	case "ctrl-i", "]":
+		l.historyForward()
+		return true, false
+	}
 	if l.State.Page.KeysEngine {
 		return false, false
 	}
@@ -388,7 +414,8 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 		l.startPrompt(true)
 		return true, false
 	case "r":
-		return send(protocol.App{Action: protocol.AppReload})
+		l.reload()
+		return true, false
 	case "R":
 		return send(protocol.App{Action: protocol.AppToggleReader})
 	case "D":
@@ -418,7 +445,8 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	case "?":
 		return send(protocol.Navigate{URL: "about:help", Push: true})
 	case "H":
-		return send(protocol.Navigate{URL: "about:history", Push: true})
+		l.openHistory()
+		return true, false
 	}
 	return false, false
 }
@@ -1385,7 +1413,7 @@ func (l *SessionLoop) handlePromptKey(k string) (handled, quit bool) {
 		}
 		if text != "" {
 			l.promptHist.record(text)
-			_ = l.Session.Send(protocol.Command{Body: protocol.Navigate{URL: text, Push: true}})
+			l.navigate(text)
 		}
 		return true, false
 	case "esc":
@@ -1616,17 +1644,21 @@ func (l *SessionLoop) activateChromeHit(kind ChromeHitKind) {
 	var body protocol.CommandBody
 	switch kind {
 	case ChromeHitBack:
-		body = protocol.App{Action: protocol.AppBack}
+		l.historyBack()
+		return
 	case ChromeHitForward:
-		body = protocol.App{Action: protocol.AppForward}
+		l.historyForward()
+		return
 	case ChromeHitReload:
-		body = protocol.App{Action: protocol.AppReload}
+		l.reload()
+		return
 	case ChromeHitStop:
 		body = protocol.App{Action: protocol.AppStop}
 	case ChromeHitHome:
 		body = protocol.App{Action: protocol.AppHome}
 	case ChromeHitHistory:
-		body = protocol.Navigate{URL: "about:history", Push: true}
+		l.openHistory()
+		return
 	case ChromeHitHelp:
 		body = protocol.Navigate{URL: "about:help", Push: true}
 	case ChromeHitConfig:

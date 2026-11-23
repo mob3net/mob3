@@ -32,7 +32,8 @@ const (
 	maxClipboardBytes     = 100 * 1024
 )
 
-// Browser holds navigation and view state.
+// Browser holds one page session's content and view state. The front end owns
+// the trusted navigation list; this type keeps the memory-only page cache.
 type Browser struct {
 	loader *Loader
 	url    *url.URL
@@ -67,10 +68,16 @@ type Browser struct {
 	// Dark mode remaps the rendered page palette.
 	dark bool
 
-	// History.
-	history []historyEntry
-	histIdx int
-	histMu  sync.RWMutex
+	// History cache. The front end owns the ordered entry list and scroll
+	// offsets; the engine only keeps a bounded memory-only page cache keyed by
+	// the front-end entry ID.
+	entryID         uint64
+	nextEntryID     uint64
+	historyCache    map[uint64]*cachedPage
+	historyView     []string
+	historyViewCur  int
+	historyObserver func(protocol.HistoryCommit)
+	histMu          sync.RWMutex
 	// historyCacheBytes bounds the estimated size of the back/forward page cache.
 	// Zero disables page caching.
 	historyCacheBytes int64
@@ -328,10 +335,15 @@ type loadResult struct {
 	page        *Page
 	err         error
 	u           *url.URL
-	push        bool
 	method      string
 	body        []byte
 	contentType string
+	// entryID is the front-end history entry this load belongs to. The engine
+	// keys its page cache by it and reports the final URL under the same ID.
+	entryID uint64
+	// historyPush appends a new history entry on completion; false updates the
+	// entry in place (reload, replace or a back/forward restore).
+	historyPush bool
 	// restoreScroll, when set, overrides the usual start-at-top behaviour.
 	// It is used by history back/forward to return to the position the user
 	// last had on that entry.
@@ -351,7 +363,10 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, histIdx: -1, zoom: 1,
+		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
+		nextEntryID:       1,
+		historyCache:      make(map[uint64]*cachedPage),
+		historyViewCur:    -1,
 		jsMemLimit:        jsHeapBudget(effectiveMemoryLimit()),
 		jsPageBudget:      jsPageBudget,
 		layoutBudget:      DefaultLayoutBudget,
@@ -373,7 +388,7 @@ func NewBrowser(w, h int) *Browser {
 func (b *Browser) setLoader(l *Loader) {
 	b.loader = l
 	if l != nil {
-		l.historyFn = b.historySnapshot
+		l.historyFn = b.historyViewSnapshot
 		l.setMemoryBudget(effectiveMemoryLimit())
 		if b.width > 0 {
 			l.imageViewportPx = cssWidthPx(b.width)
@@ -411,14 +426,35 @@ func (b *Browser) applyImageCap() {
 	b.loader.setImageCap(b.imageCapPx())
 }
 
-func (b *Browser) historySnapshot() ([]string, int) {
-	b.histMu.RLock()
-	defer b.histMu.RUnlock()
-	urls := make([]string, len(b.history))
-	for i, entry := range b.history {
-		urls[i] = entry.URL
+// historyViewSnapshot supplies the stored display snapshot to the built-in
+// history page. The front end owns the live list; this is only the latest
+// bounded copy it sent for about:history.
+func (b *Browser) historyViewSnapshot() ([]string, int) {
+	return b.historyView, b.historyViewCur
+}
+
+// setHistoryView replaces the snapshot used by about:history. It is display
+// data only; navigation state lives in the front end.
+func (b *Browser) setHistoryView(v protocol.History) {
+	// Keep in sync with the front-end snapshot cap and HistoryPageHTML.
+	const limit = 50
+	urls := make([]string, 0, len(v.Entries))
+	start := 0
+	if len(v.Entries) > limit {
+		start = len(v.Entries) - limit
 	}
-	return urls, b.histIdx
+	for _, e := range v.Entries[start:] {
+		urls = append(urls, e.URL)
+	}
+	current := v.Current
+	if current >= 0 {
+		current -= start
+		if current < 0 || current >= len(urls) {
+			current = -1
+		}
+	}
+	b.historyView = urls
+	b.historyViewCur = current
 }
 
 // searchTemplate returns the configured search URL template.
@@ -435,13 +471,34 @@ func (b *Browser) Navigate(input string, push bool) {
 	b.navigateRequest(http.MethodGet, input, nil, "", push)
 }
 
+// nextHistoryID allocates an opaque ID for a new front-end history entry.
+func (b *Browser) nextHistoryID() uint64 {
+	id := b.nextEntryID
+	b.nextEntryID++
+	return id
+}
+
 func (b *Browser) navigateRequest(method, input string, body []byte, contentType string, push bool) {
-	b.navigateRequestForce(method, input, body, contentType, push, false)
+	entryID, historyPush := b.entryID, push
+	if push || entryID == 0 {
+		entryID = b.nextHistoryID()
+		historyPush = true
+	}
+	b.navigateRequestEntry(method, input, body, contentType, entryID, historyPush, false)
 }
 
 // navigateRequestForce is navigateRequest with an optional one-shot block
 // bypass. It backs the "Try anyway" link (about:retry) on the blocked page.
 func (b *Browser) navigateRequestForce(method, input string, body []byte, contentType string, push bool, forceBlocks bool) {
+	entryID, historyPush := b.entryID, push
+	if push || entryID == 0 {
+		entryID = b.nextHistoryID()
+		historyPush = true
+	}
+	b.navigateRequestEntry(method, input, body, contentType, entryID, historyPush, forceBlocks)
+}
+
+func (b *Browser) navigateRequestEntry(method, input string, body []byte, contentType string, entryID uint64, historyPush, forceBlocks bool) {
 	// A download-attribute name belongs to this load only, so consume it even
 	// when the navigation is rejected before a request is made.
 	downloadName := b.pendingDownloadName
@@ -454,7 +511,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		}
 		input = b.url.String()
 		forceBlocks = true
-		push = false
+		historyPush = false
 		b.nextScrollSet = false
 	}
 	u, err := ResolveInput(input, b.url, b.searchTemplate())
@@ -468,7 +525,6 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 	}
 	restoreScroll, hasRestoreScroll := b.nextScroll, b.nextScrollSet
 	b.nextScrollSet = false
-	b.recordHistoryScroll()
 	if isAboutConfigURL(u) && b.reader {
 		b.status = "Config is not available in reader mode — press R to turn it off"
 		b.draw()
@@ -492,7 +548,7 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		}
 		page := b.configPage(u, applied)
 		b.finishLoad(loadResult{
-			seq: b.loadSeq, page: page, u: u, push: push, method: http.MethodGet,
+			seq: b.loadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: http.MethodGet,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
 		})
 		return
@@ -530,7 +586,8 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 		page, loadErr := load(ctx, method, target, body, contentType)
 		select {
 		case b.loadCh <- loadResult{
-			seq: seq, page: page, err: loadErr, u: u, push: push,
+			seq: seq, page: page, err: loadErr, u: u,
+			entryID: entryID, historyPush: historyPush,
 			method: method, body: body, contentType: contentType,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
 			downloadName: downloadName,
@@ -693,24 +750,19 @@ func (b *Browser) finishLoad(res loadResult) {
 		if b.autoNavigations >= maxAutoNavigations {
 			loopStopped = true
 		} else {
-			// Record this document first, then let the target replace it. A
-			// meta refresh is a client redirect, so browsers coalesce it into
+			// A meta refresh is a client redirect, so browsers coalesce it into
 			// one history entry; Back should skip the redirecting page rather
 			// than land on it and be forwarded again.
-			b.prepareHistory(res.push)
 			b.autoNavigations++
-			b.Navigate(target, false)
+			b.navigateRequestEntry(http.MethodGet, target, nil, "", res.entryID, res.historyPush, false)
 			return
 		}
 	}
 	b.resetConsole()
 	b.startJS(page)
-	if b.js != nil && (b.js.PendingNav() != "" || b.js.PendingForm() != nil) {
-		b.prepareHistory(res.push)
-	}
 	// A navigation queued by the page's own load-time scripts is also a
-	// client redirect: replace the entry recorded above instead of adding one.
-	if b.applyPendingJS(true) {
+	// client redirect: keep the same history entry instead of adding one.
+	if b.applyPendingJS(true, res.entryID, res.historyPush) {
 		return
 	}
 	if b.loopStopped {
@@ -752,12 +804,19 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.scroll = res.restoreScroll
 		b.clampScroll()
 	}
-	if b.url != nil {
-		if res.push {
-			b.pushHistory(b.url.String(), b.scroll)
-		} else {
-			b.replaceHistoryEntry(b.url.String(), b.scroll)
+	if !res.historyPush && b.entryID == 0 {
+		// A replace with no current entry does not create one, matching the
+		// old replaceHistoryEntry path (about:retry from a failed first load).
+		res.entryID = 0
+	}
+	b.entryID = res.entryID
+	if b.url != nil && res.entryID != 0 {
+		if !res.historyPush {
+			b.dropCachedEntryUnless(res.entryID, b.url.String())
 		}
+		b.emitHistoryCommit(protocol.HistoryCommit{
+			EntryID: res.entryID, URL: b.url.String(), Scroll: b.scroll, Push: res.historyPush,
+		})
 	}
 	b.autoNavigations = 0
 	b.prev = nil
@@ -789,22 +848,22 @@ func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
 
 // consumePendingJS applies a queued location.href/assign navigation or
 // programmatic form.submit() after the current script or callback has finished.
-func (b *Browser) consumePendingJS() bool { return b.applyPendingJS(false) }
+func (b *Browser) consumePendingJS() bool { return b.applyPendingJS(false, 0, false) }
 
 // applyPendingJS applies a navigation queued by page JavaScript. duringLoad
 // marks the queue drain that happens while the page is still being applied:
-// such a redirect replaces the redirecting entry, matching browser behaviour,
+// such a redirect keeps the same history entry, matching browser behaviour,
 // while a click or timer navigation after the page settled still pushes.
-func (b *Browser) applyPendingJS(duringLoad bool) bool {
+func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool {
 	if b.js == nil {
 		return false
 	}
 	if pf := b.js.PendingForm(); pf != nil {
 		b.js.SetPendingForm(nil)
-		if pf.Method == http.MethodPost {
-			b.navigateRequest(pf.Method, pf.Target, pf.Body, pf.ContentType, true)
+		if duringLoad {
+			b.navigateRequestEntry(pf.Method, pf.Target, pf.Body, pf.ContentType, entryID, historyPush, false)
 		} else {
-			b.Navigate(pf.Target, true)
+			b.navigateRequest(pf.Method, pf.Target, pf.Body, pf.ContentType, true)
 		}
 		return true
 	}
@@ -820,8 +879,10 @@ func (b *Browser) applyPendingJS(duringLoad bool) bool {
 		return false
 	}
 	b.autoNavigations++
-	if replace || duringLoad {
-		b.Navigate(target, false)
+	if duringLoad {
+		b.navigateRequestEntry(http.MethodGet, target, nil, "", entryID, historyPush, false)
+	} else if replace {
+		b.navigateRequestEntry(http.MethodGet, target, nil, "", b.entryID, false, false)
 	} else {
 		b.Navigate(target, true)
 	}
@@ -1310,15 +1371,17 @@ func (b *Browser) followLink(li *LinkInfo) {
 						return
 					}
 				} else {
-					b.recordHistoryScroll()
 					if !b.scrollToAnchor(u.Fragment) && b.reader {
 						b.status = readerLinkUnavailable
 						return
 					}
+					b.entryID = b.nextHistoryID()
 					b.url = u
-					b.pushHistory(u.String(), b.scroll)
 					b.status = ""
 					b.prev = nil
+					b.emitHistoryCommit(protocol.HistoryCommit{
+						EntryID: b.entryID, URL: u.String(), Scroll: b.scroll, Push: true,
+					})
 					return
 				}
 			}

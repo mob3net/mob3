@@ -6,17 +6,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
-)
 
-// historyEntry is one session-history position. Scroll records the document
-// row the user last had on that entry so back and forward can return to it.
-// Cached holds the applied page so back and forward restore it without a
-// network load, as long as it is still in the bounded in-memory page cache.
-type historyEntry struct {
-	URL    string
-	Scroll int
-	cached *cachedPage
-}
+	"browser/internal/protocol"
+)
 
 // maxCachedPages bounds the session's back/forward page cache. Oldest entries
 // are dropped first; nothing is written to disk.
@@ -209,17 +201,8 @@ func metaRefreshTarget(page *Page) string {
 	return ""
 }
 
-// recordHistoryScroll stores the current scroll offset on the active entry.
-func (b *Browser) recordHistoryScroll() {
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	if b.histIdx >= 0 && b.histIdx < len(b.history) {
-		b.history[b.histIdx].Scroll = b.scroll
-	}
-}
-
 // suspendCurrentPage keeps the applied page for back/forward when it belongs
-// to the active history entry, and detaches its JavaScript runtime without
+// to the current front-end entry, and detaches its JavaScript runtime without
 // destroying it so timers and DOM state resume on return. Pages that cannot be
 // cached (about: pages, downloads) simply have their runtime stopped.
 func (b *Browser) suspendCurrentPage() {
@@ -234,10 +217,10 @@ func (b *Browser) suspendCurrentPage() {
 	}
 }
 
-// cacheCurrentPage stores the applied page on the active history entry. It
-// reports whether the page was cached.
+// cacheCurrentPage stores the applied page under the current front-end entry
+// ID. It reports whether the page was cached.
 func (b *Browser) cacheCurrentPage() bool {
-	if b.page == nil || b.page.Root == nil || b.url == nil || b.page.Download {
+	if b.page == nil || b.page.Root == nil || b.url == nil || b.page.Download || b.entryID == 0 {
 		return false
 	}
 	switch b.url.Scheme {
@@ -263,39 +246,33 @@ func (b *Browser) cacheCurrentPage() bool {
 	}
 	b.histMu.Lock()
 	defer b.histMu.Unlock()
-	if b.histIdx < 0 || b.histIdx >= len(b.history) {
-		return false
-	}
-	if b.history[b.histIdx].URL != b.url.String() {
-		return false
-	}
-	b.history[b.histIdx].cached = c
-	b.history[b.histIdx].Scroll = b.scroll
+	b.historyCache[b.entryID] = c
 	b.trimHistoryCacheLocked()
 	return true
 }
 
 // trimHistoryCacheLocked drops cached pages until the cache is within its page
 // count and estimated byte budget. The least recently cached pages go first;
-// the newest entry survives even when the budget is tiny so Back can restore
-// one step without a load. The caller holds histMu.
+// the newest page survives even when the budget is tiny so Back can restore one
+// step without a load. The caller holds histMu.
 func (b *Browser) trimHistoryCacheLocked() {
 	type slot struct {
-		idx   int
+		id    uint64
 		at    time.Time
 		bytes int64
 	}
 	var slots []slot
 	total := int64(0)
-	for i := range b.history {
-		if c := b.history[i].cached; c != nil {
-			slots = append(slots, slot{idx: i, at: c.at, bytes: c.bytes})
-			total += c.bytes
+	for id, c := range b.historyCache {
+		if c == nil {
+			continue
 		}
+		slots = append(slots, slot{id: id, at: c.at, bytes: c.bytes})
+		total += c.bytes
 	}
 	if b.historyCacheBytes <= 0 {
 		for _, s := range slots {
-			b.history[s.idx].cached = nil
+			delete(b.historyCache, s.id)
 		}
 		return
 	}
@@ -311,7 +288,7 @@ func (b *Browser) trimHistoryCacheLocked() {
 		}
 		total -= slots[oldest].bytes
 		b.noteEvictedPage(slots[oldest].bytes)
-		b.history[slots[oldest].idx].cached = nil
+		delete(b.historyCache, slots[oldest].id)
 		slots = append(slots[:oldest], slots[oldest+1:]...)
 		return true
 	}
@@ -323,11 +300,32 @@ func (b *Browser) trimHistoryCacheLocked() {
 	}
 }
 
+// dropCachedEntryUnless removes an entry's cached page when its URL differs
+// from u. A same-URL reload keeps the old cached page, matching the old history
+// semantics.
+func (b *Browser) dropCachedEntryUnless(id uint64, u string) {
+	if id == 0 {
+		return
+	}
+	b.histMu.Lock()
+	defer b.histMu.Unlock()
+	c := b.historyCache[id]
+	if c == nil {
+		return
+	}
+	if c.page != nil && c.page.URL != nil && c.page.URL.String() == u {
+		return
+	}
+	if c.js != nil {
+		c.js.Stop()
+	}
+	delete(b.historyCache, id)
+}
+
 // applyCachedPage restores a page kept by the back/forward cache without any
 // network or script work. The scroll position and reader extraction from the
 // entry are reapplied.
-func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
-	c := entry.cached
+func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.suspendCurrentPage()
 	b.clearInputFocus()
 	b.cancelLoadNow()
@@ -336,12 +334,11 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 	}
 	b.loadSeq++
 	b.histMu.Lock()
-	b.histIdx = idx
-	// Restoring counts as the entry's most recent use, so keep it cached even
-	// when trimming evicted it while another page was being stashed.
+	// Restoring counts as the entry's most recent use.
 	c.at = time.Now()
-	b.history[idx].cached = c
+	b.historyCache[entryID] = c
 	b.histMu.Unlock()
+	b.entryID = entryID
 	b.page = c.page
 	b.url = c.page.URL
 	b.imagesPaused = false
@@ -371,7 +368,7 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 		}
 	}
 	b.rebuild()
-	b.scroll = entry.Scroll
+	b.scroll = scroll
 	b.clampScroll()
 	b.focus = -1
 	b.hover = -1
@@ -380,100 +377,19 @@ func (b *Browser) applyCachedPage(idx int, entry historyEntry) {
 	b.prev = nil
 }
 
-func (b *Browser) pushHistory(u string, scroll int) {
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	if b.histIdx >= 0 && b.histIdx < len(b.history) && b.history[b.histIdx].URL == u {
-		b.history[b.histIdx].Scroll = scroll
+// restoreEntry returns to a front-end history entry. A same-document target
+// updates the fragment and scroll in place; a cached page is restored without
+// a load; anything else is fetched with the entry's scroll offset.
+func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
+	if entryID == 0 {
 		return
 	}
-	if b.histIdx+1 < len(b.history) {
-		b.history = b.history[:b.histIdx+1]
-	}
-	b.history = append(b.history, historyEntry{URL: u, Scroll: scroll})
-	b.histIdx = len(b.history) - 1
-}
-
-// prepareHistory records the current document in the session history before a
-// potential automatic redirect. push is the navigation's normal push flag; a
-// replace navigation only needs an entry when none exists yet.
-func (b *Browser) prepareHistory(push bool) {
-	if b.url == nil {
-		return
-	}
-	if push {
-		b.pushHistory(b.url.String(), 0)
-		return
-	}
-	b.histMu.RLock()
-	empty := b.histIdx < 0
-	b.histMu.RUnlock()
-	if empty {
-		b.pushHistory(b.url.String(), 0)
-	}
-}
-
-// replaceHistoryEntry updates the active history entry in place after a
-// navigation that must not create a new entry (location.replace and reload).
-func (b *Browser) replaceHistoryEntry(u string, scroll int) {
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	if b.histIdx < 0 || b.histIdx >= len(b.history) {
-		return
-	}
-	e := &b.history[b.histIdx]
-	if e.URL != u {
-		if e.cached != nil && e.cached.js != nil {
-			e.cached.js.Stop()
-		}
-		e.cached = nil
-	}
-	e.URL = u
-	e.Scroll = scroll
-}
-
-func (b *Browser) back() {
 	b.clearLinkHints()
-	b.recordHistoryScroll()
-	b.histMu.Lock()
-	if b.histIdx <= 0 {
-		b.histMu.Unlock()
-		b.status = "No previous page"
-		return
-	}
-	idx := b.histIdx - 1
-	entry := b.history[idx]
-	b.histMu.Unlock()
-	b.navigateHistoryEntry(idx, entry)
-}
-
-func (b *Browser) forward() {
-	b.clearLinkHints()
-	b.recordHistoryScroll()
-	b.histMu.Lock()
-	if b.histIdx < 0 || b.histIdx+1 >= len(b.history) {
-		b.histMu.Unlock()
-		b.status = "No next page"
-		return
-	}
-	idx := b.histIdx + 1
-	entry := b.history[idx]
-	b.histMu.Unlock()
-	b.navigateHistoryEntry(idx, entry)
-}
-
-// navigateHistoryEntry moves to a history entry. When the target is the same
-// document as the current page, it updates the fragment and scroll offset in
-// place without another network load. Otherwise a cached page is restored
-// directly and anything else is fetched normally.
-func (b *Browser) navigateHistoryEntry(idx int, entry historyEntry) {
 	if b.url != nil && b.page != nil && b.page.Root != nil {
-		if u, err := url.Parse(entry.URL); err == nil && sameDocument(u, b.url) {
-			b.histMu.Lock()
-			b.histIdx = idx
-			b.histMu.Unlock()
+		if u, err := url.Parse(rawURL); err == nil && sameDocument(u, b.url) {
+			b.entryID = entryID
 			b.url = u
-			b.scroll = entry.Scroll
+			b.scroll = scroll
 			b.clampScroll()
 			b.focus = -1
 			b.hover = -1
@@ -482,17 +398,31 @@ func (b *Browser) navigateHistoryEntry(idx int, entry historyEntry) {
 			return
 		}
 	}
-	if entry.cached != nil {
-		b.applyCachedPage(idx, entry)
+	b.histMu.Lock()
+	c := b.historyCache[entryID]
+	if c != nil {
+		c.at = time.Now()
+	}
+	b.histMu.Unlock()
+	if c != nil {
+		b.applyCachedPage(entryID, c, scroll)
 		return
 	}
 	b.suspendCurrentPage()
-	b.histMu.Lock()
-	b.histIdx = idx
-	b.histMu.Unlock()
-	b.nextScroll = entry.Scroll
+	b.nextScroll = scroll
 	b.nextScrollSet = true
-	b.Navigate(entry.URL, false)
+	b.navigateRequestEntry(http.MethodGet, rawURL, nil, "", entryID, false, false)
+}
+
+// emitHistoryCommit reports a completed load to the front end list and any
+// headless observer. The engine never mutates the ordered list itself.
+func (b *Browser) emitHistoryCommit(c protocol.HistoryCommit) {
+	if b.sessionOut != nil {
+		_ = b.sessionOut.Send(protocol.Event{Body: c})
+	}
+	if b.historyObserver != nil {
+		b.historyObserver(c)
+	}
 }
 
 func (b *Browser) reload() {
@@ -512,12 +442,10 @@ func (b *Browser) reload() {
 func (b *Browser) dropCachedPages() {
 	b.histMu.Lock()
 	defer b.histMu.Unlock()
-	for i := range b.history {
-		if c := b.history[i].cached; c != nil {
-			if c.js != nil {
-				c.js.Stop()
-			}
-			b.history[i].cached = nil
+	for id, c := range b.historyCache {
+		if c != nil && c.js != nil {
+			c.js.Stop()
 		}
+		delete(b.historyCache, id)
 	}
 }

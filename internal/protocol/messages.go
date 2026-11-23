@@ -66,13 +66,38 @@ func (Init) commandKind() Kind { return CmdInit }
 
 // Navigate starts a top-level load.
 type Navigate struct {
-	URL              string
-	Push             bool
-	RestoreScroll    int
-	HasRestoreScroll bool
+	URL  string
+	Push bool
 }
 
 func (Navigate) commandKind() Kind { return CmdNavigate }
+
+// HistoryEntry is one front-end-owned session-history position as displayed on
+// about:history. The engine does not store the list; it receives a bounded
+// snapshot for the next history page.
+type HistoryEntry struct {
+	URL string
+}
+
+// History supplies the snapshot the engine renders for about:history. Current
+// is the index of the active entry, or -1 when it is not in the snapshot.
+type History struct {
+	Entries []HistoryEntry
+	Current int
+}
+
+func (History) commandKind() Kind { return CmdHistory }
+
+// Restore asks the engine to return to a front-end history entry. The engine
+// restores the cached page for EntryID when possible, resolves a same-document
+// URL in place, or loads URL with Scroll as the restore offset.
+type Restore struct {
+	EntryID uint64
+	URL     string
+	Scroll  int
+}
+
+func (Restore) commandKind() Kind { return CmdRestore }
 
 // Resize changes the terminal size. The engine derives the content rectangle
 // from it until that geometry moves to the front end.
@@ -119,9 +144,7 @@ func (Mouse) commandKind() Kind { return CmdMouse }
 type AppAction uint8
 
 const (
-	AppBack AppAction = iota + 1
-	AppForward
-	AppReload
+	AppReload AppAction = iota + 1
 	AppStop
 	AppToggleDark
 	AppToggleReader
@@ -368,6 +391,18 @@ type Crash struct {
 }
 
 func (Crash) eventKind() Kind { return EvCrash }
+
+// HistoryCommit reports the final URL of a completed load. Push appends a new
+// entry (merging into the current one when the URL is unchanged); otherwise the
+// entry identified by EntryID is updated in place.
+type HistoryCommit struct {
+	EntryID uint64
+	URL     string
+	Scroll  int
+	Push    bool
+}
+
+func (HistoryCommit) eventKind() Kind { return EvHistoryCommit }
 
 // Selection is the text of the current page selection.
 type Selection struct {

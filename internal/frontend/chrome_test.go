@@ -76,7 +76,6 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 		kind ChromeHitKind
 		body any
 	}{
-		{"back", ChromeHitBack, protocol.App{Action: protocol.AppBack}},
 		{"reload", ChromeHitReload, protocol.App{Action: protocol.AppReload}},
 		{"graphics", ChromeHitGraphics, protocol.App{Action: protocol.AppToggleImages}},
 		{"console", ChromeHitConsole, protocol.App{Action: protocol.AppToggleConsole}},
@@ -107,6 +106,31 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 				t.Fatalf("command = %#v, want %#v", s.cmds[0].Body, tc.body)
 			}
 		})
+	}
+}
+
+func TestChromeBackSendsHistoryRestore(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = chromeState()
+	loop.history = []historyEntry{{id: 1, url: "https://example.com/a"}, {id: 2, url: "https://example.com/b"}}
+	loop.historyIndex = 1
+	var hit ChromeHit
+	for _, h := range LayoutChrome(loop.State.Page).Hits {
+		if h.Kind == ChromeHitBack {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no back hit")
+	}
+	if !loop.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("back hit was not consumed")
+	}
+	want := protocol.Restore{EntryID: 1, URL: "https://example.com/a"}
+	if len(s.cmds) != 1 || s.cmds[0].Body != want {
+		t.Fatalf("commands = %#v, want %#v", s.cmds, want)
 	}
 }
 

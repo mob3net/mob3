@@ -11,27 +11,121 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"browser/internal/protocol"
 )
 
-func TestHistoryRecordsSession(t *testing.T) {
+// testHistory mirrors the front-end's ordered list so the engine tests can
+// drive restore and inspect the commits the engine emits.
+type testHistory struct {
+	entries []testHistoryEntry
+	index   int
+}
+
+type testHistoryEntry struct {
+	id     uint64
+	url    string
+	scroll int
+}
+
+func attachHistory(b *Browser) *testHistory {
+	h := &testHistory{index: -1}
+	b.historyObserver = h.apply
+	return h
+}
+
+func (h *testHistory) apply(c protocol.HistoryCommit) {
+	e := testHistoryEntry{id: c.EntryID, url: c.URL, scroll: c.Scroll}
+	if c.Push {
+		if h.index >= 0 && h.index < len(h.entries) && h.entries[h.index].url == c.URL {
+			h.entries[h.index] = e
+			return
+		}
+		if h.index+1 < len(h.entries) {
+			h.entries = h.entries[:h.index+1]
+		}
+		h.entries = append(h.entries, e)
+		h.index = len(h.entries) - 1
+		return
+	}
+	if len(h.entries) == 0 {
+		h.entries = append(h.entries, e)
+		h.index = 0
+		return
+	}
+	if h.index < 0 || h.index >= len(h.entries) {
+		h.index = len(h.entries) - 1
+	}
+	h.entries[h.index] = e
+}
+
+func (h *testHistory) record(b *Browser) {
+	if h.index >= 0 && h.index < len(h.entries) {
+		h.entries[h.index].scroll = b.scroll
+	}
+}
+
+func (h *testHistory) back(b *Browser) {
+	h.record(b)
+	if h.index <= 0 {
+		b.status = "No previous page"
+		return
+	}
+	h.index--
+	e := h.entries[h.index]
+	b.restoreEntry(e.id, e.url, e.scroll)
+}
+
+func (h *testHistory) forward(b *Browser) {
+	h.record(b)
+	if len(h.entries) == 0 || h.index+1 >= len(h.entries) {
+		b.status = "No next page"
+		return
+	}
+	h.index++
+	e := h.entries[h.index]
+	b.restoreEntry(e.id, e.url, e.scroll)
+}
+
+func (h *testHistory) urls() []string {
+	out := make([]string, len(h.entries))
+	for i, e := range h.entries {
+		out[i] = e.url
+	}
+	return out
+}
+
+func navigateAndFinish(t *testing.T, b *Browser, target string) {
+	t.Helper()
+	b.Navigate(target, true)
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatalf("navigation to %s did not finish", target)
+	}
+}
+
+func TestHistoryCommitRecordsSession(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	h := attachHistory(b)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: u.Path, Root: ParseHTML("<html><body>ok</body></html>")}, nil
 	}
-	navigate := func(target string) {
-		b.Navigate(target, true)
-		select {
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case <-time.After(2 * time.Second):
-			t.Fatalf("navigation to %s did not finish", target)
-		}
+	navigateAndFinish(t, b, "https://example.com/a")
+	navigateAndFinish(t, b, "https://example.com/b")
+	if got := strings.Join(h.urls(), " "); got != "https://example.com/a https://example.com/b" {
+		t.Fatalf("history = %q", got)
 	}
-	navigate("https://example.com/a")
-	navigate("https://example.com/b")
+	if h.index != 1 || h.entries[0].id == 0 || h.entries[1].id == 0 || h.entries[0].id == h.entries[1].id {
+		t.Fatalf("history index/ids = %+v at %d", h.entries, h.index)
+	}
 
+	b.setHistoryView(protocol.History{Entries: []protocol.HistoryEntry{
+		{URL: "https://example.com/a"}, {URL: "https://example.com/b"},
+	}, Current: 1})
 	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +141,9 @@ func TestHistoryRecordsSession(t *testing.T) {
 
 func TestHistoryPage(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.history = []historyEntry{{URL: "https://example.com/a"}, {URL: "about:start"}}
-	b.histIdx = 1
+	b.setHistoryView(protocol.History{Entries: []protocol.HistoryEntry{
+		{URL: "https://example.com/a"}, {URL: "about:start"},
+	}, Current: 1})
 	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -85,22 +180,18 @@ func TestHistoryPage(t *testing.T) {
 
 func TestJavaScriptToggleDropsPageCache(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.history = []historyEntry{
-		{URL: "https://example.com/a", cached: &cachedPage{js: &jsRuntime{}}},
-		{URL: "https://example.com/b", cached: &cachedPage{}},
-	}
-	b.histIdx = 1
+	b.historyCache[1] = &cachedPage{js: &jsRuntime{}}
+	b.historyCache[2] = &cachedPage{}
 	b.dropCachedPages()
-	for i, e := range b.history {
-		if e.cached != nil {
-			t.Fatalf("history %d still cached", i)
-		}
+	if len(b.historyCache) != 0 {
+		t.Fatalf("cache still has %d pages", len(b.historyCache))
 	}
 }
 
 func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	h := attachHistory(b)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		var doc strings.Builder
@@ -111,22 +202,13 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 		doc.WriteString(`<div id="target">target</div></body></html>`)
 		return &Page{URL: u, Base: u, Title: "test", Root: ParseHTML(doc.String())}, nil
 	}
-	finish := func() {
-		t.Helper()
-		select {
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case <-time.After(2 * time.Second):
-			t.Fatal("navigation did not finish")
-		}
-	}
-	b.Navigate("https://example.com/", true)
-	finish()
-	if len(b.history) != 1 {
-		t.Fatalf("history = %+v, want one entry", b.history)
+	navigateAndFinish(t, b, "https://example.com/")
+	if len(h.entries) != 1 {
+		t.Fatalf("history = %+v, want one entry", h.entries)
 	}
 
 	b.scroll = 2
+	h.record(b)
 	idx := -1
 	for i, li := range b.layout.Links {
 		if li.Href == "#target" {
@@ -139,8 +221,8 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	b.focus = idx
 	b.followFocused()
 
-	if len(b.history) != 2 {
-		t.Fatalf("history after anchor = %+v, want two entries", b.history)
+	if len(h.entries) != 2 {
+		t.Fatalf("history after anchor = %+v, want two entries", h.entries)
 	}
 	if b.url == nil || b.url.Fragment != "target" {
 		t.Fatalf("url after anchor = %v", b.url)
@@ -154,7 +236,7 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	b.scroll = anchorScroll + 5
 	b.clampScroll()
 	rememberedScroll := b.scroll
-	b.back()
+	h.back(b)
 	if b.url == nil || b.url.Fragment != "" {
 		t.Fatalf("url after back = %v", b.url)
 	}
@@ -162,7 +244,7 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 		t.Fatalf("back scroll = %d, want 2", b.scroll)
 	}
 
-	b.forward()
+	h.forward(b)
 	if b.url == nil || b.url.Fragment != "target" {
 		t.Fatalf("url after forward = %v", b.url)
 	}
@@ -174,30 +256,22 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 func TestBackRestoresPageScroll(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	h := attachHistory(b)
 	loads := 0
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		loads++
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
 	}
-	navigate := func(target string) {
-		t.Helper()
-		b.Navigate(target, true)
-		select {
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case <-time.After(2 * time.Second):
-			t.Fatalf("navigation to %s did not finish", target)
-		}
-	}
-	navigate("https://example.com/a")
+	navigateAndFinish(t, b, "https://example.com/a")
 	b.scroll = 5
-	navigate("https://example.com/b")
+	h.record(b)
+	navigateAndFinish(t, b, "https://example.com/b")
 	if b.scroll != 0 {
 		t.Fatalf("new page scroll = %d, want 0", b.scroll)
 	}
 	b.scroll = 7
-	b.back()
+	h.back(b)
 	if loads != 2 {
 		t.Fatalf("back refetched the page: loads = %d", loads)
 	}
@@ -210,7 +284,7 @@ func TestBackRestoresPageScroll(t *testing.T) {
 	if b.page == nil || b.page.Title != "https://example.com/a" {
 		t.Fatalf("back did not restore the cached page: %+v", b.page)
 	}
-	b.forward()
+	h.forward(b)
 	if loads != 2 {
 		t.Fatalf("forward refetched the page: loads = %d", loads)
 	}
@@ -225,6 +299,7 @@ func TestBackRestoresPageScroll(t *testing.T) {
 func TestBackKeepsPageJavaScriptState(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	h := attachHistory(b)
 	loads := 0
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		loads++
@@ -235,22 +310,12 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 		}
 		return page, nil
 	}
-	navigate := func(target string) {
-		t.Helper()
-		b.Navigate(target, true)
-		select {
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case <-time.After(2 * time.Second):
-			t.Fatalf("navigation to %s did not finish", target)
-		}
-	}
-	withQuietStdout(t, func() { navigate("https://example.com/a") })
+	withQuietStdout(t, func() { navigateAndFinish(t, b, "https://example.com/a") })
 	if b.page.Title != "A1" {
 		t.Fatalf("script title = %q", b.page.Title)
 	}
-	navigate("https://example.com/b")
-	withQuietStdout(t, b.back)
+	navigateAndFinish(t, b, "https://example.com/b")
+	withQuietStdout(t, func() { h.back(b) })
 	if loads != 2 {
 		t.Fatalf("back refetched the page: loads = %d", loads)
 	}
@@ -272,32 +337,19 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 func TestHistoryCacheIsBounded(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
+	attachHistory(b)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body><p>x</p></body></html>`)}, nil
 	}
 	for i := 0; i < maxCachedPages+3; i++ {
-		target := fmt.Sprintf("https://example.com/p%d", i)
-		b.Navigate(target, true)
-		select {
-		case res := <-b.loadCh:
-			b.finishLoad(res)
-		case <-time.After(2 * time.Second):
-			t.Fatalf("navigation %d did not finish", i)
-		}
+		navigateAndFinish(t, b, fmt.Sprintf("https://example.com/p%d", i))
 	}
-	cached := 0
-	for _, entry := range b.history {
-		if entry.cached != nil {
-			cached++
-		}
+	if got := len(b.historyCache); got != maxCachedPages {
+		t.Fatalf("cached pages = %d, want %d", got, maxCachedPages)
 	}
-	if cached != maxCachedPages {
-		t.Fatalf("cached pages = %d, want %d", cached, maxCachedPages)
-	}
-	// The most recent page must still be cached for an immediate back.
-	last := b.history[len(b.history)-2]
-	if last.cached == nil {
+	// The most recently replaced page must still be cached for an immediate back.
+	if b.historyCache[b.nextEntryID-2] == nil {
 		t.Fatal("most recent page was evicted from the cache")
 	}
 }
@@ -305,28 +357,17 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 func TestAboutPagesAreNotCached(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
-	b.Navigate("https://example.com/a", true)
-	select {
-	case res := <-b.loadCh:
-		b.finishLoad(res)
-	case <-time.After(2 * time.Second):
-		t.Fatal("navigation did not finish")
-	}
-	b.Navigate("about:help", true)
-	select {
-	case res := <-b.loadCh:
-		b.finishLoad(res)
-	case <-time.After(2 * time.Second):
-		t.Fatal("help navigation did not finish")
-	}
-	if b.history[b.histIdx].cached != nil {
+	attachHistory(b)
+	navigateAndFinish(t, b, "https://example.com/a")
+	navigateAndFinish(t, b, "about:help")
+	if b.historyCache[b.entryID] != nil {
 		t.Fatal("about:help was cached")
 	}
 }
 
 func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
-	// A client redirect that runs while the page is being applied replaces the
-	// redirecting entry, the way browsers coalesce it; Back must skip it.
+	// A client redirect that runs while the page is being applied keeps the
+	// same entry, the way browsers coalesce it; Back must skip it.
 	cases := []struct {
 		name     string
 		script   string
@@ -346,6 +387,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			b := NewBrowser(80, 10)
+			h := attachHistory(b)
 			b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 				u, err := url.Parse(target)
 				if err != nil {
@@ -367,12 +409,8 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 					t.Fatalf("load %d did not finish", i+1)
 				}
 			}
-			var got []string
-			for _, e := range b.history {
-				got = append(got, e.URL)
-			}
-			if strings.Join(got, " ") != strings.Join(tc.wantURLs, " ") {
-				t.Fatalf("history = %v, want %v", got, tc.wantURLs)
+			if got := strings.Join(h.urls(), " "); got != strings.Join(tc.wantURLs, " ") {
+				t.Fatalf("history = %v, want %v", h.urls(), tc.wantURLs)
 			}
 		})
 	}
@@ -380,6 +418,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 
 func TestScriptRedirectLoopStops(t *testing.T) {
 	b := NewBrowser(80, 10)
+	h := attachHistory(b)
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
@@ -409,8 +448,8 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 	if b.loading {
 		t.Fatal("a load is still running after the loop was stopped")
 	}
-	if len(b.history) != 1 {
-		t.Fatalf("history grew to %d entries: %v", len(b.history), b.history)
+	if len(h.entries) != 1 {
+		t.Fatalf("history grew to %d entries: %v", len(h.entries), h.urls())
 	}
 }
 
@@ -449,6 +488,7 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 
 func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
 	b := NewBrowser(60, 12)
+	h := attachHistory(b)
 	uRedir := mustParse(t, "https://example.com/redir")
 	uTarget := mustParse(t, "https://example.com/target")
 	redir := &Page{URL: uRedir, Base: uRedir, Root: ParseHTML(
@@ -456,16 +496,19 @@ func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
 	target := &Page{URL: uTarget, Base: uTarget, Root: ParseHTML(`<html><body>target</body></html>`)}
 	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) { return target, nil }
 
-	b.finishLoad(loadResult{seq: b.loadSeq, page: redir, u: uRedir, push: true, method: http.MethodGet})
+	id := b.nextHistoryID()
+	b.finishLoad(loadResult{seq: b.loadSeq, page: redir, u: uRedir, entryID: id, historyPush: true, method: http.MethodGet})
 	select {
 	case res := <-b.loadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("meta refresh navigation did not finish")
 	}
-	urls, idx := b.historySnapshot()
-	if len(urls) != 1 || urls[0] != "https://example.com/target" || idx != 0 {
-		t.Fatalf("history = %v at %d, want only the target", urls, idx)
+	if got := strings.Join(h.urls(), " "); got != "https://example.com/target" {
+		t.Fatalf("history = %v, want only the target", h.urls())
+	}
+	if h.index != 0 || h.entries[0].id != id {
+		t.Fatalf("history entry = %+v, want id %d", h.entries, id)
 	}
 }
 
@@ -473,12 +516,14 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	// A navigation queued after the page settled (a click or timer handler)
 	// still adds an entry, so Back returns to the page the user was on.
 	b := NewBrowser(60, 12)
+	h := attachHistory(b)
 	u := mustParse(t, "https://example.com/start")
 	next := mustParse(t, "https://example.com/next")
 	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) {
 		return &Page{URL: next, Base: next, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
 	}
-	b.finishLoad(loadResult{seq: b.loadSeq, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, push: true, method: http.MethodGet})
+	id := b.nextHistoryID()
+	b.finishLoad(loadResult{seq: b.loadSeq, entryID: id, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, historyPush: true, method: http.MethodGet})
 	if b.js == nil {
 		t.Fatal("no JS runtime")
 	}
@@ -492,9 +537,9 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("navigation did not finish")
 	}
-	urls, _ := b.historySnapshot()
-	if len(urls) != 2 || urls[0] != "https://example.com/start" || urls[1] != "https://example.com/next" {
-		t.Fatalf("history = %v, want start then next", urls)
+	want := "https://example.com/start https://example.com/next"
+	if got := strings.Join(h.urls(), " "); got != want {
+		t.Fatalf("history = %q, want %q", got, want)
 	}
 }
 
@@ -502,33 +547,26 @@ func TestHistoryCacheEvictsByWeight(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.historyCacheBytes = 3 << 20
 	now := time.Now()
-	b.history = []historyEntry{
-		{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20, at: now}},
-		{URL: "https://example.com/b", cached: &cachedPage{bytes: 1 << 20, at: now.Add(time.Second)}},
-		{URL: "https://example.com/c", cached: &cachedPage{bytes: 1 << 20, at: now.Add(2 * time.Second)}},
-		{URL: "https://example.com/d", cached: &cachedPage{bytes: 1 << 20, at: now.Add(3 * time.Second)}},
+	for i := 0; i < 4; i++ {
+		b.historyCache[uint64(i+1)] = &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)}
 	}
 	b.histMu.Lock()
 	b.trimHistoryCacheLocked()
 	b.histMu.Unlock()
 	total := int64(0)
-	cached := 0
-	for _, e := range b.history {
-		if e.cached != nil {
-			cached++
-			total += e.cached.bytes
-		}
+	for _, c := range b.historyCache {
+		total += c.bytes
 	}
 	if total > b.historyCacheBytes {
 		t.Fatalf("cached bytes = %d, budget = %d", total, b.historyCacheBytes)
 	}
-	if cached != 3 {
-		t.Fatalf("cached pages = %d, want 3", cached)
+	if len(b.historyCache) != 3 {
+		t.Fatalf("cached pages = %d, want 3", len(b.historyCache))
 	}
-	if b.history[0].cached != nil {
+	if b.historyCache[1] != nil {
 		t.Fatal("oldest page survived the weight budget")
 	}
-	if b.history[len(b.history)-1].cached == nil {
+	if b.historyCache[4] == nil {
 		t.Fatal("newest page was evicted")
 	}
 }
@@ -538,21 +576,20 @@ func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	b.historyCacheBytes = 2 << 20 // single-page cap is 1 MiB
 	u := mustParse(t, "https://example.com/heavy")
 	b.url = u
-	b.history = []historyEntry{{URL: u.String()}}
-	b.histIdx = 0
+	b.entryID = 1
 	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body><p>heavy</p></body></html>`),
 		RawHTML: strings.Repeat("x", 1200*1024)}
 	if b.cacheCurrentPage() {
 		t.Fatal("page heavier than the single-page cap was cached")
 	}
-	if b.history[0].cached != nil {
-		t.Fatal("heavy page was stored on the history entry")
+	if b.historyCache[1] != nil {
+		t.Fatal("heavy page was stored in the cache")
 	}
 	b.page.RawHTML = "<html><body><p>light</p></body></html>"
 	if !b.cacheCurrentPage() {
 		t.Fatal("light page was not cached")
 	}
-	if b.history[0].cached == nil || b.history[0].cached.bytes <= 0 {
+	if c := b.historyCache[1]; c == nil || c.bytes <= 0 {
 		t.Fatal("light page has no recorded weight")
 	}
 }
@@ -586,12 +623,12 @@ func TestPageWeightCountsScriptsImagesAndRuntime(t *testing.T) {
 
 func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.history = []historyEntry{{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20}}}
+	b.historyCache[1] = &cachedPage{bytes: 1 << 20}
 	b.setHistoryCacheLimitMB(0)
 	if b.historyCacheBytes != 0 {
 		t.Fatalf("budget = %d, want 0", b.historyCacheBytes)
 	}
-	if b.history[0].cached != nil {
+	if len(b.historyCache) != 0 {
 		t.Fatal("disabling the page cache kept an entry")
 	}
 	if b.cacheCurrentPage() {
@@ -620,11 +657,11 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 	}
 }
 
-func cachedBytes(history []historyEntry) int64 {
+func cachedBytes(history map[uint64]*cachedPage) int64 {
 	total := int64(0)
-	for _, e := range history {
-		if e.cached != nil {
-			total += e.cached.bytes
+	for _, c := range history {
+		if c != nil {
+			total += c.bytes
 		}
 	}
 	return total
@@ -635,16 +672,13 @@ func TestLightEvictionDoesNotScavenge(t *testing.T) {
 	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
 	now := time.Now()
 	for i := 0; i < 12; i++ {
-		b.history = append(b.history, historyEntry{
-			URL:    fmt.Sprintf("https://example.com/p%d", i),
-			cached: &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)},
-		})
+		b.historyCache[uint64(i+1)] = &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)}
 	}
 	b.histMu.Lock()
 	b.trimHistoryCacheLocked()
 	b.histMu.Unlock()
-	if cachedBytes(b.history) > b.historyCacheBytes {
-		t.Fatalf("cached bytes = %d, budget = %d", cachedBytes(b.history), b.historyCacheBytes)
+	if cachedBytes(b.historyCache) > b.historyCacheBytes {
+		t.Fatalf("cached bytes = %d, budget = %d", cachedBytes(b.historyCache), b.historyCacheBytes)
 	}
 	if b.takeScavengePending() {
 		t.Fatal("small evictions requested a scavenge")
@@ -655,11 +689,9 @@ func TestHeavyEvictionRequestsScavenge(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
 	now := time.Now()
-	b.history = []historyEntry{
-		{URL: "https://example.com/a", cached: &cachedPage{bytes: 1 << 20, at: now}},
-		{URL: "https://example.com/b", cached: &cachedPage{bytes: 4 << 20, at: now.Add(time.Second)}},
-		{URL: "https://example.com/c", cached: &cachedPage{bytes: 4 << 20, at: now.Add(2 * time.Second)}},
-	}
+	b.historyCache[1] = &cachedPage{bytes: 1 << 20, at: now}
+	b.historyCache[2] = &cachedPage{bytes: 4 << 20, at: now.Add(time.Second)}
+	b.historyCache[3] = &cachedPage{bytes: 4 << 20, at: now.Add(2 * time.Second)}
 	// Only the light oldest page is evicted to fit the budget, so no scavenge.
 	b.histMu.Lock()
 	b.trimHistoryCacheLocked()
@@ -669,9 +701,7 @@ func TestHeavyEvictionRequestsScavenge(t *testing.T) {
 	}
 	// A new heavy page pushes out the older heavy one (4 MiB), which is at
 	// least a quarter of the budget.
-	b.history = append(b.history, historyEntry{
-		URL: "https://example.com/d", cached: &cachedPage{bytes: 4 << 20, at: now.Add(3 * time.Second)},
-	})
+	b.historyCache[4] = &cachedPage{bytes: 4 << 20, at: now.Add(3 * time.Second)}
 	b.histMu.Lock()
 	b.trimHistoryCacheLocked()
 	b.histMu.Unlock()
@@ -680,5 +710,59 @@ func TestHeavyEvictionRequestsScavenge(t *testing.T) {
 	}
 	if b.takeScavengePending() {
 		t.Fatal("scavenge request was not consumed exactly once")
+	}
+}
+
+func TestRestoreFetchesUncachedEntryWithScroll(t *testing.T) {
+	b := NewBrowser(60, 10)
+	b.setLoader(NewLoader())
+	h := attachHistory(b)
+	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u := mustParse(t, target)
+		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
+	}
+	navigateAndFinish(t, b, "https://example.com/a")
+	b.restoreEntry(9, "https://example.com/c", 7)
+	select {
+	case res := <-b.loadCh:
+		b.finishLoad(res)
+	case <-time.After(2 * time.Second):
+		t.Fatal("restore did not load")
+	}
+	if b.entryID != 9 || b.url == nil || b.url.Path != "/c" {
+		t.Fatalf("entry=%d url=%v", b.entryID, b.url)
+	}
+	if b.scroll != 7 {
+		t.Fatalf("scroll = %d, want 7", b.scroll)
+	}
+	if got := h.entries[len(h.entries)-1]; got.id != 9 || got.url != "https://example.com/c" || got.scroll != 7 {
+		t.Fatalf("restore commit = %+v", got)
+	}
+	if h.lastPush() {
+		t.Fatal("restore pushed a new entry")
+	}
+}
+
+func (h *testHistory) lastPush() bool {
+	// The helper only stores entries; a restore commit updates the active
+	// entry in place, so the list length stays at two.
+	return len(h.entries) > 2
+}
+
+func TestHistoryCommandStoresSnapshot(t *testing.T) {
+	b := NewBrowser(60, 10)
+	if _, err := b.handleCommand(protocol.Command{Body: protocol.History{
+		Entries: []protocol.HistoryEntry{{URL: "https://example.com/a"}, {URL: "https://example.com/b"}},
+		Current: 0,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := b.loader.LoadContext(context.Background(), "about:history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := page.Root.TextContent()
+	if !strings.Contains(text, "https://example.com/a") || !strings.Contains(text, "(current)") {
+		t.Fatalf("history text = %q", text)
 	}
 }

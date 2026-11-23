@@ -68,8 +68,18 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		kind = CmdNavigate
 		e.str(v.URL)
 		e.bool(v.Push)
-		e.i32(v.RestoreScroll)
-		e.bool(v.HasRestoreScroll)
+	case History:
+		kind = CmdHistory
+		e.count(len(v.Entries))
+		for _, h := range v.Entries {
+			e.str(h.URL)
+		}
+		e.i32(v.Current)
+	case Restore:
+		kind = CmdRestore
+		e.u64(v.EntryID)
+		e.str(v.URL)
+		e.i32(v.Scroll)
 	case Resize:
 		kind = CmdResize
 		e.i32(v.Width)
@@ -266,6 +276,12 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		for _, r := range v.Rects {
 			e.rect(r)
 		}
+	case HistoryCommit:
+		kind = EvHistoryCommit
+		e.u64(v.EntryID)
+		e.str(v.URL)
+		e.i32(v.Scroll)
+		e.bool(v.Push)
 	case Download:
 		kind = EvDownload
 		e.str(v.URL)
@@ -383,12 +399,16 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 			Flags:  d.u32(),
 		}
 	case CmdNavigate:
-		body = Navigate{
-			URL:              d.str(),
-			Push:             d.bool(),
-			RestoreScroll:    d.i32(),
-			HasRestoreScroll: d.bool(),
+		body = Navigate{URL: d.str(), Push: d.bool()}
+	case CmdHistory:
+		n := d.count(lim.MaxLinks)
+		entries := make([]HistoryEntry, n)
+		for i := range entries {
+			entries[i] = HistoryEntry{URL: d.str()}
 		}
+		body = History{Entries: entries, Current: d.i32()}
+	case CmdRestore:
+		body = Restore{EntryID: d.u64(), URL: d.str(), Scroll: d.i32()}
 	case CmdResize:
 		body = Resize{Width: d.i32(), Height: d.i32(), CellW: d.i32(), CellH: d.i32()}
 	case CmdScroll:
@@ -575,6 +595,8 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			rects[i] = d.rect()
 		}
 		body = FindResults{Query: query, Current: current, Total: total, Rects: rects}
+	case EvHistoryCommit:
+		body = HistoryCommit{EntryID: d.u64(), URL: d.str(), Scroll: d.i32(), Push: d.bool()}
 	case EvDownload:
 		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
 	case EvNotice:
