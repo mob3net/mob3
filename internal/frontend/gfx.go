@@ -188,6 +188,10 @@ func (r *GFX) Clear(sb *strings.Builder) {
 	switch r.mode {
 	case GraphicsKitty:
 		sb.WriteString("\x1b_Ga=d,d=A,q=2\x1b\\")
+		// d=A removes the terminal-side image data as well as placements, so
+		// the id cache is no longer valid. Encoded/scaled/decoded images stay
+		// cached and are re-transmitted on the next native frame.
+		r.kitty = make(map[gfxKey]*kittyImage)
 	case GraphicsITerm:
 		// Inline images are ordinary screen content and are cleared by the
 		// caller's screen reset / alternate-screen switch.

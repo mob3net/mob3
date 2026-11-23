@@ -83,6 +83,9 @@ func execute(o runOptions) int {
 	}
 	interactive := !o.Dump && frontend.IsTTY(os.Stdin) && frontend.IsTTY(os.Stdout)
 	graphicsMode := frontend.ParseGraphicsMode(o.Graphics)
+	if graphicsMode == frontend.GraphicsAuto {
+		graphicsMode = frontend.DetectGraphics(frontend.GraphicsAuto)
+	}
 	loader, err := browser.NewConfiguredLoader(browser.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,

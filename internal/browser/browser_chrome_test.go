@@ -827,6 +827,9 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	if !hasImage() {
 		t.Fatal("image fragment did not return after enabling graphics")
 	}
+	if b.gfx == nil || !b.inlineImagesEnabled() {
+		t.Fatalf("native renderer did not return: gfx=%v", b.gfx)
+	}
 }
 
 func TestStatusShortcutUnderlinesErrorE(t *testing.T) {
@@ -1029,5 +1032,38 @@ func TestZoomBadgeSingleRowHeader(t *testing.T) {
 	}
 	if line := plainLine(b.prev[0]); !strings.Contains(line, "50%") {
 		t.Fatalf("single-row header = %q, want the 50%% badge", line)
+	}
+}
+
+func TestGraphicsDowngradeAndRepaintPlacements(t *testing.T) {
+	u := mustParse(t, "https://example.com/pic")
+	doc := ParseHTML(`<html><body><p>intro</p><img src="/pic.png"></body></html>`)
+	if n := doc.FindFirst("img"); n != nil {
+		n.Img = image.NewRGBA(image.Rect(0, 0, 40, 20))
+		n.ImgSrc = "/pic.png"
+	}
+	b := NewBrowser(80, 20)
+	b.loader = NewLoader()
+	b.loader.noImages = false
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.emitFrames = true
+	b.frontendChrome = true
+	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.newGraphics = newTestGraphics
+	b.setGraphicsMode(GraphicsKitty)
+	b.draw()
+	if len(b.frameBuf.Placements) == 0 {
+		t.Fatal("no native placements in kitty mode")
+	}
+	b.setGraphicsMode(GraphicsBlocks)
+	b.draw()
+	if len(b.frameBuf.Placements) != 0 {
+		t.Fatal("native placements survived blocks mode")
+	}
+	b.setGraphicsMode(GraphicsKitty)
+	b.draw()
+	if len(b.frameBuf.Placements) == 0 {
+		t.Fatal("native placements did not return after re-enabling kitty")
 	}
 }
