@@ -219,7 +219,7 @@ published by the Pages build.
   engine type, and `internal/protocol` is canonical for the message set. The
   engine no longer imports `net/http`: JS `fetch`/XHR and cookie parsing use the
   host broker. The engine owns session construction and headless automation;
-  the terminal loop, normal header/footer chrome, the displayed URL/title ledger,
+  the terminal loop, normal header/footer chrome, the displayed URL ledger,
   content geometry, base shell keys, scrollbar, URL/vim prompt, page find,
   view/zoom windows, JS dialogs, the select popup, download/notice modals, link
   hints, the console (composition, input and find) and session history (list,
@@ -228,8 +228,10 @@ published by the Pages build.
   `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`,
   `frontend/download.go`, `frontend/hints.go`, `frontend/console.go` and
   `frontend/history.go`. The front end validates the committed URL scheme and
-  renders only committed history entries for chrome; host-attested final URLs
-  remain open.
+  renders only committed history entries for chrome. The host records each
+  document fetch's final URL and exposes it to the front end by entry ID; the
+  engine's `HistoryCommit` URL is ignored. A fully compromised engine still
+  needs the child process for memory isolation.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package

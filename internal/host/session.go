@@ -6,6 +6,7 @@ import (
 	"image"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"browser/internal/protocol"
@@ -23,6 +24,11 @@ type Session struct {
 	cache    *ResourceCache
 	requests *RequestLog
 	token    *ConfigToken
+	// attestedID/URL hold the final URL of the latest document fetch. The
+	// front end reads it by entry ID; the engine only triggers the fetch.
+	attestedMu  sync.Mutex
+	attestedID  uint64
+	attestedURL string
 }
 
 // NewSession builds an empty host session. The caller applies UA, search,
@@ -37,6 +43,17 @@ func NewSession() *Session {
 		requests: NewRequestLog(),
 		token:    NewConfigToken(),
 	}
+}
+
+// AttestedURL reports the host's final URL for one document navigation. The
+// front end calls it directly; the engine cannot write the value.
+func (s *Session) AttestedURL(entryID uint64) (string, bool) {
+	s.attestedMu.Lock()
+	defer s.attestedMu.Unlock()
+	if entryID == 0 || s.attestedID != entryID || s.attestedURL == "" {
+		return "", false
+	}
+	return s.attestedURL, true
 }
 
 func (s *Session) fetcher() *Fetcher {
@@ -62,6 +79,14 @@ func (s *Session) Fetch(ctx context.Context, method string, u *url.URL, body []b
 		return protocol.HostFetch{}, err
 	}
 	local := IsLocalHost(final.Hostname()) || (space.Local.Load() && !RequestUsesProxy(final.String()))
+	if final != nil {
+		if meta := protocol.RequestMetaFrom(ctx); meta.EntryID != 0 && meta.Kind == "doc" {
+			s.attestedMu.Lock()
+			s.attestedID = meta.EntryID
+			s.attestedURL = final.String()
+			s.attestedMu.Unlock()
+		}
+	}
 	return protocol.HostFetch{Data: data, ContentType: ctype, FinalURL: final, Status: status, PageLocal: local}, nil
 }
 

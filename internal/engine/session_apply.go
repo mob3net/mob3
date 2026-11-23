@@ -162,12 +162,8 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 		if !res.HistoryPush {
 			s.DropCachedEntryUnless(res.EntryID, s.URL.String())
 		}
-		title := ""
-		if s.Page != nil {
-			title = s.Page.Title
-		}
 		h.EmitHistoryCommit(protocol.HistoryCommit{
-			EntryID: res.EntryID, URL: s.URL.String(), Title: title, Scroll: s.Scroll, Push: res.HistoryPush,
+			EntryID: res.EntryID, URL: s.URL.String(), Scroll: s.Scroll, Push: res.HistoryPush,
 		})
 	}
 	s.AutoNavigations = 0

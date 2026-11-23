@@ -87,7 +87,8 @@ func execute(o runOptions) int {
 	if graphicsMode == frontend.GraphicsAuto {
 		graphicsMode = frontend.DetectGraphics(frontend.GraphicsAuto)
 	}
-	loader, err := engine.NewConfiguredLoader(host.NewSession(), engine.LoaderConfig{
+	hostSess := host.NewSession()
+	loader, err := engine.NewConfiguredLoader(hostSess, engine.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,
 		NoImages:     graphicsMode == frontend.GraphicsNone,
@@ -254,7 +255,7 @@ func execute(o runOptions) int {
 	loop := &frontend.SessionLoop{
 		Session: session, Presenter: presenter, Keys: keys, Resize: winch, Quit: quitSig,
 		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
-		CellW:        cellW, CellH: cellH, Stderr: os.Stderr,
+		CellW:        cellW, CellH: cellH, Stderr: os.Stderr, AttestedURL: hostSess.AttestedURL,
 	}
 	loop.State.Clipboard = os.Stdout
 	if err := loop.Run(); err != nil {

@@ -43,10 +43,12 @@ type SessionLoop struct {
 	quitBase    protocol.State
 	scrollDrag  bool
 
-	// History is front-end-owned: the engine receives entry IDs for its page
-	// cache and reports the final URL with HistoryCommit.
+	// History is front-end-owned. AttestedURL reports the host's final URL for
+	// a document navigation; the engine's HistoryCommit supplies the title,
+	// scroll and push flag but never the trusted URL.
 	history      []historyEntry
 	historyIndex int
+	AttestedURL  func(entryID uint64) (string, bool)
 
 	findActive  bool
 	findText    string

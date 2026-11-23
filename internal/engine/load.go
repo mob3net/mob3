@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"net/url"
+
+	"browser/internal/protocol"
 )
 
 // LoadFunc fetches one page request.
@@ -40,6 +42,7 @@ func (s *Session) BeginLoad(load LoadFunc, u *url.URL, method, target string, bo
 	s.LoadSeq++
 	seq := s.LoadSeq
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = protocol.WithRequestEntry(ctx, entryID)
 	s.CancelLoad = cancel
 	s.Loading = true
 	s.StartProgress()

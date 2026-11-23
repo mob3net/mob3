@@ -4,7 +4,7 @@ Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the 
 agreement, the non-negotiable constraints and the change protocol.
 
 - Cookie jar and redirects via `net/http`; the page’s final URL is kept for
-  relative links and history. The jar is memory-only, uses the public suffix
+  relative links and records it for the front-end history lookup. The jar is memory-only, uses the public suffix
   list for domain scoping, and is shared by page loads, resources, XHR, fetch
   and `document.cookie`. HttpOnly cookies are hidden from JavaScript through a
   separate visible jar, and a script may neither replace nor delete a

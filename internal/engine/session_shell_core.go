@@ -748,12 +748,8 @@ func (b *Session) followLink(li *LinkInfo) {
 					b.URL = u
 					b.status = ""
 					b.prev = nil
-					title := ""
-					if b.Page != nil {
-						title = b.Page.Title
-					}
 					b.emitHistoryCommit(protocol.HistoryCommit{
-						EntryID: b.EntryID, URL: u.String(), Title: title, Scroll: b.Scroll, Push: true,
+						EntryID: b.EntryID, URL: u.String(), Scroll: b.Scroll, Push: true,
 					})
 					return
 				}

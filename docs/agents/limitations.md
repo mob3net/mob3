@@ -25,9 +25,10 @@ agreement, the non-negotiable constraints and the change protocol.
   upgraded" hiding rules never apply. Storage
   and cookies are in-memory only and do not persist. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
-  `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests
-  and simple CORS cross-origin responses, and lack streaming/upload progress;
-  CORS preflight and credentialed cross-origin requests are unsupported.
+  `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests,
+  simple CORS cross-origin responses and opaque `no-cors` fetches, and lack
+  streaming/upload progress; CORS preflight and credentialed cross-origin
+  requests are unsupported.
   `AbortController` only cancels fetches that have
   not started. `Intl` is an
   English-only subset without full CLDR locale data. `document.write` is
@@ -47,6 +48,11 @@ agreement, the non-negotiable constraints and the change protocol.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
+- **Address-bar integrity:** the host records each document's final URL and
+  the front end reads it by entry ID, so an engine bug cannot forge a new
+  history entry's URL through the protocol. This is not process isolation: a
+  fully compromised engine shares the process and could read or corrupt
+  trusted memory. Only the future engine child process isolates it.
 - Mixed content is handled for `https` documents: HTTP image requests
   (including CSS background images and `srcset`/`<picture>` candidates) are
   upgraded to HTTPS without an HTTP fallback, while HTTP scripts, stylesheets,

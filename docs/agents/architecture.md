@@ -40,8 +40,9 @@ transport implementation, not another architecture change.
 ### Migration order
 
 All steps are landed. The temporary aliases, test-only host factory and the
-migration tracker are gone. Host-attested final URLs remain open as a separate
-process/trust decision; they do not affect the package boundary.
+migration tracker are gone. The host records each document's final URL and the
+front end reads it by entry ID; the remaining isolation step is the engine
+child process.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
@@ -50,8 +51,9 @@ process/trust decision; they do not affect the package boundary.
    end.
 3. **Landed.** Normal chrome, overlays, dialogs, hints, the console, the find
    bar, the session history list/index/scroll, content geometry and the
-   displayed URL/title ledger are front-end-owned. The engine still reports the
-   committed final URL; host attestation remains open.
+   displayed URL ledger are front-end-owned. The host records the
+   committed final URL and the front end reads it by entry ID; the engine's URL
+   is ignored.
 4. **Landed.** `internal/engine` owns one `Session` type, the loader, headless
    automation and the dump handler; `internal/browser` is gone.
 5. **Landed.** Host `Fetch`, decompression/charset/parse and MCP are split;
@@ -80,12 +82,16 @@ process/trust decision; they do not affect the package boundary.
   bar, overlays and dialogs are composed by the front end from `State` or
   overlay messages; back/forward history and the download/curl hint live on the
   front end. The engine keeps only a page cache keyed by entry ID.
+- A new history entry's URL comes only from the host via `AttestedURL(entryID)`.
+  The engine supplies the title, scroll and push flag; a forged
+  `HistoryCommit` URL never reaches the address bar.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 
 ## Current layout
 
-This is the **actual** state; only host-attested final URLs remain open.
+This is the **actual** state; the engine child process remains the only open
+isolation step.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -112,9 +118,9 @@ This is the **actual** state; only host-attested final URLs remain open.
   index, scroll offsets, the `about:history` display snapshot and the
   content-rectangle geometry (`ContentBounds` → `Init`/`Resize`); the engine
   keys its page cache by the front-end entry ID. It also owns the displayed
-  URL/title: committed history entries replace `State.URL/Title` for chrome,
-  with a scheme/length check. The engine still reports the final URL, so
-  host-attested authenticity remains. While a page form field holds the key
+  URL: committed history entries replace `State.URL` for chrome, with a
+  scheme/length check; the title stays engine-supplied. The host records the final URL and the front end
+  reads it by entry ID, so the engine's `HistoryCommit` URL is not trusted. While a page form field holds the key
   path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
   stays true and the front end composes the header, footer and scrollbar.
 - The engine imports only `internal/protocol` (plus approved vendored
@@ -187,7 +193,7 @@ This is the **actual** state; only host-attested final URLs remain open.
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
-| `internal/frontend/history.go` | Front-end-owned session history and displayed URL/title ledger: entries, current index, scroll tracking, validated `HistoryCommit` updates, `about:history` snapshot and back/forward restore requests. |
+| `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, current index, scroll tracking, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
@@ -202,10 +208,10 @@ This is the **actual** state; only host-attested final URLs remain open.
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
 | `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
 | `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
-| `internal/protocol/host.go` | `Host` port, host fetch result, request record and config-token interfaces. |
+| `internal/protocol/host.go` | `Host` port, host fetch result, `AttestedURL`, request record and config-token interfaces. |
 | `internal/protocol/netctx.go` | Shared request metadata, page-space and local-network/mixed-content error values used by loader and host. |
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
-| `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
+| `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags and terminal setup. |

@@ -401,7 +401,6 @@ func (Crash) eventKind() Kind { return EvCrash }
 type HistoryCommit struct {
 	EntryID uint64
 	URL     string
-	Title   string
 	Scroll  int
 	Push    bool
 }

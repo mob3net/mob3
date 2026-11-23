@@ -25,7 +25,6 @@ type testHistory struct {
 type testHistoryEntry struct {
 	id     uint64
 	url    string
-	title  string
 	scroll int
 }
 
@@ -36,7 +35,7 @@ func attachHistory(b *Session) *testHistory {
 }
 
 func (h *testHistory) apply(c protocol.HistoryCommit) {
-	e := testHistoryEntry{id: c.EntryID, url: c.URL, title: c.Title, scroll: c.Scroll}
+	e := testHistoryEntry{id: c.EntryID, url: c.URL, scroll: c.Scroll}
 	if c.Push {
 		if h.index >= 0 && h.index < len(h.entries) && h.entries[h.index].url == c.URL {
 			h.entries[h.index] = e
@@ -122,9 +121,6 @@ func TestHistoryCommitRecordsSession(t *testing.T) {
 	}
 	if h.index != 1 || h.entries[0].id == 0 || h.entries[1].id == 0 || h.entries[0].id == h.entries[1].id {
 		t.Fatalf("history index/ids = %+v at %d", h.entries, h.index)
-	}
-	if h.entries[0].title != "/a" || h.entries[1].title != "/b" {
-		t.Fatalf("history titles = %q, %q", h.entries[0].title, h.entries[1].title)
 	}
 
 	b.setHistoryView(protocol.History{Entries: []protocol.HistoryEntry{

@@ -157,3 +157,42 @@ func TestJSFetchNoCORSStillRejectsNonSimple(t *testing.T) {
 		t.Fatal("non-simple no-cors request was allowed")
 	}
 }
+
+func TestFetchAttestsDocumentFinalURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("page"))
+	}))
+	defer srv.Close()
+	s := NewSession()
+	u, _ := url.Parse(srv.URL)
+	ctx := protocol.WithRequestMeta(context.Background(), 1, "doc")
+	ctx = protocol.WithRequestEntry(ctx, 7)
+	res, err := s.Fetch(ctx, "GET", u, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attested, ok := s.AttestedURL(7)
+	if !ok || attested != res.FinalURL.String() {
+		t.Fatalf("attestation = %q, %v; final = %v", attested, ok, res.FinalURL)
+	}
+	if attested != srv.URL {
+		t.Fatalf("attested %q, want %q", attested, srv.URL)
+	}
+}
+
+func TestFetchDoesNotAttestSubresource(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("img"))
+	}))
+	defer srv.Close()
+	s := NewSession()
+	u, _ := url.Parse(srv.URL)
+	ctx := protocol.WithRequestMeta(context.Background(), 1, "img")
+	ctx = protocol.WithRequestEntry(ctx, 8)
+	if _, err := s.Fetch(ctx, "GET", u, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.AttestedURL(8); ok {
+		t.Fatal("subresource fetch was attested")
+	}
+}

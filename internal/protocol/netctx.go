@@ -16,6 +16,10 @@ type PageSpaceKey struct{}
 type RequestMeta struct {
 	Gen  int
 	Kind string
+	// EntryID identifies the front-end history entry this document fetch is
+	// for. The host uses it to attest the final URL; subresource kinds leave
+	// it untouched.
+	EntryID uint64
 	// PageURL is the document that initiated the request. BlockLocal marks a
 	// public document that may not reach loopback, private or link-local
 	// addresses. TargetURL lets the dial guard tell a direct connection from a
@@ -74,7 +78,19 @@ func WithRequestTarget(ctx context.Context, target *url.URL) context.Context {
 }
 
 func WithRequestMeta(ctx context.Context, gen int, kind string) context.Context {
-	return context.WithValue(ctx, RequestMetaKey{}, RequestMeta{Gen: gen, Kind: kind})
+	m := RequestMetaFrom(ctx)
+	m.Gen = gen
+	m.Kind = kind
+	return context.WithValue(ctx, RequestMetaKey{}, m)
+}
+
+// WithRequestEntry records the front-end history entry a document fetch is
+// for. The loader sets it from BeginLoad; the host uses it to attest the final
+// URL.
+func WithRequestEntry(ctx context.Context, id uint64) context.Context {
+	m := RequestMetaFrom(ctx)
+	m.EntryID = id
+	return context.WithValue(ctx, RequestMetaKey{}, m)
 }
 
 func WithRequestKind(ctx context.Context, kind string) context.Context {

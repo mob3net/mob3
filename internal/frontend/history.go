@@ -12,7 +12,6 @@ import (
 type historyEntry struct {
 	id     uint64
 	url    string
-	title  string
 	scroll int
 }
 
@@ -21,12 +20,9 @@ type historyEntry struct {
 // current anyway.
 const historyLimit = 50
 
-// Display limits keep a hostile engine from parking an unbounded URL or title
-// in the trusted history ledger.
-const (
-	maxDisplayURL   = 4096
-	maxDisplayTitle = 512
-)
+// maxDisplayURL keeps a hostile engine from parking an unbounded URL in the
+// trusted history ledger.
+const maxDisplayURL = 4096
 
 // validDisplayURL accepts only the schemes the session can render. The front
 // end owns the address bar, so a malformed or unsupported commit is ignored.
@@ -48,17 +44,6 @@ func validDisplayURL(raw string) bool {
 	return false
 }
 
-func cleanTitle(s string) string {
-	if len(s) <= maxDisplayTitle {
-		return s
-	}
-	r := []rune(s)
-	if len(r) <= maxDisplayTitle {
-		return s
-	}
-	return string(r[:maxDisplayTitle])
-}
-
 // isAboutHistory reports whether input names the built-in history page.
 func isAboutHistory(input string) bool {
 	return strings.EqualFold(strings.TrimSpace(input), "about:history")
@@ -72,17 +57,48 @@ func (l *SessionLoop) recordHistoryScroll() {
 	l.history[l.historyIndex].scroll = l.State.Scroll
 }
 
-// applyHistoryCommit updates the front-end list from the engine's final URL.
-// Push appends a new entry, merging into the current one when the URL is
-// unchanged; otherwise the entry is updated in place.
+// applyHistoryCommit stores the engine's scroll and push flag. A new entry's
+// URL comes from the host; the engine URL is used only for built-in pages and
+// same-document fragment changes. The page title is taken from State.
 func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
-	if v.EntryID == 0 || !validDisplayURL(v.URL) {
+	if v.EntryID == 0 {
 		return
 	}
-	e := historyEntry{id: v.EntryID, url: v.URL, title: cleanTitle(v.Title), scroll: v.Scroll}
+	if e := l.entryByID(v.EntryID); e != nil {
+		// Reload, restore or title update: keep the host-attested URL, but let
+		// a redirect on reload replace it.
+		if u, ok := l.attestedURL(v.EntryID); ok {
+			e.url = u
+		}
+		e.scroll = v.Scroll
+		return
+	}
+	url, attested := l.attestedURL(v.EntryID)
+	if !attested {
+		if !l.allowUnattestedCommit(v) {
+			return
+		}
+		url = v.URL
+	}
+	if !validDisplayURL(url) {
+		return
+	}
+	l.storeHistoryCommit(v, url)
+}
+
+func (l *SessionLoop) attestedURL(entryID uint64) (string, bool) {
+	if l.AttestedURL == nil {
+		return "", false
+	}
+	return l.AttestedURL(entryID)
+}
+
+// storeHistoryCommit applies the push/merge rule with the trusted URL.
+func (l *SessionLoop) storeHistoryCommit(v protocol.HistoryCommit, url string) {
+	e := historyEntry{id: v.EntryID, url: url, scroll: v.Scroll}
 	if v.Push {
 		if l.historyIndex >= 0 && l.historyIndex < len(l.history) &&
-			l.history[l.historyIndex].url == v.URL {
+			l.history[l.historyIndex].url == url {
 			l.history[l.historyIndex] = e
 			return
 		}
@@ -104,21 +120,50 @@ func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
 	l.history[l.historyIndex] = e
 }
 
-// pageState replaces the engine's URL/title with the front-end ledger. A title
-// change is accepted only while the engine still reports the committed URL.
+func (l *SessionLoop) entryByID(id uint64) *historyEntry {
+	for i := range l.history {
+		if l.history[i].id == id {
+			return &l.history[i]
+		}
+	}
+	return nil
+}
+
+// allowUnattestedCommit permits built-in pages and same-document fragment
+// changes, which never perform a host document fetch.
+func (l *SessionLoop) allowUnattestedCommit(v protocol.HistoryCommit) bool {
+	lower := strings.ToLower(v.URL)
+	if lower == "about:home" || strings.HasPrefix(lower, "about:") {
+		return true
+	}
+	if l.historyIndex >= 0 && l.historyIndex < len(l.history) {
+		return sameDocumentWithoutFragment(l.history[l.historyIndex].url, v.URL)
+	}
+	return false
+}
+
+// sameDocumentWithoutFragment reports whether two URLs differ only by fragment.
+func sameDocumentWithoutFragment(a, b string) bool {
+	au, err := url.Parse(a)
+	if err != nil {
+		return false
+	}
+	bu, err := url.Parse(b)
+	if err != nil {
+		return false
+	}
+	au.Fragment, bu.Fragment = "", ""
+	return au.String() == bu.String()
+}
+
+// pageState replaces the engine's URL with the committed history entry. The
+// page title stays engine-supplied and is not part of the trusted URL ledger.
 func (l *SessionLoop) pageState(v protocol.State) protocol.State {
 	if l.historyIndex < 0 || l.historyIndex >= len(l.history) {
 		return v
 	}
-	e := &l.history[l.historyIndex]
-	if v.URL == e.url && v.Title != "" {
-		e.title = cleanTitle(v.Title)
-	}
-	if e.url != "" {
+	if e := &l.history[l.historyIndex]; e.url != "" {
 		v.URL = e.url
-	}
-	if e.title != "" {
-		v.Title = e.title
 	}
 	return v
 }
