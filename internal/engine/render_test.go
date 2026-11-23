@@ -95,7 +95,7 @@ func TestUniformHalfBlockUsesSpace(t *testing.T) {
 		}
 	}
 	g := NewGrid(2, 2, RGB(0, 0, 0), RGB(255, 255, 255))
-	paintImage(g, img, image.Rectangle{}, 0, 0, 2, 2, 0, 2)
+	PaintImage(g, img, image.Rectangle{}, 0, 0, 2, 2, 0, 2)
 	want := Color{R: 10, G: 20, B: 30, A: 255, Set: true}
 	for _, c := range g.Cells[:4] {
 		if c.R != ' ' {
@@ -111,15 +111,15 @@ func TestUniformHalfBlockUsesSpace(t *testing.T) {
 }
 
 // gridRun returns the structured scaled run starting at a cell.
-func gridRun(g *Grid, x, y int) (scaledRun, bool) {
+func gridRun(g *Grid, x, y int) (ScaledRun, bool) {
 	c := g.Cells[y*g.W+x]
 	if c.Run == 0 || int(c.Run) > len(g.Runs) {
-		return scaledRun{}, false
+		return ScaledRun{}, false
 	}
 	return g.Runs[int(c.Run)-1], true
 }
 
-func runEscape(r scaledRun) string {
+func runEscape(r ScaledRun) string {
 	return fmt.Sprintf("\x1b]66;s=%d;%s\x07", r.Scale, r.Text)
 }
 
@@ -158,7 +158,7 @@ func TestGridDropsTerminalControls(t *testing.T) {
 
 func TestBigTextPaint(t *testing.T) {
 	ly := &Layout{Height: 4, Frags: []Frag{
-		{Kind: fragText, X: 0, Y: 0, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, Bold: true, LineHeight: 1}},
+		{Kind: FragText, X: 0, Y: 0, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, Bold: true, LineHeight: 1}},
 	}}
 	g := NewGrid(10, 4, RGB(0, 0, 0), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 4, nil, RGB(0, 0, 0), nil, true)
@@ -204,7 +204,7 @@ h1{font-size:32px;line-height:1} p{margin:0}
 	content := NewGrid(40, 8, fg, bg)
 	PaintLayoutBig(content, ly, 0, 0, 8, nil, fg, nil, true)
 	screen := NewGrid(40, 12, fg, bg)
-	blitGrid(screen, content, 2)
+	BlitGrid(screen, content, 2)
 	for _, r := range content.Runs {
 		r.Y += 2
 		screen.Runs = append(screen.Runs, r)
@@ -230,7 +230,7 @@ h1{font-size:32px;line-height:1} p{margin:0}
 
 func TestPaintLayoutCollectsClippedPlacement(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 32, 64))
-	ly := &Layout{Height: 10, Frags: []Frag{{Kind: fragImage, X: 1, Y: 5, W: 4, H: 4, Img: img}}}
+	ly := &Layout{Height: 10, Frags: []Frag{{Kind: FragImage, X: 1, Y: 5, W: 4, H: 4, Img: img}}}
 	g := NewGrid(20, 8, RGB(0, 0, 0), RGB(255, 255, 255))
 	var ps []ImagePlacement
 	PaintLayoutGraphics(g, ly, 7, 0, 8, nil, RGB(0, 0, 0), &ps)
@@ -251,7 +251,7 @@ func TestPaintLayoutCollectsClippedPlacement(t *testing.T) {
 }
 
 func TestDecodeSVG(t *testing.T) {
-	img, err := decodeSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+	img, err := DecodeSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
 		<rect width="10" height="10" fill="#ff0000"/>
 	</svg>`))
 	if err != nil {
@@ -279,7 +279,7 @@ func TestInlineSVGSkippedByDefault(t *testing.T) {
 	ly := BuildLayout(root, nil, 40)
 	var text strings.Builder
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			text.WriteString(f.Text)
 		}
 	}
@@ -302,7 +302,7 @@ func TestInlineSVGDecoded(t *testing.T) {
 	ly := BuildLayout(root, nil, 40)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragImage && f.Img == svg.Img {
+		if f.Kind == FragImage && f.Img == svg.Img {
 			found = true
 		}
 	}
@@ -312,10 +312,10 @@ func TestInlineSVGDecoded(t *testing.T) {
 }
 
 func TestIsSVG(t *testing.T) {
-	if !isSVG("image/svg+xml", nil) || !isSVG("", []byte(`<svg></svg>`)) {
+	if !IsSVG("image/svg+xml", nil) || !IsSVG("", []byte(`<svg></svg>`)) {
 		t.Fatal("SVG detection failed")
 	}
-	if isSVG("image/png", []byte("not svg")) {
+	if IsSVG("image/png", []byte("not svg")) {
 		t.Fatal("PNG misdetected as SVG")
 	}
 }
@@ -337,8 +337,8 @@ func TestBigTextWhitespaceHasNoScaledUnderline(t *testing.T) {
 
 func TestBigTextStaysInsideViewport(t *testing.T) {
 	ly := &Layout{Frags: []Frag{
-		{Kind: fragText, X: 0, Y: 2, W: 3, H: 2, Text: "Big", Style: &Style{FontSize: 32, LineHeight: 1}},
-		{Kind: fragText, X: 0, Y: 4, W: 6, H: 2, Text: "Banana", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: FragText, X: 0, Y: 2, W: 3, H: 2, Text: "Big", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: FragText, X: 0, Y: 4, W: 6, H: 2, Text: "Banana", Style: &Style{FontSize: 32, LineHeight: 1}},
 	}}
 	g := NewGrid(20, 6, RGB(0, 0, 0), RGB(255, 255, 255))
 	// Rows 0-4 are the page viewport; row 5 is the footer.
@@ -363,8 +363,8 @@ func TestBigTextDisabledUnderFixedChrome(t *testing.T) {
 	// 5 must be painted at normal size: the terminal composites OSC 66 scaled
 	// text above the cell grid, so the big glyphs would cover the bar.
 	ly := &Layout{Frags: []Frag{
-		{Kind: fragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
-		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+		{Kind: FragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: FragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
 	}}
 	g := NewGrid(20, 8, RGB(255, 255, 255), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 8, nil, RGB(0, 0, 0), nil, true)
@@ -377,8 +377,8 @@ func TestBigTextDisabledUnderFixedChrome(t *testing.T) {
 
 	// Clear of the bar, the same run keeps its scaled output.
 	ly = &Layout{Frags: []Frag{
-		{Kind: fragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
-		{Kind: fragFill, X: 0, Y: 7, W: 20, H: 1, Color: fill, Fixed: true},
+		{Kind: FragText, X: 0, Y: 4, W: 4, H: 2, Text: "AB", Style: &Style{FontSize: 32, LineHeight: 1}},
+		{Kind: FragFill, X: 0, Y: 7, W: 20, H: 1, Color: fill, Fixed: true},
 	}}
 	g = NewGrid(20, 10, RGB(255, 255, 255), RGB(255, 255, 255))
 	PaintLayoutBig(g, ly, 0, 0, 10, nil, RGB(0, 0, 0), nil, true)
@@ -496,8 +496,8 @@ func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
 	// An image scrolling under a fixed chrome fill must not become a native
 	// placement, because the terminal would composite it over the chrome.
 	ly := &Layout{Frags: []Frag{
-		{Kind: fragImage, X: 0, Y: 5, W: 2, H: 2, Img: img},
-		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+		{Kind: FragImage, X: 0, Y: 5, W: 2, H: 2, Img: img},
+		{Kind: FragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
 	}}
 	var placements []ImagePlacement
 	PaintLayoutGraphics(g, ly, 5, 0, 10, nil, RGB(255, 255, 255), &placements)
@@ -506,7 +506,7 @@ func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
 	}
 
 	// An image outside the chrome band keeps its native placement.
-	ly = &Layout{Frags: []Frag{{Kind: fragImage, X: 0, Y: 8, W: 2, H: 1, Img: img}}}
+	ly = &Layout{Frags: []Frag{{Kind: FragImage, X: 0, Y: 8, W: 2, H: 1, Img: img}}}
 	placements = nil
 	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
 	if len(placements) != 1 {
@@ -516,8 +516,8 @@ func TestImagesUnderFixedChromeUseBlocks(t *testing.T) {
 	// A fixed image (for example a logo in the fixed header) is part of the
 	// chrome and keeps its native placement.
 	ly = &Layout{Frags: []Frag{
-		{Kind: fragImage, X: 0, Y: 5, W: 2, H: 1, Img: img, Fixed: true},
-		{Kind: fragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
+		{Kind: FragImage, X: 0, Y: 5, W: 2, H: 1, Img: img, Fixed: true},
+		{Kind: FragFill, X: 0, Y: 5, W: 20, H: 1, Color: fill, Fixed: true},
 	}}
 	placements = nil
 	PaintLayoutGraphics(g, ly, 5, 0, 10, nil, RGB(255, 255, 255), &placements)
@@ -534,8 +534,8 @@ func TestImagesUnderTextUseBlocks(t *testing.T) {
 	// must keep the image in half-block art: a native placement would be
 	// composited above the text grid and hide it.
 	ly := &Layout{Frags: []Frag{
-		{Kind: fragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
-		{Kind: fragText, X: 1, Y: 0, W: 4, H: 1, Text: "tabs", Style: &Style{}},
+		{Kind: FragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
+		{Kind: FragText, X: 1, Y: 0, W: 4, H: 1, Text: "tabs", Style: &Style{}},
 	}}
 	var placements []ImagePlacement
 	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
@@ -545,8 +545,8 @@ func TestImagesUnderTextUseBlocks(t *testing.T) {
 
 	// Text beside the image, not on it, leaves the native placement alone.
 	ly = &Layout{Frags: []Frag{
-		{Kind: fragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
-		{Kind: fragText, X: 10, Y: 0, W: 4, H: 1, Text: "side", Style: &Style{}},
+		{Kind: FragImage, X: 0, Y: 0, W: 8, H: 2, Img: img},
+		{Kind: FragText, X: 10, Y: 0, W: 4, H: 1, Text: "side", Style: &Style{}},
 	}}
 	placements = nil
 	PaintLayoutGraphics(g, ly, 0, 0, 10, nil, RGB(255, 255, 255), &placements)
@@ -558,7 +558,7 @@ func TestImagesUnderTextUseBlocks(t *testing.T) {
 // svgAlpha decodes an SVG document and returns the alpha of one pixel.
 func svgAlpha(t *testing.T, doc string, x, y int) uint32 {
 	t.Helper()
-	img, err := decodeSVG([]byte(doc))
+	img, err := DecodeSVG([]byte(doc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,7 +617,7 @@ func TestDecodeSVGBoundsDashStroke(t *testing.T) {
 	</svg>`
 	done := make(chan error, 1)
 	go func() {
-		_, err := decodeSVG([]byte(doc))
+		_, err := DecodeSVG([]byte(doc))
 		done <- err
 	}()
 	select {

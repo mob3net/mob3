@@ -20,7 +20,7 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	loader := newTestLoader()
 	loader.NoImages = false
 	loader.DeferImageLoad = true
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
@@ -50,7 +50,7 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	doc := ParseHTML(`<html><body><img src="pic.png" alt="pic"></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader = newTestLoader()
 	b.loader.NoImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}
@@ -89,13 +89,13 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 		}
 		return false
 	})
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.Scroll = 0
 	b.Layout = &Layout{Frags: []Frag{
-		{Kind: fragText, Node: byID["d"], Y: 100},
-		{Kind: fragText, Node: byID["c"], Y: 25},
-		{Kind: fragText, Node: byID["b"], Y: 5},
-		{Kind: fragText, Node: byID["a"], Y: 0},
+		{Kind: FragText, Node: byID["d"], Y: 100},
+		{Kind: FragText, Node: byID["c"], Y: 25},
+		{Kind: FragText, Node: byID["b"], Y: 5},
+		{Kind: FragText, Node: byID["a"], Y: 0},
 	}}
 	tasks := []imageTask{
 		{Node: byID["d"], Src: "d.png"},
@@ -119,7 +119,7 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 }
 
 func TestDeferredImageProgressBar(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`)}
 	b.DeferredImages = true
 	b.ImageTotal = 10
@@ -145,7 +145,7 @@ func TestDeferredImageProgressBar(t *testing.T) {
 }
 
 func TestFooterShowsImageLoadingCount(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.DeferredImages = true
 	b.ImageTotal = 5
 	b.ImageDone = 2
@@ -166,7 +166,7 @@ func TestRefreshImagesAfterScript(t *testing.T) {
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 	page := newJSPage(`<html><body><img id="x" alt="lazy"></body></html>`,
 		`document.getElementById("x").src = "`+dataURL+`";`)
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader.NoImages = false
 	b.Page = page
 	b.URL = page.URL
@@ -236,7 +236,7 @@ func TestImageDownscaledOnLoad(t *testing.T) {
 }
 
 func TestSessionSetsImageCapFromViewport(t *testing.T) {
-	b := NewSession(177, 42)
+	b := newTestSession(177, 42)
 	if b.loader.ImageCapW() != 177*8 || b.loader.ImageCapH() != 42*16 {
 		t.Fatalf("cap = %dx%d, want %dx%d", b.loader.ImageCapW(), b.loader.ImageCapH(), 177*8, 42*16)
 	}
@@ -261,10 +261,10 @@ func TestSafeDecodeRecoversDecoderPanic(t *testing.T) {
 	image.RegisterFormat("panic-test", "panicimg",
 		func(io.Reader) (image.Image, error) { panic("decode boom") },
 		func(io.Reader) (image.Config, error) { panic("config boom") })
-	if _, err := safeDecodeConfig([]byte("panicimg data")); err == nil {
+	if _, err := SafeDecodeConfig([]byte("panicimg data")); err == nil {
 		t.Fatal("config decoder panic was not converted")
 	}
-	if _, err := safeDecodeImage([]byte("panicimg data")); err == nil {
+	if _, err := SafeDecodeImage([]byte("panicimg data")); err == nil {
 		t.Fatal("image decoder panic was not converted")
 	}
 }
@@ -278,7 +278,7 @@ func deferredImageFixture(t *testing.T, html string) *Session {
 	loader := newTestLoader()
 	loader.NoImages = false
 	loader.DeferImageLoad = true
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
@@ -529,7 +529,7 @@ func TestStartDeferredImageLoadStreams(t *testing.T) {
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 	doc := ParseHTML(`<html><body><img id="x" src="` + dataURL + `"></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader.NoImages = false
 	b.loader.DeferImageLoad = true
 	b.Page = &Page{URL: u, Base: u, Root: doc}

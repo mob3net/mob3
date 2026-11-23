@@ -108,7 +108,7 @@ func navigateAndFinish(t *testing.T, b *Session, target string) {
 }
 
 func TestHistoryCommitRecordsSession(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	h := attachHistory(b)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -144,7 +144,7 @@ func TestHistoryCommitRecordsSession(t *testing.T) {
 }
 
 func TestHistoryPage(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setHistoryView(protocol.History{Entries: []protocol.HistoryEntry{
 		{URL: "https://example.com/a"}, {URL: "about:start"},
 	}, Current: 1})
@@ -172,7 +172,7 @@ func TestHistoryPage(t *testing.T) {
 		t.Fatalf("history links = %d", links)
 	}
 
-	empty := NewSession(60, 10)
+	empty := newTestSession(60, 10)
 	p2, err := empty.loader.LoadContext(context.Background(), "about:history", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestHistoryPage(t *testing.T) {
 }
 
 func TestJavaScriptToggleDropsPageCache(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.Cache.Put(1, &cachedPage{JS: &jsRuntime{}})
 	b.Cache.Put(2, &cachedPage{})
 	b.dropCachedPages()
@@ -193,7 +193,7 @@ func TestJavaScriptToggleDropsPageCache(t *testing.T) {
 }
 
 func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	h := attachHistory(b)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -258,7 +258,7 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 }
 
 func TestBackRestoresPageScroll(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	h := attachHistory(b)
 	loads := 0
@@ -301,7 +301,7 @@ func TestBackRestoresPageScroll(t *testing.T) {
 }
 
 func TestBackKeepsPageJavaScriptState(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	h := attachHistory(b)
 	loads := 0
@@ -339,7 +339,7 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 }
 
 func TestHistoryCacheIsBounded(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	attachHistory(b)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -359,7 +359,7 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 }
 
 func TestAboutPagesAreNotCached(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	attachHistory(b)
 	navigateAndFinish(t, b, "https://example.com/a")
@@ -390,7 +390,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			b := NewSession(80, 10)
+			b := newTestSession(80, 10)
 			h := attachHistory(b)
 			b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 				u, err := url.Parse(target)
@@ -421,7 +421,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 }
 
 func TestScriptRedirectLoopStops(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	h := attachHistory(b)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
@@ -458,7 +458,7 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 }
 
 func TestMetaRefreshLoopStops(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
@@ -491,7 +491,7 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 }
 
 func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
-	b := NewSession(60, 12)
+	b := newTestSession(60, 12)
 	h := attachHistory(b)
 	uRedir := mustParse(t, "https://example.com/redir")
 	uTarget := mustParse(t, "https://example.com/target")
@@ -519,7 +519,7 @@ func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
 func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	// A navigation queued after the page settled (a click or timer handler)
 	// still adds an entry, so Back returns to the page the user was on.
-	b := NewSession(60, 12)
+	b := newTestSession(60, 12)
 	h := attachHistory(b)
 	u := mustParse(t, "https://example.com/start")
 	next := mustParse(t, "https://example.com/next")
@@ -548,7 +548,7 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 }
 
 func TestHistoryCacheEvictsByWeight(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.Cache.SetLimitBytes(3 << 20)
 	now := time.Now()
 	for i := 0; i < 4; i++ {
@@ -569,7 +569,7 @@ func TestHistoryCacheEvictsByWeight(t *testing.T) {
 }
 
 func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.Cache.SetLimitBytes(2 << 20) // single-page cap is 1 MiB
 	u := mustParse(t, "https://example.com/heavy")
 	b.URL = u
@@ -619,7 +619,7 @@ func TestPageWeightCountsScriptsImagesAndRuntime(t *testing.T) {
 }
 
 func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.Cache.Put(1, &cachedPage{Bytes: 1 << 20})
 	b.setHistoryCacheLimitMB(0)
 	if b.Cache.LimitBytes() != 0 {
@@ -636,7 +636,7 @@ func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
 func TestMemoryLimitDerivesCaches(t *testing.T) {
 	prev := debug.SetMemoryLimit(-1)
 	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setMemoryLimitMB(1024)
 	if got, want := b.Cache.LimitBytes(), MemoryFraction(int64(1)<<30, historyCachePercent); got != want {
 		t.Fatalf("history cache = %d, want %d", got, want)
@@ -655,7 +655,7 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 }
 
 func TestLightEvictionDoesNotScavenge(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	now := time.Now()
 	for i := 0; i < 12; i++ {
 		b.Cache.Put(uint64(i+1), &cachedPage{Bytes: 1 << 20, At: now.Add(time.Duration(i) * time.Second)})
@@ -670,7 +670,7 @@ func TestLightEvictionDoesNotScavenge(t *testing.T) {
 }
 
 func TestHeavyEvictionRequestsScavenge(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	now := time.Now()
 	b.Cache.Put(1, &cachedPage{Bytes: 1 << 20, At: now})
 	b.Cache.Put(2, &cachedPage{Bytes: 4 << 20, At: now.Add(time.Second)})
@@ -689,7 +689,7 @@ func TestHeavyEvictionRequestsScavenge(t *testing.T) {
 }
 
 func TestRestoreFetchesUncachedEntryWithScroll(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setLoader(newTestLoader())
 	h := attachHistory(b)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -725,7 +725,7 @@ func (h *testHistory) lastPush() bool {
 }
 
 func TestHistoryCommandStoresSnapshot(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	if _, err := b.handleCommand(protocol.Command{Body: protocol.History{
 		Entries: []protocol.HistoryEntry{{URL: "https://example.com/a"}, {URL: "https://example.com/b"}},
 		Current: 0,

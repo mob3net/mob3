@@ -2,7 +2,6 @@ package engine
 
 import (
 	"browser/internal/host"
-	"browser/internal/protocol"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -17,7 +16,6 @@ import (
 
 func init() {
 	SetDefaultOutput(func(p []byte) (int, error) { return os.Stdout.Write(p) })
-	SetHostFactory(func() protocol.Host { return host.NewSession() })
 }
 
 var testSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -74,7 +72,7 @@ func TestGridLayout(t *testing.T) {
 	found := 0
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch f.Text {
@@ -120,7 +118,7 @@ func TestSelectorIs(t *testing.T) {
 func TestImageCap(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 3000, 2000))
 	n := &Node{Type: ElementNode, Tag: "img", Img: img}
-	st := &Style{Display: "inline-block", Width: pct(100), Height: pct(100)}
+	st := &Style{Display: "inline-block", Width: Pct(100), Height: Pct(100)}
 	w, h := imageSize(n, st, 100, 40)
 	if w != 40 || h != 13 {
 		t.Fatalf("capped image = %dx%d, want 40x13", w, h)
@@ -143,7 +141,7 @@ func TestFlexItemsKeepMinContentWidth(t *testing.T) {
 	whole := 0
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Text == "abcd" {
+		if f.Kind == FragText && f.Text == "abcd" {
 			whole++
 		}
 	}
@@ -158,7 +156,7 @@ func TestDenseGridFallsBack(t *testing.T) {
 	ly := BuildLayout(doc, nil, 60)
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Text == "hello" && f.W == 5 {
+		if f.Kind == FragText && f.Text == "hello" && f.W == 5 {
 			return
 		}
 	}
@@ -180,7 +178,7 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 	page := newJSPage(`<html><body>
 <a id="a" href="/next" onclick="event.preventDefault(); throw new Error('boom');">next</a>
 </body></html>`, ``)
-	b := NewSession(60, 12)
+	b := newTestSession(60, 12)
 	b.Page = page
 	b.URL = page.URL
 	b.setLoader(newTestLoader())
@@ -207,7 +205,7 @@ func TestPreventedLinkClickWithoutErrorStays(t *testing.T) {
 	page := newJSPage(`<html><body>
 <a id="a" href="/next" onclick="event.preventDefault();">next</a>
 </body></html>`, ``)
-	b := NewSession(60, 12)
+	b := newTestSession(60, 12)
 	b.Page = page
 	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
@@ -223,7 +221,7 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 	page := newJSPage(`<html><body>
 <p><a id="a" href="#" onclick="document.body.setAttribute('data-clicked','yes'); return false;">show an alert</a></p>
 </body></html>`, ``)
-	b := NewSession(60, 12)
+	b := newTestSession(60, 12)
 	b.Page = page
 	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
@@ -241,7 +239,7 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 }
 
 func TestNavigateSearchesQuery(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader.SetSearchURL("https://www.bing.com/search?q=%s")
 	ch := make(chan string, 1)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -260,7 +258,7 @@ func TestNavigateSearchesQuery(t *testing.T) {
 }
 
 func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.URL = mustParse(t, "https://example.com/")
 	called := false
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -277,7 +275,7 @@ func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 }
 
 func TestNavigateAsyncAndStop(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	started := make(chan struct{})
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		close(started)
@@ -312,7 +310,7 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 }
 
 func TestNavigateAsyncSuccess(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Navigate("data:text/html,<title>Loaded</title><p>hi</p>", false)
 	var res LoadResult
 	select {
@@ -327,7 +325,7 @@ func TestNavigateAsyncSuccess(t *testing.T) {
 }
 
 func TestLoadingProgress(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	if b.progressActive() {
 		t.Fatal("idle browser reports active progress")
 	}
@@ -371,7 +369,7 @@ func TestLoadingProgress(t *testing.T) {
 }
 
 func TestTryAnywayRetriesBlockedURL(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.URL = mustParse(t, "https://example.com/challenge")
 	var got string
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -395,7 +393,7 @@ func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 }
 
 func TestTryAnywayWithoutURL(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.URL = nil
 	b.Navigate("about:retry", true)
 	if b.status != "Nothing to retry" {
@@ -409,7 +407,7 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 }
 
 func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	u := mustParse(t, "https://example.com/")
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML("<html><body>scripted</body></html>")}
 	b.URL = u
@@ -468,14 +466,14 @@ func TestHoverRebuildIsDebounced(t *testing.T) {
 <div class="sub"><a href="#x">Item</a></div></div>
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.emitFrames = true
 	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
 	b.URL = u
 	b.rebuild()
 	var menu *Frag
 	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Menu" {
+		if b.Layout.Frags[i].Kind == FragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Menu" {
 			menu = &b.Layout.Frags[i]
 		}
 	}
@@ -497,7 +495,7 @@ func TestHoverRebuildIsDebounced(t *testing.T) {
 	}
 	found := false
 	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Item" {
+		if b.Layout.Frags[i].Kind == FragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Item" {
 			found = true
 		}
 	}
@@ -512,14 +510,14 @@ func TestHoverOpensJSMenu(t *testing.T) {
 </body></html>`, `document.getElementById("menu").addEventListener("mouseover", function () {
   document.getElementById("sub").style.display = "block";
 });`)
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 	findText := func(s string) *Frag {
 		for i := range b.Layout.Frags {
-			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+			if b.Layout.Frags[i].Kind == FragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
 				return &b.Layout.Frags[i]
 			}
 		}
@@ -544,14 +542,14 @@ func TestHoverMenuSurvivesPaddingGaps(t *testing.T) {
 <div class="sub"><a href="#x">Item</a></div></div>
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(
 		`.menu .sub{display:none;position:absolute}.menu:hover .sub{display:block}.sub a{display:block;padding:1em}`)}
 	b.URL = u
 	b.rebuild()
 	textFrag := func(s string) *Frag {
 		for i := range b.Layout.Frags {
-			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+			if b.Layout.Frags[i].Kind == FragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
 				return &b.Layout.Frags[i]
 			}
 		}
@@ -586,13 +584,13 @@ func TestHoverOpensCSSMenu(t *testing.T) {
 <div class="sub"><a href="#x">Item</a></div></div>
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
 	b.URL = u
 	b.rebuild()
 	findText := func(s string) *Frag {
 		for i := range b.Layout.Frags {
-			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+			if b.Layout.Frags[i].Kind == FragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
 				return &b.Layout.Frags[i]
 			}
 		}
@@ -616,7 +614,7 @@ func TestHoverOpensCSSMenu(t *testing.T) {
 func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="/target">target</a></p></body></html>`)
 	u := mustParse(t, "https://example.com/page")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.rebuild()
 	if len(b.Layout.Links) == 0 {
@@ -663,7 +661,7 @@ func TestHelpAlertExample(t *testing.T) {
 	if link == nil {
 		t.Fatal("alert example link not found")
 	}
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.Page = page
 	withQuietStdout(t, func() {
 		b.startJS(page)
@@ -681,7 +679,7 @@ func TestHelpAlertExample(t *testing.T) {
 }
 
 func TestNextJSTimerDelayTracksPendingTimers(t *testing.T) {
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	if _, ok := b.nextJSTimerDelay(); ok {
 		t.Fatal("reported a timer without a JS runtime")
 	}
@@ -707,7 +705,7 @@ func TestPageContentCannotInjectTerminalControls(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	root := ParseHTML("<html><head><title>evil\x1b]52;c;x\x07</title></head><body><p>hi\x1b[2Jthere</p></body></html>")
 	page := &Page{URL: u, Base: u, Root: root, Title: "evil\x1b]52;c;x\x07", RawHTML: "<html>\x1b]0;pwn\x07</html>"}
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.URL = u
 	b.Layout = BuildLayout(page.Root, nil, 60)
@@ -729,7 +727,7 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 			document.getElementById("out").textContent = String(Date.now());
 		}, 10);
 	`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
@@ -761,7 +759,7 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 	u := mustParse(t, "https://filesamples.com/formats/zip")
 	doc := ParseHTML(`<a href="/files/sample.zip" download>Download</a>`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Layout = BuildLayout(doc, nil, 60)
@@ -789,7 +787,7 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	u := mustParse(t, "https://samplepdf.org/")
 	doc := ParseHTML(`<a href="/files/sample.pdf" download="chosen.pdf">Download</a>`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Layout = BuildLayout(doc, nil, 60)
@@ -841,7 +839,7 @@ func TestDownloadPDFDetection(t *testing.T) {
 	for _, c := range cases {
 		doc := ParseHTML(`<a href="` + c.href + `" download="` + c.attr + `">Download</a>`)
 		u := mustParse(t, "https://example.com/page")
-		b := NewSession(60, 15)
+		b := newTestSession(60, 15)
 		b.Page = &Page{URL: u, Base: u, Root: doc}
 		b.URL = u
 		b.Layout = BuildLayout(doc, nil, 60)
@@ -857,7 +855,7 @@ func TestDownloadPDFDetection(t *testing.T) {
 func TestDownloadAttributeNameWins(t *testing.T) {
 	u := mustParse(t, "https://example.com/files/")
 	doc := ParseHTML(`<a href="x.bin" download="chosen.zip">Download</a>`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Layout = BuildLayout(doc, nil, 60)
@@ -873,7 +871,7 @@ func TestDownloadAttributeNameWins(t *testing.T) {
 }
 
 func TestDownloadCommandNeutralizesOptionsAndLocalFiles(t *testing.T) {
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.showDownload("-o/tmp/x", "-K/tmp/cfg")
 	if b.download == nil {
 		t.Fatal("dash-prefixed target did not open the popup")
@@ -894,7 +892,7 @@ func TestDownloadCommandNeutralizesOptionsAndLocalFiles(t *testing.T) {
 
 func TestDownloadPopupBuildsCurlCommand(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
 	b.URL = u
 	b.showDownload(u.String(), "")
@@ -909,7 +907,7 @@ func TestDownloadPopupBuildsCurlCommand(t *testing.T) {
 
 func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 	u := mustParse(t, "https://example.com/files/archive.zip")
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	page := &Page{
 		URL: u, Base: u, Root: ParseHTML(`<p>cannot display</p>`),
 		Download: true, DownloadName: "archive.zip",
@@ -933,20 +931,20 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 func TestLayoutTextOverlapDetection(t *testing.T) {
 	big := &Style{FontSize: 32}
 	ly := &Layout{Frags: []Frag{
-		{Kind: fragText, Text: "one", X: 0, Y: 0, W: 5, H: 1},
-		{Kind: fragText, Text: "two", X: 5, Y: 0, W: 5, H: 1},
+		{Kind: FragText, Text: "one", X: 0, Y: 0, W: 5, H: 1},
+		{Kind: FragText, Text: "two", X: 5, Y: 0, W: 5, H: 1},
 	}}
-	if layoutTextOverlaps(ly) {
+	if LayoutTextOverlaps(ly) {
 		t.Fatal("adjacent text runs reported as overlapping")
 	}
 	// Ordinary normal-size overlays do not disable scaled text.
-	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "bad", X: 3, Y: 0, W: 5, H: 1})
-	if layoutTextOverlaps(ly) {
+	ly.Frags = append(ly.Frags, Frag{Kind: FragText, Text: "bad", X: 3, Y: 0, W: 5, H: 1})
+	if LayoutTextOverlaps(ly) {
 		t.Fatal("normal-size overlay disabled scaled text")
 	}
 	// A scaled run sharing cells with another run does.
-	ly.Frags = append(ly.Frags, Frag{Kind: fragText, Text: "BIG", X: 2, Y: 0, W: 6, H: 1, Style: big})
-	if !layoutTextOverlaps(ly) {
+	ly.Frags = append(ly.Frags, Frag{Kind: FragText, Text: "BIG", X: 2, Y: 0, W: 6, H: 1, Style: big})
+	if !LayoutTextOverlaps(ly) {
 		t.Fatal("overlapping scaled text was not detected")
 	}
 }
@@ -954,7 +952,7 @@ func TestLayoutTextOverlapDetection(t *testing.T) {
 func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<html><body><p>text that wraps normally</p></body></html>`)
-	b := NewSession(20, 6)
+	b := newTestSession(20, 6)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.rebuild()
@@ -971,7 +969,7 @@ func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
 func TestSessionFixedLayoutUsesViewportHeight(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`)
-	b := NewSession(30, 10)
+	b := newTestSession(30, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.rebuild()
@@ -990,7 +988,7 @@ func TestReaderModeModalLinkWarnsWithoutScrolling(t *testing.T) {
 	for _, href := range []string{"#", "#missing"} {
 		u := mustParse(t, "https://example.com/article")
 		doc := ParseHTML(`<p>hello</p><p><a href="` + href + `">open modal</a></p>`)
-		b := NewSession(40, 10)
+		b := newTestSession(40, 10)
 		b.Page = &Page{URL: u, Base: u, Root: doc}
 		b.URL = u
 		b.Reader = true
@@ -1018,7 +1016,7 @@ func TestReaderModeModalLinkWarnsWithoutScrolling(t *testing.T) {
 func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	u := mustParse(t, "https://example.com/article")
 	doc := ParseHTML(`<p>hello</p><h2 id="target">target</h2><p><a href="#target">jump</a></p>`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Reader = true
@@ -1038,13 +1036,13 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 func TestRightClickCopiesLinkURL(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
 	u := mustParse(t, "https://example.com/news")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
 
 	var frag *Frag
 	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == fragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
+		if b.Layout.Frags[i].Kind == FragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
 			frag = &b.Layout.Frags[i]
 			break
 		}
@@ -1083,7 +1081,7 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	doc := ParseHTML(`<p>Plain text without a link</p>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
 
@@ -1106,7 +1104,7 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
 	u := mustParse(t, "https://example.com/news")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
 	var buf bytes.Buffer
@@ -1114,7 +1112,7 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 
 	var frag *Frag
 	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == fragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
+		if b.Layout.Frags[i].Kind == FragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
 			frag = &b.Layout.Frags[i]
 			break
 		}
@@ -1150,7 +1148,7 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 }
 
 func TestEngineNoLongerOwnsHistoryKeys(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	for _, k := range []string{"ctrl-o", "ctrl-i", "[", "]", "h", "l", "left", "right"} {
 		b.status = ""
 		b.HandleKey(k)
@@ -1161,7 +1159,7 @@ func TestEngineNoLongerOwnsHistoryKeys(t *testing.T) {
 }
 
 func TestStatusDetailsShortcut(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.status = `Error: Invalid URL: parse "x": invalid port`
 	b.showStatusDetails()
 	if b.notice == nil {
@@ -1187,7 +1185,7 @@ func TestStatusDetailsShortcut(t *testing.T) {
 }
 
 func TestZoomKeysStepThroughPresets(t *testing.T) {
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	if b.Zoom != 1 {
 		t.Fatalf("new browser zoom = %g, want 1", b.Zoom)
 	}
@@ -1238,8 +1236,8 @@ func TestZoomKeysStepThroughPresets(t *testing.T) {
 }
 
 func TestZoomStepsFromArbitraryStart(t *testing.T) {
-	b := NewSession(80, 24)
-	defer setLayoutZoom(1)
+	b := newTestSession(80, 24)
+	defer SetZoom(1)
 	b.applyZoom(1.4)
 	b.zoomBy(1)
 	if b.Zoom != 1.5 {

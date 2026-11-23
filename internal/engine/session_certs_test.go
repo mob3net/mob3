@@ -91,7 +91,7 @@ func TestSetCertSourceRejectsFiles(t *testing.T) {
 }
 
 func TestConfigSwitchesCertSource(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	b.applyConfig(url.Values{"certs": {CertSourceEmbedded}})
 	if b.loader.CertStore != CertSourceEmbedded || b.loader.CertPool == nil {

@@ -166,7 +166,7 @@ func PDFInfoTitle(d *PDFDoc) string {
 	return PDFTextString(title)
 }
 
-// pdfTextString decodes a PDF text string, which is either UTF-16BE with a
+// PDFTextString decodes a PDF text string, which is either UTF-16BE with a
 // byte-order mark or a single-byte encoding.
 func PDFTextString(s string) string {
 	if len(s) >= 2 && s[0] == 0xFE && s[1] == 0xFF {
@@ -182,7 +182,7 @@ func PDFTextString(s string) string {
 	return strings.Join(strings.Fields(sanitizePDFText(s)), " ")
 }
 
-// pdfDisplayName derives a short label from the URL's last path segment.
+// PDFDisplayName derives a short label from the URL's last path segment.
 func PDFDisplayName(u *url.URL) string {
 	if u == nil {
 		return ""

@@ -82,13 +82,18 @@ func BenchmarkInProcFrameHandoff(b *testing.B) {
 	for i := range f.Cells {
 		f.Cells[i] = Cell{R: rune('a' + i%26), FG: Color{R: 30, G: 40, B: 50, A: 255, Set: true}}
 	}
+	done := make(chan struct{})
 	hnd := HandlerFunc(func(ctx context.Context, abort <-chan struct{}, in <-chan Command, out EventSink) error {
-		for i := 0; i < b.N; i++ {
+		for {
+			select {
+			case <-done:
+				return nil
+			default:
+			}
 			if err := out.Send(Event{Body: f}); err != nil {
 				return err
 			}
 		}
-		return nil
 	})
 	s, err := (&InProc{EventQueue: 8}).Open(context.Background(), 1, hnd)
 	if err != nil {
@@ -102,4 +107,5 @@ func BenchmarkInProcFrameHandoff(b *testing.B) {
 			b.Fatal("event stream closed")
 		}
 	}
+	close(done)
 }

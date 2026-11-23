@@ -44,7 +44,7 @@ type ClickTarget struct {
 }
 
 // NewAutomation creates a headless browser with a virtual text viewport.
-func NewAutomation(width, height int) *Automation {
+func newAutomation(width, height int) *Automation {
 	b := NewSession(width, height)
 	b.NoDraw = true
 	if b.loader != nil {
@@ -253,7 +253,7 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 		return false
 	}) {
 		typ := strings.ToLower(n.Attr("type"))
-		if typ == "hidden" || isDisabledControl(n) {
+		if typ == "hidden" || IsDisabledControl(n) {
 			continue
 		}
 		f := firstVisibleFrag(b, n, b.Scroll, vh)
@@ -264,7 +264,7 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 		if name == "" {
 			name = n.Attr("id")
 		}
-		value := inputValue(n)
+		value := InputValue(n)
 		switch typ {
 		case "checkbox", "radio":
 			if n.HasAttr("checked") {
@@ -287,7 +287,7 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 func firstVisibleFrag(b *Session, n *Node, scroll, vh int) *Frag {
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Kind != fragText || f.Node == nil {
+		if f.Kind != FragText || f.Node == nil {
 			continue
 		}
 		if f.Node != n && !isDescendant(f.Node, n) {
@@ -819,7 +819,7 @@ func (a *Automation) FormFields(selector string) (string, error) {
 		}
 		orig := n
 		if n.Tag != "form" {
-			n = nearestForm(n)
+			n = NearestForm(n)
 		}
 		if n == nil {
 			return "", fmt.Errorf("%s is not inside a form", describeNode(orig))
@@ -851,8 +851,8 @@ func (a *Automation) FormFields(selector string) (string, error) {
 	}
 	if !truncated {
 		var loose []*Node
-		for _, n := range root.FindAll(func(n *Node) bool { return isFormControl(n) }) {
-			if isHiddenInput(n) || nearestForm(n) != nil {
+		for _, n := range root.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
+			if isHiddenInput(n) || NearestForm(n) != nil {
 				continue
 			}
 			loose = append(loose, n)
@@ -900,7 +900,7 @@ func isHiddenInput(n *Node) bool {
 // whether more controls were left out.
 func controlLines(root, container *Node, indent string, max int) ([]string, bool) {
 	var lines []string
-	for _, n := range container.FindAll(func(n *Node) bool { return isFormControl(n) }) {
+	for _, n := range container.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
 		if isHiddenInput(n) {
 			continue
 		}
@@ -942,24 +942,24 @@ func controlLine(root, n *Node) string {
 		}
 		parts = append(parts, "state="+state, "value="+strconv.Quote(value))
 	case n.Tag == "select":
-		opts := selectOptions(n)
+		opts := SelectOptions(n)
 		var values []string
 		for _, o := range opts {
-			values = append(values, optionValue(o))
+			values = append(values, OptionValue(o))
 		}
 		if n.HasAttr("multiple") {
-			parts = append(parts, "multiple", "values="+quotedList(selectedOptionValues(n)))
+			parts = append(parts, "multiple", "values="+quotedList(SelectedOptionValues(n)))
 		} else {
-			parts = append(parts, "value="+strconv.Quote(inputValue(n)))
+			parts = append(parts, "value="+strconv.Quote(InputValue(n)))
 		}
 		parts = append(parts, "options="+quotedList(values))
 	case n.Tag == "textarea":
-		parts = append(parts, "value="+strconv.Quote(clipText(collapseWhitespace(inputValue(n)), 80)))
+		parts = append(parts, "value="+strconv.Quote(clipText(collapseWhitespace(InputValue(n)), 80)))
 	case typ == "password":
 		// Never expose a password through the automation surface. Presence is
 		// still useful, so an empty field stays visibly empty.
 		value := `""`
-		if inputValue(n) != "" {
+		if InputValue(n) != "" {
 			value = `"[redacted]"`
 		}
 		parts = append(parts, "value="+value)
@@ -970,15 +970,15 @@ func controlLine(root, n *Node) string {
 		}
 		parts = append(parts, "text="+strconv.Quote(clipText(label, 80)))
 	default:
-		parts = append(parts, "value="+strconv.Quote(clipText(collapseWhitespace(inputValue(n)), 80)))
+		parts = append(parts, "value="+strconv.Quote(clipText(collapseWhitespace(InputValue(n)), 80)))
 	}
 	if n.HasAttr("required") {
 		parts = append(parts, "required")
 	}
-	if isReadOnlyControl(n) {
+	if IsReadOnlyControl(n) {
 		parts = append(parts, "readonly")
 	}
-	if isDisabledControl(n) {
+	if IsDisabledControl(n) {
 		parts = append(parts, "disabled")
 	}
 	parts = append(parts, "selector="+strconv.Quote(selectorForNode(root, n)))
@@ -1024,14 +1024,14 @@ func (a *Automation) fillControlLocked(n *Node, value string) error {
 	if n == nil || n.Type != ElementNode {
 		return errors.New("not an element")
 	}
-	if isDisabledControl(n) {
+	if IsDisabledControl(n) {
 		return fmt.Errorf("%s is disabled", describeNode(n))
 	}
 	if n.Tag == "textarea" {
-		if isReadOnlyControl(n) {
+		if IsReadOnlyControl(n) {
 			return fmt.Errorf("%s is read-only", describeNode(n))
 		}
-		b.setInputValue(n, truncateRunes(value, maxLength(n)))
+		b.setInputValue(n, truncateRunes(value, MaxLength(n)))
 		a.fireChangeLocked(n)
 		return nil
 	}
@@ -1054,13 +1054,13 @@ func (a *Automation) fillControlLocked(n *Node, value string) error {
 		b.setRangeValue(n, f)
 		return nil
 	}
-	if isReadOnlyControl(n) {
+	if IsReadOnlyControl(n) {
 		return fmt.Errorf("%s is read-only", describeNode(n))
 	}
-	if !isTextInput(n) {
+	if !IsTextInput(n) {
 		return fmt.Errorf("%s is not an editable text field", describeNode(n))
 	}
-	b.setInputValue(n, truncateRunes(value, maxLength(n)))
+	b.setInputValue(n, truncateRunes(value, MaxLength(n)))
 	a.fireChangeLocked(n)
 	return nil
 }
@@ -1108,13 +1108,13 @@ func (a *Automation) Select(selector string, value *string, values []string, lab
 	if n.Tag != "select" {
 		return "", fmt.Errorf("%s is not a <select>", describeNode(n))
 	}
-	if isDisabledControl(n) {
+	if IsDisabledControl(n) {
 		return "", fmt.Errorf("%s is disabled", describeNode(n))
 	}
-	opts := selectOptions(n)
+	opts := SelectOptions(n)
 	var enabled []*Node
 	for _, o := range opts {
-		if !isDisabledControl(o) {
+		if !IsDisabledControl(o) {
 			enabled = append(enabled, o)
 		}
 	}
@@ -1144,7 +1144,7 @@ func (a *Automation) Select(selector string, value *string, values []string, lab
 			return "", fmt.Errorf("option index %d out of range (0-%d)", *index, len(opts)-1)
 		}
 		o := opts[*index]
-		if isDisabledControl(o) {
+		if IsDisabledControl(o) {
 			return "", errors.New("option is disabled")
 		}
 		chosen = []*Node{o}
@@ -1164,12 +1164,12 @@ func (a *Automation) Select(selector string, value *string, values []string, lab
 		return "", errors.New("select needs value, values, text or index")
 	}
 	for _, o := range opts {
-		removeAttr(o, "selected")
+		RemoveAttr(o, "selected")
 	}
 	var picked []string
 	for _, o := range chosen {
-		setAttr(o, "selected", "")
-		picked = append(picked, optionValue(o))
+		SetAttr(o, "selected", "")
+		picked = append(picked, OptionValue(o))
 	}
 	// A select's value is derived from its selected option attributes; drop any
 	// stale direct value a script may have set.
@@ -1181,7 +1181,7 @@ func (a *Automation) Select(selector string, value *string, values []string, lab
 
 func optionByValue(opts []*Node, value string) *Node {
 	for _, o := range opts {
-		if optionValue(o) == value {
+		if OptionValue(o) == value {
 			return o
 		}
 	}
@@ -1190,13 +1190,13 @@ func optionByValue(opts []*Node, value string) *Node {
 
 func optionByLabel(opts []*Node, label string) *Node {
 	for _, o := range opts {
-		if optionLabel(o) == label {
+		if OptionLabel(o) == label {
 			return o
 		}
 	}
 	var match *Node
 	for _, o := range opts {
-		if strings.EqualFold(optionLabel(o), label) {
+		if strings.EqualFold(OptionLabel(o), label) {
 			if match != nil {
 				return match // ambiguous case-only match; take the first
 			}
@@ -1209,7 +1209,7 @@ func optionByLabel(opts []*Node, label string) *Node {
 func optionValueList(opts []*Node) string {
 	var values []string
 	for _, o := range opts {
-		values = append(values, optionValue(o))
+		values = append(values, OptionValue(o))
 	}
 	return clipText(quotedList(values), 160)
 }
@@ -1230,7 +1230,7 @@ func (a *Automation) Toggle(selector string, checked *bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if isDisabledControl(n) {
+	if IsDisabledControl(n) {
 		return "", fmt.Errorf("%s is disabled", describeNode(n))
 	}
 	if n.Tag == "option" {
@@ -1247,9 +1247,9 @@ func (a *Automation) Toggle(selector string, checked *bool) (string, error) {
 			return toggleState(n, want), nil
 		}
 		if want {
-			setAttr(n, "selected", "")
+			SetAttr(n, "selected", "")
 		} else {
-			removeAttr(n, "selected")
+			RemoveAttr(n, "selected")
 		}
 		b.fireSelectChange(sel)
 		return toggleState(n, want), nil
@@ -1302,7 +1302,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 	var form *Node
 	if selector == "" {
 		if b.Forms.InputFocus != nil {
-			form = nearestForm(b.Forms.InputFocus)
+			form = NearestForm(b.Forms.InputFocus)
 		}
 		if form == nil {
 			forms := b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "form" })
@@ -1323,7 +1323,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 		if n.Tag == "form" {
 			form = n
 		} else {
-			form = nearestForm(n)
+			form = NearestForm(n)
 		}
 		if form == nil {
 			return fmt.Errorf("%s is not inside a form", describeNode(n))
@@ -1357,7 +1357,7 @@ func revealNode(b *Session, n *Node) {
 	var first *Frag
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Kind != fragText || f.Node == nil {
+		if f.Kind != FragText || f.Node == nil {
 			continue
 		}
 		if f.Node != n && !isDescendant(f.Node, n) {
@@ -1394,7 +1394,7 @@ func selectorForNode(root, n *Node) string {
 	}
 	if name := n.Attr("name"); name != "" && safeAttrText(name) {
 		base := n.Tag + "[name=" + strconv.Quote(name) + "]"
-		if form := nearestForm(n); form != nil {
+		if form := NearestForm(n); form != nil {
 			if id := form.Attr("id"); id != "" && safeCSSIdent(id) {
 				if sel := "#" + id + " " + base; selectorMatchesNode(root, n, sel) {
 					return sel
@@ -1602,7 +1602,7 @@ func (a *Automation) renderedTextLocked() string {
 	if b.Layout != nil {
 		for i := range b.Layout.Frags {
 			f := &b.Layout.Frags[i]
-			if f.Kind == fragText && f.Text != "" {
+			if f.Kind == FragText && f.Text != "" {
 				sb.WriteString(f.Text)
 				sb.WriteByte(' ')
 			}
@@ -1801,7 +1801,7 @@ func (a *Automation) Logs(limit int) string {
 	}
 	for _, entry := range entries {
 		for _, line := range strings.Split(entry, "\n") {
-			sb.WriteString(stripTerminalControls(line))
+			sb.WriteString(StripTerminalControls(line))
 			sb.WriteString("\n")
 		}
 	}
@@ -1828,7 +1828,7 @@ func (a *Automation) Source(selector string) (string, error) {
 			return "", err
 		}
 		var sb strings.Builder
-		serializeNode(&sb, n)
+		SerializeNode(&sb, n)
 		src = sb.String()
 	}
 	if src == "" {

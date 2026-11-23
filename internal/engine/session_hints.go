@@ -205,7 +205,7 @@ func (b *Session) activateHintControl(n *Node, r Rect) {
 		return
 	}
 	switch {
-	case isFileInput(n):
+	case IsFileInput(n):
 		b.focusControlTarget(n, nil)
 		b.showUploadNotice()
 	case n.Tag == "option":
@@ -218,7 +218,7 @@ func (b *Session) activateHintControl(n *Node, r Rect) {
 	case isToggleControl(n):
 		b.focusControlTarget(n, nil)
 		b.toggleControl(n)
-	case isTextInput(n), isRangeInput(n):
+	case IsTextInput(n), IsRangeInput(n):
 		b.setInputFocus(n)
 		b.ensureInputVisible(n)
 	case isButtonControl(n):

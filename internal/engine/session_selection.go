@@ -210,7 +210,7 @@ func (b *Session) copyRenderedPage(visibleOnly bool) {
 	// which terminal and page size, and which modes produced the text.
 	url := ""
 	if b.URL != nil {
-		url = stripTerminalControls(b.URL.String())
+		url = StripTerminalControls(b.URL.String())
 	}
 	if len(url) > 500 {
 		cut := 500

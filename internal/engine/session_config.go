@@ -185,7 +185,7 @@ func (b *Session) applyConfig(q url.Values) {
 	if v, ok := q["zoom"]; ok && len(v) > 0 {
 		if pct, valid := parseZoomPercent(v[0]); valid {
 			b.Zoom = pct / 100
-			setLayoutZoom(b.Zoom)
+			SetZoom(b.Zoom)
 			b.BigTextBlocked = false
 		}
 	}

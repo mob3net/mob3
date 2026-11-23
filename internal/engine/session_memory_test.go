@@ -10,7 +10,7 @@ import (
 func TestMemoryLimitAppliedAndCleared(t *testing.T) {
 	prev := debug.SetMemoryLimit(-1)
 	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.setMemoryLimitMB(96)
 	if got := debug.SetMemoryLimit(-1); got != 96<<20 {
 		t.Fatalf("runtime limit = %d, want %d", got, int64(96)<<20)
@@ -64,7 +64,7 @@ func TestDynamicStyleRuleCap(t *testing.T) {
 }
 
 func TestJSMemorySamplerLifecycle(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	if !j.MemSamplerActive() {
@@ -85,7 +85,7 @@ func TestJSMemorySamplerLifecycle(t *testing.T) {
 }
 
 func TestJSMemorySamplerInterrupts(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 1 << 20
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	defer j.Stop()
@@ -103,7 +103,7 @@ func TestJSMemorySamplerInterrupts(t *testing.T) {
 }
 
 func TestTakeScavengePendingConsumesOnce(t *testing.T) {
-	b := NewSession(60, 10)
+	b := newTestSession(60, 10)
 	b.NoteEvictedPage(1, 0)
 	if !b.takeScavengePending() {
 		t.Fatal("pending scavenge was not reported")

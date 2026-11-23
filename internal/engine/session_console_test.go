@@ -14,7 +14,7 @@ import (
 func TestJSDialogsNonInteractive(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`alert("hello"); document.title = String(confirm("c")) + ":" + String(prompt("p", "d"));`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	if page.Title != "false:null" {
@@ -28,7 +28,7 @@ func TestJSDialogsNonInteractive(t *testing.T) {
 func TestConsoleStorageSection(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`localStorage.setItem("theme", "dark"); sessionStorage.setItem("tab", "1");`)
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.URL = mustParse(t, "https://example.com/")
 	withQuietStdout(t, func() { b.startJS(page) })
@@ -49,7 +49,7 @@ func TestConsoleStorageSection(t *testing.T) {
 }
 
 func TestConsoleStorageCookieDetails(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.URL = mustParse(t, "https://example.com/api/page")
 	testHost(b.loader).Cookies().SetCookies(b.URL, []*http.Cookie{
 		{Name: "sid", Value: "abc", Domain: ".example.com", Path: "/api", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode},
@@ -73,7 +73,7 @@ func TestConsoleStorageCookieDetails(t *testing.T) {
 }
 
 func TestConsoleRequestLinesWrap(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	gen := b.loader.CurrentPageGeneration()
 	id, ok := b.loader.StartRequest(gen, "GET", "https://example.com/"+strings.Repeat("a", 200), "doc")
 	if !ok {
@@ -86,7 +86,7 @@ func TestConsoleRequestLinesWrap(t *testing.T) {
 		t.Fatalf("long request did not wrap: %q", lines)
 	}
 	for _, line := range lines {
-		if w := stringWidth(line); w > width {
+		if w := StringWidth(line); w > width {
 			t.Fatalf("request line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -96,7 +96,7 @@ func TestConsoleRequestLinesWrap(t *testing.T) {
 }
 
 func TestConsoleToolLinesWrap(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.appendToolLine(strings.Repeat("z", 200))
 	const width = 40
 	lines := b.toolLines(width)
@@ -104,7 +104,7 @@ func TestConsoleToolLinesWrap(t *testing.T) {
 		t.Fatalf("long tool output did not wrap: %q", lines)
 	}
 	for _, line := range lines {
-		if w := stringWidth(line); w > width {
+		if w := StringWidth(line); w > width {
 			t.Fatalf("tool line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -114,7 +114,7 @@ func TestConsoleToolLinesWrap(t *testing.T) {
 }
 
 func TestConsoleStorageWrapsLongValues(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.URL = mustParse(t, "https://example.com/")
 	testHost(b.loader).Cookies().SetCookies(b.URL, []*http.Cookie{
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
@@ -126,7 +126,7 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	const width = 40
 	lines := b.storageLinesWidth(width)
 	for _, line := range lines {
-		if w := stringWidth(line); w > width {
+		if w := StringWidth(line); w > width {
 			t.Fatalf("storage line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -144,7 +144,7 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 }
 
 func TestConsoleHTMLShowsRawHTML(t *testing.T) {
-	b := NewSession(40, 20)
+	b := newTestSession(40, 20)
 	b.Page = &Page{RawHTML: "<html>\n<body><p>Hello raw page</p></body>\n</html>"}
 	joined := strings.Join(b.htmlLines(20), "\n")
 	if !strings.Contains(joined, "<html>") || !strings.Contains(joined, "Hello raw") {
@@ -158,7 +158,7 @@ func TestConsoleHTMLShowsRawHTML(t *testing.T) {
 	// Long source lines wrap to the console width.
 	b.Page = &Page{RawHTML: strings.Repeat("x", 45)}
 	for _, line := range b.htmlLines(20) {
-		if stringWidth(line) > 20 {
+		if StringWidth(line) > 20 {
 			t.Fatalf("HTML line wider than requested: %q", line)
 		}
 	}
@@ -170,7 +170,7 @@ func TestConsolePausesTimers(t *testing.T) {
 			document.getElementById("out").textContent = "timer";
 		}, 10);
 	`)
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.consoleOpen = true
@@ -188,7 +188,7 @@ func TestConsolePausesTimers(t *testing.T) {
 
 func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `console.log("fresh");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.jsLog = []string{"[error] old"}
 	b.jsErr = true
 	b.consoleText = "draft"
@@ -215,7 +215,7 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 
 func TestConsoleKeepsLogOnFailedNavigation(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.jsLog = []string{"[error] old"}
 	withQuietStdout(t, func() {
 		b.finishLoad(LoadResult{Err: errors.New("boom"), URL: u})
@@ -240,7 +240,7 @@ func consoleClipboardText(t *testing.T, buf *bytes.Buffer) string {
 }
 
 func TestConsoleYCopiesActiveSection(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.consoleOpen = true
 	b.jsLog = []string{"[log] hello", "[error] boom"}
 	var buf bytes.Buffer

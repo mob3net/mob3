@@ -408,13 +408,6 @@ type HistoryCommit struct {
 
 func (HistoryCommit) eventKind() Kind { return EvHistoryCommit }
 
-// Selection is the text of the current page selection.
-type Selection struct {
-	Text string
-}
-
-func (Selection) eventKind() Kind { return EvSelection }
-
 // FindResults reports the current match and the total. Rects are content
 // viewport rectangles for highlighting.
 type FindResults struct {

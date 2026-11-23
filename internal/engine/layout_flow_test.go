@@ -8,14 +8,14 @@ import (
 func TestClosedDetailsHidesContent(t *testing.T) {
 	closed := build(`<details><summary>summary</summary><p>secret</p></details>`, 40)
 	for _, f := range closed.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "secret") {
+		if f.Kind == FragText && strings.Contains(f.Text, "secret") {
 			t.Fatal("closed details rendered its content")
 		}
 	}
 	open := build(`<details open><summary>summary</summary><p>visible</p></details>`, 40)
 	found := false
 	for _, f := range open.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "visible") {
+		if f.Kind == FragText && strings.Contains(f.Text, "visible") {
 			found = true
 		}
 	}
@@ -28,7 +28,7 @@ func TestListMarkerBeforeText(t *testing.T) {
 	ly := build(`<ul><li>First item</li></ul>`, 30)
 	markerX, textX := -1, -1
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		if strings.TrimSpace(f.Text) == "•" {
@@ -52,7 +52,7 @@ func TestPseudoAfterAspectBox(t *testing.T) {
 	ly := BuildLayout(doc, rules, 40)
 	afterY := 0
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "after" {
+		if f.Kind == FragText && f.Text == "after" {
 			afterY = f.Y
 		}
 	}
@@ -71,7 +71,7 @@ func TestFloatLeftLaysItemsHorizontally(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	pos := map[string][2]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (f.Text == "A" || f.Text == "B" || f.Text == "C") {
+		if f.Kind == FragText && (f.Text == "A" || f.Text == "B" || f.Text == "C") {
 			pos[f.Text] = [2]int{f.X, f.Y}
 		}
 	}
@@ -87,7 +87,7 @@ func TestClipHiddenContent(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	seen := map[string]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			seen[f.Text] = true
 		}
 	}
@@ -107,7 +107,7 @@ func TestOverflowClippingStopsSpill(t *testing.T) {
 <p id="after">after</p></body></html>`, 40)
 	seen := map[string]Frag{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			if s := strings.TrimSpace(f.Text); s != "" {
 				seen[s] = f
 			}
@@ -135,7 +135,7 @@ func TestOverflowClippingStopsSpill(t *testing.T) {
 func TestOverflowClipsHorizontalRun(t *testing.T) {
 	ly := build(`<html><body><div style="width:2em;overflow:hidden;white-space:nowrap">abcdefgh</div></body></html>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "abcdefgh") {
+		if f.Kind == FragText && strings.Contains(f.Text, "abcdefgh") {
 			t.Fatalf("nowrap run was not clipped: %+v", f)
 		}
 	}
@@ -148,7 +148,7 @@ func TestFloatLeftWrapsText(t *testing.T) {
 </body></html>`, 40)
 	var narrowed, full bool
 	for _, f := range ly.Frags {
-		if f.Kind != fragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
+		if f.Kind != FragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
 			continue
 		}
 		if f.Y < 4 {
@@ -172,7 +172,7 @@ func TestFloatRightNarrowsLines(t *testing.T) {
 </body></html>`, 40)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind != fragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
+		if f.Kind != FragText || fragOwnerID(f) != "p" || strings.TrimSpace(f.Text) == "" {
 			continue
 		}
 		if f.Y < 4 {
@@ -193,7 +193,7 @@ func TestClearMovesBelowFloat(t *testing.T) {
 <p id="clear" style="clear:left">after</p>
 </body></html>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && fragOwnerID(f) == "clear" {
+		if f.Kind == FragText && fragOwnerID(f) == "clear" {
 			if f.X > 1 || f.Y < 4 {
 				t.Fatalf("cleared block did not move below the float: x=%d y=%d %q", f.X, f.Y, f.Text)
 			}
@@ -208,7 +208,7 @@ func TestFloatContainedByOverflow(t *testing.T) {
 <div style="overflow:hidden"><div style="float:left;width:5em;height:2em">F</div></div>
 <p id="after">after</p></body></html>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && fragOwnerID(f) == "after" {
+		if f.Kind == FragText && fragOwnerID(f) == "after" {
 			if f.X > 1 {
 				t.Fatalf("float leaked out of its formatting context: x=%d", f.X)
 			}
@@ -224,7 +224,7 @@ func TestFloatTableCaptionDoesNotInflateWidth(t *testing.T) {
 <figcaption>a very long figcaption that must wrap to the table width instead of widening it</figcaption></figure>
 <p id="p">one two three four five six seven eight nine ten eleven twelve</p></body></html>`, 60)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && fragOwnerID(f) == "p" && strings.TrimSpace(f.Text) != "" && f.Y < 4 {
+		if f.Kind == FragText && fragOwnerID(f) == "p" && strings.TrimSpace(f.Text) != "" && f.Y < 4 {
 			if f.X > 15 {
 				t.Fatalf("figcaption inflated the float width: text x=%d %q", f.X, f.Text)
 			}
@@ -288,7 +288,7 @@ func TestFloatRowMaxContentIsSum(t *testing.T) {
 	}
 	var rows []int
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (strings.TrimSpace(f.Text) == "aaaa" || strings.TrimSpace(f.Text) == "bbbb") {
+		if f.Kind == FragText && (strings.TrimSpace(f.Text) == "aaaa" || strings.TrimSpace(f.Text) == "bbbb") {
 			rows = append(rows, f.Y)
 		}
 	}

@@ -8,7 +8,7 @@ import (
 )
 
 func TestConfigPageShowsValues(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	b.home = "https://example.com/home"
 	b.NoJS = true
@@ -48,7 +48,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 	}
 	selects := map[string]string{}
 	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "select" }) {
-		selects[n.Attr("name")] = inputValue(n)
+		selects[n.Attr("name")] = InputValue(n)
 	}
 	want := map[string]string{
 		"no-js": "on", "home": "https://example.com/home",
@@ -73,7 +73,7 @@ func TestConfigPageShowsValues(t *testing.T) {
 }
 
 func TestConfigPageShowsPixelViewport(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.CellW, b.CellH = 10, 20
 	page := b.configPage(mustParse(t, "about:config"), false)
 	text := page.Root.TextContent()
@@ -85,7 +85,7 @@ func TestConfigPageShowsPixelViewport(t *testing.T) {
 }
 
 func TestApplyConfig(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	q := url.Values{
 		"no-js":         {"on"},
@@ -121,7 +121,7 @@ func TestApplyConfig(t *testing.T) {
 }
 
 func TestConfigNavigation(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	oldHome, oldMem := b.home, b.JSMemLimit
 	// A typed query without the form token applies nothing.
@@ -158,7 +158,7 @@ func TestConfigNavigation(t *testing.T) {
 	}
 	values := map[string]string{}
 	for _, n := range b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		values[n.Attr("name")] = inputValue(n)
+		values[n.Attr("name")] = InputValue(n)
 	}
 	if values["home"] != "https://example.com/home" {
 		t.Fatalf("config inputs = %+v", values)
@@ -184,13 +184,13 @@ func configInputValue(page *Page, name string) string {
 	for _, n := range page.Root.FindAll(func(n *Node) bool {
 		return n.Tag == "input" && n.Attr("name") == name
 	}) {
-		return inputValue(n)
+		return InputValue(n)
 	}
 	return ""
 }
 
 func TestConfigBlockedInReaderMode(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	u := mustParse(t, "https://example.com/article")
 	b.Page = &Page{URL: u, Base: u, Title: "Article"}
 	b.URL = u
@@ -208,7 +208,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 		t.Fatal("reader-mode config notice is not a warning")
 	}
 
-	cfg := NewSession(80, 10)
+	cfg := newTestSession(80, 10)
 	cfgURL := mustParse(t, "about:config")
 	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
 	cfg.URL = cfgURL
@@ -222,7 +222,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 }
 
 func TestConfigCheckboxForm(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	b.NoJS = true
 	b.loader.IgnoreBlocks = true
@@ -236,13 +236,13 @@ func TestConfigCheckboxForm(t *testing.T) {
 }
 
 func TestConfigAppliesZoom(t *testing.T) {
-	b := NewSession(80, 24)
-	defer setLayoutZoom(1)
+	b := newTestSession(80, 24)
+	defer SetZoom(1)
 	b.applyConfig(url.Values{"zoom": {"150%"}})
 	if b.Zoom != 1.5 {
 		t.Fatalf("zoom = %g, want 1.5", b.Zoom)
 	}
-	if got := px(16).ResolveH(0, 16); got != 3 {
+	if got := PX(16).ResolveH(0, 16); got != 3 {
 		t.Fatalf("16px at 150%% = %d cells, want 3", got)
 	}
 	found := false

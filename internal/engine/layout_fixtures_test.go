@@ -173,8 +173,8 @@ func TestLayoutZoomFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setLayoutZoom(2)
-	defer setLayoutZoom(1)
+	SetZoom(2)
+	defer SetZoom(1)
 	for _, width := range fixtureWidths {
 		root := ParseHTML(string(data))
 		author := fixtureAuthorRules(root)

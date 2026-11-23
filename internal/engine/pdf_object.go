@@ -534,7 +534,7 @@ func (p *pdfScanner) number() (any, error) {
 // pdfOp is a content-stream operator keyword.
 type pdfOp string
 
-// parsePDF builds a document from raw bytes.
+// ParsePDF builds a document from raw bytes.
 func ParsePDF(data []byte) (*PDFDoc, error) {
 	if len(data) == 0 {
 		return nil, errPDFInvalid

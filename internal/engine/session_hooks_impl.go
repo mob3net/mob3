@@ -70,7 +70,7 @@ func (b *Session) Init(v protocol.Init) {
 	}
 	if v.Zoom > 0 {
 		b.Zoom = v.Zoom
-		setLayoutZoom(v.Zoom)
+		SetZoom(v.Zoom)
 	}
 	b.color = v.Caps&protocol.CapColor != 0
 	b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)

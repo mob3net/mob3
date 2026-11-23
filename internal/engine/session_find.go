@@ -206,7 +206,7 @@ func (b *Session) paintFindPage(g *Grid, top, bottom int) {
 			if y < top || y >= bottom || y < 0 || y >= g.H {
 				continue
 			}
-			for dy := 0; dy < maxInt(1, r.H); dy++ {
+			for dy := 0; dy < MaxInt(1, r.H); dy++ {
 				if y+dy >= bottom || y+dy >= g.H {
 					break
 				}

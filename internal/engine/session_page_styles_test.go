@@ -26,7 +26,7 @@ func TestCollectDynamicStyles(t *testing.T) {
 	textX := func() int {
 		ly := BuildLayout(root, page.Author, 40)
 		for i := range ly.Frags {
-			if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
+			if f := &ly.Frags[i]; f.Kind == FragText && f.Text == "BOX" {
 				return f.X
 			}
 		}

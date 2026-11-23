@@ -62,7 +62,7 @@ func TestAbsoluteStretchBetweenOffsets(t *testing.T) {
 	ly := build(`<div style="position:relative;height:80px;background:#eee"><div style="position:absolute;top:0;left:0;right:0;bottom:0;background:#ff0000"></div></div>`, 30)
 	red := RGB(0xff, 0, 0)
 	for _, f := range ly.Frags {
-		if f.Kind == fragFill && f.Color == red {
+		if f.Kind == FragFill && f.Color == red {
 			if f.X != 0 || f.Y != 0 || f.W != 30 || f.H != 5 {
 				t.Fatalf("stretched box = %+v, want x=0 y=0 w=30 h=5", f)
 			}
@@ -76,7 +76,7 @@ func TestAbsolutePaintsAboveFlow(t *testing.T) {
 	ly := build(`<div style="position:absolute;top:0;left:0">abs</div><p>flow</p>`, 30)
 	absIdx, flowIdx := -1, -1
 	for i, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch strings.TrimSpace(f.Text) {
@@ -218,7 +218,7 @@ func TestAbsoluteChildOfShiftedAbsoluteBox(t *testing.T) {
 		`</div></div>`)
 	ly := BuildLayout(doc, nil, 100)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "X") {
+		if f.Kind == FragText && strings.Contains(f.Text, "X") {
 			if f.X < 40 {
 				t.Fatalf("absolute child x = %d, want near the parent's right edge", f.X)
 			}

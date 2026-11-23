@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// visibleText concatenates rendered text below n, skipping hidden elements.
+// VisibleText concatenates rendered text below n, skipping hidden elements.
 // Form controls (notably buttons) use this instead of TextContent so CSS or
 // script text cannot leak into their labels.
 func VisibleText(n *Node) string {
@@ -87,7 +87,7 @@ func MinInt(a, b int) int {
 	return b
 }
 
-// runeWidth returns the number of terminal cells a rune occupies.
+// RuneWidth returns the number of terminal cells a rune occupies.
 func RuneWidth(r rune) int {
 	if r == 0 || r < 32 || (r >= 0x7f && r < 0xa0) {
 		return 0
@@ -132,7 +132,7 @@ func StringWidth(s string) int {
 	return w
 }
 
-// truncateWidth cuts s to at most max cells.
+// TruncateWidth cuts s to at most max cells.
 func TruncateWidth(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -148,7 +148,7 @@ func TruncateWidth(s string, max int) string {
 	return s
 }
 
-// padWidth pads s with spaces to exactly w cells.
+// PadWidth pads s with spaces to exactly w cells.
 func PadWidth(s string, w int) string {
 	sw := StringWidth(s)
 	if sw >= w {
@@ -157,7 +157,7 @@ func PadWidth(s string, w int) string {
 	return s + strings.Repeat(" ", w-sw)
 }
 
-// fitWidth truncates s with an ellipsis and pads it to exactly w cells.
+// FitWidth truncates s with an ellipsis and pads it to exactly w cells.
 func FitWidth(s string, w int) string {
 	if w <= 0 {
 		return ""
@@ -191,7 +191,7 @@ func ApplyTextTransform(s, mode string) string {
 	return s
 }
 
-// expandTabs converts tabs to spaces using a 4-cell tab width.
+// ExpandTabs converts tabs to spaces using a 4-cell tab width.
 func ExpandTabs(s string) string {
 	if !strings.ContainsRune(s, '\t') {
 		return s

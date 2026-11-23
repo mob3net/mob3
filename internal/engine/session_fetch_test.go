@@ -122,11 +122,11 @@ func TestHelpPageDemoInputPlaceholder(t *testing.T) {
 	if got := input.Attr("placeholder"); got != "try typing here" {
 		t.Fatalf("demo input placeholder = %q", got)
 	}
-	if label := formLabel(input); !strings.Contains(label, "try typing here") {
+	if label := FormLabel(input); !strings.Contains(label, "try typing here") {
 		t.Fatalf("unfocused input label = %q", label)
 	}
 	input.InputFocused = true
-	if label := formLabel(input); strings.Contains(label, "try typing here") {
+	if label := FormLabel(input); strings.Contains(label, "try typing here") {
 		t.Fatalf("focused input still shows placeholder: %q", label)
 	}
 }
@@ -170,10 +170,10 @@ func TestHelpPageSelectControls(t *testing.T) {
 		}
 		return false
 	})
-	if single == nil || len(selectOptions(single)) != 3 {
+	if single == nil || len(SelectOptions(single)) != 3 {
 		t.Fatalf("single select = %+v", single)
 	}
-	if multi == nil || len(selectOptions(multi)) != 3 {
+	if multi == nil || len(SelectOptions(multi)) != 3 {
 		t.Fatalf("multi-select = %+v", multi)
 	}
 }
@@ -283,7 +283,7 @@ func TestBlockedChallenge(t *testing.T) {
 	centered := false
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Node != nil && f.Node.Parent != nil &&
+		if f.Kind == FragText && f.Node != nil && f.Node.Parent != nil &&
 			f.Node.Parent.Tag == "h1" && f.X >= 8 {
 			centered = true
 			break
@@ -637,20 +637,20 @@ func TestWebPDecodeRegistered(t *testing.T) {
 }
 
 func TestImageConfigLimit(t *testing.T) {
-	if !imageConfigOK(image.Config{Width: 1000, Height: 1000}) {
+	if !ImageConfigOK(image.Config{Width: 1000, Height: 1000}) {
 		t.Error("normal image rejected")
 	}
-	if imageConfigOK(image.Config{Width: 10000, Height: 10000}) {
+	if ImageConfigOK(image.Config{Width: 10000, Height: 10000}) {
 		t.Error("decompression bomb accepted")
 	}
-	if imageConfigOK(image.Config{}) {
+	if ImageConfigOK(image.Config{}) {
 		t.Error("empty image accepted")
 	}
 }
 
 func TestBranding(t *testing.T) {
 	for _, want := range []string{"MOB³"} {
-		if !strings.Contains(startPageHTML, want) {
+		if !strings.Contains(StartPageHTML, want) {
 			t.Errorf("start page is missing %q", want)
 		}
 	}
@@ -661,10 +661,10 @@ func TestBranding(t *testing.T) {
 	if page.Root.FindFirst("article") == nil {
 		t.Error("start page is not wrapped in an article for reader-style layout")
 	}
-	if len(page.Author) < len(readerRules) {
-		t.Errorf("start page author rules = %d, want the reader stylesheet (%d)", len(page.Author), len(readerRules))
+	if len(page.Author) < len(ReaderRules) {
+		t.Errorf("start page author rules = %d, want the reader stylesheet (%d)", len(page.Author), len(ReaderRules))
 	}
-	if hist := historyPageHTML(nil, -1); !strings.Contains(hist, "max-width: 900px") || !strings.Contains(hist, "margin: 8px auto") {
+	if hist := HistoryPageHTML(nil, -1); !strings.Contains(hist, "max-width: 900px") || !strings.Contains(hist, "margin: 8px auto") {
 		t.Error("history page is not a narrow reading column")
 	}
 	ua := newTestLoader().RequestUserAgent()
@@ -853,7 +853,7 @@ func TestLoadDataPageWithImage(t *testing.T) {
 	ly := BuildLayout(page.Root, page.Author, 40)
 	found := false
 	for _, fr := range ly.Frags {
-		if fr.Kind == fragImage && fr.W == 2 && fr.H == 1 {
+		if fr.Kind == FragImage && fr.W == 2 && fr.H == 1 {
 			found = true
 		}
 	}
@@ -881,7 +881,7 @@ func TestImagesDisabledByDefault(t *testing.T) {
 	ly := BuildLayout(page.Root, page.Author, 40)
 	var text strings.Builder
 	for _, fr := range ly.Frags {
-		if fr.Kind == fragText {
+		if fr.Kind == FragText {
 			text.WriteString(fr.Text)
 		}
 	}
@@ -1078,7 +1078,7 @@ func TestLoadRequestMarksLocalPage(t *testing.T) {
 }
 
 func TestXHRLocalNetworkGuard(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	loader := newTestLoader()
 	b.loader = loader
 	reached := false
@@ -1260,7 +1260,7 @@ func TestMixedContentBlocksDowngradeRedirect(t *testing.T) {
 }
 
 func TestXHRMixedContent(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	loader := newTestLoader()
 	b.loader = loader
 	reached := false
@@ -1404,7 +1404,7 @@ func TestJSDocumentCookie(t *testing.T) {
 		};
 		x.send();
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	testHost(loader).Cookies().SetCookies(page.URL, []*http.Cookie{
 		{Name: "theme", Value: "dark", Path: "/"},
@@ -1499,7 +1499,7 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	}
 
 	// Applying the batch installs the decoded image without a page reload.
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.loader = loader
 	b.Page = page
 	b.URL = page.URL
@@ -1516,7 +1516,7 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	}
 	found := false
 	for _, f := range b.Layout.Frags {
-		if f.Kind == fragImage && f.Node == img {
+		if f.Kind == FragImage && f.Node == img {
 			found = true
 		}
 	}
@@ -1579,8 +1579,8 @@ func TestPickSrcset(t *testing.T) {
 		{"", 320, ""},
 	}
 	for _, c := range cases {
-		if got := pickSrcset(c.srcset, c.pref); got != c.want {
-			t.Errorf("pickSrcset(%q, %d) = %q, want %q", c.srcset, c.pref, got, c.want)
+		if got := PickSrcset(c.srcset, c.pref); got != c.want {
+			t.Errorf("PickSrcset(%q, %d) = %q, want %q", c.srcset, c.pref, got, c.want)
 		}
 	}
 }
@@ -1593,23 +1593,23 @@ func TestImageSourcePictureAndDataAttrs(t *testing.T) {
 		Attrs: []Attr{{Key: "src", Value: "fallback.jpg"}}}
 	pic.Children = []*Node{source, img}
 
-	if got := imageSource(img, 400); got != "mobile.jpg" {
+	if got := ImageSource(img, 400); got != "mobile.jpg" {
 		t.Fatalf("mobile picture = %q", got)
 	}
-	if got := imageSource(img, 1600); got != "fallback.jpg" {
+	if got := ImageSource(img, 1600); got != "fallback.jpg" {
 		t.Fatalf("desktop picture = %q", got)
 	}
 
 	lazy := &Node{Type: ElementNode, Tag: "img",
 		Attrs: []Attr{{Key: "data-src", Value: "lazy.jpg"}}}
-	if got := imageSource(lazy, 800); got != "lazy.jpg" {
+	if got := ImageSource(lazy, 800); got != "lazy.jpg" {
 		t.Fatalf("data-src = %q", got)
 	}
 
 	// srcset wins over src.
 	both := &Node{Type: ElementNode, Tag: "img",
 		Attrs: []Attr{{Key: "src", Value: "small.jpg"}, {Key: "srcset", Value: "big.jpg 800w"}}}
-	if got := imageSource(both, 800); got != "big.jpg" {
+	if got := ImageSource(both, 800); got != "big.jpg" {
 		t.Fatalf("srcset preference = %q", got)
 	}
 }

@@ -41,7 +41,7 @@ func TestDarkLayoutPalette(t *testing.T) {
 	found := false
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText || f.Style == nil || f.Text == "" {
+		if f.Kind != FragText || f.Style == nil || f.Text == "" {
 			continue
 		}
 		found = true
@@ -70,7 +70,7 @@ func TestDarkModeUsesAuthorDarkCSS(t *testing.T) {
 	}
 	for i := range dark.Frags {
 		f := &dark.Frags[i]
-		if f.Kind == fragText && f.Style != nil && f.Text != "" {
+		if f.Kind == FragText && f.Style != nil && f.Text != "" {
 			if f.Style.Color != RGB(0xee, 0xee, 0xee) {
 				t.Fatalf("author dark text was remapped: %+v", f.Style.Color)
 			}
@@ -85,7 +85,7 @@ func TestDarkReaderMode(t *testing.T) {
 		`Dark reader article text that is long enough for extraction.` +
 		`</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.Dark = true
 	b.toggleReader()
@@ -97,7 +97,7 @@ func TestDarkReaderMode(t *testing.T) {
 	}
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Kind == fragText && f.Style != nil {
+		if f.Kind == FragText && f.Style != nil {
 			if colorLum(f.Style.Color) < 0.4 {
 				t.Fatalf("dark reader text = %+v", f.Style.Color)
 			}
@@ -111,7 +111,7 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	doc := ParseHTML(`<html><body><p>Dark mode text</p></body></html>`)
 	u, _ := url.Parse("https://example.com/dark")
 	// Wide enough that the right-side dark label has not collapsed.
-	b := NewSession(120, 20)
+	b := newTestSession(120, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Dark"}
 	b.rebuild()
 	b.toggleDark()

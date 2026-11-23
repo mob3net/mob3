@@ -196,7 +196,7 @@ func TestRunRejectsLocalFile(t *testing.T) {
 }
 
 func TestRunZoomFlag(t *testing.T) {
-	defer engine.SetLayoutZoom(1)
+	defer engine.SetZoom(1)
 	src := `<html><body style="margin:0"><p style="margin:0 0 0 64px">indent</p></body></html>`
 	page := dataPage(src)
 	indentOf := func(out []byte) int {

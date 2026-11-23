@@ -12,7 +12,7 @@ func TestInlineSVGFallbackLabel(t *testing.T) {
 	ly := build(`<div><svg aria-label="Google"><path d="M0 0"/></svg><svg aria-hidden="true"></svg><svg><title>Visible title</title></svg></div>`, 40)
 	text := ""
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			text += f.Text
 		}
 	}
@@ -30,7 +30,7 @@ func TestInlineSVGFallbackLabel(t *testing.T) {
 func TestBrokenDecorativeImageSkipped(t *testing.T) {
 	ly := build(`<p>before <img src="bad.svg"> after</p>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "[image:") {
+		if f.Kind == FragText && strings.Contains(f.Text, "[image:") {
 			t.Fatalf("decorative broken image rendered: %q", f.Text)
 		}
 	}
@@ -48,7 +48,7 @@ func TestImageHalfBlocksSize(t *testing.T) {
 	ly := BuildLayout(doc, nil, 60)
 	var f *Frag
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind == fragImage {
+		if ly.Frags[i].Kind == FragImage {
 			f = &ly.Frags[i]
 		}
 	}
@@ -67,7 +67,7 @@ func TestBrokenImagePlaceholder(t *testing.T) {
 	}
 	ly = build(`<p><img alt="" width="8" height="8"></p>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "░") {
+		if f.Kind == FragText && strings.Contains(f.Text, "░") {
 			t.Fatalf("1-cell broken image showed a placeholder: %q", f.Text)
 		}
 	}
@@ -80,7 +80,7 @@ func TestBlockImageFragment(t *testing.T) {
 	node.Img = img
 	ly := BuildLayout(doc, nil, 80)
 	for _, f := range ly.Frags {
-		if f.Kind == fragImage && f.Node == node {
+		if f.Kind == FragImage && f.Node == node {
 			if f.W != 4 || f.H < 1 {
 				t.Fatalf("block image = %dx%d, want 4-wide image fragment", f.W, f.H)
 			}
@@ -103,7 +103,7 @@ func TestAbsoluteImageInsideAspectPlaceholder(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragImage && f.Node == node {
+		if f.Kind == FragImage && f.Node == node {
 			found = true
 			if f.W <= 0 || f.H <= 0 {
 				t.Fatalf("absolute image size = %dx%d", f.W, f.H)
@@ -115,7 +115,7 @@ func TestAbsoluteImageInsideAspectPlaceholder(t *testing.T) {
 	}
 	after := 0
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "after" {
+		if f.Kind == FragText && f.Text == "after" {
 			after = f.Y
 		}
 	}
@@ -135,7 +135,7 @@ func TestObjectFitCoverAndContain(t *testing.T) {
 	got := map[string]*Frag{}
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragImage && f.Node != nil {
+		if f.Kind == FragImage && f.Node != nil {
 			got[f.Node.Attr("id")] = f
 		}
 	}
@@ -171,7 +171,7 @@ func TestObjectFitNone(t *testing.T) {
 	got := map[string]*Frag{}
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragImage && f.Node != nil {
+		if f.Kind == FragImage && f.Node != nil {
 			got[f.Node.Attr("id")] = f
 		}
 	}
@@ -192,7 +192,7 @@ func TestObjectFitNone(t *testing.T) {
 func TestBlockAspectRatio(t *testing.T) {
 	ly := build(`<div style="width:160px;aspect-ratio:2/1"></div>after`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "after") {
+		if f.Kind == FragText && strings.Contains(f.Text, "after") {
 			if f.Y != 5 {
 				t.Fatalf("text after aspect-ratio box y = %d, want 5", f.Y)
 			}
@@ -210,10 +210,10 @@ func TestLayoutImagesOffUsesAltText(t *testing.T) {
 	ly := BuildLayoutBudgetDeadlineImages(doc, nil, 40, 0, false, false, false, false, true, time.Time{}, DefaultLayoutBudget)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragImage {
+		if f.Kind == FragImage {
 			t.Fatal("imagesOff layout produced an image fragment")
 		}
-		if f.Kind == fragText && strings.Contains(f.Text, "pic") {
+		if f.Kind == FragText && strings.Contains(f.Text, "pic") {
 			found = true
 		}
 	}
@@ -236,7 +236,7 @@ func TestImageAltLabelClipsToBox(t *testing.T) {
 			ly := build(tc.src, 100)
 			found := false
 			for _, f := range ly.Frags {
-				if f.Kind == fragText && strings.HasPrefix(strings.TrimSpace(f.Text), "[image:") {
+				if f.Kind == FragText && strings.HasPrefix(strings.TrimSpace(f.Text), "[image:") {
 					found = true
 					if f.W > 20 || f.X+f.W > 21 {
 						t.Fatalf("alt label = x %d w %d, want within a 20-cell box", f.X, f.W)
@@ -253,7 +253,7 @@ func TestImageAltLabelClipsToBox(t *testing.T) {
 func TestImageAltLabelUsesMarkerInTinyBox(t *testing.T) {
 	ly := build(`<div style="width:32px"><img alt="long alternative text" style="width:100%"></div>`, 100)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			if strings.HasPrefix(f.Text, "[image:") {
 				t.Fatalf("tiny image drew a full label: %q", f.Text)
 			}
@@ -269,7 +269,7 @@ func TestImageLabelReservesCSSHeight(t *testing.T) {
 	ly := build(`<div style="width:160px"><img alt="pic" style="display:block;width:80px;height:64px">after</div>`, 40)
 	labelY, afterY := -1, -1
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		if strings.Contains(f.Text, "[image:") {
@@ -361,7 +361,7 @@ func TestInlineSVGInFlexRowIsPainted(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	var got *Frag
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind == fragImage && ly.Frags[i].Node == svg {
+		if ly.Frags[i].Kind == FragImage && ly.Frags[i].Node == svg {
 			got = &ly.Frags[i]
 		}
 	}
@@ -407,7 +407,7 @@ func TestInlineImagePercentInsideSizedWrapper(t *testing.T) {
 	img.Img = im
 	ly := BuildLayout(root, fixtureAuthorRules(root), 100)
 	for i := range ly.Frags {
-		if f := &ly.Frags[i]; f.Kind == fragImage {
+		if f := &ly.Frags[i]; f.Kind == FragImage {
 			if f.W != 4 || f.H != 2 {
 				t.Fatalf("image box = %dx%d cells, want 4x2 inside the 2rem wrapper", f.W, f.H)
 			}

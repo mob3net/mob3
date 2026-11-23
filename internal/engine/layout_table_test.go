@@ -9,7 +9,7 @@ func TestTableColumnsAndCells(t *testing.T) {
 	ly := build(`<table><tr><th>Name</th><th>Value</th></tr><tr><td>alpha</td><td>1</td></tr></table>`, 40)
 	var texts []string
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			texts = append(texts, f.Text)
 		}
 	}
@@ -26,7 +26,7 @@ func TestTableCellPercentageWidthAndNowrap(t *testing.T) {
 	linkLines := map[int]bool{}
 	var linkText string
 	for _, f := range ly.Frags {
-		if f.Kind != fragText || f.Link == nil || f.Link.Href != "/x" {
+		if f.Kind != FragText || f.Link == nil || f.Link.Href != "/x" {
 			continue
 		}
 		linkLines[f.Y] = true
@@ -43,7 +43,7 @@ func TestTableCellPercentageWidthAndNowrap(t *testing.T) {
 func TestTableCellWidthDoesNotClampContent(t *testing.T) {
 	ly := build(`<table><tr><td width="10%">abcdefgh</td><td>zzzzzzzzzzzzzzzzzzzz</td></tr></table>`, 60)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "abcdefgh" {
+		if f.Kind == FragText && f.Text == "abcdefgh" {
 			return
 		}
 	}
@@ -55,12 +55,12 @@ func TestTableCenteredByCenterTag(t *testing.T) {
 	center := build(`<center><table><tr><td>Name</td><td>Value</td></tr></table></center>`, 40)
 	leftX, centerX := -1, -1
 	for _, f := range left.Frags {
-		if f.Kind == fragText && f.Text == "Name" {
+		if f.Kind == FragText && f.Text == "Name" {
 			leftX = f.X
 		}
 	}
 	for _, f := range center.Frags {
-		if f.Kind == fragText && f.Text == "Name" {
+		if f.Kind == FragText && f.Text == "Name" {
 			centerX = f.X
 		}
 	}
@@ -77,7 +77,7 @@ func TestHiddenInputDoesNotWidenTableCell(t *testing.T) {
 	hidden := build(`<table><tr><td><input type="hidden" name="x" value="long-value">ab</td></tr></table>`, 40)
 	tableWidth := func(ly *Layout) int {
 		for _, f := range ly.Frags {
-			if f.Kind == fragFill && f.W > 1 {
+			if f.Kind == FragFill && f.W > 1 {
 				return f.W
 			}
 		}
@@ -119,7 +119,7 @@ func TestTableCellBackgroundNotShifted(t *testing.T) {
 		t.Fatal("reference text missing")
 	}
 	for _, f := range ly.Frags {
-		if f.Kind == fragFill && f.Color == RGB(0xff, 0, 0) {
+		if f.Kind == FragFill && f.Color == RGB(0xff, 0, 0) {
 			if f.Y != top.Y {
 				t.Fatalf("cell background Y=%d, want cell top %d", f.Y, top.Y)
 			}
@@ -132,7 +132,7 @@ func TestTableCellBackgroundNotShifted(t *testing.T) {
 func firstTableFillWidth(ly *Layout) int {
 	width := 0
 	for _, f := range ly.Frags {
-		if f.Kind == fragFill && f.W > width {
+		if f.Kind == FragFill && f.W > width {
 			width = f.W
 		}
 	}

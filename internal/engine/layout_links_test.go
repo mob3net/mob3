@@ -15,7 +15,7 @@ func TestLinkRects(t *testing.T) {
 	}
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Link == ly.Links[0] {
+		if f.Kind == FragText && f.Link == ly.Links[0] {
 			found = true
 		}
 	}
@@ -31,20 +31,20 @@ func TestLinkSpaceStaysOutsideLink(t *testing.T) {
 	}
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText || f.Text != "GNOME" {
+		if f.Kind != FragText || f.Text != "GNOME" {
 			continue
 		}
 		if f.Link != ly.Links[0] {
 			t.Fatal("GNOME fragment is not part of the link")
 		}
-		if got := ly.Links[0].Rects[0].W; got != stringWidth("GNOME") {
-			t.Fatalf("link rect width = %d, want %d", got, stringWidth("GNOME"))
+		if got := ly.Links[0].Rects[0].W; got != StringWidth("GNOME") {
+			t.Fatalf("link rect width = %d, want %d", got, StringWidth("GNOME"))
 		}
 		if i == 0 {
 			t.Fatal("no space before the link fragment")
 		}
 		prev := &ly.Frags[i-1]
-		if prev.Kind != fragText || strings.TrimSpace(prev.Text) != "" {
+		if prev.Kind != FragText || strings.TrimSpace(prev.Text) != "" {
 			t.Fatalf("previous fragment = %q", prev.Text)
 		}
 		if prev.Link != nil {

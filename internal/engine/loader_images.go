@@ -246,6 +246,6 @@ func (l *Loader) LoadImages(ctx context.Context, root *Node, base *url.URL) bool
 	return changed
 }
 
-// helpPageHTML wraps the help body in the shared page shell.
+// HelpPageHTML wraps the help body in the shared page shell.
 
-// historyPageHTML renders the in-memory session history as clickable links.
+// HistoryPageHTML renders the in-memory session history as clickable links.

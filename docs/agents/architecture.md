@@ -5,11 +5,9 @@ agreement, the non-negotiable constraints and the change protocol.
 
 ## Target boundary
 
-The single `browser` package is being split so page content (DOM, JS, layout,
-decoders) cannot reach the terminal, the network policy or the trusted UI. The
-wire seam is canonical in `internal/protocol`; this section records ownership
-and the migration order. Progress, decisions and measurements are tracked in
-[boundary-migration.md](boundary-migration.md).
+The packages are split so page content (DOM, JS, layout, decoders) cannot reach
+the terminal, the network policy or the trusted UI. The wire seam is canonical
+in `internal/protocol`; this section records ownership.
 
 | Package | Owns |
 | --- | --- |
@@ -41,30 +39,28 @@ transport implementation, not another architecture change.
 
 ### Migration order
 
-Each batch lands with tests green; type aliases are temporary and removed at
-the end. Steps 1, 2 and 6 are landed. Step 3's normal chrome, dialogs, console,
-find, history list, content geometry and the displayed URL/title ledger are
-landed; host-attested final URLs, step 4's session type and step 5's Loader
-orchestration remain; step 7 is Phase 6.
+All steps are landed. The temporary aliases, test-only host factory and the
+migration tracker are gone. Host-attested final URLs remain open as a separate
+process/trust decision; they do not affect the package boundary.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
 2. **Landed.** Frame boundary: content-rect `Frame`, structured scaled text
    instead of raw escape cells, ANSI and native-image encoding in the front
    end.
-3. **Partial.** Normal chrome, overlays, dialogs, hints, the console, the
-   find bar, the session history list/index/scroll, content geometry and the
+3. **Landed.** Normal chrome, overlays, dialogs, hints, the console, the find
+   bar, the session history list/index/scroll, content geometry and the
    displayed URL/title ledger are front-end-owned. The engine still reports the
-   committed final URL; host attestation remains.
-4. **Partial.** Leaf subsystems moved into `internal/engine`; the session type
-   and `Browser` → `Session` split remain.
-5. **Partial.** Host `Fetch`, decompression/charset/parse and MCP are split;
+   committed final URL; host attestation remains open.
+4. **Landed.** `internal/engine` owns one `Session` type, the loader, headless
+   automation and the dump handler; `internal/browser` is gone.
+5. **Landed.** Host `Fetch`, decompression/charset/parse and MCP are split;
    the document loader is engine-owned and reaches the network only through
-   `protocol.Host`; session construction remains.
+   `protocol.Host`.
 6. **Landed.** Every path, including `-dump`, `-png` and MCP, runs through the
    in-process transport; a stream transport exists for the later process split.
-7. **Phase 6.** Fuzz the codec, benchmark against the baseline, remove
-   aliases.
+7. **Landed.** Fuzzing, final benchmarks and cleanup: no aliases, no browser
+   package, no unused `Selection` event.
 
 ### Exit gates
 
@@ -89,8 +85,7 @@ orchestration remain; step 7 is Phase 6.
 
 ## Current layout
 
-This is the **actual** state. The target above is the destination; the tracker
-lists the remaining Phase 6 cleanup.
+This is the **actual** state; only host-attested final URLs remain open.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -147,10 +142,9 @@ lists the remaining Phase 6 cleanup.
 | `cmd/mob3/main.go` | Executable entry point only. |
 | `internal/engine/html.go` | Hand-written tolerant HTML tokenizer + tree builder. No `x/net/html`. Handles comments, doctype, raw text elements, entities, void elements, implicit closes scoped to the current container so nested tables/lists survive. Honors XML-style self-closing tags (needed by legacy markup such as `<tr/>`). |
 | `internal/engine/style.go` | The `Style` struct and computed styles: defaults, inheritance, text scale and line metrics, `applyDecl`/`applyDecls` (including the `font` shorthand, which keeps numeric weights (`400`) separate from the size (`12px/18px`)), border shorthands, presentation attributes, `var()` substitution, `background-image`/`background-size`/`background-position`, `object-position`/`aspect-ratio`, `box-sizing` (including `inherit`, so the common `html{box-sizing:border-box} *{box-sizing:inherit}` reset reaches every element), min/max sizing, logical `margin`/`padding` aliases for horizontal-tb, approximate `-webkit-line-clamp`, and screen-reader-only clip detection. |
-| `internal/engine/units.go` | `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`), viewport units (`vw`/`vh`/`vmin`/`vmax`, including inside `calc()`), `calc()` arithmetic, and `min()`/`max()`/`clamp()` with percentages, viewport units, `calc()` arguments and nesting, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected. The engine owns the cell-size/zoom globals. |
+| `internal/engine/units.go` | `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`), viewport units (`vw`/`vh`/`vmin`/`vmax`, including inside `calc()`), `calc()` arithmetic, and `min()`/`max()`/`clamp()` with percentages, viewport units, `calc()` arguments and nesting, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected. The engine owns the cell-size/zoom globals. They are process-wide by design: MOB³ runs one session per process, and multi-session isolation is not a goal. |
 | `internal/engine/color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion, alpha and opacity. |
 | `internal/engine/cssutil.go` | `SplitFields`/`SplitTopLevel` and the string scanner shared by color and sheet parsing. |
-| `internal/engine/aliases.go` | Temporary lowercase aliases for engine helpers used by the moved session files; remove in Phase 6. |
 | `internal/engine/style_app.go` | App-level style helpers: zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
 | `internal/engine/style_resolve.go` | `StyleEngine.resolveStyleUnits`: rem, viewport, lh and calc resolution against the final computed style. |
 | `internal/engine/style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
@@ -213,7 +207,6 @@ lists the remaining Phase 6 cleanup.
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
-| `internal/engine/host_port.go` | Test-only host-session factory for the default loader constructor; production constructs the host in `internal/app`. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags and terminal setup. |
 | `internal/engine/version.go` | Injected build version and the help-page wrapper. |

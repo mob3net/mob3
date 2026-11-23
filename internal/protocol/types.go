@@ -66,7 +66,6 @@ const (
 	EvClipboard
 	EvConsole
 	EvCrash
-	EvSelection
 	EvFindResults
 	EvDownload
 	EvQuit

@@ -10,7 +10,7 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	ly := build(src, 24)
 	firstY := -1
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text != "" {
+		if f.Kind == FragText && f.Text != "" {
 			firstY = f.Y
 			break
 		}
@@ -20,7 +20,7 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	}
 	justified := false
 	for _, f := range ly.Frags {
-		if f.Y == firstY && f.Kind == fragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
+		if f.Y == firstY && f.Kind == FragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
 			justified = true
 		}
 	}
@@ -30,13 +30,13 @@ func TestTextAlignJustifyExpandsSpaces(t *testing.T) {
 	plain := build(`<p>one two three four five six seven eight nine ten</p>`, 24)
 	firstY = -1
 	for _, f := range plain.Frags {
-		if f.Kind == fragText && f.Text != "" {
+		if f.Kind == FragText && f.Text != "" {
 			firstY = f.Y
 			break
 		}
 	}
 	for _, f := range plain.Frags {
-		if f.Y == firstY && f.Kind == fragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
+		if f.Y == firstY && f.Kind == FragText && strings.TrimSpace(f.Text) == "" && f.W > 1 {
 			t.Fatal("plain text spaces were expanded")
 		}
 	}
@@ -46,7 +46,7 @@ func TestInlineBlockWrapperWithWidthKeepsBlocks(t *testing.T) {
 	ly := build(`<div>before <span style="display:inline-block;width:100%"><div>inside</div></span>after</div>`, 40)
 	var before, inside, after *Frag
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind != fragText {
+		if ly.Frags[i].Kind != FragText {
 			continue
 		}
 		switch ly.Frags[i].Text {
@@ -106,7 +106,7 @@ func TestBigTextLayout(t *testing.T) {
 	ly := BuildLayoutBig(doc, nil, 40, true)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "AB" {
+		if f.Kind == FragText && f.Text == "AB" {
 			found = true
 			if f.W != 4 || f.H != 2 {
 				t.Fatalf("big heading size = %dx%d, want 4x2", f.W, f.H)
@@ -118,7 +118,7 @@ func TestBigTextLayout(t *testing.T) {
 	}
 	plain := BuildLayout(doc, nil, 40)
 	for _, f := range plain.Frags {
-		if f.Kind == fragText && f.Text == "AB" && (f.W != 2 || f.H != 2) {
+		if f.Kind == FragText && f.Text == "AB" && (f.W != 2 || f.H != 2) {
 			t.Fatalf("plain heading size = %dx%d, want 2x2", f.W, f.H)
 		}
 	}
@@ -128,7 +128,7 @@ func TestTextWrapsInsideWidth(t *testing.T) {
 	ly := build(`<div style="width:120px"><p>one two three four five six seven eight nine ten eleven twelve</p></div>`, 30)
 	saw := false
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		saw = true
@@ -145,7 +145,7 @@ func TestInlineWrapperWithBlockDescendantStartsNewLine(t *testing.T) {
 	ly := build(`<div><span style="display:inline"><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px"><p>alpha</p><p>beta</p></div></span></div><p>gamma</p>`, 40)
 	find := func(text string) *Frag {
 		for i := range ly.Frags {
-			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+			if ly.Frags[i].Kind == FragText && ly.Frags[i].Text == text {
 				return &ly.Frags[i]
 			}
 		}
@@ -170,7 +170,7 @@ func TestLineBreaks(t *testing.T) {
 	ly := build(`<p>line one<br>line two<br><br>line four</p>`, 30)
 	ys := map[string]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			ys[strings.TrimSpace(f.Text)] = f.Y
 		}
 	}
@@ -184,7 +184,7 @@ func TestNoWrap(t *testing.T) {
 	ys := map[int]bool{}
 	seen := 0
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.TrimSpace(f.Text) != "" {
+		if f.Kind == FragText && strings.TrimSpace(f.Text) != "" {
 			ys[f.Y] = true
 			seen++
 		}
@@ -221,7 +221,7 @@ func TestLineClampLimitsLines(t *testing.T) {
 	ly := BuildLayout(doc, rules, 20)
 	lines := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		for p := f.Node; p != nil; p = p.Parent {
@@ -241,7 +241,7 @@ func TestInlinePaddingSeparatesLinks(t *testing.T) {
 	var first, second *Frag
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch strings.TrimSpace(f.Text) {
@@ -265,7 +265,7 @@ func TestInlineFlexStaysInLine(t *testing.T) {
 	var first, second *Frag
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch strings.TrimSpace(f.Text) {
@@ -289,7 +289,7 @@ func TestLeadingWhitespaceDoesNotWrapPaddedLinks(t *testing.T) {
 	var first, second *Frag
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch strings.TrimSpace(f.Text) {
@@ -312,10 +312,10 @@ func TestNowrapInlineElementsWrapBetweenBoxes(t *testing.T) {
 	var a, b *Frag
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && strings.HasPrefix(f.Text, "aaa") {
+		if f.Kind == FragText && strings.HasPrefix(f.Text, "aaa") {
 			a = f
 		}
-		if f.Kind == fragText && strings.HasPrefix(f.Text, "bbb") {
+		if f.Kind == FragText && strings.HasPrefix(f.Text, "bbb") {
 			b = f
 		}
 	}
@@ -331,7 +331,7 @@ func TestLongNowrapInlineContentSplits(t *testing.T) {
 	ly := build(`<div style="width:10ch"><a style="white-space:nowrap">abcdefghijklmno</a></div>`, 40)
 	lines := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text != "" {
+		if f.Kind == FragText && f.Text != "" {
 			lines[f.Y] = true
 		}
 	}
@@ -345,7 +345,7 @@ func TestInlineEdgesRoundTotalOnce(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	pos := map[string]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			switch strings.TrimSpace(f.Text) {
 			case "x":
 				pos["x"] = f.X
@@ -363,7 +363,7 @@ func TestInlineEdgesRoundTotalOnce(t *testing.T) {
 	tiny := build(`<p>a<span style="padding:1px">x</span>b</p>`, 40)
 	pos = map[string]int{}
 	for _, f := range tiny.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			switch strings.TrimSpace(f.Text) {
 			case "x":
 				pos["x"] = f.X
@@ -384,7 +384,7 @@ func TestInlineSpacePrecedesCodeEdge(t *testing.T) {
 	}
 	cells := map[int]cell{}
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		bg := f.Style != nil && f.Style.Background.Set

@@ -89,7 +89,7 @@ var readerKeptAttrs = map[string]bool{
 	"title": true, "type": true, "width": true,
 }
 
-// extractReaderPage builds a clean article document from the live page tree.
+// ExtractReaderPage builds a clean article document from the live page tree.
 // It returns false when no meaningful content can be found.
 func ExtractReaderPage(root *Node, title string) (*Node, bool) {
 	if root == nil {

@@ -74,7 +74,7 @@ func (b *Session) paintControlFocus(g *Grid, top, bottom int) {
 	fg := RGB(0x1f, 0x23, 0x28)
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Node != target || f.Kind != fragText && f.Kind != fragImage {
+		if f.Node != target || f.Kind != FragText && f.Kind != FragImage {
 			continue
 		}
 		y := f.Y - b.Scroll + top

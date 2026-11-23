@@ -10,7 +10,7 @@ func hintTestSession(t *testing.T, html string, width, height int) *Session {
 	t.Helper()
 	root := ParseHTML(html)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(width, height)
+	b := newTestSession(width, height)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, width)
 	return b
@@ -169,7 +169,7 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 }
 
 func TestLinkHintsDisableInlineImages(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	if !b.inlineImagesEnabled() {
 		t.Fatal("inline images should be enabled outside hint mode")
@@ -181,7 +181,7 @@ func TestLinkHintsDisableInlineImages(t *testing.T) {
 }
 
 func TestModalsDisableInlineImages(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	modals := []struct {
 		name  string
@@ -222,7 +222,7 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 	if len(radios) != 2 || multi == nil || len(single) != 1 || check == nil {
 		t.Fatal("test form is incomplete")
 	}
-	beta := selectOptions(multi)[1]
+	beta := SelectOptions(multi)[1]
 	choose := func(match func(*Node) bool) {
 		t.Helper()
 		b.HandleKey("f")
@@ -409,7 +409,7 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 		<div style="position:fixed;bottom:0;right:0"><button id="ok">Got it</button>
 		<a href="/docs">Docs</a></div>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 15)
+	b := newTestSession(60, 15)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayoutViewportDeadline(doc, nil, 60, 12, false, time.Time{})
 
@@ -448,7 +448,7 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 	<div id="bar"><div class="text">Cookies are used here.</div>
 	<button id="ok" type="button">Got it</button></div>
 	</body></html>`)
-	b := NewSession(60, 24)
+	b := newTestSession(60, 24)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.URL = u
 	b.rebuild()

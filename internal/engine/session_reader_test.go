@@ -12,7 +12,7 @@ func TestReaderToggle(t *testing.T) {
 		` + strings.Repeat(`<p>Reader paragraph text.</p>`, 40) + `
 	</article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Long article"}
 	b.rebuild()
 	b.Scroll = 5
@@ -52,7 +52,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	doc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("Old article text. ", 20) + `</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/old")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Old"}
 	b.rebuild()
 	b.toggleReader()
@@ -114,7 +114,7 @@ func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 			e.preventDefault();
 		});
 	`)
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.URL = page.URL
 	b.startJS(page)
@@ -146,7 +146,7 @@ func TestReaderFooterLabel(t *testing.T) {
 	doc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("Reader icon article text. ", 20) + `</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.rebuild()
 	if !strings.Contains(b.footerRight(80), "Reader:off") {
@@ -168,10 +168,10 @@ func TestReaderFooterLabel(t *testing.T) {
 func TestReaderHeadingsStayLeftAligned(t *testing.T) {
 	src := `<article><h2>one two three four five six seven eight nine ten eleven twelve</h2>` +
 		`<p>alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu</p></article>`
-	ly := BuildLayout(ParseHTML(src), readerRules, 40)
+	ly := BuildLayout(ParseHTML(src), ReaderRules, 40)
 	headingY, paragraphY := -1, -1
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		if f.Text == "one" {
@@ -185,7 +185,7 @@ func TestReaderHeadingsStayLeftAligned(t *testing.T) {
 		t.Fatalf("missing heading or paragraph: heading=%d paragraph=%d", headingY, paragraphY)
 	}
 	for _, f := range ly.Frags {
-		if f.Kind != fragText || f.W <= 1 || strings.TrimSpace(f.Text) != "" {
+		if f.Kind != FragText || f.W <= 1 || strings.TrimSpace(f.Text) != "" {
 			continue
 		}
 		if f.Y == headingY {
@@ -194,7 +194,7 @@ func TestReaderHeadingsStayLeftAligned(t *testing.T) {
 	}
 	justified := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.W > 1 && strings.TrimSpace(f.Text) == "" && f.Y == paragraphY {
+		if f.Kind == FragText && f.W > 1 && strings.TrimSpace(f.Text) == "" && f.Y == paragraphY {
 			justified = true
 		}
 	}
@@ -205,7 +205,7 @@ func TestReaderHeadingsStayLeftAligned(t *testing.T) {
 
 func TestReaderHeadingLinksAreNotUnderlined(t *testing.T) {
 	doc := ParseHTML(`<article><a href="/story"><h2>Story title</h2></a><p>Body</p></article>`)
-	styles := newStyleEngine(readerRules, 800).ComputeAll(doc)
+	styles := newStyleEngine(ReaderRules, 800).ComputeAll(doc)
 	h2 := doc.FindFirst("h2")
 	if h2 == nil {
 		t.Fatal("missing heading")
@@ -225,7 +225,7 @@ func layoutText(ly *Layout) string {
 	}
 	var b strings.Builder
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind == fragText {
+		if ly.Frags[i].Kind == FragText {
 			b.WriteString(ly.Frags[i].Text)
 			b.WriteByte(' ')
 		}

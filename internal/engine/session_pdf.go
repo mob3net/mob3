@@ -37,7 +37,7 @@ func (b *Session) downloadCurrentPDF() {
 		b.status = "This PDF has no download URL"
 		return
 	}
-	name := pdfDisplayName(u)
+	name := PDFDisplayName(u)
 	if name == "" {
 		name = "document.pdf"
 	}
@@ -56,30 +56,30 @@ func (b *Session) pdfFooterLine(avail int) (text, hint string, hintCell int, ok 
 	if u == nil {
 		u = b.Page.URL
 	}
-	name := pdfDisplayName(u)
+	name := PDFDisplayName(u)
 	if name == "" {
 		name = "PDF"
 	}
 	base := fmt.Sprintf(" Page %d/%d", b.PDFPageNumber(), len(b.Page.PDF.Pages))
 	full := base + " (d -> Download " + name + ")"
-	if stringWidth(full) <= avail {
-		return full, "(d -> Download " + name + ")", stringWidth(base) + 1, true
+	if StringWidth(full) <= avail {
+		return full, "(d -> Download " + name + ")", StringWidth(base) + 1, true
 	}
 	// Shorten the file name inside the hint before giving the hint up.
 	const prefix, suffix = "(d -> Download ", ")"
-	room := avail - stringWidth(base) - 1 - stringWidth(prefix) - stringWidth(suffix)
+	room := avail - StringWidth(base) - 1 - StringWidth(prefix) - StringWidth(suffix)
 	if room >= 6 {
-		short := truncateWidth(name, room-1) + "…"
+		short := TruncateWidth(name, room-1) + "…"
 		hint := prefix + short + suffix
-		if stringWidth(base+" "+hint) <= avail {
-			return base + " " + hint, hint, stringWidth(base) + 1, true
+		if StringWidth(base+" "+hint) <= avail {
+			return base + " " + hint, hint, StringWidth(base) + 1, true
 		}
 	}
-	if hint := "(d)"; stringWidth(base+" "+hint) <= avail {
-		return base + " " + hint, hint, stringWidth(base) + 1, true
+	if hint := "(d)"; StringWidth(base+" "+hint) <= avail {
+		return base + " " + hint, hint, StringWidth(base) + 1, true
 	}
-	if stringWidth(base) <= avail {
+	if StringWidth(base) <= avail {
 		return base, "", 0, true
 	}
-	return truncateWidth(base, avail), "", 0, true
+	return TruncateWidth(base, avail), "", 0, true
 }

@@ -26,7 +26,7 @@ func (b *Session) submitInput() {
 	if n == nil {
 		return
 	}
-	form := nearestForm(n)
+	form := NearestForm(n)
 	b.setInputFocus(nil)
 	if form != nil {
 		b.submitForm(form)
@@ -82,7 +82,7 @@ func (b *Session) clickContent(x, docY int) {
 	if target := b.resolveLabelTarget(n); target != nil {
 		n = target
 	}
-	if n != nil && isDisabledControl(n) {
+	if n != nil && IsDisabledControl(n) {
 		b.Focus = -1
 		b.status = ""
 		return
@@ -178,7 +178,7 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 			// on the mouse back button and h.
 			docY := b.Scroll + (y - top)
 			if n := b.nodeAt(x, docY); n != nil {
-				if a := nearestAnchor(n); a != nil {
+				if a := NearestAnchor(n); a != nil {
 					if href := strings.TrimSpace(a.Attr("href")); href != "" {
 						b.clearInputFocus()
 						target := b.resolveHref(href)
@@ -199,7 +199,7 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 				if target := b.resolveLabelTarget(n); target != nil {
 					n = target
 				}
-				if isFileInput(n) {
+				if IsFileInput(n) {
 					b.Selecting = false
 					b.showUploadNotice()
 					return false
@@ -209,12 +209,12 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 					b.toggleControl(n)
 					return false
 				}
-				if isTextInput(n) {
+				if IsTextInput(n) {
 					b.Selecting = false
 					b.setInputFocus(n)
 					return false
 				}
-				if isRangeInput(n) {
+				if IsRangeInput(n) {
 					b.Selecting = false
 					if dir := b.rangeSideAt(n, x, docY); dir != 0 {
 						if b.Forms.InputFocus != n {

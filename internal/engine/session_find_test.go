@@ -15,7 +15,7 @@ func typeFindQuery(t *testing.T, b *Session, _ func(), query string) {
 func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	root := ParseHTML(`<html><body><p>Alpha beta</p><p>alpha gamma</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, 60)
 
@@ -69,7 +69,7 @@ func TestFindMultiWordQuery(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := ParseHTML(`<html><body><p>reader mode</p><p>reader mode again</p></body></html>`)
 			u := mustParse(t, "https://example.com/")
-			b := NewSession(tc.width, 20)
+			b := newTestSession(tc.width, 20)
 			b.Page = &Page{URL: u, Base: u, Root: root}
 			b.Layout = BuildLayout(root, nil, tc.width)
 			typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
@@ -86,7 +86,7 @@ func TestFindMultiWordQuery(t *testing.T) {
 func TestFindMultiWordNormalisesWhitespace(t *testing.T) {
 	root := ParseHTML(`<html><body><p>reader   mode</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, 60)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader  mode")
@@ -101,7 +101,7 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.Page = help
 	b.Layout = BuildLayout(help.Root, help.Author, 80)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
@@ -113,7 +113,7 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 func TestFindStatusHintsLinkMatch(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="#one">evidence link</a></p><p>plain evidence text</p><div id="one">target</div></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.URL = u
 	b.Layout = BuildLayout(root, nil, 80)
@@ -152,7 +152,7 @@ func TestFindStatusPersistsWhileScrolling(t *testing.T) {
 	sb.WriteString(`</body></html>`)
 	root := ParseHTML(sb.String())
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, 60)
 
@@ -194,7 +194,7 @@ func TestFindStatusPersistsWhileScrolling(t *testing.T) {
 func TestApplyFindCommand(t *testing.T) {
 	root := ParseHTML(`<html><body><p>Alpha beta</p><p>alpha gamma</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.Layout = BuildLayout(root, nil, 60)
 	b.emitFrames = true

@@ -40,7 +40,7 @@ func TestJSCustomElementUpgrade(t *testing.T) {
 			customElements.get("my-widget") === MyWidget
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "yes:1:true:true:yes:true"
 	if got := page.Root.FindFirst("p").TextContent(); got != want {
@@ -68,7 +68,7 @@ func TestJSTemplateContent(t *testing.T) {
 			t.innerHTML
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "0:2:built!:2:b:<b>built</b><span>!</span>"
 	if got := page.Root.FindFirst("p").TextContent(); got != want {
@@ -86,7 +86,7 @@ func TestJSAwaitThenableAndPromise(t *testing.T) {
 			document.getElementById("out").textContent = a + ":" + b;
 		})();
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "42:8" {
 		t.Fatalf("await = %q, want 42:8", got)
@@ -99,7 +99,7 @@ func TestDocumentNodeMethods(t *testing.T) {
 			`document.getElementById("out").textContent =`+
 			` document.contains(d) + ":" + (document.lastChild === d) + ":" +`+
 			` document.hasChildNodes() + ":" + (d.parentNode === document);`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "true:true:true:true" {
 		t.Fatalf("document node methods = %q, want true:true:true:true", got)
@@ -117,7 +117,7 @@ func TestJSNamespaceURI(t *testing.T) {
 			document.documentElement.namespaceURI === plain.namespaceURI
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "true:true:true" {
 		t.Fatalf("namespaceURI = %q, want true:true:true", got)
@@ -133,7 +133,7 @@ func TestDocumentElementChildren(t *testing.T) {
 			`document.children.length,`+
 			`document.childElementCount`+
 			`].join(":");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "HTML:true:2:2" {
 		t.Fatalf("document element children = %q", got)
@@ -145,7 +145,7 @@ func TestJSStorageConstructor(t *testing.T) {
 		`localStorage.setItem("k", "v");`+
 			`document.getElementById("out").textContent =`+
 			` typeof Storage + ":" + (localStorage instanceof Storage) + ":" + localStorage.getItem("k");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "function:true:v" {
 		t.Fatalf("Storage global = %q, want function:true:v", got)
@@ -169,7 +169,7 @@ func scriptPage(n int) *Page {
 
 func TestJSScriptLimit(t *testing.T) {
 	page := scriptPage(jsMaxScripts + 5)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	b.startJS(page)
 	n := int64(0)
@@ -186,7 +186,7 @@ func TestJSScriptLimit(t *testing.T) {
 
 func TestJSPageBudgetSkipsScripts(t *testing.T) {
 	page := scriptPage(3)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	b.JSPageBudget = time.Nanosecond
 	b.startJS(page)
@@ -199,7 +199,7 @@ func TestJSPageBudgetSkipsScripts(t *testing.T) {
 }
 
 func TestJSUserAbortInterruptsScript(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	j.SetTimeout(20 * time.Millisecond)
@@ -219,7 +219,7 @@ func TestJSUserAbortInterruptsScript(t *testing.T) {
 }
 
 func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	loader := newTestLoader()
 	b.loader = loader
@@ -251,7 +251,7 @@ func TestJSUserAbortSkipsRemainingScripts(t *testing.T) {
 
 func TestSelectorParseCache(t *testing.T) {
 	page := &Page{Root: ParseHTML(`<html><body><p class="x">hi</p></body></html>`)}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	j := newJSRuntime(b, page)
 	a := j.ParsedSelectors(".x")
 	c := j.ParsedSelectors(".x")
@@ -263,7 +263,7 @@ func TestSelectorParseCache(t *testing.T) {
 func TestJSScriptMutatesDOM(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out">before</p></body></html>`,
 		`document.getElementById("out").textContent = "after";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if b.JS == nil {
 		t.Fatal("runtime not created")
@@ -276,10 +276,10 @@ func TestJSScriptMutatesDOM(t *testing.T) {
 func TestJSInputValue(t *testing.T) {
 	page := newJSPage(`<html><body><input id="q" value="before"></body></html>`,
 		`document.getElementById("q").value = "after";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	input := page.Root.FindFirst("input")
-	if got := inputValue(input); got != "after" {
+	if got := InputValue(input); got != "after" {
 		t.Fatalf("value = %q", got)
 	}
 }
@@ -291,7 +291,7 @@ func TestJSWindowIsGlobal(t *testing.T) {
 		document.title = String(fromWindow + fromVar) + ":" +
 			String(window.fromVar) + ":" + String(window === globalThis);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "42:1:true" {
 		t.Fatalf("title = %q", page.Title)
@@ -306,7 +306,7 @@ func TestJSClientWidthBeforeLayout(t *testing.T) {
 		var b = document.getElementById("b");
 		document.title = String(b.clientWidth) + ":" + String(document.body.clientWidth);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if want := "200:320"; page.Title != want {
 		t.Fatalf("pre-layout clientWidth = %q, want %q", page.Title, want)
@@ -340,7 +340,7 @@ func TestJSElementPropertiesShared(t *testing.T) {
 			typeof detached
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "true:true:true:y:story:true:true:true:true:undefined"
 	if page.Title != want {
@@ -366,7 +366,7 @@ func TestJSSVGElementHasDOMMethods(t *testing.T) {
 			path.parentNode === svg
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "function:true:0 0 10 10:true:false:true" {
 		t.Fatalf("SVG DOM methods = %q", got)
@@ -397,7 +397,7 @@ func TestJSTextNodeIsANode(t *testing.T) {
 			frag.nodeType
 		].join(":");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	b.startJS(page)
 	want := "3:true:0:false:true:parent:1:11"
@@ -430,7 +430,7 @@ func TestJSDOMInsertBefore(t *testing.T) {
 		document.title = a.children.length + ":" + a.children[1].tagName + ":" +
 			clone.children.length + ":" + a.contains(b) + ":" + b.matches("span#b");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "4:I:4:true:true"
 	if page.Title != want {
@@ -455,7 +455,7 @@ func TestJSDialogElement(t *testing.T) {
 		document.title = [initiallyOpen, opened, closed, returnValue,
 			reopened, closes, d.open, d.returnValue].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "false|true|false|dismissed|true|1|false|dismissed"
 	if page.Title != want {
@@ -475,7 +475,7 @@ func TestJSWebAPIs(t *testing.T) {
 			document.getElementById("w").textContent, localStorage.getItem("k")
 		].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "example.com|/search|x|a=1|written|v"
 	if page.Title != want {
@@ -498,7 +498,7 @@ func TestJSElementConstructors(t *testing.T) {
 			s.constructor === HTMLScriptElement
 		].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "true|true|true|true|true|true|true|true"
 	if page.Title != want {
@@ -532,7 +532,7 @@ func TestJSFetch(t *testing.T) {
 			.then(function (s) { document.title = s; })
 			.catch(function (e) { document.title = "error:" + e; });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if want := "201|true|42|true"; page.Title != want {
@@ -558,7 +558,7 @@ func TestJSFetchCrossOriginBlocked(t *testing.T) {
 			.then(function () { document.title = "leaked"; })
 			.catch(function () { document.title = "blocked"; });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {
@@ -587,7 +587,7 @@ func TestJSFetchCrossOriginCORS(t *testing.T) {
 			.then(function (t) { document.title = t; })
 			.catch(function (e) { document.title = "error:" + e; });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {
@@ -613,7 +613,7 @@ func TestJSIntl(t *testing.T) {
 			list.format(["a", "b", "c"]), plural.select(1), plural.select(2)
 		].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "$1,234.50|01/02/2020|3 days ago|a, b, and c|one|other"
 	if page.Title != want {
@@ -641,7 +641,7 @@ func TestJSIntlSegmenter(t *testing.T) {
 			sentences.resolvedOptions().granularity
 		].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "One./ Two!/ Three|hi:true, :false,there:true,!:false|3| Two!|sentence"
 	if page.Title != want {
@@ -674,7 +674,7 @@ func TestJSXMLHTTPRequest(t *testing.T) {
 		};
 		x.send("abc");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if page.Title != "200|ok|yes" {
@@ -703,7 +703,7 @@ func TestJSXHRCrossOriginBlocked(t *testing.T) {
 		x.onerror = function () { document.title = "blocked:" + x.status; };
 		x.send();
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {
@@ -732,7 +732,7 @@ func TestJSXHRCrossOriginRedirectBlocked(t *testing.T) {
 		x.onerror = function () { document.title = "blocked:" + x.status; };
 		x.send();
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {
@@ -745,7 +745,7 @@ func TestJSXHRCrossOriginRedirectBlocked(t *testing.T) {
 
 func TestRuntimeWithoutScripts(t *testing.T) {
 	page := &Page{URL: mustParse(t, "https://example.com/"), Root: ParseHTML(`<html><body><a href="#" onclick="alert('x'); return false;">x</a></body></html>`)}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if b.JS == nil {
@@ -756,7 +756,7 @@ func TestRuntimeWithoutScripts(t *testing.T) {
 func TestJSNavigator(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`document.title = navigator.userAgent + "|" + navigator.language;`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if !strings.HasPrefix(page.Title, "MOB3/1.0") ||
 		!strings.HasSuffix(page.Title, "|en-US") {
@@ -766,7 +766,7 @@ func TestJSNavigator(t *testing.T) {
 
 func TestJSLocationRedirect(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `location.href = "/next";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if b.JS == nil || b.JS.PendingNav() != "https://example.com/next" {
@@ -784,7 +784,7 @@ func TestJSDocumentTypeGlobal(t *testing.T) {
 		document.title = typeof DocumentType + ":" + (document.doctype === null) +
 			":" + (Object.getPrototypeOf(DocumentType.prototype) === Node.prototype);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "function:true:true" {
 		t.Fatalf("DocumentType global = %q", page.Title)
@@ -793,7 +793,7 @@ func TestJSDocumentTypeGlobal(t *testing.T) {
 
 func TestJSDocumentDomain(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `document.title = document.domain;`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "example.com" {
 		t.Fatalf("document.domain = %q", page.Title)
@@ -806,7 +806,7 @@ func TestJSFormSubmitQueuesPost(t *testing.T) {
 		<input type="hidden" name="_method" value="POST">
 		<input name="try_url" value="https://example.com">
 	</form></body></html>`, `document.getElementById("f").submit();`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if b.JS == nil || b.JS.PendingForm() == nil {
@@ -842,7 +842,7 @@ func TestJSSessionGlobals(t *testing.T) {
 		document.title = typeof performance.now() + ":" + img.tagName + ":" +
 			img.src + ":" + location.hostname + ":" + typeof requestAnimationFrame;
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "number:IMG:x.png:example.com:function"
 	if page.Title != want {
@@ -861,7 +861,7 @@ func TestStorageNamedProperties(t *testing.T) {
 		var named = sessionStorage.k;
 		document.title = [read, viaGet, afterDelete === undefined, named].join("|");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "hello|hello|true|v"
 	if page.Title != want {
@@ -874,7 +874,7 @@ func TestStorageNamedProperties(t *testing.T) {
 
 func TestJSConsoleLogAndView(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `console.error("navigator is not defined");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if len(b.jsLog) != 1 || !strings.Contains(b.jsLog[0], "navigator is not defined") {
@@ -890,7 +890,7 @@ func TestJSDOMContentLoaded(t *testing.T) {
 		`document.addEventListener("DOMContentLoaded", function () {
 			document.body.appendChild(document.createElement("p")).textContent = "loaded";
 		});`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("body").TextContent(); !strings.Contains(got, "loaded") {
 		t.Fatalf("body text = %q", got)
@@ -906,18 +906,18 @@ func TestJSClassStyleAndInnerHTML(t *testing.T) {
 		d.style.color = "red";
 		document.body.appendChild(d);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	body := page.Root.FindFirst("body")
 	d := body.FindFirst("div")
 	if d == nil {
 		t.Fatal("div was not appended")
 	}
-	if !strings.Contains(attrValue(d, "class"), "two") {
-		t.Errorf("class = %q", attrValue(d, "class"))
+	if !strings.Contains(AttrValue(d, "class"), "two") {
+		t.Errorf("class = %q", AttrValue(d, "class"))
 	}
-	if !strings.Contains(attrValue(d, "style"), "color: red") {
-		t.Errorf("style = %q", attrValue(d, "style"))
+	if !strings.Contains(AttrValue(d, "style"), "color: red") {
+		t.Errorf("style = %q", AttrValue(d, "style"))
 	}
 	if d.FindFirst("b") == nil {
 		t.Error("innerHTML did not create <b>")
@@ -934,10 +934,10 @@ func TestJSClassListToggleForce(t *testing.T) {
 		d.classList.toggle("one", true);
 		d.classList.toggle("two", true);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	div := page.Root.FindFirst("div")
-	if got := attrValue(div, "class"); got != "one two" {
+	if got := AttrValue(div, "class"); got != "one two" {
 		t.Fatalf("class = %q, want %q", got, "one two")
 	}
 }
@@ -950,7 +950,7 @@ func TestJSClickHandlerPreventsDefault(t *testing.T) {
 			link.textContent = "clicked";
 		});
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	link := page.Root.FindFirst("a")
 	if !b.JS.DispatchClick(link) {
@@ -973,7 +973,7 @@ func TestSelectChangeFiresJavaScript(t *testing.T) {
 			document.title = "change:" + sel.value;
 		});
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.URL = page.URL
 	b.startJS(page)
@@ -993,7 +993,7 @@ func TestClickContentRunsLivePageJavaScript(t *testing.T) {
 			link.textContent = "clicked";
 		});
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.URL = page.URL
 	b.startJS(page)
@@ -1017,7 +1017,7 @@ func TestJSListenerOnce(t *testing.T) {
 			document.title = "n" + n;
 		}, { once: true });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	b.JS.FireDocumentEvent("tick")
 	b.JS.FireDocumentEvent("tick")
@@ -1032,7 +1032,7 @@ func TestJSTimers(t *testing.T) {
 			document.getElementById("out").textContent = "timer";
 		}, 10);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if b.JS.Tick(time.Now()) {
 		t.Fatal("timer fired immediately")
@@ -1050,13 +1050,13 @@ func TestJSTimers(t *testing.T) {
 
 func TestNoscriptHiddenWhenJSEnabled(t *testing.T) {
 	page := &Page{Root: ParseHTML(`<html><body><noscript>fallback</noscript><p>ok</p></body></html>`)}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Root.FindFirst("noscript") != nil {
 		t.Fatal("noscript should be removed when JS is enabled")
 	}
 	page2 := &Page{Root: ParseHTML(`<html><body><noscript>fallback</noscript></body></html>`)}
-	b2 := NewSession(40, 10)
+	b2 := newTestSession(40, 10)
 	b2.NoJS = true
 	b2.startJS(page2)
 	if page2.Root.FindFirst("noscript") == nil {
@@ -1067,7 +1067,7 @@ func TestNoscriptHiddenWhenJSEnabled(t *testing.T) {
 func TestNoJSDisablesRuntime(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out">before</p></body></html>`,
 		`document.getElementById("out").textContent = "after";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.NoJS = true
 	b.startJS(page)
 	if b.JS != nil {
@@ -1079,14 +1079,14 @@ func TestNoJSDisablesRuntime(t *testing.T) {
 }
 
 func TestJSMemoryLimitDefault(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	if want := jsHeapBudget(effectiveMemoryLimit()); b.JSMemLimit != want {
 		t.Fatalf("jsMemLimit = %d, want %d", b.JSMemLimit, want)
 	}
 }
 
 func TestJSMemoryLimitExceeded(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 1
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	_, err := j.RunCode("alloc", `var a = []; for (;;) { a.push(new Array(4096).fill("x")); }`)
@@ -1096,7 +1096,7 @@ func TestJSMemoryLimitExceeded(t *testing.T) {
 }
 
 func TestJSMemoryLimitZeroDisables(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.JSMemLimit = 0
 	j := newJSRuntime(b, newJSPage(`<html><body></body></html>`, ""))
 	_, err := j.RunCode("alloc", `var a = []; for (var i = 0; i < 1000; i++) { a.push(new Array(1024).fill(i)); }`)
@@ -1113,7 +1113,7 @@ func TestJSListenerOptionsWithoutOnce(t *testing.T) {
 		document.dispatchEvent(new Event("tick"));
 		document.title = "n" + n;
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "n1" {
 		t.Fatalf("title = %q, want n1", page.Title)
@@ -1138,7 +1138,7 @@ func TestJSCreateEvent(t *testing.T) {
 			t instanceof CharacterData ? "1" : "0"
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "1,1,42,3:4,1" {
 		t.Fatalf("title = %q", page.Title)
@@ -1157,7 +1157,7 @@ func TestJSDispatchEventBubbles(t *testing.T) {
 		el.dispatchEvent(new CustomEvent("custom", { bubbles: false, detail: 4 }));
 		document.title = log;
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "tbd3t" {
 		t.Fatalf("title = %q, want tbd3t", page.Title)
@@ -1174,7 +1174,7 @@ func TestJSCanvasGetContext(t *testing.T) {
 		ctx.fillRect(0, 0, 1, 1);
 		document.title = [!!ctx, missing === null, img.width, img.height, img.data.length, c.width, ctx.fillStyle].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "true,true,2,3,24,300,red" {
 		t.Fatalf("title = %q", page.Title)
@@ -1187,7 +1187,7 @@ func TestJSMessageChannel(t *testing.T) {
 		mc.port2.onmessage = function (e) { document.title = "got" + e.data; };
 		mc.port1.postMessage(7);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "got" && !b.JS.Tick(time.Now().Add(time.Second)) {
 		t.Fatal("message timer did not fire")
@@ -1202,7 +1202,7 @@ func TestJSPerformanceTiming(t *testing.T) {
 		document.title = typeof performance.timing.responseStart + ":" +
 			typeof performance.navigation.type + ":" + performance.timing.responseStart;
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if !strings.HasPrefix(page.Title, "number:number:") {
 		t.Fatalf("title = %q", page.Title)
@@ -1216,7 +1216,7 @@ func TestJSStyleFeatureDetection(t *testing.T) {
 			return k + ":" + (k in s);
 		}).join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "transition:true,transform:true,WebkitTransition:true,WebkitTransform:true" {
 		t.Fatalf("title = %q", page.Title)
@@ -1237,7 +1237,7 @@ func TestJSDocumentImplementation(t *testing.T) {
 			d.title
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "true,2,true,true,made" {
 		t.Fatalf("title = %q", page.Title)
@@ -1262,7 +1262,7 @@ func TestJSGetComputedStyle(t *testing.T) {
 			s.getPropertyValue("font-weight")
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if !strings.HasPrefix(page.Title, "function,function,block,block,") {
 		t.Fatalf("title = %q", page.Title)
@@ -1301,7 +1301,7 @@ func TestJSDOMCompatTier(t *testing.T) {
 			el.getClientRects().length
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "42,data-user-id|data-x,true,true,2,true,2,1" {
 		t.Fatalf("title = %q", page.Title)
@@ -1330,7 +1330,7 @@ func TestJSTreeWalkerAndRange(t *testing.T) {
 			r.toString(), sel.rangeCount, sel.isCollapsed, sel.toString()
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "P|SPAN,DIV|P|SPAN,hello world,1,false,hello world" {
 		t.Fatalf("title = %q", page.Title)
@@ -1354,7 +1354,7 @@ func TestJSTextCryptoAndClone(t *testing.T) {
 			back, bytes.length, uuid.length, c.a, c.b[1], c.self === c, distinct
 		].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "héllo,6,36,1,2,true,true" && page.Title != "héllo,6,36,1,2,true,false" {
 		t.Fatalf("title = %q", page.Title)
@@ -1373,7 +1373,7 @@ func TestJSBase64(t *testing.T) {
 		try { btoa("\u0100"); } catch (e) { thrown = true; }
 		document.title = [enc, dec, round, forgiving, thrown].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "aGVsbG8=,hello,true,hello,hello,true"
 	if page.Title != want {
@@ -1390,7 +1390,7 @@ func TestJSAbortController(t *testing.T) {
 		ac.abort();
 		document.title = [before, ac.signal.aborted, fired, ac.signal.reason.name].join(",");
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "false,true,abort,AbortError" {
 		t.Fatalf("title = %q", page.Title)
@@ -1406,7 +1406,7 @@ func TestJSFetchAborted(t *testing.T) {
 			function (e) { document.title = "rejected:" + e.name; }
 		);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "rejected:AbortError" {
 		t.Fatalf("title = %q", page.Title)
@@ -1434,7 +1434,7 @@ func TestJSBlobFileReaderFormData(t *testing.T) {
 		};
 		fr.readAsText(blob);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	b.JS.Tick(time.Now().Add(time.Second))
 	if page.Title != "2,text/plain,3,1,true,a=3|b=2,true,hi,1" {
@@ -1452,7 +1452,7 @@ func TestJSFocusAndMicrotask(t *testing.T) {
 		var blurred = document.activeElement !== input;
 		queueMicrotask(function () { document.title = [focused, blurred].join(","); });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	b.JS.Tick(time.Now().Add(time.Second))
 	if page.Title != "true,true" {
@@ -1476,7 +1476,7 @@ func TestJSRequestLog(t *testing.T) {
 		x.open("GET", "/x");
 		x.send();
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.setLoader(loader)
 	b.startJS(page)
 	records := loader.RequestSnapshot()
@@ -1520,7 +1520,7 @@ func TestExternalScriptCollected(t *testing.T) {
 	if len(page.Scripts) != 1 {
 		t.Fatalf("scripts = %d", len(page.Scripts))
 	}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "external" {
 		t.Fatalf("text = %q", got)
@@ -1532,7 +1532,7 @@ func TestPlatformStubs(t *testing.T) {
 <div id="wrap" class="box"><p class="c" name="x">one</p><p class="c">two</p>
 <a id="lnk" href="/a">link</a><iframe id="f"></iframe></div>
 </body></html>`, ``)
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.startJS(page)
 	if b.JS == nil {
 		t.Fatal("runtime not created")
@@ -1657,7 +1657,7 @@ func TestJSFetchRequestObjectWithoutURL(t *testing.T) {
 			function (e) { document.title = "rejected:" + e.name; }
 		);
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "rejected:TypeError" {
 		t.Fatalf("title = %q", page.Title)
@@ -1666,7 +1666,7 @@ func TestJSFetchRequestObjectWithoutURL(t *testing.T) {
 
 func TestWindowScrollAliases(t *testing.T) {
 	page := newJSPage(`<html><body><p>x</p></body></html>`, ``)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	b.Layout = &Layout{Height: 100}
 	if _, err := b.JS.RunCode("scroll", `window.scrollTo(0, 32); window.scrollBy(0, 16);`); err != nil {
@@ -1686,7 +1686,7 @@ func TestWindowScrollAliases(t *testing.T) {
 
 func TestElementMetricsReadInlineStyle(t *testing.T) {
 	page := newJSPage(`<html><body><div id="d" style="width:320px;height:100px"></div></body></html>`, ``)
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.Page = page
 	b.URL = page.URL
 	b.startJS(page)
@@ -1705,7 +1705,7 @@ func TestElementMetricsReadInlineStyle(t *testing.T) {
 func TestJSConsoleKeepsErrorStack(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`try { console.error("i18n init failed", new Error("boom")); } catch (e) {}`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if len(b.jsLog) != 1 {
@@ -1730,7 +1730,7 @@ func TestDocumentBaseURIUsesBaseElement(t *testing.T) {
 		Scripts: []Script{{Code: `
 			document.title = document.baseURI + "|" + new URL("api/i18n", document.baseURI).href;
 		`, Src: "inline script"}}}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	want := "https://example.com/|https://example.com/api/i18n"
@@ -1747,7 +1747,7 @@ func TestGetBoundingClientRectUsesLayoutFragments(t *testing.T) {
 			var r = document.getElementById("box").getBoundingClientRect();
 			document.title = [r.width > 0, r.height > 0, r.left >= 0, r.top >= 0].join(",");
 		`, Src: "inline script"}}}
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.rebuild()
 	b.startJS(page)
@@ -1768,7 +1768,7 @@ func TestScriptCreatedElementGetsStyleAndMinWidth(t *testing.T) {
 			document.body.append(d);
 			document.title = getComputedStyle(d).position + "|" + d.offsetWidth;
 		`, Src: "inline script"}}}
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Page = page
 	b.rebuild()
 	b.startJS(page)
@@ -1782,7 +1782,7 @@ func TestScriptCreatedElementGetsStyleAndMinWidth(t *testing.T) {
 func TestProgrammaticFileInputClickShowsUploadNotice(t *testing.T) {
 	page := newJSPage(`<html><body><input id="pick" type="file"></body></html>`,
 		`document.getElementById("pick").click();`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.startJS(page)
 	if b.notice == nil || !strings.Contains(b.notice.title, "Upload") {
@@ -1804,7 +1804,7 @@ func TestStopPropagationKeepsSiblingListeners(t *testing.T) {
 		 document.getElementById("anc").addEventListener("click", function () { log.push("ancestor"); });
 		 document.getElementById("b").click();
 		 document.title = log.join(",");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "first,second" {
 		t.Fatalf("listener log = %q, want first,second (ancestor suppressed)", page.Title)
@@ -1818,7 +1818,7 @@ func TestNativeEventComposedPath(t *testing.T) {
 			document.title = p[0].id + ":" + p.includes(document) + ":" + (p.length >= 4);
 		 });
 		 document.getElementById("b").click();`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "b:true:true" {
 		t.Fatalf("composedPath = %q, want b:true:true", page.Title)
@@ -1835,7 +1835,7 @@ func TestStopImmediatePropagationSkipsSiblingListeners(t *testing.T) {
 		 document.getElementById("b").addEventListener("click", function () { log.push("second"); });
 		 document.getElementById("b").click();
 		 document.title = log.join(",");`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if page.Title != "first" {
 		t.Fatalf("listener log = %q, want only first", page.Title)
@@ -1854,13 +1854,13 @@ func TestScriptInjectedStyleApplies(t *testing.T) {
 			s.textContent='#x{padding-left:40px}';
 			document.head.appendChild(s);`}},
 	}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = page
 	b.URL = u
 	b.startJS(page)
 	b.rebuild()
 	for i := range b.Layout.Frags {
-		if f := &b.Layout.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
+		if f := &b.Layout.Frags[i]; f.Kind == FragText && f.Text == "BOX" {
 			if f.X != 5 {
 				t.Fatalf("BOX at X=%d, want 5 after the script-injected rule", f.X)
 			}
@@ -1879,7 +1879,7 @@ func TestJSScriptInnerHTMLIsRawText(t *testing.T) {
 		document.getElementById("out").textContent =
 			s.textContent + "|" + d.querySelector("b").textContent;
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	want := "for (var r = 0; r < n; r++) { total += r; }|bold"
 	if got := page.Root.FindFirst("p").TextContent(); got != want {
@@ -1908,7 +1908,7 @@ func TestJSFetchNoCORSReturnsOpaque(t *testing.T) {
 			})
 			.catch(function (e) { document.title = "error:" + e; });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {
@@ -1937,7 +1937,7 @@ func TestJSFetchRequestObjectNoCORS(t *testing.T) {
 			.then(function (r) { document.title = r.type + "|" + r.status; })
 			.catch(function (e) { document.title = "error:" + e; });
 	`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.loader = loader
 	b.startJS(page)
 	if calls != 1 {

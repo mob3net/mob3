@@ -11,17 +11,11 @@ task needs them, which keeps this page short enough to read in full every time.
 belongs to here, or into the routed page it belongs to, rewritten as the rule in
 force. Do not append history, and do not leave a superseded rule standing.
 
-> **Phase 6 cleanup remains.** The engine/frontend boundary migration (B) is
-> complete: the package layout and import rules in §4 are in force. The
-> [boundary tracker](docs/agents/boundary-migration.md) stays until the Phase 6
-> cleanup (temporary aliases, package globals, final benchmarks) is done.
-
 ## 1. Open on demand
 
 | Page | Read it when |
 | --- | --- |
 | [docs/agents/architecture.md](docs/agents/architecture.md) | choosing or adding a file, moving code, checking what a subsystem owns |
-| [docs/agents/boundary-migration.md](docs/agents/boundary-migration.md) | tracking the boundary migration (B); temporary, deleted when complete |
 | [docs/agents/rendering.md](docs/agents/rendering.md) | touching style, layout, paint, text, images, backgrounds or PDF display |
 | [docs/agents/ux.md](docs/agents/ux.md) | touching chrome, keys, mouse, forms, history, reader, dark mode, dialogs or the JS console |
 | [docs/agents/networking.md](docs/agents/networking.md) | touching fetching, caching, cookies, TLS, content types or resource limits |

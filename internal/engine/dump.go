@@ -53,7 +53,7 @@ func (h *dumpHandler) warn(out protocol.EventSink, format string, args ...any) {
 
 func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	o := h.o
-	setLayoutZoom(o.Zoom)
+	SetZoom(o.Zoom)
 	o.Loader.ViewportPx = cssWidthPx(o.Width)
 	// A PNG has no browsing context, so it shows one page: page 1 unless the
 	// caller selected another. Dumps keep every page.
@@ -82,7 +82,7 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 		// NewSession resets the package-wide cell ratio; restore the run's zoom
 		// before scripts run so script-visible viewport sizes match the dump.
 		runner.Zoom = o.Zoom
-		setLayoutZoom(o.Zoom)
+		SetZoom(o.Zoom)
 		runner.NoJS = false
 		runner.JSMemLimit = o.JSMem
 		runner.startJS(page)
@@ -92,11 +92,11 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 			o.Loader.LoadImages(context.Background(), page.Root, page.Base)
 		}
 	}
-	setLayoutZoom(o.Zoom)
+	SetZoom(o.Zoom)
 	root, author := page.Root, page.Author
 	if o.Reader && page.PDF == nil {
-		if extracted, ok := extractReaderPage(page.Root, page.Title); ok {
-			root, author = extracted, readerRules
+		if extracted, ok := ExtractReaderPage(page.Root, page.Title); ok {
+			root, author = extracted, ReaderRules
 		}
 	}
 	deadline := time.Time{}

@@ -22,7 +22,7 @@ func (b *Session) paintInputSelection(g *Grid, top, bottom int) {
 	selFG := RGB(0xf8, 0xfa, 0xfc)
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Kind != fragText || f.Node != n || f.W < 4 {
+		if f.Kind != FragText || f.Node != n || f.W < 4 {
 			continue
 		}
 		y := f.Y - b.Scroll + top
@@ -56,7 +56,7 @@ func (b *Session) paintInputCursor(g *Grid, top, bottom int) {
 		return
 	}
 	ch := g.Cells[y*g.W+x].R
-	if ch == 0 || runeWidth(ch) != 1 {
+	if ch == 0 || RuneWidth(ch) != 1 {
 		ch = ' '
 	}
 	g.Put(x, y, ch, &Style{Bold: true}, RGB(0x2f, 0x6f, 0xbf), RGB(0xff, 0xff, 0xff))
@@ -90,7 +90,7 @@ func (b *Session) draw() {
 	if contentH < 1 {
 		contentH = 1
 	}
-	cg := reuseGrid(b.contentGrid, w, contentH, fg, bg)
+	cg := ReuseGrid(b.contentGrid, w, contentH, fg, bg)
 	b.contentGrid = cg
 	var placements []ImagePlacement
 	var collect *[]ImagePlacement
@@ -151,7 +151,7 @@ func (b *Session) footerModel() footerModel {
 		rightBudget = 1
 	}
 	rightText := b.footerRight(rightBudget)
-	avail := w - stringWidth(rightText) - reserve - footerGap
+	avail := w - StringWidth(rightText) - reserve - footerGap
 	if avail < 0 {
 		avail = 0
 	}
@@ -250,7 +250,7 @@ func tailWidth(s string, max int) string {
 	w := 0
 	start := len(runes)
 	for start > 0 {
-		rw := runeWidth(runes[start-1])
+		rw := RuneWidth(runes[start-1])
 		if w+rw > max {
 			break
 		}
@@ -435,7 +435,7 @@ func (b *Session) footerRight(width int) string {
 	var base string
 	for drop := 0; drop < len(parts); drop++ {
 		candidate := strings.Join(parts[drop:], "   ")
-		if stringWidth(candidate) <= width {
+		if StringWidth(candidate) <= width {
 			base = candidate
 			break
 		}

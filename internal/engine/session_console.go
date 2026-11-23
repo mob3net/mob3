@@ -98,7 +98,7 @@ func (b *Session) consoleHistoryFor(pane int) *consoleHistory {
 // sanitizes the message, keeps duplicate consecutive reports out of the log,
 // and points the footer at the console so the failure is discoverable.
 func (b *Session) logEngineError(msg string) {
-	msg = stripTerminalControls(msg)
+	msg = StripTerminalControls(msg)
 	if msg == "" {
 		return
 	}
@@ -382,7 +382,7 @@ func (b *Session) consoleLines(width int) []string {
 	var out []string
 	for _, entry := range b.jsLog {
 		for _, raw := range strings.Split(entry, "\n") {
-			raw = stripTerminalControls(expandTabs(strings.TrimRight(raw, "\r")))
+			raw = StripTerminalControls(ExpandTabs(strings.TrimRight(raw, "\r")))
 			if raw == "" {
 				out = append(out, "")
 				continue
@@ -402,7 +402,7 @@ func wrapCells(s string, width int) []string {
 	var line strings.Builder
 	col := 0
 	for _, r := range s {
-		rw := runeWidth(r)
+		rw := RuneWidth(r)
 		if rw == 0 {
 			line.WriteRune(r)
 			continue
@@ -437,7 +437,7 @@ func wrapCellsHanging(s string, width, indent int) []string {
 	var line strings.Builder
 	col := 0
 	for _, r := range s {
-		rw := runeWidth(r)
+		rw := RuneWidth(r)
 		if rw == 0 {
 			line.WriteRune(r)
 			continue
@@ -490,9 +490,9 @@ func (b *Session) requestLinesWidth(width int) []string {
 		if kind == "" {
 			kind = "req"
 		}
-		line := fmt.Sprintf("%3s %-5s %6s %-5s %s", status, r.Method, size, kind, stripTerminalControls(r.URL))
+		line := fmt.Sprintf("%3s %-5s %6s %-5s %s", status, r.Method, size, kind, StripTerminalControls(r.URL))
 		if r.Err != "" {
-			line += "  " + stripTerminalControls(r.Err)
+			line += "  " + StripTerminalControls(r.Err)
 		}
 		out = appendWrappedHanging(out, line, width)
 	}
@@ -587,7 +587,7 @@ func (b *Session) trimToolLog() {
 }
 
 func sanitizeToolLine(line string) string {
-	line = stripTerminalControls(line)
+	line = StripTerminalControls(line)
 	if r := []rune(line); len(r) > 4096 {
 		line = string(r[:4096]) + "…"
 	}
@@ -818,7 +818,7 @@ func (b *Session) htmlLines(width int) []string {
 	}
 	var out []string
 	for _, raw := range strings.Split(src, "\n") {
-		raw = stripTerminalControls(expandTabs(strings.TrimRight(raw, "\r")))
+		raw = StripTerminalControls(ExpandTabs(strings.TrimRight(raw, "\r")))
 		if raw == "" {
 			out = append(out, "")
 			continue
@@ -867,7 +867,7 @@ func sanitizeStorageText(s string) string {
 	s = strings.ReplaceAll(s, "\n", "\\n")
 	s = strings.ReplaceAll(s, "\r", "\\r")
 	s = strings.ReplaceAll(s, "\t", "\\t")
-	s = stripTerminalControls(s)
+	s = StripTerminalControls(s)
 	if r := []rune(s); len(r) > 4096 {
 		s = string(r[:4096]) + "…"
 	}
@@ -954,7 +954,7 @@ func visibleConsoleLines(items []string, scroll, rows, width int) []string {
 	start := paneStart(len(items), scroll, rows)
 	out := make([]string, 0, rows)
 	for i := 0; i < rows && start+i < len(items); i++ {
-		out = append(out, truncateWidth(items[start+i], width))
+		out = append(out, TruncateWidth(items[start+i], width))
 	}
 	return out
 }
@@ -982,7 +982,7 @@ func (b *Session) emitConsoleView() {
 				reqRows--
 			}
 			v.Lines = visibleConsoleLines(b.requestLinesWidth(w-2), b.reqScroll, reqRows, w-2)
-			v.Summary = truncateWidth(b.requestCacheSummary(), w-2)
+			v.Summary = TruncateWidth(b.requestCacheSummary(), w-2)
 		case consoleStorage:
 			v.Lines = visibleConsoleLines(b.storageLinesWidth(w-2), b.storageScroll, l.bodyRows, w-2)
 		case consoleHTML:
@@ -1061,7 +1061,7 @@ type selectMenuDialog struct {
 // openSelectMenu shows all options of a single select with the current value
 // highlighted.
 func (b *Session) openSelectMenu(sel *Node) {
-	opts := selectOptions(sel)
+	opts := SelectOptions(sel)
 	if len(opts) == 0 {
 		return
 	}
@@ -1080,7 +1080,7 @@ func (b *Session) openSelectMenu(sel *Node) {
 		b.selectFrontend = true
 		labels := make([]string, len(opts))
 		for i, opt := range opts {
-			labels[i] = optionLabel(opt)
+			labels[i] = OptionLabel(opt)
 		}
 		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Select{
 			ID: b.selectID, Options: labels, Selected: idx,
@@ -1100,9 +1100,9 @@ func (b *Session) commitSelectOption(opt *Node) {
 		return
 	}
 	for _, o := range m.options {
-		removeAttr(o, "selected")
+		RemoveAttr(o, "selected")
 	}
-	setAttr(opt, "selected", "")
+	SetAttr(opt, "selected", "")
 	sel := m.node
 	b.selectMenu = nil
 	b.status = ""

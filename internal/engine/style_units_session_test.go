@@ -26,24 +26,24 @@ func TestRemUsesRootFontSize(t *testing.T) {
 }
 
 func TestZoomCellRatio(t *testing.T) {
-	defer setLayoutZoom(1)
+	defer SetZoom(1)
 
-	setLayoutZoom(1)
-	if got := px(80).ResolveH(0, 16); got != 10 {
+	SetZoom(1)
+	if got := PX(80).ResolveH(0, 16); got != 10 {
 		t.Fatalf("zoom 1: 80px = %d cells, want 10", got)
 	}
-	if got := px(16).ResolveV(0, 16); got != 1 {
+	if got := PX(16).ResolveV(0, 16); got != 1 {
 		t.Fatalf("zoom 1: 16px = %d rows, want 1", got)
 	}
 	if got := cssWidthPx(100); got != 800 {
 		t.Fatalf("zoom 1: 100 columns = %d CSS px, want 800", got)
 	}
 
-	setLayoutZoom(2)
-	if got := px(80).ResolveH(0, 16); got != 20 {
+	SetZoom(2)
+	if got := PX(80).ResolveH(0, 16); got != 20 {
 		t.Fatalf("zoom 2: 80px = %d cells, want 20", got)
 	}
-	if got := px(16).ResolveV(0, 16); got != 2 {
+	if got := PX(16).ResolveV(0, 16); got != 2 {
 		t.Fatalf("zoom 2: 16px = %d rows, want 2", got)
 	}
 	// The CSS viewport shrinks, so responsive rules see a narrower screen.
@@ -51,7 +51,7 @@ func TestZoomCellRatio(t *testing.T) {
 		t.Fatalf("zoom 2: 100 columns = %d CSS px, want 400", got)
 	}
 	// Percentages stay relative to their container, so they do not zoom.
-	if got := pct(50).ResolveH(100, 16); got != 50 {
+	if got := Pct(50).ResolveH(100, 16); got != 50 {
 		t.Fatalf("zoom 2: 50%% of 100 = %d cells, want 50", got)
 	}
 

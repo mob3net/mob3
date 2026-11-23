@@ -10,12 +10,12 @@ func TestSearchFieldMinimumWidth(t *testing.T) {
 		{Key: "type", Value: "search"}, {Key: "placeholder", Value: "Search"},
 	}}
 	input.Style = &Style{Display: "inline", FontSize: 16, LineHeight: 1}
-	if w := stringWidth(formLabel(input)); w < 34 {
+	if w := StringWidth(FormLabel(input)); w < 34 {
 		t.Fatalf("search field width = %d, want at least 34", w)
 	}
 	area := &Node{Type: ElementNode, Tag: "textarea", Attrs: []Attr{{Key: "placeholder", Value: "Search"}}}
 	area.Style = &Style{Display: "inline", FontSize: 16, LineHeight: 1}
-	if w := stringWidth(formLabel(area)); w < 34 {
+	if w := StringWidth(FormLabel(area)); w < 34 {
 		t.Fatalf("textarea width = %d, want at least 34", w)
 	}
 }
@@ -26,11 +26,11 @@ func TestInputFocusClearsPlaceholder(t *testing.T) {
 		n.Style = &Style{Display: "inline", FontSize: 16, LineHeight: 1, Color: RGB(0, 0, 0)}
 	}
 	focusStyle(input)
-	if label := formLabel(input); !strings.Contains(label, "Search query") {
+	if label := FormLabel(input); !strings.Contains(label, "Search query") {
 		t.Fatalf("unfocused label = %q", label)
 	}
 	input.InputFocused = true
-	if label := formLabel(input); strings.Contains(label, "Search query") {
+	if label := FormLabel(input); strings.Contains(label, "Search query") {
 		t.Fatalf("focused field still shows placeholder: %q", label)
 	}
 }
@@ -40,7 +40,7 @@ func TestFocusedInputIsProminent(t *testing.T) {
 	input := ly.Frags
 	var node *Node
 	for i := range input {
-		if input[i].Kind == fragText && input[i].Node != nil && input[i].Node.Tag == "input" {
+		if input[i].Kind == FragText && input[i].Node != nil && input[i].Node.Tag == "input" {
 			node = input[i].Node
 			break
 		}
@@ -76,10 +76,10 @@ func TestButtonSkipsStyleText(t *testing.T) {
 	ly := build(`<button>Go<style>.x{display:none}</style></button>`, 40)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, ".x{") {
+		if f.Kind == FragText && strings.Contains(f.Text, ".x{") {
 			t.Fatal("style text leaked into button label")
 		}
-		if f.Kind == fragText && strings.Contains(f.Text, "Go") {
+		if f.Kind == FragText && strings.Contains(f.Text, "Go") {
 			found = true
 		}
 	}
@@ -97,7 +97,7 @@ func TestTextareaLargeValueBounded(t *testing.T) {
 	}
 	ys := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Node == area {
+		if f.Kind == FragText && f.Node == area {
 			ys[f.Y] = true
 		}
 	}
@@ -115,7 +115,7 @@ func TestTextareaRendersAtLeastTwoRows(t *testing.T) {
 	}
 	ys := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Node == area {
+		if f.Kind == FragText && f.Node == area {
 			ys[f.Y] = true
 		}
 	}
@@ -130,7 +130,7 @@ func TestTextareaWrapsAndHonoursRows(t *testing.T) {
 	area := doc.FindFirst("textarea")
 	ys := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Node == area {
+		if f.Kind == FragText && f.Node == area {
 			ys[f.Y] = true
 		}
 	}
@@ -151,16 +151,16 @@ func TestFormControlGlyphs(t *testing.T) {
 		node *Node
 		want string
 	}{
-		{control("checkbox", true), glyphCheckboxOn},
-		{control("checkbox", false), glyphCheckboxOff},
-		{control("radio", true), glyphRadioOn},
-		{control("radio", false), glyphRadioOff},
+		{control("checkbox", true), GlyphCheckboxOn},
+		{control("checkbox", false), GlyphCheckboxOff},
+		{control("radio", true), GlyphRadioOn},
+		{control("radio", false), GlyphRadioOff},
 	}
 	for _, c := range cases {
-		if got := formLabel(c.node); got != c.want {
-			t.Errorf("formLabel(%s) = %q, want %q", c.node.Attr("type"), got, c.want)
+		if got := FormLabel(c.node); got != c.want {
+			t.Errorf("FormLabel(%s) = %q, want %q", c.node.Attr("type"), got, c.want)
 		}
-		if w := stringWidth(c.want); w != 1 {
+		if w := StringWidth(c.want); w != 1 {
 			t.Errorf("glyph %q width = %d, want 1 cell", c.want, w)
 		}
 	}

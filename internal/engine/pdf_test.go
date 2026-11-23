@@ -55,7 +55,7 @@ func TestPDFExtractsText(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Hello PDF) Tj ET",
 		"/Info 6 0 R ",
 		"<< /Title (Quarterly report) >>")
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if len(doc.Pages) != 1 {
 		t.Fatalf("pages = %d, want 1", len(doc.Pages))
 	}
@@ -74,7 +74,7 @@ func TestPDFKeepsColumnAlignment(t *testing.T) {
 	// Two runs share a baseline; the second starts 120pt to the right, which
 	// is 20 terminal cells at 6pt per cell.
 	data := pdfSimpleDoc("BT /F1 10 Tf 20 180 Td (Name) Tj 120 0 Td (Value) Tj ET", "")
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	text := doc.Text()
 	line := strings.SplitN(text, "\n", 2)[0]
 	if !strings.HasPrefix(line, "Name") {
@@ -99,7 +99,7 @@ func TestPDFMultiplePagesAndStyles(t *testing.T) {
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
 		pdfStreamBody("", []byte("BT /F1 12 Tf 20 180 Td (Second page) Tj ET")),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if len(doc.Pages) != 2 {
 		t.Fatalf("pages = %d, want 2", len(doc.Pages))
 	}
@@ -126,7 +126,7 @@ func TestPDFFlateContent(t *testing.T) {
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
 		pdfStreamBody("/Filter /FlateDecode ", buf.Bytes()),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if !strings.Contains(doc.Text(), "Compressed text") {
 		t.Fatalf("text = %q", doc.Text())
 	}
@@ -177,7 +177,7 @@ func pdfXrefStreamDoc(content string) []byte {
 }
 
 func TestPDFObjectStreamAndXrefStream(t *testing.T) {
-	doc := buildPDFDocument(pdfXrefStreamDoc("BT /F1 12 Tf 20 180 Td (Packed objects) Tj ET"))
+	doc := BuildPDFDocument(pdfXrefStreamDoc("BT /F1 12 Tf 20 180 Td (Packed objects) Tj ET"))
 	if len(doc.Pages) != 1 {
 		t.Fatalf("pages = %d, note=%q", len(doc.Pages), doc.Note)
 	}
@@ -194,7 +194,7 @@ func TestPDFRecoversDamagedXref(t *testing.T) {
 	if cut < 0 {
 		t.Fatal("test PDF has no xref")
 	}
-	doc := buildPDFDocument(data[:cut])
+	doc := BuildPDFDocument(data[:cut])
 	if !strings.Contains(doc.Text(), "Recovered") {
 		t.Fatalf("text = %q, note=%q", doc.Text(), doc.Note)
 	}
@@ -204,7 +204,7 @@ func TestPDFEncrypted(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Hidden) Tj ET",
 		"/Encrypt 6 0 R ",
 		"<< /Filter /Standard /V 1 /R 2 >>")
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if !doc.Encrypted {
 		t.Fatal("encrypted flag not set")
 	}
@@ -242,7 +242,7 @@ end`
 		"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Test /DW 500 /W [1 [600]] >>",
 		pdfStreamBody("", []byte(cmap)),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if got := strings.TrimSpace(doc.Text()); got != "HI!" {
 		t.Fatalf("text = %q, note=%q", got, doc.Note)
 	}
@@ -254,7 +254,7 @@ func TestPDFSkipsInlineImages(t *testing.T) {
 	content := "BT /F1 12 Tf 20 180 Td (Before) Tj ET\n" +
 		"BI /W 4 /H 4 /BPC 8 /CS /G ID \x00\x01BT /F1 12 Tf 0 0 Td (GARBAGE) Tj ET\x02 EI\n" +
 		"BT /F1 12 Tf 20 150 Td (After) Tj ET"
-	doc := buildPDFDocument(pdfSimpleDoc(content, ""))
+	doc := BuildPDFDocument(pdfSimpleDoc(content, ""))
 	text := doc.Text()
 	if !strings.Contains(text, "Before") || !strings.Contains(text, "After") {
 		t.Fatalf("text = %q", text)
@@ -265,7 +265,7 @@ func TestPDFSkipsInlineImages(t *testing.T) {
 }
 
 func TestPDFNoExtractableText(t *testing.T) {
-	doc := buildPDFDocument(pdfSimpleDoc("0 0 m 100 100 l S", ""))
+	doc := BuildPDFDocument(pdfSimpleDoc("0 0 m 100 100 l S", ""))
 	if len(doc.Pages) != 1 {
 		t.Fatalf("pages = %d", len(doc.Pages))
 	}
@@ -281,7 +281,7 @@ func TestPDFUnsupportedFilter(t *testing.T) {
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>",
 		pdfStreamBody("/Filter /JPXDecode ", []byte("junk")),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if !strings.Contains(doc.Note, "no extractable text") {
 		t.Fatalf("note = %q", doc.Note)
 	}
@@ -308,7 +308,7 @@ func TestPDFLoadEndToEnd(t *testing.T) {
 	ly := BuildLayout(page.Root, page.Author, 100)
 	var text strings.Builder
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			text.WriteString(f.Text)
 			text.WriteString(" ")
 		}
@@ -340,7 +340,7 @@ func TestPDFDisabledFallsBackToDownload(t *testing.T) {
 	ly := BuildLayout(page.Root, page.Author, 100)
 	var text strings.Builder
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			text.WriteString(f.Text)
 			text.WriteString(" ")
 		}
@@ -354,10 +354,10 @@ func TestPDFDisabledFallsBackToDownload(t *testing.T) {
 func TestPDFInfoTextString(t *testing.T) {
 	// UTF-16BE with BOM, as written by many generators.
 	title := "\xfe\xff\x00H\x00i\x00 \x00P\x00D\x00F"
-	if got := pdfTextString(title); got != "Hi PDF" {
+	if got := PDFTextString(title); got != "Hi PDF" {
 		t.Fatalf("title = %q", got)
 	}
-	if got := pdfTextString("Plain title"); got != "Plain title" {
+	if got := PDFTextString("Plain title"); got != "Plain title" {
 		t.Fatalf("title = %q", got)
 	}
 }
@@ -365,27 +365,27 @@ func TestPDFInfoTextString(t *testing.T) {
 func TestPDFLineSpacingDoesNotSplitGlyphs(t *testing.T) {
 	// Per-glyph runs that touch must join without spaces, while a real gap
 	// becomes one space and a column jump becomes padding.
-	runs := []pdfRun{
+	runs := []PDFRun{
 		{Text: "T", X: 0, Y: 100, W: 5, Size: 10},
 		{Text: "h", X: 5, Y: 100, W: 5, Size: 10},
 		{Text: "e", X: 10, Y: 100, W: 5, Size: 10},
 	}
-	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The\n" {
+	if got := PDFSpansText(PDFPageLines(runs, 0)); got != "The\n" {
 		t.Fatalf("touching runs = %q", got)
 	}
-	runs = append(runs, pdfRun{Text: "word", X: 20, Y: 100, W: 20, Size: 10})
-	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The word\n" {
+	runs = append(runs, PDFRun{Text: "word", X: 20, Y: 100, W: 20, Size: 10})
+	if got := PDFSpansText(PDFPageLines(runs, 0)); got != "The word\n" {
 		t.Fatalf("gap run = %q", got)
 	}
-	runs = append(runs, pdfRun{Text: "cell", X: 120, Y: 100, W: 20, Size: 10})
-	if got := pdfSpansText(pdfPageLines(runs, 0)); got != "The word            cell\n" {
+	runs = append(runs, PDFRun{Text: "cell", X: 120, Y: 100, W: 20, Size: 10})
+	if got := PDFSpansText(PDFPageLines(runs, 0)); got != "The word            cell\n" {
 		t.Fatalf("column run = %q", got)
 	}
 }
 
 func TestPDFRejectsDeepNesting(t *testing.T) {
 	deep := strings.Repeat("[", 200) + strings.Repeat("]", 200)
-	doc, err := parsePDF(pdfBuild("",
+	doc, err := ParsePDF(pdfBuild("",
 		"<< /Type /Catalog /Pages 2 0 R >>",
 		deep))
 	if err != nil {
@@ -403,7 +403,7 @@ func TestPDFMalformedInputDoesNotPanic(t *testing.T) {
 		[]byte("%PDF-1.4\n%%EOF\n"),
 		[]byte("%PDF-1.7\n1 0 obj << /Length 999999999 >>\nstream\nx\nendstream\nendobj\n"),
 	} {
-		doc := buildPDFDocument(data)
+		doc := BuildPDFDocument(data)
 		if doc == nil {
 			t.Fatal("nil document")
 		}
@@ -420,7 +420,7 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.setLoader(loader)
 	b.Reader = true
 	b.finishLoad(LoadResult{Page: page, URL: page.URL})
@@ -436,8 +436,8 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 }
 
 func TestPDFEscapesMarkup(t *testing.T) {
-	doc := buildPDFDocument(pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (a < b & c) Tj ET", ""))
-	html := pdfPageHTML(doc, nil)
+	doc := BuildPDFDocument(pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (a < b & c) Tj ET", ""))
+	html := PDFPageHTML(doc, nil)
 	if strings.Contains(html, "a < b & c") {
 		t.Fatal("page text was not escaped")
 	}
@@ -453,7 +453,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 		doc.Pages[i].Number = i + 1
 	}
 	root := ParseHTML(`<html><body></body></html>`)
-	b := NewSession(100, 20)
+	b := newTestSession(100, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root, PDF: doc}
 	b.PDFStarts = []int{0, 40, 80, 120, 160}
 
@@ -468,7 +468,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	if hint != "(d -> Download file-example_PDF_500_kB.pdf)" {
 		t.Fatalf("hint = %q", hint)
 	}
-	if cell != stringWidth(" Page 1/5")+1 {
+	if cell != StringWidth(" Page 1/5")+1 {
 		t.Fatalf("hint cell = %d", cell)
 	}
 
@@ -500,7 +500,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 
 func TestPDFDownloadKey(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
-	b := NewSession(100, 20)
+	b := newTestSession(100, 20)
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body></body></html>`), PDF: &PDFDocument{}}
 	b.downloadCurrentPDF()
 	if b.download == nil {
@@ -513,7 +513,7 @@ func TestPDFDownloadKey(t *testing.T) {
 }
 
 func TestPDFDownloadKeyOnlyWorksInViewer(t *testing.T) {
-	b := NewSession(100, 20)
+	b := newTestSession(100, 20)
 	b.Page = &Page{URL: mustParse(t, "https://example.com/page"), Root: ParseHTML(`<html><body>text</body></html>`)}
 	b.status = ""
 	b.downloadCurrentPDF()
@@ -528,7 +528,7 @@ func TestPDFDownloadKeyOnlyWorksInViewer(t *testing.T) {
 func TestPDFFooterDownloadHit(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
 	root := ParseHTML(`<html><body><div class="pdf-page"><pre>line</pre></div></body></html>`)
-	b := NewSession(100, 12)
+	b := newTestSession(100, 12)
 	b.Page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
 	b.Layout = &Layout{Height: 20}
 	b.PDFStarts = []int{0}
@@ -543,7 +543,7 @@ func TestPDFFooterDownloadHit(t *testing.T) {
 
 func TestPDFDisplayName(t *testing.T) {
 	u, _ := url.Parse("https://example.com/docs/quarterly%20report.pdf")
-	if got := pdfDisplayName(u); got != "quarterly report.pdf" {
+	if got := PDFDisplayName(u); got != "quarterly report.pdf" {
 		t.Fatalf("name = %q", got)
 	}
 }
@@ -567,7 +567,7 @@ func TestPDFFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			doc := buildPDFDocument(data)
+			doc := BuildPDFDocument(data)
 			var b strings.Builder
 			for _, p := range doc.Pages {
 				fmt.Fprintf(&b, "=== page %d\n", p.Number)
@@ -581,7 +581,7 @@ func TestPDFFixtures(t *testing.T) {
 
 			// The rendered page must hold the text and separators only: no
 			// in-page header or per-page labels.
-			root := ParseHTML(pdfPageHTML(doc, nil))
+			root := ParseHTML(PDFPageHTML(doc, nil))
 			rendered := renderFixture(root, fixtureAuthorRules(root), 70)
 			if strings.Contains(rendered, "Page 1 of") || strings.Contains(rendered, "PDF ·") {
 				t.Errorf("%s: page chrome leaked into the viewport:\n%s", name, rendered)
@@ -625,14 +625,14 @@ func TestPDFPagesShareHeight(t *testing.T) {
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
 		pdfStreamBody("", []byte("BT /F1 11 Tf 20 200 Td (Line one) Tj 0 -15 Td (Line two) Tj 0 -15 Td (Line three) Tj ET")),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if len(doc.Pages) != 2 {
 		t.Fatalf("pages = %d", len(doc.Pages))
 	}
 	if doc.PageRows != 3 {
 		t.Fatalf("uniform page rows = %d, want 3", doc.PageRows)
 	}
-	html := pdfPageHTML(doc, nil)
+	html := PDFPageHTML(doc, nil)
 	parts := strings.Split(html, `<pre class="pdf-text">`)
 	if len(parts) != 3 {
 		t.Fatalf("page blocks = %d", len(parts)-1)
@@ -667,13 +667,13 @@ func TestPDFPagesShareHeight(t *testing.T) {
 
 func TestPDFPageBox(t *testing.T) {
 	page := func(lines ...string) PDFPageText {
-		var spans []pdfSpan
+		var spans []PDFSpan
 		for _, l := range lines {
-			spans = append(spans, pdfSpan{Text: l}, pdfSpan{Text: "\n"})
+			spans = append(spans, PDFSpan{Text: l}, PDFSpan{Text: "\n"})
 		}
 		return PDFPageText{Spans: spans}
 	}
-	rows, cells := pdfPageBox([]PDFPageText{
+	rows, cells := PDFPageBox([]PDFPageText{
 		page("short"),
 		page("a longer line here", "two", "three"),
 	})
@@ -697,11 +697,11 @@ func TestPDFBlankFigurePagesStayBlank(t *testing.T) {
 		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 7 0 R >>",
 		pdfStreamBody("", []byte("0 0 m 100 100 l S")),
 	)
-	doc := buildPDFDocument(data)
+	doc := BuildPDFDocument(data)
 	if !doc.HasText {
 		t.Fatal("document with text was marked as scan")
 	}
-	html := pdfPageHTML(doc, nil)
+	html := PDFPageHTML(doc, nil)
 	if strings.Count(html, "[no extractable text on this page]") != 0 {
 		t.Fatalf("figure page got a placeholder:\n%s", html)
 	}
@@ -718,8 +718,8 @@ func TestPDFHeadlinesGetHeadlineSize(t *testing.T) {
 				"BT /F1 11 Tf 20 230 Td (Body text) Tj 0 -13 Td (More body) Tj 0 -13 Td (Last body) Tj ET")),
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
 	)
-	doc := buildPDFDocument(data)
-	var spans []pdfSpan
+	doc := BuildPDFDocument(data)
+	var spans []PDFSpan
 	for _, page := range doc.Pages {
 		spans = append(spans, page.Spans...)
 	}
@@ -733,7 +733,7 @@ func TestPDFHeadlinesGetHeadlineSize(t *testing.T) {
 		t.Fatal("large PDF heading was not given the headline size")
 	}
 	// The heading is followed by the blank lines its layout gap implies.
-	text := pdfSpansText(spans)
+	text := PDFSpansText(spans)
 	if !strings.Contains(text, "Big title\n\n") {
 		t.Fatalf("no spacing after heading: %q", text)
 	}
@@ -741,7 +741,7 @@ func TestPDFHeadlinesGetHeadlineSize(t *testing.T) {
 		t.Fatal("body lines gained spurious blank lines")
 	}
 	// A headline line counts as two rows.
-	rows := pdfPageRows(spans)
+	rows := PDFPageRows(spans)
 	lines := strings.Count(text, "\n")
 	if rows <= lines {
 		t.Fatalf("headline rows = %d, plain lines = %d", rows, lines)
@@ -753,7 +753,7 @@ func TestPDFDedupesDoubleDrawnText(t *testing.T) {
 	// one copy belongs in the text.
 	content := "BT /F1 33 Tf 57.35 700 Td (Invoice) Tj ET " +
 		"BT /F1 33 Tf 56.69 700 Td (Invoice) Tj ET"
-	doc := buildPDFDocument(pdfSimpleDoc(content, ""))
+	doc := BuildPDFDocument(pdfSimpleDoc(content, ""))
 	if got := strings.TrimSpace(doc.Text()); got != "Invoice" {
 		t.Fatalf("text = %q", got)
 	}
@@ -762,7 +762,7 @@ func TestPDFDedupesDoubleDrawnText(t *testing.T) {
 func TestPDFSpaceGlyphAndGapDoNotDouble(t *testing.T) {
 	// Justified text often carries a space glyph plus a TJ gap; the gap must
 	// not add a second space.
-	doc := buildPDFDocument(pdfSimpleDoc("BT /F1 11 Tf 20 700 Td [(Hello ) -500 (world)] TJ ET", ""))
+	doc := BuildPDFDocument(pdfSimpleDoc("BT /F1 11 Tf 20 700 Td [(Hello ) -500 (world)] TJ ET", ""))
 	if got := strings.TrimSpace(doc.Text()); got != "Hello world" {
 		t.Fatalf("text = %q", got)
 	}
@@ -776,7 +776,7 @@ func TestPDFTableKeepsRowOrder(t *testing.T) {
 			fmt.Fprintf(&content, "BT /F1 11 Tf %d %d Td (R%dC%d) Tj ET ", x, y, row, col)
 		}
 	}
-	doc := buildPDFDocument(pdfSimpleDoc(content.String(), ""))
+	doc := BuildPDFDocument(pdfSimpleDoc(content.String(), ""))
 	text := doc.Text()
 	for row := 0; row < 6; row++ {
 		line := fmt.Sprintf("R%dC0", row)

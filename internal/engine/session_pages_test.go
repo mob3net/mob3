@@ -12,9 +12,9 @@ import (
 func TestBuiltinPagesShareShell(t *testing.T) {
 	u, _ := url.Parse("https://example.com/file.bin")
 	pages := map[string]string{
-		"help":           helpPageHTML(),
-		"history":        historyPageHTML([]string{"https://example.com/"}, 0),
-		"blocked":        blockedPageHTML("https://example.com/", "anti-bot challenge", 403),
+		"help":           HelpPageDocument(),
+		"history":        HistoryPageHTML([]string{"https://example.com/"}, 0),
+		"blocked":        BlockedPageHTML("https://example.com/", "anti-bot challenge", 403),
 		"config":         configPageHTML(nil, false, "", "", 80, 24, 8, 16),
 		"cannot display": CannotDisplayPageHTML("image/png", u),
 		"load error":     LoadErrorPageHTML("dial tcp: connection refused"),
@@ -63,7 +63,7 @@ func TestLoadErrorPageUsesShellStyles(t *testing.T) {
 	ly := BuildLayout(root, page.Author, 152)
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Node != nil && f.Node.Parent != nil &&
+		if f.Kind == FragText && f.Node != nil && f.Node.Parent != nil &&
 			f.Node.Parent.Tag == "h1" && f.X >= 8 {
 			return
 		}

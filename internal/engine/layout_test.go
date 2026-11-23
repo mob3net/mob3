@@ -53,7 +53,7 @@ func TestMediaQueryViewport(t *testing.T) {
 func TestOffscreenTransformHidden(t *testing.T) {
 	ly := build(`<div style="transform:translateY(-100%)"><p>x</p></div>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.TrimSpace(f.Text) == "x" {
+		if f.Kind == FragText && strings.TrimSpace(f.Text) == "x" {
 			t.Fatal("off-screen transformed content was rendered")
 		}
 	}
@@ -63,7 +63,7 @@ func TestAutoMarginCenters(t *testing.T) {
 	ly := build(`<div style="width:80px;margin:0 auto">x</div>`, 40)
 	x := -1
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.TrimSpace(f.Text) == "x" {
+		if f.Kind == FragText && strings.TrimSpace(f.Text) == "x" {
 			x = f.X
 		}
 	}
@@ -77,7 +77,7 @@ func TestLowContrastTextFallback(t *testing.T) {
 	white := RGB(255, 255, 255)
 	dark := RGB(0x1f, 0x23, 0x28)
 	ly := &Layout{Height: 2, Frags: []Frag{{
-		Kind: fragText, X: 0, Y: 0, W: 4, H: 1, Text: "test",
+		Kind: FragText, X: 0, Y: 0, W: 4, H: 1, Text: "test",
 		Style: &Style{Color: white, FontSize: 16, LineHeight: 1},
 	}}}
 	g := NewGrid(10, 2, white, white)
@@ -103,7 +103,7 @@ func TestDisplayNoneAndHiddenText(t *testing.T) {
 	ly := build(`<p style="display:none">gone</p><p style="visibility:hidden">invisible</p><p>shown</p>`, 30)
 	var texts []string
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			texts = append(texts, f.Text)
 		}
 	}
@@ -119,7 +119,7 @@ func TestDisplayNoneAndHiddenText(t *testing.T) {
 func TestScreenReaderOnlyBoxHidden(t *testing.T) {
 	ly := build(`<a class="sr" href="#x" style="position:absolute;width:1px;height:1px;overflow:hidden">Jump</a><p>body</p>`, 30)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "Jump" {
+		if f.Kind == FragText && f.Text == "Jump" {
 			t.Fatal("screen-reader-only text should be hidden")
 		}
 	}
@@ -128,7 +128,7 @@ func TestScreenReaderOnlyBoxHidden(t *testing.T) {
 func TestPercentageWidth(t *testing.T) {
 	ly := build(`<div style="width:50%; background:#eee"><p>abcdefghij klmnopqrst uvwxyz</p></div>`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragFill && f.W == 20 {
+		if f.Kind == FragFill && f.W == 20 {
 			return
 		}
 	}
@@ -147,7 +147,7 @@ func TestFixedWidthOverflowsNarrowContainer(t *testing.T) {
 </div></body></html>`, 80)
 	wide := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragFill && f.W == 120 {
+		if f.Kind == FragFill && f.W == 120 {
 			wide = true
 		}
 	}
@@ -156,7 +156,7 @@ func TestFixedWidthOverflowsNarrowContainer(t *testing.T) {
 	}
 	pos := map[string]Frag{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (f.Text == "alpha" || f.Text == "beta") {
+		if f.Kind == FragText && (f.Text == "alpha" || f.Text == "beta") {
 			pos[f.Text] = f
 		}
 	}
@@ -194,7 +194,7 @@ func TestBuildLayoutWithoutDeadlineComplete(t *testing.T) {
 
 func textFrag(ly *Layout, s string) *Frag {
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind == fragText && strings.TrimSpace(ly.Frags[i].Text) == s {
+		if ly.Frags[i].Kind == FragText && strings.TrimSpace(ly.Frags[i].Text) == s {
 			return &ly.Frags[i]
 		}
 	}
@@ -240,7 +240,7 @@ func TestBoxSizingBorderBox(t *testing.T) {
 	content := func(css string) int {
 		ly := build(`<div style="`+css+`">`+text+`</div>`, 40)
 		for _, f := range ly.Frags {
-			if f.Kind == fragText && strings.TrimSpace(f.Text) != "" {
+			if f.Kind == FragText && strings.TrimSpace(f.Text) != "" {
 				return f.W
 			}
 		}
@@ -257,7 +257,7 @@ func TestBoxSizingBorderBox(t *testing.T) {
 	height := func(css string) int {
 		ly := build(`<div style="background:#ff0000;`+css+`"></div>`, 40)
 		for _, f := range ly.Frags {
-			if f.Kind == fragFill && f.Color == RGB(0xff, 0, 0) {
+			if f.Kind == FragFill && f.Color == RGB(0xff, 0, 0) {
 				return f.H
 			}
 		}
@@ -281,7 +281,7 @@ func TestMinMaxBoxConstraints(t *testing.T) {
 	bg := func(css string) int {
 		ly := build(`<div style="background:#00ff00;`+css+`"></div>`, 40)
 		for _, f := range ly.Frags {
-			if f.Kind == fragFill && f.Color == RGB(0, 0xff, 0) {
+			if f.Kind == FragFill && f.Color == RGB(0, 0xff, 0) {
 				return f.H
 			}
 		}
@@ -321,7 +321,7 @@ func TestHiddenAttributeHidesElement(t *testing.T) {
 	ly := build(`<div hidden>secret</div><p>visible</p>`, 40)
 	seen := map[string]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			seen[f.Text] = true
 		}
 	}
@@ -336,7 +336,7 @@ func TestHiddenAttributeHidesElement(t *testing.T) {
 func TestExplicitHeightDoesNotGrow(t *testing.T) {
 	ly := build(`<div style="height:16px"><div style="height:80px">tall</div></div>after`, 40)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "after") {
+		if f.Kind == FragText && strings.Contains(f.Text, "after") {
 			if f.Y != 1 {
 				t.Fatalf("content after fixed-height box y = %d, want 1", f.Y)
 			}
@@ -390,7 +390,7 @@ func TestFloatDropsBelowShorterFloat(t *testing.T) {
 }
 
 func TestZoomScalesBoxesNotText(t *testing.T) {
-	defer setLayoutZoom(1)
+	defer SetZoom(1)
 	src := `<div style="width:80px;padding:16px">hi</div>`
 	measure := func(bigText bool) (boxW, textW, textH int) {
 		root := ParseHTML(src)
@@ -405,14 +405,14 @@ func TestZoomScalesBoxesNotText(t *testing.T) {
 		}
 		for i := range ly.Frags {
 			f := &ly.Frags[i]
-			if f.Kind == fragText && strings.TrimSpace(f.Text) != "" {
+			if f.Kind == FragText && strings.TrimSpace(f.Text) != "" {
 				return boxW, f.W, f.H
 			}
 		}
 		return boxW, 0, 0
 	}
 
-	setLayoutZoom(1)
+	SetZoom(1)
 	box1, text1, h1 := measure(false)
 	// 80px is 10 cells plus 2+2 cells of padding.
 	if box1 != 14 {
@@ -422,7 +422,7 @@ func TestZoomScalesBoxesNotText(t *testing.T) {
 		t.Fatalf("zoom 1 text = %d cells x %d rows, want 2x1", text1, h1)
 	}
 
-	setLayoutZoom(2)
+	SetZoom(2)
 	box2, text2, h2 := measure(false)
 	// Fixed pixels and padding double; the word keeps its two cells and row.
 	if box2 != 28 {
@@ -434,11 +434,11 @@ func TestZoomScalesBoxesNotText(t *testing.T) {
 
 	// A scaled heading grows with the zoom while body text does not.
 	bigRoot := ParseHTML(`<h1>head</h1><p>body</p>`)
-	setLayoutZoom(1)
+	SetZoom(1)
 	base := BuildLayoutBig(bigRoot, nil, 100, true)
 	headW1, headH1 := fragSize(base, "head")
 	bodyW1, bodyH1 := fragSize(base, "body")
-	setLayoutZoom(2)
+	SetZoom(2)
 	zoomed := BuildLayoutBig(bigRoot, nil, 100, true)
 	headW2, headH2 := fragSize(zoomed, "head")
 	bodyW2, bodyH2 := fragSize(zoomed, "body")
@@ -456,7 +456,7 @@ func TestZoomScalesBoxesNotText(t *testing.T) {
 func fragSize(ly *Layout, text string) (w, h int) {
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && strings.TrimSpace(f.Text) == text {
+		if f.Kind == FragText && strings.TrimSpace(f.Text) == text {
 			return f.W, f.H
 		}
 	}
@@ -464,10 +464,10 @@ func fragSize(ly *Layout, text string) (w, h int) {
 }
 
 func TestZoomShrinksMediaViewport(t *testing.T) {
-	defer setLayoutZoom(1)
+	defer SetZoom(1)
 	rules := ParseStylesheet(`@media (max-width: 500px) { .m { display:none } }`)
 	atZoom := func(z float64) string {
-		setLayoutZoom(z)
+		SetZoom(z)
 		doc := ParseHTML(`<p class="m">x</p>`)
 		st := BuildLayout(doc, rules, 100).Styles[doc.FindFirst("p")]
 		if st == nil {
@@ -502,7 +502,7 @@ func TestStickyTopFollowsScroll(t *testing.T) {
 	}
 	idx := -1
 	for i := range ly.Frags {
-		if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "HEAD" {
+		if f := &ly.Frags[i]; f.Kind == FragText && f.Text == "HEAD" {
 			idx = i
 			break
 		}
@@ -566,7 +566,7 @@ func TestStickyDisabledKeepsNormalFlow(t *testing.T) {
 	}
 	idx := -1
 	for i := range ly.Frags {
-		if f := &ly.Frags[i]; f.Kind == fragText && f.Text == "HEAD" {
+		if f := &ly.Frags[i]; f.Kind == FragText && f.Text == "HEAD" {
 			idx = i
 			break
 		}
@@ -615,13 +615,13 @@ func TestNestedZIndexHitTesting(t *testing.T) {
 	if overlayLayer(btn) <= overlayLayer(under) {
 		t.Fatalf("button layer %d, under layer %d", overlayLayer(btn), overlayLayer(under))
 	}
-	b := NewSession(40, 12)
+	b := newTestSession(40, 12)
 	b.Page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
 	b.Layout = ly
 	hit := false
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind != fragText || f.Node == nil {
+		if f.Kind != FragText || f.Node == nil {
 			continue
 		}
 		if f.Node != btn && !isDescendant(f.Node, btn) {
@@ -658,7 +658,7 @@ func TestZIndexPaintOrder(t *testing.T) {
 		t.Fatalf("painted top row = %q, want the higher z-index text", top)
 	}
 
-	b := NewSession(20, 3)
+	b := newTestSession(20, 3)
 	b.Page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
 	b.Layout = ly
 	n := b.nodeAt(0, 0)

@@ -10,7 +10,7 @@ import (
 func TestTextScaleCanBeDisabled(t *testing.T) {
 	t.Setenv("TERM", "xterm-kitty")
 	t.Setenv("KITTY_WINDOW_ID", "1")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
 	b.NoBigText = true
@@ -26,7 +26,7 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 }
 
 func TestJSErrorFooterLabel(t *testing.T) {
-	b := NewSession(200, 10)
+	b := newTestSession(200, 10)
 	b.color = true
 	b.usage = procUsage{rss: 18 << 20}
 	if strings.Contains(b.footerRight(140), "Error") {
@@ -58,7 +58,7 @@ func TestJSErrorFooterLabel(t *testing.T) {
 }
 
 func TestFooterRightCollapsesLeftToRight(t *testing.T) {
-	b := NewSession(160, 10)
+	b := newTestSession(160, 10)
 	b.usage = procUsage{rss: 18 << 20}
 	full := b.footerRight(100)
 	for _, want := range []string{"JavaScript:on", "Graphics:none", "Dark:off", "Reader:off", "MEM 18MB"} {
@@ -91,7 +91,7 @@ func TestFooterRightCollapsesLeftToRight(t *testing.T) {
 }
 
 func TestFooterRightDoesNotShrinkForLongLeftText(t *testing.T) {
-	b := NewSession(100, 10)
+	b := newTestSession(100, 10)
 	right := b.footerRight(100/2 - 7)
 	if right == "" {
 		t.Fatal("no right footer state")
@@ -103,7 +103,7 @@ func TestFooterRightDoesNotShrinkForLongLeftText(t *testing.T) {
 }
 
 func TestFooterShowsJSAndGraphicsState(t *testing.T) {
-	b := NewSession(120, 10)
+	b := newTestSession(120, 10)
 	right := b.footerRight(120)
 	if !strings.Contains(right, "JavaScript:on") || !strings.Contains(right, "Graphics:none") {
 		t.Fatalf("footer right = %q", right)
@@ -125,7 +125,7 @@ func TestJSConsoleDoesNotUseFooterText(t *testing.T) {
 		console.warn("warning");
 		console.error("boom");
 	`)
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.startJS(page)
 	if b.status != "" {
 		t.Fatalf("console output set footer status: %q", b.status)
@@ -136,7 +136,7 @@ func TestJSConsoleDoesNotUseFooterText(t *testing.T) {
 }
 
 func TestJSReportErrorUsesFooterHint(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.status = "keep me"
 	j := newJSRuntime(b, nil)
 	j.ReportError(errors.New("boom"))
@@ -163,7 +163,7 @@ func TestProcUsageFooterRoundsMemory(t *testing.T) {
 }
 
 func TestCycleGraphicsModes(t *testing.T) {
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
 	b.newGraphics = newTestGraphics
@@ -199,7 +199,7 @@ func TestCycleGraphicsModes(t *testing.T) {
 }
 
 func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.CellW, b.CellH = 8, 16
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<html><body><p>before</p><img alt="pic" src="pic.png"><p>after</p></body></html>`)
@@ -220,7 +220,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	seq := b.LoadSeq
 	hasImage := func() bool {
 		for _, f := range b.Layout.Frags {
-			if f.Kind == fragImage {
+			if f.Kind == FragImage {
 				return true
 			}
 		}
@@ -264,7 +264,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 func TestModalDisablesScaledText(t *testing.T) {
 	t.Setenv("TERM", "xterm-kitty")
 	t.Setenv("KITTY_WINDOW_ID", "1")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
 	b.rebuild()
@@ -284,7 +284,7 @@ func TestModalDisablesScaledText(t *testing.T) {
 }
 
 func TestZoomBadgeShows(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.Zoom = 1.5
 	if got, want := b.zoomBadge(), " 150% "; got != want {
 		t.Fatalf("zoom badge = %q, want %q", got, want)
@@ -304,7 +304,7 @@ func TestGraphicsDowngradeAndRepaintPlacements(t *testing.T) {
 		n.Img = image.NewRGBA(image.Rect(0, 0, 40, 20))
 		n.ImgSrc = "/pic.png"
 	}
-	b := NewSession(80, 20)
+	b := newTestSession(80, 20)
 	b.loader = newTestLoader()
 	b.loader.NoImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}

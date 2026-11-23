@@ -78,7 +78,7 @@ func (g *Grid) Reset(fg, bg Color) {
 	g.Runs = g.Runs[:0]
 }
 
-// reuseGrid returns g ready for a frame of the given size, allocating only
+// ReuseGrid returns g ready for a frame of the given size, allocating only
 // when the size changed.
 func ReuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
 	if g == nil || g.W != w || g.H != h {
@@ -88,7 +88,7 @@ func ReuseGrid(g *Grid, w, h int, fg, bg Color) *Grid {
 	return g
 }
 
-// blitGrid copies src into dst starting at row y. Cell run indexes refer to
+// BlitGrid copies src into dst starting at row y. Cell run indexes refer to
 // src.Runs, so the caller must copy those runs in the same order.
 func BlitGrid(dst, src *Grid, y int) {
 	if dst == nil || src == nil || y < 0 || y >= dst.H {
@@ -790,14 +790,14 @@ func textBackground(f *Frag) Color {
 	return Color{}
 }
 
-// stripTerminalControls drops C0/C1 control characters before text is embedded
+// StripTerminalControls drops C0/C1 control characters before text is embedded
 // in an OSC 66 escape. Ordinary Grid.Text drops them via zero rune width, but
 // scaled text is written raw inside the escape sequence.
 func StripTerminalControls(s string) string {
 	return protocol.StripControls(s)
 }
 
-// readableFG keeps text legible when author CSS leaves a near-invisible
+// ReadableFG keeps text legible when author CSS leaves a near-invisible
 // foreground/background pair (for example white text whose background came
 // from an unsupported gradient or CSS variable).
 // backgroundPlaceholderBG is the mid-grey fill used when CSS background images
@@ -819,7 +819,7 @@ var errBadSVG = errors.New("invalid SVG")
 // ErrBadSVG marks malformed SVG input.
 var ErrBadSVG = errBadSVG
 
-// isSVG reports whether fetched data is an SVG image.
+// IsSVG reports whether fetched data is an SVG image.
 func IsSVG(ctype string, data []byte) bool {
 	ct := strings.ToLower(ctype)
 	if strings.Contains(ct, "image/svg+xml") {
@@ -835,12 +835,12 @@ func IsSVG(ctype string, data []byte) bool {
 	return false
 }
 
-// decodeSVG rasterizes an SVG into an RGBA image, bounded in size.
+// DecodeSVG rasterizes an SVG into an RGBA image, bounded in size.
 func DecodeSVG(data []byte) (image.Image, error) {
 	return DecodeSVGWithin(data, 0)
 }
 
-// decodeSVGWithin is decodeSVG with a cap on the rasterized pixel count. It
+// decodeSVGWithin is DecodeSVG with a cap on the rasterized pixel count. It
 // scales the raster down rather than failing when the budget is smaller.
 func recoverImage(fn func() (image.Image, error)) (img image.Image, err error) {
 	defer func() {

@@ -6,7 +6,7 @@ import (
 )
 
 func TestEscapeShowsExitHint(t *testing.T) {
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.Layout = &Layout{Height: 10}
 	b.HandleKey("esc")
 	if b.status != exitHint {
@@ -23,7 +23,7 @@ func TestEscapeShowsExitHint(t *testing.T) {
 func TestEscapeFromInputShowsExitHint(t *testing.T) {
 	doc := ParseHTML(`<html><body><input name="q"></body></html>`)
 	u := mustParse(t, "https://example.com/")
-	b := NewSession(80, 10)
+	b := newTestSession(80, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.rebuild()
 	q := inputByName(doc, "q")
@@ -92,7 +92,7 @@ func TestParseX10Mouse(t *testing.T) {
 }
 
 func TestMouseSideButtonsAreFrontendOwned(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.HandleMouse(MouseEvent{Button: MouseButtonBack, X: 5, Y: 5, Press: true})
 	b.HandleMouse(MouseEvent{Button: MouseButtonForward, X: 5, Y: 5, Press: true})
 	if b.status != "" {

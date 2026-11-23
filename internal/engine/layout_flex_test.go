@@ -9,7 +9,7 @@ func TestFlexWrapStartsNewLine(t *testing.T) {
 	ly := build(`<div style="display:flex;flex-wrap:wrap"><div style="width:100%">alpha</div><div style="width:100%">beta</div></div>`, 40)
 	var alpha, beta *Frag
 	for i := range ly.Frags {
-		if ly.Frags[i].Kind != fragText {
+		if ly.Frags[i].Kind != FragText {
 			continue
 		}
 		switch ly.Frags[i].Text {
@@ -31,7 +31,7 @@ func TestSearchInputFlexFullWidth(t *testing.T) {
 	ly := build(`<form style="display:flex;gap:8px"><input type="search" name="q" placeholder="Search or enter address" style="flex:1"><button type="submit">Go</button></form>`, 40)
 	inputY, inputW, buttonY := -1, 0, -1
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		if strings.Contains(f.Text, "Search or enter address") {
@@ -60,7 +60,7 @@ func TestFlexPercentageWidthNotDoubleResolved(t *testing.T) {
 	ly := BuildLayoutBig(doc, nil, 100, true)
 	ys := map[string]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (f.Text == "LinkPreview" || f.Text == "API") {
+		if f.Kind == FragText && (f.Text == "LinkPreview" || f.Text == "API") {
 			ys[f.Text] = f.Y
 		}
 	}
@@ -76,7 +76,7 @@ func TestFlexTextareaRendersWidget(t *testing.T) {
 	ly := build(`<div style="display:flex"><textarea name="q"></textarea></div>`, 40)
 	found := false
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "[") && f.W > 2 {
+		if f.Kind == FragText && strings.Contains(f.Text, "[") && f.W > 2 {
 			found = true
 		}
 	}
@@ -96,7 +96,7 @@ func TestFlexWrapToleratesCellRounding(t *testing.T) {
 </div></body></html>`, 120)
 	pos := map[string]Frag{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (f.Text == "alpha" || f.Text == "beta") {
+		if f.Kind == FragText && (f.Text == "alpha" || f.Text == "beta") {
 			pos[f.Text] = f
 		}
 	}
@@ -125,7 +125,7 @@ func TestFlexPercentageMarginUsesContainerWidth(t *testing.T) {
 </div></body></html>`, 80)
 	x := -1
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "right" {
+		if f.Kind == FragText && f.Text == "right" {
 			x = f.X
 		}
 	}
@@ -141,7 +141,7 @@ func TestFlexRow(t *testing.T) {
 	ly := build(`<div style="display:flex"><div style="flex:1">a</div><div style="flex:1">b</div></div>`, 40)
 	pos := map[string]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && (f.Text == "a" || f.Text == "b") {
+		if f.Kind == FragText && (f.Text == "a" || f.Text == "b") {
 			pos[f.Text] = f.X
 		}
 	}
@@ -166,7 +166,7 @@ func TestFlexBasisCalcConstrainsText(t *testing.T) {
 	maxRight := 0
 	lines := 0
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		inside := false
@@ -201,7 +201,7 @@ func TestFlexItemCalcWidthUsesContainer(t *testing.T) {
 </div></body></html>`, 100)
 	lines := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		for p := f.Node; p != nil; p = p.Parent {
@@ -227,10 +227,10 @@ func TestDisplayContentsExpandsInFlex(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	ax, bx := -1, -1
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && f.Text == "A" {
+		if f.Kind == FragText && f.Text == "A" {
 			ax = f.X
 		}
-		if f.Kind == fragText && f.Text == "B" {
+		if f.Kind == FragText && f.Text == "B" {
 			bx = f.X
 		}
 	}
@@ -243,7 +243,7 @@ func TestFlexAlignShiftsOnlyOwnItem(t *testing.T) {
 	ly := build(`<div style="display:flex;align-items:center"><div id="a" style="height:3em">A</div><span id="b">B</span></div><div id="c">C</div>`, 40)
 	pos := map[string]Frag{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			if id := fragOwnerID(f); id == "a" || id == "b" || id == "c" {
 				pos[id] = f
 			}
@@ -280,7 +280,7 @@ func TestFlexOrderAndJustify(t *testing.T) {
 	ly := BuildLayout(doc, nil, 40)
 	pos := map[string][2]int{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && len(f.Text) == 1 {
+		if f.Kind == FragText && len(f.Text) == 1 {
 			pos[f.Text] = [2]int{f.X, f.Y}
 		}
 	}
@@ -299,7 +299,7 @@ func TestInlineListInFlexHeaderStaysOnOneLine(t *testing.T) {
 		`<li style="display:inline"><a>Contact</a></li></ul></div>`, 50)
 	rows := map[string]int{}
 	for _, f := range ly.Frags {
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch strings.TrimSpace(f.Text) {
@@ -350,7 +350,7 @@ func TestFlexAutoMarginPushesItemRight(t *testing.T) {
 	ly := build(`<div style="display:flex;width:400px"><span>Brand</span>`+
 		`<div style="margin-left:auto">Right</div></div>`, 100)
 	for _, f := range ly.Frags {
-		if f.Kind == fragText && strings.Contains(f.Text, "Right") {
+		if f.Kind == FragText && strings.Contains(f.Text, "Right") {
 			if f.X < 40 {
 				t.Fatalf("auto-margin item x = %d, want near the right edge", f.X)
 			}
@@ -514,7 +514,7 @@ func TestFlexPseudoAspectBoxGivesHeight(t *testing.T) {
 	var after *Frag
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Text == "following" {
+		if f.Kind == FragText && f.Text == "following" {
 			after = f
 		}
 	}
@@ -550,7 +550,7 @@ func TestFlexColumnBlockifiesInlineChildren(t *testing.T) {
 	}
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
-		if f.Kind == fragText && f.Text == "caption" {
+		if f.Kind == FragText && f.Text == "caption" {
 			if f.Y < r.Y+r.H {
 				t.Fatalf("caption y=%d overlaps column child bottom %d", f.Y, r.Y+r.H)
 			}

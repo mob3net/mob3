@@ -16,7 +16,7 @@ func TestContentRect(t *testing.T) {
 		{20, 2, 19},
 	}
 	for _, tc := range cases {
-		b := NewSession(100, 24)
+		b := newTestSession(100, 24)
 		b.Height = tc.h
 		cr := b.contentRect()
 		if cr.Top != tc.top || cr.Bottom != tc.bottom || cr.Height != tc.bottom-tc.top || cr.Width != 100 {
@@ -26,7 +26,7 @@ func TestContentRect(t *testing.T) {
 }
 
 func TestShellKeyRouting(t *testing.T) {
-	b := NewSession(60, 20)
+	b := newTestSession(60, 20)
 	b.Layout = &Layout{Height: 100}
 	if quit := b.HandleKey("j"); quit {
 		t.Fatal("content key quit the browser")
@@ -44,7 +44,7 @@ func TestShellKeyRouting(t *testing.T) {
 }
 
 func TestStateMessage(t *testing.T) {
-	b := NewSession(100, 30)
+	b := newTestSession(100, 30)
 	b.URL = mustParse(t, "https://example.test/page")
 	b.Page = &Page{URL: b.URL, Title: "Title", Root: ParseHTML("<p>x</p>")}
 	b.Layout = &Layout{Height: 100}
@@ -89,7 +89,7 @@ func TestStateMessage(t *testing.T) {
 }
 
 func TestFrontEndContentGeometry(t *testing.T) {
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.resizeWithContent(80, 24, 3, 10)
 	if got := b.headerRows(); got != 3 {
 		t.Fatalf("header rows = %d, want 3", got)

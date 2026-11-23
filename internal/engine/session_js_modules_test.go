@@ -17,7 +17,7 @@ func TestInlineModuleImportsAndRuns(t *testing.T) {
 	page := moduleTestPage(`<html><body><p id="out">before</p></body></html>`,
 		`import { msg } from "data:text/javascript,export const msg = 'from module';";`+
 			`document.getElementById("out").textContent = msg;`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if b.JS == nil {
 		t.Fatal("runtime was not created")
@@ -33,7 +33,7 @@ func TestInlineModuleImportsAndRuns(t *testing.T) {
 func TestInlineModuleImportMetaURL(t *testing.T) {
 	page := moduleTestPage(`<html><body><p id="out"></p></body></html>`,
 		`document.getElementById("out").textContent = import.meta.url;`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "https://example.com/" {
 		t.Fatalf("import.meta.url = %q", got)
@@ -50,7 +50,7 @@ func TestExternalModuleUsesCollectedBody(t *testing.T) {
 		Src:    "https://example.com/app/main.js",
 		Code:   `document.getElementById("out").textContent = import.meta.url;`,
 	}}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "https://example.com/app/main.js" {
 		t.Fatalf("external module = %q", got)
@@ -61,7 +61,7 @@ func TestDynamicImportResolvesNamespace(t *testing.T) {
 	page := moduleTestPage(`<html><body><p id="out"></p></body></html>`,
 		`import("data:text/javascript,export const n = 7;").then(function (m) {`+
 			`document.getElementById("out").textContent = String(m.n);});`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "7" {
 		t.Fatalf("dynamic import result = %q, want 7 (log: %s)", got, strings.Join(b.jsLog, "; "))
@@ -79,7 +79,7 @@ func TestModuleGraphRunsOnceForSharedDependency(t *testing.T) {
 		{Module: true, Code: `import { n as m } from "` + counter + `";` +
 			`document.getElementById("out").textContent += ":" + String(globalThis.hits) + ":" + String(m);`},
 	}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "a1:1:1" {
 		t.Fatalf("shared dependency = %q, want a1:1:1 (log: %s)", got, strings.Join(b.jsLog, "; "))
@@ -92,7 +92,7 @@ func TestAsyncImportsShareModuleRecords(t *testing.T) {
 	// fresh graph per import.
 	dep := "data:text/javascript,globalThis.hits = (globalThis.hits || 0) + 1;export const n = 1;"
 	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Interactive = true
 	b.startJS(page)
 	for i := 0; i < 2; i++ {
@@ -117,7 +117,7 @@ func TestAsyncDynamicImportCompletes(t *testing.T) {
 	// A dynamic import after the page settled loads in the background; the
 	// event loop completes it and the promise continuation runs.
 	page := newJSPage(`<html><body><p id="out"></p></body></html>`, "")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Interactive = true
 	b.startJS(page)
 	if _, err := b.JS.RunCode("test",
@@ -142,7 +142,7 @@ func TestClassicScriptCanDynamicImport(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out"></p></body></html>`,
 		`import("data:text/javascript,export const n = 5;").then(function (m) {`+
 			`document.getElementById("out").textContent = String(m.n);});`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "5" {
 		t.Fatalf("classic dynamic import = %q, want 5 (log: %s)", got, strings.Join(b.jsLog, "; "))
@@ -157,7 +157,7 @@ func TestDuplicateModuleTagsEvaluateOnce(t *testing.T) {
 		{Module: true, Code: `import "` + dep + `";` +
 			`document.getElementById("out").textContent = String(globalThis.runs);`},
 	}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "1" {
 		t.Fatalf("dependency runs = %q, want 1", got)
@@ -168,17 +168,17 @@ func TestCollectImportMap(t *testing.T) {
 	root := ParseHTML(`<html><head>` +
 		`<script type="importmap">{"imports":{"react":"https://cdn.example/react.js","pkg/":"https://cdn.example/pkg/"}}</script>` +
 		`</head></html>`)
-	m := collectImportMap(root)
+	m := CollectImportMap(root)
 	if m["react"] != "https://cdn.example/react.js" {
 		t.Fatalf("react mapping = %q", m["react"])
 	}
 	if m["pkg/"] != "https://cdn.example/pkg/" {
 		t.Fatalf("prefix mapping = %q", m["pkg/"])
 	}
-	if collectImportMap(ParseHTML(`<html><head><script type="importmap">{bad json</script></head></html>`)) != nil {
+	if CollectImportMap(ParseHTML(`<html><head><script type="importmap">{bad json</script></head></html>`)) != nil {
 		t.Fatal("malformed import map was accepted")
 	}
-	if collectImportMap(ParseHTML(`<html><head><script type="module">1</script></head></html>`)) != nil {
+	if CollectImportMap(ParseHTML(`<html><head><script type="module">1</script></head></html>`)) != nil {
 		t.Fatal("module script was read as an import map")
 	}
 }
@@ -190,7 +190,7 @@ func TestBareSpecifierUsesImportMap(t *testing.T) {
 	page.ImportMap = map[string]string{
 		"react": "data:text/javascript,export const v = 'mapped';",
 	}
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if b.moduleErr {
 		t.Fatalf("import map module failed: %s", strings.Join(b.jsLog, "; "))
@@ -202,7 +202,7 @@ func TestBareSpecifierUsesImportMap(t *testing.T) {
 
 func TestModuleFailureShowsStatus(t *testing.T) {
 	page := moduleTestPage(`<html><body><p>Loading...</p></body></html>`, `import "react";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if !b.moduleErr {
 		t.Fatal("bare module specifier did not fail")
@@ -220,7 +220,7 @@ func TestModuleWithWrongMIMEFails(t *testing.T) {
 	// like a classic script would be.
 	page := moduleTestPage(`<html><body><p>Loading...</p></body></html>`,
 		`import "data:text/plain,export const n = 1;";`)
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.startJS(page)
 	if !b.moduleErr {
 		t.Fatal("non-JavaScript module did not fail")

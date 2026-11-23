@@ -9,14 +9,14 @@ import (
 )
 
 func TestMouseDragSelection(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Layout = BuildLayout(ParseHTML(`<p>hello world</p>`), nil, 40)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<p>hello world</p>`)}
 	top, _ := b.viewport()
 
 	var frag *Frag
 	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == fragText {
+		if b.Layout.Frags[i].Kind == FragText {
 			frag = &b.Layout.Frags[i]
 			break
 		}
@@ -84,14 +84,14 @@ func TestMouseDragSelection(t *testing.T) {
 
 func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	doc := ParseHTML(`<html><body><p>one</p><p>two</p><p>three</p></body></html>`)
-	b := NewSession(40, 16)
+	b := newTestSession(40, 16)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: doc}
 	b.Layout = BuildLayout(doc, nil, 40)
 	b.Scroll = 0
 	var first, middle, last *Frag
 	for i := range b.Layout.Frags {
 		f := &b.Layout.Frags[i]
-		if f.Kind != fragText {
+		if f.Kind != FragText {
 			continue
 		}
 		switch f.Text {
@@ -122,8 +122,8 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 }
 
 func TestCopySelectionUsesOSC52(t *testing.T) {
-	b := NewSession(40, 10)
-	b.Layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
+	b := newTestSession(40, 10)
+	b.Layout = &Layout{Frags: []Frag{{Kind: FragText, Text: "hello", X: 0, Y: 0, W: 5}}}
 	b.Selection.Anchor = CellPos{X: 0, Y: 0}
 	b.Selection.Cursor = CellPos{X: 4, Y: 0}
 	var buf bytes.Buffer
@@ -147,7 +147,7 @@ func TestCopySelectionUsesOSC52(t *testing.T) {
 }
 
 func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.URL = mustParse(t, "https://example.com/page")
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
@@ -168,7 +168,7 @@ func TestYankWholePageAsText(t *testing.T) {
 	root := ParseHTML(`<html><head><style>body{margin:0}p{margin:0}</style></head>` +
 		`<body><p>First line</p><p>Second line</p></body></html>`)
 	u := mustParse(t, "https://example.com/debug")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.URL = u
 	b.rebuild()
@@ -219,7 +219,7 @@ func TestYankWholePageAsText(t *testing.T) {
 }
 
 func TestYankWholePageWithoutPage(t *testing.T) {
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 	b.HandleKey("Y")
@@ -241,7 +241,7 @@ func TestCopyViewportText(t *testing.T) {
 	root := ParseHTML(`<html><head><style>body{margin:0}p{margin:0}</style></head>` +
 		`<body>` + body.String() + `</body></html>`)
 	u := mustParse(t, "https://example.com/scroll")
-	b := NewSession(40, 10)
+	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: root, Author: fixtureAuthorRules(root)}
 	b.URL = u
 	b.rebuild()

@@ -37,7 +37,7 @@ type SessionConfig struct {
 func NewConfiguredSession(c SessionConfig) *Session {
 	b := NewSession(c.Width, c.Height)
 	b.Zoom = c.Zoom
-	SetLayoutZoom(c.Zoom)
+	SetZoom(c.Zoom)
 	b.Interactive = c.Interactive
 	if c.Loader != nil {
 		b.setLoader(c.Loader)
@@ -136,9 +136,9 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 	if h <= 0 {
 		h = 30
 	}
-	a := NewAutomation(w, h)
+	a := newAutomation(w, h)
 	a.b.Zoom = c.Zoom
-	SetLayoutZoom(c.Zoom)
+	SetZoom(c.Zoom)
 	if c.Loader != nil {
 		a.b.setLoader(c.Loader)
 		c.Loader.NoImages = true

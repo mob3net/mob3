@@ -14,7 +14,7 @@ func TestGridAutoTrackSizedToContent(t *testing.T) {
 		`<div>Story starts here</div></div>`, 40)
 	find := func(text string) *Frag {
 		for i := range ly.Frags {
-			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+			if ly.Frags[i].Kind == FragText && ly.Frags[i].Text == text {
 				return &ly.Frags[i]
 			}
 		}
@@ -63,7 +63,7 @@ func TestGridNamedAreasAndAutoTrack(t *testing.T) {
 		`<a style="grid-area:cta">View more</a></div>`, 40)
 	find := func(text string) *Frag {
 		for i := range ly.Frags {
-			if ly.Frags[i].Kind == fragText && ly.Frags[i].Text == text {
+			if ly.Frags[i].Kind == FragText && ly.Frags[i].Text == text {
 				return &ly.Frags[i]
 			}
 		}
@@ -87,7 +87,7 @@ func TestNamedGridLines(t *testing.T) {
 	ly := BuildLayout(doc, rules, 40)
 	lines := map[int]bool{}
 	for _, f := range ly.Frags {
-		if f.Kind == fragText {
+		if f.Kind == FragText {
 			lines[f.Y] = true
 		}
 	}

@@ -220,7 +220,7 @@ func (l Length) ResolveV(basis int, fontPx float64) int {
 	return int(math.Round(l.CSSPx(fontPx) / cellH))
 }
 
-// resolveLengthLH converts a computed lh length to px. lh depends on the
+// ResolveLengthLH converts a computed lh length to px. lh depends on the
 // element's own line-height, so this runs after the cascade rather than while
 // declarations are parsed.
 func ResolveLengthLH(l *Length, linePx float64) {
@@ -281,7 +281,7 @@ func ParseLength(v string, fontPx float64) Length {
 	return ParseLengthSimple(v)
 }
 
-// parseLengthSimple parses a plain length token, without calc() or the
+// ParseLengthSimple parses a plain length token, without calc() or the
 // min()/max()/clamp() functions.
 func ParseLengthSimple(v string) Length {
 	v = strings.ToLower(strings.TrimSpace(v))
@@ -325,14 +325,14 @@ func ParseLengthSimple(v string) Length {
 	return Length{}
 }
 
-// finiteNumber reports whether f is a usable CSS number. Scripts sometimes
+// FiniteNumber reports whether f is a usable CSS number. Scripts sometimes
 // write NaN or Infinity into inline styles; browsers ignore such declarations,
 // so the same values must not become layout geometry here.
 func FiniteNumber(f float64) bool {
 	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
-// nonFiniteLength reports whether a declaration value is a NaN or Infinity
+// NonFiniteLength reports whether a declaration value is a NaN or Infinity
 // length. Those declarations are dropped so an earlier rule keeps its value.
 func NonFiniteLength(val string) bool {
 	v := strings.ToLower(strings.TrimSpace(val))
@@ -359,7 +359,7 @@ func NonFiniteLength(val string) bool {
 	return err == nil && !FiniteNumber(f)
 }
 
-// lengthProperty reports whether prop takes a length, so an invalid numeric
+// LengthProperty reports whether prop takes a length, so an invalid numeric
 // value can be dropped instead of clearing a previously declared length.
 func LengthProperty(prop string) bool {
 	for _, part := range []string{"width", "height", "margin", "padding", "gap", "top", "right", "bottom", "left", "size", "spacing", "indent", "basis", "radius", "inset"} {

@@ -68,7 +68,6 @@ func testEvents() []Event {
 		{Session: 5, Seq: 5, Body: Clipboard{Text: "copied"}},
 		{Session: 6, Seq: 6, Body: Console{Level: ConsoleError, Text: "boom"}},
 		{Session: 7, Seq: 7, Body: Crash{Message: "contained"}},
-		{Session: 8, Seq: 8, Body: Selection{Text: "selected"}},
 		{Session: 9, Seq: 9, Body: FindResults{Query: "q", Current: 2, Total: 3, Rects: []Rect{{X: 1, Y: 2, W: 3, H: 1}}}},
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin", Command: "curl -L -o f.bin -- https://example.test/f.bin"}},
 		{Session: 11, Seq: 11, Body: Select{ID: 9, Options: []string{"One", "Two"}, Selected: 1}},

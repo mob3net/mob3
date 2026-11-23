@@ -13,7 +13,7 @@ import (
 // newTestAutomation wires a headless session to a fixed set of paths.
 func newTestAutomation(t *testing.T, pages map[string]string) *Automation {
 	t.Helper()
-	a := NewAutomation(80, 24)
+	a := NewAutomationWithConfig(AutomationConfig{Loader: newTestLoader(), Width: 80, Height: 24})
 	a.b.LoadFn = func(_ context.Context, _ string, target string, _ []byte, _ string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
@@ -125,13 +125,13 @@ func TestAutomationClickSelectorAndType(t *testing.T) {
 	if err := a.Type(ctx, "hello"); err != nil {
 		t.Fatal(err)
 	}
-	if got := inputValue(a.b.Forms.InputFocus); got != "hello" {
+	if got := InputValue(a.b.Forms.InputFocus); got != "hello" {
 		t.Fatalf("typed value = %q", got)
 	}
 	if err := a.Press(ctx, "Backspace"); err != nil {
 		t.Fatal(err)
 	}
-	if got := inputValue(a.b.Forms.InputFocus); got != "hell" {
+	if got := InputValue(a.b.Forms.InputFocus); got != "hell" {
 		t.Fatalf("after Backspace = %q", got)
 	}
 }
@@ -330,7 +330,7 @@ func TestAutomationFillAndSubmit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := inputValue(node); got != want {
+		if got := InputValue(node); got != want {
 			t.Errorf("%s = %q, want %q", sel, got, want)
 		}
 	}
@@ -416,8 +416,8 @@ func TestAutomationSelectAndToggle(t *testing.T) {
 	}
 	selected := func(sel, value string) bool {
 		t.Helper()
-		for _, o := range selectOptions(selectNode(sel)) {
-			if optionValue(o) == value {
+		for _, o := range SelectOptions(selectNode(sel)) {
+			if OptionValue(o) == value {
 				return o.HasAttr("selected")
 			}
 		}
@@ -447,7 +447,7 @@ func TestAutomationSelectAndToggle(t *testing.T) {
 	if _, err := a.Select(`select[name="multi"]`, nil, []string{"x", "z"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := selectedOptionValues(selectNode(`select[name="multi"]`)); len(got) != 2 || got[0] != "x" || got[1] != "z" {
+	if got := SelectedOptionValues(selectNode(`select[name="multi"]`)); len(got) != 2 || got[0] != "x" || got[1] != "z" {
 		t.Fatalf("multi selection = %v", got)
 	}
 	if _, err := a.Select(`select[name="one"]`, nil, []string{"a", "b"}, "", nil); err == nil {

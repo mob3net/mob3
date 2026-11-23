@@ -3,7 +3,7 @@ package engine
 import "testing"
 
 func TestStateKeysEngineFlag(t *testing.T) {
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.emitFrames = true
 	b.frontendChrome = true
 	if st := b.stateMessage(); st.KeysEngine {
@@ -21,7 +21,7 @@ func TestStateKeysEngineFlag(t *testing.T) {
 }
 
 func TestFormFocusKeepsFrontendChrome(t *testing.T) {
-	b := NewSession(80, 24)
+	b := newTestSession(80, 24)
 	b.emitFrames = true
 	b.frontendChrome = true
 	b.Forms.InputFocus = &Node{Tag: "input"}

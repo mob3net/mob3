@@ -268,9 +268,6 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 	case Crash:
 		kind = EvCrash
 		e.str(v.Message)
-	case Selection:
-		kind = EvSelection
-		e.str(v.Text)
 	case FindResults:
 		kind = EvFindResults
 		e.str(v.Query)
@@ -576,8 +573,6 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Console{Level: ConsoleLevel(d.u8()), Text: d.str()}
 	case EvCrash:
 		body = Crash{Message: d.str()}
-	case EvSelection:
-		body = Selection{Text: d.str()}
 	case EvFindResults:
 		query := d.str()
 		current, total := d.i32(), d.i32()

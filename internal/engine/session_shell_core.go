@@ -26,7 +26,7 @@ func NewSession(w, h int) *Session {
 	if h < 5 {
 		h = 24
 	}
-	loader := NewLoader(newLoaderHost())
+	loader := NewLoader(nil)
 	b := &Session{
 		Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
 		CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
@@ -43,7 +43,7 @@ func NewSession(w, h int) *Session {
 	}
 	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
-	setLayoutZoom(b.Zoom)
+	SetZoom(b.Zoom)
 	return b
 }
 
@@ -430,7 +430,7 @@ func (b *Session) toggleReader() {
 		b.status = "Reader mode unavailable"
 		return
 	}
-	root, ok := extractReaderPage(b.Page.Root, b.Page.Title)
+	root, ok := ExtractReaderPage(b.Page.Root, b.Page.Title)
 	if !ok {
 		b.status = "Reader mode unavailable"
 		return
@@ -490,7 +490,7 @@ func (b *Session) resetZoom() {
 func (b *Session) applyZoom(z float64) {
 	if b.Zoom != z {
 		b.Zoom = z
-		setLayoutZoom(z)
+		SetZoom(z)
 		// A page whose scaled runs overlapped may be fine at another zoom, so
 		// re-evaluate the fallback instead of keeping it for the session.
 		b.BigTextBlocked = false
