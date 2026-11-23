@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"context"
 	"time"
 
 	"browser/internal/engine"
@@ -119,3 +120,31 @@ func (b *Browser) ApplyHint(v protocol.HintResult)       { b.applyHintResult(v) 
 func (b *Browser) ApplyConsole(v protocol.ConsoleAction) { b.applyConsoleAction(v) }
 func (b *Browser) LogClientError(msg string)             { b.logEngineError(msg) }
 func (b *Browser) Abort()                                { b.abortGen.Add(1) }
+
+func (b *Browser) BeginSession(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) {
+	b.sessionCtx, b.sessionIn, b.sessionAbort = ctx, in, abort
+	b.sessionOut = out
+	b.sessionQuit = false
+	b.Session.LastState = protocol.State{}
+	b.emitFrames = true
+	b.frontendChrome = true
+}
+
+func (b *Browser) EndSession() {
+	b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
+	b.sessionOut = nil
+	b.frameReady = false
+	b.chromeReady = false
+	b.emitFrames = false
+	b.frontendChrome = false
+}
+
+func (b *Browser) Draw()                 { b.draw() }
+func (b *Browser) State() protocol.State { return b.stateMessage() }
+func (b *Browser) EmitPendingFrame()     { b.emitPendingFrame() }
+func (b *Browser) SessionQuit() bool     { return b.sessionQuit }
+func (b *Browser) UsageFooter() string   { return b.usage.footer() }
+func (b *Browser) SampleUsage() string   { b.sampleUsage(); return b.usage.footer() }
+func (b *Browser) ApplyImageBatch(batch engine.ImageBatch) bool {
+	return b.applyDeferredImageBatch(batch)
+}

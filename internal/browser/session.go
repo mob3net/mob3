@@ -3,8 +3,6 @@ package browser
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
-	"time"
 
 	"browser/internal/protocol"
 )
@@ -18,137 +16,7 @@ import (
 // this loop emits frames and state. The engine still composes chrome for
 // overlays, the console and the find bar and handles shell dialogs.
 func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
-	var jsTimer, progressTimer *time.Timer
-	defer func() {
-		if jsTimer != nil {
-			jsTimer.Stop()
-		}
-		if progressTimer != nil {
-			progressTimer.Stop()
-		}
-		b.cancelLoadNow()
-		b.stopJS()
-	}()
-	usageTicker := time.NewTicker(2 * time.Second)
-	defer usageTicker.Stop()
-
-	b.sessionCtx, b.sessionIn, b.sessionAbort = ctx, in, abort
-	b.sessionOut = out
-	b.sessionQuit = false
-	b.lastState = protocol.State{}
-	b.emitFrames = true
-	b.frontendChrome = true
-	defer func() {
-		b.sessionCtx, b.sessionIn, b.sessionAbort = nil, nil, nil
-		b.sessionOut = nil
-		b.frameReady = false
-		b.chromeReady = false
-		b.emitFrames = false
-		b.frontendChrome = false
-	}()
-	b.sampleUsage()
-	for {
-		// A heavy page evicted from the history cache asks for one scavenge so
-		// its memory leaves the process instead of waiting for the background
-		// scavenger. This runs between frames, never inside a load.
-		if b.takeScavengePending() {
-			debug.FreeOSMemory()
-		}
-		if b.skipDraw {
-			b.skipDraw = false
-		} else {
-			b.draw()
-			// A redraw can change pixels without changing the shell state, so
-			// only cross the seam when the snapshot differs. State precedes the
-			// frame so the presenter knows the scroll offset and native mode
-			// before it sees the pixels.
-			if st := b.stateMessage(); st != b.lastState {
-				b.lastState = st
-				if err := out.Send(protocol.Event{Body: st}); err != nil {
-					return err
-				}
-			}
-			b.emitPendingFrame()
-		}
-		var timerC <-chan time.Time
-		if d, ok := b.nextJSTimerDelay(); ok {
-			if jsTimer == nil {
-				jsTimer = time.NewTimer(d)
-			} else {
-				if !jsTimer.Stop() {
-					select {
-					case <-jsTimer.C:
-					default:
-					}
-				}
-				jsTimer.Reset(d)
-			}
-			timerC = jsTimer.C
-		}
-		var progressC <-chan time.Time
-		if b.progressActive() {
-			if progressTimer == nil {
-				progressTimer = time.NewTimer(progressTickInterval)
-			} else {
-				if !progressTimer.Stop() {
-					select {
-					case <-progressTimer.C:
-					default:
-					}
-				}
-				progressTimer.Reset(progressTickInterval)
-			}
-			progressC = progressTimer.C
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-abort:
-			// AbortSession already counted the request on the front-end
-			// goroutine. This is only a wakeup so the loop can redraw and let
-			// the following key command run.
-		case cmd, ok := <-in:
-			if !ok {
-				return nil
-			}
-			quit, err := b.handleCommand(cmd)
-			if err != nil {
-				return err
-			}
-			if quit || b.sessionQuit {
-				return out.Send(protocol.Event{Body: protocol.Quit{}})
-			}
-		case res := <-b.LoadCh:
-			b.finishLoad(res)
-		case batch := <-b.ImageCh:
-			if !b.applyDeferredImageBatch(batch) {
-				b.skipDraw = true
-			}
-		case task := <-b.ImportCh:
-			b.finishJSImport(task)
-			if b.JS != nil && b.JS.ConsumeDirty() {
-				b.rebuild()
-			}
-			b.consumePendingJS()
-		case <-timerC:
-			// Repaint only when a timer rebuilt the page; an idle page must not
-			// repaint at every timer wakeup.
-			if !b.runJSTimers() {
-				b.skipDraw = true
-			}
-		case <-progressC:
-			if !b.tickProgress() {
-				b.skipDraw = true
-			}
-		case <-usageTicker.C:
-			// Refresh the memory readout only when the displayed value changed.
-			before := b.usage.footer()
-			b.sampleUsage()
-			if b.consoleOpen || b.usage.footer() == before {
-				b.skipDraw = true
-			}
-		}
-	}
+	return b.Session.Serve(ctx, abort, in, out, b)
 }
 
 // handleCommand applies one front-end command. It reports whether the session

@@ -40,6 +40,7 @@ type Session struct {
 	ScaledLayout    bool
 	LastBuild       time.Duration
 	LastRebuild     time.Time
+	LastState       protocol.State
 
 	// View and page-display state.
 	Focus             int
