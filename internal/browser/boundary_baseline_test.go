@@ -136,8 +136,8 @@ func BenchmarkBoundaryDraw(b *testing.B) {
 	root := ParseHTML(boundaryBaselineHTML())
 	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: root, Title: "bench"}
-	br.layout = ly
+	br.Page = &Page{Root: root, Title: "bench"}
+	br.Layout = ly
 	br.color = true
 	br.bigText = false
 	old := os.Stdout
@@ -216,8 +216,8 @@ func BenchmarkBoundarySessionFrame(b *testing.B) {
 	root := ParseHTML(boundaryBaselineHTML())
 	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: root, Title: "bench"}
-	br.layout = ly
+	br.Page = &Page{Root: root, Title: "bench"}
+	br.Layout = ly
 	br.color = true
 	br.bigText = false
 	br.emitFrames = true
@@ -237,8 +237,8 @@ func BenchmarkBoundaryTextRepaint(b *testing.B) {
 	root := ParseHTML(boundaryBaselineHTML())
 	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: root, Title: "bench"}
-	br.layout = ly
+	br.Page = &Page{Root: root, Title: "bench"}
+	br.Layout = ly
 	br.color = true
 	br.bigText = false
 	br.emitFrames = true
@@ -266,8 +266,8 @@ func BenchmarkBoundaryStateChromeRepaint(b *testing.B) {
 	root := ParseHTML(boundaryBaselineHTML())
 	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: root, Title: "bench"}
-	br.layout = ly
+	br.Page = &Page{Root: root, Title: "bench"}
+	br.Layout = ly
 	br.color = true
 	br.bigText = false
 	br.emitFrames = true
@@ -292,8 +292,8 @@ func BenchmarkBoundaryStateChromeRepaint(b *testing.B) {
 func BenchmarkBoundarySessionFrameImage(b *testing.B) {
 	img := image.NewNRGBA(image.Rect(0, 0, 320, 320))
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
-	br.layout = &Layout{Height: 30, Frags: []Frag{{Kind: fragImage, X: 2, Y: 1, W: 40, H: 20, Img: img}}}
+	br.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
+	br.Layout = &Layout{Height: 30, Frags: []Frag{{Kind: fragImage, X: 2, Y: 1, W: 40, H: 20, Img: img}}}
 	br.color = true
 	br.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	br.emitFrames = true
@@ -314,8 +314,8 @@ func BenchmarkBoundaryComposedRepaint(b *testing.B) {
 	root := ParseHTML(boundaryBaselineHTML())
 	ly := BuildLayoutViewportDeadline(root, nil, 100, 33, false, time.Time{})
 	br := NewBrowser(100, 35)
-	br.page = &Page{Root: root, Title: "bench"}
-	br.layout = ly
+	br.Page = &Page{Root: root, Title: "bench"}
+	br.Layout = ly
 	br.color = true
 	br.bigText = false
 	br.emitFrames = true

@@ -30,18 +30,18 @@ func (b *Browser) cancelDeferredImageLoad() {
 // viewport: visible first, then within one viewport, then the rest by distance.
 // DOM order is preserved for equal ranks.
 func (b *Browser) sortImageTasks(tasks []imageTask) {
-	if len(tasks) < 2 || b.layout == nil || b.layout.Frags == nil {
+	if len(tasks) < 2 || b.Layout == nil || b.Layout.Frags == nil {
 		return
 	}
-	viewTop := b.scroll
+	viewTop := b.Scroll
 	viewH := b.viewportHeight()
 	if viewH < 1 {
 		viewH = 1
 	}
 	viewBottom := viewTop + viewH
 	yOf := make(map[*Node]int, len(tasks))
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Node == nil {
 			continue
 		}
@@ -92,10 +92,10 @@ func (b *Browser) sortImageTasks(tasks []imageTask) {
 // goroutine. The page is already laid out and visible; results arrive on
 // imageCh and are applied by the event loop.
 func (b *Browser) startDeferredImageLoad() {
-	if b.imagesPaused || b.loader == nil || b.loader.noImages || b.page == nil || b.page.Root == nil || b.reader {
+	if b.imagesPaused || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil || b.reader {
 		return
 	}
-	tasks := b.loader.imageTasks(b.page.Root, b.page.Base)
+	tasks := b.loader.imageTasks(b.Page.Root, b.Page.Base)
 	if len(tasks) == 0 {
 		return
 	}
@@ -108,7 +108,7 @@ func (b *Browser) startDeferredImageLoad() {
 	b.progress = 0.9
 	b.progressHold = 0
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = withRequestPage(ctx, b.page.URL, b.page.Local)
+	ctx = withRequestPage(ctx, b.Page.URL, b.Page.Local)
 	b.imageCancel = cancel
 	b.deferredImages = true
 	seq := b.loadSeq
@@ -140,15 +140,15 @@ func (b *Browser) startDeferredImageLoad() {
 // fragmentRows maps each node to the first laid-out row of its own fragments.
 func (b *Browser) fragmentRows(nodes []*Node) map[*Node]int {
 	rows := make(map[*Node]int, len(nodes))
-	if b.layout == nil || len(b.layout.Frags) == 0 || len(nodes) == 0 {
+	if b.Layout == nil || len(b.Layout.Frags) == 0 || len(nodes) == 0 {
 		return rows
 	}
 	want := make(map[*Node]struct{}, len(nodes))
 	for _, n := range nodes {
 		want[n] = struct{}{}
 	}
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Node == nil {
 			continue
 		}
@@ -173,7 +173,7 @@ func (b *Browser) imageChangeReachesViewport(nodes []*Node) (bool, int) {
 	if viewH < 1 {
 		viewH = 1
 	}
-	viewBottom := b.scroll + viewH
+	viewBottom := b.Scroll + viewH
 	top := 0
 	for _, n := range nodes {
 		y, ok := rows[n]
@@ -192,15 +192,15 @@ func (b *Browser) imageChangeReachesViewport(nodes []*Node) (bool, int) {
 // may be waiting. While every pending image is still below the fold it leaves
 // the layout and the frame untouched.
 func (b *Browser) applyPendingImageLayout() {
-	if b.pendingImageRow <= 0 || b.layout == nil {
+	if b.pendingImageRow <= 0 || b.Layout == nil {
 		return
 	}
 	viewH := b.viewportHeight()
 	if viewH < 1 {
 		viewH = 1
 	}
-	viewBottom := b.scroll + viewH
-	atBottom := b.layout.Height > 0 && viewBottom >= b.layout.Height
+	viewBottom := b.Scroll + viewH
+	atBottom := b.Layout.Height > 0 && viewBottom >= b.Layout.Height
 	if !atBottom && b.pendingImageRow >= viewBottom {
 		return
 	}
@@ -213,7 +213,7 @@ func (b *Browser) applyPendingImageLayout() {
 // page, rebuilding only when the new images can affect what the viewport shows.
 // It reports whether anything changed.
 func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
-	if b.page == nil || batch.seq != b.loadSeq || !b.deferredImages {
+	if b.Page == nil || batch.seq != b.loadSeq || !b.deferredImages {
 		return false
 	}
 	if b.imageTotal > 0 {
@@ -277,9 +277,9 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 }
 
 func (b *Browser) refreshImages() bool {
-	if b == nil || b.loader == nil || b.loader.noImages || b.page == nil || b.page.Root == nil {
+	if b == nil || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil {
 		return false
 	}
-	ctx := withRequestPage(context.Background(), b.page.URL, b.page.Local)
-	return b.loader.loadImages(ctx, b.page.Root, b.page.Base)
+	ctx := withRequestPage(context.Background(), b.Page.URL, b.Page.Local)
+	return b.loader.loadImages(ctx, b.Page.Root, b.Page.Base)
 }

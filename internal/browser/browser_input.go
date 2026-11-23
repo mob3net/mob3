@@ -28,11 +28,11 @@ func (b *Browser) modalMouseAction(ev MouseEvent) string {
 
 // linkAt returns the index of the link covering document cell (x, y), or -1.
 func (b *Browser) linkAt(x, y int) int {
-	if b.layout == nil {
+	if b.Layout == nil {
 		return -1
 	}
 	best, bestLayer := -1, -1
-	for i, li := range b.layout.Links {
+	for i, li := range b.Layout.Links {
 		for _, r := range li.Rects {
 			if x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
 				continue
@@ -63,8 +63,8 @@ func (b *Browser) openURLPromptMode(vim bool) {
 	b.prompt = true
 	b.promptVim = vim
 	b.promptText = ""
-	if b.url != nil {
-		b.promptText = b.url.String()
+	if b.URL != nil {
+		b.promptText = b.URL.String()
 	}
 	b.promptCursor = len(b.promptText)
 	b.promptSelectAll = true
@@ -320,7 +320,7 @@ func (b *Browser) submitInput() {
 
 // nodeAt returns the nearest element under a document cell, or nil.
 func (b *Browser) nodeAt(x, y int) *Node {
-	if b.layout == nil {
+	if b.Layout == nil {
 		return nil
 	}
 	var best *Node
@@ -333,8 +333,8 @@ func (b *Browser) nodeAt(x, y int) *Node {
 			best, bestLayer, bestArea, bestDepth = n, layer, area, depth
 		}
 	}
-	for i := len(b.layout.Frags) - 1; i >= 0; i-- {
-		f := &b.layout.Frags[i]
+	for i := len(b.Layout.Frags) - 1; i >= 0; i-- {
+		f := &b.Layout.Frags[i]
 		if f.Node == nil || (f.Kind != fragText && f.Kind != fragImage) {
 			continue
 		}
@@ -350,7 +350,7 @@ func (b *Browser) nodeAt(x, y int) *Node {
 	}
 	// Padding and background gaps have no text fragment. Use laid-out element
 	// boxes so hover menus remain reachable while moving between their items.
-	for n, r := range b.layout.Boxes {
+	for n, r := range b.Layout.Boxes {
 		if r.W <= 0 || r.H <= 0 || x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
 			continue
 		}
@@ -390,11 +390,11 @@ func nodeDepth(n *Node) int {
 // lays out a detached extraction, so synthetic events must not be dispatched on
 // those clones.
 func (b *Browser) liveNode(n *Node) bool {
-	if b.page == nil || n == nil {
+	if b.Page == nil || n == nil {
 		return false
 	}
 	for p := n; p != nil; p = p.Parent {
-		if p == b.page.Root {
+		if p == b.Page.Root {
 			return true
 		}
 	}
@@ -406,7 +406,7 @@ func (b *Browser) liveNode(n *Node) bool {
 func (b *Browser) clickContent(x, docY int) {
 	b.clearControlFocus()
 	if idx := b.linkAt(x, docY); idx >= 0 {
-		li := b.layout.Links[idx]
+		li := b.Layout.Links[idx]
 		if b.js != nil && b.liveNode(li.Node) {
 			if b.js.DispatchClick(li.Node) {
 				if b.js.EventErr() && linkFallbackOK(li.Href) {
@@ -671,7 +671,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		return false
 	}
 	if ev.Motion && !b.selecting {
-		docY := b.scroll + (y - top)
+		docY := b.Scroll + (y - top)
 		b.setPageHover(b.nodeAt(x, docY))
 		b.updateHover(x, y, top, bottom)
 		return false
@@ -687,7 +687,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			// right-click away from a link leaves the page alone. Back stays
 			// on the mouse back button and h.
 			if y >= top && y < bottom {
-				docY := b.scroll + (y - top)
+				docY := b.Scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
 					if a := nearestAnchor(n); a != nil {
 						if href := strings.TrimSpace(a.Attr("href")); href != "" {
@@ -707,7 +707,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 			return false
 		case MouseButtonLeft:
 			if y >= top && y < bottom {
-				docY := b.scroll + (y - top)
+				docY := b.Scroll + (y - top)
 				if n := b.nodeAt(x, docY); n != nil {
 					if target := b.resolveLabelTarget(n); target != nil {
 						n = target
@@ -754,7 +754,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		if moved {
 			b.status = b.selectionSummary()
 		} else if y >= top && y < bottom {
-			b.clickContent(x, b.scroll+(y-top))
+			b.clickContent(x, b.Scroll+(y-top))
 		}
 	}
 	// Do not restore the hovered-link line while the copy confirmation is
@@ -875,9 +875,9 @@ func (b *Browser) handlePageKey(k string) bool {
 	case "ctrl-u":
 		b.scrollBy(-b.viewportHeight() / 2)
 	case "g", "home":
-		b.scroll = 0
+		b.Scroll = 0
 	case "G", "end":
-		b.scroll = b.maxScroll()
+		b.Scroll = b.maxScroll()
 	case "tab":
 		b.tabStep(1)
 	case "backtab":
@@ -920,8 +920,8 @@ func (b *Browser) handlePageKey(k string) bool {
 	case "Z":
 		b.openZoomMenu()
 	case "u":
-		if b.url != nil {
-			b.status = b.url.String()
+		if b.URL != nil {
+			b.status = b.URL.String()
 		}
 	case "n":
 		if b.findText != "" && b.findScope == findScopePage {

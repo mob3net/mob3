@@ -220,21 +220,21 @@ func (b *Browser) suspendCurrentPage() {
 // cacheCurrentPage stores the applied page under the current front-end entry
 // ID. It reports whether the page was cached.
 func (b *Browser) cacheCurrentPage() bool {
-	if b.page == nil || b.page.Root == nil || b.url == nil || b.page.Download || b.entryID == 0 {
+	if b.Page == nil || b.Page.Root == nil || b.URL == nil || b.Page.Download || b.entryID == 0 {
 		return false
 	}
-	switch b.url.Scheme {
+	switch b.URL.Scheme {
 	case "", "about", "data", "javascript", "mailto", "tel":
 		return false
 	}
-	weight := pageWeight(b.page, b.js, b.lastBody, b.readerRoot)
+	weight := pageWeight(b.Page, b.js, b.lastBody, b.readerRoot)
 	if weight > b.historyCachePageCap() {
 		// A page heavier than the single-page allowance would pin the whole
 		// cache, so leave it out and let Back reload it instead.
 		return false
 	}
 	c := &cachedPage{
-		page:              b.page,
+		page:              b.Page,
 		js:                b.js,
 		readerRoot:        b.readerRoot,
 		readerSavedScroll: b.readerSavedScroll,
@@ -339,13 +339,13 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.historyCache[entryID] = c
 	b.histMu.Unlock()
 	b.entryID = entryID
-	b.page = c.page
-	b.url = c.page.URL
+	b.Page = c.page
+	b.URL = c.page.URL
 	b.imagesPaused = false
 	b.lastMethod = c.method
 	b.lastBody = c.body
 	b.lastContentType = c.contentType
-	b.layout = nil
+	b.Layout = nil
 	b.bigTextBlocked = false
 	b.resetConsole()
 	if c.js != nil {
@@ -368,7 +368,7 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 		}
 	}
 	b.rebuild()
-	b.scroll = scroll
+	b.Scroll = scroll
 	b.clampScroll()
 	b.focus = -1
 	b.hover = -1
@@ -385,11 +385,11 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 		return
 	}
 	b.clearLinkHints()
-	if b.url != nil && b.page != nil && b.page.Root != nil {
-		if u, err := url.Parse(rawURL); err == nil && sameDocument(u, b.url) {
+	if b.URL != nil && b.Page != nil && b.Page.Root != nil {
+		if u, err := url.Parse(rawURL); err == nil && sameDocument(u, b.URL) {
 			b.entryID = entryID
-			b.url = u
-			b.scroll = scroll
+			b.URL = u
+			b.Scroll = scroll
 			b.clampScroll()
 			b.focus = -1
 			b.hover = -1
@@ -426,14 +426,14 @@ func (b *Browser) emitHistoryCommit(c protocol.HistoryCommit) {
 }
 
 func (b *Browser) reload() {
-	if b.url == nil {
+	if b.URL == nil {
 		return
 	}
 	method := b.lastMethod
 	if method == "" {
 		method = http.MethodGet
 	}
-	b.navigateRequest(method, b.url.String(), b.lastBody, b.lastContentType, false)
+	b.navigateRequest(method, b.URL.String(), b.lastBody, b.lastContentType, false)
 }
 
 // dropCachedPages clears the back/forward page cache. It is used when a

@@ -35,9 +35,8 @@ const (
 // Browser holds one page session's content and view state. The front end owns
 // the trusted navigation list; this type keeps the memory-only page cache.
 type Browser struct {
+	*engine.Session
 	loader *Loader
-	url    *url.URL
-	page   *Page
 
 	width, height int
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
@@ -45,8 +44,6 @@ type Browser struct {
 	contentTop    int
 	contentHeight int
 	cellW, cellH  int
-	layout        *Layout
-	scroll        int
 	// pdfStarts holds the layout row where each PDF page begins, so the footer
 	// can name the page under the viewport.
 	pdfStarts    []int
@@ -361,7 +358,8 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		loader: NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
+		Session: engine.NewSession(),
+		loader:  NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
 		nextEntryID:       1,
 		historyCache:      make(map[uint64]*cachedPage),
 		historyViewCur:    -1,
@@ -502,17 +500,17 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 	downloadName := b.pendingDownloadName
 	b.pendingDownloadName = ""
 	if strings.EqualFold(strings.TrimSpace(input), "about:retry") {
-		if b.url == nil {
+		if b.URL == nil {
 			b.status = "Nothing to retry"
 			b.draw()
 			return
 		}
-		input = b.url.String()
+		input = b.URL.String()
 		forceBlocks = true
 		historyPush = false
 		b.nextScrollSet = false
 	}
-	u, err := ResolveInput(input, b.url, b.searchTemplate())
+	u, err := ResolveInput(input, b.URL, b.searchTemplate())
 	if err != nil {
 		b.status = "Invalid URL: " + err.Error()
 		b.draw()
@@ -701,13 +699,13 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.loopStopped = false
 		b.status = "Error: " + res.err.Error()
 		b.finishProgress()
-		if b.page == nil {
+		if b.Page == nil {
 			doc := engine.LoadErrorPageHTML(res.err.Error())
 			root := ParseHTML(doc)
 			page := &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
 			engine.ApplyPageStyles(root, page)
-			b.page = page
-			b.url = res.u
+			b.Page = page
+			b.URL = res.u
 			b.rebuild()
 		}
 		return
@@ -724,18 +722,18 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.prev = nil
 		return
 	}
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.imagesPaused = false
-	if b.url != nil && res.u != nil && res.u.Fragment != "" && b.url.Fragment == "" {
-		u := *b.url
+	if b.URL != nil && res.u != nil && res.u.Fragment != "" && b.URL.Fragment == "" {
+		u := *b.URL
 		u.Fragment = res.u.Fragment
-		b.url = &u
+		b.URL = &u
 	}
 	b.lastMethod = res.method
 	b.lastBody = res.body
 	b.lastContentType = res.contentType
-	b.layout = nil
+	b.Layout = nil
 	b.bigTextBlocked = false
 	// <noscript> is not active when scripting is enabled. Remove it before
 	// evaluating meta refresh, otherwise no-JS bypass pages redirect us to
@@ -785,7 +783,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.refreshImages()
 	}
 	b.rebuild()
-	b.scroll = 0
+	b.Scroll = 0
 	b.focus = -1
 	b.clearControlFocus()
 	b.status = b.pageLoadStatus(page, readerFailed)
@@ -799,7 +797,7 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.scrollToAnchor(frag)
 	}
 	if res.hasRestoreScroll {
-		b.scroll = res.restoreScroll
+		b.Scroll = res.restoreScroll
 		b.clampScroll()
 	}
 	if !res.historyPush && b.entryID == 0 {
@@ -808,16 +806,16 @@ func (b *Browser) finishLoad(res loadResult) {
 		res.entryID = 0
 	}
 	b.entryID = res.entryID
-	if b.url != nil && res.entryID != 0 {
+	if b.URL != nil && res.entryID != 0 {
 		if !res.historyPush {
-			b.dropCachedEntryUnless(res.entryID, b.url.String())
+			b.dropCachedEntryUnless(res.entryID, b.URL.String())
 		}
 		title := ""
-		if b.page != nil {
-			title = b.page.Title
+		if b.Page != nil {
+			title = b.Page.Title
 		}
 		b.emitHistoryCommit(protocol.HistoryCommit{
-			EntryID: res.entryID, URL: b.url.String(), Title: title, Scroll: b.scroll, Push: res.historyPush,
+			EntryID: res.entryID, URL: b.URL.String(), Title: title, Scroll: b.Scroll, Push: res.historyPush,
 		})
 	}
 	b.autoNavigations = 0
@@ -840,7 +838,7 @@ func (b *Browser) pageLoadStatus(page *Page, readerFailed bool) string {
 		return fmt.Sprintf("HTTP %d %s", page.Status, http.StatusText(page.Status))
 	case b.moduleErr:
 		return moduleFailedStatus
-	case b.layout != nil && b.layout.Truncated:
+	case b.Layout != nil && b.Layout.Truncated:
 		return layoutTruncatedStatus
 	case readerFailed:
 		return "Reader mode unavailable"
@@ -892,13 +890,13 @@ func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bo
 }
 
 func (b *Browser) rebuild() {
-	if b.page == nil {
+	if b.Page == nil {
 		return
 	}
 	// Frameworks inject their component CSS as <style> elements after load;
 	// collect new or changed ones before this layout pass.
 	if b.js != nil && !b.reader {
-		b.page.CollectDynamicStyles()
+		b.Page.CollectDynamicStyles()
 	}
 	// The new layout includes every image decoded so far, so nothing is left
 	// waiting for the viewport.
@@ -920,8 +918,8 @@ func (b *Browser) rebuild() {
 	wasConfirm := b.hintConfirm
 	var confirmNode *Node
 	confirmHref := ""
-	if wasConfirm && b.layout != nil && b.hintConfirmLink >= 0 && b.hintConfirmLink < len(b.layout.Links) {
-		li := b.layout.Links[b.hintConfirmLink]
+	if wasConfirm && b.Layout != nil && b.hintConfirmLink >= 0 && b.hintConfirmLink < len(b.Layout.Links) {
+		li := b.Layout.Links[b.hintConfirmLink]
 		confirmNode = li.Node
 		confirmHref = li.Href
 	}
@@ -929,7 +927,7 @@ func (b *Browser) rebuild() {
 	b.clearHintConfirm()
 	start := time.Now()
 	b.bigText = b.scaledTextWanted()
-	root, author := b.page.Root, b.page.Author
+	root, author := b.Page.Root, b.Page.Author
 	if b.reader && b.readerRoot != nil {
 		root, author = b.readerRoot, readerRules
 	}
@@ -945,10 +943,10 @@ func (b *Browser) rebuild() {
 	}
 	b.bigText = b.scaledTextWanted()
 	imagesOff := b.loader != nil && b.loader.noImages
-	b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
-	b.layout.BackgroundsOff = b.hideBackgrounds
+	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
+	b.Layout.BackgroundsOff = b.hideBackgrounds
 	b.updatePDFPageStarts()
-	if b.bigText && layoutTextOverlaps(b.layout) {
+	if b.bigText && layoutTextOverlaps(b.Layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
 		// multi-column pages that pushes text from one column over another, so
 		// this page falls back to normal-size text for the rest of its session.
@@ -959,19 +957,19 @@ func (b *Browser) rebuild() {
 		if b.layoutBudget.Time > 0 {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
-		b.layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
-		b.layout.BackgroundsOff = b.hideBackgrounds
+		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
+		b.Layout.BackgroundsOff = b.hideBackgrounds
 		b.updatePDFPageStarts()
 	}
 	b.scaledLayout = b.bigText
 	b.pageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
-	if b.layout != nil {
-		b.layout.SetFixedScroll(b.scroll)
+	if b.Layout != nil {
+		b.Layout.SetFixedScroll(b.Scroll)
 	}
 	b.reindexFind()
-	if b.layout.Truncated {
+	if b.Layout.Truncated {
 		if b.status == "" {
 			b.status = layoutTruncatedStatus
 		}
@@ -1013,11 +1011,11 @@ func (b *Browser) scaledTextWanted() bool {
 // toggleReader switches between the page and an extracted article view without
 // touching history or the live page DOM.
 func (b *Browser) toggleReader() {
-	if !b.reader && isAboutConfigURL(b.url) {
+	if !b.reader && isAboutConfigURL(b.URL) {
 		b.status = "Reader mode is unavailable on the config page"
 		return
 	}
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		b.status = "Reader mode unavailable"
 		return
 	}
@@ -1025,25 +1023,25 @@ func (b *Browser) toggleReader() {
 		b.reader = false
 		b.readerRoot = nil
 		b.rebuild()
-		b.scroll = b.readerSavedScroll
+		b.Scroll = b.readerSavedScroll
 		b.readerSavedScroll = 0
 		b.clampScroll()
 		b.status = "Reader mode off"
 		return
 	}
-	if b.page.PDF != nil {
+	if b.Page.PDF != nil {
 		b.status = "Reader mode unavailable"
 		return
 	}
-	root, ok := extractReaderPage(b.page.Root, b.page.Title)
+	root, ok := extractReaderPage(b.Page.Root, b.Page.Title)
 	if !ok {
 		b.status = "Reader mode unavailable"
 		return
 	}
-	b.readerSavedScroll = b.scroll
+	b.readerSavedScroll = b.Scroll
 	b.reader = true
 	b.readerRoot = root
-	b.scroll = 0
+	b.Scroll = 0
 	b.focus = -1
 	b.clearSelection()
 	b.rebuild()
@@ -1101,11 +1099,11 @@ func (b *Browser) applyZoom(z float64) {
 		b.bigTextBlocked = false
 		b.prev = nil
 		b.rebuild()
-		if limit := b.maxScroll(); b.scroll > limit {
-			b.scroll = limit
+		if limit := b.maxScroll(); b.Scroll > limit {
+			b.Scroll = limit
 		}
-		if b.scroll < 0 {
-			b.scroll = 0
+		if b.Scroll < 0 {
+			b.Scroll = 0
 		}
 	}
 	b.status = fmt.Sprintf("Zoom %d%%", int(math.Round(z*100)))
@@ -1124,7 +1122,7 @@ func (b *Browser) toggleJavaScript() {
 	} else {
 		b.pendingStatus = "JavaScript on"
 	}
-	if b.url == nil {
+	if b.URL == nil {
 		b.status = b.pendingStatus
 		b.pendingStatus = ""
 		b.draw()
@@ -1162,10 +1160,10 @@ func (b *Browser) resizeWithContent(w, h, top, contentH int) {
 }
 
 func (b *Browser) maxScroll() int {
-	if b.layout == nil {
+	if b.Layout == nil {
 		return 0
 	}
-	m := b.layout.Height - b.viewportHeight()
+	m := b.Layout.Height - b.viewportHeight()
 	if m < 0 {
 		return 0
 	}
@@ -1174,11 +1172,11 @@ func (b *Browser) maxScroll() int {
 
 func (b *Browser) clampScroll() {
 	max := b.maxScroll()
-	if b.scroll < 0 {
-		b.scroll = 0
+	if b.Scroll < 0 {
+		b.Scroll = 0
 	}
-	if b.scroll > max {
-		b.scroll = max
+	if b.Scroll > max {
+		b.Scroll = max
 	}
 }
 
@@ -1186,7 +1184,7 @@ func (b *Browser) scrollBy(n int) {
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	b.hover = -1
-	b.scroll += n
+	b.Scroll += n
 	b.clampScroll()
 	switch {
 	case b.findText != "":
@@ -1199,17 +1197,17 @@ func (b *Browser) scrollBy(n int) {
 }
 
 func (b *Browser) focusedLink() *LinkInfo {
-	if b.layout == nil || b.focus < 0 || b.focus >= len(b.layout.Links) {
+	if b.Layout == nil || b.focus < 0 || b.focus >= len(b.Layout.Links) {
 		return nil
 	}
-	return b.layout.Links[b.focus]
+	return b.Layout.Links[b.focus]
 }
 
 func (b *Browser) hoveredLink() *LinkInfo {
-	if b.layout == nil || b.hover < 0 || b.hover >= len(b.layout.Links) {
+	if b.Layout == nil || b.hover < 0 || b.hover >= len(b.Layout.Links) {
 		return nil
 	}
-	return b.layout.Links[b.hover]
+	return b.Layout.Links[b.hover]
 }
 
 // setPageHover updates the element chain used for CSS :hover and dispatches
@@ -1278,16 +1276,16 @@ func markHoverChain(n *Node, on bool) {
 func (b *Browser) updateHover(x, y, top, bottom int) {
 	idx := -1
 	if y >= top && y < bottom {
-		idx = b.linkAt(x, b.scroll+(y-top))
+		idx = b.linkAt(x, b.Scroll+(y-top))
 	}
 	b.hover = idx
 }
 
 func (b *Browser) resolveHref(href string) string {
-	if b.page == nil || b.page.Base == nil {
+	if b.Page == nil || b.Page.Base == nil {
 		return href
 	}
-	if u, err := b.page.Base.Parse(href); err == nil {
+	if u, err := b.Page.Base.Parse(href); err == nil {
 		return u.String()
 	}
 	return href
@@ -1352,8 +1350,8 @@ func (b *Browser) followLink(li *LinkInfo) {
 	}
 	if li.Node != nil && li.Node.HasAttr("download") {
 		target := href
-		if b.page != nil && b.page.Base != nil {
-			if u, err := b.page.Base.Parse(href); err == nil {
+		if b.Page != nil && b.Page.Base != nil {
+			if u, err := b.Page.Base.Parse(href); err == nil {
 				target = u.String()
 			}
 		}
@@ -1370,9 +1368,9 @@ func (b *Browser) followLink(li *LinkInfo) {
 		b.showDownload(target, li.Node.Attr("download"))
 		return
 	}
-	if b.page != nil && b.page.Base != nil {
-		if u, err := b.page.Base.Parse(href); err == nil {
-			if b.url != nil && sameDocument(u, b.url) {
+	if b.Page != nil && b.Page.Base != nil {
+		if u, err := b.Page.Base.Parse(href); err == nil {
+			if b.URL != nil && sameDocument(u, b.URL) {
 				if u.Fragment == "" {
 					// A bare "#" link is a page-modal trigger on many sites.
 					// In reader mode it would reload the page and jump to the
@@ -1387,15 +1385,15 @@ func (b *Browser) followLink(li *LinkInfo) {
 						return
 					}
 					b.entryID = b.nextHistoryID()
-					b.url = u
+					b.URL = u
 					b.status = ""
 					b.prev = nil
 					title := ""
-					if b.page != nil {
-						title = b.page.Title
+					if b.Page != nil {
+						title = b.Page.Title
 					}
 					b.emitHistoryCommit(protocol.HistoryCommit{
-						EntryID: b.entryID, URL: u.String(), Title: title, Scroll: b.scroll, Push: true,
+						EntryID: b.entryID, URL: u.String(), Title: title, Scroll: b.Scroll, Push: true,
 					})
 					return
 				}
@@ -1522,15 +1520,15 @@ func shellQuote(s string) string {
 }
 
 func (b *Browser) scrollToAnchor(frag string) bool {
-	if b.layout == nil || frag == "" {
+	if b.Layout == nil || frag == "" {
 		return false
 	}
 	if unescaped, err := url.PathUnescape(frag); err == nil {
 		frag = unescaped
 	}
 	best := -1
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		for p := f.Node; p != nil; p = p.Parent {
 			if p.Type != ElementNode {
 				continue
@@ -1544,7 +1542,7 @@ func (b *Browser) scrollToAnchor(frag string) bool {
 		}
 	}
 	if best >= 0 {
-		b.scroll = best - 1
+		b.Scroll = best - 1
 		b.clampScroll()
 		return true
 	}

@@ -100,7 +100,9 @@ destination; the tracker lists what remains.
 - `internal/browser/` still holds the session shell: the 306-method `Browser`,
   chrome/overlay composition, dialogs, navigation loads, the memory-only page
   cache, Loader image/SVG/about/PDF orchestration, automation, and most
-  integration tests. MCP transport lives in `internal/app`.
+  integration tests. `Browser` embeds `engine.Session`, which now owns the page,
+  layout, URL and scroll fields; the methods and shell fields are still being
+  moved. MCP transport lives in `internal/app`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -212,7 +214,7 @@ destination; the tracker lists what remains.
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
 | `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
-| `browser.go` | Core view state: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. |
+| `browser.go` | Session shell around `engine.Session`: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. Page/layout/URL/scroll live in `engine.Session`. |
 | `browser_chrome.go` | Session-side fallback composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, the fallback scrollbar and memory readout remain here. |
 | `shell.go` | `protocol.State` snapshot and the engine-side view of the front-end content rectangle (`contentRect`, `headerRows`, `viewport`). The front end computes the rectangle; the legacy derivation remains for direct callers and tests. |
 | `browser_forms.go` | Form controls: Tab stepping, control activation, input value editing and caret handling, and GET/POST submission. Focus state, validation, control predicates, Tab-target discovery, radio/select stepping, label lookup, form requests, input-fragment updates, range hit testing and input-line helpers live in `engine` (`form_state.go`, `validate.go`, `form_edit.go`, `tab_order.go`, `form_step.go`). |
@@ -240,6 +242,7 @@ destination; the tracker lists what remains.
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
+| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL` and `Scroll`. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
 | `js_compat.go` | Browser aliases and constructor for the engine runtime. |

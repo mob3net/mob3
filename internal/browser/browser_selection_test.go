@@ -12,14 +12,14 @@ import (
 
 func TestMouseDragSelection(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.layout = BuildLayout(ParseHTML(`<p>hello world</p>`), nil, 40)
-	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<p>hello world</p>`)}
+	b.Layout = BuildLayout(ParseHTML(`<p>hello world</p>`), nil, 40)
+	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<p>hello world</p>`)}
 	top, _ := b.viewport()
 
 	var frag *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -27,7 +27,7 @@ func TestMouseDragSelection(t *testing.T) {
 		t.Fatal("no text fragment")
 	}
 	// Convert the fragment start into 1-based terminal coordinates.
-	row := top + (frag.Y - b.scroll) + 1
+	row := top + (frag.Y - b.Scroll) + 1
 	col := frag.X + 1
 	b.HandleMouse(MouseEvent{Button: 0, X: col, Y: row, Press: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: col + 4, Y: row, Press: true, Motion: true})
@@ -87,12 +87,12 @@ func TestMouseDragSelection(t *testing.T) {
 func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	doc := ParseHTML(`<html><body><p>one</p><p>two</p><p>three</p></body></html>`)
 	b := NewBrowser(40, 16)
-	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: doc}
-	b.layout = BuildLayout(doc, nil, 40)
-	b.scroll = 0
+	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: doc}
+	b.Layout = BuildLayout(doc, nil, 40)
+	b.Scroll = 0
 	var first, middle, last *Frag
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind != fragText {
 			continue
 		}
@@ -114,7 +114,7 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	g := NewGrid(40, 16, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintSelection(g, top, bottom)
 	selBG := RGB(0x2f, 0x6f, 0xbf)
-	y := middle.Y - b.scroll + top
+	y := middle.Y - b.Scroll + top
 	if g.Cells[y*g.W+middle.X].BG != selBG {
 		t.Fatal("selected text was not highlighted")
 	}
@@ -125,7 +125,7 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
+	b.Layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
 	b.selection.Anchor = engine.CellPos{X: 0, Y: 0}
 	b.selection.Cursor = engine.CellPos{X: 4, Y: 0}
 	var buf bytes.Buffer
@@ -150,7 +150,7 @@ func TestCopySelectionUsesOSC52(t *testing.T) {
 
 func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 	b.HandleKey("y")
@@ -171,8 +171,8 @@ func TestYankWholePageAsText(t *testing.T) {
 		`<body><p>First line</p><p>Second line</p></body></html>`)
 	u := mustParse(t, "https://example.com/debug")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.URL = u
 	b.rebuild()
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
@@ -244,10 +244,10 @@ func TestCopyViewportText(t *testing.T) {
 		`<body>` + body.String() + `</body></html>`)
 	u := mustParse(t, "https://example.com/scroll")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: root, Author: fixtureAuthorRules(root)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: root, Author: fixtureAuthorRules(root)}
+	b.URL = u
 	b.rebuild()
-	b.scroll = 20
+	b.Scroll = 20
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 

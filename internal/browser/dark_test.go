@@ -85,17 +85,17 @@ func TestDarkReaderMode(t *testing.T) {
 		`</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.dark = true
 	b.HandleKey("R")
 	if !b.reader {
 		t.Fatal("reader mode did not turn on")
 	}
-	if colorLum(b.layout.PageBG) > 0.2 {
-		t.Fatalf("dark reader background = %+v", b.layout.PageBG)
+	if colorLum(b.Layout.PageBG) > 0.2 {
+		t.Fatalf("dark reader background = %+v", b.Layout.PageBG)
 	}
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind == fragText && f.Style != nil {
 			if colorLum(f.Style.Color) < 0.4 {
 				t.Fatalf("dark reader text = %+v", f.Style.Color)
@@ -111,7 +111,7 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	u, _ := url.Parse("https://example.com/dark")
 	// Wide enough that the right-side dark label has not collapsed.
 	b := NewBrowser(120, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Dark"}
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Dark"}
 	b.rebuild()
 	if b.HandleKey("D") {
 		t.Fatal("D asked to quit")
@@ -122,8 +122,8 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	if b.status != "Dark mode on" {
 		t.Fatalf("status = %q", b.status)
 	}
-	if colorLum(b.layout.PageBG) > 0.2 {
-		t.Fatalf("dark layout background = %+v", b.layout.PageBG)
+	if colorLum(b.Layout.PageBG) > 0.2 {
+		t.Fatalf("dark layout background = %+v", b.Layout.PageBG)
 	}
 	drawQuiet(b)
 	var hit *headerHit

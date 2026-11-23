@@ -431,7 +431,7 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 	if b.status != "Reader mode unavailable" {
 		t.Fatalf("status = %q", b.status)
 	}
-	if text := strings.Join(strings.Fields(layoutText(b.layout)), " "); !strings.Contains(text, "Reader keeps pages") {
+	if text := strings.Join(strings.Fields(layoutText(b.Layout)), " "); !strings.Contains(text, "Reader keeps pages") {
 		t.Fatalf("PDF text missing from layout: %q", text)
 	}
 }
@@ -455,7 +455,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	}
 	root := ParseHTML(`<html><body></body></html>`)
 	b := NewBrowser(100, 20)
-	b.page = &Page{URL: u, Base: u, Root: root, PDF: doc}
+	b.Page = &Page{URL: u, Base: u, Root: root, PDF: doc}
 	b.pdfStarts = []int{0, 40, 80, 120, 160}
 
 	text, hint, cell, ok := b.pdfFooterLine(120)
@@ -474,17 +474,17 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	}
 
 	// Scrolling into the third page moves the counter.
-	b.scroll = 90
+	b.Scroll = 90
 	if got := b.pdfPageNumber(); got != 3 {
 		t.Fatalf("page at scroll 90 = %d, want 3", got)
 	}
-	b.scroll = 1000
+	b.Scroll = 1000
 	if got := b.pdfPageNumber(); got != 5 {
 		t.Fatalf("page at bottom = %d, want 5", got)
 	}
 
 	// Narrow footers shorten the name, then fall back to a compact hint.
-	b.scroll = 0
+	b.Scroll = 0
 	text, _, _, _ = b.pdfFooterLine(45)
 	if text != " Page 1/5 (d -> Download file-example_PDF_5…)" {
 		t.Fatalf("narrow footer = %q", text)
@@ -502,7 +502,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 func TestPDFDownloadKey(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
 	b := NewBrowser(100, 20)
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body></body></html>`), PDF: &PDFDocument{}}
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body></body></html>`), PDF: &PDFDocument{}}
 	b.HandleKey("d")
 	if b.download == nil {
 		t.Fatal("d did not open the download dialog")
@@ -515,7 +515,7 @@ func TestPDFDownloadKey(t *testing.T) {
 
 func TestPDFDownloadKeyOnlyWorksInViewer(t *testing.T) {
 	b := NewBrowser(100, 20)
-	b.page = &Page{URL: mustParse(t, "https://example.com/page"), Root: ParseHTML(`<html><body>text</body></html>`)}
+	b.Page = &Page{URL: mustParse(t, "https://example.com/page"), Root: ParseHTML(`<html><body>text</body></html>`)}
 	b.status = ""
 	b.HandleKey("d")
 	if b.download != nil {
@@ -530,8 +530,8 @@ func TestPDFFooterDownloadHit(t *testing.T) {
 	u, _ := url.Parse("https://example.com/files/report.pdf")
 	root := ParseHTML(`<html><body><div class="pdf-page"><pre>line</pre></div></body></html>`)
 	b := NewBrowser(100, 12)
-	b.page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
-	b.layout = &Layout{Height: 20}
+	b.Page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
+	b.Layout = &Layout{Height: 20}
 	b.pdfStarts = []int{0}
 
 	// Draw into a pipe so both the painted line and its hit region are real.

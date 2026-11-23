@@ -61,13 +61,13 @@ func TestSelectClickOpensAllOptions(t *testing.T) {
 	</form></body></html>`)
 	u, _ := url.Parse("https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.URL = u
 	b.rebuild()
 	sel := doc.FindFirst("select")
 	var rect Rect
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind == fragText && f.Node == sel {
 			rect = Rect{X: f.X, Y: f.Y, W: f.W, H: f.H}
 			break
@@ -78,7 +78,7 @@ func TestSelectClickOpensAllOptions(t *testing.T) {
 	}
 	clickDoc := func(x, docY int) {
 		top, _ := b.viewport()
-		sx, sy := x+1, docY-b.scroll+top+1
+		sx, sy := x+1, docY-b.Scroll+top+1
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy, Press: true})
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy})
 	}
@@ -109,13 +109,13 @@ func TestMultiSelectShowsAndTogglesAllOptions(t *testing.T) {
 	</form></body></html>`)
 	u, _ := url.Parse("https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.URL = u
 	b.rebuild()
 	sel := doc.FindFirst("select")
 	rows := map[*Node]int{}
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind == fragText {
 			for p := f.Node; p != nil; p = p.Parent {
 				if p.Tag == "option" {
@@ -133,11 +133,11 @@ func TestMultiSelectShowsAndTogglesAllOptions(t *testing.T) {
 		t.Fatalf("multi-select options are not on separate rows: %v", rows)
 	}
 	clickOption := func(opt *Node) {
-		for i := range b.layout.Frags {
-			f := &b.layout.Frags[i]
+		for i := range b.Layout.Frags {
+			f := &b.Layout.Frags[i]
 			if f.Kind == fragText && f.Node == opt {
 				top, _ := b.viewport()
-				b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: f.X + 1, Y: f.Y - b.scroll + top + 1, Press: true})
+				b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: f.X + 1, Y: f.Y - b.Scroll + top + 1, Press: true})
 				return
 			}
 		}
@@ -164,7 +164,7 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://www.google.com/")
 	b := NewBrowser(60, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.rebuild()
 
 	q := inputByName(doc, "q")
@@ -172,9 +172,9 @@ func TestInputTypingAndSubmit(t *testing.T) {
 		t.Fatal("input not found")
 	}
 	var field *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Node == q {
-			field = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Node == q {
+			field = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -186,10 +186,10 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{
-		Button: 0, X: field.X + 1, Y: top + field.Y - b.scroll + 1, Press: true,
+		Button: 0, X: field.X + 1, Y: top + field.Y - b.Scroll + 1, Press: true,
 	})
 	b.HandleMouse(MouseEvent{
-		Button: 0, X: field.X + 1, Y: top + field.Y - b.scroll + 1, Press: false,
+		Button: 0, X: field.X + 1, Y: top + field.Y - b.Scroll + 1, Press: false,
 	})
 	if b.forms.InputFocus != q || !q.InputFocused {
 		t.Fatal("clicking the input did not focus it")
@@ -197,7 +197,7 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	if strings.Contains(formLabel(q), "try typing here") {
 		t.Fatalf("focused label still shows the placeholder: %q", formLabel(q))
 	}
-	if b.layout == nil || !b.layout.HasCursor {
+	if b.Layout == nil || !b.Layout.HasCursor {
 		t.Fatal("focused input has no caret")
 	}
 	b.HandleKey("h")
@@ -239,20 +239,20 @@ func TestFixedWidthInputPatchesFragments(t *testing.T) {
 <input name="q" style="width:24em" value=""></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	q := inputByName(doc, "q")
 	b.setInputFocus(q)
-	layout := b.layout
+	layout := b.Layout
 	b.setInputValue(q, "wikipedia search")
-	if b.layout != layout {
+	if b.Layout != layout {
 		t.Fatal("fixed-width input triggered a full rebuild")
 	}
 	var frag *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == q {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && b.Layout.Frags[i].Node == q {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -280,8 +280,8 @@ func TestTabReachesAllFormControls(t *testing.T) {
 </form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	check := doc.FindFirst("input")
 	radios := doc.FindAll(func(n *Node) bool { return n.Tag == "input" && n.Attr("type") == "radio" })
@@ -371,8 +371,8 @@ func TestInputTabMovesFocus(t *testing.T) {
 </form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	a := inputByName(doc, "a")
 	b.setInputFocus(a)
@@ -408,8 +408,8 @@ func TestInputCtrlASelectsAll(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
 	b.color = true
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	q := inputByName(doc, "q")
 	b.setInputFocus(q)
@@ -475,8 +475,8 @@ func TestInputWordEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="https://en.wikipedia.org/wiki/Wyoming"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	q := inputByName(doc, "q")
 	b.setInputFocus(q)
@@ -511,8 +511,8 @@ func TestInputCursorMovementAndEditing(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="q" value="abcd"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	q := inputByName(doc, "q")
 	if q == nil {
@@ -522,17 +522,17 @@ func TestInputCursorMovementAndEditing(t *testing.T) {
 	if q.InputCursor != 4 {
 		t.Fatalf("focus cursor = %d, want 4", q.InputCursor)
 	}
-	if b.layout == nil || !b.layout.HasCursor {
+	if b.Layout == nil || !b.Layout.HasCursor {
 		t.Fatal("focused input has no caret")
 	}
-	endX := b.layout.Cursor.X
+	endX := b.Layout.Cursor.X
 	b.HandleKey("left")
 	b.HandleKey("left")
 	if q.InputCursor != 2 {
 		t.Fatalf("cursor after two lefts = %d, want 2", q.InputCursor)
 	}
-	if b.layout.Cursor.X != endX-2 {
-		t.Fatalf("caret did not move: x = %d, want %d", b.layout.Cursor.X, endX-2)
+	if b.Layout.Cursor.X != endX-2 {
+		t.Fatalf("caret did not move: x = %d, want %d", b.Layout.Cursor.X, endX-2)
 	}
 	b.HandleKey("X")
 	if got := inputValue(q); got != "abXcd" {
@@ -560,8 +560,8 @@ func TestTextareaCursorMovesBetweenRows(t *testing.T) {
 cd</textarea></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	area := doc.FindFirst("textarea")
 	if area == nil {
@@ -571,12 +571,12 @@ cd</textarea></form></body></html>`)
 	if area.InputCursor != len(inputValue(area)) {
 		t.Fatalf("focus cursor = %d", area.InputCursor)
 	}
-	row2 := b.layout.Cursor.Y
+	row2 := b.Layout.Cursor.Y
 	b.HandleKey("up")
 	if area.InputCursor != 2 {
 		t.Fatalf("cursor after up = %d, want 2", area.InputCursor)
 	}
-	if b.layout.Cursor.Y == row2 {
+	if b.Layout.Cursor.Y == row2 {
 		t.Fatal("textarea caret did not move to the previous row")
 	}
 	b.HandleKey("left")
@@ -591,7 +591,7 @@ cd</textarea></form></body></html>`)
 
 func TestPaintInputCursor(t *testing.T) {
 	b := NewBrowser(20, 5)
-	b.layout = &Layout{HasCursor: true, Cursor: Rect{X: 2, Y: 1, W: 1, H: 1}}
+	b.Layout = &Layout{HasCursor: true, Cursor: Rect{X: 2, Y: 1, W: 1, H: 1}}
 	g := NewGrid(20, 5, RGB(0, 0, 0), RGB(0x11, 0x22, 0x33))
 	b.paintInputCursor(g, 2, 5)
 	cell := g.Cells[3*20+2]
@@ -612,7 +612,7 @@ func TestFormValidationConstraints(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
 	form := doc.FindFirst("form")
 
 	field, msg := b.validateForm(form)
@@ -656,8 +656,8 @@ func TestMaxlengthReadonlyDisabled(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	short := inputByName(doc, "short")
 	b.setInputFocus(short)
@@ -685,8 +685,8 @@ func TestRangeKeyboardControl(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go"><input name="r" type="range" min="0" max="10" step="2" value="4"></form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	r := inputByName(doc, "r")
 	b.setInputFocus(r)
@@ -709,9 +709,9 @@ func TestRangeKeyboardControl(t *testing.T) {
 		t.Fatalf("range label = %q", label)
 	}
 	var frag *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == r {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && b.Layout.Frags[i].Node == r {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -720,7 +720,7 @@ func TestRangeKeyboardControl(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	clickAt := func(rel int) {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: frag.X + rel + 1, Y: frag.Y - b.scroll + top + 1, Press: true})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: frag.X + rel + 1, Y: frag.Y - b.Scroll + top + 1, Press: true})
 	}
 	minus := strings.Index(frag.Text, "-")
 	clickAt(stringWidth(frag.Text[:minus]))
@@ -728,9 +728,9 @@ func TestRangeKeyboardControl(t *testing.T) {
 		t.Fatalf("range after minus click = %q", got)
 	}
 	b.rebuild()
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && b.layout.Frags[i].Node == r {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && b.Layout.Frags[i].Node == r {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -751,17 +751,17 @@ func TestLabelAssociations(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(70, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	clickText := func(text string) {
-		for i := range b.layout.Frags {
-			f := &b.layout.Frags[i]
+		for i := range b.Layout.Frags {
+			f := &b.Layout.Frags[i]
 			if f.Kind != fragText || !strings.Contains(f.Text, text) {
 				continue
 			}
 			top, _ := b.viewport()
-			x, y := f.X+1, f.Y-b.scroll+top+1
+			x, y := f.X+1, f.Y-b.Scroll+top+1
 			b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 			b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y})
 			return
@@ -791,7 +791,7 @@ func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 			document.getElementById("out").textContent = "hidden";
 		});`)
 	b := NewBrowser(60, 10)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 
@@ -800,9 +800,9 @@ func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 		t.Fatal("button not found")
 	}
 	var field *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Node == btn {
-			field = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Node == btn {
+			field = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -811,7 +811,7 @@ func TestNonSubmitButtonClickRunsHandler(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	x := field.X + 1
-	y := top + field.Y - b.scroll + 1
+	y := top + field.Y - b.Scroll + 1
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
@@ -831,16 +831,16 @@ func TestMouseClickSubmitButton(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.rebuild()
 	btn := doc.FindFirst("button")
 	if btn == nil {
 		t.Fatal("button not found")
 	}
 	var field *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Node == btn {
-			field = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Node == btn {
+			field = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -857,7 +857,7 @@ func TestMouseClickSubmitButton(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	x := field.X + 1
-	y := top + field.Y - b.scroll + 1
+	y := top + field.Y - b.Scroll + 1
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
@@ -877,8 +877,8 @@ func TestHomeSearchFormUsesURLResolution(t *testing.T) {
 		u := mustParse(t, "about:home")
 		page := &Page{URL: u, Base: u, Root: ParseHTML(startPageHTML), Title: "MOB³"}
 		b := NewBrowser(80, 20)
-		b.page = page
-		b.url = u
+		b.Page = page
+		b.URL = u
 		b.loader.setSearchURL("https://search.example/?q=%s")
 		input := page.Root.FindFirst("input")
 		if input == nil || input.Attr("name") != "q" {
@@ -938,7 +938,7 @@ func TestFormPOSTSubmission(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/form")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.rebuild()
 
 	type req struct {
@@ -973,17 +973,17 @@ func TestFileInputClickShowsUnsupportedNotice(t *testing.T) {
 	u := mustParse(t, "https://example.com/form")
 	doc := ParseHTML(`<form action="/upload" method="post"><input type="file" name="f"><button>Send</button></form>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	file := inputByName(doc, "f")
 	if file == nil {
 		t.Fatal("file input not found")
 	}
 	var field *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Node == file {
-			field = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Node == file {
+			field = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -992,7 +992,7 @@ func TestFileInputClickShowsUnsupportedNotice(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	x := field.X + 1
-	y := top + field.Y - b.scroll + 1
+	y := top + field.Y - b.Scroll + 1
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
@@ -1018,8 +1018,8 @@ func TestTextareaEnterInsertsNewlineAndEscExits(t *testing.T) {
 	u := mustParse(t, "https://example.com/form")
 	doc := ParseHTML(`<form action="/submit" method="post"><textarea name="t"></textarea></form>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	area := doc.FindFirst("textarea")
 	if area == nil {
@@ -1035,8 +1035,8 @@ func TestTextareaEnterInsertsNewlineAndEscExits(t *testing.T) {
 	if b.forms.InputFocus != area {
 		t.Fatal("Enter left the textarea")
 	}
-	if b.url.String() != "https://example.com/form" {
-		t.Fatalf("Enter navigated to %s", b.url)
+	if b.URL.String() != "https://example.com/form" {
+		t.Fatalf("Enter navigated to %s", b.URL)
 	}
 	b.HandleKey("esc")
 	if b.forms.InputFocus != nil || area.InputFocused {
@@ -1048,18 +1048,18 @@ func TestTextareaTypingPatchesLayout(t *testing.T) {
 	u := mustParse(t, "https://example.com/form")
 	doc := ParseHTML(`<form action="/submit"><textarea name="t">` + strings.Repeat("a", 50) + `</textarea></form>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	area := doc.FindFirst("textarea")
 	b.setInputFocus(area)
-	before := b.layout
+	before := b.Layout
 	b.HandleKey("x")
-	if b.layout != before {
+	if b.Layout != before {
 		t.Fatal("typing triggered a full relayout")
 	}
 	found := false
-	for _, f := range b.layout.Frags {
+	for _, f := range b.Layout.Frags {
 		if f.Kind == fragText && f.Node == area && strings.Contains(f.Text, "x") {
 			found = true
 		}
@@ -1080,8 +1080,8 @@ func TestLongSelectMenuScrolls(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/submit"><select name="n">` + opts.String() + `</select></form></body></html>`)
 	u, _ := url.Parse("https://example.com/")
 	b := NewBrowser(60, 12)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.URL = u
 	b.rebuild()
 	sel := doc.FindFirst("select")
 	b.openSelectMenu(sel)

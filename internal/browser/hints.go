@@ -29,19 +29,19 @@ type hintTarget = engine.HintTarget
 // target-heavy pages. With ask set (the F key), choosing a link shows its
 // destination and waits for confirmation; fields are focused directly.
 func (b *Browser) openLinkHints(ask bool) {
-	if b.layout == nil {
+	if b.Layout == nil {
 		b.status = "No links or fields on this page"
 		return
 	}
 	// Fixed bars keep viewport coordinates in FixedY; re-anchor them for the
 	// current scroll so their controls pass the visibility test.
-	b.layout.SetFixedScroll(b.scroll)
+	b.Layout.SetFixedScroll(b.Scroll)
 	top, bottom := b.viewport()
 	var root *Node
-	if b.page != nil {
-		root = b.page.Root
+	if b.Page != nil {
+		root = b.Page.Root
 	}
-	targets := engine.BuildHintTargets(b.layout, root, b.scroll, top, bottom)
+	targets := engine.BuildHintTargets(b.Layout, root, b.Scroll, top, bottom)
 	if len(targets) == 0 {
 		b.status = "No links or controls in view"
 		return
@@ -52,7 +52,7 @@ func (b *Browser) openLinkHints(ask bool) {
 	}
 	b.hintTargets = targets
 	b.hintItems = b.hintItems[:0]
-	b.hintItems = append(b.hintItems, buildLinkHints(ids, engine.CollectHintGlyphs(b.layout, targets, b.scroll, top, bottom))...)
+	b.hintItems = append(b.hintItems, buildLinkHints(ids, engine.CollectHintGlyphs(b.Layout, targets, b.Scroll, top, bottom))...)
 	b.linkHints = true
 	b.hintPrefix = ""
 	b.hintAsk = ask
@@ -74,17 +74,17 @@ func (b *Browser) sendHints(ask bool, top, bottom int) error {
 	for _, h := range b.hintItems {
 		item := protocol.HintItem{Target: h.Target, Label: h.Label}
 		if r, ok := b.hintTargetRect(h.Target, top, bottom); ok {
-			item.X, item.Y = r.X, r.Y-b.scroll
+			item.X, item.Y = r.X, r.Y-b.Scroll
 			item.W, item.H = r.W, r.H
 		}
 		item.Chars = make([]protocol.HintChar, len(h.Chars))
 		for i, c := range h.Chars {
-			item.Chars[i] = protocol.HintChar{R: c.R, X: c.X, Y: c.Y - b.scroll}
+			item.Chars[i] = protocol.HintChar{R: c.R, X: c.X, Y: c.Y - b.Scroll}
 		}
 		t := b.hintTargetAt(h.Target)
-		if t.Node == nil && t.Link >= 0 && b.layout != nil && t.Link < len(b.layout.Links) {
+		if t.Node == nil && t.Link >= 0 && b.Layout != nil && t.Link < len(b.Layout.Links) {
 			item.Link = true
-			item.Href = b.resolveHref(b.layout.Links[t.Link].Href)
+			item.Href = b.resolveHref(b.Layout.Links[t.Link].Href)
 		}
 		items = append(items, item)
 	}
@@ -116,7 +116,7 @@ func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 
 // hintTargetRect returns the visible box of a hint target.
 func (b *Browser) hintTargetRect(target int, top, bottom int) (Rect, bool) {
-	return engine.HintTargetRect(b.layout, b.hintTargets, target, b.scroll, top, bottom)
+	return engine.HintTargetRect(b.Layout, b.hintTargets, target, b.Scroll, top, bottom)
 }
 
 // clearLinkHints leaves hint mode without navigating. It is safe to call when
@@ -278,7 +278,7 @@ func (b *Browser) hintTargetAt(i int) hintTarget {
 	if i >= 0 && i < len(b.hintTargets) {
 		return b.hintTargets[i]
 	}
-	if b.layout != nil && i >= 0 && i < len(b.layout.Links) {
+	if b.Layout != nil && i >= 0 && i < len(b.Layout.Links) {
 		return hintTarget{Link: i}
 	}
 	return hintTarget{Link: -1}
@@ -289,8 +289,8 @@ func (b *Browser) beginHintConfirm(link int) {
 	b.hintConfirm = true
 	b.hintConfirmLink = link
 	target := ""
-	if b.layout != nil && link >= 0 && link < len(b.layout.Links) {
-		target = b.resolveHref(b.layout.Links[link].Href)
+	if b.Layout != nil && link >= 0 && link < len(b.Layout.Links) {
+		target = b.resolveHref(b.Layout.Links[link].Href)
 	}
 	b.status = target + "  (Enter/y follows · Esc cancels)"
 }
@@ -298,17 +298,17 @@ func (b *Browser) beginHintConfirm(link int) {
 // findHintLink locates an equivalent link after a layout rebuild, preferring
 // the same DOM node and falling back to the same href.
 func (b *Browser) findHintLink(node *Node, href string) int {
-	if b.layout == nil {
+	if b.Layout == nil {
 		return -1
 	}
 	if node != nil {
-		for i, li := range b.layout.Links {
+		for i, li := range b.Layout.Links {
 			if li.Node == node {
 				return i
 			}
 		}
 	}
-	for i, li := range b.layout.Links {
+	for i, li := range b.Layout.Links {
 		if li.Href == href {
 			return i
 		}
@@ -367,5 +367,5 @@ func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
 	if !b.linkHints || b.hintsFrontend {
 		return
 	}
-	engine.PaintHintLabels(g, b.layout, b.hintTargets, b.hintItems, b.hintPrefix, b.scroll, top, bottom, b.color)
+	engine.PaintHintLabels(g, b.Layout, b.hintTargets, b.hintItems, b.hintPrefix, b.Scroll, top, bottom, b.color)
 }

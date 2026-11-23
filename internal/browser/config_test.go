@@ -126,26 +126,26 @@ func TestConfigNavigation(t *testing.T) {
 	oldHome, oldMem := b.home, b.jsMemLimit
 	// A typed query without the form token applies nothing.
 	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome", true)
-	if b.page == nil || b.page.Title != "Config — MOB³" {
-		t.Fatalf("config page = %+v", b.page)
+	if b.Page == nil || b.Page.Title != "Config — MOB³" {
+		t.Fatalf("config page = %+v", b.Page)
 	}
 	if b.home != oldHome || b.jsMemLimit != oldMem {
 		t.Fatal("typed about:config query changed settings without a token")
 	}
-	if !strings.Contains(b.page.Root.TextContent(), "Settings not changed") {
+	if !strings.Contains(b.Page.Root.TextContent(), "Settings not changed") {
 		t.Fatal("missing notice for a token-less config query")
 	}
 
 	// The rendered form carries a token and posts its values.
-	form := b.page.Root.FindFirst("form")
+	form := b.Page.Root.FindFirst("form")
 	if form == nil || strings.ToLower(form.Attr("method")) != "post" {
 		t.Fatalf("config form = %v, want method post", form)
 	}
-	token := configInputValue(b.page, configTokenParam)
+	token := configInputValue(b.Page, configTokenParam)
 	if token == "" || token != b.configToken.Current() {
 		t.Fatalf("form token = %q, browser token = %q", token, b.configToken.Current())
 	}
-	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+	for _, n := range b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		if n.Attr("name") == "home" {
 			n.Value, n.ValueSet = "https://example.com/home", true
 		}
@@ -157,7 +157,7 @@ func TestConfigNavigation(t *testing.T) {
 		t.Fatalf("home = %q", b.home)
 	}
 	values := map[string]string{}
-	for _, n := range b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
+	for _, n := range b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
 		values[n.Attr("name")] = inputValue(n)
 	}
 	if values["home"] != "https://example.com/home" {
@@ -192,12 +192,12 @@ func configInputValue(page *Page, name string) string {
 func TestConfigBlockedInReaderMode(t *testing.T) {
 	b := NewBrowser(80, 10)
 	u := mustParse(t, "https://example.com/article")
-	b.page = &Page{URL: u, Base: u, Title: "Article"}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Title: "Article"}
+	b.URL = u
 	b.reader = true
-	oldPage := b.page
+	oldPage := b.Page
 	withQuietStdout(t, func() { b.Navigate("about:config", true) })
-	if b.page != oldPage {
+	if b.Page != oldPage {
 		t.Fatal("config navigation replaced the page in reader mode")
 	}
 	want := "Config is not available in reader mode — press R to turn it off"
@@ -210,8 +210,8 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 
 	cfg := NewBrowser(80, 10)
 	cfgURL := mustParse(t, "about:config")
-	cfg.page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
-	cfg.url = cfgURL
+	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
+	cfg.URL = cfgURL
 	cfg.HandleKey("R")
 	if cfg.reader {
 		t.Fatal("reader mode was enabled on the config page")

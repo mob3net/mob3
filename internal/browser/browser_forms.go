@@ -15,7 +15,7 @@ type tabTarget = engine.TabTarget
 // tabTargets returns links and form controls in document order. Radio groups
 // take one stop at their first button; arrows move within the group.
 func (b *Browser) tabTargets() []tabTarget {
-	return engine.BuildTabTargets(b.page, b.layout)
+	return engine.BuildTabTargets(b.Page, b.Layout)
 }
 
 func (b *Browser) currentTabNode() *Node {
@@ -25,8 +25,8 @@ func (b *Browser) currentTabNode() *Node {
 	if b.forms.ControlFocus != nil {
 		return b.forms.ControlFocus
 	}
-	if b.layout != nil && b.focus >= 0 && b.focus < len(b.layout.Links) {
-		return b.layout.Links[b.focus].Node
+	if b.Layout != nil && b.focus >= 0 && b.focus < len(b.Layout.Links) {
+		return b.Layout.Links[b.focus].Node
 	}
 	return nil
 }
@@ -63,7 +63,7 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 	if t.Link >= 0 {
 		b.focus = t.Link
 		b.ensureFocusVisible()
-		li := b.layout.Links[t.Link]
+		li := b.Layout.Links[t.Link]
 		b.status = fmt.Sprintf("%d/%d  %s", index, total, b.resolveHref(li.Href))
 		return
 	}
@@ -88,7 +88,7 @@ func (b *Browser) clearControlFocus() {
 // paintControlFocus highlights the focused non-text control, or the active
 // option inside a multi-select list box.
 func (b *Browser) paintControlFocus(g *Grid, top, bottom int) {
-	if b.layout == nil || b.forms.ControlFocus == nil {
+	if b.Layout == nil || b.forms.ControlFocus == nil {
 		return
 	}
 	target := b.forms.ControlFocus
@@ -97,12 +97,12 @@ func (b *Browser) paintControlFocus(g *Grid, top, bottom int) {
 	}
 	bg := RGB(0xff, 0xd7, 0x00)
 	fg := RGB(0x1f, 0x23, 0x28)
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Node != target || f.Kind != fragText && f.Kind != fragImage {
 			continue
 		}
-		y := f.Y - b.scroll + top
+		y := f.Y - b.Scroll + top
 		if y < top || y >= bottom {
 			continue
 		}
@@ -166,7 +166,7 @@ func (b *Browser) activateControlFocus() {
 		return
 	}
 	top, bottom := b.viewport()
-	r, _ := engine.VisibleInputRect(b.layout, n, b.scroll, top, bottom)
+	r, _ := engine.VisibleInputRect(b.Layout, n, b.Scroll, top, bottom)
 	if n.Tag == "select" && n.HasAttr("multiple") && b.forms.ControlOption != nil {
 		b.toggleControl(b.forms.ControlOption)
 		return
@@ -274,10 +274,10 @@ func (b *Browser) ensureFocusVisible() {
 		vh = 1
 	}
 	r := li.Rects[0]
-	if r.Y < b.scroll {
-		b.scroll = r.Y - 1
-	} else if r.Y+r.H >= b.scroll+vh {
-		b.scroll = r.Y + r.H - vh + 1
+	if r.Y < b.Scroll {
+		b.Scroll = r.Y - 1
+	} else if r.Y+r.H >= b.Scroll+vh {
+		b.Scroll = r.Y + r.H - vh + 1
 	}
 	b.clampScroll()
 }
@@ -341,7 +341,7 @@ func (b *Browser) setInputFocus(n *Node) {
 
 // ensureInputVisible scrolls a focused control into the viewport.
 func (b *Browser) ensureInputVisible(n *Node) {
-	if b.layout == nil || n == nil {
+	if b.Layout == nil || n == nil {
 		return
 	}
 	top, bottom := b.viewport()
@@ -349,15 +349,15 @@ func (b *Browser) ensureInputVisible(n *Node) {
 	if vh < 1 {
 		vh = 1
 	}
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Node != n || f.Fixed {
 			continue
 		}
-		if f.Y < b.scroll {
-			b.scroll = f.Y - 1
-		} else if f.Y+f.H >= b.scroll+vh {
-			b.scroll = f.Y + f.H - vh + 1
+		if f.Y < b.Scroll {
+			b.Scroll = f.Y - 1
+		} else if f.Y+f.H >= b.Scroll+vh {
+			b.Scroll = f.Y + f.H - vh + 1
 		}
 		b.clampScroll()
 		return
@@ -474,7 +474,7 @@ func (b *Browser) queueFormSubmit(form *Node) {
 // resolveLabelTarget maps a click on label text to its control. Clicks on the
 // control itself return nil so normal control handling is not duplicated.
 func (b *Browser) resolveLabelTarget(n *Node) *Node {
-	if n == nil || b.page == nil || b.page.Root == nil {
+	if n == nil || b.Page == nil || b.Page.Root == nil {
 		return nil
 	}
 	for p := n; p != nil; p = p.Parent {
@@ -489,7 +489,7 @@ func (b *Browser) resolveLabelTarget(n *Node) *Node {
 	if label == nil {
 		return nil
 	}
-	target := labelControl(b.page.Root, label)
+	target := labelControl(b.Page.Root, label)
 	if target == nil {
 		return nil
 	}
@@ -672,17 +672,17 @@ func (b *Browser) refreshInputCursor(n *Node) {
 
 // Form helpers live in the engine; these wrappers keep the session call sites
 func (b *Browser) updateInputFragments(n *Node) bool {
-	return engine.UpdateInputFragments(b.layout, n)
+	return engine.UpdateInputFragments(b.Layout, n)
 }
 
 func (b *Browser) rangeSideAt(n *Node, x, y int) int {
-	return engine.RangeSideAt(b.layout, n, x, y)
+	return engine.RangeSideAt(b.Layout, n, x, y)
 }
 
 func (b *Browser) formRequest(form *Node) (method, target string, body []byte, contentType string, ok bool) {
-	base := b.url
-	if b.page != nil && b.page.Base != nil {
-		base = b.page.Base
+	base := b.URL
+	if b.Page != nil && b.Page.Base != nil {
+		base = b.Page.Base
 	}
 	method, target, body, contentType, ok = engine.FormRequest(form, base)
 	if !ok {

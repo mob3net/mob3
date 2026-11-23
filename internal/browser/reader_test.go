@@ -13,11 +13,11 @@ func TestReaderToggle(t *testing.T) {
 	</article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Long article"}
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Long article"}
 	b.rebuild()
-	b.scroll = 5
+	b.Scroll = 5
 	b.clampScroll()
-	originalScroll := b.scroll
+	originalScroll := b.Scroll
 	if b.HandleKey("R") {
 		t.Fatal("R asked to quit")
 	}
@@ -27,23 +27,23 @@ func TestReaderToggle(t *testing.T) {
 	if b.status != "Reader mode — R to exit" {
 		t.Fatalf("status = %q", b.status)
 	}
-	if b.layout == nil || b.layout.Height == 0 {
+	if b.Layout == nil || b.Layout.Height == 0 {
 		t.Fatal("reader layout is empty")
 	}
-	readerText := strings.Join(strings.Fields(layoutText(b.layout)), " ")
+	readerText := strings.Join(strings.Fields(layoutText(b.Layout)), " ")
 	if strings.Contains(readerText, "Navigation") {
 		t.Fatal("reader layout still contains navigation")
 	}
 	if !strings.Contains(readerText, "Reader paragraph text") {
 		t.Fatal("reader layout is missing article text")
 	}
-	b.scroll = 4
+	b.Scroll = 4
 	b.HandleKey("R")
 	if b.reader {
 		t.Fatal("reader mode did not turn off")
 	}
-	if b.scroll != originalScroll {
-		t.Fatalf("restored scroll = %d, want %d", b.scroll, originalScroll)
+	if b.Scroll != originalScroll {
+		t.Fatalf("restored scroll = %d, want %d", b.Scroll, originalScroll)
 	}
 	if b.status != "Reader mode off" {
 		t.Fatalf("status = %q", b.status)
@@ -55,7 +55,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 		strings.Repeat("Old article text. ", 20) + `</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/old")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Old"}
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Old"}
 	b.rebuild()
 	b.HandleKey("R")
 	if !b.reader {
@@ -72,7 +72,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	if !b.reader || b.readerRoot == nil {
 		t.Fatal("reader mode did not survive navigation")
 	}
-	if text := strings.Join(strings.Fields(layoutText(b.layout)), " "); !strings.Contains(text, "New article text") {
+	if text := strings.Join(strings.Fields(layoutText(b.Layout)), " "); !strings.Contains(text, "New article text") {
 		t.Fatalf("new reader layout = %q", text)
 	}
 
@@ -117,8 +117,8 @@ func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 		});
 	`)
 	b := NewBrowser(60, 20)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.startJS(page)
 	b.rebuild()
 	b.HandleKey("R")
@@ -126,20 +126,20 @@ func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 		t.Fatal("reader mode did not turn on")
 	}
 	var link *LinkInfo
-	for _, li := range b.layout.Links {
+	for _, li := range b.Layout.Links {
 		if li.Href == "#target" {
 			link = li
 			break
 		}
 	}
 	if link == nil || len(link.Rects) == 0 {
-		t.Fatalf("reader link is missing: %+v", b.layout.Links)
+		t.Fatalf("reader link is missing: %+v", b.Layout.Links)
 	}
-	if b.scroll != 0 {
-		t.Fatalf("initial reader scroll = %d", b.scroll)
+	if b.Scroll != 0 {
+		t.Fatalf("initial reader scroll = %d", b.Scroll)
 	}
 	b.clickContent(link.Rects[0].X, link.Rects[0].Y)
-	if b.scroll == 0 {
+	if b.Scroll == 0 {
 		t.Fatal("page JavaScript cancelled the reader link click")
 	}
 }
@@ -149,7 +149,7 @@ func TestReaderFooterLabel(t *testing.T) {
 		strings.Repeat("Reader icon article text. ", 20) + `</p></article></body></html>`)
 	u, _ := url.Parse("https://example.com/article")
 	b := NewBrowser(80, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
 	b.rebuild()
 	drawQuiet(b)
 

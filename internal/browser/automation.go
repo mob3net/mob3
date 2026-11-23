@@ -84,7 +84,7 @@ func (a *Automation) Navigate(ctx context.Context, target string) error {
 	if err := a.waitLoad(ctx); err != nil {
 		return err
 	}
-	if a.b.page == nil {
+	if a.b.Page == nil {
 		return fmt.Errorf("navigation failed: %s", nonEmptyStatus(a.b.status))
 	}
 	if a.b.loadSeq == before {
@@ -128,12 +128,12 @@ func (a *Automation) Snapshot() string {
 	b := a.b
 	var sb strings.Builder
 	u := ""
-	if b.url != nil {
-		u = b.url.String()
+	if b.URL != nil {
+		u = b.URL.String()
 	}
 	title := ""
-	if b.page != nil {
-		title = b.page.Title
+	if b.Page != nil {
+		title = b.Page.Title
 	}
 	sb.WriteString("URL: " + u + "\n")
 	if title != "" {
@@ -165,12 +165,12 @@ func (a *Automation) Snapshot() string {
 // viewportGrid renders the current page viewport without browser chrome.
 func (a *Automation) viewportGridLocked(vh int) *Grid {
 	b := a.b
-	if b.layout == nil || b.page == nil {
+	if b.Layout == nil || b.Page == nil {
 		return nil
 	}
-	b.layout.SetFixedScroll(b.scroll)
+	b.Layout.SetFixedScroll(b.Scroll)
 	g := NewGrid(b.width, vh, b.pageFG(), b.pageBG())
-	PaintLayout(g, b.layout, b.scroll, 0, vh, nil, b.pageFG())
+	PaintLayout(g, b.Layout, b.Scroll, 0, vh, nil, b.pageFG())
 	return g
 }
 
@@ -209,13 +209,13 @@ func (a *Automation) Screenshot(scale int) ([]byte, error) {
 
 func (a *Automation) linkLinesLocked(vh int) []string {
 	b := a.b
-	if b.layout == nil {
+	if b.Layout == nil {
 		return nil
 	}
 	var out []string
-	for i := range b.layout.Links {
-		li := b.layout.Links[i]
-		if !rectVisible(li.Rects, b.scroll, vh) {
+	for i := range b.Layout.Links {
+		li := b.Layout.Links[i]
+		if !rectVisible(li.Rects, b.Scroll, vh) {
 			continue
 		}
 		text := ""
@@ -238,11 +238,11 @@ func (a *Automation) linkLinesLocked(vh int) []string {
 
 func (a *Automation) inputLinesLocked(vh int) []string {
 	b := a.b
-	if b.page == nil || b.page.Root == nil || b.layout == nil {
+	if b.Page == nil || b.Page.Root == nil || b.Layout == nil {
 		return nil
 	}
 	var out []string
-	for _, n := range b.page.Root.FindAll(func(n *Node) bool {
+	for _, n := range b.Page.Root.FindAll(func(n *Node) bool {
 		if n.Type != ElementNode {
 			return false
 		}
@@ -256,7 +256,7 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 		if typ == "hidden" || isDisabledControl(n) {
 			continue
 		}
-		f := firstVisibleFrag(b, n, b.scroll, vh)
+		f := firstVisibleFrag(b, n, b.Scroll, vh)
 		if f == nil {
 			continue
 		}
@@ -275,7 +275,7 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 		}
 		line := fmt.Sprintf("- %s name=%q type=%q value=%q at (%d,%d)",
 			n.Tag, name, typ, clipText(collapseWhitespace(value), 40),
-			f.X, f.Y-b.scroll)
+			f.X, f.Y-b.Scroll)
 		out = append(out, line)
 		if len(out) >= 40 {
 			break
@@ -285,8 +285,8 @@ func (a *Automation) inputLinesLocked(vh int) []string {
 }
 
 func firstVisibleFrag(b *Browser, n *Node, scroll, vh int) *Frag {
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind != fragText || f.Node == nil {
 			continue
 		}
@@ -346,13 +346,13 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.layout == nil {
+	if b.Page == nil || b.Layout == nil {
 		return errors.New("no page loaded")
 	}
 	switch {
 	case target.Link > 0:
-		if target.Link > len(b.layout.Links) {
-			return fmt.Errorf("link %d out of range (%d links)", target.Link, len(b.layout.Links))
+		if target.Link > len(b.Layout.Links) {
+			return fmt.Errorf("link %d out of range (%d links)", target.Link, len(b.Layout.Links))
 		}
 		b.focus = target.Link - 1
 		b.followFocused()
@@ -367,7 +367,7 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 		}
 		return a.waitLoad(ctx)
 	case target.Selector != "":
-		n, err := findSelectorNode(b.page.Root, target.Selector)
+		n, err := findSelectorNode(b.Page.Root, target.Selector)
 		if err != nil {
 			return err
 		}
@@ -396,25 +396,25 @@ func (a *Automation) clickNodeLocked(n *Node) error {
 	for anchor != nil && anchor.Tag != "a" {
 		anchor = anchor.Parent
 	}
-	for i := range b.layout.Links {
-		li := b.layout.Links[i]
+	for i := range b.Layout.Links {
+		li := b.Layout.Links[i]
 		if li.Node == anchor {
 			b.focus = i
 			b.followFocused()
 			return nil
 		}
 	}
-	f := firstVisibleFrag(b, n, b.scroll, b.viewportHeight())
+	f := firstVisibleFrag(b, n, b.Scroll, b.viewportHeight())
 	if f == nil {
 		// Selector clicks scroll the element into view, like a browser.
 		revealNode(b, n)
-		f = firstVisibleFrag(b, n, b.scroll, b.viewportHeight())
+		f = firstVisibleFrag(b, n, b.Scroll, b.viewportHeight())
 	}
 	if f == nil {
 		return fmt.Errorf("element %s is not visible", describeNode(n))
 	}
 	top, _ := b.viewport()
-	x, y := f.X+1, top+f.Y-b.scroll+1
+	x, y := f.X+1, top+f.Y-b.Scroll+1
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: true})
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: x, Y: y, Press: false})
 	return nil
@@ -427,13 +427,13 @@ func findNodeByText(b *Browser, query string) (*Node, error) {
 	if needle == "" {
 		return nil, errors.New("click text is empty")
 	}
-	if b.page == nil || b.page.Root == nil || b.layout == nil {
+	if b.Page == nil || b.Page.Root == nil || b.Layout == nil {
 		return nil, errors.New("no page loaded")
 	}
 	var best *Node
 	bestExact := false
 	bestPrio, bestLen := 0, 0
-	b.page.Root.FindAll(func(n *Node) bool {
+	b.Page.Root.FindAll(func(n *Node) bool {
 		if n.Type != ElementNode {
 			return false
 		}
@@ -479,8 +479,8 @@ func findNodeByText(b *Browser, query string) (*Node, error) {
 // hasAnyFrag reports whether layout produced a fragment for n or its subtree,
 // including content outside the current viewport.
 func hasAnyFrag(b *Browser, n *Node) bool {
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Node == n || (f.Node != nil && isDescendant(f.Node, n)) {
 			return true
 		}
@@ -676,10 +676,10 @@ func (a *Automation) Scroll(lines, pages int, top, bottom bool) {
 	defer a.mu.Unlock()
 	switch {
 	case top:
-		a.b.scroll = 0
+		a.b.Scroll = 0
 		a.b.clampScroll()
 	case bottom:
-		a.b.scroll = a.b.maxScroll()
+		a.b.Scroll = a.b.maxScroll()
 	case pages != 0:
 		a.b.scrollBy(pages * a.b.viewportHeight())
 	default:
@@ -723,7 +723,7 @@ func (a *Automation) recordHistoryScrollLocked() {
 	if a.historyIndex < 0 || a.historyIndex >= len(a.history) {
 		return
 	}
-	a.history[a.historyIndex].scroll = a.b.scroll
+	a.history[a.historyIndex].scroll = a.b.Scroll
 }
 
 // applyHistoryCommit updates the headless history list from the engine.
@@ -807,10 +807,10 @@ func (a *Automation) FormFields(selector string) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return "No page loaded", nil
 	}
-	root := b.page.Root
+	root := b.Page.Root
 	var forms []*Node
 	if selector != "" {
 		n, err := findSelectorNode(root, selector)
@@ -994,7 +994,7 @@ func (a *Automation) Fill(fields map[string]string) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return 0, errors.New("no page loaded")
 	}
 	if len(fields) == 0 {
@@ -1007,7 +1007,7 @@ func (a *Automation) Fill(fields map[string]string) (int, error) {
 	sort.Strings(keys)
 	filled := 0
 	for _, sel := range keys {
-		n, err := findSelectorNode(b.page.Root, sel)
+		n, err := findSelectorNode(b.Page.Root, sel)
 		if err != nil {
 			return filled, err
 		}
@@ -1098,10 +1098,10 @@ func (a *Automation) Select(selector string, value *string, values []string, lab
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return "", errors.New("no page loaded")
 	}
-	n, err := findSelectorNode(b.page.Root, selector)
+	n, err := findSelectorNode(b.Page.Root, selector)
 	if err != nil {
 		return "", err
 	}
@@ -1223,10 +1223,10 @@ func (a *Automation) Toggle(selector string, checked *bool) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return "", errors.New("no page loaded")
 	}
-	n, err := findSelectorNode(b.page.Root, selector)
+	n, err := findSelectorNode(b.Page.Root, selector)
 	if err != nil {
 		return "", err
 	}
@@ -1296,7 +1296,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return errors.New("no page loaded")
 	}
 	var form *Node
@@ -1305,7 +1305,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 			form = nearestForm(b.forms.InputFocus)
 		}
 		if form == nil {
-			forms := b.page.Root.FindAll(func(n *Node) bool { return n.Tag == "form" })
+			forms := b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "form" })
 			switch len(forms) {
 			case 0:
 				return errors.New("no form on the page")
@@ -1316,7 +1316,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 			}
 		}
 	} else {
-		n, err := findSelectorNode(b.page.Root, selector)
+		n, err := findSelectorNode(b.Page.Root, selector)
 		if err != nil {
 			return err
 		}
@@ -1350,13 +1350,13 @@ func (a *Automation) waitPendingLocked(ctx context.Context) error {
 
 // revealNode scrolls the page until one of n's text fragments is in view.
 func revealNode(b *Browser, n *Node) {
-	if b.layout == nil {
+	if b.Layout == nil {
 		return
 	}
 	vh := b.viewportHeight()
 	var first *Frag
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind != fragText || f.Node == nil {
 			continue
 		}
@@ -1366,17 +1366,17 @@ func revealNode(b *Browser, n *Node) {
 		if first == nil {
 			first = f
 		}
-		if f.Y >= b.scroll && f.Y < b.scroll+vh {
+		if f.Y >= b.Scroll && f.Y < b.Scroll+vh {
 			return
 		}
 	}
 	if first == nil {
 		return
 	}
-	if first.Y < b.scroll {
-		b.scroll = first.Y
+	if first.Y < b.Scroll {
+		b.Scroll = first.Y
 	} else {
-		b.scroll = first.Y - vh + 1
+		b.Scroll = first.Y - vh + 1
 	}
 	b.clampScroll()
 }
@@ -1573,12 +1573,12 @@ func waitTarget(selector, text string) string {
 
 func (a *Automation) conditionLocked(sel *Selector, needle string) bool {
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return false
 	}
 	if sel != nil {
 		found := false
-		b.page.Root.FindAll(func(n *Node) bool {
+		b.Page.Root.FindAll(func(n *Node) bool {
 			if !found && n.Type == ElementNode && sel.Match(n) {
 				found = true
 			}
@@ -1599,17 +1599,17 @@ func (a *Automation) conditionLocked(sel *Selector, needle string) bool {
 func (a *Automation) renderedTextLocked() string {
 	b := a.b
 	var sb strings.Builder
-	if b.layout != nil {
-		for i := range b.layout.Frags {
-			f := &b.layout.Frags[i]
+	if b.Layout != nil {
+		for i := range b.Layout.Frags {
+			f := &b.Layout.Frags[i]
 			if f.Kind == fragText && f.Text != "" {
 				sb.WriteString(f.Text)
 				sb.WriteByte(' ')
 			}
 		}
 	}
-	if sb.Len() == 0 && b.page != nil && b.page.Root != nil {
-		writeDOMText(&sb, b.page.Root)
+	if sb.Len() == 0 && b.Page != nil && b.Page.Root != nil {
+		writeDOMText(&sb, b.Page.Root)
 	}
 	return collapseWhitespace(sb.String())
 }
@@ -1685,7 +1685,7 @@ func (a *Automation) Links(selector string) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil || b.layout == nil {
+	if b.Page == nil || b.Page.Root == nil || b.Layout == nil {
 		return "No page loaded", nil
 	}
 	var filter *Selector
@@ -1699,8 +1699,8 @@ func (a *Automation) Links(selector string) (string, error) {
 	var lines []string
 	total := 0
 	truncated := false
-	for i := range b.layout.Links {
-		li := b.layout.Links[i]
+	for i := range b.Layout.Links {
+		li := b.Layout.Links[i]
 		if li.Node == nil || filter != nil && !filter.Match(li.Node) {
 			continue
 		}
@@ -1720,7 +1720,7 @@ func (a *Automation) Links(selector string) (string, error) {
 			text = "(no text)"
 		}
 		lines = append(lines, fmt.Sprintf("[%d] %s -> %s selector=%s",
-			i+1, clipText(text, 100), b.resolveHref(li.Href), strconv.Quote(selectorForNode(b.page.Root, li.Node))))
+			i+1, clipText(text, 100), b.resolveHref(li.Href), strconv.Quote(selectorForNode(b.Page.Root, li.Node))))
 	}
 	if total == 0 {
 		if selector != "" {
@@ -1818,12 +1818,12 @@ func (a *Automation) Source(selector string) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.page == nil || b.page.Root == nil {
+	if b.Page == nil || b.Page.Root == nil {
 		return "No page loaded", nil
 	}
-	src := b.page.RawHTML
+	src := b.Page.RawHTML
 	if selector != "" {
-		n, err := findSelectorNode(b.page.Root, selector)
+		n, err := findSelectorNode(b.Page.Root, selector)
 		if err != nil {
 			return "", err
 		}

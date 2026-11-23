@@ -12,8 +12,8 @@ func hintTestBrowser(t *testing.T, html string, width, height int) *Browser {
 	root := ParseHTML(html)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(width, height)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, width)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, width)
 	return b
 }
 
@@ -147,8 +147,8 @@ func TestLinkHintsClearOnEscapeAndScroll(t *testing.T) {
 	if b.linkHints {
 		t.Fatal("mouse wheel scrolling did not clear link hints")
 	}
-	if b.scroll != 3 {
-		t.Fatalf("scroll = %d, want the wheel scroll to still happen", b.scroll)
+	if b.Scroll != 3 {
+		t.Fatalf("scroll = %d, want the wheel scroll to still happen", b.Scroll)
 	}
 }
 
@@ -160,8 +160,8 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 	}
 	doc.WriteString(`<p><a href="#bottom">bottom</a></p></body></html>`)
 	b := hintTestBrowser(t, doc.String(), 40, 8)
-	if len(b.layout.Links) != 2 {
-		t.Fatalf("page links = %d, want 2", len(b.layout.Links))
+	if len(b.Layout.Links) != 2 {
+		t.Fatalf("page links = %d, want 2", len(b.Layout.Links))
 	}
 	b.HandleKey("f")
 	if len(b.hintItems) != 1 || b.hintItems[0].Target != 0 {
@@ -218,7 +218,7 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 <select name="one"><option>Gamma</option><option>Delta</option></select>
 <button type="button">Press</button>
 </form></body></html>`, 60, 30)
-	doc := b.page.Root
+	doc := b.Page.Root
 	check := doc.FindFirst("input")
 	radios := doc.FindAll(func(n *Node) bool { return n.Tag == "input" && n.Attr("type") == "radio" })
 	multi := doc.FindFirst("select")
@@ -317,7 +317,7 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 
 func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.layout = &Layout{Links: make([]*LinkInfo, 3)}
+	b.Layout = &Layout{Links: make([]*LinkInfo, 3)}
 	b.linkHints = true
 	b.hintPrefix = "g"
 	b.hintItems = []linkHint{
@@ -342,7 +342,7 @@ func TestPaintLinkHintsHidesTypedPrefix(t *testing.T) {
 
 func TestPaintLinkHintFallbackInsideBox(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.layout = &Layout{Links: []*LinkInfo{{Rects: []Rect{{X: 3, Y: 0, W: 10, H: 1}}}}}
+	b.Layout = &Layout{Links: []*LinkInfo{{Rects: []Rect{{X: 3, Y: 0, W: 10, H: 1}}}}}
 	b.linkHints = true
 	b.hintItems = []linkHint{{Target: 0, Label: "bx"}}
 	g := NewGrid(40, 10, RGB(0, 0, 0), RGB(255, 255, 255))
@@ -371,10 +371,10 @@ func TestPaintLinkHintsHighlightsText(t *testing.T) {
 	b.HandleKey("f")
 	top, bottom := b.viewport()
 	g := NewGrid(b.width, b.height, RGB(0, 0, 0), RGB(255, 255, 255))
-	PaintLayoutBig(g, b.layout, b.scroll, top, bottom, nil, RGB(0, 0, 0), nil, false)
+	PaintLayoutBig(g, b.Layout, b.Scroll, top, bottom, nil, RGB(0, 0, 0), nil, false)
 	b.paintLinkHints(g, top, bottom)
-	r := b.layout.Links[0].Rects[0]
-	y := r.Y - b.scroll + top
+	r := b.Layout.Links[0].Rects[0]
+	y := r.Y - b.Scroll + top
 
 	var row strings.Builder
 	for x := r.X; x < r.X+r.W; x++ {
@@ -492,8 +492,8 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 		<a href="/docs">Docs</a></div>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.layout = BuildLayoutViewportDeadline(doc, nil, 60, 12, false, time.Time{})
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.Layout = BuildLayoutViewportDeadline(doc, nil, 60, 12, false, time.Time{})
 
 	find := func() (button, link bool) {
 		b.openLinkHints(false)
@@ -511,7 +511,7 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 		t.Fatalf("fixed bar hints: button=%v link=%v", button, link)
 	}
 	// The same must hold once the page is scrolled.
-	b.scroll = 40
+	b.Scroll = 40
 	if button, link := find(); !button || !link {
 		t.Fatalf("scrolled fixed bar hints: button=%v link=%v", button, link)
 	}
@@ -531,8 +531,8 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 	<button id="ok" type="button">Got it</button></div>
 	</body></html>`)
 	b := NewBrowser(60, 24)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.URL = u
 	b.rebuild()
 
 	var btn *Node
@@ -544,7 +544,7 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 		t.Fatal("button not found")
 	}
 	top, bottom := b.viewport()
-	if _, ok := engine.VisibleInputRect(b.layout, btn, b.scroll, top, bottom); !ok {
+	if _, ok := engine.VisibleInputRect(b.Layout, btn, b.Scroll, top, bottom); !ok {
 		t.Fatal("fixed column-flex button has no widget fragment")
 	}
 	b.openLinkHints(false)

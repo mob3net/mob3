@@ -746,7 +746,7 @@ func TestJSXHRCrossOriginRedirectBlocked(t *testing.T) {
 func TestRuntimeWithoutScripts(t *testing.T) {
 	page := &Page{URL: mustParse(t, "https://example.com/"), Root: ParseHTML(`<html><body><a href="#" onclick="alert('x'); return false;">x</a></body></html>`)}
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if b.js == nil {
 		t.Fatal("runtime was not created for a page with only inline handlers")
@@ -767,7 +767,7 @@ func TestJSNavigator(t *testing.T) {
 func TestJSLocationRedirect(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `location.href = "/next";`)
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if b.js == nil || b.js.PendingNav() != "https://example.com/next" {
 		t.Fatalf("pending navigation = %q", func() string {
@@ -807,7 +807,7 @@ func TestJSFormSubmitQueuesPost(t *testing.T) {
 		<input name="try_url" value="https://example.com">
 	</form></body></html>`, `document.getElementById("f").submit();`)
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if b.js == nil || b.js.PendingForm() == nil {
 		t.Fatal("form.submit() did not queue a submission")
@@ -875,7 +875,7 @@ func TestStorageNamedProperties(t *testing.T) {
 func TestJSConsoleLogAndView(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `console.error("navigator is not defined");`)
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if len(b.jsLog) != 1 || !strings.Contains(b.jsLog[0], "navigator is not defined") {
 		t.Fatalf("log = %v", b.jsLog)
@@ -976,8 +976,8 @@ func TestSelectChangeFiresJavaScript(t *testing.T) {
 		});
 	`)
 	b := NewBrowser(40, 10)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.startJS(page)
 	b.rebuild()
 	sel := page.Root.FindFirst("select")
@@ -998,15 +998,15 @@ func TestClickContentRunsLivePageJavaScript(t *testing.T) {
 		});
 	`)
 	b := NewBrowser(40, 10)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.startJS(page)
 	b.rebuild()
 	link := page.Root.FindFirst("a")
-	if len(b.layout.Links) == 0 || len(b.layout.Links[0].Rects) == 0 {
+	if len(b.Layout.Links) == 0 || len(b.Layout.Links[0].Rects) == 0 {
 		t.Fatal("link has no click rectangle")
 	}
-	r := b.layout.Links[0].Rects[0]
+	r := b.Layout.Links[0].Rects[0]
 	b.clickContent(r.X, r.Y)
 	if got := link.TextContent(); got != "clicked" {
 		t.Fatalf("live page click handler did not run, text = %q", got)
@@ -1672,12 +1672,12 @@ func TestWindowScrollAliases(t *testing.T) {
 	page := newJSPage(`<html><body><p>x</p></body></html>`, ``)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	if _, err := b.js.RunCode("scroll", `window.scrollTo(0, 32); window.scrollBy(0, 16);`); err != nil {
 		t.Fatal(err)
 	}
-	if b.scroll != 3 {
-		t.Fatalf("scroll row = %d, want 3", b.scroll)
+	if b.Scroll != 3 {
+		t.Fatalf("scroll row = %d, want 3", b.Scroll)
 	}
 	v, err := b.js.RunCode("scrollY", `String(window.scrollY) + ":" + String(window.pageYOffset)`)
 	if err != nil {
@@ -1691,8 +1691,8 @@ func TestWindowScrollAliases(t *testing.T) {
 func TestElementMetricsReadInlineStyle(t *testing.T) {
 	page := newJSPage(`<html><body><div id="d" style="width:320px;height:100px"></div></body></html>`, ``)
 	b := NewBrowser(80, 24)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.startJS(page)
 	if b.js == nil {
 		t.Fatal("no JS runtime")
@@ -1710,7 +1710,7 @@ func TestJSConsoleKeepsErrorStack(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`try { console.error("i18n init failed", new Error("boom")); } catch (e) {}`)
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if len(b.jsLog) != 1 {
 		t.Fatalf("log = %v", b.jsLog)
@@ -1735,7 +1735,7 @@ func TestDocumentBaseURIUsesBaseElement(t *testing.T) {
 			document.title = document.baseURI + "|" + new URL("api/i18n", document.baseURI).href;
 		`, Src: "inline script"}}}
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	want := "https://example.com/|https://example.com/api/i18n"
 	if page.Title != want {
@@ -1752,7 +1752,7 @@ func TestGetBoundingClientRectUsesLayoutFragments(t *testing.T) {
 			document.title = [r.width > 0, r.height > 0, r.left >= 0, r.top >= 0].join(",");
 		`, Src: "inline script"}}}
 	b := NewBrowser(60, 20)
-	b.page = page
+	b.Page = page
 	b.rebuild()
 	b.startJS(page)
 	if page.Title != "true,true,true,true" {
@@ -1773,7 +1773,7 @@ func TestScriptCreatedElementGetsStyleAndMinWidth(t *testing.T) {
 			document.title = getComputedStyle(d).position + "|" + d.offsetWidth;
 		`, Src: "inline script"}}}
 	b := NewBrowser(60, 20)
-	b.page = page
+	b.Page = page
 	b.rebuild()
 	b.startJS(page)
 	// 11rem at 16px is 176px; a fixed box must not be guessed as a full-width
@@ -1787,7 +1787,7 @@ func TestProgrammaticFileInputClickShowsUploadNotice(t *testing.T) {
 	page := newJSPage(`<html><body><input id="pick" type="file"></body></html>`,
 		`document.getElementById("pick").click();`)
 	b := NewBrowser(40, 10)
-	b.page = page
+	b.Page = page
 	b.startJS(page)
 	if b.notice == nil || !strings.Contains(b.notice.title, "Upload") {
 		t.Fatalf("file input click left no upload notice: %+v", b.notice)
@@ -1859,12 +1859,12 @@ func TestScriptInjectedStyleApplies(t *testing.T) {
 			document.head.appendChild(s);`}},
 	}
 	b := NewBrowser(40, 10)
-	b.page = page
-	b.url = u
+	b.Page = page
+	b.URL = u
 	b.startJS(page)
 	b.rebuild()
-	for i := range b.layout.Frags {
-		if f := &b.layout.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
+	for i := range b.Layout.Frags {
+		if f := &b.Layout.Frags[i]; f.Kind == fragText && f.Text == "BOX" {
 			if f.X != 5 {
 				t.Fatalf("BOX at X=%d, want 5 after the script-injected rule", f.X)
 			}

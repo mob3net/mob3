@@ -42,7 +42,7 @@ func TestQuitConfirmation(t *testing.T) {
 
 func TestURLPromptPrefillsAndSelects(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	b.HandleKey("o")
 	if b.promptText != "https://example.com/page" || !b.promptSelectAll {
 		t.Fatalf("prompt = %q selectAll=%v", b.promptText, b.promptSelectAll)
@@ -63,7 +63,7 @@ func TestURLPromptPrefillsAndSelects(t *testing.T) {
 
 func TestURLPromptCursorEditing(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/abc")
+	b.URL = mustParse(t, "https://example.com/abc")
 	b.HandleKey("o")
 	b.HandleKey("right") // collapse selection to end
 	b.HandleKey("left")
@@ -97,7 +97,7 @@ func TestURLPromptWordEditing(t *testing.T) {
 	open := func(text string) {
 		b.prompt = false
 		b.promptText = ""
-		b.url = mustParse(t, text)
+		b.URL = mustParse(t, text)
 		b.HandleKey("o")
 		b.HandleKey("right") // collapse the initial select-all to the end
 	}
@@ -172,7 +172,7 @@ func TestVimURLKey(t *testing.T) {
 
 func TestCtrlLOpensURLPrompt(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	b.HandleKey("ctrl-l")
 	if !b.prompt {
 		t.Fatal("ctrl-l did not open the URL prompt")
@@ -188,7 +188,7 @@ func TestCtrlLOpensURLPrompt(t *testing.T) {
 	doc := ParseHTML(`<html><body><input name="q"></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	f := NewBrowser(80, 10)
-	f.page = &Page{URL: u, Base: u, Root: doc}
+	f.Page = &Page{URL: u, Base: u, Root: doc}
 	f.rebuild()
 	q := inputByName(doc, "q")
 	if q == nil {
@@ -203,7 +203,7 @@ func TestCtrlLOpensURLPrompt(t *testing.T) {
 
 func TestEscapeShowsExitHint(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.layout = &Layout{Height: 10}
+	b.Layout = &Layout{Height: 10}
 	b.HandleKey("esc")
 	if b.status != exitHint {
 		t.Fatalf("status = %q, want %q", b.status, exitHint)
@@ -233,7 +233,7 @@ func TestEscapeFromInputShowsExitHint(t *testing.T) {
 	doc := ParseHTML(`<html><body><input name="q"></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(80, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.rebuild()
 	q := inputByName(doc, "q")
 	if q == nil {
@@ -258,8 +258,8 @@ func TestHistoryShortcutKey(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("H did not load about:history")
 	}
-	if b.url == nil || b.url.String() != "about:history" {
-		t.Fatalf("url after H = %v", b.url)
+	if b.URL == nil || b.URL.String() != "about:history" {
+		t.Fatalf("url after H = %v", b.URL)
 	}
 }
 
@@ -346,7 +346,7 @@ func TestMouseTokenRoundTrip(t *testing.T) {
 
 func TestClickOutsideURLPromptClosesIt(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.layout = &Layout{Height: 10}
+	b.Layout = &Layout{Height: 10}
 	b.openURLPrompt()
 	drawQuiet(b)
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: 5, Y: 5, Press: true})
@@ -360,7 +360,7 @@ func TestClickOutsideURLPromptClosesIt(t *testing.T) {
 
 func TestClickInURLPromptKeepsItOpen(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.layout = &Layout{Height: 10}
+	b.Layout = &Layout{Height: 10}
 	b.openURLPrompt()
 	drawQuiet(b)
 	// Row 2 (1-based) is the URL field on a normal header.
@@ -372,8 +372,8 @@ func TestClickInURLPromptKeepsItOpen(t *testing.T) {
 
 func TestShiftMouseDragLeavesURLPromptAlone(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.url = mustParse(t, "https://example.com/page")
-	b.layout = &Layout{Height: 10}
+	b.URL = mustParse(t, "https://example.com/page")
+	b.Layout = &Layout{Height: 10}
 	b.openURLPrompt()
 	drawQuiet(b)
 	before := b.promptText
@@ -401,8 +401,8 @@ func TestShiftMouseDragLeavesURLPromptAlone(t *testing.T) {
 
 func TestURLPromptMouseClickPlacesCursor(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.url = mustParse(t, "https://example.com/page")
-	b.layout = &Layout{Height: 10}
+	b.URL = mustParse(t, "https://example.com/page")
+	b.Layout = &Layout{Height: 10}
 	b.openURLPrompt()
 	drawQuiet(b)
 
@@ -430,8 +430,8 @@ func TestNoColorPromptClearsOldURL(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 12)
 	b.color = false
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 
 	r, w, err := os.Pipe()
@@ -460,7 +460,7 @@ func TestNoColorPromptClearsOldURL(t *testing.T) {
 
 func TestColonPromptQuitsLikeQ(t *testing.T) {
 	b := NewBrowser(60, 12)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	b.HandleKey(":")
 	if !b.prompt || !b.promptVim {
 		t.Fatalf(": did not open a command prompt: prompt=%v vim=%v", b.prompt, b.promptVim)
@@ -478,9 +478,9 @@ func TestColonPromptQuitsLikeQ(t *testing.T) {
 
 	// The :o-style prompt keeps q as ordinary input.
 	b = NewBrowser(60, 12)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
-		return &Page{URL: b.url, Base: b.url, Root: ParseHTML("<html><body>ok</body></html>")}, nil
+		return &Page{URL: b.URL, Base: b.URL, Root: ParseHTML("<html><body>ok</body></html>")}, nil
 	}
 	b.HandleKey("o")
 	b.HandleKey("q")
@@ -496,7 +496,7 @@ func TestColonPromptQuitsLikeQ(t *testing.T) {
 
 func TestURLPromptHistoryKeys(t *testing.T) {
 	b := NewBrowser(60, 12)
-	b.url = mustParse(t, "https://example.com/page")
+	b.URL = mustParse(t, "https://example.com/page")
 	b.promptHist.entries = []string{"first query", "second query"}
 	b.promptHist.reset()
 	b.HandleKey("o")
@@ -521,7 +521,7 @@ func TestURLPromptHistoryKeys(t *testing.T) {
 
 func TestQuitConfirmationBeatsHoveredLink(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.layout = &Layout{Links: []*LinkInfo{{Href: "/target"}}}
+	b.Layout = &Layout{Links: []*LinkInfo{{Href: "/target"}}}
 	b.hover = 0
 	b.HandleKey("q")
 	if !b.quitPending || b.status != quitConfirmText {

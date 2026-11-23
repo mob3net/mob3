@@ -94,8 +94,8 @@ func TestAutomationClickLinkAndBack(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Link: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/next" {
-		t.Fatalf("link click landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/next" {
+		t.Fatalf("link click landed on %v", a.b.URL)
 	}
 	if !strings.Contains(a.Snapshot(), "Second page") {
 		t.Fatal("snapshot does not show the second page")
@@ -103,8 +103,8 @@ func TestAutomationClickLinkAndBack(t *testing.T) {
 	if err := a.Back(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/" {
-		t.Fatalf("back landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/" {
+		t.Fatalf("back landed on %v", a.b.URL)
 	}
 }
 
@@ -162,8 +162,8 @@ func TestAutomationScrollAndHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.Scroll(0, 0, false, true)
-	if a.b.scroll != a.b.maxScroll() || a.b.scroll == 0 {
-		t.Fatalf("bottom scroll = %d, max %d", a.b.scroll, a.b.maxScroll())
+	if a.b.Scroll != a.b.maxScroll() || a.b.Scroll == 0 {
+		t.Fatalf("bottom scroll = %d, max %d", a.b.Scroll, a.b.maxScroll())
 	}
 	if h := a.History(); !strings.Contains(h, "* https://example.com/") {
 		t.Fatalf("history = %q", h)
@@ -326,7 +326,7 @@ func TestAutomationFillAndSubmit(t *testing.T) {
 		`input[name="empty"]`:    "",
 		`textarea[name="notes"]`: "fresh notes",
 	} {
-		node, err := findSelectorNode(a.b.page.Root, sel)
+		node, err := findSelectorNode(a.b.Page.Root, sel)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,10 +341,10 @@ func TestAutomationFillAndSubmit(t *testing.T) {
 	if err := a.Submit(ctx, ""); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/find" {
-		t.Fatalf("submitted to %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/find" {
+		t.Fatalf("submitted to %v", a.b.URL)
 	}
-	q := a.b.url.Query()
+	q := a.b.URL.Query()
 	if got := q.Get("q"); got != "new value" {
 		t.Errorf("q = %q", got)
 	}
@@ -408,7 +408,7 @@ func TestAutomationSelectAndToggle(t *testing.T) {
 	}
 	selectNode := func(sel string) *Node {
 		t.Helper()
-		n, err := findSelectorNode(a.b.page.Root, sel)
+		n, err := findSelectorNode(a.b.Page.Root, sel)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -506,8 +506,8 @@ func TestAutomationSubmitValidationAndPrevented(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "required") {
 		t.Fatalf("submit error = %v, want a required-field error", err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/" {
-		t.Fatalf("invalid form navigated to %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/" {
+		t.Fatalf("invalid form navigated to %v", a.b.URL)
 	}
 
 	prevented := newTestAutomation(t, map[string]string{
@@ -524,8 +524,8 @@ func TestAutomationSubmitValidationAndPrevented(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "prevented") {
 		t.Fatalf("prevented submit error = %v", err)
 	}
-	if prevented.b.url == nil || prevented.b.url.Path != "/" {
-		t.Fatalf("prevented form navigated to %v", prevented.b.url)
+	if prevented.b.URL == nil || prevented.b.URL.Path != "/" {
+		t.Fatalf("prevented form navigated to %v", prevented.b.URL)
 	}
 }
 
@@ -596,7 +596,7 @@ func TestAutomationFormCommands(t *testing.T) {
 	if got, err := a.RunCommand(ctx, "submit", json.RawMessage(`{"selector":"#f"}`)); err != nil || !strings.Contains(got, "Found") {
 		t.Fatalf("submit = %q, %v", got, err)
 	}
-	q := a.b.url.Query()
+	q := a.b.URL.Query()
 	if q.Get("q") != "new" || q.Get("safe") != "on" || q.Get("lang") != "fr" {
 		t.Fatalf("submitted query = %v", q)
 	}
@@ -613,7 +613,7 @@ func TestAutomationClickSelectorScrollsIntoView(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Selector: `input[name="q"]`}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.scroll == 0 {
+	if a.b.Scroll == 0 {
 		t.Fatal("selector click did not scroll the field into view")
 	}
 	if a.b.forms.InputFocus == nil {
@@ -667,8 +667,8 @@ func TestAutomationWaitAppliesTimerNavigation(t *testing.T) {
 	if _, err := a.Wait(ctx, 100); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/next" {
-		t.Fatalf("timer navigation landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/next" {
+		t.Fatalf("timer navigation landed on %v", a.b.URL)
 	}
 }
 
@@ -765,8 +765,8 @@ func TestAutomationLinksListsOffscreen(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Link: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/next" {
-		t.Fatalf("off-screen link click landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/next" {
+		t.Fatalf("off-screen link click landed on %v", a.b.URL)
 	}
 }
 
@@ -782,8 +782,8 @@ func TestAutomationClickByText(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Text: "next page"}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/next" {
-		t.Fatalf("text click landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/next" {
+		t.Fatalf("text click landed on %v", a.b.URL)
 	}
 	if err := a.Click(ctx, ClickTarget{Text: "missing text"}); err == nil {
 		t.Fatal("text click without a match was accepted")
@@ -802,10 +802,10 @@ func TestAutomationClickTextSubmitButton(t *testing.T) {
 	if err := a.Click(ctx, ClickTarget{Text: "Send"}); err != nil {
 		t.Fatal(err)
 	}
-	if a.b.url == nil || a.b.url.Path != "/find" {
-		t.Fatalf("submit button click landed on %v", a.b.url)
+	if a.b.URL == nil || a.b.URL.Path != "/find" {
+		t.Fatalf("submit button click landed on %v", a.b.URL)
 	}
-	if got := a.b.url.Query().Get("q"); got != "hi" {
+	if got := a.b.URL.Query().Get("q"); got != "hi" {
 		t.Fatalf("submitted q = %q", got)
 	}
 }

@@ -82,8 +82,8 @@ func TestSessionInitResizeAndScroll(t *testing.T) {
 	root := ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 200) + `</body></html>`)
 	b := NewBrowser(60, 10)
 	b.noJS = true
-	b.page = &Page{Root: root, Title: "t"}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{Root: root, Title: "t"}
+	b.Layout = BuildLayout(root, nil, 60)
 	restore := quietStdout(t)
 	defer restore()
 
@@ -96,9 +96,9 @@ func TestSessionInitResizeAndScroll(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Height 10 reserves two header rows and one footer row: viewport 7.
-	maxBefore := b.layout.Height - 7
+	maxBefore := b.Layout.Height - 7
 	if maxBefore < 1 {
-		t.Fatalf("test layout is too short: %d rows", b.layout.Height)
+		t.Fatalf("test layout is too short: %d rows", b.Layout.Height)
 	}
 	if err := s.Send(protocol.Command{Body: protocol.Key{Token: "G"}}); err != nil {
 		t.Fatal(err)
@@ -270,8 +270,8 @@ func TestSessionFrameCarriesNativePlacements(t *testing.T) {
 	b := NewBrowser(40, 12)
 	b.noJS = true
 	b.color = true
-	b.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
-	b.layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: 1, Y: 0, W: 4, H: 4, Img: img}}}
+	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
+	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: 1, Y: 0, W: 4, H: 4, Img: img}}}
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.emitFrames = true
 	capture := &frameCapture{}
@@ -301,8 +301,8 @@ func TestSessionClipsOutOfBoundsPlacements(t *testing.T) {
 	b := NewBrowser(10, 8)
 	b.noJS = true
 	b.noDraw = false
-	b.page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "clip"}
-	b.layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: -5, Y: 1, W: 20, H: 3, Img: img}}}
+	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "clip"}
+	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: fragImage, X: -5, Y: 1, W: 20, H: 3, Img: img}}}
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.emitFrames = true
 	capture := &frameCapture{}
@@ -547,7 +547,7 @@ func TestConsoleHTMLFindCommand(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
 	b.consolePane = consoleHTML
-	b.page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
+	b.Page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
 	sink := &consoleSink{}
 	b.sessionOut = sink
 	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Query: "needle"})

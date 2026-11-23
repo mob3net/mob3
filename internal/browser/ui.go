@@ -267,8 +267,8 @@ func (b *Browser) consoleCopyText() string {
 	case consoleStorage:
 		return strings.Join(b.storageLines(), "\n")
 	case consoleHTML:
-		if b.page != nil {
-			return b.page.RawHTML
+		if b.Page != nil {
+			return b.Page.RawHTML
 		}
 	case consoleTools:
 		return strings.Join(b.toolLog, "\n")
@@ -830,10 +830,10 @@ func (b *Browser) storageLines() []string {
 
 func (b *Browser) storageLinesWidth(width int) []string {
 	out := []string{"Cookies"}
-	if b.url == nil || b.loader == nil || (b.url.Scheme != "http" && b.url.Scheme != "https") {
+	if b.URL == nil || b.loader == nil || (b.URL.Scheme != "http" && b.URL.Scheme != "https") {
 		out = append(out, "  (not available for this page)")
 	} else {
-		cookies := b.loader.cookies.cookiesForDisplay(b.url)
+		cookies := b.loader.cookies.cookiesForDisplay(b.URL)
 		sort.Slice(cookies, func(i, j int) bool {
 			if cookies[i].Name != cookies[j].Name {
 				return cookies[i].Name < cookies[j].Name
@@ -906,10 +906,10 @@ func (b *Browser) htmlLines(width int) []string {
 		width = 1
 	}
 	src := ""
-	if b.page != nil {
-		src = b.page.RawHTML
+	if b.Page != nil {
+		src = b.Page.RawHTML
 	}
-	if b.htmlPage == b.page && b.htmlWidth == width && b.htmlCache != nil {
+	if b.htmlPage == b.Page && b.htmlWidth == width && b.htmlCache != nil {
 		return b.htmlCache
 	}
 	var out []string
@@ -924,7 +924,7 @@ func (b *Browser) htmlLines(width int) []string {
 	if len(out) == 0 {
 		out = append(out, "(no HTML source)")
 	}
-	b.htmlPage = b.page
+	b.htmlPage = b.Page
 	b.htmlWidth = width
 	b.htmlCache = out
 	return out

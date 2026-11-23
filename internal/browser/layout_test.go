@@ -616,8 +616,8 @@ func TestNestedZIndexHitTesting(t *testing.T) {
 		t.Fatalf("button layer %d, under layer %d", overlayLayer(btn), overlayLayer(under))
 	}
 	b := NewBrowser(40, 12)
-	b.page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
-	b.layout = ly
+	b.Page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
+	b.Layout = ly
 	hit := false
 	for i := range ly.Frags {
 		f := &ly.Frags[i]
@@ -659,8 +659,8 @@ func TestZIndexPaintOrder(t *testing.T) {
 	}
 
 	b := NewBrowser(20, 3)
-	b.page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
-	b.layout = ly
+	b.Page = &Page{URL: mustParse(t, "https://example.com/"), Root: root}
+	b.Layout = ly
 	n := b.nodeAt(0, 0)
 	if n == nil || !strings.Contains(n.Attr("class"), "high") {
 		t.Fatalf("hit testing picked %+v, want the higher z-index box", n)

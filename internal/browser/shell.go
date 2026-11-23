@@ -100,14 +100,14 @@ func (b *Browser) stateMessage() protocol.State {
 	st := protocol.State{
 		Status:    b.status,
 		Loading:   b.loading,
-		Scroll:    b.scroll,
+		Scroll:    b.Scroll,
 		MaxScroll: b.maxScroll(),
 	}
-	if b.url != nil {
-		st.URL = b.url.String()
+	if b.URL != nil {
+		st.URL = b.URL.String()
 	}
-	if b.page != nil {
-		st.Title = b.page.Title
+	if b.Page != nil {
+		st.Title = b.Page.Title
 	}
 	if b.progress > 0 {
 		p := int(b.progress*100 + 0.5)
@@ -194,15 +194,15 @@ func footerLevelMessage(l statusLevel) protocol.FooterLevel {
 }
 
 func (b *Browser) pageKind() protocol.PageKind {
-	if b.page == nil {
+	if b.Page == nil {
 		return protocol.PageHTML
 	}
 	switch {
-	case b.page.PDF != nil:
+	case b.Page.PDF != nil:
 		return protocol.PagePDF
-	case b.page.Download:
+	case b.Page.Download:
 		return protocol.PageDownload
-	case b.url != nil && b.url.Scheme == "about":
+	case b.URL != nil && b.URL.Scheme == "about":
 		return protocol.PageAbout
 	}
 	return protocol.PageHTML

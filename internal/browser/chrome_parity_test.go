@@ -41,8 +41,8 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 			b.status = "Copied 12 chars"
 		}},
 		{"hover-link", func(b *Browser) {
-			b.page = &Page{Title: "Example", Root: &Node{}, Base: b.url, URL: b.url}
-			b.layout = &Layout{Links: []*LinkInfo{{Href: "/next"}}}
+			b.Page = &Page{Title: "Example", Root: &Node{}, Base: b.URL, URL: b.URL}
+			b.Layout = &Layout{Links: []*LinkInfo{{Href: "/next"}}}
 			b.hover = 0
 		}},
 		{"zoom", func(b *Browser) {
@@ -54,8 +54,8 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 			b := NewBrowser(100, 30)
 			b.emitFrames = true
 			b.frontendChrome = true
-			b.url, _ = url.Parse("https://example.com/")
-			b.page = &Page{Title: "Example", Root: &Node{}}
+			b.URL, _ = url.Parse("https://example.com/")
+			b.Page = &Page{Title: "Example", Root: &Node{}}
 			b.usage.rss = 42 << 20
 			tc.setup(b)
 
@@ -104,8 +104,8 @@ func TestFrontendChromeMatchesEngineSizes(t *testing.T) {
 			b := NewBrowser(w, h)
 			b.emitFrames = true
 			b.frontendChrome = true
-			b.url, _ = url.Parse("https://example.com/a/very/long/path/that/should/truncate")
-			b.page = &Page{Title: "A rather long page title for the toolbar", Root: &Node{}}
+			b.URL, _ = url.Parse("https://example.com/a/very/long/path/that/should/truncate")
+			b.Page = &Page{Title: "A rather long page title for the toolbar", Root: &Node{}}
 			b.usage.rss = 84 << 20
 			st := b.stateMessage()
 			if !st.FrontendChrome {
@@ -135,8 +135,8 @@ func TestFrontendChromeMatchesEngineSizes(t *testing.T) {
 
 func TestFrontendScrollBarMatchesEngine(t *testing.T) {
 	b := NewBrowser(100, 35)
-	b.layout = &Layout{Height: 200}
-	b.scroll = 50
+	b.Layout = &Layout{Height: 200}
+	b.Scroll = 50
 	contentH := b.viewportHeight()
 	g := NewGrid(b.width, contentH, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.drawScrollBar(g, 0, contentH)
@@ -145,7 +145,7 @@ func TestFrontendScrollBarMatchesEngine(t *testing.T) {
 		f.Cells[i].R = ' '
 	}
 	frontend.DrawScrollBarFrame(&f, protocol.State{
-		FrontendChrome: true, MaxScroll: b.maxScroll(), Scroll: b.scroll,
+		FrontendChrome: true, MaxScroll: b.maxScroll(), Scroll: b.Scroll,
 	})
 	for y := 0; y < contentH; y++ {
 		got := f.Cells[y*b.width+b.width-1]
@@ -183,8 +183,8 @@ func TestFrontendMenuMatchesEngine(t *testing.T) {
 	b := NewBrowser(100, 30)
 	b.emitFrames = true
 	b.frontendChrome = true
-	b.url, _ = url.Parse("https://example.com/")
-	b.page = &Page{Title: "Example", Root: &Node{}}
+	b.URL, _ = url.Parse("https://example.com/")
+	b.Page = &Page{Title: "Example", Root: &Node{}}
 	b.viewMenu = &viewMenuDialog{idx: 1}
 	b.hideFixed = true
 	st := b.stateMessage()
@@ -213,8 +213,8 @@ func TestFrontendDialogMatchesEngine(t *testing.T) {
 	b := NewBrowser(100, 30)
 	b.emitFrames = true
 	b.frontendChrome = true
-	b.url, _ = url.Parse("https://example.com/")
-	b.page = &Page{Title: "Example", Root: &Node{}}
+	b.URL, _ = url.Parse("https://example.com/")
+	b.Page = &Page{Title: "Example", Root: &Node{}}
 	b.dialog = &jsDialog{kind: "prompt", message: "Type your name here", text: "Alice", cursor: 5, selectAll: true}
 	st := b.stateMessage()
 	st.FrontendChrome = true
@@ -242,8 +242,8 @@ func TestFrontendSelectMatchesEngine(t *testing.T) {
 	b := NewBrowser(100, 30)
 	b.emitFrames = true
 	b.frontendChrome = true
-	b.url, _ = url.Parse("https://example.com/")
-	b.page = &Page{Title: "Example", Root: &Node{}}
+	b.URL, _ = url.Parse("https://example.com/")
+	b.Page = &Page{Title: "Example", Root: &Node{}}
 	opts := []*Node{
 		{Type: ElementNode, Tag: "option", Children: []*Node{{Type: TextNode, Text: "One"}}},
 		{Type: ElementNode, Tag: "option", Attrs: []Attr{{Key: "selected", Value: ""}}, Children: []*Node{{Type: TextNode, Text: "Two"}}},
@@ -277,8 +277,8 @@ func TestFrontendDownloadMatchesEngine(t *testing.T) {
 	b := NewBrowser(100, 30)
 	b.emitFrames = true
 	b.frontendChrome = true
-	b.url, _ = url.Parse("https://example.com/")
-	b.page = &Page{Title: "Example", Root: &Node{}}
+	b.URL, _ = url.Parse("https://example.com/")
+	b.Page = &Page{Title: "Example", Root: &Node{}}
 	b.download = &downloadDialog{
 		url: "https://example.com/f.bin", name: "f.bin",
 		command: "curl -L -o 'f.bin' -- 'https://example.com/f.bin'",

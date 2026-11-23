@@ -52,7 +52,7 @@ func TestJSConfirm(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`document.title = confirm("Continue?") ? "yes" : "no";`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	keys := make(chan string, 4)
 	keys <- "y"
 	b.keys = keys
@@ -66,7 +66,7 @@ func TestJSPrompt(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`document.title = prompt("Name", "bob") || "cancel";`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	keys := make(chan string, 4)
 	keys <- "x"
 	keys <- "enter"
@@ -81,7 +81,7 @@ func TestJSDialogsNonInteractive(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`alert("hello"); document.title = String(confirm("c")) + ":" + String(prompt("p", "d"));`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	if page.Title != "false:null" {
 		t.Fatalf("title = %q", page.Title)
@@ -135,7 +135,7 @@ func TestConsoleRequestPane(t *testing.T) {
 func TestConsoleRequestsHeaderCountsRealRequests(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
-	b.url = mustParse(t, "about:home")
+	b.URL = mustParse(t, "about:home")
 	b.loader.beginPage()
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	l := newConsoleLayout(20, consoleLogs)
@@ -149,10 +149,10 @@ func TestConsoleStorageSection(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`localStorage.setItem("theme", "dark"); sessionStorage.setItem("tab", "1");`)
 	b := NewBrowser(60, 20)
-	b.page = page
-	b.url = mustParse(t, "https://example.com/")
+	b.Page = page
+	b.URL = mustParse(t, "https://example.com/")
 	withQuietStdout(t, func() { b.startJS(page) })
-	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
+	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
 		{Name: "sid", Value: "abc", Path: "/", HttpOnly: true},
 		{Name: "seen", Value: "yes", Path: "/"},
 	})
@@ -170,8 +170,8 @@ func TestConsoleStorageSection(t *testing.T) {
 
 func TestConsoleStorageCookieDetails(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.url = mustParse(t, "https://example.com/api/page")
-	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
+	b.URL = mustParse(t, "https://example.com/api/page")
+	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
 		{Name: "sid", Value: "abc", Domain: ".example.com", Path: "/api", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode},
 		{Name: "plain", Value: "v", Path: "/"},
 		{Name: "old", Value: "x", Path: "/", Expires: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -235,8 +235,8 @@ func TestConsoleToolLinesWrap(t *testing.T) {
 
 func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.url = mustParse(t, "https://example.com/")
-	b.loader.cookies.SetCookies(b.url, []*http.Cookie{
+	b.URL = mustParse(t, "https://example.com/")
+	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
 	})
 	b.js = newJSRuntime(b, nil)
@@ -299,18 +299,18 @@ func TestConsoleScrollReachesFirstWrappedLine(t *testing.T) {
 
 func TestConsoleHTMLShowsRawHTML(t *testing.T) {
 	b := NewBrowser(40, 20)
-	b.page = &Page{RawHTML: "<html>\n<body><p>Hello raw page</p></body>\n</html>"}
+	b.Page = &Page{RawHTML: "<html>\n<body><p>Hello raw page</p></body>\n</html>"}
 	joined := strings.Join(b.htmlLines(20), "\n")
 	if !strings.Contains(joined, "<html>") || !strings.Contains(joined, "Hello raw") {
 		t.Fatalf("HTML lines = %q", joined)
 	}
 	// A different page invalidates the cached wrapping.
-	b.page = &Page{RawHTML: "<html><body>second</body></html>"}
+	b.Page = &Page{RawHTML: "<html><body>second</body></html>"}
 	if got := strings.Join(b.htmlLines(20), "\n"); !strings.Contains(got, "second") {
 		t.Fatalf("HTML cache was not refreshed: %q", got)
 	}
 	// Long source lines wrap to the console width.
-	b.page = &Page{RawHTML: strings.Repeat("x", 45)}
+	b.Page = &Page{RawHTML: strings.Repeat("x", 45)}
 	for _, line := range b.htmlLines(20) {
 		if stringWidth(line) > 20 {
 			t.Fatalf("HTML line wider than requested: %q", line)
@@ -321,7 +321,7 @@ func TestConsoleHTMLShowsRawHTML(t *testing.T) {
 func TestConsoleHTMLOpensAtTop(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
-	b.page = &Page{RawHTML: "<html>\n" + strings.Repeat("<p>line</p>\n", 100) + "</html>"}
+	b.Page = &Page{RawHTML: "<html>\n" + strings.Repeat("<p>line</p>\n", 100) + "</html>"}
 	for i := 0; i < 3; i++ {
 		b.handleConsoleKey("tab")
 	}
@@ -470,7 +470,7 @@ func TestConsolePausesTimers(t *testing.T) {
 		}, 10);
 	`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.consoleOpen = true
 	if b.runJSTimers() {
@@ -490,7 +490,7 @@ func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
 	b.color = true
 	b.consoleOpen = true
 	b.jsLog = []string{"[log] \x1b]52;c;evil\x07\x1b[2J"}
-	b.page = &Page{RawHTML: "<html>\x1b]0;pwn\x07</html>"}
+	b.Page = &Page{RawHTML: "<html>\x1b]0;pwn\x07</html>"}
 	check := func(where string) {
 		joined := strings.Join(b.prev, "\n")
 		for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\x1b]0", "\u009b"} {
@@ -527,7 +527,7 @@ func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
 func TestJSDialogMouseClose(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `alert("Continue?");`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	// The alert is one line at width 60: box 56 wide, 7 tall, centered at
 	// x=2, y=4. The close button sits on the top-right border at columns
 	// 55-57 (zero-based); mouse coordinates are one-based.
@@ -547,7 +547,7 @@ func TestJSDialogMouseClose(t *testing.T) {
 func TestConsoleJavaScriptInputRow(t *testing.T) {
 	page := newJSPage(`<html><body><p id="out">before</p></body></html>`, ``)
 	b := NewBrowser(60, 20)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.consoleOpen = true
 	b.handleConsoleKey("i")
@@ -1062,11 +1062,11 @@ func TestConsoleYCopiesActiveSection(t *testing.T) {
 	}
 
 	// The HTML tab copies the raw source, not the width-wrapped display lines.
-	b.page = &Page{RawHTML: "<html>\n<body>raw source</body>\n</html>"}
+	b.Page = &Page{RawHTML: "<html>\n<body>raw source</body>\n</html>"}
 	b.selectConsolePane(consoleHTML)
 	buf.Reset()
 	b.HandleKey("y")
-	if got := consoleClipboardText(t, &buf); got != b.page.RawHTML {
+	if got := consoleClipboardText(t, &buf); got != b.Page.RawHTML {
 		t.Fatalf("HTML copy = %q", got)
 	}
 }
@@ -1077,8 +1077,8 @@ func TestSelectPopupActiveRowContrastsWithFrame(t *testing.T) {
 	</form></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
+	b.URL = u
 	b.rebuild()
 	sel := doc.FindFirst("select")
 	b.openSelectMenu(sel)

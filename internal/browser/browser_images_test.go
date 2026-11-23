@@ -21,8 +21,8 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	loader.deferImages = true
 	b := NewBrowser(60, 20)
 	b.loader = loader
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.loadSeq = 1
 	b.deferredImages = true
 	b.imageCancel = func() {}
@@ -52,8 +52,8 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.loader = NewLoader()
 	b.loader.noImages = false
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.loadSeq = 1
 	b.deferredImages = true
 	img := doc.FindFirst("img")
@@ -89,8 +89,8 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 		return false
 	})
 	b := NewBrowser(80, 20)
-	b.scroll = 0
-	b.layout = &Layout{Frags: []Frag{
+	b.Scroll = 0
+	b.Layout = &Layout{Frags: []Frag{
 		{Kind: fragText, Node: byID["d"], Y: 100},
 		{Kind: fragText, Node: byID["c"], Y: 25},
 		{Kind: fragText, Node: byID["b"], Y: 5},
@@ -119,7 +119,7 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 
 func TestDeferredImageProgressBar(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.page = &Page{Root: ParseHTML(`<html><body></body></html>`)}
+	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`)}
 	b.deferredImages = true
 	b.imageTotal = 10
 	b.progress = 0.9
@@ -167,8 +167,8 @@ func TestRefreshImagesAfterScript(t *testing.T) {
 		`document.getElementById("x").src = "`+dataURL+`";`)
 	b := NewBrowser(60, 20)
 	b.loader.noImages = false
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.startJS(page)
 	if !b.refreshImages() {
 		t.Fatal("post-script images were not discovered")
@@ -279,8 +279,8 @@ func deferredImageFixture(t *testing.T, html string) *Browser {
 	loader.deferImages = true
 	b := NewBrowser(60, 20)
 	b.loader = loader
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.loadSeq = 1
 	b.deferredImages = true
 	b.rebuild()
@@ -310,15 +310,15 @@ func nodeRow(ly *Layout, n *Node) int {
 func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
-	far := nodeByID(b.page.Root, "far")
+	far := nodeByID(b.Page.Root, "far")
 	if far == nil {
 		t.Fatal("fixture image missing")
 	}
-	row := nodeRow(b.layout, far)
+	row := nodeRow(b.Layout, far)
 	if row <= b.viewportHeight() {
 		t.Fatalf("fixture image row %d is not below the fold", row)
 	}
-	before := b.layout
+	before := b.Layout
 	b.prev = []string{"frame"}
 	batch := imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
@@ -326,7 +326,7 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 	if !b.applyDeferredImageBatch(batch) {
 		t.Fatal("below-fold batch did not request the progress repaint")
 	}
-	if b.layout != before {
+	if b.Layout != before {
 		t.Fatal("below-fold image forced a layout rebuild")
 	}
 	if b.prev == nil {
@@ -342,8 +342,8 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 
 func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><img id="near" src="near.png" alt="near"></body></html>`)
-	near := nodeByID(b.page.Root, "near")
-	before := b.layout
+	near := nodeByID(b.Page.Root, "near")
+	before := b.Layout
 	b.prev = []string{"frame"}
 	batch := imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: near, Src: "near.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
@@ -351,7 +351,7 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	if !b.applyDeferredImageBatch(batch) {
 		t.Fatal("visible batch did not request a repaint")
 	}
-	if b.layout == before {
+	if b.Layout == before {
 		t.Fatal("visible image did not rebuild the layout")
 	}
 	if b.pendingImageRow != 0 {
@@ -366,8 +366,8 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 
 func TestDeferredImageWithoutFragmentRebuilds(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><img id="ghost" src="ghost.png" style="display:none"></body></html>`)
-	ghost := nodeByID(b.page.Root, "ghost")
-	if nodeRow(b.layout, ghost) >= 0 {
+	ghost := nodeByID(b.Page.Root, "ghost")
+	if nodeRow(b.Layout, ghost) >= 0 {
 		t.Fatal("display:none image was laid out")
 	}
 	batch := imageBatch{seq: 1, results: []imageLoadResult{{
@@ -382,48 +382,48 @@ func TestDeferredImageWithoutFragmentRebuilds(t *testing.T) {
 func TestPendingImageLayoutWaitsForViewport(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
-	far := nodeByID(b.page.Root, "far")
-	row := nodeRow(b.layout, far)
+	far := nodeByID(b.Page.Root, "far")
+	row := nodeRow(b.Layout, far)
 	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
 	if b.pendingImageRow == 0 {
 		t.Fatal("below-fold image was not deferred")
 	}
-	before := b.layout
-	b.scroll = 1
+	before := b.Layout
+	b.Scroll = 1
 	b.applyPendingImageLayout()
-	if b.layout != before {
+	if b.Layout != before {
 		t.Fatal("distant scroll rebuilt the page for a pending image")
 	}
 	if b.pendingImageRow == 0 {
 		t.Fatal("distant scroll cleared the pending row")
 	}
 	// The image's own row is now inside the viewport.
-	b.scroll = row - 1
+	b.Scroll = row - 1
 	b.applyPendingImageLayout()
 	if b.pendingImageRow != 0 {
 		t.Fatal("image entering the viewport stayed pending")
 	}
-	if b.layout == before {
+	if b.Layout == before {
 		t.Fatal("image entering the viewport did not rebuild")
 	}
-	if nodeRow(b.layout, far) != row {
-		t.Fatalf("image moved to row %d, want %d", nodeRow(b.layout, far), row)
+	if nodeRow(b.Layout, far) != row {
+		t.Fatalf("image moved to row %d, want %d", nodeRow(b.Layout, far), row)
 	}
 }
 
 func TestPendingImageLayoutRebuildsAtDocumentEnd(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
-	far := nodeByID(b.page.Root, "far")
+	far := nodeByID(b.Page.Root, "far")
 	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
-	before := b.layout
-	b.scroll = b.layout.Height
+	before := b.Layout
+	b.Scroll = b.Layout.Height
 	b.applyPendingImageLayout()
-	if b.pendingImageRow != 0 || b.layout == before {
+	if b.pendingImageRow != 0 || b.Layout == before {
 		t.Fatal("pending image at the end of the document was not laid out")
 	}
 }
@@ -431,19 +431,19 @@ func TestPendingImageLayoutRebuildsAtDocumentEnd(t *testing.T) {
 func TestDrawAppliesPendingImageLayout(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
-	far := nodeByID(b.page.Root, "far")
-	row := nodeRow(b.layout, far)
+	far := nodeByID(b.Page.Root, "far")
+	row := nodeRow(b.Layout, far)
 	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
-	before := b.layout
+	before := b.Layout
 	drawQuiet(b)
-	if b.layout != before {
+	if b.Layout != before {
 		t.Fatal("a frame far above the pending image rebuilt the page")
 	}
-	b.scroll = row - 1
+	b.Scroll = row - 1
 	drawQuiet(b)
-	if b.pendingImageRow != 0 || b.layout == before {
+	if b.pendingImageRow != 0 || b.Layout == before {
 		t.Fatal("the frame that reached the image did not lay it out")
 	}
 }
@@ -451,7 +451,7 @@ func TestDrawAppliesPendingImageLayout(t *testing.T) {
 func TestBelowViewportImageBatchKeepsVisibleRows(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top of the page</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
-	far := nodeByID(b.page.Root, "far")
+	far := nodeByID(b.Page.Root, "far")
 	drawQuiet(b)
 	before := append([]string(nil), b.prev...)
 	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{

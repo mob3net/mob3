@@ -27,15 +27,15 @@ func TestContentRect(t *testing.T) {
 
 func TestShellKeyRouting(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	b.prompt = true
 	b.promptText = ""
 
 	if quit := b.HandleKey("j"); quit {
 		t.Fatal("prompt key quit the browser")
 	}
-	if b.scroll != 0 {
-		t.Fatalf("prompt key scrolled the page: %d", b.scroll)
+	if b.Scroll != 0 {
+		t.Fatalf("prompt key scrolled the page: %d", b.Scroll)
 	}
 	if b.promptText != "j" {
 		t.Fatalf("prompt text = %q, want j", b.promptText)
@@ -43,8 +43,8 @@ func TestShellKeyRouting(t *testing.T) {
 
 	b.prompt = false
 	b.HandleKey("j")
-	if b.scroll != 1 {
-		t.Fatalf("page key did not scroll: %d", b.scroll)
+	if b.Scroll != 1 {
+		t.Fatalf("page key did not scroll: %d", b.Scroll)
 	}
 
 	b.quitPending = true
@@ -58,10 +58,10 @@ func TestShellKeyRouting(t *testing.T) {
 
 func TestStateMessage(t *testing.T) {
 	b := NewBrowser(100, 30)
-	b.url = mustParse(t, "https://example.test/page")
-	b.page = &Page{URL: b.url, Title: "Title", Root: ParseHTML("<p>x</p>")}
-	b.layout = &Layout{Height: 100}
-	b.scroll = 5
+	b.URL = mustParse(t, "https://example.test/page")
+	b.Page = &Page{URL: b.URL, Title: "Title", Root: ParseHTML("<p>x</p>")}
+	b.Layout = &Layout{Height: 100}
+	b.Scroll = 5
 	b.loading = true
 	b.progress = 0.42
 	b.status = "Ready"
@@ -95,7 +95,7 @@ func TestStateMessage(t *testing.T) {
 	if b.stateMessage().Flags&protocol.StateImages != 0 {
 		t.Fatal("images flag set with images disabled")
 	}
-	b.page.PDF = &PDFDocument{}
+	b.Page.PDF = &PDFDocument{}
 	if b.stateMessage().Kind != protocol.PagePDF {
 		t.Fatal("PDF page kind not reported")
 	}

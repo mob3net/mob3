@@ -171,8 +171,8 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 <a id="a" href="/next" onclick="event.preventDefault(); throw new Error('boom');">next</a>
 </body></html>`, ``)
 	b := NewBrowser(60, 12)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.setLoader(NewLoader())
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
@@ -198,8 +198,8 @@ func TestPreventedLinkClickWithoutErrorStays(t *testing.T) {
 <a id="a" href="/next" onclick="event.preventDefault();">next</a>
 </body></html>`, ``)
 	b := NewBrowser(60, 12)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 	b.focus = 0
@@ -214,11 +214,11 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 <p><a id="a" href="#" onclick="document.body.setAttribute('data-clicked','yes'); return false;">show an alert</a></p>
 </body></html>`, ``)
 	b := NewBrowser(60, 12)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
-	b.scroll = 1
+	b.Scroll = 1
 	b.focus = 0
 	b.followFocused()
 	body := page.Root.FindFirst("body")
@@ -251,7 +251,7 @@ func TestNavigateSearchesQuery(t *testing.T) {
 
 func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/")
+	b.URL = mustParse(t, "https://example.com/")
 	called := false
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		called = true
@@ -296,7 +296,7 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 		b.finishLoad(res)
 	case <-time.After(200 * time.Millisecond):
 	}
-	if b.page != nil {
+	if b.Page != nil {
 		t.Fatal("canceled load was applied")
 	}
 }
@@ -363,8 +363,8 @@ func TestNavigateAsyncSuccess(t *testing.T) {
 		t.Fatal("load did not finish")
 	}
 	b.finishLoad(res)
-	if b.page == nil || b.page.Title != "Loaded" {
-		t.Fatalf("page = %+v", b.page)
+	if b.Page == nil || b.Page.Title != "Loaded" {
+		t.Fatalf("page = %+v", b.Page)
 	}
 }
 
@@ -414,7 +414,7 @@ func TestLoadingProgress(t *testing.T) {
 
 func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = mustParse(t, "https://example.com/challenge")
+	b.URL = mustParse(t, "https://example.com/challenge")
 	var got string
 	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		got = target
@@ -438,7 +438,7 @@ func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 
 func TestTryAnywayWithoutURL(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.url = nil
+	b.URL = nil
 	b.Navigate("about:retry", true)
 	if b.status != "Nothing to retry" {
 		t.Fatalf("status = %q", b.status)
@@ -453,8 +453,8 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	b := NewBrowser(80, 10)
 	u := mustParse(t, "https://example.com/")
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML("<html><body>scripted</body></html>")}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML("<html><body>scripted</body></html>")}
+	b.URL = u
 	b.lastMethod = "GET"
 	b.rebuild()
 
@@ -512,22 +512,22 @@ func TestHoverRebuildIsDebounced(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
 	b.keys = make(chan string)
-	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
+	b.URL = u
 	b.rebuild()
 	var menu *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == "Menu" {
-			menu = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Menu" {
+			menu = &b.Layout.Frags[i]
 		}
 	}
 	if menu == nil {
 		t.Fatal("menu link missing")
 	}
-	layout := b.layout
+	layout := b.Layout
 	top, _ := b.viewport()
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
-	if b.layout != layout {
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.Scroll + top + 1})
+	if b.Layout != layout {
 		t.Fatal("hover rebuilt the page immediately instead of debouncing")
 	}
 	if !b.hoverRebuildPending {
@@ -538,8 +538,8 @@ func TestHoverRebuildIsDebounced(t *testing.T) {
 		t.Fatal("deferred hover rebuild did not run")
 	}
 	found := false
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == "Item" {
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == "Item" {
 			found = true
 		}
 	}
@@ -555,14 +555,14 @@ func TestHoverOpensJSMenu(t *testing.T) {
   document.getElementById("sub").style.display = "block";
 });`)
 	b := NewBrowser(60, 20)
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 	findText := func(s string) *Frag {
-		for i := range b.layout.Frags {
-			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
-				return &b.layout.Frags[i]
+		for i := range b.Layout.Frags {
+			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+				return &b.Layout.Frags[i]
 			}
 		}
 		return nil
@@ -573,7 +573,7 @@ func TestHoverOpensJSMenu(t *testing.T) {
 	}
 	top, _ := b.viewport()
 	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.Scroll + top + 1})
 	})
 	if findText("Item") == nil {
 		t.Fatal("mouseover handler did not open the menu")
@@ -587,14 +587,14 @@ func TestHoverMenuSurvivesPaddingGaps(t *testing.T) {
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(
+	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(
 		`.menu .sub{display:none;position:absolute}.menu:hover .sub{display:block}.sub a{display:block;padding:1em}`)}
-	b.url = u
+	b.URL = u
 	b.rebuild()
 	textFrag := func(s string) *Frag {
-		for i := range b.layout.Frags {
-			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
-				return &b.layout.Frags[i]
+		for i := range b.Layout.Frags {
+			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+				return &b.Layout.Frags[i]
 			}
 		}
 		return nil
@@ -604,13 +604,13 @@ func TestHoverMenuSurvivesPaddingGaps(t *testing.T) {
 		t.Fatal("menu link missing")
 	}
 	top, _ := b.viewport()
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.Scroll + top + 1})
 	item := textFrag("Item")
 	if item == nil {
 		t.Fatal("hover did not open the menu")
 	}
 	// Move into the link's top padding, where there is no text fragment.
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: item.X + 1, Y: item.Y - 1 - b.scroll + top + 1})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: item.X + 1, Y: item.Y - 1 - b.Scroll + top + 1})
 	if textFrag("Item") == nil {
 		t.Fatal("moving through the menu padding closed it")
 	}
@@ -629,13 +629,13 @@ func TestHoverOpensCSSMenu(t *testing.T) {
 </body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc, Author: ParseStylesheet(`.menu .sub{display:none}.menu:hover .sub{display:block}`)}
+	b.URL = u
 	b.rebuild()
 	findText := func(s string) *Frag {
-		for i := range b.layout.Frags {
-			if b.layout.Frags[i].Kind == fragText && strings.TrimSpace(b.layout.Frags[i].Text) == s {
-				return &b.layout.Frags[i]
+		for i := range b.Layout.Frags {
+			if b.Layout.Frags[i].Kind == fragText && strings.TrimSpace(b.Layout.Frags[i].Text) == s {
+				return &b.Layout.Frags[i]
 			}
 		}
 		return nil
@@ -645,7 +645,7 @@ func TestHoverOpensCSSMenu(t *testing.T) {
 		t.Fatal("menu link missing")
 	}
 	top, _ := b.viewport()
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.scroll + top + 1})
+	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, Motion: true, X: menu.X + 1, Y: menu.Y - b.Scroll + top + 1})
 	if findText("Item") == nil {
 		t.Fatal("hover did not open the CSS menu")
 	}
@@ -659,12 +659,12 @@ func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="/target">target</a></p></body></html>`)
 	u := mustParse(t, "https://example.com/page")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: root}
+	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.rebuild()
-	if len(b.layout.Links) == 0 {
+	if len(b.Layout.Links) == 0 {
 		t.Fatal("no links in layout")
 	}
-	r := b.layout.Links[0].Rects[0]
+	r := b.Layout.Links[0].Rects[0]
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{X: r.X + 1, Y: top + r.Y + 1, Motion: true})
 	if b.hover != 0 {
@@ -706,7 +706,7 @@ func TestHelpAlertExample(t *testing.T) {
 		t.Fatal("alert example link not found")
 	}
 	b := NewBrowser(80, 24)
-	b.page = page
+	b.Page = page
 	keys := make(chan string, 2)
 	keys <- "enter"
 	b.keys = keys
@@ -733,7 +733,7 @@ func TestNextJSTimerDelayTracksPendingTimers(t *testing.T) {
 	page := newJSPage(`<html><body><p>idle</p></body></html>`, `
 		setTimeout(function () {}, 5000);
 	`)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	d, ok := b.nextJSTimerDelay()
 	if !ok {
@@ -753,9 +753,9 @@ func TestPageContentCannotInjectTerminalControls(t *testing.T) {
 	root := ParseHTML("<html><head><title>evil\x1b]52;c;x\x07</title></head><body><p>hi\x1b[2Jthere</p></body></html>")
 	page := &Page{URL: u, Base: u, Root: root, Title: "evil\x1b]52;c;x\x07", RawHTML: "<html>\x1b]0;pwn\x07</html>"}
 	b := NewBrowser(60, 20)
-	b.page = page
-	b.url = u
-	b.layout = BuildLayout(page.Root, nil, 60)
+	b.Page = page
+	b.URL = u
+	b.Layout = BuildLayout(page.Root, nil, 60)
 	withQuietStdout(t, func() { b.draw() })
 	joined := strings.Join(b.prev, "\n")
 	for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\x1b]0", "\u009b"} {
@@ -775,17 +775,17 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 		}, 10);
 	`)
 	b := NewBrowser(60, 15)
-	b.page = page
+	b.Page = page
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
-	first := b.layout
+	first := b.Layout
 	b.lastBuild = 100 * time.Millisecond
 	b.lastRebuild = time.Now()
 	time.Sleep(25 * time.Millisecond)
 	if b.runJSTimers() {
 		t.Fatal("timer rebuilt inside the coalescing interval")
 	}
-	if b.layout != first {
+	if b.Layout != first {
 		t.Fatal("layout changed inside the coalescing interval")
 	}
 	if !b.js.Dirty() {
@@ -798,7 +798,7 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 	if b.js.Dirty() {
 		t.Fatal("dirty flag was not cleared after rebuilding")
 	}
-	if b.layout == first {
+	if b.Layout == first {
 		t.Fatal("layout was not rebuilt after the interval")
 	}
 }
@@ -807,11 +807,11 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 	u := mustParse(t, "https://filesamples.com/formats/zip")
 	doc := ParseHTML(`<a href="/files/sample.zip" download>Download</a>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
-	b.layout = BuildLayout(doc, nil, 60)
-	if len(b.layout.Links) != 1 {
-		t.Fatalf("links = %d", len(b.layout.Links))
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.Layout = BuildLayout(doc, nil, 60)
+	if len(b.Layout.Links) != 1 {
+		t.Fatalf("links = %d", len(b.Layout.Links))
 	}
 	b.focus = 0
 	b.followFocused()
@@ -826,8 +826,8 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 	if b.loading {
 		t.Fatal("non-PDF download link started a load")
 	}
-	if b.url.String() != "https://filesamples.com/formats/zip" {
-		t.Fatalf("non-PDF download link navigated to %s", b.url)
+	if b.URL.String() != "https://filesamples.com/formats/zip" {
+		t.Fatalf("non-PDF download link navigated to %s", b.URL)
 	}
 }
 
@@ -835,9 +835,9 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	u := mustParse(t, "https://samplepdf.org/")
 	doc := ParseHTML(`<a href="/files/sample.pdf" download="chosen.pdf">Download</a>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
-	b.layout = BuildLayout(doc, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.Layout = BuildLayout(doc, nil, 60)
 	b.loadFn = func(_ context.Context, _, target string, _ []byte, _ string) (*Page, error) {
 		tu := mustParse(t, target)
 		return &Page{URL: tu, Base: tu, Root: ParseHTML("<html><body>pdf</body></html>")}, nil
@@ -864,8 +864,8 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	if b.download != nil {
 		t.Fatal("PDF download fell back to the curl popup")
 	}
-	if b.url.String() != "https://samplepdf.org/files/sample.pdf" {
-		t.Fatalf("PDF download navigated to %s", b.url)
+	if b.URL.String() != "https://samplepdf.org/files/sample.pdf" {
+		t.Fatalf("PDF download navigated to %s", b.URL)
 	}
 }
 
@@ -887,9 +887,9 @@ func TestDownloadPDFDetection(t *testing.T) {
 		doc := ParseHTML(`<a href="` + c.href + `" download="` + c.attr + `">Download</a>`)
 		u := mustParse(t, "https://example.com/page")
 		b := NewBrowser(60, 15)
-		b.page = &Page{URL: u, Base: u, Root: doc}
-		b.url = u
-		b.layout = BuildLayout(doc, nil, 60)
+		b.Page = &Page{URL: u, Base: u, Root: doc}
+		b.URL = u
+		b.Layout = BuildLayout(doc, nil, 60)
 		b.focus = 0
 		b.followFocused()
 		got := b.download == nil
@@ -903,9 +903,9 @@ func TestDownloadAttributeNameWins(t *testing.T) {
 	u := mustParse(t, "https://example.com/files/")
 	doc := ParseHTML(`<a href="x.bin" download="chosen.zip">Download</a>`)
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
-	b.layout = BuildLayout(doc, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.Layout = BuildLayout(doc, nil, 60)
 	b.focus = 0
 	b.followFocused()
 	if b.download == nil {
@@ -940,8 +940,8 @@ func TestDownloadCommandNeutralizesOptionsAndLocalFiles(t *testing.T) {
 func TestDownloadPopupCopiesWithY(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.URL = u
 	b.showDownload(u.String(), "")
 	drawQuiet(b)
 	if screen := strings.Join(b.prev, "\n"); !strings.Contains(screen, "curl -L -o") ||
@@ -988,7 +988,7 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 	if b.download == nil {
 		t.Fatal("non-HTML response did not offer the curl popup")
 	}
-	if b.page != nil {
+	if b.Page != nil {
 		t.Fatal("non-HTML response was applied as a page")
 	}
 	if !strings.Contains(b.download.command, "archive.zip") || !strings.Contains(b.download.command, u.String()) {
@@ -1002,8 +1002,8 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 func TestDownloadCommandIsNotDrawnSelected(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.URL = u
 	b.showDownload(u.String(), "")
 	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintDownload(g)
@@ -1050,16 +1050,16 @@ func TestInteractiveLayoutReservesScrollbarColumn(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<html><body><p>text that wraps normally</p></body></html>`)
 	b := NewBrowser(20, 6)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
-	if b.layout.Width != 19 {
-		t.Fatalf("interactive layout width = %d, want 19", b.layout.Width)
+	if b.Layout.Width != 19 {
+		t.Fatalf("interactive layout width = %d, want 19", b.Layout.Width)
 	}
 	b.noDraw = true
 	b.rebuild()
-	if b.layout.Width != 20 {
-		t.Fatalf("headless layout width = %d, want 20", b.layout.Width)
+	if b.Layout.Width != 20 {
+		t.Fatalf("headless layout width = %d, want 20", b.Layout.Width)
 	}
 }
 
@@ -1067,15 +1067,15 @@ func TestBrowserFixedLayoutUsesViewportHeight(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	doc := ParseHTML(`<div>top</div><div style="position:fixed;bottom:0;right:0">bar</div>`)
 	b := NewBrowser(30, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
-	bar := textFrag(b.layout, "bar")
+	bar := textFrag(b.Layout, "bar")
 	if bar == nil {
 		t.Fatal("fixed fragment not laid out")
 	}
 	wantY := b.viewportHeight() - 1
-	wantX := b.layout.Width - 3
+	wantX := b.Layout.Width - 3
 	if bar.Y != wantY || bar.X != wantX {
 		t.Fatalf("fixed box at (%d,%d), want (%d,%d)", bar.X, bar.Y, wantX, wantY)
 	}
@@ -1086,26 +1086,26 @@ func TestReaderModeModalLinkWarnsWithoutScrolling(t *testing.T) {
 		u := mustParse(t, "https://example.com/article")
 		doc := ParseHTML(`<p>hello</p><p><a href="` + href + `">open modal</a></p>`)
 		b := NewBrowser(40, 10)
-		b.page = &Page{URL: u, Base: u, Root: doc}
-		b.url = u
+		b.Page = &Page{URL: u, Base: u, Root: doc}
+		b.URL = u
 		b.reader = true
 		b.readerRoot = doc
 		b.rebuild()
-		if len(b.layout.Links) == 0 {
+		if len(b.Layout.Links) == 0 {
 			t.Fatal("link not laid out")
 		}
-		b.layout.Height = 100
-		b.scroll = 3
+		b.Layout.Height = 100
+		b.Scroll = 3
 		b.focus = 0
 		b.followFocused()
 		if b.status != readerLinkUnavailable {
 			t.Fatalf("href %q status = %q, want %q", href, b.status, readerLinkUnavailable)
 		}
-		if b.scroll != 3 {
-			t.Fatalf("href %q scrolled to %d", href, b.scroll)
+		if b.Scroll != 3 {
+			t.Fatalf("href %q scrolled to %d", href, b.Scroll)
 		}
-		if b.url.String() != "https://example.com/article" {
-			t.Fatalf("href %q navigated to %s", href, b.url)
+		if b.URL.String() != "https://example.com/article" {
+			t.Fatalf("href %q navigated to %s", href, b.URL)
 		}
 	}
 }
@@ -1114,18 +1114,18 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	u := mustParse(t, "https://example.com/article")
 	doc := ParseHTML(`<p>hello</p><h2 id="target">target</h2><p><a href="#target">jump</a></p>`)
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.reader = true
 	b.readerRoot = doc
 	b.rebuild()
-	b.layout.Height = 100
+	b.Layout.Height = 100
 	b.focus = 0
 	b.followFocused()
 	if b.status == readerLinkUnavailable {
 		t.Fatal("existing anchor was rejected in reader mode")
 	}
-	if b.scroll == 0 {
+	if b.Scroll == 0 {
 		t.Fatal("existing anchor did not scroll")
 	}
 }
@@ -1230,8 +1230,8 @@ func TestNoColorLinkHintsUseReverse(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(40, 10)
 	b.color = false
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 	withQuietStdout(t, func() {
 		b.openLinkHints(false)
@@ -1255,13 +1255,13 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
 	u := mustParse(t, "https://example.com/news")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.layout = BuildLayout(doc, nil, b.width)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.Layout = BuildLayout(doc, nil, b.width)
 
 	var frag *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && strings.Contains(b.layout.Frags[i].Text, "Story") {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}
@@ -1300,8 +1300,8 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	doc := ParseHTML(`<p>Plain text without a link</p>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.layout = BuildLayout(doc, nil, b.width)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.Layout = BuildLayout(doc, nil, b.width)
 
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
@@ -1323,15 +1323,15 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
 	u := mustParse(t, "https://example.com/news")
 	b := NewBrowser(40, 10)
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.layout = BuildLayout(doc, nil, b.width)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.Layout = BuildLayout(doc, nil, b.width)
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 
 	var frag *Frag
-	for i := range b.layout.Frags {
-		if b.layout.Frags[i].Kind == fragText && strings.Contains(b.layout.Frags[i].Text, "Story") {
-			frag = &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == fragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
+			frag = &b.Layout.Frags[i]
 			break
 		}
 	}

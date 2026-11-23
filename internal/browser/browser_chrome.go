@@ -68,7 +68,7 @@ func (b *Browser) drawScrollBar(g *Grid, top, bottom int) {
 	}
 	thumbTop := top
 	if vh > thumbH {
-		thumbTop = top + (vh-thumbH)*b.scroll/max
+		thumbTop = top + (vh-thumbH)*b.Scroll/max
 	}
 	g.Fill(g.W-1, top, 1, vh, RGB(0xdd, 0xe3, 0xea))
 	g.Fill(g.W-1, thumbTop, 1, thumbH, RGB(0x7a, 0x8a, 0x9a))
@@ -85,7 +85,7 @@ func (b *Browser) scrollBarTo(y int) {
 	rel := y - info.trackTop - info.thumbH/2
 	span := info.trackH - info.thumbH
 	if span <= 0 || max <= 0 {
-		b.scrollBy(-b.scroll)
+		b.scrollBy(-b.Scroll)
 		return
 	}
 	if rel < 0 {
@@ -95,19 +95,19 @@ func (b *Browser) scrollBarTo(y int) {
 		rel = span
 	}
 	target := rel * max / span
-	b.scrollBy(target - b.scroll)
+	b.scrollBy(target - b.Scroll)
 }
 
 func (b *Browser) pageFG() Color {
-	if b.layout != nil && b.layout.Body != nil && b.layout.Body.Style != nil && b.layout.Body.Style.Color.Set {
-		return b.layout.Body.Style.Color
+	if b.Layout != nil && b.Layout.Body != nil && b.Layout.Body.Style != nil && b.Layout.Body.Style.Color.Set {
+		return b.Layout.Body.Style.Color
 	}
 	return RGB(0x1f, 0x23, 0x28)
 }
 
 func (b *Browser) pageBG() Color {
-	if b.layout != nil && b.layout.PageBG.Set {
-		return b.layout.PageBG
+	if b.Layout != nil && b.Layout.PageBG.Set {
+		return b.Layout.PageBG
 	}
 	return RGB(255, 255, 255)
 }
@@ -193,17 +193,17 @@ func (b *Browser) drawHeaderButton(g *Grid, x, y int, label string, kind headerK
 // normal focused colors.
 func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
 	n := b.forms.InputFocus
-	if !b.forms.InputSelectAll || n == nil || b.layout == nil {
+	if !b.forms.InputSelectAll || n == nil || b.Layout == nil {
 		return
 	}
 	selBG := RGB(0x1f, 0x4f, 0x9f)
 	selFG := RGB(0xf8, 0xfa, 0xfc)
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
+	for i := range b.Layout.Frags {
+		f := &b.Layout.Frags[i]
 		if f.Kind != fragText || f.Node != n || f.W < 4 {
 			continue
 		}
-		y := f.Y - b.scroll + top
+		y := f.Y - b.Scroll + top
 		if y < top || y >= bottom || y >= g.H {
 			continue
 		}
@@ -225,11 +225,11 @@ func (b *Browser) paintInputSelection(g *Grid, top, bottom int) {
 
 // paintInputCursor draws the caret over a focused input or textarea.
 func (b *Browser) paintInputCursor(g *Grid, top, bottom int) {
-	if b.layout == nil || !b.layout.HasCursor || b.forms.InputSelectAll {
+	if b.Layout == nil || !b.Layout.HasCursor || b.forms.InputSelectAll {
 		return
 	}
-	r := b.layout.Cursor
-	x, y := r.X, r.Y-b.scroll+top
+	r := b.Layout.Cursor
+	x, y := r.X, r.Y-b.Scroll+top
 	if x < 0 || x >= g.W || y < top || y >= bottom {
 		return
 	}
@@ -263,7 +263,7 @@ func (b *Browser) draw() {
 	// a modal cannot hide a large heading that runs across it. Rebuild the page
 	// without scaled text while a modal or popup is open, and restore it when
 	// the overlay closes.
-	if b.layout != nil && b.scaledTextWanted() != b.scaledLayout {
+	if b.Layout != nil && b.scaledTextWanted() != b.scaledLayout {
 		b.rebuild()
 	}
 	// Deferred image batches keep their layout until the viewport can see them.
@@ -288,10 +288,10 @@ func (b *Browser) draw() {
 	if b.inlineImagesEnabled() {
 		collect = &placements
 	}
-	if b.layout != nil {
-		b.layout.SetFixedScroll(b.scroll)
+	if b.Layout != nil {
+		b.Layout.SetFixedScroll(b.Scroll)
 	}
-	PaintLayoutBig(cg, b.layout, b.scroll, 0, contentH, b.focusedLink(), fg, collect, b.bigText)
+	PaintLayoutBig(cg, b.Layout, b.Scroll, 0, contentH, b.focusedLink(), fg, collect, b.bigText)
 	b.paintControlFocus(cg, 0, contentH)
 	b.paintInputSelection(cg, 0, contentH)
 	b.paintInputCursor(cg, 0, contentH)
@@ -410,7 +410,7 @@ func (b *Browser) footerModel() footerModel {
 	}
 	leftText := b.footerLeft()
 	pdfHint, pdfHintX := "", -1
-	if leftText == " Ready" && b.page != nil && b.page.PDF != nil {
+	if leftText == " Ready" && b.Page != nil && b.Page.PDF != nil {
 		if text, hint, cell, ok := b.pdfFooterLine(avail); ok {
 			leftText, pdfHint, pdfHintX = text, hint, cell
 		}
@@ -509,8 +509,8 @@ func (b *Browser) drawChrome(g *Grid) {
 				g.Text(cx, y, tail, hs, headerFG)
 			} else {
 				u := ""
-				if b.url != nil {
-					u = b.url.String()
+				if b.URL != nil {
+					u = b.URL.String()
 				}
 				g.Text(x, y, fitWidth(" "+u+" ", width), us, headerFG)
 			}
@@ -550,8 +550,8 @@ func (b *Browser) drawChrome(g *Grid) {
 			helpX := configX - helpW
 			histX := helpX - historyW
 			title := "MOB³"
-			if b.page != nil && b.page.Title != "" {
-				title = b.page.Title
+			if b.Page != nil && b.Page.Title != "" {
+				title = b.Page.Title
 			}
 			if room := histX - x; room > 0 {
 				titleFG := RGB(0xff, 0xd7, 0x66)
@@ -774,8 +774,8 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 	// stray wrap), and cells covered by scaled text are skipped when painting.
 	// Clear the whole screen and repaint on any scroll change so stale content
 	// can never show through the skipped cells.
-	if b.scroll != b.lastScroll {
-		b.lastScroll = b.scroll
+	if b.Scroll != b.lastScroll {
+		b.lastScroll = b.Scroll
 		b.prev = nil
 	}
 	// Entering or leaving hint/modal mode switches between native inline
@@ -857,14 +857,14 @@ func tailWidth(s string, max int) string {
 }
 
 func (b *Browser) scrollPercent() int {
-	if b.layout == nil || b.layout.Height <= 0 {
+	if b.Layout == nil || b.Layout.Height <= 0 {
 		return 0
 	}
-	view := b.layout.Height - b.viewportHeight()
+	view := b.Layout.Height - b.viewportHeight()
 	if view <= 0 {
 		return 0
 	}
-	pct := b.scroll * 100 / view
+	pct := b.Scroll * 100 / view
 	if pct < 0 {
 		pct = 0
 	}
@@ -1031,9 +1031,9 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	// Rebuild the page in the new mode instead of reloading it. Decoded images
 	// stay on the page; layout hides them when images are off, and a page
 	// loaded with images disabled fetches them here when they are turned on.
-	if b.page != nil && b.page.Root != nil {
+	if b.Page != nil && b.Page.Root != nil {
 		if !hideImages && b.loader != nil {
-			b.loader.loadInlineSVGs(b.page.Root)
+			b.loader.loadInlineSVGs(b.Page.Root)
 			if !b.loader.deferImages {
 				b.refreshImages()
 			}

@@ -22,8 +22,8 @@ func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	root := ParseHTML(`<html><body><p>Alpha beta</p><p>alpha gamma</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, 60)
 
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha")
 	if got := len(b.findMatches); got != 2 {
@@ -75,8 +75,8 @@ func TestFindWordEditing(t *testing.T) {
 	root := ParseHTML(`<html><body><p>alpha beta gamma</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, 60)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha beta gamma")
 
 	b.handleFindKey("alt-backspace")
@@ -111,8 +111,8 @@ func TestFindMultiWordQuery(t *testing.T) {
 			root := ParseHTML(`<html><body><p>reader mode</p><p>reader mode again</p></body></html>`)
 			u := mustParse(t, "https://example.com/")
 			b := NewBrowser(tc.width, 20)
-			b.page = &Page{URL: u, Base: u, Root: root}
-			b.layout = BuildLayout(root, nil, tc.width)
+			b.Page = &Page{URL: u, Base: u, Root: root}
+			b.Layout = BuildLayout(root, nil, tc.width)
 			typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
 			if got := len(b.findMatches); got != 2 {
 				t.Fatalf("matches = %d, want 2", got)
@@ -128,8 +128,8 @@ func TestFindMultiWordNormalisesWhitespace(t *testing.T) {
 	root := ParseHTML(`<html><body><p>reader   mode</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, 60)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader  mode")
 	if got := len(b.findMatches); got != 1 {
 		t.Fatalf("matches = %d, want 1", got)
@@ -143,8 +143,8 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := NewBrowser(80, 20)
-	b.page = help
-	b.layout = BuildLayout(help.Root, help.Author, 80)
+	b.Page = help
+	b.Layout = BuildLayout(help.Root, help.Author, 80)
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "reader mode")
 	if len(b.findMatches) == 0 {
 		t.Fatal("help page multi-word search found no matches")
@@ -155,7 +155,7 @@ func TestFindHTMLConsole(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true
 	b.consolePane = consoleHTML
-	b.page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
+	b.Page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
 	typeFindQuery(t, b, func() { b.handleConsoleKey("/") }, "needle")
 	if b.findScope != findScopeHTML {
 		t.Fatalf("find scope = %d, want HTML", b.findScope)
@@ -187,9 +187,9 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="#one">evidence link</a></p><p>plain evidence text</p><div id="one">target</div></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(80, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.url = u
-	b.layout = BuildLayout(root, nil, 80)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.URL = u
+	b.Layout = BuildLayout(root, nil, 80)
 
 	// The first match is the link text.
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "evidence")
@@ -200,8 +200,8 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 
 	// f follows the matched link rather than opening hint mode.
 	b.HandleKey("f")
-	if b.findActive || b.url == nil || b.url.Fragment != "one" {
-		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.findActive, b.url)
+	if b.findActive || b.URL == nil || b.URL.Fragment != "one" {
+		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.findActive, b.URL)
 	}
 
 	// The second match is plain text, so the hint disappears.
@@ -231,8 +231,8 @@ func TestFindStatusPersistsWhileScrolling(t *testing.T) {
 	root := ParseHTML(sb.String())
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, 60)
 
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "alpha")
 	b.handleFindKey("enter")
@@ -273,8 +273,8 @@ func TestApplyFindCommand(t *testing.T) {
 	root := ParseHTML(`<html><body><p>Alpha beta</p><p>alpha gamma</p></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.page = &Page{URL: u, Base: u, Root: root}
-	b.layout = BuildLayout(root, nil, 60)
+	b.Page = &Page{URL: u, Base: u, Root: root}
+	b.Layout = BuildLayout(root, nil, 60)
 	b.emitFrames = true
 	b.frontendChrome = true
 

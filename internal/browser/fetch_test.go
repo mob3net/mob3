@@ -1501,8 +1501,8 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	// Applying the batch installs the decoded image without a page reload.
 	b := NewBrowser(60, 20)
 	b.loader = loader
-	b.page = page
-	b.url = page.URL
+	b.Page = page
+	b.URL = page.URL
 	b.loadSeq = 1
 	b.deferredImages = true
 	if !b.applyDeferredImageBatch(imageBatch{seq: 1, results: results, done: true}) {
@@ -1515,7 +1515,7 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 		t.Fatal("deferred flag stayed set")
 	}
 	found := false
-	for _, f := range b.layout.Frags {
+	for _, f := range b.Layout.Frags {
 		if f.Kind == fragImage && f.Node == img {
 			found = true
 		}

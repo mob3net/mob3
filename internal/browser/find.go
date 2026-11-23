@@ -62,7 +62,7 @@ func (b *Browser) findStatusText() string {
 
 // currentFindLink returns the link containing the current page find match.
 func (b *Browser) currentFindLink() *LinkInfo {
-	if b.findScope != findScopePage || b.layout == nil || len(b.findMatches) == 0 {
+	if b.findScope != findScopePage || b.Layout == nil || len(b.findMatches) == 0 {
 		return nil
 	}
 	idx := b.findIdx
@@ -70,10 +70,10 @@ func (b *Browser) currentFindLink() *LinkInfo {
 		idx = 0
 	}
 	m := b.findMatches[idx]
-	if m.Frag < 0 || m.Frag >= len(b.layout.Frags) {
+	if m.Frag < 0 || m.Frag >= len(b.Layout.Frags) {
 		return nil
 	}
-	return b.layout.Frags[m.Frag].Link
+	return b.Layout.Frags[m.Frag].Link
 }
 
 func (b *Browser) findBarCount() string {
@@ -162,7 +162,7 @@ func (b *Browser) findAnchor() int {
 		l := newConsoleLayout(b.height, consoleHTML)
 		return paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
 	}
-	return b.scroll
+	return b.Scroll
 }
 
 // reindexFind keeps highlights valid after a layout rebuild.
@@ -184,7 +184,7 @@ func (b *Browser) computeFindMatches() []findMatch {
 	if b.findScope == findScopeHTML {
 		return engine.FindHTMLMatches(b.htmlLines(b.width-2), b.findText)
 	}
-	return engine.FindPageMatches(b.layout, b.findText, b.bigText)
+	return engine.FindPageMatches(b.Layout, b.findText, b.bigText)
 }
 
 func (b *Browser) findNext(dir int) {
@@ -235,10 +235,10 @@ func (b *Browser) focusFindMatch(idx int) {
 	if rows < 1 {
 		return
 	}
-	if m.Y < b.scroll {
-		b.scroll = m.Y
-	} else if m.Y >= b.scroll+rows {
-		b.scroll = m.Y - rows + 1
+	if m.Y < b.Scroll {
+		b.Scroll = m.Y
+	} else if m.Y >= b.Scroll+rows {
+		b.Scroll = m.Y - rows + 1
 	}
 	b.clampScroll()
 }
@@ -326,7 +326,7 @@ func (b *Browser) paintFindPage(g *Grid, top, bottom int) {
 			rects = []findRect{{X: m.X, Y: m.Y, W: m.W, H: m.H}}
 		}
 		for _, r := range rects {
-			y := r.Y - b.scroll + top
+			y := r.Y - b.Scroll + top
 			if y < top || y >= bottom || y < 0 || y >= g.H {
 				continue
 			}

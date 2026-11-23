@@ -62,7 +62,7 @@ func (h *testHistory) apply(c protocol.HistoryCommit) {
 
 func (h *testHistory) record(b *Browser) {
 	if h.index >= 0 && h.index < len(h.entries) {
-		h.entries[h.index].scroll = b.scroll
+		h.entries[h.index].scroll = b.Scroll
 	}
 }
 
@@ -211,10 +211,10 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 		t.Fatalf("history = %+v, want one entry", h.entries)
 	}
 
-	b.scroll = 2
+	b.Scroll = 2
 	h.record(b)
 	idx := -1
-	for i, li := range b.layout.Links {
+	for i, li := range b.Layout.Links {
 		if li.Href == "#target" {
 			idx = i
 		}
@@ -228,32 +228,32 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	if len(h.entries) != 2 {
 		t.Fatalf("history after anchor = %+v, want two entries", h.entries)
 	}
-	if b.url == nil || b.url.Fragment != "target" {
-		t.Fatalf("url after anchor = %v", b.url)
+	if b.URL == nil || b.URL.Fragment != "target" {
+		t.Fatalf("url after anchor = %v", b.URL)
 	}
-	anchorScroll := b.scroll
+	anchorScroll := b.Scroll
 	if anchorScroll == 2 {
 		t.Fatal("anchor did not scroll")
 	}
 
 	// Scrolling on the anchored entry should be remembered by forward.
-	b.scroll = anchorScroll + 5
+	b.Scroll = anchorScroll + 5
 	b.clampScroll()
-	rememberedScroll := b.scroll
+	rememberedScroll := b.Scroll
 	h.back(b)
-	if b.url == nil || b.url.Fragment != "" {
-		t.Fatalf("url after back = %v", b.url)
+	if b.URL == nil || b.URL.Fragment != "" {
+		t.Fatalf("url after back = %v", b.URL)
 	}
-	if b.scroll != 2 {
-		t.Fatalf("back scroll = %d, want 2", b.scroll)
+	if b.Scroll != 2 {
+		t.Fatalf("back scroll = %d, want 2", b.Scroll)
 	}
 
 	h.forward(b)
-	if b.url == nil || b.url.Fragment != "target" {
-		t.Fatalf("url after forward = %v", b.url)
+	if b.URL == nil || b.URL.Fragment != "target" {
+		t.Fatalf("url after forward = %v", b.URL)
 	}
-	if b.scroll != rememberedScroll {
-		t.Fatalf("forward scroll = %d, want %d", b.scroll, rememberedScroll)
+	if b.Scroll != rememberedScroll {
+		t.Fatalf("forward scroll = %d, want %d", b.Scroll, rememberedScroll)
 	}
 }
 
@@ -268,35 +268,35 @@ func TestBackRestoresPageScroll(t *testing.T) {
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
 	}
 	navigateAndFinish(t, b, "https://example.com/a")
-	b.scroll = 5
+	b.Scroll = 5
 	h.record(b)
 	navigateAndFinish(t, b, "https://example.com/b")
-	if b.scroll != 0 {
-		t.Fatalf("new page scroll = %d, want 0", b.scroll)
+	if b.Scroll != 0 {
+		t.Fatalf("new page scroll = %d, want 0", b.Scroll)
 	}
-	b.scroll = 7
+	b.Scroll = 7
 	h.back(b)
 	if loads != 2 {
 		t.Fatalf("back refetched the page: loads = %d", loads)
 	}
-	if b.url == nil || b.url.Path != "/a" {
-		t.Fatalf("url after back = %v", b.url)
+	if b.URL == nil || b.URL.Path != "/a" {
+		t.Fatalf("url after back = %v", b.URL)
 	}
-	if b.scroll != 5 {
-		t.Fatalf("back scroll = %d, want 5", b.scroll)
+	if b.Scroll != 5 {
+		t.Fatalf("back scroll = %d, want 5", b.Scroll)
 	}
-	if b.page == nil || b.page.Title != "https://example.com/a" {
-		t.Fatalf("back did not restore the cached page: %+v", b.page)
+	if b.Page == nil || b.Page.Title != "https://example.com/a" {
+		t.Fatalf("back did not restore the cached page: %+v", b.Page)
 	}
 	h.forward(b)
 	if loads != 2 {
 		t.Fatalf("forward refetched the page: loads = %d", loads)
 	}
-	if b.url == nil || b.url.Path != "/b" {
-		t.Fatalf("url after forward = %v", b.url)
+	if b.URL == nil || b.URL.Path != "/b" {
+		t.Fatalf("url after forward = %v", b.URL)
 	}
-	if b.scroll != 7 {
-		t.Fatalf("forward scroll = %d, want 7", b.scroll)
+	if b.Scroll != 7 {
+		t.Fatalf("forward scroll = %d, want 7", b.Scroll)
 	}
 }
 
@@ -315,16 +315,16 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 		return page, nil
 	}
 	withQuietStdout(t, func() { navigateAndFinish(t, b, "https://example.com/a") })
-	if b.page.Title != "A1" {
-		t.Fatalf("script title = %q", b.page.Title)
+	if b.Page.Title != "A1" {
+		t.Fatalf("script title = %q", b.Page.Title)
 	}
 	navigateAndFinish(t, b, "https://example.com/b")
 	withQuietStdout(t, func() { h.back(b) })
 	if loads != 2 {
 		t.Fatalf("back refetched the page: loads = %d", loads)
 	}
-	if b.page.Title != "A1" {
-		t.Fatalf("cached title = %q, want A1", b.page.Title)
+	if b.Page.Title != "A1" {
+		t.Fatalf("cached title = %q, want A1", b.Page.Title)
 	}
 	if b.js == nil {
 		t.Fatal("cached page lost its JavaScript runtime")
@@ -579,9 +579,9 @@ func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.historyCacheBytes = 2 << 20 // single-page cap is 1 MiB
 	u := mustParse(t, "https://example.com/heavy")
-	b.url = u
+	b.URL = u
 	b.entryID = 1
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body><p>heavy</p></body></html>`),
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body><p>heavy</p></body></html>`),
 		RawHTML: strings.Repeat("x", 1200*1024)}
 	if b.cacheCurrentPage() {
 		t.Fatal("page heavier than the single-page cap was cached")
@@ -589,7 +589,7 @@ func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	if b.historyCache[1] != nil {
 		t.Fatal("heavy page was stored in the cache")
 	}
-	b.page.RawHTML = "<html><body><p>light</p></body></html>"
+	b.Page.RawHTML = "<html><body><p>light</p></body></html>"
 	if !b.cacheCurrentPage() {
 		t.Fatal("light page was not cached")
 	}
@@ -733,11 +733,11 @@ func TestRestoreFetchesUncachedEntryWithScroll(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("restore did not load")
 	}
-	if b.entryID != 9 || b.url == nil || b.url.Path != "/c" {
-		t.Fatalf("entry=%d url=%v", b.entryID, b.url)
+	if b.entryID != 9 || b.URL == nil || b.URL.Path != "/c" {
+		t.Fatalf("entry=%d url=%v", b.entryID, b.URL)
 	}
-	if b.scroll != 7 {
-		t.Fatalf("scroll = %d, want 7", b.scroll)
+	if b.Scroll != 7 {
+		t.Fatalf("scroll = %d, want 7", b.Scroll)
 	}
 	if got := h.entries[len(h.entries)-1]; got.id != 9 || got.url != "https://example.com/c" || got.scroll != 7 {
 		t.Fatalf("restore commit = %+v", got)

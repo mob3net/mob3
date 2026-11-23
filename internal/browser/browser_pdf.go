@@ -11,10 +11,10 @@ import "fmt"
 // scrolls. Called after every layout pass.
 func (b *Browser) updatePDFPageStarts() {
 	b.pdfStarts = b.pdfStarts[:0]
-	if b.page == nil || b.page.PDF == nil || b.layout == nil {
+	if b.Page == nil || b.Page.PDF == nil || b.Layout == nil {
 		return
 	}
-	nodes := b.page.PDF.PageNodes
+	nodes := b.Page.PDF.PageNodes
 	if len(nodes) == 0 {
 		return
 	}
@@ -26,7 +26,7 @@ func (b *Browser) updatePDFPageStarts() {
 	for i := range starts {
 		starts[i] = -1
 	}
-	for _, f := range b.layout.Frags {
+	for _, f := range b.Layout.Frags {
 		for n := f.Node; n != nil; n = n.Parent {
 			i, ok := index[n]
 			if !ok {
@@ -54,10 +54,10 @@ func (b *Browser) updatePDFPageStarts() {
 // pdfPageNumber returns the page shown at the top of the viewport, or 0 when
 // the current document is not a PDF.
 func (b *Browser) pdfPageNumber() int {
-	if b.page == nil || b.page.PDF == nil {
+	if b.Page == nil || b.Page.PDF == nil {
 		return 0
 	}
-	n := len(b.page.PDF.Pages)
+	n := len(b.Page.PDF.Pages)
 	if n == 0 {
 		return 0
 	}
@@ -66,7 +66,7 @@ func (b *Browser) pdfPageNumber() int {
 		if i >= n {
 			break
 		}
-		if y <= b.scroll {
+		if y <= b.Scroll {
 			cur = i + 1
 		}
 	}
@@ -82,12 +82,12 @@ func (b *Browser) pdfPageNumber() int {
 // downloadCurrentPDF opens the curl dialog for the current PDF document. It
 // does nothing unless the PDF viewer is showing.
 func (b *Browser) downloadCurrentPDF() {
-	if b.page == nil || b.page.PDF == nil {
+	if b.Page == nil || b.Page.PDF == nil {
 		return
 	}
-	u := b.url
+	u := b.URL
 	if u == nil {
-		u = b.page.URL
+		u = b.Page.URL
 	}
 	if u == nil {
 		b.status = "This PDF has no download URL"
@@ -111,18 +111,18 @@ func (b *Browser) downloadCurrentPDF() {
 // download hint separately so it can be drawn as a clickable label. The hint is
 // dropped on terminals too narrow to hold it.
 func (b *Browser) pdfFooterLine(avail int) (text, hint string, hintCell int, ok bool) {
-	if b.page == nil || b.page.PDF == nil || len(b.page.PDF.Pages) == 0 || avail <= 0 {
+	if b.Page == nil || b.Page.PDF == nil || len(b.Page.PDF.Pages) == 0 || avail <= 0 {
 		return "", "", 0, false
 	}
-	u := b.url
+	u := b.URL
 	if u == nil {
-		u = b.page.URL
+		u = b.Page.URL
 	}
 	name := pdfDisplayName(u)
 	if name == "" {
 		name = "PDF"
 	}
-	base := fmt.Sprintf(" Page %d/%d", b.pdfPageNumber(), len(b.page.PDF.Pages))
+	base := fmt.Sprintf(" Page %d/%d", b.pdfPageNumber(), len(b.Page.PDF.Pages))
 	full := base + " (d -> Download " + name + ")"
 	if stringWidth(full) <= avail {
 		return full, "(d -> Download " + name + ")", stringWidth(base) + 1, true

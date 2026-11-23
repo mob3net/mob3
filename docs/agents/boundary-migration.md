@@ -372,9 +372,10 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Move paint and the content frame; keep native-image/terminal encoding in the browser until Phase 5.
 - [x] Move the PDF parser and document model (3b4a).
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
-- [ ] Split the session: page/content state to `engine.Session`, chrome and
-      navigation to the front end; rename `Browser` → `Session`. Still
-      `internal/browser`, 306 methods.
+- [~] Split the session: `engine.Session` now owns page/layout/URL/scroll and
+      `Browser` embeds it; methods and shell fields still need to move.
+- [ ] Rename `Browser` → `Session` and remove `internal/browser`. Still
+      306 methods.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
       lists them.
 
@@ -536,8 +537,8 @@ trusted-shell split, then Phase 6. Dependency order:
 - [ ] Rename `Browser` → `Session` and remove `internal/browser`.
 - [x] Move `browser.Execute`, `RunOptions` and mode dispatch into
       `internal/app`; the interactive boot now lives in `app/execute.go`.
-- [ ] Replace the remaining `browser.NewSession`/`Dump`/`RunMCPBoot` calls
-      with direct host/engine/frontend construction after the session split.
+- [ ] Replace the remaining `browser.NewSession`/`Dump` calls with direct
+      host/engine/frontend construction after the session split.
 - [ ] Tighten `protocol/deps_test.go`: `app` → `engine`, `host`, `frontend`,
       `protocol`; no `browser` package.
 
@@ -1130,3 +1131,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8d | Batch 29: moved radio-group, single-select and multi-select stepping into `internal/engine/form_step.go`; the browser applies visibility/status/change effects. Added engine stepping tests. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Remaining form editing/submission, then session split |
 | 2026-11-23 | 8e | Batch 30: moved control toggling into `internal/engine/form_toggle.go` (checkbox/radio/option/select action result), Tab index selection into `tab_order.go`, and input focus transitions onto `FormState`. The browser still owns menus, JS events, navigation, status and rebuilds. Added engine toggle/tab/focus tests. Forms now stop at the shell-effect boundary. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, PTY form/Tab, dump/PNG hashes | Session type split |
 | 2026-11-23 | 8f | Batch 31: moved MCP into `internal/app`: `mcp.go`, `automation_transport.go`, the handler/client, MCP boot and tool-definition docs test. Browser exposes `NewAutomationWithConfig`; app owns the JSON-RPC server and protocol client. Added app MCP protocol/screenshot/error tests. | `go test ./...`, `go vet`, full `-race`, app MCP and browser automation transport tests, MCP tools/list smoke, dump/PNG hashes | Session type split |
+| 2026-11-23 | 8g | Batch 32: started the session type split. Added `engine.Session` with `Page`, `Layout`, `URL` and `Scroll`; `Browser` now embeds it and all page state access goes through the embedded session. Methods and shell fields remain in the browser. | `go test ./...`, `go vet`, full `-race`, browser/engine tests, PTY interactive boot, dump/PNG hashes | Move content methods onto engine.Session |

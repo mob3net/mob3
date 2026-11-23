@@ -43,25 +43,25 @@ func (b *Browser) updateSelection(x, y, top, bottom int) {
 	if x >= b.width {
 		x = b.width - 1
 	}
-	docY := b.scroll + (y - top)
+	docY := b.Scroll + (y - top)
 	if docY < 0 {
 		docY = 0
 	}
 	b.selection.SetCursor(engine.CellPos{X: x, Y: docY})
 }
 
-func (b *Browser) selectedText() string { return b.selection.Text(b.layout) }
+func (b *Browser) selectedText() string { return b.selection.Text(b.Layout) }
 
 // copySelection sends the selected page text to the terminal clipboard with
 // OSC 52. Terminals and multiplexers must support it for the copy to arrive.
 func (b *Browser) copySelection() {
 	text := b.selectedText()
 	if text == "" {
-		if b.url == nil || b.url.String() == "" {
+		if b.URL == nil || b.URL.String() == "" {
 			b.status = "No URL"
 			return
 		}
-		if b.copyText(b.url.String()) {
+		if b.copyText(b.URL.String()) {
 			b.status = "Copied URL"
 		}
 		return
@@ -112,11 +112,11 @@ func (b *Browser) copyText(text string) bool {
 	return true
 }
 
-func (b *Browser) selectionSummary() string { return b.selection.Summary(b.layout) }
+func (b *Browser) selectionSummary() string { return b.selection.Summary(b.Layout) }
 
 // paintSelection highlights selected cells in the content viewport.
 func (b *Browser) paintSelection(g *Grid, top, bottom int) {
-	b.selection.Paint(g, b.layout, b.scroll, top, bottom)
+	b.selection.Paint(g, b.Layout, b.Scroll, top, bottom)
 }
 
 // copyPageText copies the whole rendered page as plain text: the rows -dump
@@ -136,8 +136,8 @@ func (b *Browser) copyViewportText() {
 }
 
 func (b *Browser) copyRenderedPage(visibleOnly bool) {
-	ly := b.layout
-	if ly == nil || b.page == nil {
+	ly := b.Layout
+	if ly == nil || b.Page == nil {
 		b.status = "Nothing to copy"
 		return
 	}
@@ -152,8 +152,8 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	if visibleOnly {
 		label = "Copied viewport"
 		// Anchor fixed and sticky fragments for the frame the user sees.
-		ly.SetFixedScroll(b.scroll)
-		start = b.scroll
+		ly.SetFixedScroll(b.Scroll)
+		start = b.Scroll
 		if start < 0 {
 			start = 0
 		}
@@ -170,7 +170,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 		// A whole-page copy shows fixed and sticky boxes at their flow
 		// positions, not shifted by the current scroll.
 		ly.SetFixedScroll(0)
-		defer ly.SetFixedScroll(b.scroll)
+		defer ly.SetFixedScroll(b.Scroll)
 	}
 	if rows < 1 {
 		b.status = "Nothing to copy"
@@ -214,8 +214,8 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	// A single metadata line makes a pasted page self-describing: which URL,
 	// which terminal and page size, and which modes produced the text.
 	url := ""
-	if b.url != nil {
-		url = stripTerminalControls(b.url.String())
+	if b.URL != nil {
+		url = stripTerminalControls(b.URL.String())
 	}
 	if len(url) > 500 {
 		cut := 500
@@ -227,7 +227,7 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	header := fmt.Sprintf(
 		"# url=%s build=%s term=%dx%d page=%dx%d rows=%d scroll=%d zoom=%s dark=%s reader=%s js=%s graphics=%s cell=%dx%d layout_truncated=%t copy_truncated=%t lines=%d",
 		url, buildVersion, b.width, b.height, width, b.viewportHeight(), docRows,
-		b.scroll, zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
+		b.Scroll, zoomPercentLabel(b.zoom), onOff(b.dark), onOff(b.reader), onOff(!b.noJS),
 		strings.TrimPrefix(b.graphicsStatusText(), "Graphics:"), b.cellW, b.cellH,
 		ly.Truncated, copyTruncated, pageLines)
 	text = header + "\n" + text

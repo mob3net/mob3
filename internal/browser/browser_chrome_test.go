@@ -13,7 +13,7 @@ import (
 func TestHeaderHitRegions(t *testing.T) {
 	b := NewBrowser(60, 10)
 	u, _ := url.Parse("https://example.com/a")
-	b.url = u
+	b.URL = u
 	drawQuiet(b)
 
 	if len(b.headerHits) != 9 {
@@ -123,7 +123,7 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	b := NewBrowser(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
-	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
+	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
 	b.noBigText = true
 	b.rebuild()
 	if b.bigText {
@@ -138,8 +138,8 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 
 func TestFooterOmitsScrollPercent(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.layout = &Layout{Height: 107}
-	b.scroll = 50
+	b.Layout = &Layout{Height: 107}
+	b.Scroll = 50
 	drawQuiet(b)
 	line := plainLine(b.prev[len(b.prev)-1])
 	if strings.Contains(line, "%") {
@@ -152,7 +152,7 @@ func TestFooterOmitsScrollPercent(t *testing.T) {
 
 func TestFooterShowsUsage(t *testing.T) {
 	b := NewBrowser(120, 10)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
 	line := plainLine(b.prev[len(b.prev)-1])
@@ -168,7 +168,7 @@ func TestFooterShowsUsage(t *testing.T) {
 
 func TestFooterUsageDropsOnNarrow(t *testing.T) {
 	b := NewBrowser(20, 10)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	b.usage = procUsage{rss: 18 << 20}
 	drawQuiet(b)
 	line := plainLine(b.prev[len(b.prev)-1])
@@ -182,7 +182,7 @@ func TestFooterUsageDropsOnNarrow(t *testing.T) {
 
 func TestPageScrollbarMouse(t *testing.T) {
 	b := NewBrowser(20, 10)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	drawQuiet(b)
 	if b.scrollBar == nil {
 		t.Fatal("no scrollbar for a long page")
@@ -192,19 +192,19 @@ func TestPageScrollbarMouse(t *testing.T) {
 		t.Fatalf("scrollbar track = %+v", info)
 	}
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true})
-	if b.scroll != b.maxScroll() || b.scroll == 0 {
-		t.Fatalf("bottom click scroll = %d, max = %d", b.scroll, b.maxScroll())
+	if b.Scroll != b.maxScroll() || b.Scroll == 0 {
+		t.Fatalf("bottom click scroll = %d, max = %d", b.Scroll, b.maxScroll())
 	}
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 1, Press: true})
-	if b.scroll != 0 {
-		t.Fatalf("top click scroll = %d", b.scroll)
+	if b.Scroll != 0 {
+		t.Fatalf("top click scroll = %d", b.Scroll)
 	}
 
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + 3, Press: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: true, Motion: true})
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false})
-	if b.scroll != b.maxScroll() {
-		t.Fatalf("drag scroll = %d, max = %d", b.scroll, b.maxScroll())
+	if b.Scroll != b.maxScroll() {
+		t.Fatalf("drag scroll = %d, max = %d", b.Scroll, b.maxScroll())
 	}
 	if b.scrollDrag {
 		t.Fatal("scrollbar drag did not end")
@@ -217,10 +217,10 @@ func TestPageScrollbarMouse(t *testing.T) {
 	if b.scrollDrag {
 		t.Fatal("release with motion bit kept the scrollbar drag active")
 	}
-	dragEnd := b.scroll
+	dragEnd := b.Scroll
 	b.HandleMouse(MouseEvent{Button: 0, X: b.width, Y: info.trackTop + info.trackH, Press: false, Motion: true})
-	if b.scroll != dragEnd {
-		t.Fatalf("pointer motion after release scrolled: %d -> %d", dragEnd, b.scroll)
+	if b.Scroll != dragEnd {
+		t.Fatalf("pointer motion after release scrolled: %d -> %d", dragEnd, b.Scroll)
 	}
 
 	// Releasing over the toolbar also ends the drag.
@@ -232,7 +232,7 @@ func TestPageScrollbarMouse(t *testing.T) {
 	}
 
 	short := NewBrowser(20, 10)
-	short.layout = &Layout{Height: 5}
+	short.Layout = &Layout{Height: 5}
 	drawQuiet(short)
 	if short.scrollBar != nil {
 		t.Fatal("scrollbar shown for a page that fits")
@@ -241,7 +241,7 @@ func TestPageScrollbarMouse(t *testing.T) {
 
 func TestFooterConsoleIcon(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	drawQuiet(b)
 	var hit *headerHit
 	for i := range b.footerHits {
@@ -263,7 +263,7 @@ func TestFooterConsoleIcon(t *testing.T) {
 
 func TestScrollRepaintsChrome(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.layout = &Layout{Height: 100}
+	b.Layout = &Layout{Height: 100}
 	drawQuiet(b)
 	b.prev[0] = "stale header"
 	b.scrollBy(1)
@@ -286,7 +286,7 @@ func TestScrollRepaintsChrome(t *testing.T) {
 func TestHeaderClicks(t *testing.T) {
 	b := NewBrowser(60, 10)
 	u, _ := url.Parse("https://example.com/a")
-	b.url = u
+	b.URL = u
 	drawQuiet(b)
 
 	b.HandleMouse(MouseEvent{Button: 0, X: 7, Y: 2, Press: true})
@@ -344,8 +344,8 @@ func TestHeaderClicks(t *testing.T) {
 	}
 
 	b.HandleMouse(MouseEvent{Button: 0, X: 58, Y: 1, Press: true})
-	if b.page == nil || b.page.Title != "Config — MOB³" {
-		t.Fatalf("config page = %+v", b.page)
+	if b.Page == nil || b.Page.Title != "Config — MOB³" {
+		t.Fatalf("config page = %+v", b.Page)
 	}
 }
 
@@ -640,8 +640,8 @@ func TestDialogRendering(t *testing.T) {
 func TestModalCloseButtonClosesWithMouse(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.URL = u
 	b.showDownload(u.String(), "")
 	drawQuiet(b)
 	r := b.modalClose
@@ -675,8 +675,8 @@ func TestModalCloseButtonClosesWithMouse(t *testing.T) {
 func TestModalClearsPageGlyphs(t *testing.T) {
 	u := mustParse(t, "https://example.com/file.zip")
 	b := NewBrowser(60, 15)
-	b.page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<p>x</p>`)}
+	b.URL = u
 	b.showDownload(u.String(), "")
 	g := NewGrid(60, 15, RGB(0, 0, 0), RGB(255, 255, 255))
 	for y := 0; y < g.H; y++ {
@@ -711,7 +711,7 @@ func TestModalClearsPageGlyphs(t *testing.T) {
 func TestFooterStatusColors(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.color = true
-	b.layout = &Layout{Height: 10}
+	b.Layout = &Layout{Height: 10}
 	cases := []struct {
 		status string
 		code   string
@@ -778,16 +778,16 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 	b.loader = NewLoader()
 	b.loader.noImages = false
-	b.page = &Page{URL: u, Base: u, Root: doc}
-	b.url = u
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.rebuild()
-	page := b.page
+	page := b.Page
 	seq := b.loadSeq
 	hasImage := func() bool {
-		for _, f := range b.layout.Frags {
+		for _, f := range b.Layout.Frags {
 			if f.Kind == fragImage {
 				return true
 			}
@@ -799,7 +799,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // native -> blocks
-	if b.page != page || b.loadSeq != seq {
+	if b.Page != page || b.loadSeq != seq {
 		t.Fatal("changing to blocks reloaded the page")
 	}
 	if b.gfx != nil || !hasImage() {
@@ -807,7 +807,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // blocks -> none
-	if b.page != page || b.loadSeq != seq {
+	if b.Page != page || b.loadSeq != seq {
 		t.Fatal("changing to none reloaded the page")
 	}
 	if !b.loader.noImages {
@@ -818,7 +818,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // none -> native
-	if b.page != page || b.loadSeq != seq {
+	if b.Page != page || b.loadSeq != seq {
 		t.Fatal("changing back to native graphics reloaded the page")
 	}
 	if !hasImage() {
@@ -851,7 +851,7 @@ func TestModalDisablesScaledText(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	b := NewBrowser(40, 10)
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
-	b.page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
+	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
 	b.rebuild()
 	if !b.bigText {
 		t.Fatal("scaled text should be enabled in kitty by default")

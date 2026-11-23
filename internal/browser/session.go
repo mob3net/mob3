@@ -196,11 +196,11 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 	case protocol.Scroll:
 		switch {
 		case v.Top:
-			b.scrollBy(-b.scroll)
+			b.scrollBy(-b.Scroll)
 		case v.Bottom:
-			b.scrollBy(b.maxScroll() - b.scroll)
+			b.scrollBy(b.maxScroll() - b.Scroll)
 		case v.HasTo:
-			b.scrollBy(v.To - b.scroll)
+			b.scrollBy(v.To - b.Scroll)
 		default:
 			b.scrollBy(v.Delta)
 		}

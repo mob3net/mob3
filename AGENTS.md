@@ -198,9 +198,10 @@ published by the Pages build.
   interactive session boot. It still imports `internal/browser` for the
   session type and non-interactive render helpers until the session split. MCP
   transport lives in `internal/app`.
-- `internal/browser/` — package `browser` with the 306-method `Browser`, its
-  construction helpers, chrome/dialogs/navigation loads and tests until the
-  boundary migration completes. Nothing under `internal` is imported from
+- `internal/browser/` — package `browser` with the 306-method `Browser`, which
+  embeds `engine.Session` for page/layout/URL/scroll, plus construction helpers,
+  chrome/dialogs/navigation loads and tests until the boundary migration
+  completes. Nothing under `internal` is imported from
   outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
