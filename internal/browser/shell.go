@@ -16,8 +16,13 @@ type contentRect struct {
 	Height      int
 }
 
-// headerRows returns the number of rows used by the top bar.
+// headerRows returns the number of rows used by the top bar. The front end
+// supplies the content rectangle; the legacy rule remains for direct callers
+// and tests.
 func (b *Browser) headerRows() int {
+	if b.contentTop >= 0 {
+		return b.contentTop
+	}
 	if b.height < 3 {
 		return 0
 	}
@@ -29,10 +34,25 @@ func (b *Browser) headerRows() int {
 
 // viewport returns the first content row and the exclusive end row.
 func (b *Browser) viewport() (int, int) {
+	if b.contentTop >= 0 && b.contentHeight > 0 {
+		return b.contentTop, b.contentTop + b.contentHeight
+	}
 	if b.height < 3 {
 		return 0, b.height
 	}
 	return b.headerRows(), b.height - 1
+}
+
+// normalizeContentRect validates the front-end rectangle against the terminal
+// height. Zero values select the legacy derivation.
+func normalizeContentRect(h, top, contentH int) (int, int) {
+	if top < 0 || contentH < 1 || top >= h {
+		return -1, 0
+	}
+	if top+contentH > h {
+		contentH = h - top
+	}
+	return top, contentH
 }
 
 func (b *Browser) viewportHeight() int {

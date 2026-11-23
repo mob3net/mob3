@@ -240,8 +240,10 @@ func Execute(o RunOptions) int {
 		return 1
 	}
 	defer session.Close()
+	top, contentH := frontend.ContentBounds(h)
 	if err := session.Send(protocol.Command{Body: protocol.Init{
-		Width: w, Height: h, CellW: cellW, CellH: cellH, Zoom: zoomFactor, Caps: caps,
+		Width: w, Height: h, ContentTop: top, ContentHeight: contentH,
+		CellW: cellW, CellH: cellH, Zoom: zoomFactor, Caps: caps,
 	}}); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: session init: %v\n", err)
 		return 1

@@ -153,9 +153,7 @@ func (l *SessionLoop) Run() error {
 				continue
 			}
 			if w, h, ok := l.TerminalSize(); ok {
-				if err := l.Session.Send(protocol.Command{Body: protocol.Resize{
-					Width: w, Height: h, CellW: l.CellW, CellH: l.CellH,
-				}}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
+				if err := l.Session.Send(protocol.Command{Body: l.resizeCommand(w, h)}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
 					return fmt.Errorf("session resize: %w", err)
 				}
 			}
@@ -173,6 +171,16 @@ func (l *SessionLoop) Run() error {
 		case <-l.Quit:
 			return nil
 		}
+	}
+}
+
+// resizeCommand builds the terminal resize plus the front-end-owned content
+// rectangle.
+func (l *SessionLoop) resizeCommand(w, h int) protocol.Resize {
+	top, contentH := ContentBounds(h)
+	return protocol.Resize{
+		Width: w, Height: h, ContentTop: top, ContentHeight: contentH,
+		CellW: l.CellW, CellH: l.CellH,
 	}
 }
 

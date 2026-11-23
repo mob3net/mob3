@@ -167,7 +167,7 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 			setLayoutZoom(v.Zoom)
 		}
 		b.color = v.Caps&protocol.CapColor != 0
-		b.resize(v.Width, v.Height)
+		b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
 	case protocol.Navigate:
 		b.Navigate(v.URL, v.Push)
 	case protocol.History:
@@ -175,7 +175,7 @@ func (b *Browser) handleCommand(cmd protocol.Command) (bool, error) {
 	case protocol.Restore:
 		b.restoreEntry(v.EntryID, v.URL, v.Scroll)
 	case protocol.Resize:
-		b.resize(v.Width, v.Height)
+		b.resizeWithContent(v.Width, v.Height, v.ContentTop, v.ContentHeight)
 		if v.CellW > 0 {
 			b.cellW = v.CellW
 		}

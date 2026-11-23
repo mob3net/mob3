@@ -25,9 +25,9 @@ func testFrame() Frame {
 
 func testCommands() []Command {
 	return []Command{
-		{Session: 1, Seq: 1, Body: Init{Width: 100, Height: 30, CellW: 8, CellH: 16, Zoom: 1.25, Caps: CapColor | CapKittyText, Flags: InitNoJS}},
+		{Session: 1, Seq: 1, Body: Init{Width: 100, Height: 30, ContentTop: 2, ContentHeight: 27, CellW: 8, CellH: 16, Zoom: 1.25, Caps: CapColor | CapKittyText, Flags: InitNoJS}},
 		{Session: 2, Seq: 2, Body: Navigate{URL: "https://example.test/a?b=c", Push: true}},
-		{Session: 3, Seq: 3, Body: Resize{Width: 80, Height: 24, CellW: 9, CellH: 18}},
+		{Session: 3, Seq: 3, Body: Resize{Width: 80, Height: 24, ContentTop: 2, ContentHeight: 21, CellW: 9, CellH: 18}},
 		{Session: 4, Seq: 4, Body: Scroll{Delta: -3, To: 42, HasTo: true, Top: false, Bottom: true}},
 		{Session: 5, Seq: 5, Body: Key{Token: "ctrl-c"}},
 		{Session: 6, Seq: 6, Body: Mouse{X: 3, Y: 4, Button: 0, Wheel: -1, Press: true, Motion: true, Shift: true}},

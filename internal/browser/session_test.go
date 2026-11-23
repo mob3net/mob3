@@ -559,3 +559,26 @@ func TestConsoleHTMLFindCommand(t *testing.T) {
 		t.Fatalf("console view = %+v", sink.view)
 	}
 }
+
+func TestInitAndResizeUseContentGeometry(t *testing.T) {
+	b := NewBrowser(80, 24)
+	if _, err := b.handleCommand(protocol.Command{Body: protocol.Init{
+		Width: 80, Height: 24, ContentTop: 2, ContentHeight: 21,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if top, bottom := b.viewport(); top != 2 || bottom != 23 {
+		t.Fatalf("init viewport = %d,%d", top, bottom)
+	}
+	if _, err := b.handleCommand(protocol.Command{Body: protocol.Resize{
+		Width: 100, Height: 40, ContentTop: 2, ContentHeight: 37,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if top, bottom := b.viewport(); top != 2 || bottom != 39 {
+		t.Fatalf("resize viewport = %d,%d", top, bottom)
+	}
+	if b.width != 100 || b.height != 40 {
+		t.Fatalf("terminal = %dx%d", b.width, b.height)
+	}
+}

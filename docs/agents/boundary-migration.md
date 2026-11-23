@@ -13,8 +13,8 @@ terminal front end, live session loop, app dispatch and the interactive chrome
 surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
 select, download/notice, hints, the console and the session history list) are
 landed. The engine still composes chrome while a focused page form holds the
-key path. Remaining: trusted URL ownership, moving content-rectangle geometry,
-the `Browser` → `Session` split, direct app wiring and Phase 6 cleanup.
+key path. Remaining: trusted URL ownership, the `Browser` → `Session` split,
+direct app wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
 Last updated: 2026-11-22 (audited against the code).
 
@@ -186,7 +186,7 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 | --- | --- | --- | --- | --- |
 | 0 | Contract, codec, dependency test, baseline | 1 week | Done | Protocol compiles; baseline recorded |
 | 1 | Frame boundary and paint split | 1–2 weeks | Done | `-dump`/`-png` byte-identical; paint path has no ANSI |
-| 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, shell-loop split, every interactive chrome surface and the history list are front-end-owned; the trusted URL and content-rectangle geometry remain engine-side |
+| 2 | Chrome and state ownership | 2–3 weeks | Partial | The `State` snapshot, shell-loop split, every interactive chrome surface, the history list and content geometry are front-end-owned; the trusted URL/title remains engine-side |
 | 3 | Extract `internal/engine` | 3–4 weeks | Partial | DOM/style/layout/paint/PDF/JS moved; the session split and `Browser` → `Session` rename remain |
 | 4 | Extract `internal/host` and broker | 2–3 weeks | Done | Transport/cache/cookies/settings/raw fetch/JS fetch/XHR, CORS, config token and about-page rendering are split; engine cannot open sockets or parse cookies. Loader orchestration moves with 3c. |
 | 5 | Transport and lifecycle | 1–2 weeks | Partial | Interactive, dump, PNG, MCP, native images, coalescing and stream transport are done; interactive chrome ownership is done apart from the form-input fallback. The restart hook is deferred to the child-process work (D59). |
@@ -195,12 +195,12 @@ Total: **9–13 weeks**. Phase 3 dominates the risk.
 \* Phase 1 is functionally complete. The `Lines`/gfx file move is folded into
 Phase 3 under D19.
 
-\*\* Phase 2 is partial only for the trusted URL/title and content-rectangle
-geometry. Every interactive chrome surface, overlay, dialog, hint, console,
-find bar and the session history list are front-end-owned; the engine keeps
-its fallback composition for direct callers, tests and while a focused page
-form keeps keys engine-side. `protocol.Dialog`/`DialogResult` are wired in the
-interactive path.
+\*\* Phase 2 is partial only for the trusted URL/title. Every interactive
+chrome surface, overlay, dialog, hint, console, find bar, the session history
+list and content geometry are front-end-owned; the engine keeps its fallback
+composition for direct callers, tests and while a focused page form keeps keys
+engine-side. `protocol.Dialog`/`DialogResult` are wired in the interactive
+path.
 
 ### Phase 0 — Contract and baseline
 
@@ -253,9 +253,11 @@ interactive path.
       and tests.
 - [x] The `State` snapshot exists (`stateMessage`), is emitted by `Serve`, and
       is consumed by `frontend.SessionLoop`.
-- [~] The content rectangle exists (`contentRect`, `headerRows`, `viewport`),
-      but it still lives in the browser and the engine computes it from the
-      terminal size. Move the geometry to the front end.
+- [x] The front end computes the content top/height (`ContentBounds`) and
+      sends it in `Init`/`Resize`; the engine uses the supplied rectangle and
+      keeps the legacy derivation only for direct callers and tests. Terminal
+      width/height still travel for the engine fallback screen until the
+      session split.
 - [x] Base shell keys live in `frontend.SessionLoop`: quit confirmation, app
       actions, help/history and mode toggles. `State.KeysEngine` keeps keys on
       the engine path while a prompt, find, menu, console, dialog, form field
@@ -303,6 +305,9 @@ interactive path.
       presentation; the engine still builds the command.
 - [ ] The trusted URL/title still come from the engine; closing that is the
       remaining navigation-ownership step.
+- [x] Content-rectangle geometry moved to the front end (`frontend.ContentBounds`
+      → `Init`/`Resize.ContentTop/ContentHeight`); the engine no longer derives
+      chrome rows for the interactive path.
 - [x] Engine overlays are clipped to the content grid; chrome and modals
       compose above it.
 - [x] Automation still drives the same commands; full suite green.
@@ -409,7 +414,7 @@ interactive path.
       find, menus, dialogs, select, download/notice, hints, the console and
       history are front-end-drawn. The engine `Chrome`/full-frame fallback
       remains for direct callers, tests and the engine-owned form-input path.
-      The trusted URL and content-rectangle geometry remain engine-side.
+      The trusted URL/title remains engine-side.
 - [x] Move native image placement to the front end: encode `ImagePlacement`
       into `protocol.Placement`, and move kitty/iTerm2 scaling, PNG and escape
       output to `internal/frontend/gfx.go`. Frames carry placements in every
@@ -462,8 +467,11 @@ trusted-shell split, then Phase 6. Dependency order:
       composes chrome. Make the front end own chrome in that state, or move form
       editing out of the engine key path, so the engine cannot emit chrome in a
       live session.
-- [ ] Move content-rect geometry (`headerRows`, `viewport`, `contentRect`) to
-      the front end; the engine receives the content rectangle only.
+- [x] Move content-rect geometry (`headerRows`, `viewport`, `contentRect`) to
+      the front end; `ContentBounds` is computed there and sent in
+      `Init`/`Resize`. The engine keeps a legacy derivation for direct callers
+      and tests, and still receives terminal dimensions for the fallback
+      screen.
 
 **B. Dialogs and navigation**
 
@@ -1065,3 +1073,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7l | Batch 12: console HTML find moved to the front end; `Find` has a page/HTML scope, engine sends counts/highlight rectangles in `ConsoleView`, front end owns bar/query/caret/next/close. Engine old find path remains for direct callers/tests. Added console find command/view/key tests and PTY `/help` check. | `go test ./...`, `go vet`, full `-race`, console find tests, PTY console HTML find, dump/PNG hashes | Batch 13: navigation state and session split |
 | 2026-11-22 | 7m | Audit: corrected the stale status, Phase 2/5 checklists and file-ownership notes to match the landed console/find/dialog/chrome ownership. Recorded the remaining trust gap (a focused page form makes `State.FrontendChrome` false and lets the engine compose chrome), the unused `protocol.Selection` event and the unused `Navigate.RestoreScroll`, and updated the `Browser` method count to 303. No behavior change. | `go test ./...`, `go vet`, `gofmt`, `git diff --check`, dump/PNG hashes | Batch 13: navigation state, trusted URL and content-rectangle geometry |
 | 2026-11-23 | 7n | Batch 13 (D72): moved the session history list, current index, scroll offsets and `about:history` snapshot to the front end. Added `History`, `Restore` and `HistoryCommit`; the engine now keys its memory-only page cache by front-end entry ID, emits final URLs, restores cached/same-document entries, and no longer owns back/forward or `App` history actions. Automation keeps its own headless history list. Trusted URL/title ownership remains deferred. | `go test ./...`, `go vet`, full `-race`, protocol/history/cache/restore tests, front-end snapshot/commit/mouse tests, PTY H/back/forward, dump/PNG hashes | Trusted URL, content-rectangle geometry, then session split |
+| 2026-11-23 | 7o | Batch 14: moved content-rectangle geometry to the front end. `ContentBounds` computes the chrome reservation; `Init`/`Resize` carry `ContentTop`/`ContentHeight`; the engine uses the supplied rectangle and keeps the legacy derivation only for direct callers/tests. Terminal dimensions still travel for the fallback screen. Added geometry and protocol tests; PTY and hashes unchanged. | `go test ./...`, `go vet`, full `-race`, geometry/state/protocol tests, PTY H/back, dump/PNG hashes | Trusted URL/title, then session split |

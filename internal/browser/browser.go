@@ -40,6 +40,10 @@ type Browser struct {
 	page   *Page
 
 	width, height int
+	// contentTop/contentHeight are the front-end-owned page rectangle. A
+	// negative top means direct callers/tests use the legacy derivation.
+	contentTop    int
+	contentHeight int
 	cellW, cellH  int
 	layout        *Layout
 	scroll        int
@@ -363,7 +367,7 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		loader: NewLoader(), width: w, height: h, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
+		loader: NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
 		nextEntryID:       1,
 		historyCache:      make(map[uint64]*cachedPage),
 		historyViewCur:    -1,
@@ -1134,16 +1138,25 @@ func (b *Browser) toggleJavaScript() {
 }
 
 func (b *Browser) resize(w, h int) {
+	b.resizeWithContent(w, h, -1, 0)
+}
+
+// resizeWithContent applies the terminal size and the front-end-owned content
+// rectangle. A negative top keeps the legacy chrome derivation for direct
+// callers and tests.
+func (b *Browser) resizeWithContent(w, h, top, contentH int) {
 	if w < 10 {
 		w = 10
 	}
 	if h < 3 {
 		h = 3
 	}
-	if w == b.width && h == b.height {
+	top, contentH = normalizeContentRect(h, top, contentH)
+	if w == b.width && h == b.height && top == b.contentTop && contentH == b.contentHeight {
 		return
 	}
 	b.width, b.height = w, h
+	b.contentTop, b.contentHeight = top, contentH
 	b.applyImageCap()
 	b.prev = nil
 	b.clearSelection()

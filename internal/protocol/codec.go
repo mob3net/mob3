@@ -59,6 +59,8 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		kind = CmdInit
 		e.i32(v.Width)
 		e.i32(v.Height)
+		e.i32(v.ContentTop)
+		e.i32(v.ContentHeight)
 		e.i32(v.CellW)
 		e.i32(v.CellH)
 		e.f64(v.Zoom)
@@ -84,6 +86,8 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		kind = CmdResize
 		e.i32(v.Width)
 		e.i32(v.Height)
+		e.i32(v.ContentTop)
+		e.i32(v.ContentHeight)
 		e.i32(v.CellW)
 		e.i32(v.CellH)
 	case Scroll:
@@ -390,13 +394,15 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 	switch h.kind {
 	case CmdInit:
 		body = Init{
-			Width:  d.i32(),
-			Height: d.i32(),
-			CellW:  d.i32(),
-			CellH:  d.i32(),
-			Zoom:   d.f64(),
-			Caps:   Capabilities(d.u32()),
-			Flags:  d.u32(),
+			Width:         d.i32(),
+			Height:        d.i32(),
+			ContentTop:    d.i32(),
+			ContentHeight: d.i32(),
+			CellW:         d.i32(),
+			CellH:         d.i32(),
+			Zoom:          d.f64(),
+			Caps:          Capabilities(d.u32()),
+			Flags:         d.u32(),
 		}
 	case CmdNavigate:
 		body = Navigate{URL: d.str(), Push: d.bool()}
@@ -410,7 +416,11 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 	case CmdRestore:
 		body = Restore{EntryID: d.u64(), URL: d.str(), Scroll: d.i32()}
 	case CmdResize:
-		body = Resize{Width: d.i32(), Height: d.i32(), CellW: d.i32(), CellH: d.i32()}
+		body = Resize{
+			Width: d.i32(), Height: d.i32(),
+			ContentTop: d.i32(), ContentHeight: d.i32(),
+			CellW: d.i32(), CellH: d.i32(),
+		}
 	case CmdScroll:
 		body = Scroll{
 			Delta:  d.i32(),

@@ -669,3 +669,17 @@ func minInt(a, b int) int {
 	}
 	return b
 }
+
+// ContentBounds returns the page rectangle for a terminal height: the first
+// content row and its height. The front end owns the chrome reservation and
+// sends this rectangle to the engine.
+func ContentBounds(height int) (top, contentHeight int) {
+	switch {
+	case height < 3:
+		return 0, height
+	case height < 5:
+		return 1, height - 2
+	default:
+		return 2, height - 3
+	}
+}

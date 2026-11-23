@@ -422,3 +422,32 @@ func TestBuildConsoleFrame(t *testing.T) {
 		}
 	}
 }
+
+func TestContentBounds(t *testing.T) {
+	cases := []struct {
+		height, top, content int
+	}{
+		{1, 0, 1},
+		{2, 0, 2},
+		{3, 1, 1},
+		{4, 1, 2},
+		{5, 2, 2},
+		{24, 2, 21},
+		{35, 2, 32},
+	}
+	for _, c := range cases {
+		top, content := ContentBounds(c.height)
+		if top != c.top || content != c.content {
+			t.Errorf("ContentBounds(%d) = %d,%d, want %d,%d", c.height, top, content, c.top, c.content)
+		}
+	}
+}
+
+func TestResizeCommandCarriesContentGeometry(t *testing.T) {
+	loop := &SessionLoop{CellW: 8, CellH: 16}
+	got := loop.resizeCommand(80, 24)
+	want := protocol.Resize{Width: 80, Height: 24, ContentTop: 2, ContentHeight: 21, CellW: 8, CellH: 16}
+	if got != want {
+		t.Fatalf("resize command = %#v, want %#v", got, want)
+	}
+}

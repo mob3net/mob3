@@ -51,15 +51,17 @@ const (
 )
 
 // Init creates or reconfigures a session. Width and Height are the terminal
-// size: the engine still reserves the chrome rows and derives the content
-// rectangle until that geometry moves to the front end. CellW and CellH are CSS
-// pixels per terminal cell, already adjusted for zoom.
+// size. ContentTop and ContentHeight are the front-end-owned page rectangle;
+// zero values fall back to the engine's legacy chrome derivation for direct
+// callers and tests. CellW and CellH are CSS pixels per terminal cell, already
+// adjusted for zoom.
 type Init struct {
-	Width, Height int
-	CellW, CellH  int
-	Zoom          float64
-	Caps          Capabilities
-	Flags         uint32
+	Width, Height             int
+	ContentTop, ContentHeight int
+	CellW, CellH              int
+	Zoom                      float64
+	Caps                      Capabilities
+	Flags                     uint32
 }
 
 func (Init) commandKind() Kind { return CmdInit }
@@ -99,11 +101,11 @@ type Restore struct {
 
 func (Restore) commandKind() Kind { return CmdRestore }
 
-// Resize changes the terminal size. The engine derives the content rectangle
-// from it until that geometry moves to the front end.
+// Resize changes the terminal size and the front-end-owned content rectangle.
 type Resize struct {
-	Width, Height int
-	CellW, CellH  int
+	Width, Height             int
+	ContentTop, ContentHeight int
+	CellW, CellH              int
 }
 
 func (Resize) commandKind() Kind { return CmdResize }

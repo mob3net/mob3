@@ -100,3 +100,28 @@ func TestStateMessage(t *testing.T) {
 		t.Fatal("PDF page kind not reported")
 	}
 }
+
+func TestFrontEndContentGeometry(t *testing.T) {
+	b := NewBrowser(80, 24)
+	b.resizeWithContent(80, 24, 3, 10)
+	if got := b.headerRows(); got != 3 {
+		t.Fatalf("header rows = %d, want 3", got)
+	}
+	top, bottom := b.viewport()
+	if top != 3 || bottom != 13 {
+		t.Fatalf("viewport = %d,%d, want 3,13", top, bottom)
+	}
+	cr := b.contentRect()
+	if cr.Top != 3 || cr.Bottom != 13 || cr.Height != 10 || cr.Width != 80 {
+		t.Fatalf("content rect = %+v", cr)
+	}
+	if st := b.stateMessage(); st.HeaderRows != 3 || st.Width != 80 || st.Height != 24 {
+		t.Fatalf("state geometry = %+v", st)
+	}
+
+	// A direct resize without content fields keeps the legacy derivation.
+	b.resize(80, 24)
+	if top, bottom = b.viewport(); top != 2 || bottom != 23 {
+		t.Fatalf("legacy viewport = %d,%d, want 2,23", top, bottom)
+	}
+}
