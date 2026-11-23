@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"net/url"
 	"strings"
 	"unicode/utf8"
 )
@@ -269,4 +270,168 @@ func TextareaVerticalOffset(s string, cur, delta int) int {
 		col = len(runes)
 	}
 	return line + len(string(runes[:col]))
+}
+
+func UpdateInputFragments(layout *Layout, n *Node) bool {
+	if layout == nil || n == nil || !IsTextInput(n) {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "color") {
+		// The color field's own background is the live swatch, so it needs a
+		// full paint whenever the value changes.
+		return false
+	}
+	var frags []*Frag
+	for i := range layout.Frags {
+		f := &layout.Frags[i]
+		if f.Kind == FragText && f.Node == n {
+			frags = append(frags, f)
+		}
+	}
+	if len(frags) == 0 {
+		return false
+	}
+	if n.Tag == "textarea" {
+		boxW := frags[0].W
+		rows, cursorRow, cursorCol, hasCursor := TextareaLayoutFor(n, boxW)
+		if len(rows) != len(frags) {
+			return false
+		}
+		for i := range rows {
+			if StringWidth(rows[i]) != frags[i].W {
+				return false
+			}
+			frags[i].Text = rows[i]
+		}
+		if hasCursor {
+			layout.Cursor = Rect{X: frags[cursorRow].X + 2 + cursorCol, Y: frags[cursorRow].Y, W: 1, H: 1}
+			layout.HasCursor = true
+		} else {
+			layout.HasCursor = false
+		}
+		return true
+	}
+	label := FormLabel(n)
+	if label == "" || len(frags) != 1 {
+		return false
+	}
+	w := StringWidth(label)
+	boxW := frags[0].W
+	if w != boxW {
+		// A fixed-width or flex-stretched control keeps the same box while the
+		// value changes; rewrite the label inside it instead of rebuilding the
+		// whole page. Auto-width controls must relayout when their box grows or
+		// shrinks.
+		fixed := false
+		if st := n.Style; st != nil {
+			fixed = st.FlexGrow > 0 || (st.Width.Set && !st.Width.IsAuto())
+		}
+		if !fixed {
+			return false
+		}
+		if w > boxW {
+			label = TruncateWidth(label, boxW)
+		} else if pad := boxW - w; pad > 0 {
+			if strings.HasSuffix(label, "]") {
+				label = strings.TrimSuffix(label, "]") + strings.Repeat(" ", pad) + "]"
+			} else {
+				label += strings.Repeat(" ", pad)
+			}
+		}
+	}
+	frags[0].Text = label
+	if col, ok := InputCursorOffset(n, label); ok {
+		layout.Cursor = Rect{X: frags[0].X + 2 + col, Y: frags[0].Y, W: 1, H: 1}
+		layout.HasCursor = true
+	} else {
+		layout.HasCursor = false
+	}
+	return true
+}
+
+func RangeSideAt(layout *Layout, n *Node, x, y int) int {
+	if layout == nil || n == nil {
+		return 0
+	}
+	for i := range layout.Frags {
+		f := &layout.Frags[i]
+		if f.Kind != FragText || f.Node != n || y != f.Y {
+			continue
+		}
+		rel := x - f.X
+		if i := strings.Index(f.Text, "-"); i >= 0 && rel == StringWidth(f.Text[:i]) {
+			return -1
+		}
+		if i := strings.LastIndex(f.Text, "+"); i >= 0 && rel == StringWidth(f.Text[:i]) {
+			return 1
+		}
+	}
+	return 0
+}
+
+// FormRequest resolves a form's action and collects its successful controls.
+func FormRequest(form *Node, base *url.URL) (method, target string, body []byte, contentType string, ok bool) {
+	method = strings.ToUpper(strings.TrimSpace(form.Attr("method")))
+	if method == "" {
+		method = "GET"
+	}
+	action := strings.TrimSpace(form.Attr("action"))
+	var u *url.URL
+	var err error
+	if action == "" {
+		u = base
+	} else if base != nil {
+		u, err = base.Parse(action)
+	}
+	if err != nil || u == nil {
+		return "", "", nil, "", false
+	}
+	vals := url.Values{}
+	form.FindAll(func(x *Node) bool {
+		if x.Tag != "input" && x.Tag != "textarea" && x.Tag != "select" {
+			return false
+		}
+		if IsDisabledControl(x) {
+			return false
+		}
+		name := x.Attr("name")
+		if name == "" {
+			return false
+		}
+		if x.Tag == "select" {
+			if x.HasAttr("multiple") {
+				for _, v := range SelectedOptionValues(x) {
+					vals.Add(name, v)
+				}
+			} else {
+				vals.Add(name, InputValue(x))
+			}
+			return false
+		}
+		typ := strings.ToLower(x.Attr("type"))
+		switch typ {
+		case "submit", "button", "reset", "image", "file":
+			return false
+		case "checkbox", "radio":
+			if x.HasAttr("checked") {
+				v := x.Attr("value")
+				if v == "" {
+					v = "on"
+				}
+				vals.Add(name, v)
+			}
+		default:
+			vals.Add(name, InputValue(x))
+		}
+		return false
+	})
+	if method == "POST" {
+		return method, u.String(), []byte(vals.Encode()), "application/x-www-form-urlencoded", true
+	}
+	q := u.Query()
+	for k, values := range vals {
+		q[k] = values
+	}
+	u.RawQuery = q.Encode()
+	return "GET", u.String(), nil, "", true
 }

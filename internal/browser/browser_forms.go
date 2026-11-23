@@ -526,83 +526,6 @@ func (b *Browser) setInputValue(n *Node, v string) {
 // updateInputFragments rewrites the focused control's text fragments after a
 // value change. It reports false when the widget's width or row count changed
 // and a full relayout is required.
-func (b *Browser) updateInputFragments(n *Node) bool {
-	if b.layout == nil || n == nil || !isTextInput(n) {
-		return false
-	}
-	if strings.EqualFold(strings.TrimSpace(n.Attr("type")), "color") {
-		// The color field's own background is the live swatch, so it needs a
-		// full paint whenever the value changes.
-		return false
-	}
-	var frags []*Frag
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind == fragText && f.Node == n {
-			frags = append(frags, f)
-		}
-	}
-	if len(frags) == 0 {
-		return false
-	}
-	if n.Tag == "textarea" {
-		boxW := frags[0].W
-		rows, cursorRow, cursorCol, hasCursor := textareaLayoutFor(n, boxW)
-		if len(rows) != len(frags) {
-			return false
-		}
-		for i := range rows {
-			if stringWidth(rows[i]) != frags[i].W {
-				return false
-			}
-			frags[i].Text = rows[i]
-		}
-		if hasCursor {
-			b.layout.Cursor = Rect{X: frags[cursorRow].X + 2 + cursorCol, Y: frags[cursorRow].Y, W: 1, H: 1}
-			b.layout.HasCursor = true
-		} else {
-			b.layout.HasCursor = false
-		}
-		return true
-	}
-	label := formLabel(n)
-	if label == "" || len(frags) != 1 {
-		return false
-	}
-	w := stringWidth(label)
-	boxW := frags[0].W
-	if w != boxW {
-		// A fixed-width or flex-stretched control keeps the same box while the
-		// value changes; rewrite the label inside it instead of rebuilding the
-		// whole page. Auto-width controls must relayout when their box grows or
-		// shrinks.
-		fixed := false
-		if st := n.Style; st != nil {
-			fixed = st.FlexGrow > 0 || (st.Width.Set && !st.Width.IsAuto())
-		}
-		if !fixed {
-			return false
-		}
-		if w > boxW {
-			label = truncateWidth(label, boxW)
-		} else if pad := boxW - w; pad > 0 {
-			if strings.HasSuffix(label, "]") {
-				label = strings.TrimSuffix(label, "]") + strings.Repeat(" ", pad) + "]"
-			} else {
-				label += strings.Repeat(" ", pad)
-			}
-		}
-	}
-	frags[0].Text = label
-	if col, ok := inputCursorOffset(n, label); ok {
-		b.layout.Cursor = Rect{X: frags[0].X + 2 + col, Y: frags[0].Y, W: 1, H: 1}
-		b.layout.HasCursor = true
-	} else {
-		b.layout.HasCursor = false
-	}
-	return true
-}
-
 func (b *Browser) submitNode(n *Node) {
 	b.clearInputFocus()
 	if form := nearestForm(n); form != nil {
@@ -664,74 +587,6 @@ func (b *Browser) submitForm(form *Node) (started bool, reason string) {
 	return true, ""
 }
 
-// formRequest resolves a form's action and collects its successful controls.
-func (b *Browser) formRequest(form *Node) (method, target string, body []byte, contentType string, ok bool) {
-	method = strings.ToUpper(strings.TrimSpace(form.Attr("method")))
-	if method == "" {
-		method = http.MethodGet
-	}
-	action := strings.TrimSpace(form.Attr("action"))
-	var u *url.URL
-	var err error
-	if action == "" {
-		u = b.url
-	} else if b.page != nil {
-		u, err = ResolveURL(action, b.page.Base)
-	}
-	if err != nil || u == nil {
-		b.status = "Invalid form action"
-		return "", "", nil, "", false
-	}
-	vals := url.Values{}
-	form.FindAll(func(x *Node) bool {
-		if x.Tag != "input" && x.Tag != "textarea" && x.Tag != "select" {
-			return false
-		}
-		if isDisabledControl(x) {
-			return false
-		}
-		name := x.Attr("name")
-		if name == "" {
-			return false
-		}
-		if x.Tag == "select" {
-			if x.HasAttr("multiple") {
-				for _, v := range selectedOptionValues(x) {
-					vals.Add(name, v)
-				}
-			} else {
-				vals.Add(name, inputValue(x))
-			}
-			return false
-		}
-		typ := strings.ToLower(x.Attr("type"))
-		switch typ {
-		case "submit", "button", "reset", "image", "file":
-			return false
-		case "checkbox", "radio":
-			if x.HasAttr("checked") {
-				v := x.Attr("value")
-				if v == "" {
-					v = "on"
-				}
-				vals.Add(name, v)
-			}
-		default:
-			vals.Add(name, inputValue(x))
-		}
-		return false
-	})
-	if method == http.MethodPost {
-		return method, u.String(), []byte(vals.Encode()), "application/x-www-form-urlencoded", true
-	}
-	q := u.Query()
-	for k, values := range vals {
-		q[k] = values
-	}
-	u.RawQuery = q.Encode()
-	return http.MethodGet, u.String(), nil, "", true
-}
-
 // queueFormSubmit implements HTMLFormElement.submit(): it queues a navigation
 // without firing submit handlers or running constraint validation.
 func (b *Browser) queueFormSubmit(form *Node) {
@@ -782,26 +637,6 @@ func (b *Browser) resolveLabelTarget(n *Node) *Node {
 
 // rangeSideAt reports which end of a range slider was clicked: -1 for the
 // minus, +1 for the plus, and 0 elsewhere.
-func (b *Browser) rangeSideAt(n *Node, x, y int) int {
-	if b.layout == nil || n == nil {
-		return 0
-	}
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Node != n || y != f.Y {
-			continue
-		}
-		rel := x - f.X
-		if i := strings.Index(f.Text, "-"); i >= 0 && rel == stringWidth(f.Text[:i]) {
-			return -1
-		}
-		if i := strings.LastIndex(f.Text, "+"); i >= 0 && rel == stringWidth(f.Text[:i]) {
-			return 1
-		}
-	}
-	return 0
-}
-
 func (b *Browser) handleInputKey(k string) bool {
 	n := b.forms.InputFocus
 	if n == nil {
@@ -967,6 +802,27 @@ func (b *Browser) refreshInputCursor(n *Node) {
 	if !b.updateInputFragments(n) {
 		b.rebuild()
 	}
+}
+
+// Form helpers live in the engine; these wrappers keep the session call sites
+func (b *Browser) updateInputFragments(n *Node) bool {
+	return engine.UpdateInputFragments(b.layout, n)
+}
+
+func (b *Browser) rangeSideAt(n *Node, x, y int) int {
+	return engine.RangeSideAt(b.layout, n, x, y)
+}
+
+func (b *Browser) formRequest(form *Node) (method, target string, body []byte, contentType string, ok bool) {
+	base := b.url
+	if b.page != nil && b.page.Base != nil {
+		base = b.page.Base
+	}
+	method, target, body, contentType, ok = engine.FormRequest(form, base)
+	if !ok {
+		b.status = "Invalid form action"
+	}
+	return
 }
 
 // Form helpers live in the engine; these wrappers keep the session call sites
