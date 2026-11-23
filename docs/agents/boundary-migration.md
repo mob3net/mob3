@@ -14,11 +14,11 @@ surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
 select, download/notice, hints, the console and the session history list) are
 landed, and the front end renders the displayed URL/title from validated
 history commits. A focused page form still sends keys through the engine, but
-the front end keeps the chrome. Remaining: host-attested final URLs, form/input/JS and command routing, fallback
+the front end keeps the chrome. Remaining: host-attested final URLs, JS lifecycle and command routing, fallback
 UI removal, the `Browser` → `Session` split (309 methods), direct app wiring and
 Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (audited after batch 50).
+Last updated: 2026-11-23 (batch 51 landed).
 
 ## 1. Goal
 
@@ -173,7 +173,7 @@ seam; the note names which part goes where.
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Page hit testing moved to `engine/hit.go`; engine fallback modals/hints/console drawing still live here; shared line editing is `engine.EditLineKey`; form editing remains. |
 | `browser_history.go` | engine + frontend | Page cache, limits, suspend/cache, restore application and scavenge are engine-owned; history commits, reload and `about:history` data remain. The ordered back/forward list and scroll offsets are front-end-owned (D54/D72). |
 | `browser_pdf.go` | engine + frontend | PDF page tracking feeds the engine footer state; the download/curl shortcut is presentation (D54). |
-| `browser_forms.go` | engine + session | Constraint validation, focus state, Tab-target discovery, radio/select stepping, form requests, input-fragment updates, range hit testing and control/label/input-line helpers moved to `internal/engine`; Tab stepping, editing decisions and submission remain session-side. |
+| `browser_forms.go` | engine wrapper | Tab stepping, control activation, text/range editing, submission, label targets and form requests moved to `internal/engine/forms.go`; the browser keeps wrappers and the control-focus highlight painter. |
 | `browser_selection.go` | engine wrapper | Selection range, extraction and painting moved to `internal/engine/selection.go`; the browser keeps drag state and clipboard policy. |
 | `hints.go` | engine + session | Target discovery, glyph collection, label assignment, encoding and painting moved to `internal/engine/hints.go`; hint-mode keys, activation and F confirmation remain session-side. |
 | `find.go` | engine + session | Match streams, whitespace normalisation and match rectangles moved to `internal/engine/find.go`; find state, navigation, painting and front-end messages remain session-side. |
@@ -417,6 +417,7 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Page hit testing, overlay layering, scroll stepping and href resolution moved to `internal/engine/hit.go`; browser call sites remain thin wrappers.
 - [x] Back/forward cache glue moved to `internal/engine/history_cache.go`: limits, cache/suspend, entry removal, drop-all and scavenge requests.
 - [x] Load-result application and cached-page restore moved to `engine.Session` (`session_apply.go`) behind `SessionHooks`; the browser supplies only UI/JS/console/status/download effects.
+- [x] Form editing and focus moved to `internal/engine/forms.go`: Tab order, control activation/stepping, text/range editing, submission, labels and form requests. The browser keeps wrappers and the focus highlight painter.
 - [ ] Form editing decisions, Tab focus effects and submission remain
       session-side with the other shell effects (JS events, navigation, status
       and rebuilds).
@@ -1170,5 +1171,6 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8x | Batch 48: moved page hit testing (`LinkAt`/`NodeAt`), overlay layering, scroll stepping and href resolution into `internal/engine/hit.go`. Browser input and scroll call sites are wrappers; links, boxes, overlay ranking and invalid-href fallback are engine behavior. Added engine tests. | `go test ./...`, `go vet`, full `-race`, engine/browser hit/scroll tests, PTY mouse/link/scroll, dump/PNG hashes | Batch 49: load-result application and history/page-cache glue |
 | 2026-11-23 | 8y | Batch 49: moved back/forward cache glue into `internal/engine/history_cache.go`: page cap/limits, cache/suspend, entry removal, drop-all and the scavenge request. Browser history keeps restore requests, cached-page application, reload, history commits and meta-refresh targets. Added engine cache tests. | `go test ./...`, `go vet`, full `-race`, engine/browser history/cache tests, PTY back/forward, dump/PNG hashes | Batch 50: load-result application and cached-page restore hooks |
 | 2026-11-23 | 8z | Batch 50: moved load-result application and cached-page restore into `engine.Session` (`session_apply.go`) behind a `SessionHooks` interface. The browser now supplies JS start, pending-JS drain, console/modal reset, rebuild/invalidate, status, download and history-commit effects. Added engine apply-result coverage; browser finish/restore paths are wrappers. | `go test ./...`, `go vet`, full `-race`, engine/browser load/history/render tests, PTY navigation/back-forward, dump/PNG hashes | Batch 51: command routing and fallback UI removal |
+| 2026-11-23 | 9a | Batch 51: moved form editing and focus into `internal/engine/forms.go`: Tab order, control activation and stepping, input/range editing, submission, label targets and form requests. `SessionHooks` gained viewport, key fallback, navigation, hint-activation and select-menu effects. Browser form code is wrappers plus the focus painter. | `go test ./...`, `go vet`, full `-race`, browser form/Tab/input tests, PTY form/Tab, dump/PNG hashes | Batch 52: JS lifecycle and command routing |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 50: updated the `Browser` method count (296 → 309), documented the new engine load/layout/hit/cache/apply files and protocol/browser host/test files, corrected remaining ownership (load-result application, restore, hit testing, layout rebuild), and recorded the command-routing/fallback/rename work still ahead. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 51: forms, input and JS lifecycle |

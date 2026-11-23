@@ -1,88 +1,68 @@
 package browser
 
-import (
-	"browser/internal/engine"
-	"browser/internal/protocol"
-	"fmt"
-	"net/url"
-	"strings"
-	"unicode/utf8"
-)
+import "browser/internal/engine"
 
-// tabTarget is one stop in the standard Tab order.
+// Form editing lives on engine.Session; these wrappers keep the browser call
+// sites and tests stable during the migration.
+
 type tabTarget = engine.TabTarget
 
-// tabTargets returns links and form controls in document order. Radio groups
-// take one stop at their first button; arrows move within the group.
-func (b *Browser) tabTargets() []tabTarget {
-	return engine.BuildTabTargets(b.Page, b.Layout)
-}
-
-func (b *Browser) currentTabNode() *Node {
-	if b.Forms.InputFocus != nil {
-		return b.Forms.InputFocus
-	}
-	if b.Forms.ControlFocus != nil {
-		return b.Forms.ControlFocus
-	}
-	if b.Layout != nil && b.Focus >= 0 && b.Focus < len(b.Layout.Links) {
-		return b.Layout.Links[b.Focus].Node
-	}
-	return nil
-}
-
-// tabStep moves through the standard Tab order, wrapping at the ends.
-func (b *Browser) tabStep(delta int) {
-	targets := b.tabTargets()
-	if len(targets) == 0 {
-		b.clearInputFocus()
-		b.clearControlFocus()
-		b.Focus = -1
-		b.status = "No focusable elements"
-		return
-	}
-	next := engine.TabIndex(targets, b.currentTabNode(), delta)
-	b.setTabFocus(targets[next], next+1, len(targets))
-}
-
-// setTabFocus makes one Tab target current: a link is focused visually, a text
-// field starts editing, and other controls get a highlight and key handling.
+func (b *Browser) tabTargets() []tabTarget { return b.Session.TabTargets() }
+func (b *Browser) currentTabNode() *Node   { return b.Session.CurrentTabNode() }
+func (b *Browser) tabStep(delta int)       { b.Session.TabStep(delta, b) }
 func (b *Browser) setTabFocus(t tabTarget, index, total int) {
-	if t.Link < 0 && isTextInput(t.Node) {
-		b.Focus = -1
-		b.setInputFocus(t.Node)
-		b.ensureInputVisible(t.Node)
-		return
-	}
-	if b.Forms.InputFocus != nil {
-		// Leave the field through the normal blur path so change handlers run.
-		b.setInputFocus(nil)
-	} else {
-		b.clearControlFocus()
-	}
-	if t.Link >= 0 {
-		b.Focus = t.Link
-		b.ensureFocusVisible()
-		li := b.Layout.Links[t.Link]
-		b.status = fmt.Sprintf("%d/%d  %s", index, total, b.resolveHref(li.Href))
-		return
-	}
-	b.Focus = -1
-	b.Forms.ControlFocus = t.Node
-	if t.Node.Tag == "select" && t.Node.HasAttr("multiple") {
-		b.Forms.ControlOption = firstSelectOption(t.Node)
-	}
-	if b.Forms.ControlOption != nil {
-		b.ensureInputVisible(b.Forms.ControlOption)
-	} else {
-		b.ensureInputVisible(b.Forms.ControlFocus)
-	}
-	b.status = tabControlStatus(t.Node)
+	b.Session.SetTabFocus(t, index, total, b)
 }
-
-func (b *Browser) clearControlFocus() {
-	b.Forms.ControlFocus = nil
-	b.Forms.ControlOption = nil
+func (b *Browser) clearControlFocus() { b.Session.Forms.ClearControl() }
+func (b *Browser) handleControlKey(k string) bool {
+	return b.Session.HandleControlKey(k, b)
+}
+func (b *Browser) activateControlFocus() { b.Session.ActivateControlFocus(b) }
+func (b *Browser) controlStep(dir int)   { b.Session.ControlStep(dir, b) }
+func (b *Browser) stepRadio(n *Node, dir int) {
+	b.Session.StepRadio(n, dir, b)
+}
+func (b *Browser) stepMultiSelect(sel *Node, dir int) {
+	b.Session.StepMultiSelect(sel, dir, b)
+}
+func (b *Browser) stepSingleSelect(sel *Node, dir int) {
+	b.Session.StepSingleSelect(sel, dir, b)
+}
+func (b *Browser) ensureFocusVisible() { b.Session.EnsureFocusVisible(b) }
+func (b *Browser) toggleControl(n *Node) {
+	b.Session.ToggleControl(n, b)
+}
+func (b *Browser) fireSelectChange(sel *Node) { b.Session.FireSelectChange(sel, b) }
+func (b *Browser) clearInputFocus()           { b.Session.Forms.ClearInputFocus() }
+func (b *Browser) setInputFocus(n *Node)      { b.Session.SetInputFocus(n, b) }
+func (b *Browser) ensureInputVisible(n *Node) { b.Session.EnsureInputVisible(n, b) }
+func (b *Browser) setInputValue(n *Node, v string) {
+	b.Session.SetInputValue(n, v, b)
+}
+func (b *Browser) submitNode(n *Node) { b.Session.SubmitNode(n, b) }
+func (b *Browser) validateForm(form *Node) (*Node, string) {
+	return engine.ValidateForm(form)
+}
+func (b *Browser) submitForm(form *Node) (bool, string) { return b.Session.SubmitForm(form, b) }
+func (b *Browser) queueFormSubmit(form *Node)           { b.Session.QueueFormSubmit(form, b) }
+func (b *Browser) resolveLabelTarget(n *Node) *Node     { return b.Session.ResolveLabelTarget(n) }
+func (b *Browser) handleInputKey(k string) bool         { return b.Session.HandleInputKey(k, b) }
+func (b *Browser) handleRangeKey(n *Node, k string) bool {
+	return b.Session.HandleRangeKey(n, k, b)
+}
+func (b *Browser) adjustRange(n *Node, direction float64) {
+	b.Session.AdjustRange(n, direction, b)
+}
+func (b *Browser) setRangeValue(n *Node, value float64) {
+	b.Session.SetRangeValue(n, value, b)
+}
+func (b *Browser) refreshInputCursor(n *Node) { b.Session.RefreshInputCursor(n, b) }
+func (b *Browser) updateInputFragments(n *Node) bool {
+	return b.Session.UpdateInputFragments(n)
+}
+func (b *Browser) rangeSideAt(n *Node, x, y int) int { return b.Session.RangeSideAt(n, x, y) }
+func (b *Browser) formRequest(form *Node) (string, string, []byte, string, bool) {
+	return b.Session.FormRequest(form, b)
 }
 
 // paintControlFocus highlights the focused non-text control, or the active
@@ -110,589 +90,6 @@ func (b *Browser) paintControlFocus(g *Grid, top, bottom int) {
 	}
 }
 
-// handleControlKey processes keys while a non-text form control is focused.
-func (b *Browser) handleControlKey(k string) bool {
-	switch k {
-	case "esc", "ctrl-c":
-		b.clearControlFocus()
-		if k == "ctrl-c" {
-			return b.HandleKey(k)
-		}
-		b.status = exitHint
-		return false
-	case "tab":
-		b.tabStep(1)
-		return false
-	case "backtab":
-		b.tabStep(-1)
-		return false
-	case "enter", " ", "space":
-		b.activateControlFocus()
-		return false
-	case "left", "up":
-		b.controlStep(-1)
-		return false
-	case "right", "down":
-		b.controlStep(1)
-		return false
-	case "h":
-		if controlUsesArrows(b.Forms.ControlFocus) {
-			b.controlStep(-1)
-			return false
-		}
-	case "k":
-		if controlUsesArrows(b.Forms.ControlFocus) {
-			b.controlStep(-1)
-			return false
-		}
-	case "l":
-		if controlUsesArrows(b.Forms.ControlFocus) {
-			b.controlStep(1)
-			return false
-		}
-	case "j":
-		if controlUsesArrows(b.Forms.ControlFocus) {
-			b.controlStep(1)
-			return false
-		}
-	}
-	b.clearControlFocus()
-	return b.HandleKey(k)
-}
-
-func (b *Browser) activateControlFocus() {
-	n := b.Forms.ControlFocus
-	if n == nil {
-		return
-	}
-	top, bottom := b.viewport()
-	r, _ := engine.VisibleInputRect(b.Layout, n, b.Scroll, top, bottom)
-	if n.Tag == "select" && n.HasAttr("multiple") && b.Forms.ControlOption != nil {
-		b.toggleControl(b.Forms.ControlOption)
-		return
-	}
-	b.activateHintControl(n, r)
-}
-
-func (b *Browser) controlStep(dir int) {
-	n := b.Forms.ControlFocus
-	if n == nil {
-		return
-	}
-	if isRangeInput(n) {
-		b.adjustRange(n, float64(dir))
-		return
-	}
-	if n.Tag == "select" {
-		if n.HasAttr("multiple") {
-			b.stepMultiSelect(n, dir)
-		} else {
-			b.stepSingleSelect(n, dir)
-		}
-		return
-	}
-	if n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "radio") {
-		b.stepRadio(n, dir)
-	}
-}
-
-func (b *Browser) stepRadio(n *Node, dir int) {
-	group := radioGroupNodes(n)
-	if len(group) == 0 {
-		return
-	}
-	idx := 0
-	for i, r := range group {
-		if r == n {
-			idx = i
-			break
-		}
-	}
-	next := group[(idx+dir+len(group))%len(group)]
-	b.Forms.ControlFocus = next
-	b.toggleControl(next)
-	b.ensureInputVisible(next)
-	b.status = tabControlStatus(next)
-}
-
-func (b *Browser) stepMultiSelect(sel *Node, dir int) {
-	opts := selectOptions(sel)
-	if len(opts) == 0 {
-		return
-	}
-	idx := 0
-	for i, opt := range opts {
-		if opt == b.Forms.ControlOption {
-			idx = i
-			break
-		}
-	}
-	for tries := 0; tries < len(opts); tries++ {
-		idx = (idx + dir + len(opts)) % len(opts)
-		if !isDisabledControl(opts[idx]) && opts[idx].Style != nil && opts[idx].Style.Display != "none" {
-			break
-		}
-	}
-	b.Forms.ControlOption = opts[idx]
-	b.ensureInputVisible(b.Forms.ControlOption)
-	b.status = tabControlStatus(sel)
-}
-
-func (b *Browser) stepSingleSelect(sel *Node, dir int) {
-	opts := selectOptions(sel)
-	if len(opts) == 0 {
-		return
-	}
-	idx := 0
-	for i, opt := range opts {
-		if opt.HasAttr("selected") {
-			idx = i
-			break
-		}
-	}
-	for tries := 0; tries < len(opts); tries++ {
-		idx = (idx + dir + len(opts)) % len(opts)
-		if !isDisabledControl(opts[idx]) {
-			break
-		}
-	}
-	for _, opt := range opts {
-		removeAttr(opt, "selected")
-	}
-	setAttr(opts[idx], "selected", "")
-	b.fireSelectChange(sel)
-}
-
-func (b *Browser) ensureFocusVisible() {
-	li := b.focusedLink()
-	if li == nil || len(li.Rects) == 0 {
-		return
-	}
-	top, bottom := b.viewport()
-	vh := bottom - top
-	if vh < 1 {
-		vh = 1
-	}
-	r := li.Rects[0]
-	if r.Y < b.Scroll {
-		b.Scroll = r.Y - 1
-	} else if r.Y+r.H >= b.Scroll+vh {
-		b.Scroll = r.Y + r.H - vh + 1
-	}
-	b.clampScroll()
-}
-
-// isRangeInput reports an interactive range slider.
-
-// toggleControl flips a checkbox, radio or multi-select option. A single select
-// opens its option popup instead of cycling through values blind.
-func (b *Browser) toggleControl(n *Node) {
-	res := engine.ToggleControl(n)
-	switch res.Action {
-	case engine.ToggleOpenSelect:
-		b.openSelectMenu(n)
-		return
-	case engine.ToggleValue:
-		if res.Select != nil {
-			b.fireSelectChange(res.Select)
-			return
-		}
-		if b.JS != nil {
-			b.JS.FireNodeEvent(n, "input")
-			b.JS.FireNodeEvent(n, "change")
-		}
-		b.rebuild()
-	}
-}
-
-// fireSelectChange notifies scripts and repaints after a select value changes.
-func (b *Browser) fireSelectChange(sel *Node) {
-	if b.JS != nil && sel != nil {
-		b.JS.FireNodeEvent(sel, "input")
-		b.JS.FireNodeEvent(sel, "change")
-	}
-	b.rebuild()
-}
-
-func (b *Browser) clearInputFocus() {
-	b.Forms.ClearInputFocus()
-}
-
-func (b *Browser) setInputFocus(n *Node) {
-	if b.Forms.InputFocus == n {
-		return
-	}
-	b.clearControlFocus()
-	old := b.Forms.FocusInput(n)
-	if old != nil && b.JS != nil {
-		b.JS.FireNodeEvent(old, "change")
-	}
-	if n != nil {
-		if isRangeInput(n) {
-			b.status = "+/− or arrows adjust · Esc finishes"
-		} else {
-			b.status = "Typing · Enter submits · Esc finishes"
-		}
-	} else {
-		b.status = ""
-	}
-	b.rebuild()
-}
-
-// ensureInputVisible scrolls a focused control into the viewport.
-func (b *Browser) ensureInputVisible(n *Node) {
-	if b.Layout == nil || n == nil {
-		return
-	}
-	top, bottom := b.viewport()
-	vh := bottom - top
-	if vh < 1 {
-		vh = 1
-	}
-	for i := range b.Layout.Frags {
-		f := &b.Layout.Frags[i]
-		if f.Node != n || f.Fixed {
-			continue
-		}
-		if f.Y < b.Scroll {
-			b.Scroll = f.Y - 1
-		} else if f.Y+f.H >= b.Scroll+vh {
-			b.Scroll = f.Y + f.H - vh + 1
-		}
-		b.clampScroll()
-		return
-	}
-}
-
-func (b *Browser) setInputValue(n *Node, v string) {
-	if n == nil {
-		return
-	}
-	n.Value = v
-	n.ValueSet = true
-	dirty := false
-	if b.JS != nil {
-		b.JS.FireNodeEvent(n, "input")
-		// The rebuild below uses any DOM mutations the handler made, so do
-		// not schedule a second timer-driven rebuild for the same keystroke.
-		dirty = b.JS.ConsumeDirty()
-	}
-	if b.consumePendingJS() {
-		return
-	}
-	// Most keystrokes only change the control's text. Patch its fragments in
-	// place when the widget keeps the same box geometry instead of running a
-	// full style+layout pass for the whole page.
-	if !dirty && !b.FindActive && b.updateInputFragments(n) {
-		return
-	}
-	b.rebuild()
-}
-
-// updateInputFragments rewrites the focused control's text fragments after a
-// value change. It reports false when the widget's width or row count changed
-// and a full relayout is required.
-func (b *Browser) submitNode(n *Node) {
-	b.clearInputFocus()
-	if form := nearestForm(n); form != nil {
-		b.submitForm(form)
-	}
-}
-
-// validateForm applies the engine's supported HTML constraint checks.
-func (b *Browser) validateForm(form *Node) (*Node, string) {
-	return engine.ValidateForm(form)
-}
-
-// submitForm validates and submits a form. It reports whether a navigation was
-// started and, when not, the reason shown to the user or returned to automation.
-func (b *Browser) submitForm(form *Node) (started bool, reason string) {
-	if form == nil {
-		return false, "no form to submit"
-	}
-	if field, msg := b.validateForm(form); field != nil {
-		if isTextInput(field) || isRangeInput(field) {
-			b.setInputFocus(field)
-		}
-		b.status = msg
-		return false, msg
-	}
-	prevented := false
-	if b.JS != nil {
-		prevented = b.JS.FireNodeEvent(form, "submit")
-	}
-	if b.consumePendingJS() {
-		return true, ""
-	}
-	if prevented {
-		return false, "submit event was prevented"
-	}
-	method, target, body, contentType, ok := b.formRequest(form)
-	if !ok {
-		return false, nonEmptyStatus(b.status)
-	}
-	if method == protocol.MethodPost {
-		b.navigateRequest(method, target, body, contentType, true)
-		return true, ""
-	}
-	if u, err := url.Parse(target); err == nil && u.Scheme == "about" {
-		switch aboutPageName(u) {
-		case "home", "start":
-			// The start page's search box acts exactly like the URL prompt:
-			// resolve the entered text as a URL, with the -search fallback.
-			query := strings.TrimSpace(u.Query().Get("q"))
-			if query == "" {
-				b.status = "Enter a URL or search query"
-				return false, b.status
-			}
-			b.Navigate(query, true)
-			return true, ""
-		}
-	}
-	b.Navigate(target, true)
-	return true, ""
-}
-
-// queueFormSubmit implements HTMLFormElement.submit(): it queues a navigation
-// without firing submit handlers or running constraint validation.
-func (b *Browser) queueFormSubmit(form *Node) {
-	method, target, body, contentType, ok := b.formRequest(form)
-	if !ok {
-		return
-	}
-	if b.JS == nil {
-		if method == protocol.MethodPost {
-			b.navigateRequest(method, target, body, contentType, true)
-		} else {
-			b.Navigate(target, true)
-		}
-		return
-	}
-	b.JS.SetPendingForm(&FormSubmission{Method: method, Target: target, Body: body, ContentType: contentType})
-}
-
-// resolveLabelTarget maps a click on label text to its control. Clicks on the
-// control itself return nil so normal control handling is not duplicated.
-func (b *Browser) resolveLabelTarget(n *Node) *Node {
-	if n == nil || b.Page == nil || b.Page.Root == nil {
-		return nil
-	}
-	for p := n; p != nil; p = p.Parent {
-		if isLabelable(p) {
-			return nil
-		}
-	}
-	label := n
-	for label != nil && label.Tag != "label" {
-		label = label.Parent
-	}
-	if label == nil {
-		return nil
-	}
-	target := labelControl(b.Page.Root, label)
-	if target == nil {
-		return nil
-	}
-	for p := n; p != nil; p = p.Parent {
-		if p == target {
-			return nil
-		}
-	}
-	return target
-}
-
-// rangeSideAt reports which end of a range slider was clicked: -1 for the
-// minus, +1 for the plus, and 0 elsewhere.
-func (b *Browser) handleInputKey(k string) bool {
-	n := b.Forms.InputFocus
-	if n == nil {
-		return false
-	}
-	if isRangeInput(n) {
-		return b.handleRangeKey(n, k)
-	}
-	value := inputValue(n)
-	cur := n.InputCursor
-	if cur < 0 || cur > len(value) {
-		cur = len(value)
-	}
-	switch k {
-	case "ctrl-a":
-		b.Forms.InputSelectAll = true
-		return false
-	case "esc":
-		b.Forms.InputSelectAll = false
-		b.setInputFocus(nil)
-		b.status = exitHint
-		return false
-	case "enter":
-		if n.Tag == "textarea" {
-			all := b.Forms.InputSelectAll
-			b.Forms.InputSelectAll = false
-			if all {
-				value, cur = "", 0
-			}
-			if utf8.RuneCountInString(value) < 2048 && !inputAtMaxLength(n, value) {
-				n.InputCursor = cur + 1
-				b.setInputValue(n, value[:cur]+"\n"+value[cur:])
-			}
-			return false
-		}
-		b.Forms.InputSelectAll = false
-		b.submitInput()
-		return false
-	case "tab":
-		b.Forms.InputSelectAll = false
-		b.tabStep(1)
-		return false
-	case "backtab":
-		b.Forms.InputSelectAll = false
-		b.tabStep(-1)
-		return false
-	case "ctrl-c":
-		b.Forms.InputSelectAll = false
-		return true
-	case "home":
-		if n.Tag == "textarea" {
-			b.Forms.InputSelectAll = false
-			n.InputCursor = inputLineStart(value, cur)
-			b.refreshInputCursor(n)
-			return false
-		}
-	case "end":
-		if n.Tag == "textarea" {
-			b.Forms.InputSelectAll = false
-			n.InputCursor = inputLineEnd(value, cur)
-			b.refreshInputCursor(n)
-			return false
-		}
-	case "up", "down":
-		b.Forms.InputSelectAll = false
-		if n.Tag == "textarea" {
-			delta := -1
-			if k == "down" {
-				delta = 1
-			}
-			n.InputCursor = textareaVerticalOffset(value, cur, delta)
-			b.refreshInputCursor(n)
-		}
-		return false
-	}
-	maxRunes := 2048
-	if limit := maxLength(n); limit > 0 && limit < maxRunes {
-		maxRunes = limit
-	}
-	newValue, newCur, handled := editLineKey(value, cur, k, editConfig{
-		selAll:   &b.Forms.InputSelectAll,
-		maxRunes: maxRunes,
-	})
-	if handled {
-		n.InputCursor = newCur
-		if newValue != value {
-			b.setInputValue(n, newValue)
-		} else {
-			b.refreshInputCursor(n)
-		}
-	}
-	return false
-}
-
-// handleRangeKey drives a focused range slider.
-func (b *Browser) handleRangeKey(n *Node, k string) bool {
-	switch k {
-	case "esc":
-		b.setInputFocus(nil)
-		b.status = exitHint
-		return false
-	case "enter":
-		b.submitInput()
-		return false
-	case "tab":
-		b.tabStep(1)
-		return false
-	case "backtab":
-		b.tabStep(-1)
-		return false
-	case "ctrl-c":
-		return true
-	case "left", "down":
-		b.adjustRange(n, -1)
-		return false
-	case "right", "up":
-		b.adjustRange(n, 1)
-		return false
-	case "home":
-		min, _, _, _ := rangeParams(n)
-		b.setRangeValue(n, min)
-		return false
-	case "end":
-		_, max, _, _ := rangeParams(n)
-		b.setRangeValue(n, max)
-		return false
-	}
-	return false
-}
-
-func (b *Browser) adjustRange(n *Node, direction float64) {
-	min, max, step, value := rangeParams(n)
-	value += direction * step
-	if value < min {
-		value = min
-	}
-	if value > max {
-		value = max
-	}
-	b.setRangeValue(n, value)
-}
-
-func (b *Browser) setRangeValue(n *Node, value float64) {
-	min, max, _, _ := rangeParams(n)
-	if value < min {
-		value = min
-	}
-	if value > max {
-		value = max
-	}
-	n.Value = formatRangeNumber(value)
-	n.ValueSet = true
-	if b.JS != nil {
-		b.JS.FireNodeEvent(n, "input")
-		b.JS.FireNodeEvent(n, "change")
-	}
-	b.rebuild()
-}
-
-// refreshInputCursor patches the focused widget after a caret-only move and
-// falls back to a full rebuild when its display width changed.
-func (b *Browser) refreshInputCursor(n *Node) {
-	if !b.updateInputFragments(n) {
-		b.rebuild()
-	}
-}
-
-// Form helpers live in the engine; these wrappers keep the session call sites
-func (b *Browser) updateInputFragments(n *Node) bool {
-	return engine.UpdateInputFragments(b.Layout, n)
-}
-
-func (b *Browser) rangeSideAt(n *Node, x, y int) int {
-	return engine.RangeSideAt(b.Layout, n, x, y)
-}
-
-func (b *Browser) formRequest(form *Node) (method, target string, body []byte, contentType string, ok bool) {
-	base := b.URL
-	if b.Page != nil && b.Page.Base != nil {
-		base = b.Page.Base
-	}
-	method, target, body, contentType, ok = engine.FormRequest(form, base)
-	if !ok {
-		b.status = "Invalid form action"
-	}
-	return
-}
-
-// Form helpers live in the engine; these wrappers keep the session call sites
-// readable during the migration.
 func isTabControl(n *Node) bool                   { return engine.IsTabControl(n) }
 func tabControlStatus(n *Node) string             { return engine.TabControlStatus(n) }
 func controlUsesArrows(n *Node) bool              { return engine.ControlUsesArrows(n) }

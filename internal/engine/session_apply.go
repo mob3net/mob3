@@ -26,6 +26,12 @@ type SessionHooks interface {
 	TakePendingStatus() string
 	ShowDownload(url, name string)
 	EmitHistoryCommit(protocol.HistoryCommit)
+	Viewport() (top, bottom int)
+	HandleKey(string) bool
+	Navigate(input string, push bool)
+	NavigateRequest(method, target string, body []byte, contentType string, push bool)
+	ActivateHintControl(*Node, Rect)
+	OpenSelectMenu(*Node)
 }
 
 // ApplyLoadResult applies a completed navigation result. Stale results are

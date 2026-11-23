@@ -25,8 +25,14 @@ func (b *Browser) ResetUI() {
 	b.moduleErr = false
 }
 
-func (b *Browser) ResetConsole()      { b.resetConsole() }
-func (b *Browser) StartJS(page *Page) { b.startJS(page) }
+func (b *Browser) ResetConsole()        { b.resetConsole() }
+func (b *Browser) Viewport() (int, int) { return b.viewport() }
+func (b *Browser) NavigateRequest(method, target string, body []byte, contentType string, push bool) {
+	b.navigateRequest(method, target, body, contentType, push)
+}
+func (b *Browser) ActivateHintControl(n *Node, r Rect) { b.activateHintControl(n, r) }
+func (b *Browser) OpenSelectMenu(n *Node)              { b.openSelectMenu(n) }
+func (b *Browser) StartJS(page *Page)                  { b.startJS(page) }
 func (b *Browser) ApplyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool {
 	return b.applyPendingJS(duringLoad, entryID, historyPush)
 }

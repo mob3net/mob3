@@ -23,6 +23,12 @@ func (h *testSessionHooks) InvalidateFrame()                                    
 func (h *testSessionHooks) SetStatus(s string)                                               { h.status = s }
 func (h *testSessionHooks) PageLoadStatus(*Page, bool) string                                { return "" }
 func (h *testSessionHooks) ViewportHeight() int                                              { return 20 }
+func (h *testSessionHooks) Viewport() (int, int)                                             { return 0, 20 }
+func (h *testSessionHooks) HandleKey(string) bool                                            { return false }
+func (h *testSessionHooks) Navigate(string, bool)                                            {}
+func (h *testSessionHooks) NavigateRequest(string, string, []byte, string, bool)             {}
+func (h *testSessionHooks) ActivateHintControl(*Node, Rect)                                  {}
+func (h *testSessionHooks) OpenSelectMenu(*Node)                                             {}
 func (h *testSessionHooks) TakePendingStatus() string                                        { return "" }
 func (h *testSessionHooks) ShowDownload(string, string)                                      {}
 func (h *testSessionHooks) EmitHistoryCommit(c protocol.HistoryCommit) {
