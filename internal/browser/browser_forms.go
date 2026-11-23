@@ -314,7 +314,7 @@ func (b *Browser) activateControlFocus() {
 		return
 	}
 	top, bottom := b.viewport()
-	r, _ := b.visibleInputRect(n, top, bottom)
+	r, _ := engine.VisibleInputRect(b.layout, n, b.scroll, top, bottom)
 	if n.Tag == "select" && n.HasAttr("multiple") && b.forms.ControlOption != nil {
 		b.toggleControl(b.forms.ControlOption)
 		return

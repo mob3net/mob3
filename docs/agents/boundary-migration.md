@@ -171,7 +171,7 @@ seam; the note names which part goes where.
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
 | `browser_forms.go` | engine + session | Constraint validation and form focus state moved to `internal/engine` (`validate.go`, `form_state.go`); Tab order, editing, range/select stepping and submission remain session-side. |
 | `browser_selection.go` | engine wrapper | Selection range, extraction and painting moved to `internal/engine/selection.go`; the browser keeps drag state and clipboard policy. |
-| `hints.go` | engine + session | Glyph types, label assignment, unique-pair shortening and base-26 encoding moved to `internal/engine/hints.go`; target collection, painting, activation and confirmation remain session-side. |
+| `hints.go` | engine + session | Target discovery, glyph collection, label assignment, encoding and painting moved to `internal/engine/hints.go`; hint-mode keys, activation and F confirmation remain session-side. |
 | `find.go` | engine + session | Match streams, whitespace normalisation and match rectangles moved to `internal/engine/find.go`; find state, navigation, painting and front-end messages remain session-side. |
 | `reader.go` | done | Extraction and `ReaderRules` moved to `internal/engine/reader.go`; the browser file is a thin alias. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
@@ -383,9 +383,9 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Reader extraction and its stylesheet moved to `internal/engine/reader.go`.
 - [x] Selection range, extraction and painting moved to
       `internal/engine/selection.go`.
-- [x] Hint label assignment, glyph types and encoding moved to
-      `internal/engine/hints.go`; target collection, painting and activation
-      remain session-side.
+- [x] Hint target discovery, glyph collection, label assignment, encoding and
+      painting moved to `internal/engine/hints.go`; hint-mode keys, activation
+      and confirmation remain session-side.
 - [x] Find match streams and highlight rectangles moved to
       `internal/engine/find.go`; find navigation, painting and messages remain
       session-side.
@@ -1112,3 +1112,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 7v | Batch 21: moved find match computation into `internal/engine/find.go`: page/HTML streams, whitespace normalisation, overlapping case-insensitive spans, match grouping and highlight rectangles. The browser keeps find state, navigation, painting, result messages and the engine console fallback. Added engine find tests; browser find tests updated. | `go test ./...`, `go vet`, full `-race`, engine/browser find tests, PTY find/n/N, dump/PNG hashes | Form state leaf, then session type split |
 | 2026-11-23 | 7w | Batch 22: moved form constraint validation into `internal/engine/validate.go`: required fields, radio groups, typed date/month/week/time/datetime/color formats and pattern checks. The browser keeps form control state, editing, Tab/focus and submission. Added engine validation tests; browser form tests still cover submission integration. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Session type split, or form control state next |
 | 2026-11-23 | 7x | Batch 23: moved form focus state into `internal/engine/form_state.go`: focused text control, selection-all flag, control focus and active option, with `Current`/clear helpers. The browser still owns Tab order, editing, stepping and submission. Added an engine form-state test; all call sites use the engine state. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Session type split, or remaining form editing next |
+| 2026-11-23 | 7y | Batch 24: completed the hint content move. `internal/engine/hints.go` now owns target discovery, glyph collection, label painting and target rectangles; the browser keeps hint-mode key handling, activation, F confirmation and front-end messages. Browser hint tests drive the engine helpers; all tests green. | `go test ./...`, `go vet`, full `-race`, engine/browser hint tests, PTY f/F, dump/PNG hashes | Session type split, or form editing next |

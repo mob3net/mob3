@@ -240,12 +240,12 @@ func (b *Browser) applyHintResult(v protocol.HintResult) {
 	top, bottom := b.viewport()
 	r, _ := b.hintTargetRect(target, top, bottom)
 	b.clearLinkHints()
-	if t.node != nil {
-		b.activateHintControl(t.node, r)
+	if t.Node != nil {
+		b.activateHintControl(t.Node, r)
 		return
 	}
-	if t.link >= 0 {
-		b.focus = t.link
+	if t.Link >= 0 {
+		b.focus = t.Link
 		b.followFocused()
 	}
 }

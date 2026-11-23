@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"strings"
 	"testing"
 	"time"
@@ -234,7 +235,7 @@ func TestLinkHintsOperateFormControls(t *testing.T) {
 		}
 		label := ""
 		for _, h := range b.hintItems {
-			if target := b.hintTargetAt(h.Target); target.node != nil && match(target.node) {
+			if target := b.hintTargetAt(h.Target); target.Node != nil && match(target.Node) {
 				label = h.Label
 				break
 			}
@@ -294,8 +295,8 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 	var input *Node
 	label := ""
 	for _, h := range b.hintItems {
-		if target := b.hintTargetAt(h.Target); target.node != nil {
-			input = target.node
+		if target := b.hintTargetAt(h.Target); target.Node != nil {
+			input = target.Node
 			label = h.Label
 			break
 		}
@@ -497,10 +498,10 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 	find := func() (button, link bool) {
 		b.openLinkHints(false)
 		for _, tgt := range b.hintTargets {
-			if tgt.node != nil && tgt.node.Attr("id") == "ok" {
+			if tgt.Node != nil && tgt.Node.Attr("id") == "ok" {
 				button = true
 			}
-			if tgt.node == nil && tgt.link >= 0 {
+			if tgt.Node == nil && tgt.Link >= 0 {
 				link = true
 			}
 		}
@@ -543,12 +544,12 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 		t.Fatal("button not found")
 	}
 	top, bottom := b.viewport()
-	if _, ok := b.visibleInputRect(btn, top, bottom); !ok {
+	if _, ok := engine.VisibleInputRect(b.layout, btn, b.scroll, top, bottom); !ok {
 		t.Fatal("fixed column-flex button has no widget fragment")
 	}
 	b.openLinkHints(false)
 	for _, target := range b.hintTargets {
-		if target.node == btn {
+		if target.Node == btn {
 			return
 		}
 	}

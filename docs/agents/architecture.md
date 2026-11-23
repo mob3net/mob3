@@ -227,10 +227,10 @@ destination; the tracker lists what remains.
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs, the page select popup, the `X` view/`Z` zoom windows and their rendering. Interactive presentation and input for all of these are front-end-owned. |
 | `find.go` | Find state, navigation, scrolling, result messages and match highlights; match computation calls `engine.FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret and next/previous are front-end-owned. |
-| `hints.go` | Session-side target discovery, glyph collection, following and the F destination-confirmation step; hint label assignment and encoding call `engine.AssignLinkHints`/`EncodeLinkHint`. The overlay painting and prefix input are front-end-owned (`frontend/hints.go`). |
+| `hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection, label assignment and painting call `engine` (`BuildHintTargets`, `CollectHintGlyphs`, `AssignLinkHints`, `PaintHintLabels`). The overlay input is front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
 | `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
-| `internal/engine/hints.go` | Link-hint label assignment: glyph types, single/pair assignment, unique-pair shortening and base-26 label encoding. |
+| `internal/engine/hints.go` | Link-hint target discovery, glyph collection, label assignment, unique-pair shortening, base-26 encoding and label painting. |
 | `internal/engine/find.go` | Page and console HTML find streams, whitespace normalisation, overlapping case-insensitive spans and match/highlight rectangles. |
 | `internal/engine/validate.go` | HTML form constraint validation: required, radio groups, typed date/month/week/time/datetime/color formats and pattern checks. |
 | `internal/engine/form_state.go` | Focused text control, select/checkbox/radio/button control and active option, plus clear helpers. |

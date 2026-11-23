@@ -21,10 +21,7 @@ func buildLinkHints(links []int, glyphs map[int][]hintGlyph) []linkHint {
 func encodeLinkHint(i, length int) string { return engine.EncodeLinkHint(i, length) }
 
 // hintTarget is a link or editable field reachable through link hints.
-type hintTarget struct {
-	link int   // Layout.Links index for a link target
-	node *Node // editable control for a field target
-}
+type hintTarget = engine.HintTarget
 
 // openLinkHints starts hint mode and labels every link and editable field that
 // intersects the current viewport. Each label is picked from the target's own
@@ -37,38 +34,14 @@ func (b *Browser) openLinkHints(ask bool) {
 		return
 	}
 	// Fixed bars keep viewport coordinates in FixedY; re-anchor them for the
-	// current scroll so their controls pass the visibility test below.
+	// current scroll so their controls pass the visibility test.
 	b.layout.SetFixedScroll(b.scroll)
 	top, bottom := b.viewport()
-	var targets []hintTarget
-	for i, li := range b.layout.Links {
-		if _, ok := b.visibleLinkRect(li, top, bottom); ok {
-			targets = append(targets, hintTarget{link: i})
-		}
+	var root *Node
+	if b.page != nil {
+		root = b.page.Root
 	}
-	if b.page != nil && b.page.Root != nil {
-		for _, n := range b.page.Root.FindAll(func(n *Node) bool {
-			if !isHintControl(n) || n.Style == nil || n.Style.Display == "none" || n.Style.Hidden {
-				return false
-			}
-			return true
-		}) {
-			if n.Tag == "select" && n.HasAttr("multiple") {
-				for _, opt := range selectOptions(n) {
-					if isDisabledControl(opt) || opt.Style == nil || opt.Style.Display == "none" {
-						continue
-					}
-					if _, ok := b.visibleInputRect(opt, top, bottom); ok {
-						targets = append(targets, hintTarget{link: -1, node: opt})
-					}
-				}
-				continue
-			}
-			if _, ok := b.visibleInputRect(n, top, bottom); ok {
-				targets = append(targets, hintTarget{link: -1, node: n})
-			}
-		}
-	}
+	targets := engine.BuildHintTargets(b.layout, root, b.scroll, top, bottom)
 	if len(targets) == 0 {
 		b.status = "No links or controls in view"
 		return
@@ -79,7 +52,7 @@ func (b *Browser) openLinkHints(ask bool) {
 	}
 	b.hintTargets = targets
 	b.hintItems = b.hintItems[:0]
-	b.hintItems = append(b.hintItems, buildLinkHints(ids, b.collectHintGlyphs(targets, top, bottom))...)
+	b.hintItems = append(b.hintItems, buildLinkHints(ids, engine.CollectHintGlyphs(b.layout, targets, b.scroll, top, bottom))...)
 	b.linkHints = true
 	b.hintPrefix = ""
 	b.hintAsk = ask
@@ -109,36 +82,15 @@ func (b *Browser) sendHints(ask bool, top, bottom int) error {
 			item.Chars[i] = protocol.HintChar{R: c.R, X: c.X, Y: c.Y - b.scroll}
 		}
 		t := b.hintTargetAt(h.Target)
-		if t.node == nil && t.link >= 0 && b.layout != nil && t.link < len(b.layout.Links) {
+		if t.Node == nil && t.Link >= 0 && b.layout != nil && t.Link < len(b.layout.Links) {
 			item.Link = true
-			item.Href = b.resolveHref(b.layout.Links[t.link].Href)
+			item.Href = b.resolveHref(b.layout.Links[t.Link].Href)
 		}
 		items = append(items, item)
 	}
 	return b.sessionOut.Send(protocol.Event{Body: protocol.Hints{
 		Ask: ask, Prefix: b.hintPrefix, Items: items,
 	}})
-}
-
-// visibleInputRect returns the first visible fragment rectangle of an editable
-// control.
-func (b *Browser) visibleInputRect(n *Node, top, bottom int) (Rect, bool) {
-	if b.layout == nil {
-		return Rect{}, false
-	}
-	viewTop := b.scroll
-	viewBottom := b.scroll + (bottom - top)
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Node != n {
-			continue
-		}
-		if f.Y >= viewBottom || f.Y+f.H <= viewTop {
-			continue
-		}
-		return Rect{X: f.X, Y: f.Y, W: f.W, H: f.H}, true
-	}
-	return Rect{}, false
 }
 
 // reopenLinkHints restores an active hint session after a layout rebuild. The
@@ -164,58 +116,7 @@ func (b *Browser) reopenLinkHints(ask bool, prefix string) {
 
 // hintTargetRect returns the visible box of a hint target.
 func (b *Browser) hintTargetRect(target int, top, bottom int) (Rect, bool) {
-	t := b.hintTargetAt(target)
-	if t.node != nil {
-		return b.visibleInputRect(t.node, top, bottom)
-	}
-	if b.layout == nil || t.link < 0 || t.link >= len(b.layout.Links) {
-		return Rect{}, false
-	}
-	return b.visibleLinkRect(b.layout.Links[t.link], top, bottom)
-}
-
-// collectHintGlyphs returns the visible letters of each requested target in
-// document order, with their terminal cells.
-func (b *Browser) collectHintGlyphs(targets []hintTarget, top, bottom int) map[int][]hintGlyph {
-	linkIDs := make(map[int]int, len(targets))
-	inputIDs := make(map[*Node]int, len(targets))
-	for id, t := range targets {
-		if t.node != nil {
-			inputIDs[t.node] = id
-		} else {
-			linkIDs[t.link] = id
-		}
-	}
-	out := make(map[int][]hintGlyph, len(targets))
-	viewTop := b.scroll
-	viewBottom := b.scroll + (bottom - top)
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Text == "" {
-			continue
-		}
-		id := -1
-		if f.Link != nil {
-			if tid, ok := linkIDs[f.Link.Index]; ok {
-				id = tid
-			}
-		} else if f.Node != nil {
-			if tid, ok := inputIDs[f.Node]; ok {
-				id = tid
-			}
-		}
-		if id < 0 || f.Y < viewTop || f.Y >= viewBottom {
-			continue
-		}
-		x := f.X
-		for _, r := range f.Text {
-			if ch, ok := hintLetter(r); ok {
-				out[id] = append(out[id], hintGlyph{Ch: ch, R: r, X: x, Y: f.Y})
-			}
-			x += runeWidth(r)
-		}
-	}
-	return out
+	return engine.HintTargetRect(b.layout, b.hintTargets, target, b.scroll, top, bottom)
 }
 
 // clearLinkHints leaves hint mode without navigating. It is safe to call when
@@ -290,45 +191,19 @@ func (b *Browser) chooseHint(target int) {
 	top, bottom := b.viewport()
 	r, _ := b.hintTargetRect(target, top, bottom)
 	b.clearLinkHints()
-	if t.node != nil {
-		b.activateHintControl(t.node, r)
+	if t.Node != nil {
+		b.activateHintControl(t.Node, r)
 		return
 	}
-	if t.link < 0 {
+	if t.Link < 0 {
 		return
 	}
 	if !ask {
-		b.focus = t.link
+		b.focus = t.Link
 		b.followFocused()
 		return
 	}
-	b.beginHintConfirm(t.link)
-}
-
-// isHintControl reports whether a control is reachable through f hints.
-func isHintControl(n *Node) bool {
-	if n == nil || n.Type != ElementNode || isDisabledControl(n) {
-		return false
-	}
-	switch n.Tag {
-	case "option":
-		return false
-	case "button":
-		return true
-	case "textarea":
-		return isTextInput(n)
-	case "select":
-		return true
-	case "input":
-		if isTextInput(n) || isRangeInput(n) || isFileInput(n) {
-			return true
-		}
-		switch strings.ToLower(strings.TrimSpace(n.Attr("type"))) {
-		case "checkbox", "radio", "submit", "button", "reset", "image":
-			return true
-		}
-	}
-	return false
+	b.beginHintConfirm(t.Link)
 }
 
 // activateHintControl applies the same action as clicking a form control and
@@ -404,9 +279,9 @@ func (b *Browser) hintTargetAt(i int) hintTarget {
 		return b.hintTargets[i]
 	}
 	if b.layout != nil && i >= 0 && i < len(b.layout.Links) {
-		return hintTarget{link: i}
+		return hintTarget{Link: i}
 	}
-	return hintTarget{link: -1}
+	return hintTarget{Link: -1}
 }
 
 // beginHintConfirm shows a chosen F link and waits for confirmation.
@@ -475,23 +350,6 @@ func (b *Browser) handleHintConfirmKey(k string) bool {
 	return b.HandleKey(k)
 }
 
-// visibleLinkRect returns the first rectangle of li that intersects the
-// viewport rows [top, bottom).
-func (b *Browser) visibleLinkRect(li *LinkInfo, top, bottom int) (Rect, bool) {
-	if li == nil {
-		return Rect{}, false
-	}
-	viewTop := b.scroll
-	viewBottom := b.scroll + (bottom - top)
-	for _, r := range li.Rects {
-		if r.Y >= viewBottom || r.Y+r.H <= viewTop {
-			continue
-		}
-		return r, true
-	}
-	return Rect{}, false
-}
-
 // inlineImagesEnabled reports whether the current frame should use native
 // terminal image protocols. Hint mode and any open modal fall back to
 // half-block art so text painted above the images cannot be covered by them.
@@ -506,76 +364,8 @@ func (b *Browser) inlineImagesEnabled() bool {
 // background and underline. The page text itself is never replaced unless a
 // link has no text letters at all.
 func (b *Browser) paintLinkHints(g *Grid, top, bottom int) {
-	if !b.linkHints || b.hintsFrontend || b.layout == nil {
+	if !b.linkHints || b.hintsFrontend {
 		return
 	}
-	bg := RGB(0xff, 0xd7, 0x00)
-	fg := RGB(0x1f, 0x23, 0x28)
-	st := &Style{Bold: true, Underline: true, FontSize: 16, LineHeight: 1}
-	for _, h := range b.hintItems {
-		if !strings.HasPrefix(h.Label, b.hintPrefix) {
-			continue
-		}
-		if len(h.Chars) == 0 {
-			b.paintLinkHintFallback(g, h, top, bottom)
-			continue
-		}
-		// The already typed prefix has done its job; repaint only the letters
-		// that still need to be chosen.
-		chars := h.Chars
-		if len(b.hintPrefix) < len(chars) {
-			chars = chars[len(b.hintPrefix):]
-		} else {
-			chars = nil
-		}
-		for _, c := range chars {
-			y := c.Y - b.scroll + top
-			if y < top || y >= bottom || y < 0 || y >= g.H {
-				continue
-			}
-			if c.X < 0 || c.X >= g.W {
-				continue
-			}
-			g.Put(c.X, y, c.R, st, fg, bg)
-			if !b.color {
-				// Without colors, reverse video marks the hint letter.
-				g.Cells[y*g.W+c.X].Reverse = true
-			}
-		}
-	}
-}
-
-// paintLinkHintFallback draws free label letters inside a target box that has
-// no usable text, such as an image link or an empty field.
-func (b *Browser) paintLinkHintFallback(g *Grid, h linkHint, top, bottom int) {
-	r, ok := b.hintTargetRect(h.Target, top, bottom)
-	if !ok {
-		return
-	}
-	label := h.Label
-	if len(b.hintPrefix) < len(label) {
-		label = label[len(b.hintPrefix):]
-	} else {
-		return
-	}
-	y := r.Y - b.scroll + top
-	if y < top || y >= bottom || y < 0 || y >= g.H {
-		return
-	}
-	x := r.X
-	if x+len(label) > g.W {
-		x = g.W - len(label)
-	}
-	if x < 0 || x >= g.W {
-		return
-	}
-	st := &Style{Bold: true, Underline: true, FontSize: 16, LineHeight: 1}
-	bg := RGB(0xff, 0xd7, 0x00)
-	fg := RGB(0x1f, 0x23, 0x28)
-	for i, ch := range label {
-		g.Put(x+i, y, ch, st, fg, bg)
-		if !b.color {
-			g.Cells[y*g.W+x+i].Reverse = true
-		}
-	}
+	engine.PaintHintLabels(g, b.layout, b.hintTargets, b.hintItems, b.hintPrefix, b.scroll, top, bottom, b.color)
 }
