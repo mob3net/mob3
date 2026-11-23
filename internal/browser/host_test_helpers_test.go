@@ -8,9 +8,12 @@ import (
 	"net/url"
 	"syscall"
 
+	"browser/internal/engine"
 	"browser/internal/host"
 	"browser/internal/protocol"
 )
+
+func overlayLayer(n *Node) int { return engine.OverlayLayer(n) }
 
 func testHost(l *Loader) *host.Session {
 	if l == nil {

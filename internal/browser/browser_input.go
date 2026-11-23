@@ -27,26 +27,7 @@ func (b *Browser) modalMouseAction(ev MouseEvent) string {
 }
 
 // linkAt returns the index of the link covering document cell (x, y), or -1.
-func (b *Browser) linkAt(x, y int) int {
-	if b.Layout == nil {
-		return -1
-	}
-	best, bestLayer := -1, -1
-	for i, li := range b.Layout.Links {
-		for _, r := range li.Rects {
-			if x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
-				continue
-			}
-			// Positioned overlays and sticky bars paint above in-flow links,
-			// so a click on their cells must follow the visible link.
-			if layer := overlayLayer(li.Node); layer > bestLayer {
-				best, bestLayer = i, layer
-			}
-			break
-		}
-	}
-	return best
-}
+func (b *Browser) linkAt(x, y int) int { return b.Session.LinkAt(x, y) }
 
 // openURLPrompt opens the URL field prefilled with the current URL, selected
 // so typing replaces it like a normal browser address bar.
@@ -319,72 +300,7 @@ func (b *Browser) submitInput() {
 }
 
 // nodeAt returns the nearest element under a document cell, or nil.
-func (b *Browser) nodeAt(x, y int) *Node {
-	if b.Layout == nil {
-		return nil
-	}
-	var best *Node
-	bestLayer, bestArea, bestDepth := -1, 0, 0
-	consider := func(n *Node, layer, area, depth int) {
-		if n == nil {
-			return
-		}
-		if layer > bestLayer || (layer == bestLayer && (area < bestArea || (area == bestArea && depth > bestDepth))) {
-			best, bestLayer, bestArea, bestDepth = n, layer, area, depth
-		}
-	}
-	for i := len(b.Layout.Frags) - 1; i >= 0; i-- {
-		f := &b.Layout.Frags[i]
-		if f.Node == nil || (f.Kind != fragText && f.Kind != fragImage) {
-			continue
-		}
-		if x < f.X || x >= f.X+f.W || y < f.Y || y >= f.Y+f.H {
-			continue
-		}
-		for p := f.Node; p != nil; p = p.Parent {
-			if p.Type == ElementNode {
-				consider(p, overlayLayer(p), -1, nodeDepth(p))
-				break
-			}
-		}
-	}
-	// Padding and background gaps have no text fragment. Use laid-out element
-	// boxes so hover menus remain reachable while moving between their items.
-	for n, r := range b.Layout.Boxes {
-		if r.W <= 0 || r.H <= 0 || x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
-			continue
-		}
-		consider(n, overlayLayer(n), r.W*r.H, nodeDepth(n))
-	}
-	return best
-}
-
-// overlayLayer ranks positioned boxes above normal flow for hit testing.
-// A nested positioned box must not mask the high-z overlay that contains it:
-// a relative z-index:0 dialog child inside a fixed z-index:9999 modal still
-// paints with the modal, above ordinary positioned content.
-func overlayLayer(n *Node) int {
-	layer := 0
-	for p := n; p != nil; p = p.Parent {
-		if p.Style == nil || !isPositionedStyle(p.Style) {
-			continue
-		}
-		if l := 2 + p.Style.ZIndex; l > layer {
-			layer = l
-		}
-	}
-	return layer
-}
-
-func nodeDepth(n *Node) int {
-	d := 0
-	for p := n; p != nil; p = p.Parent {
-		if p.Type == ElementNode {
-			d++
-		}
-	}
-	return d
-}
+func (b *Browser) nodeAt(x, y int) *Node { return b.Session.NodeAt(x, y) }
 
 // liveNode reports whether n belongs to the current page document. Reader mode
 // lays out a detached extraction, so synthetic events must not be dispatched on

@@ -938,8 +938,7 @@ func (b *Browser) scrollBy(n int) {
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	b.Hover = -1
-	b.Scroll += n
-	b.clampScroll()
+	b.Session.ScrollBy(n, b.viewportHeight())
 	switch {
 	case b.FindText != "":
 		// Keep the confirmed find status visible while scrolling; only Esc
@@ -1019,20 +1018,12 @@ func markHoverChain(n *Node, on bool) {
 func (b *Browser) updateHover(x, y, top, bottom int) {
 	idx := -1
 	if y >= top && y < bottom {
-		idx = b.linkAt(x, b.Scroll+(y-top))
+		idx = b.Session.LinkAt(x, b.Scroll+(y-top))
 	}
 	b.Hover = idx
 }
 
-func (b *Browser) resolveHref(href string) string {
-	if b.Page == nil || b.Page.Base == nil {
-		return href
-	}
-	if u, err := b.Page.Base.Parse(href); err == nil {
-		return u.String()
-	}
-	return href
-}
+func (b *Browser) resolveHref(href string) string { return b.Session.ResolveHref(href) }
 
 func (b *Browser) followFocused() {
 	li := b.focusedLink()
