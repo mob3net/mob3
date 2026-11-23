@@ -30,6 +30,7 @@ type Presenter struct {
 	consoleActive bool
 	lastFrame     protocol.Frame
 	hasFrame      bool
+	lastOverlay   bool
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -98,6 +99,15 @@ func (p *Presenter) SetState(st protocol.State) {
 	p.state = st
 }
 
+// overlayOpen reports whether a front-end window covers the page. Native
+// terminal images composite above the cell grid, so they must not be placed
+// beneath a menu, popup or modal; the engine draws them as half-block art while
+// the window is open.
+func (p *Presenter) overlayOpen() bool {
+	return p.state.Menu != protocol.MenuNone || p.dialog != nil ||
+		p.selectView != nil || p.download != nil || p.notice != nil || p.hint != nil
+}
+
 // Refresh re-presents the last frame with the current state. It is used when
 // the front end changes a chrome-only value (such as a local quit prompt)
 // without receiving a new engine frame.
@@ -158,6 +168,10 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	// old glyphs and the text they covered in place. A layout reflow (images
 	// arriving, a hover rebuild) can move runs without changing the scroll.
 	if !protocol.RunsEqual(p.lastFrame.Runs, f.Runs) {
+		p.prev = nil
+	}
+	if over := p.overlayOpen(); over != p.lastOverlay {
+		p.lastOverlay = over
 		p.prev = nil
 	}
 	p.lastFrame = f
@@ -264,7 +278,7 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		}
 		p.prev[i] = lines[i]
 	}
-	if native && p.gfx != nil {
+	if native && p.gfx != nil && !p.overlayOpen() {
 		p.gfx.PlaceAll(&sb, placements)
 	}
 	if sb.Len() == 0 {

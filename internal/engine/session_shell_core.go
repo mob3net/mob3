@@ -393,7 +393,7 @@ func (b *Session) rebuild() {
 // Terminal-side graphics composite above the cell grid, so scaled text is
 // disabled while one is open and the layout is rebuilt without it.
 func (b *Session) overlayOpen() bool {
-	return b.dialog != nil || (b.download != nil && !b.downloadFrontend) ||
+	return b.frontendOverlay || b.dialog != nil || (b.download != nil && !b.downloadFrontend) ||
 		(b.notice != nil && !b.noticeFrontend) ||
 		(b.selectMenu != nil && !b.selectFrontend)
 }

@@ -338,8 +338,8 @@ func (b *Session) handleHintConfirmKey(k string) bool {
 // terminal image protocols. Hint mode and any open modal fall back to
 // half-block art so text painted above the images cannot be covered by them.
 func (b *Session) inlineImagesEnabled() bool {
-	if b.gfx == nil || b.LinkHints {
+	if b.gfx == nil || b.LinkHints || b.frontendOverlay {
 		return false
 	}
-	return b.dialog == nil && b.download == nil && b.notice == nil
+	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil
 }

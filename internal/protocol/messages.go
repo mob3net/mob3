@@ -167,6 +167,10 @@ const (
 	AppOpenVimPrompt
 	AppOpenViewMenu
 	AppZoomSet
+	// AppFrontendOverlay tells the engine a front-end window covers the page.
+	// Arg is 1 while it is open and 0 when it closes; the engine then paints
+	// native images as half-block art and scaled text at normal size.
+	AppFrontendOverlay
 )
 
 // App requests an application action. Arg carries an action-specific value.

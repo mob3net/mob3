@@ -5,6 +5,8 @@ import (
 	"image"
 	"strings"
 	"testing"
+
+	"browser/internal/protocol"
 )
 
 func TestTextScaleCanBeDisabled(t *testing.T) {
@@ -281,6 +283,81 @@ func TestModalDisablesScaledText(t *testing.T) {
 	if !b.BigText {
 		t.Fatal("scaled text did not return after the modal closed")
 	}
+
+	b.frontendOverlay = true
+	drawQuiet(b)
+	if b.BigText {
+		t.Fatal("scaled text stayed on under a front-end overlay")
+	}
+	b.frontendOverlay = false
+	drawQuiet(b)
+	if !b.BigText {
+		t.Fatal("scaled text did not return after the front-end overlay closed")
+	}
+}
+
+func TestFrontendOverlayPaintsBlocks(t *testing.T) {
+	t.Setenv("TERM", "xterm-kitty")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	b := newTestSession(40, 20)
+	b.CellW, b.CellH = 8, 16
+	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.loader = newTestLoader()
+	b.loader.NoImages = false
+	u := mustParse(t, "https://example.com/")
+	doc := ParseHTML(`<html><body><h1>big heading</h1><img alt="pic" src="pic.png"></body></html>`)
+	for _, n := range doc.FindAll(func(n *Node) bool { return n.Tag == "img" }) {
+		img := image.NewRGBA(image.Rect(0, 0, 160, 80))
+		for i := range img.Pix {
+			img.Pix[i] = 0xff
+		}
+		n.Img = img
+		n.ImgSrc = "pic.png"
+	}
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.rebuild()
+	drawQuiet(b)
+	if !b.BigText {
+		t.Fatal("scaled text should be enabled before the overlay opens")
+	}
+	if hasBlockImage(b.contentGrid) {
+		t.Fatal("native images should not be painted as blocks")
+	}
+
+	if _, err := b.handleAppAction(protocol.App{Action: protocol.AppFrontendOverlay, Arg: 1}); err != nil {
+		t.Fatal(err)
+	}
+	drawQuiet(b)
+	if b.BigText {
+		t.Fatal("scaled text stayed on under the front-end overlay")
+	}
+	if !hasBlockImage(b.contentGrid) {
+		t.Fatal("images were not painted as half-block art under the overlay")
+	}
+
+	if _, err := b.handleAppAction(protocol.App{Action: protocol.AppFrontendOverlay, Arg: 0}); err != nil {
+		t.Fatal(err)
+	}
+	drawQuiet(b)
+	if !b.BigText {
+		t.Fatal("scaled text did not return after the overlay closed")
+	}
+	if hasBlockImage(b.contentGrid) {
+		t.Fatal("native images did not return after the overlay closed")
+	}
+}
+
+func hasBlockImage(g *Grid) bool {
+	if g == nil {
+		return false
+	}
+	for i := range g.Cells {
+		if g.Cells[i].Img {
+			return true
+		}
+	}
+	return false
 }
 
 func TestZoomBadgeShows(t *testing.T) {

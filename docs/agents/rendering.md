@@ -270,8 +270,8 @@ agreement, the non-negotiable constraints and the change protocol.
   diff cannot erase what an earlier run left there. Any frame whose run set
   differs from the previous frame's (a reflow can move headings without a
   scroll) therefore forces a whole-screen repaint.
-  While a modal window or popup is open the page is rebuilt without scaled
-  text and restored when it closes, so terminal-side glyphs cannot paint over
+  While a modal window, popup or front-end menu is open the page is rebuilt
+  without scaled text and restored when it closes, so terminal-side glyphs cannot paint over
   the modal; this is the text counterpart of native images falling back to
   half-block art.
 - **No font files:** the terminal font is used for all glyphs; font size affects

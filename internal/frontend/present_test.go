@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"bytes"
+	"image"
 	"io"
 	"strings"
 	"testing"
@@ -128,6 +129,47 @@ func TestPresenterRepaintsWhenScaledRunsMove(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "\x1b[2J") {
 		t.Fatalf("moved scaled run did not force a clear: %q", out.String())
+	}
+}
+
+func TestPresenterSkipsPlacementsUnderOverlay(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	p.SetGraphics(GraphicsKitty, 8, 16)
+	f := protocol.Frame{W: 20, H: 5, Cells: make([]protocol.Cell, 100)}
+	for i := range f.Cells {
+		f.Cells[i].R = ' '
+	}
+	f.Placements = []protocol.Placement{
+		testPlacement("pic.png", image.NewRGBA(image.Rect(0, 0, 16, 16)), 1, 1, 2, 1, 0, 1),
+	}
+	st := protocol.State{FrontendChrome: true, Width: 20, Height: 7, HeaderRows: 1}
+	p.SetState(st)
+	if err := p.Present(f, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\x1b_Ga=p") {
+		t.Fatalf("native placement missing: %.200q", out.String())
+	}
+
+	out.Reset()
+	st.Menu = protocol.MenuView
+	p.SetState(st)
+	if err := p.Present(f, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "\x1b_Ga=p") {
+		t.Fatalf("placement drawn under the overlay: %.200q", out.String())
+	}
+
+	out.Reset()
+	st.Menu = protocol.MenuNone
+	p.SetState(st)
+	if err := p.Present(f, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\x1b_Ga=p") {
+		t.Fatalf("placement did not return: %.200q", out.String())
 	}
 }
 

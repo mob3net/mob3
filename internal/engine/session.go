@@ -205,6 +205,11 @@ type Session struct {
 	// terminal image survives.
 	lastNativeImages bool
 
+	// frontendOverlay is true while a front-end-owned window (the view or zoom
+	// menu) covers the page. Native images and scaled text are disabled so
+	// neither can composite above the window.
+	frontendOverlay bool
+
 	// noPDF disables the built-in PDF text viewer, restoring the download
 	// prompt for PDF responses.
 	// pendingStatus replaces the computed load status once, so a JavaScript

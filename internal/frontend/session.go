@@ -58,9 +58,10 @@ type SessionLoop struct {
 	findTotal   int
 	findBase    protocol.State
 
-	menuKind  protocol.MenuKind
-	menuIndex int
-	menuBase  protocol.State
+	menuKind    protocol.MenuKind
+	menuIndex   int
+	menuBase    protocol.State
+	overlaySent bool
 
 	dialogActive bool
 	dialog       protocol.Dialog
@@ -1166,7 +1167,23 @@ func (l *SessionLoop) startMenu(kind protocol.MenuKind) {
 	l.syncMenu()
 }
 
+// notifyOverlay tells the engine whether a front-end window covers the page.
+// The engine then repaints native images as half-block art and scaled text at
+// normal size, so neither can composite above the window.
+func (l *SessionLoop) notifyOverlay(open bool) {
+	if l.overlaySent == open {
+		return
+	}
+	l.overlaySent = open
+	arg := 0
+	if open {
+		arg = 1
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppFrontendOverlay, Arg: arg}})
+}
+
 func (l *SessionLoop) syncMenu() {
+	l.notifyOverlay(true)
 	st := l.State.Page
 	st.Menu = l.menuKind
 	st.MenuIndex = l.menuIndex
@@ -1184,6 +1201,7 @@ func (l *SessionLoop) closeMenu() {
 		return
 	}
 	l.menuKind = protocol.MenuNone
+	l.notifyOverlay(false)
 	l.State.Page = l.menuBase
 	if l.Presenter != nil {
 		l.Presenter.SetState(l.menuBase)

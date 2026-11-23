@@ -511,11 +511,39 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 	loop.handleMenuKey("down")
 	s.cmds = nil
 	loop.handleMenuKey("enter")
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.App{Action: protocol.AppZoomSet, Arg: 125}) {
+	if len(s.cmds) != 2 ||
+		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 0}) ||
+		s.cmds[1].Body != (protocol.App{Action: protocol.AppZoomSet, Arg: 125}) {
 		t.Fatalf("zoom commands = %#v", s.cmds)
 	}
 	if loop.menuKind != protocol.MenuNone {
 		t.Fatal("zoom selection left the menu open")
+	}
+}
+
+func TestMenuNotifiesEngineOverlay(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.startMenu(protocol.MenuView)
+	if len(s.cmds) != 1 ||
+		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 1}) {
+		t.Fatalf("open command = %#v", s.cmds)
+	}
+	s.cmds = nil
+	loop.syncMenu()
+	if len(s.cmds) != 0 {
+		t.Fatalf("unchanged menu sent %#v", s.cmds)
+	}
+	loop.closeMenu()
+	if len(s.cmds) != 1 ||
+		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 0}) {
+		t.Fatalf("close command = %#v", s.cmds)
+	}
+	s.cmds = nil
+	loop.closeMenu()
+	if len(s.cmds) != 0 {
+		t.Fatalf("closing twice sent %#v", s.cmds)
 	}
 }
 
@@ -532,7 +560,9 @@ func TestMenuMouseRowAndBackdrop(t *testing.T) {
 	if !loop.handleMenuMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
 		t.Fatal("row click not consumed")
 	}
-	if loop.menuIndex != layout.Top+1 || len(s.cmds) != 1 {
+	if loop.menuIndex != layout.Top+1 || len(s.cmds) != 2 ||
+		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 1}) ||
+		s.cmds[1].Body != (protocol.App{Action: protocol.AppToggleSticky}) {
 		t.Fatalf("idx=%d cmds=%#v", loop.menuIndex, s.cmds)
 	}
 	loop.handleMenuMouse(MouseEvent{X: 1, Y: 1, Press: true})

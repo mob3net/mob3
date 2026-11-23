@@ -694,7 +694,10 @@ agreement, the non-negotiable constraints and the change protocol.
   half-block art so terminal image placements cannot paint over the modal;
   native images return when it closes. Kitty scaled text is likewise disabled
   while a modal is open (the layout is rebuilt without it), because scaled
-  glyphs are terminal-side and would be composited over the modal.
+  glyphs are terminal-side and would be composited over the modal. The
+  front-end-owned view and zoom menus report their open state to the engine, so
+  the page behind them is repainted with half-block images and normal-size text
+  before the window is drawn.
 - **JS dialogs:** `alert`, `confirm` and `prompt` open a centered modal and
   block script execution until answered. Alert closes on Enter/Space/Esc;
   confirm uses Enter/Y for yes and N/Esc for no; prompt supports the same text
