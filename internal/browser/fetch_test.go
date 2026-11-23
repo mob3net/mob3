@@ -45,11 +45,11 @@ func TestFetchCachesSubresources(t *testing.T) {
 	l := NewLoader()
 	tr := &countingTransport{body: "body { color: red; }"}
 	testHTTP(l).Transport = tr
-	l.setCacheLimitMB(1)
+	l.SetCacheLimitMB(1)
 	u := mustParse(t, "https://example.com/style.css")
 	ctx := withRequestKind(context.Background(), "css")
 	for i := 0; i < 2; i++ {
-		data, ctype, _, status, err := l.fetchCtx(ctx, u)
+		data, ctype, _, status, err := l.FetchCtx(ctx, u)
 		if err != nil || status != 200 || string(data) != tr.body || ctype != "text/css" {
 			t.Fatalf("fetch %d = %q %q %d %v", i, data, ctype, status, err)
 		}
@@ -57,7 +57,7 @@ func TestFetchCachesSubresources(t *testing.T) {
 	if tr.count != 1 {
 		t.Fatalf("HTTP requests = %d, want 1", tr.count)
 	}
-	records := l.requestSnapshot()
+	records := l.RequestSnapshot()
 	if len(records) != 2 {
 		t.Fatalf("request records = %+v, want network + cache", records)
 	}
@@ -71,17 +71,17 @@ func TestFetchCachesSubresources(t *testing.T) {
 	tr2 := &countingTransport{body: "body { color: blue; }", noStore: true}
 	l2 := NewLoader()
 	testHTTP(l2).Transport = tr2
-	l2.setCacheLimitMB(1)
+	l2.SetCacheLimitMB(1)
 	ctx = withRequestKind(context.Background(), "css")
 	for i := 0; i < 2; i++ {
-		if _, _, _, _, err := l2.fetchCtx(ctx, u); err != nil {
+		if _, _, _, _, err := l2.FetchCtx(ctx, u); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if tr2.count != 2 {
 		t.Fatalf("no-store HTTP requests = %d, want 2", tr2.count)
 	}
-	for _, r := range l2.requestSnapshot() {
+	for _, r := range l2.RequestSnapshot() {
 		if r.Cached {
 			t.Fatalf("no-store request was marked cached: %+v", r)
 		}
@@ -415,7 +415,7 @@ func TestRequestLogRecordsPageResources(t *testing.T) {
 	if _, err := loader.LoadContext(context.Background(), "https://example.com/", nil); err != nil {
 		t.Fatal(err)
 	}
-	records := loader.requestSnapshot()
+	records := loader.RequestSnapshot()
 	if len(records) != 3 {
 		t.Fatalf("requests = %+v", records)
 	}
@@ -434,8 +434,8 @@ func TestRequestLogRecordsPageResources(t *testing.T) {
 		}
 	}
 
-	loader.beginPage()
-	if got := loader.requestSnapshot(); len(got) != 0 {
+	loader.BeginPage()
+	if got := loader.RequestSnapshot(); len(got) != 0 {
 		t.Fatalf("beginPage did not clear requests: %+v", got)
 	}
 }
@@ -477,7 +477,7 @@ func TestBlockedBypass(t *testing.T) {
 	}
 
 	global := newLoader()
-	global.ignoreBlocks = true
+	global.IgnoreBlocks = true
 	page, err = global.LoadContext(context.Background(), "https://example.com/", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -541,7 +541,7 @@ func TestLocalFilesRejected(t *testing.T) {
 
 func TestRemotePageCannotLoadLocalFiles(t *testing.T) {
 	loader := NewLoader()
-	loader.noImages = false
+	loader.NoImages = false
 	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		h := make(http.Header)
 		h.Set("Content-Type", "text/html")
@@ -667,7 +667,7 @@ func TestBranding(t *testing.T) {
 	if hist := historyPageHTML(nil, -1); !strings.Contains(hist, "max-width: 900px") || !strings.Contains(hist, "margin: 8px auto") {
 		t.Error("history page is not a narrow reading column")
 	}
-	ua := NewLoader().requestUserAgent()
+	ua := NewLoader().RequestUserAgent()
 	if ua != "MOB3/1.0 (+terminal; +https://mob3.net)" {
 		t.Errorf("User-Agent = %q", ua)
 	}
@@ -773,18 +773,18 @@ func TestLoaderSettingsConcurrent(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			l.setUserAgent("agent")
-			l.setSearchURL("https://search.example/?q=%s")
-			l.setImageCap(32, 32)
+			l.SetUserAgent("agent")
+			l.SetSearchURL("https://search.example/?q=%s")
+			l.SetImageCap(32, 32)
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			_ = l.requestUserAgent()
-			_ = l.searchTemplate()
-			_, _ = l.imageCap()
-			_ = l.fitImage(im)
+			_ = l.RequestUserAgent()
+			_ = l.SearchTemplate()
+			_, _ = l.ImageCap()
+			_ = l.FitImage(im)
 		}
 	}()
 	wg.Wait()
@@ -838,7 +838,7 @@ func TestLoadDataPageWithImage(t *testing.T) {
 	imgURL := dataImageURL(t, im)
 	htmlSrc := `<html><head><title>T</title></head><body><p>hi</p><img src="` + imgURL + `"></body></html>`
 	loader := NewLoader()
-	loader.noImages = false
+	loader.NoImages = false
 	page, err := loader.Load("data:text/html,"+url.PathEscape(htmlSrc), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -873,7 +873,7 @@ func TestImagesDisabledByDefault(t *testing.T) {
 	if img := page.Root.FindFirst("img"); img == nil || img.Img != nil {
 		t.Fatal("image was loaded even though images are disabled by default")
 	}
-	for _, r := range loader.requestSnapshot() {
+	for _, r := range loader.RequestSnapshot() {
 		if r.Kind == "img" {
 			t.Fatalf("image request was made: %+v", r)
 		}
@@ -1016,13 +1016,13 @@ func TestLocalNetworkGuardBlocksPublicSubresource(t *testing.T) {
 	page := mustURL(t, "https://example.com/")
 	ctx := withRequestKind(context.Background(), "img")
 	ctx = withRequestPage(ctx, page, false)
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); !errors.Is(err, errLocalNetworkBlocked) {
+	if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); !errors.Is(err, errLocalNetworkBlocked) {
 		t.Fatalf("fetch error = %v, want local-network block", err)
 	}
 	if reached {
 		t.Fatal("blocked request reached the transport")
 	}
-	recs := l.requestSnapshot()
+	recs := l.RequestSnapshot()
 	if len(recs) != 1 || !strings.Contains(recs[0].Err, "local-network") {
 		t.Fatalf("blocked request log = %+v, want a local-network error", recs)
 	}
@@ -1042,11 +1042,11 @@ func TestLocalNetworkGuardAllowsLocalPageAndNavigation(t *testing.T) {
 	localPage := mustURL(t, "http://127.0.0.1:3000/")
 	ctx := withRequestKind(context.Background(), "img")
 	ctx = withRequestPage(ctx, localPage, true)
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); err != nil {
+	if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://127.0.0.1:8080/x")); err != nil {
 		t.Fatalf("local page subresource was blocked: %v", err)
 	}
 	// A top-level navigation carries no page meta and stays allowed.
-	if _, _, _, _, err := l.fetchCtx(context.Background(), mustURL(t, "http://127.0.0.1:8080/")); err != nil {
+	if _, _, _, _, err := l.FetchCtx(context.Background(), mustURL(t, "http://127.0.0.1:8080/")); err != nil {
 		t.Fatalf("top-level navigation was blocked: %v", err)
 	}
 }
@@ -1157,7 +1157,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	})
 	public := withRequestKind(context.Background(), "css")
 	public = withRequestPage(public, mustURL(t, "https://example.com/"), false)
-	data, _, _, _, err := l.fetchCtx(public, u)
+	data, _, _, _, err := l.FetchCtx(public, u)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1173,7 +1173,7 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	local = withRequestPage(local, mustURL(t, "http://127.0.0.1:3000/"), true)
 	testHost(l).Cache().PutBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
 	reached = false
-	data, _, _, _, err = l.fetchCtx(local, u)
+	data, _, _, _, err = l.FetchCtx(local, u)
 	if err != nil || string(data) != "local-secret" || reached {
 		t.Fatalf("local page cache hit = %q, %v (request made: %v)", data, err, reached)
 	}
@@ -1189,7 +1189,7 @@ func TestMixedContentBlocksActiveSubresources(t *testing.T) {
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	for _, kind := range []string{"js", "css"} {
 		ctx := withRequestKind(secure, kind)
-		if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://example.com/x")); !errors.Is(err, errMixedContentBlocked) {
+		if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://example.com/x")); !errors.Is(err, errMixedContentBlocked) {
 			t.Fatalf("%s mixed content error = %v, want blocked", kind, err)
 		}
 	}
@@ -1212,14 +1212,14 @@ func TestMixedContentUpgradesImages(t *testing.T) {
 	})
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	ctx := withRequestKind(secure, "img")
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/a.png")); err != nil {
+	if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://cdn.example/a.png")); err != nil {
 		t.Fatalf("image upgrade failed: %v", err)
 	}
 	if got != "https://cdn.example/a.png" {
 		t.Fatalf("image URL = %q, want the HTTPS upgrade", got)
 	}
 	// An IP-literal image cannot be upgraded and is blocked instead.
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://93.184.216.34/a.png")); !errors.Is(err, errMixedContentBlocked) {
+	if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://93.184.216.34/a.png")); !errors.Is(err, errMixedContentBlocked) {
 		t.Fatalf("IP-literal image error = %v, want blocked", err)
 	}
 }
@@ -1236,7 +1236,7 @@ func TestMixedContentAllowsInsecureDocument(t *testing.T) {
 	})
 	page := withRequestPage(context.Background(), mustURL(t, "http://example.com/"), false)
 	ctx := withRequestKind(page, "js")
-	if _, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "http://cdn.example/x.js")); err != nil {
+	if _, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "http://cdn.example/x.js")); err != nil {
 		t.Fatalf("HTTP page subresource was blocked: %v", err)
 	}
 }
@@ -1253,7 +1253,7 @@ func TestMixedContentBlocksDowngradeRedirect(t *testing.T) {
 	})
 	secure := withRequestPage(context.Background(), mustURL(t, "https://example.com/"), false)
 	ctx := withRequestKind(secure, "js")
-	_, _, _, _, err := l.fetchCtx(ctx, mustURL(t, "https://example.com/start.js"))
+	_, _, _, _, err := l.FetchCtx(ctx, mustURL(t, "https://example.com/start.js"))
 	if !errors.Is(err, errMixedContentBlocked) {
 		t.Fatalf("downgrade redirect error = %v, want blocked", err)
 	}
@@ -1484,8 +1484,8 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	src := `<html><body><img src="` + imgURL + `" alt="pic"></body></html>`
 
 	loader := NewLoader()
-	loader.noImages = false
-	loader.deferImages = true
+	loader.NoImages = false
+	loader.DeferImageLoad = true
 	page, err := loader.Load("data:text/html,"+url.PathEscape(src), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1498,11 +1498,11 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 		t.Fatal("deferred load fetched the image during Load")
 	}
 
-	tasks := loader.imageTasks(page.Root, page.Base)
+	tasks := loader.ImageTasks(page.Root, page.Base)
 	if len(tasks) != 1 {
 		t.Fatalf("image tasks = %d, want 1", len(tasks))
 	}
-	results := loader.loadImageTaskResults(context.Background(), tasks)
+	results := loader.LoadImageTaskResults(context.Background(), tasks)
 	if len(results) != 1 || results[0].Img == nil || results[0].Failed {
 		t.Fatalf("background results = %+v", results)
 	}

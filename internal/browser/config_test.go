@@ -14,8 +14,8 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b.NoJS = true
 	b.JSMemLimit = 64 << 20
 	b.NoBigText = true
-	b.loader.setUserAgent("TestUA")
-	b.loader.setSearchURL("https://search.example/?q=%s")
+	b.loader.SetUserAgent("TestUA")
+	b.loader.SetSearchURL("https://search.example/?q=%s")
 	b.cliConfig = map[string]string{
 		"-dump": "off", "-width": "80", "-graphics": "auto",
 		"-color": "off", "-no-color": "off",
@@ -97,10 +97,10 @@ func TestApplyConfig(t *testing.T) {
 		"search":        {""},
 	}
 	b.applyConfig(q)
-	if !b.NoJS || !b.loader.noScripts {
+	if !b.NoJS || !b.loader.NoScripts {
 		t.Fatal("-no-js was not applied")
 	}
-	if !b.loader.ignoreBlocks {
+	if !b.loader.IgnoreBlocks {
 		t.Fatal("-ignore-blocks was not applied")
 	}
 	if b.home != "https://example.com/start" {
@@ -112,11 +112,11 @@ func TestApplyConfig(t *testing.T) {
 	if b.LayoutBudget.Name != "high" {
 		t.Fatalf("layout budget = %q, want high", b.LayoutBudget.Name)
 	}
-	if b.loader.requestUserAgent() != "TestUA" {
-		t.Fatalf("ua = %q", b.loader.requestUserAgent())
+	if b.loader.RequestUserAgent() != "TestUA" {
+		t.Fatalf("ua = %q", b.loader.RequestUserAgent())
 	}
-	if b.loader.searchTemplate() != "" {
-		t.Fatalf("search = %q", b.loader.searchTemplate())
+	if b.loader.SearchTemplate() != "" {
+		t.Fatalf("search = %q", b.loader.SearchTemplate())
 	}
 }
 
@@ -225,12 +225,12 @@ func TestConfigCheckboxForm(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
 	b.NoJS = true
-	b.loader.ignoreBlocks = true
+	b.loader.IgnoreBlocks = true
 	b.applyConfig(url.Values{"config-form": {"1"}})
-	if b.NoJS || b.loader.noScripts {
+	if b.NoJS || b.loader.NoScripts {
 		t.Fatal("unchecked no-js did not turn JS on")
 	}
-	if b.loader.ignoreBlocks {
+	if b.loader.IgnoreBlocks {
 		t.Fatal("unchecked ignore-blocks did not turn it off")
 	}
 }

@@ -471,7 +471,7 @@ func (b *Browser) requestLinesWidth(width int) []string {
 	if b.loader == nil {
 		return []string{"(requests unavailable)"}
 	}
-	records := b.loader.requestSnapshot()
+	records := b.loader.RequestSnapshot()
 	out := make([]string, 0, len(records))
 	for _, r := range records {
 		status := "..."
@@ -505,10 +505,10 @@ func (b *Browser) requestLinesWidth(width int) []string {
 // requestCacheSummary is the pinned cache usage line shown below the request
 // list.
 func (b *Browser) requestCacheSummary() string {
-	if b.loader == nil || b.loader.host == nil {
+	if b.loader == nil || b.loader.Host == nil {
 		return "Cache: unavailable"
 	}
-	used, limit, entries := b.loader.host.CacheStats()
+	used, limit, entries := b.loader.Host.CacheStats()
 	if limit <= 0 {
 		return fmt.Sprintf("Cache: disabled · %d entries", entries)
 	}
@@ -737,7 +737,7 @@ func (b *Browser) storageLinesWidth(width int) []string {
 	if b.URL == nil || b.loader == nil || (b.URL.Scheme != "http" && b.URL.Scheme != "https") {
 		out = append(out, "  (not available for this page)")
 	} else {
-		cookies := b.loader.host.CookieViews(b.URL)
+		cookies := b.loader.Host.CookieViews(b.URL)
 		sort.Slice(cookies, func(i, j int) bool {
 			if cookies[i].Name != cookies[j].Name {
 				return cookies[i].Name < cookies[j].Name
@@ -919,7 +919,7 @@ func newConsoleLayout(h, open int) consoleLayout {
 func (b *Browser) consoleTabTitles() [consoleSectionCount]string {
 	reqCount := 0
 	if b.loader != nil {
-		reqCount = b.loader.requestCount()
+		reqCount = b.loader.RequestCount()
 	}
 	return [consoleSectionCount]string{
 		fmt.Sprintf(" JS logs (%d) ", len(b.jsLog)),

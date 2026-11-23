@@ -18,8 +18,8 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	doc := ParseHTML(`<html><body><img src="pic.png" alt="pic"></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	loader := NewLoader()
-	loader.noImages = false
-	loader.deferImages = true
+	loader.NoImages = false
+	loader.DeferImageLoad = true
 	b := NewBrowser(60, 20)
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
@@ -52,7 +52,7 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
 	b.loader = NewLoader()
-	b.loader.noImages = false
+	b.loader.NoImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.LoadSeq = 1
@@ -167,7 +167,7 @@ func TestRefreshImagesAfterScript(t *testing.T) {
 	page := newJSPage(`<html><body><img id="x" alt="lazy"></body></html>`,
 		`document.getElementById("x").src = "`+dataURL+`";`)
 	b := NewBrowser(60, 20)
-	b.loader.noImages = false
+	b.loader.NoImages = false
 	b.Page = page
 	b.URL = page.URL
 	b.startJS(page)
@@ -188,26 +188,26 @@ func TestRefreshImagesAfterScript(t *testing.T) {
 
 func TestFitImageCapsDimensions(t *testing.T) {
 	l := NewLoader()
-	l.setImageCap(200, 150)
-	if b := l.fitImage(image.NewNRGBA(image.Rect(0, 0, 400, 300))).Bounds(); b.Dx() != 200 || b.Dy() != 150 {
+	l.SetImageCap(200, 150)
+	if b := l.FitImage(image.NewNRGBA(image.Rect(0, 0, 400, 300))).Bounds(); b.Dx() != 200 || b.Dy() != 150 {
 		t.Fatalf("square cap = %dx%d, want 200x150", b.Dx(), b.Dy())
 	}
 
 	// The narrower side follows the aspect ratio instead of being clamped
 	// independently.
-	l.setImageCap(100, 100)
-	if b := l.fitImage(image.NewNRGBA(image.Rect(0, 0, 400, 100))).Bounds(); b.Dx() != 100 || b.Dy() != 25 {
+	l.SetImageCap(100, 100)
+	if b := l.FitImage(image.NewNRGBA(image.Rect(0, 0, 400, 100))).Bounds(); b.Dx() != 100 || b.Dy() != 25 {
 		t.Fatalf("wide cap = %dx%d, want 100x25", b.Dx(), b.Dy())
 	}
 
 	small := image.NewNRGBA(image.Rect(0, 0, 50, 40))
-	if got := l.fitImage(small); got != small {
+	if got := l.FitImage(small); got != small {
 		t.Fatalf("image inside the cap was resampled: %v", got.Bounds())
 	}
 
-	l.setImageCap(0, 0)
+	l.SetImageCap(0, 0)
 	big := image.NewNRGBA(image.Rect(0, 0, 400, 300))
-	if got := l.fitImage(big); got != big {
+	if got := l.FitImage(big); got != big {
 		t.Fatal("a disabled cap should not resample")
 	}
 }
@@ -221,9 +221,9 @@ func TestImageDownscaledOnLoad(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	root := ParseHTML(`<html><body><img src="` + dataURL + `" alt="pic"></body></html>`)
 	loader := NewLoader()
-	loader.noImages = false
-	loader.setImageCap(100, 100)
-	if !loader.loadImages(context.Background(), root, u) {
+	loader.NoImages = false
+	loader.SetImageCap(100, 100)
+	if !loader.LoadImages(context.Background(), root, u) {
 		t.Fatal("image was not loaded")
 	}
 	img := root.FindFirst("img")
@@ -237,13 +237,13 @@ func TestImageDownscaledOnLoad(t *testing.T) {
 
 func TestBrowserSetsImageCapFromViewport(t *testing.T) {
 	b := NewBrowser(177, 42)
-	if b.loader.imageCapW() != 177*8 || b.loader.imageCapH() != 42*16 {
-		t.Fatalf("cap = %dx%d, want %dx%d", b.loader.imageCapW(), b.loader.imageCapH(), 177*8, 42*16)
+	if b.loader.ImageCapW() != 177*8 || b.loader.ImageCapH() != 42*16 {
+		t.Fatalf("cap = %dx%d, want %dx%d", b.loader.ImageCapW(), b.loader.ImageCapH(), 177*8, 42*16)
 	}
 	b.Width, b.Height = 80, 24
 	b.applyImageCap()
-	if b.loader.imageCapW() != 1024 || b.loader.imageCapH() != 512 {
-		t.Fatalf("small viewport cap = %dx%d, want the 1024x512 floor", b.loader.imageCapW(), b.loader.imageCapH())
+	if b.loader.ImageCapW() != 1024 || b.loader.ImageCapH() != 512 {
+		t.Fatalf("small viewport cap = %dx%d, want the 1024x512 floor", b.loader.ImageCapW(), b.loader.ImageCapH())
 	}
 }
 
@@ -276,8 +276,8 @@ func deferredImageFixture(t *testing.T, html string) *Browser {
 	doc := ParseHTML(html)
 	u := mustParse(t, "https://example.com/")
 	loader := NewLoader()
-	loader.noImages = false
-	loader.deferImages = true
+	loader.NoImages = false
+	loader.DeferImageLoad = true
 	b := NewBrowser(60, 20)
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
@@ -530,8 +530,8 @@ func TestStartDeferredImageLoadStreams(t *testing.T) {
 	doc := ParseHTML(`<html><body><img id="x" src="` + dataURL + `"></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := NewBrowser(60, 20)
-	b.loader.noImages = false
-	b.loader.deferImages = true
+	b.loader.NoImages = false
+	b.loader.DeferImageLoad = true
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.LoadSeq = 1

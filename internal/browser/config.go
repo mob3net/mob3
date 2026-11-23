@@ -64,13 +64,13 @@ func (b *Browser) configItems() []configItem {
 	}
 	ua, search, ignore := defaultUserAgent, DefaultSearchURL, false
 	if b.loader != nil {
-		ua = b.loader.requestUserAgent()
-		search = b.loader.searchTemplate()
-		ignore = b.loader.ignoreBlocks
+		ua = b.loader.RequestUserAgent()
+		search = b.loader.SearchTemplate()
+		ignore = b.loader.IgnoreBlocks
 	}
 	cacheMB := int64(0)
 	if b.loader != nil {
-		cacheMB = b.loader.host.CacheLimitBytes() >> 20
+		cacheMB = b.loader.Host.CacheLimitBytes() >> 20
 	}
 	return []configItem{
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},
@@ -135,12 +135,12 @@ func (b *Browser) applyConfig(q url.Values) {
 		if form {
 			b.NoJS = q.Has("no-js")
 			if b.loader != nil {
-				b.loader.noScripts = b.NoJS
+				b.loader.NoScripts = b.NoJS
 			}
 		} else if on, ok := parseOnOff(v[0]); ok {
 			b.NoJS = on
 			if b.loader != nil {
-				b.loader.noScripts = on
+				b.loader.NoScripts = on
 			}
 		}
 	}
@@ -148,21 +148,21 @@ func (b *Browser) applyConfig(q url.Values) {
 		if form {
 			b.NoPDF = q.Has("no-pdf")
 			if b.loader != nil {
-				b.loader.noPDF = b.NoPDF
+				b.loader.NoPDF = b.NoPDF
 			}
 		} else if on, ok := parseOnOff(v[0]); ok {
 			b.NoPDF = on
 			if b.loader != nil {
-				b.loader.noPDF = on
+				b.loader.NoPDF = on
 			}
 		}
 	}
 	if _, ok := q["ignore-blocks"]; (ok && len(q["ignore-blocks"]) > 0) || (form && b.loader != nil) {
 		if form && b.loader != nil {
-			b.loader.ignoreBlocks = q.Has("ignore-blocks")
+			b.loader.IgnoreBlocks = q.Has("ignore-blocks")
 		} else if b.loader != nil {
 			if on, ok := parseOnOff(q["ignore-blocks"][0]); ok {
-				b.loader.ignoreBlocks = on
+				b.loader.IgnoreBlocks = on
 			}
 		}
 	}
@@ -204,10 +204,10 @@ func (b *Browser) applyConfig(q url.Values) {
 		if ua == "" {
 			ua = defaultUserAgent
 		}
-		b.loader.setUserAgent(ua)
+		b.loader.SetUserAgent(ua)
 	}
 	if v, ok := q["search"]; ok && len(v) > 0 && b.loader != nil {
-		b.loader.setSearchURL(strings.TrimSpace(v[0]))
+		b.loader.SetSearchURL(strings.TrimSpace(v[0]))
 	}
 	if v, ok := q["certs"]; (ok && len(v) > 0) || (form && b.loader != nil) {
 		if b.loader != nil {

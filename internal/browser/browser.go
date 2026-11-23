@@ -244,10 +244,10 @@ func (b *Browser) setLoader(l *Loader) {
 		b.Session.Images = l
 	}
 	if l != nil {
-		l.historyFn = b.historyViewSnapshot
-		l.setMemoryBudget(effectiveMemoryLimit())
+		l.HistoryFunc = b.historyViewSnapshot
+		l.SetMemoryBudget(effectiveMemoryLimit())
 		if b.Width > 0 {
-			l.imageViewportPx = cssWidthPx(b.Width)
+			l.ViewportPx = cssWidthPx(b.Width)
 		}
 		b.applyImageCap()
 	}
@@ -279,7 +279,7 @@ func (b *Browser) applyImageCap() {
 	if b.loader == nil {
 		return
 	}
-	b.loader.setImageCap(b.imageCapPx())
+	b.loader.SetImageCap(b.imageCapPx())
 }
 
 // historyViewSnapshot supplies the stored display snapshot to the built-in
@@ -316,7 +316,7 @@ func (b *Browser) setHistoryView(v protocol.History) {
 // searchTemplate returns the configured search URL template.
 func (b *Browser) searchTemplate() string {
 	if b.loader != nil {
-		return b.loader.searchTemplate()
+		return b.loader.SearchTemplate()
 	}
 	return DefaultSearchURL
 }
@@ -387,7 +387,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		b.suspendCurrentPage()
 		b.cancelLoadNow()
 		if b.loader != nil {
-			b.loader.beginPage()
+			b.loader.BeginPage()
 		}
 		b.LoadSeq++
 		q := configValues(method, u, body)
@@ -411,7 +411,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 	b.ImagesPaused = false
 	b.applyImageCap()
 	if b.loader != nil {
-		b.loader.beginPage()
+		b.loader.BeginPage()
 	}
 	b.status = "Loading " + u.String() + " … (Esc stops)"
 	b.clearSelection()
@@ -693,7 +693,7 @@ func (b *Browser) applyZoom(z float64) {
 func (b *Browser) toggleJavaScript() {
 	b.NoJS = !b.NoJS
 	if b.loader != nil {
-		b.loader.noScripts = b.NoJS
+		b.loader.NoScripts = b.NoJS
 	}
 	if b.NoJS {
 		b.pendingStatus = "JavaScript off — press J to re-enable"

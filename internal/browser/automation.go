@@ -50,7 +50,7 @@ func NewAutomation(width, height int) *Automation {
 	b.NoDraw = true
 	if b.loader != nil {
 		// Automation exposes text; image downloads would only slow it down.
-		b.loader.noImages = true
+		b.loader.NoImages = true
 	}
 	a := &Automation{b: b}
 	b.historyObserver = a.applyHistoryCommit
@@ -1750,7 +1750,7 @@ func (a *Automation) Requests(limit int) string {
 	if b.loader == nil {
 		return "(requests unavailable)"
 	}
-	records := b.loader.requestSnapshot()
+	records := b.loader.RequestSnapshot()
 	lines := b.requestLines()
 	header := fmt.Sprintf("Requests: %d", len(records))
 	if len(records) == 0 {

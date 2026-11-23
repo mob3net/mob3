@@ -380,15 +380,15 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	}
 	hideImages := mode == GraphicsNone
 	if b.loader != nil {
-		b.loader.noImages = hideImages
+		b.loader.NoImages = hideImages
 	}
 	// Rebuild the page in the new mode instead of reloading it. Decoded images
 	// stay on the page; layout hides them when images are off, and a page
 	// loaded with images disabled fetches them here when they are turned on.
 	if b.Page != nil && b.Page.Root != nil {
 		if !hideImages && b.loader != nil {
-			b.loader.loadInlineSVGs(b.Page.Root)
-			if !b.loader.deferImages {
+			b.loader.LoadInlineSVGs(b.Page.Root)
+			if !b.loader.DeferImageLoad {
 				b.refreshImages()
 			}
 		}
@@ -402,7 +402,7 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 func (b *Browser) graphicsStatusText() string {
 	mode := "none"
 	switch {
-	case b.loader != nil && b.loader.noImages:
+	case b.loader != nil && b.loader.NoImages:
 		mode = "none"
 	case b.gfx != nil:
 		switch b.gfx.Mode() {

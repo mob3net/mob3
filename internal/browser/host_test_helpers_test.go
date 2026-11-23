@@ -19,7 +19,7 @@ func testHost(l *Loader) *host.Session {
 	if l == nil {
 		return nil
 	}
-	h, _ := l.host.(*host.Session)
+	h, _ := l.Host.(*host.Session)
 	return h
 }
 

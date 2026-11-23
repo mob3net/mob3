@@ -10,7 +10,7 @@ import (
 
 func (b *Browser) BeginPage() {
 	if b.loader != nil {
-		b.loader.beginPage()
+		b.loader.BeginPage()
 	}
 }
 

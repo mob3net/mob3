@@ -291,7 +291,7 @@ func TestPDFUnsupportedFilter(t *testing.T) {
 func TestPDFLoadEndToEnd(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Loaded from a data URL) Tj ET", "")
 	loader := NewLoader()
-	loader.noImages = true
+	loader.NoImages = true
 	target := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(data)
 	page, err := loader.Load(target, nil)
 	if err != nil {
@@ -329,8 +329,8 @@ func TestPDFLoadEndToEnd(t *testing.T) {
 func TestPDFDisabledFallsBackToDownload(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Ignored) Tj ET", "")
 	loader := NewLoader()
-	loader.noImages = true
-	loader.noPDF = true
+	loader.NoImages = true
+	loader.NoPDF = true
 	page, err := loader.Load("data:application/pdf;base64,"+base64.StdEncoding.EncodeToString(data), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -475,11 +475,11 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 
 	// Scrolling into the third page moves the counter.
 	b.Scroll = 90
-	if got := b.pdfPageNumber(); got != 3 {
+	if got := b.PDFPageNumber(); got != 3 {
 		t.Fatalf("page at scroll 90 = %d, want 3", got)
 	}
 	b.Scroll = 1000
-	if got := b.pdfPageNumber(); got != 5 {
+	if got := b.PDFPageNumber(); got != 5 {
 		t.Fatalf("page at bottom = %d, want 5", got)
 	}
 
@@ -816,8 +816,8 @@ func TestPDFPageSelection(t *testing.T) {
 	target := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(pdfTwoPageFixture())
 	load := func(page int) *Page {
 		loader := NewLoader()
-		loader.noImages = true
-		loader.pdfPage = page
+		loader.NoImages = true
+		loader.PDFPage = page
 		p, err := loader.Load(target, nil)
 		if err != nil {
 			t.Fatal(err)

@@ -40,9 +40,6 @@ func isSVG(ctype string, data []byte) bool  { return engine.IsSVG(ctype, data) }
 func decodeSVG(data []byte) (image.Image, error) {
 	return engine.DecodeSVG(data)
 }
-func decodeSVGWithin(data []byte, maxPixels int64) (image.Image, error) {
-	return engine.DecodeSVGWithin(data, maxPixels)
-}
 
 var backgroundPlaceholderBG = engine.BackgroundPlaceholderBG
 

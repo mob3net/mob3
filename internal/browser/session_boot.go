@@ -7,37 +7,6 @@ import (
 	"browser/internal/protocol"
 )
 
-// LoaderConfig is the host/loader policy the app applies before creating a
-// session. It keeps the loader fields private while the app owns flag values.
-type LoaderConfig struct {
-	NoScripts    bool
-	NoPDF        bool
-	NoImages     bool
-	IgnoreBlocks bool
-	Search       string
-	UserAgent    string
-	Certs        string
-	DeferImages  bool
-}
-
-// NewConfiguredLoader creates the loader used by one app invocation.
-func NewConfiguredLoader(c LoaderConfig) (*Loader, error) {
-	l := NewLoader()
-	l.noScripts = c.NoScripts
-	l.noPDF = c.NoPDF
-	l.noImages = c.NoImages
-	l.setSearchURL(c.Search)
-	l.ignoreBlocks = c.IgnoreBlocks
-	l.deferImages = c.DeferImages
-	if c.UserAgent != "" {
-		l.setUserAgent(c.UserAgent)
-	}
-	if err := l.SetCertSource(c.Certs); err != nil {
-		return nil, err
-	}
-	return l, nil
-}
-
 // SessionConfig is the engine-side configuration the app applies before the
 // interactive transport starts. Terminal setup stays in the app/front end.
 type SessionConfig struct {
@@ -172,7 +141,7 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 	SetLayoutZoom(c.Zoom)
 	if c.Loader != nil {
 		a.b.setLoader(c.Loader)
-		c.Loader.noImages = true
+		c.Loader.NoImages = true
 	}
 	a.b.NoJS = c.NoJS
 	a.b.NoPDF = c.NoPDF

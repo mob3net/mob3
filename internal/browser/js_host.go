@@ -59,13 +59,13 @@ func (h browserJSHost) UserAgent() string {
 	if h.b.loader == nil {
 		return ""
 	}
-	return h.b.loader.requestUserAgent()
+	return h.b.loader.RequestUserAgent()
 }
 func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
-	if h.b.loader == nil || h.b.loader.host == nil || u == nil {
+	if h.b.loader == nil || h.b.loader.Host == nil || u == nil {
 		return nil
 	}
-	cookies := h.b.loader.host.DocumentCookieValues(u)
+	cookies := h.b.loader.Host.DocumentCookieValues(u)
 	out := make([]engine.Cookie, 0, len(cookies))
 	for _, c := range cookies {
 		out = append(out, engine.Cookie{Name: c.Name, Value: c.Value})
@@ -73,22 +73,22 @@ func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
 	return out
 }
 func (h browserJSHost) SetDocumentCookie(u *url.URL, raw string) {
-	if h.b.loader == nil || h.b.loader.host == nil || u == nil {
+	if h.b.loader == nil || h.b.loader.Host == nil || u == nil {
 		return
 	}
-	h.b.loader.host.SetDocumentCookieRaw(u, raw)
+	h.b.loader.Host.SetDocumentCookieRaw(u, raw)
 }
 func (h browserJSHost) FetchResource(ctx context.Context, u *url.URL) ([]byte, string, *url.URL, int, error) {
 	if h.b.loader == nil {
 		return nil, "", nil, 0, errors.New("loader unavailable")
 	}
-	return h.b.loader.fetchCtx(ctx, u)
+	return h.b.loader.FetchCtx(ctx, u)
 }
 func (h browserJSHost) JSFetch(ctx context.Context, req protocol.FetchRequest) (protocol.FetchResponse, error) {
 	if h.b.loader == nil {
 		return protocol.FetchResponse{}, errors.New("loader unavailable")
 	}
-	return h.b.loader.host.JSFetch(ctx, req)
+	return h.b.loader.Host.JSFetch(ctx, req)
 }
 
 func (h browserJSHost) RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context {
@@ -111,7 +111,7 @@ func (h browserJSHost) MIMEEssence(contentType string) string {
 
 func (h browserJSHost) CheckRequest(ctx context.Context, u *url.URL) error {
 	meta := protocol.RequestMetaFrom(ctx)
-	if meta.BlockLocal && h.b.loader.host.IsLocalURL(u) {
+	if meta.BlockLocal && h.b.loader.Host.IsLocalURL(u) {
 		return protocol.ErrLocalNetworkBlocked
 	}
 	if meta.PageSecure && u.Scheme == "http" {

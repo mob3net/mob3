@@ -75,12 +75,12 @@ func TestConsoleStorageCookieDetails(t *testing.T) {
 
 func TestConsoleRequestLinesWrap(t *testing.T) {
 	b := NewBrowser(60, 20)
-	gen := b.loader.currentPageGeneration()
-	id, ok := b.loader.startRequest(gen, "GET", "https://example.com/"+strings.Repeat("a", 200), "doc")
+	gen := b.loader.CurrentPageGeneration()
+	id, ok := b.loader.StartRequest(gen, "GET", "https://example.com/"+strings.Repeat("a", 200), "doc")
 	if !ok {
 		t.Fatal("request was not recorded")
 	}
-	b.loader.finishRequest(id, gen, 200, 1024, time.Millisecond, nil)
+	b.loader.FinishRequest(id, gen, 200, 1024, time.Millisecond, nil)
 	const width = 40
 	lines := b.requestLinesWidth(width)
 	if len(lines) < 2 {

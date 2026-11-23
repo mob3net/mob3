@@ -13,6 +13,7 @@ func SetBuildVersion(v string) {
 		v = "dev"
 	}
 	buildVersion = v
+	engine.SetBuildVersion(v)
 }
 
 // HelpPageHTML renders the built-in help page with the current build version.

@@ -243,7 +243,7 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 
 func TestNavigateSearchesQuery(t *testing.T) {
 	b := NewBrowser(40, 10)
-	b.loader.setSearchURL("https://www.bing.com/search?q=%s")
+	b.loader.SetSearchURL("https://www.bing.com/search?q=%s")
 	ch := make(chan string, 1)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		ch <- target
@@ -427,7 +427,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	if !b.NoJS {
 		t.Fatal("J did not disable JavaScript")
 	}
-	if b.loader == nil || !b.loader.noScripts {
+	if b.loader == nil || !b.loader.NoScripts {
 		t.Fatal("loader still fetches scripts after J")
 	}
 	select {
@@ -458,7 +458,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	if b.NoJS {
 		t.Fatal("second J did not enable JavaScript")
 	}
-	if b.loader.noScripts {
+	if b.loader.NoScripts {
 		t.Fatal("loader still skips scripts after the second J")
 	}
 }

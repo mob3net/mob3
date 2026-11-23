@@ -1,7 +1,6 @@
 package browser
 
 import (
-	"context"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -28,87 +27,21 @@ func TestMemoryLimitAppliedAndCleared(t *testing.T) {
 	}
 }
 
-func TestMemoryBudgetsScaleWithLimit(t *testing.T) {
-	const gb = int64(1) << 30
-	if got := jsHeapBudget(0); got != fallbackJSHeap {
-		t.Fatalf("fallback JS budget = %d, want %d", got, fallbackJSHeap)
-	}
-	if got := jsHeapBudget(gb); got != 256<<20 {
-		t.Fatalf("JS budget at 1 GB = %d, want 256 MB", got)
-	}
-	if got := imageByteBudget(gb); got <= 0 || got > gb {
-		t.Fatalf("image budget at 1 GB = %d", got)
-	}
-	if got := svgPixelBudget(gb); got <= 0 || got*4 > gb {
-		t.Fatalf("SVG pixel budget at 1 GB = %d", got)
-	}
-	if got := imageByteBudget(0); got != fallbackImageBytes {
-		t.Fatalf("fallback image budget = %d", got)
-	}
-}
-
-func TestByteLimiter(t *testing.T) {
-	l := newByteLimiter(100)
-	if _, ok := l.acquire(context.Background(), 60); !ok {
-		t.Fatal("first acquire failed")
-	}
-	done := make(chan bool, 1)
-	go func() {
-		_, ok := l.acquire(context.Background(), 60)
-		done <- ok
-	}()
-	select {
-	case <-done:
-		t.Fatal("second acquire did not wait")
-	case <-time.After(20 * time.Millisecond):
-	}
-	l.release(60)
-	select {
-	case ok := <-done:
-		if !ok {
-			t.Fatal("second acquire was cancelled")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("second acquire did not resume after release")
-	}
-	l.release(60)
-
-	// Cancellation while waiting must fail without charging the budget.
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	if _, ok := l.acquire(ctx, 100); !ok {
-		t.Fatal("full acquire failed")
-	}
-	if _, ok := l.acquire(ctx, 100); ok {
-		t.Fatal("cancelled acquire succeeded")
-	}
-	l.release(100)
-}
-
-func TestByteLimiterClampsLargeReservation(t *testing.T) {
-	l := newByteLimiter(100)
-	admitted, ok := l.acquire(context.Background(), 500)
-	if !ok || admitted != 100 {
-		t.Fatalf("large reservation = %d, %v; want 100, true", admitted, ok)
-	}
-	l.release(admitted)
-}
-
 func TestInlineSVGBudget(t *testing.T) {
 	l := NewLoader()
-	l.noImages = false
-	l.svgBudgetPixels = 10000
+	l.NoImages = false
+	l.SVGBudgetPixels = 10000
 	root := ParseHTML(strings.Repeat(
 		`<svg viewBox="0 0 100 100"><rect width="100" height="100"/></svg>`, 3))
-	l.loadInlineSVGs(root)
+	l.LoadInlineSVGs(root)
 	total := 0
 	for _, n := range root.FindAll(func(n *Node) bool { return n.Tag == "svg" }) {
 		if n.Img != nil {
 			total += n.Img.Bounds().Dx() * n.Img.Bounds().Dy()
 		}
 	}
-	if total > int(l.svgBudgetPixels) {
-		t.Fatalf("inline SVG rasterized %d pixels, budget %d", total, l.svgBudgetPixels)
+	if total > int(l.SVGBudgetPixels) {
+		t.Fatalf("inline SVG rasterized %d pixels, budget %d", total, l.SVGBudgetPixels)
 	}
 	if total == 0 {
 		t.Fatal("no inline SVG was rasterized")

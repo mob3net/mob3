@@ -196,24 +196,27 @@ published by the Pages build.
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])` and
   exits with its status.
 - `internal/app/` — flag parsing, validation, mode dispatch and the
-  interactive session boot. It still imports `internal/browser` for loader and
-  session construction, the dump handler, automation types and the build
-  version until the session split. MCP transport and the dump/PNG output loop
-  live in `internal/app`.
+  interactive session boot. It constructs `host.Session` and
+  `engine.NewConfiguredLoader` directly, and still imports `internal/browser`
+  for session/automation construction and the dump handler until the session
+  split. MCP transport and the dump/PNG output loop live in `internal/app`.
 - `internal/browser/` — package `browser` with the 297-method `Browser`, which
   embeds `engine.Session` for page/layout/URL/scroll, the load lifecycle and
   application, forms, JS lifecycle, hit testing, find/hint state, reader,
-  text-scaling and dark mode, plus loader/session construction, navigation and
-  form/JS load glue, automation and most integration tests until the boundary
-  migration completes. The engine has no fallback chrome, console, dialog,
-  find-bar or hint-overlay rendering and no fallback shell/prompt input; the
-  front end owns those. Production code imports only `internal/engine` and
-  `internal/protocol`; the dependency test enforces that, so the package is
+  text-scaling and dark mode, plus session construction, loader compatibility
+  aliases, navigation and form/JS load glue, automation and most integration
+  tests until the boundary migration completes. The document loader lives in
+  `internal/engine` and reaches the network only through `protocol.Host`. The
+  engine has no fallback chrome, console, dialog, find-bar or hint-overlay
+  rendering and no fallback shell/prompt input; the front end owns those.
+  Production code imports only `internal/engine` and `internal/protocol`; the
+  dependency test enforces that, so the package is
   ready to move into `internal/engine`. Nothing under `internal` is imported
   from outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
-  CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),
+  CSS, layout, paint, JS/DOM, PDF, images, document loading, find, selection,
+  hints, reader),
   `internal/host` (network, cookies, cache, certificates, settings, request
   log), `internal/frontend` (terminal, input, chrome, ANSI encoding, native
   images, dialogs) and `internal/app` (wiring). Session back/forward history
@@ -229,7 +232,7 @@ published by the Pages build.
   end never names an engine type, and `internal/protocol` is canonical for the
   message set. The engine no longer imports `net/http`:
   JS `fetch`/XHR and cookie parsing use the host broker. Session construction
-  and the engine-side load result still live in `internal/browser`; the
+  and the loader compatibility layer still live in `internal/browser`; the
   terminal loop, normal header/footer chrome, the displayed URL/title ledger,
   content geometry, base shell keys, scrollbar, URL/vim prompt, page find,
   view/zoom windows, JS dialogs, the select popup, download/notice modals, link

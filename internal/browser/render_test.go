@@ -286,7 +286,7 @@ func TestInlineSVGSkippedByDefault(t *testing.T) {
 		<rect width="10" height="10" fill="#00ff00"/>
 	</svg></body></html>`)
 	loader := NewLoader()
-	loader.loadInlineSVGs(root)
+	loader.LoadInlineSVGs(root)
 	svg := root.FindFirst("svg")
 	if svg == nil || svg.Img != nil {
 		t.Fatal("inline SVG was rasterized even though images are disabled")
@@ -308,8 +308,8 @@ func TestInlineSVGDecoded(t *testing.T) {
 		<rect width="10" height="10" fill="#00ff00"/>
 	</svg></body></html>`)
 	loader := NewLoader()
-	loader.noImages = false
-	loader.loadInlineSVGs(root)
+	loader.NoImages = false
+	loader.LoadInlineSVGs(root)
 	svg := root.FindFirst("svg")
 	if svg == nil || svg.Img == nil {
 		t.Fatal("inline SVG was not rasterized")

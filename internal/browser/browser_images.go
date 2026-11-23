@@ -88,7 +88,7 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 		if r.Node == nil {
 			continue
 		}
-		if b.loader == nil || imageSource(r.Node, b.loader.imageViewportPx) != r.Src {
+		if b.loader == nil || imageSource(r.Node, b.loader.ViewportPx) != r.Src {
 			continue
 		}
 		if r.Failed {

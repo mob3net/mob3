@@ -639,10 +639,10 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
 	b := NewBrowser(60, 10)
 	b.setMemoryLimitMB(1024)
-	if got, want := b.Cache.LimitBytes(), memoryFraction(int64(1)<<30, historyCachePercent); got != want {
+	if got, want := b.Cache.LimitBytes(), engine.MemoryFraction(int64(1)<<30, historyCachePercent); got != want {
 		t.Fatalf("history cache = %d, want %d", got, want)
 	}
-	if got, want := testHost(b.loader).Cache().LimitBytes(), memoryFraction(int64(1)<<30, resourceCachePercent); got != want {
+	if got, want := testHost(b.loader).Cache().LimitBytes(), engine.MemoryFraction(int64(1)<<30, 3); got != want {
 		t.Fatalf("resource cache = %d, want %d", got, want)
 	}
 	// Clearing the limit restores the fallback budgets.
@@ -650,8 +650,8 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 	if b.Cache.LimitBytes() != fallbackHistoryCacheBytes {
 		t.Fatalf("history cache fallback = %d, want %d", b.Cache.LimitBytes(), fallbackHistoryCacheBytes)
 	}
-	if got := testHost(b.loader).Cache().LimitBytes(); got != fallbackResourceCacheBytes {
-		t.Fatalf("resource cache fallback = %d, want %d", got, fallbackResourceCacheBytes)
+	if got := testHost(b.loader).Cache().LimitBytes(); got != int64(32)<<20 {
+		t.Fatalf("resource cache fallback = %d, want %d", got, int64(32)<<20)
 	}
 }
 

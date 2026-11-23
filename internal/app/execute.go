@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"browser/internal/browser"
+	"browser/internal/engine"
 	"browser/internal/frontend"
 	"browser/internal/host"
 	"browser/internal/protocol"
@@ -75,11 +76,6 @@ func graphicsModesFor(requested frontend.GraphicsMode) []browser.GraphicsMode {
 }
 
 // execute runs one MOB³ invocation after flag parsing and validation.
-func init() {
-	// The app owns host construction; browser only sees the host port.
-	browser.SetHostFactory(func() protocol.Host { return host.NewSession() })
-}
-
 func execute(o runOptions) int {
 	if o.MemLimit > 0 {
 		debug.SetMemoryLimit(int64(o.MemLimit) << 20)
@@ -92,7 +88,7 @@ func execute(o runOptions) int {
 	if graphicsMode == frontend.GraphicsAuto {
 		graphicsMode = frontend.DetectGraphics(frontend.GraphicsAuto)
 	}
-	loader, err := browser.NewConfiguredLoader(browser.LoaderConfig{
+	loader, err := engine.NewConfiguredLoader(host.NewSession(), engine.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,
 		NoImages:     graphicsMode == frontend.GraphicsNone,

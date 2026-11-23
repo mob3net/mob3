@@ -135,7 +135,7 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.PageHasHover {
 		st.Flags |= protocol.StateHover
 	}
-	if b.loader != nil && !b.loader.noImages {
+	if b.loader != nil && !b.loader.NoImages {
 		st.Flags |= protocol.StateImages
 	}
 	if b.BigText {

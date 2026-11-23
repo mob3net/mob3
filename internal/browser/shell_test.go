@@ -59,7 +59,7 @@ func TestStateMessage(t *testing.T) {
 	b.PageHasHover = true
 	b.BigText = true
 	b.LoopStopped = true
-	b.loader.noImages = false
+	b.loader.NoImages = false
 
 	st := b.stateMessage()
 	if st.URL != "https://example.test/page" || st.Title != "Title" || st.Status != "Ready" {
@@ -78,7 +78,7 @@ func TestStateMessage(t *testing.T) {
 		t.Fatalf("flags = %#x, want %#x", st.Flags, want)
 	}
 
-	b.loader.noImages = true
+	b.loader.NoImages = true
 	if b.stateMessage().Flags&protocol.StateImages != 0 {
 		t.Fatal("images flag set with images disabled")
 	}

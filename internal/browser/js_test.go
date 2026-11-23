@@ -1479,7 +1479,7 @@ func TestJSRequestLog(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.setLoader(loader)
 	b.startJS(page)
-	records := loader.requestSnapshot()
+	records := loader.RequestSnapshot()
 	kinds := map[string]bool{}
 	for _, r := range records {
 		if r.Done && r.Status == 200 {

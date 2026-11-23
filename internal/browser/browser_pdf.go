@@ -60,7 +60,7 @@ func (b *Browser) pdfFooterLine(avail int) (text, hint string, hintCell int, ok 
 	if name == "" {
 		name = "PDF"
 	}
-	base := fmt.Sprintf(" Page %d/%d", b.pdfPageNumber(), len(b.Page.PDF.Pages))
+	base := fmt.Sprintf(" Page %d/%d", b.PDFPageNumber(), len(b.Page.PDF.Pages))
 	full := base + " (d -> Download " + name + ")"
 	if stringWidth(full) <= avail {
 		return full, "(d -> Download " + name + ")", stringWidth(base) + 1, true

@@ -14,7 +14,7 @@ and the migration order. Progress, decisions and measurements are tracked in
 | Package | Owns |
 | --- | --- |
 | `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
-| `internal/engine` | HTML/CSS parsing and style, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
+| `internal/engine` | HTML/CSS parsing and style, document loading through `protocol.Host`, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings and the request log. Session back/forward history lives in the front end, the download/curl hint is presentation, and the engine keeps only a memory-only page cache. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, session history, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
 | `internal/app` | Wiring: constructs one host, engine session and frontend, connects them over a transport, and runs the event loop. |
@@ -59,8 +59,8 @@ orchestration remain; step 7 is Phase 6.
 4. **Partial.** Leaf subsystems moved into `internal/engine`; the session type
    and `Browser` → `Session` split remain.
 5. **Partial.** Host `Fetch`, decompression/charset/parse and MCP are split;
-   loader fetch orchestration through `protocol.Host` moves with the engine
-   session.
+   the document loader is engine-owned and reaches the network only through
+   `protocol.Host`; session construction remains.
 6. **Landed.** Every path, including `-dump`, `-png` and MCP, runs through the
    in-process transport; a stream transport exists for the later process split.
 7. **Phase 6.** Fuzz the codec, benchmark against the baseline, remove
@@ -96,14 +96,15 @@ destination; the tracker lists what remains.
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
   and `internal/app` exist. `app` owns flags, validation, mode dispatch and the
-  interactive terminal/session boot; it still imports `internal/browser` for
-  loader/session construction, the dump handler, automation types and the build
-  version. `app → browser` is the temporary wiring exception.
+  interactive terminal/session boot; it constructs `host.Session` and
+  `engine.NewConfiguredLoader` and still imports `internal/browser` for
+  session/automation construction and the dump handler. `app → browser` is the
+  temporary wiring exception.
 - `internal/browser/` still holds the session shell: the 297-method `Browser`,
-  input resolution and the config-page branch, form/JS wrappers, loader fetch
-  orchestration through `protocol.Host`, automation, and most integration
-  tests. `Browser` embeds `engine.Session`, which now owns page, layout, URL,
-  scroll, load lifecycle, load-result application, forms, JS lifecycle, hit
+  input resolution and the config-page branch, form/JS wrappers, the loader
+  compatibility alias, automation, and most integration tests. `Browser`
+  embeds `engine.Session`, which now owns page, layout, URL, scroll, load
+  lifecycle, load-result application, forms, JS lifecycle, hit
   testing, find and hint state, reader, text-scaling and dark-mode state; the
   remaining shell fields are still being moved. The engine draws only the page
   content rectangle; chrome, console, dialogs, the find bar and the hint
@@ -195,7 +196,7 @@ destination; the tracker lists what remains.
 | `internal/host/certs.go` | `system`/`embedded` trust-store selection, the embedded Mozilla CA pool and the stable `CertTransport` wrapper. |
 | `internal/host/network.go` | Request metadata, local-network and mixed-content policy, dialers, pooled transport and HTTP client construction. |
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly is engine-owned; the host returns raw bytes. |
-| `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. Image/SVG loading and the loader's fetch orchestration stay outside. |
+| `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. The engine loader implements the contract. |
 | `internal/engine/page_assemble.go` | About/blocked/PDF page assembly, the anti-bot response heuristic and `AboutPageName`. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
@@ -222,20 +223,26 @@ destination; the tracker lists what remains.
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
 | `internal/browser/output.go` | Injected terminal writer for the legacy direct draw path; the app installs `os.Stdout`, tests install their own hook. |
-| `internal/browser/host_port.go` | Host-session factory injection so new loaders get a `protocol.Host` without importing `internal/host`. |
+| `internal/browser/host_port.go` | Test-only host-session factory for the compatibility `NewLoader`; production constructs the host in `internal/app`. |
 | `internal/browser/session_hooks.go` | `engine.SessionHooks` implementation: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
-| `internal/browser/pdf.go` | Thin PDF loader bridge over `engine.AssemblePDFPage`. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
 | `internal/browser/version.go` | Injected build version and the help-page wrapper. |
-| `internal/browser/certs.go`, `page_compat.go` | Thin browser wrappers over `protocol.Host`/`internal/engine`; delete or merge in Phase 6. |
+| `internal/browser/certs.go`, `page_compat.go` | `certs.go` is the config-page trust-store label; `page_compat.go` holds the `Page`/`Script` aliases. Delete or merge in Phase 6. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
 | `internal/browser/session.go` | Thin `Serve`/`handleCommand` wrappers, the front-end hint/modal/select result appliers and pending-frame emission. The transport loop and command dispatch live in `engine.Session` (`serve.go`, `commands.go`). |
-| `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
+| `internal/app/execute.go` | Mode dispatch and interactive session boot: `host.Session`/`engine.Loader` construction, session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. Host fetching, settings, cache, cookies, certificates and request accounting go through `protocol.Host`; about/blocked/PDF assembly, image helpers and typed-URL resolution are engine-owned. |
+| `internal/engine/loader.go`, `loader_config.go` | Document loader: `Loader` over `protocol.Host`, fetch/response classification, charset decode, about/blocked/PDF dispatch, request accounting and the app-facing config constructor. |
+| `internal/engine/loader_images.go` | Image loading subsystem: task collection, request context, concurrent fetch/decode, fit, viewport ordering and the in-flight byte budget. |
+| `internal/engine/loader_page.go` | `PageFetcher` implementation for page assembly, script/stylesheet collection, body decoding and JavaScript MIME checks. |
+| `internal/engine/loader_pdf.go` | PDF page bridge over `AssemblePDFPage`. |
+| `internal/engine/loader_svg.go` | Per-page inline-SVG rasterization with pixel/count budgets. |
+| `internal/engine/loader_certs.go` | Loader trust-store selection and label. |
+| `internal/engine/loader_decode.go` | Charset decoding, single-byte charset table and JavaScript MIME classification. |
+| `internal/engine/budget.go` | Effective memory limit, percentage budgets, `ByteLimiter`, loader memory/cache budget application. |
+| `internal/engine/version.go` | Injected build version for built-in pages. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |
@@ -250,7 +257,7 @@ destination; the tracker lists what remains.
 | `browser_forms.go` | Thin form wrappers plus the control-focus highlight painter. Tab stepping, control activation, text/range editing, submission, label targets and form requests live in `engine/forms.go`; helpers remain in `engine` (`form_state.go`, `validate.go`, `form_edit.go`, `tab_order.go`, `form_step.go`). |
 | `browser_input.go` | Engine content input: `HandleKey`/`HandleMouse` for page movement, forms, find navigation, hint activation, selection and content clicks, plus mouse escape decoding and `MouseEvent`. Shell keys, quit, prompts, menus, dialogs and the console are front-end-owned. The shared line-editing core is `engine.EditLineKey`; the front end keeps its own copy in `frontend/prompt.go`. |
 | `browser_history.go` | Thin restore/reload/commit wrappers. The page cache, limits, suspend/cache, restore application and scavenge request are engine-owned; the ordered list/index/scroll live in the front end. |
-| `memory.go` | Browser-side process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`), percentage-derived JS/image/SVG budgets and the weighted decoded-image byte limiter. The one-shot scavenge request is engine state. |
+| `memory.go` | Browser-side process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the JS/history cache shares. Image/SVG budgets and the byte limiter live in `engine/budget.go`. The one-shot scavenge request is engine state. |
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Thin deferred-image bridge: engine task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |

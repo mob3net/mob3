@@ -82,8 +82,8 @@ func TestSetCertSourceRejectsFiles(t *testing.T) {
 	if !strings.Contains(err.Error(), "system or embedded") {
 		t.Fatalf("error = %q", err)
 	}
-	if l.certSource != CertSourceSystem || l.certPool != nil {
-		t.Fatalf("failed load changed the trust store to %q", l.certSource)
+	if l.CertStore != CertSourceSystem || l.CertPool != nil {
+		t.Fatalf("failed load changed the trust store to %q", l.CertStore)
 	}
 	if tr := testHost(l).Client().Transport(); tr == nil || tr.TLSClientConfig != nil {
 		t.Fatal("failed load rebuilt the transport")
@@ -94,8 +94,8 @@ func TestConfigSwitchesCertSource(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.setLoader(NewLoader())
 	b.applyConfig(url.Values{"certs": {CertSourceEmbedded}})
-	if b.loader.certSource != CertSourceEmbedded || b.loader.certPool == nil {
-		t.Fatalf("cert source = %q pool=%v, want embedded", b.loader.certSource, b.loader.certPool)
+	if b.loader.CertStore != CertSourceEmbedded || b.loader.CertPool == nil {
+		t.Fatalf("cert source = %q pool=%v, want embedded", b.loader.CertStore, b.loader.CertPool)
 	}
 	if b.certSourceLabel() != CertSourceEmbedded {
 		t.Fatalf("config label = %q, want embedded", b.certSourceLabel())
@@ -105,8 +105,8 @@ func TestConfigSwitchesCertSource(t *testing.T) {
 	}
 
 	b.applyConfig(url.Values{"certs": {"roots.pem"}})
-	if b.loader.certSource != CertSourceEmbedded {
-		t.Fatalf("failed change replaced the store with %q", b.loader.certSource)
+	if b.loader.CertStore != CertSourceEmbedded {
+		t.Fatalf("failed change replaced the store with %q", b.loader.CertStore)
 	}
 	if !strings.Contains(b.configNotice, "system or embedded") {
 		t.Fatalf("path change set notice %q", b.configNotice)

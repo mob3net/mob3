@@ -54,7 +54,7 @@ func (h *dumpHandler) warn(out protocol.EventSink, format string, args ...any) {
 func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	o := h.o
 	setLayoutZoom(o.Zoom)
-	o.Loader.imageViewportPx = cssWidthPx(o.Width)
+	o.Loader.ViewportPx = cssWidthPx(o.Width)
 	// A PNG has no browsing context, so it shows one page: page 1 unless the
 	// caller selected another. Dumps keep every page.
 	if o.PDFPage == 0 && o.PNG {
@@ -63,7 +63,7 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	if o.PDFPage < 0 {
 		o.PDFPage = 0
 	}
-	o.Loader.pdfPage = o.PDFPage
+	o.Loader.PDFPage = o.PDFPage
 	page, err := o.Loader.Load(o.Target, nil)
 	if err != nil {
 		return err
@@ -76,6 +76,9 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	}
 	if !o.NoJS {
 		runner := NewBrowser(o.Width, 3)
+		if o.Loader != nil {
+			runner.setLoader(o.Loader)
+		}
 		// NewBrowser resets the package-wide cell ratio; restore the run's zoom
 		// before scripts run so script-visible viewport sizes match the dump.
 		runner.Zoom = o.Zoom
@@ -85,8 +88,8 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 		runner.startJS(page)
 		defer runner.stopJS()
 		page.CollectDynamicStyles()
-		if !o.Loader.noImages {
-			o.Loader.loadImages(context.Background(), page.Root, page.Base)
+		if !o.Loader.NoImages {
+			o.Loader.LoadImages(context.Background(), page.Root, page.Base)
 		}
 	}
 	setLayoutZoom(o.Zoom)
@@ -103,8 +106,8 @@ func (h *dumpHandler) run(ctx context.Context, out protocol.EventSink) error {
 	layout := BuildLayoutBudgetDeadline(root, author, o.Width, o.ViewportH, false, o.Dark, deadline, o.Budget)
 	// CSS background images are only known after the style pass, so a dump
 	// loads them in a second image pass and rebuilds the layout once.
-	if !o.Loader.noImages {
-		if o.Loader.loadImages(context.Background(), root, page.Base) {
+	if !o.Loader.NoImages {
+		if o.Loader.LoadImages(context.Background(), root, page.Base) {
 			if o.Budget.Time > 0 {
 				deadline = time.Now().Add(o.Budget.Time)
 			}

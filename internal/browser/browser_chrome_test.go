@@ -108,7 +108,7 @@ func TestFooterShowsJSAndGraphicsState(t *testing.T) {
 	if !strings.Contains(right, "JavaScript:on") || !strings.Contains(right, "Graphics:none") {
 		t.Fatalf("footer right = %q", right)
 	}
-	b.loader.noImages = false
+	b.loader.NoImages = false
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	if got := b.footerRight(120); !strings.Contains(got, "Graphics:kitty") {
 		t.Fatalf("resolved graphics footer = %q", got)
@@ -170,14 +170,14 @@ func TestCycleGraphicsModes(t *testing.T) {
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	if b.loader != nil {
-		b.loader.noImages = false
+		b.loader.NoImages = false
 	}
 
 	b.cycleGraphics()
 	if b.graphicsMode != GraphicsBlocks || b.gfx != nil {
 		t.Fatalf("after full graphics: mode=%v gfx=%v", b.graphicsMode, b.gfx)
 	}
-	if b.loader != nil && b.loader.noImages {
+	if b.loader != nil && b.loader.NoImages {
 		t.Fatal("blocks mode should keep image loading enabled")
 	}
 
@@ -185,7 +185,7 @@ func TestCycleGraphicsModes(t *testing.T) {
 	if b.graphicsMode != GraphicsNone || b.gfx != nil {
 		t.Fatalf("after blocks: mode=%v gfx=%v", b.graphicsMode, b.gfx)
 	}
-	if b.loader != nil && !b.loader.noImages {
+	if b.loader != nil && !b.loader.NoImages {
 		t.Fatal("none mode should disable image loading")
 	}
 
@@ -193,7 +193,7 @@ func TestCycleGraphicsModes(t *testing.T) {
 	if b.graphicsMode != GraphicsKitty || b.gfx == nil {
 		t.Fatalf("after none: mode=%v gfx=%v", b.graphicsMode, b.gfx)
 	}
-	if b.loader != nil && b.loader.noImages {
+	if b.loader != nil && b.loader.NoImages {
 		t.Fatal("full graphics should enable image loading")
 	}
 }
@@ -208,7 +208,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 		img.ImgSrc = "pic.png"
 	}
 	b.loader = NewLoader()
-	b.loader.noImages = false
+	b.loader.NoImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
@@ -242,7 +242,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	if b.Page != page || b.LoadSeq != seq {
 		t.Fatal("changing to none reloaded the page")
 	}
-	if !b.loader.noImages {
+	if !b.loader.NoImages {
 		t.Fatal("none mode should disable image loading")
 	}
 	if hasImage() {
@@ -306,7 +306,7 @@ func TestGraphicsDowngradeAndRepaintPlacements(t *testing.T) {
 	}
 	b := NewBrowser(80, 20)
 	b.loader = NewLoader()
-	b.loader.noImages = false
+	b.loader.NoImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.emitFrames = true
