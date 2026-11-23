@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"sync/atomic"
@@ -11,9 +12,9 @@ import (
 	"browser/internal/protocol"
 )
 
-// Session holds one page's content and view state. The terminal shell and
-// trusted navigation state stay in the front end; this type is the engine-side
-// half of the session split.
+// Session holds one page's content, shell glue and view state. The front end
+// owns the trusted navigation list and terminal presentation; this type keeps
+// the memory-only page cache.
 type Session struct {
 	Page   *Page
 	Layout *Layout
@@ -121,10 +122,173 @@ type Session struct {
 	placementCache  map[placementKey]*placementEntry
 	placementBytes  int
 	nextPlacementID int
+
+	loader *Loader
+
+	// contentTop/contentHeight are the front-end-owned page rectangle. A
+	// negative top means direct callers/tests use the legacy derivation.
+	// pdfStarts holds the layout row where each PDF page begins, so the footer
+	// can name the page under the viewport.
+	pdfStarts []int
+	// hoverRebuildPending coalesces the style pass for pointer hover changes so
+	// moving across a large page cannot rebuild the whole document per cell.
+	hoverRebuildPending bool
+	hoverRebuildAt      time.Time
+	jsErr               bool
+	// moduleErr records that an ES module script failed to load, link or
+	// evaluate, so the footer can point at the console.
+	moduleErr bool
+	status    string
+
+	// Reader mode renders an extracted article document instead of the page.
+
+	// Dark mode remaps the rendered page palette.
+
+	// History cache. The front end owns the ordered entry list and scroll
+	// offsets; the engine only keeps a bounded memory-only page cache keyed by
+	// the front-end entry ID.
+	historyView     []string
+	historyViewCur  int
+	historyObserver func(protocol.HistoryCommit)
+	// memLimitBytes is the process soft heap limit in bytes; zero leaves the
+	// runtime default in place.
+	memLimitBytes int64
+	// nextScroll is consumed by the next navigation started from history.
+	// autoNavigations counts consecutive scripted/meta redirects so a
+	// self-redirect loop can be stopped. loopStopped reports that the cap was
+	// hit while applying the current page.
+	home      string
+	cliConfig map[string]string
+	// configNotice shows why an edited about:config value was rejected, such
+	// as an unreadable -certs bundle.
+	configNotice string
+	// configToken is the one-shot token embedded in the current about:config
+	// form. A config submission applies only when it presents this token, so
+	// page content cannot rewrite session settings by navigating to
+	// about:config with a query.
+	configToken protocol.ConfigToken
+
+	clipboardWriter io.Writer
+	// Output is the terminal writer for the legacy direct draw path. The app
+	// sets it to os.Stdout; tests use the package default hook.
+	Output io.Writer
+
+	color        bool
+	prev         []string
+	gfx          Graphics
+	newGraphics  func(GraphicsMode, int, int) Graphics
+	frameEncoder func(protocol.Frame, bool, bool) []string
+	pngEncoder   func(protocol.Frame, int) ([]byte, error)
+	// contentGrid is reused between frames and is exactly the page viewport.
+	contentGrid *Grid
+	frameBuf    frameScratch
+	// zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
+	// per terminal cell for everything except text metrics.
+	// scaledLayout records whether the current layout was built with kitty
+	// scaled text, so draw can rebuild when an overlay toggles it.
+	// bigTextBlocked disables kitty scaled text for a page whose scaled runs
+	// overlap neighbouring columns.
+
+	// Graphics modes available to the i key, in cycle order, and the current
+	// one. The list starts with native inline graphics when available.
+	graphicsModes []GraphicsMode
+	graphicsMode  GraphicsMode
+
+	// hideFixed suppresses position:fixed boxes for the current page.
+	// noSticky lays position:sticky boxes out as normal flow, so they scroll
+	// with the page instead of following a top offset.
+	// hideBackgrounds paints CSS background images as a neutral placeholder
+	// instead of their pixels; the images stay loaded and laid out.
+
+	// lastNativeImages tracks graphics-mode transitions (hints or a modal
+	// opening/closing) so the next frame is fully repainted and no stale
+	// terminal image survives.
+	lastNativeImages bool
+
+	// noPDF disables the built-in PDF text viewer, restoring the download
+	// prompt for PDF responses.
+	// pendingStatus replaces the computed load status once, so a JavaScript
+	// toggle can report its new state instead of clearing the footer.
+	pendingStatus string
+	// jsPageBudget caps one page's load-time script phase. It defaults to
+	// jsPageBudget and exists as a field so tests can shorten it.
+
+	// interactive marks the terminal UI, where a background dynamic import can
+	// wait for the event loop instead of blocking it.
+	// imageTotal and imageDone drive the loading bar and footer count while a
+	// deferred image batch is in flight.
+	// pendingImageRow is the topmost laid-out row of images whose decoded data
+	// arrived while they sat below the viewport. Their layout is deferred until
+	// the viewport approaches that row or the end of the document, so a batch
+	// far down the page cannot reflow and repaint the visible frame. Zero means
+	// nothing is pending.
+
+	// pendingDownloadName carries a download attribute from the clicked link
+	// into the next load, so a non-renderable response keeps that filename.
+
+	consoleOpen   bool
+	consoleScroll int
+	reqScroll     int
+	storageScroll int
+	htmlScroll    int
+	toolScroll    int
+	toolLog       []string
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
+	consoleText   string
+	consoleCursor int
+	consoleEdit   bool // the input row inside the logs or tools section has focus
+	consoleHist   consoleHistory
+	toolHist      consoleHistory
+
+	htmlPage  *Page
+	htmlWidth int
+	htmlCache []string
+	jsLog     []string
+
+	dialog *jsDialog
+	// sessionCtx, sessionIn and sessionAbort are set while Serve owns the
+	// event loop. A modal dialog then reads keys from the command stream
+	// instead of a direct terminal channel.
+	sessionCtx   context.Context
+	sessionIn    <-chan protocol.Command
+	sessionAbort <-chan struct{}
+	sessionQuit  bool
+	// emitFrames switches presentation to the front end: draw stashes the
+	// screen frame and sends it over the transport instead of writing stdout.
+	// Native image modes keep the engine-side writer until placements cross the
+	// seam.
+	emitFrames bool
+	frameReady bool
+	sessionOut protocol.EventSink
+	// frontendChrome lets the normal path emit a content-only frame and a
+	// State snapshot; the front end draws the header/footer from it.
+	frontendChrome   bool
+	nextDialogID     uint32
+	nextSelectID     uint32
+	selectFrontend   bool
+	selectID         uint32
+	downloadFrontend bool
+	noticeFrontend   bool
+	hintsFrontend    bool
+	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
+	// compares it with the value captured at entry, so a press interrupts the
+	// call in flight without leaking into later timer callbacks.
+	abortGen atomic.Uint64
+	// download holds the modal curl hint shown for download links and
+	// non-renderable responses.
+	download *downloadDialog
+	// notice holds a small informational modal, such as the unsupported
+	// file-upload message.
+	notice *noticeDialog
+	// selectMenu is the pending single-select choice awaiting the front end.
+	selectMenu  *selectMenuDialog
+	lastScroll  int
+	usage       procUsage
+	quitPending bool
 }
 
 // NewSession creates an empty page session.
-func NewSession() *Session {
+func NewEmptySession() *Session {
 	return &Session{ImageCh: make(chan ImageBatch, 1), LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16), NextEntryID: 1}
 }
 

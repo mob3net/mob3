@@ -181,7 +181,7 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 }
 
 // RestoreEntry returns to a front-end history entry.
-func (s *Session) RestoreEntry(entryID uint64, rawURL string, scroll int, h SessionHooks) {
+func (s *Session) RestoreEntryWithHooks(entryID uint64, rawURL string, scroll int, h SessionHooks) {
 	if entryID == 0 {
 		return
 	}

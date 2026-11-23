@@ -1,7 +1,7 @@
 package app
 
 import (
-	"browser/internal/browser"
+	"browser/internal/engine"
 	"browser/internal/host"
 	"browser/internal/protocol"
 )
@@ -9,5 +9,5 @@ import (
 // init installs the in-process host for tests that create a default loader
 // through the browser compatibility constructors.
 func init() {
-	browser.SetHostFactory(func() protocol.Host { return host.NewSession() })
+	engine.SetHostFactory(func() protocol.Host { return host.NewSession() })
 }

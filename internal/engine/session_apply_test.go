@@ -44,7 +44,7 @@ func (h *testSessionHooks) EmitHistoryCommit(c protocol.HistoryCommit) {
 func TestApplyLoadResult(t *testing.T) {
 	u := mustParseURL(t, "https://example.com/a")
 	page := &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>ok</body></html>`), Title: "ok", Status: 200}
-	s := NewSession()
+	s := NewEmptySession()
 	s.NoJS = true
 	s.LoadSeq = 1
 	h := &testSessionHooks{}

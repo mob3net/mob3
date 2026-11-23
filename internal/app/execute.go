@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"browser/internal/browser"
 	"browser/internal/engine"
 	"browser/internal/frontend"
 	"browser/internal/host"
@@ -44,7 +43,7 @@ func onOff(v bool) string {
 	return "off"
 }
 
-func graphicsFor(mode browser.GraphicsMode, w, h int) browser.Graphics {
+func graphicsFor(mode engine.GraphicsMode, w, h int) engine.Graphics {
 	g := frontend.NewGFXRenderer(mode, w, h)
 	if g == nil {
 		return nil
@@ -54,7 +53,7 @@ func graphicsFor(mode browser.GraphicsMode, w, h int) browser.Graphics {
 
 // graphicsModesFor records the i-key cycle: native inline graphics when
 // available, then blocks, then none.
-func graphicsModesFor(requested frontend.GraphicsMode) []browser.GraphicsMode {
+func graphicsModesFor(requested frontend.GraphicsMode) []engine.GraphicsMode {
 	current := frontend.DetectGraphics(requested)
 	native := current
 	if native != frontend.GraphicsKitty && native != frontend.GraphicsITerm {
@@ -64,7 +63,7 @@ func graphicsModesFor(requested frontend.GraphicsMode) []browser.GraphicsMode {
 			native = frontend.GraphicsNone
 		}
 	}
-	modes := make([]browser.GraphicsMode, 0, 3)
+	modes := make([]engine.GraphicsMode, 0, 3)
 	if native == frontend.GraphicsKitty || native == frontend.GraphicsITerm {
 		modes = append(modes, native)
 	}
@@ -102,13 +101,13 @@ func execute(o runOptions) int {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)
 		return 2
 	}
-	jsMemLimit := browser.JSMemLimit()
-	budget, ok := browser.ParseLayoutBudget(o.LayoutBudget)
+	jsMemLimit := engine.JSMemLimit()
+	budget, ok := engine.ParseLayoutBudget(o.LayoutBudget)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", o.LayoutBudget)
 		return 2
 	}
-	zoomPct, ok := browser.ParseZoomPercent(o.Zoom)
+	zoomPct, ok := engine.ParseZoomPercent(o.Zoom)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -zoom %q (use a percentage from 25 to 200)\n", o.Zoom)
 		return 2
@@ -117,7 +116,7 @@ func execute(o runOptions) int {
 	frontend.SetColorMode(frontend.DetectColorMode())
 
 	if o.MCP {
-		auto := browser.NewAutomationWithConfig(browser.AutomationConfig{
+		auto := engine.NewAutomationWithConfig(engine.AutomationConfig{
 			Loader: loader, Width: o.Width, Height: o.Height, Zoom: zoomFactor,
 			NoJS: o.NoJS, NoPDF: o.NoPDF, JSMemLimit: jsMemLimit,
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
@@ -169,7 +168,7 @@ func execute(o runOptions) int {
 	case "off", "none", "false":
 		noBigText = true
 	}
-	b := browser.NewSession(browser.SessionConfig{
+	b := engine.NewConfiguredSession(engine.SessionConfig{
 		Loader: loader, Width: w, Height: h, Zoom: zoomFactor, Interactive: true,
 		Reader: o.Reader, Dark: o.Dark, Home: o.Home,
 		CLIConfig: map[string]string{
@@ -181,7 +180,7 @@ func execute(o runOptions) int {
 			"-graphics":      o.Graphics,
 			"-mem-limit":     strconv.Itoa(o.MemLimit),
 			"-layout-budget": budget.Name,
-			"-zoom":          browser.ZoomPercentLabel(zoomFactor),
+			"-zoom":          engine.ZoomPercentLabel(zoomFactor),
 			"-color":         onOff(o.Color),
 			"-no-color":      onOff(o.NoColor),
 			"-certs":         loader.CertSource(),

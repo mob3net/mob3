@@ -105,7 +105,7 @@ shell command only.
 
 ## Layout probe
 
-The fastest reliable tool is a temporary `internal/browser/zz_debug_test.go`
+The fastest reliable tool is a temporary `internal/engine/zz_debug_test.go`
 that builds a real layout and logs only the suspicious nodes:
 
 ```go
@@ -129,7 +129,7 @@ Log selectively:
 - For images: whether `f.Img` is nil and whether the visible text is a real
   fragment or an `[image: alt]` label.
 
-Run with `go test -mod=vendor ./internal/browser -run TestZZ -v -count=1` and
+Run with `go test -mod=vendor ./internal/engine -run TestZZ -v -count=1` and
 pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
 
 ## PDF extraction
@@ -138,8 +138,8 @@ pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
   shows the page count and the per-page `Page n of N` labels make missing or
   extra pages obvious. `-no-pdf` confirms which loader branch ran.
 - Goldens are the fastest comparison: drop a small `.pdf` in
-  `internal/browser/testdata/pdf/`, run
-  `go test ./internal/browser -run TestPDFFixtures -update`, then review the
+  `internal/engine/testdata/pdf/`, run
+  `go test ./internal/engine -run TestPDFFixtures -update`, then review the
   `.txt` diff. Do not commit large or real-world PDFs; keep fixtures small and
   generic.
 - Read the note first: “could not be parsed” is a structure problem (xref,

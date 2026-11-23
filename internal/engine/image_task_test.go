@@ -42,7 +42,7 @@ func TestImageTasksAndViewportOrder(t *testing.T) {
 	if len(tasks) != 4 {
 		t.Fatalf("tasks = %d", len(tasks))
 	}
-	s := NewSession()
+	s := NewEmptySession()
 	s.Scroll = 0
 	s.Layout = &Layout{Frags: []Frag{
 		{Kind: FragText, Node: byID["d"], Y: 100},
@@ -60,7 +60,7 @@ func TestImageTasksAndViewportOrder(t *testing.T) {
 }
 
 func TestProtocolPlacementsClipAndCache(t *testing.T) {
-	s := NewSession()
+	s := NewEmptySession()
 	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
 	p := ImagePlacement{Img: img, Src: "x", X: -1, Y: -1, W: 4, H: 4, RowStart: 0, TotalRows: 4}
 	out := s.ProtocolPlacements(nil, []ImagePlacement{p}, 2, 2)

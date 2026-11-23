@@ -5,7 +5,7 @@ import "testing"
 func TestSessionHitTestingAndScroll(t *testing.T) {
 	n := &Node{Type: ElementNode, Tag: "a"}
 	box := &Node{Type: ElementNode, Tag: "div"}
-	s := NewSession()
+	s := NewEmptySession()
 	s.Layout = &Layout{
 		Height: 20,
 		Links:  []*LinkInfo{{Node: n, Href: "/a", Rects: []Rect{{X: 1, Y: 2, W: 3, H: 1}}}},

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"browser/internal/browser"
+	"browser/internal/engine"
 	"browser/internal/frontend"
 	"browser/internal/protocol"
 )
 
 // dumpPage runs a one-shot render through the in-process transport and writes
 // the frames to stdout. It preserves the byte-for-byte -dump and -png output.
-func dumpPage(loader *browser.Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMem int64, budget browser.LayoutBudget, zoom float64) int {
+func dumpPage(loader *engine.Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMem int64, budget engine.LayoutBudget, zoom float64) int {
 	if width <= 0 {
 		if w, _, ok := frontend.TerminalSize(os.Stdout); ok {
 			width = w
@@ -21,12 +21,12 @@ func dumpPage(loader *browser.Loader, target string, width, viewportH int, noCol
 		}
 	}
 	color := !noColor && (forceColor || frontend.IsTTY(os.Stdout))
-	h := browser.NewDumpHandler(browser.DumpConfig{
+	h := engine.NewDumpHandler(engine.DumpConfig{
 		Loader: loader, Target: target, Width: width, ViewportH: viewportH,
 		NoJS: noJS, Reader: reader, Dark: dark, PNG: pngOut,
 		PDFPage: pdfPage, JSMem: jsMem, Budget: budget, Zoom: zoom,
 	})
-	session, err := (&protocol.InProc{Limits: browser.DumpLimits(width, pngOut), EventQueue: 4}).Open(context.Background(), 1, h)
+	session, err := (&protocol.InProc{Limits: engine.DumpLimits(width, pngOut), EventQueue: 4}).Open(context.Background(), 1, h)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: %v\n", err)
 		return 1

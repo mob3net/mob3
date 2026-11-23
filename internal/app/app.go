@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"browser/internal/browser"
+	"browser/internal/engine"
 )
 
 // Version is the MOB³ release version reported by -version. It is set at
@@ -21,7 +21,7 @@ var Version = "dev"
 
 // Run executes the MOB³ command line and returns a process exit code.
 func Run(args []string) int {
-	browser.SetBuildVersion(Version)
+	engine.SetBuildVersion(Version)
 	fs := flag.NewFlagSet("mob3", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dump := fs.Bool("dump", false, "render the page to stdout and exit")
@@ -33,7 +33,7 @@ func Run(args []string) int {
 	forceColor := fs.Bool("color", false, "force ANSI colors in dump mode")
 	ua := fs.String("ua", "", "custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))")
 	certs := fs.String("certs", "system", "TLS trust store: system or embedded")
-	search := fs.String("search", browser.DefaultSearchURL, "search URL template with %s; empty disables search fallback")
+	search := fs.String("search", engine.DefaultSearchURL, "search URL template with %s; empty disables search fallback")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	graphics := fs.String("graphics", "none", "image mode: none, auto, kitty, iterm or blocks")
 	fs.StringVar(graphics, "g", "none", "alias for -graphics")

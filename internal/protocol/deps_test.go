@@ -45,15 +45,10 @@ var importBoundary = map[string]importRule{
 		allowProject: map[string]bool{"internal/protocol": true},
 	},
 	"internal/app": {
-		allowAnyProject: true,
-	},
-	// During the migration the old browser shell may only reach the content
-	// engine and the wire types; the front end, host and terminal packages are
-	// off limits already.
-	"internal/browser": {
-		allowProject: map[string]bool{"internal/engine": true, "internal/protocol": true},
-		forbidStd:    map[string]bool{"net": true, "net/http": true, "syscall": true},
-		forbidOS:     true,
+		allowProject: map[string]bool{
+			"internal/engine": true, "internal/host": true,
+			"internal/frontend": true, "internal/protocol": true,
+		},
 	},
 }
 

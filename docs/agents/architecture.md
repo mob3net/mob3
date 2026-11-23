@@ -77,10 +77,9 @@ orchestration remain; step 7 is Phase 6.
   side.
 - Frame goldens cover layout and rendering, plus new frame-snapshot tests for
   the seam.
-- Dependencies are checked by a test, not by review. During the migration the
-  test allows `app` to import `internal/browser` and restricts
-  `internal/browser` to `internal/engine`/`internal/protocol`; the app
-  exception ends with the session split.
+- Dependencies are checked by a test, not by review. `app` may import
+  `engine`, `host`, `frontend` and `protocol`; each boundary package may import
+  only `protocol`.
 - The engine cannot emit chrome. Header/footer, prompts, menus, console, find
   bar, overlays and dialogs are composed by the front end from `State` or
   overlay messages; back/forward history and the download/curl hint live on the
@@ -88,30 +87,25 @@ orchestration remain; step 7 is Phase 6.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 
-## Current layout (during migration)
+## Current layout
 
-This is the **actual** state, not the target. The target above is still the
-destination; the tracker lists what remains.
+This is the **actual** state. The target above is the destination; the tracker
+lists the remaining Phase 6 cleanup.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
   and `internal/app` exist. `app` owns flags, validation, mode dispatch and the
   interactive terminal/session boot; it constructs `host.Session` and
-  `engine.NewConfiguredLoader` and still imports `internal/browser` for
-  session/automation construction and the dump handler. `app → browser` is the
-  temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 297-method `Browser`,
-  input resolution and the config-page branch, form/JS wrappers, the loader
-  compatibility alias, automation, and most integration tests. `Browser`
-  embeds `engine.Session`, which now owns page, layout, URL, scroll, load
-  lifecycle, load-result application, forms, JS lifecycle, hit
-  testing, find and hint state, reader, text-scaling and dark-mode state; the
-  remaining shell fields are still being moved. The engine draws only the page
-  content rectangle; chrome, console, dialogs, the find bar and the hint
-  overlay are front-end-owned. MCP transport lives in `internal/app`.
-  Production code imports only `internal/engine` and `internal/protocol`; the
-  dependency test enforces this, so the package is ready to move into
-  `internal/engine`.
+  `engine.NewConfiguredLoader`, then `engine.NewConfiguredSession`,
+  `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`.
+- `internal/engine/` holds the single 383-method `Session`: page, layout, URL,
+  scroll, load lifecycle and application, forms, JS lifecycle, hit testing,
+  find/hint/selection/reader state, text scaling, dark mode, content input and
+  drawing, console/dialog state, the document loader, headless automation and
+  the one-shot dump handler. It draws only the page content rectangle; chrome,
+  console, dialogs, the find bar and the hint overlay are front-end-owned. MCP
+  transport lives in `internal/app`. Production code imports only
+  `internal/protocol` (plus approved vendored modules).
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -128,12 +122,11 @@ destination; the tracker lists what remains.
   host-attested authenticity remains. While a page form field holds the key
   path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
   stays true and the front end composes the header, footer and scrollbar.
-- `internal/browser` may import only `internal/engine` and `internal/protocol`
-  during the migration, and the dependency test enforces that. The browser's
-  production code no longer imports `internal/frontend`, `internal/host`,
-  `net/http` or `os`: encoders and the graphics renderer are injected by the
-  app, and host state arrives through `protocol.Host`. The remaining app →
-  browser exception ends with the session split.
+- The engine imports only `internal/protocol` (plus approved vendored
+  modules), and the dependency test enforces that. It does not import
+  `internal/frontend`, `internal/host`, `net/http` or `os`: encoders and the
+  graphics renderer are injected by the app, and host state arrives through
+  `protocol.Host`. `app` may import only the four boundary packages.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
   global visited list or download history by design (D54): back/forward history
@@ -144,10 +137,10 @@ destination; the tracker lists what remains.
 - **Files by subsystem within a package** remains the rule. Moving code
   between files is a pure declaration move (keep doc comments, give each file
   only the imports it uses). Files carved out of a base file share its prefix
-  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `browser.go` →
-  `browser_chrome.go`, `browser_forms.go`), which matters when a bare name
+  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `session.go` →
+  `session_chrome.go`, `session_forms.go`), which matters when a bare name
   would be ambiguous (`forms`, `images`). Standalone subsystems keep their own
-  name (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
+  name (`loader.go`, `automation.go`, `dump.go`, `find.go`, `hints.go`).
 
 | File | Decision / responsibility |
 | --- | --- |
@@ -157,16 +150,14 @@ destination; the tracker lists what remains.
 | `internal/engine/units.go` | `Length`/`Unit`, `px`/`%`/`auto`, horizontal/vertical resolution (including `lh`, resolved to px after the cascade, and `rem`), viewport units (`vw`/`vh`/`vmin`/`vmax`, including inside `calc()`), `calc()` arithmetic, and `min()`/`max()`/`clamp()` with percentages, viewport units, `calc()` arguments and nesting, plus font-size keywords. Non-finite values (`NaN`, `Infinity`, division by zero) are rejected. The engine owns the cell-size/zoom globals. |
 | `internal/engine/color.go` | `Color`, named/hex/rgb/hsl parsing, HSL conversion, alpha and opacity. |
 | `internal/engine/cssutil.go` | `SplitFields`/`SplitTopLevel` and the string scanner shared by color and sheet parsing. |
-| `engine_compat.go` | Browser aliases and wrappers for the engine DOM/style API, constructors, cascade accessors and layer/import helpers. Temporary until layout and paint move. |
-| `style_app.go` | App-level style helpers that stay in the browser: zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
-| `style_units_compat.go` | Browser aliases and wrappers for the engine style primitives; temporary until the remaining style files move. |
+| `internal/engine/aliases.go` | Temporary lowercase aliases for engine helpers used by the moved session files; remove in Phase 6. |
+| `internal/engine/style_app.go` | App-level style helpers: zoom percentage parsing/formatting and terminal-to-CSS pixel conversion. |
 | `internal/engine/style_resolve.go` | `StyleEngine.resolveStyleUnits`: rem, viewport, lh and calc resolution against the final computed style. |
 | `internal/engine/style_selectors.go` | Selector parsing and matching: type/universal/class/id/attribute/descendant/child/sibling compounds, `:not`, `:hover`, structural pseudos, grouped selectors, specificity and hover detection. A pseudo-class the engine cannot evaluate invalidates its selector instead of evaluating to false, because inside `:not()` a false result would invert into a match for every element. |
 | `internal/engine/style_sheet.go` | Declaration and stylesheet parsing (comments are skipped inside blocks as well as between them, so a quote or brace in a comment cannot truncate the rest of the sheet, and a backslash escape is skipped while scanning selectors, so an escaped quote in a generated utility class such as `.before\:content-\[\'\'\]` cannot start a phantom string and drop every later rule): tolerant statement scanning, `@import` resolution hooks, `@media`/`@supports` wrapping, CSS cascade layers (`@layer` blocks and `@layer a, b;` statements ranked in declaration order across the document, unlayered rules winning over every layer, `!important` reversing the order, nested layers using dotted names), CSS nesting (`&` replaced by the parent, descendant and combinator children, nested at-rules skipped, depth capped at 8), the parse budgets (4 MiB, 50k rules, 256 KiB per block, 1 s) and the scanner helpers. |
 | `internal/engine/style_engine.go` | Style engine: UA/author rule collection, rightmost-compound indexing so large stylesheets do not scan every rule for every element, cascade application, `::before`/`::after` computation (empty boxes and literal text, with private-use icon glyphs and functional values rejected), and the style deadline. |
 | `internal/engine/style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `internal/engine/style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
-| `layout_compat.go` | Browser aliases and wrappers for the engine layout types, builders, utilities and form predicates. Temporary until paint and the frame move. |
 | `internal/engine/layout.go` | Layout entry points, the `-layout-budget` deadline/fragment/row limits, `Frag`/`LinkInfo`/`Layout` types, the fragment builders, the box model, block flow and relative offsets. |
 | `internal/engine/layout_absolute.go` | Out-of-flow absolute/fixed boxes: deferral, containing-block resolution and placement. |
 | `internal/engine/layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated `::before`/`::after` boxes with their literal text, and inline pseudo content. |
@@ -185,12 +176,11 @@ destination; the tracker lists what remains.
 | `internal/engine/inline_svg.go` | Inline SVG serialization back to XML, including restoration of SVG camelCase tag and attribute names. |
 | `internal/engine/placement.go` | Native-image placement cache, PNG encoding, image scaling and frame clipping into `protocol.Placement`. |
 | `internal/engine/image_decode.go` | Hostile-input image decoding: panic containment, decompression-bomb checks, SVG/raster dispatch, decode weight and aspect-preserving downscale. |
-| `render_gfx.go` | Browser `Graphics` interface, protocol graphics-mode aliases and the inline-SVG budget pass. SVG serialization lives in `internal/engine/inline_svg.go`; the app injects the frontend renderer. |
-| `paint_compat.go` | Browser aliases and wrappers for the engine grid/paint API and SVG decoders. Temporary. |
-| `encoders.go` | Injected frame/PNG encoder hooks; the browser does not import `internal/frontend`. |
+| `internal/engine/graphics.go` | `Graphics` interface and protocol graphics-mode aliases; the app injects the frontend renderer. |
+| `internal/engine/encoders.go` | Injected frame/PNG encoder hooks; the engine does not import `internal/frontend`. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
 | `internal/frontend/png.go` | Protocol-frame-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
-| `frame_protocol.go` | Browser-side mapper from the painted content grid to `protocol.Frame`; the only place internal cell fields become wire values. Moves to the engine session with the split. |
+| `internal/engine/frame_protocol.go` | Mapper from the painted content grid to `protocol.Frame`; the only place internal cell fields become wire values. |
 | `internal/host/requests.go` | In-memory console request log, page generation, start/finish accounting and snapshots. |
 | `internal/host/settings.go` | User agent, search template and decoded-image caps, shared by navigation and image workers. |
 | `internal/host/certs.go` | `system`/`embedded` trust-store selection, the embedded Mozilla CA pool and the stable `CertTransport` wrapper. |
@@ -222,15 +212,15 @@ destination; the tracker lists what remains.
 | `internal/protocol/netctx.go` | Shared request metadata, page-space and local-network/mixed-content error values used by loader and host. |
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
-| `internal/browser/output.go` | Injected terminal writer for the legacy direct draw path; the app installs `os.Stdout`, tests install their own hook. |
-| `internal/browser/host_port.go` | Test-only host-session factory for the compatibility `NewLoader`; production constructs the host in `internal/app`. |
-| `internal/browser/session_hooks.go` | `engine.SessionHooks` implementation: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
-| `internal/browser/version.go` | Injected build version and the help-page wrapper. |
-| `internal/browser/certs.go`, `page_compat.go` | `certs.go` is the config-page trust-store label; `page_compat.go` holds the `Page`/`Script` aliases. Delete or merge in Phase 6. |
-| `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
-| `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
-| `internal/browser/session.go` | Thin `Serve`/`handleCommand` wrappers, the front-end hint/modal/select result appliers and pending-frame emission. The transport loop and command dispatch live in `engine.Session` (`serve.go`, `commands.go`). |
+| `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
+| `internal/engine/host_port.go` | Test-only host-session factory for the default loader constructor; production constructs the host in `internal/app`. |
+| `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
+| `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags and terminal setup. |
+| `internal/engine/version.go` | Injected build version and the help-page wrapper. |
+| `internal/engine/session_certs.go` | Config-page trust-store label. |
+| `internal/engine/dump.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding lives in the app. |
+| `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; `engine.Automation` is the handler implementation. |
+| `internal/engine/session_loop.go` | `Serve`/`handleCommand` wrappers, the front-end hint/modal/select result appliers and pending-frame emission. The transport loop and command dispatch live in `serve.go`/`commands.go`. |
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: `host.Session`/`engine.Loader` construction, session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
@@ -250,23 +240,22 @@ destination; the tracker lists what remains.
 | `internal/engine/pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. |
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
-| `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
-| `browser.go` | Session shell around `engine.Session`: the `Browser` struct, input resolution and the config-page branch, `SessionHooks` effects, hint/status effects around a rebuild, mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. Load lifecycle, entry IDs, load-result application, cached-page restore and the layout rebuild core live in `engine.Session`. |
-| `browser_chrome.go` | Content-only draw path: paints the page rectangle, control/selection/find highlights and image placements, then emits the frame. Footer text/level for `State`, status levels, graphics cycling and the memory readout remain here; chrome and the scrollbar are front-end-owned. |
-| `shell.go` | `protocol.State` snapshot and the engine-side view of the front-end content rectangle (`contentRect`, `headerRows`, `viewport`). The front end computes the rectangle; the legacy derivation remains for direct callers and tests. |
-| `browser_forms.go` | Thin form wrappers plus the control-focus highlight painter. Tab stepping, control activation, text/range editing, submission, label targets and form requests live in `engine/forms.go`; helpers remain in `engine` (`form_state.go`, `validate.go`, `form_edit.go`, `tab_order.go`, `form_step.go`). |
-| `browser_input.go` | Engine content input: `HandleKey`/`HandleMouse` for page movement, forms, find navigation, hint activation, selection and content clicks, plus mouse escape decoding and `MouseEvent`. Shell keys, quit, prompts, menus, dialogs and the console are front-end-owned. The shared line-editing core is `engine.EditLineKey`; the front end keeps its own copy in `frontend/prompt.go`. |
-| `browser_history.go` | Thin restore/reload/commit wrappers. The page cache, limits, suspend/cache, restore application and scavenge request are engine-owned; the ordered list/index/scroll live in the front end. |
-| `memory.go` | Browser-side process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the JS/history cache shares. Image/SVG budgets and the byte limiter live in `engine/budget.go`. The one-shot scavenge request is engine state. |
-| `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
-| `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
-| `browser_images.go` | Thin deferred-image bridge: engine task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
-| `browser_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `engine.Selection`. |
-| `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. Browser-side today; moves with the session. `automation_transport.go` exposes it through the MCP protocol client. |
+| `internal/engine/session_config.go` | Runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
+| `internal/engine/session_shell_core.go`, `session.go` | The single `Session` type: content and shell state, input resolution and the config-page branch, hint/status effects around a rebuild, mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling and `EscapeHTML`. |
+| `internal/engine/session_chrome.go` | Content-only draw path: paints the page rectangle, control/selection/find highlights and image placements, then emits the frame. Footer text/level for `State`, status levels, graphics cycling and the memory readout remain here. |
+| `internal/engine/session_shell_state.go` | `protocol.State` snapshot and the engine-side view of the front-end content rectangle (`contentRect`, `headerRows`, `viewport`). The front end computes the rectangle; the legacy derivation remains for direct callers and tests. |
+| `internal/engine/session_forms.go` | Form wrappers plus the control-focus highlight painter. Tab stepping, control activation, text/range editing, submission, label targets and form requests live in `forms.go` and the other form helpers. |
+| `internal/engine/session_input.go` | Content input: `HandleKey`/`HandleMouse` for page movement, forms, find navigation, hint activation, selection and content clicks, plus mouse escape decoding and `MouseEvent`. |
+| `internal/engine/session_history.go` | Restore/reload/commit wrappers. The page cache, limits, suspend/cache, restore application and scavenge request are engine-owned; the ordered list/index/scroll live in the front end. |
+| `internal/engine/memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the JS/history cache shares. Image/SVG budgets and the byte limiter live in `budget.go`. |
+| `internal/engine/session_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
+| `internal/engine/session_images.go` | Deferred-image bridge: task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
+| `internal/engine/session_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `Selection`. |
+| `internal/engine/automation.go` | Headless `Automation`: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. `internal/app/automation_transport.go` exposes it through the MCP protocol client. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
-| `ui.go` | Console state, actions and `ConsoleView` snapshots; JS dialog request/response state; download/notice state. All console, dialog, download and notice rendering and input are front-end-owned. |
-| `find.go` | Find state, navigation, scrolling, result messages and page highlight painting; match computation calls `engine.FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find are front-end-owned. |
-| `hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection and label assignment call `engine` (`BuildHintTargets`, `CollectHintGlyphs`, `AssignLinkHints`). Overlay painting and input are front-end-owned (`frontend/hints.go`). |
+| `internal/engine/session_console.go` | Console state, actions and `ConsoleView` snapshots; JS dialog request/response state; download/notice state. All console, dialog, download and notice rendering and input are front-end-owned. |
+| `internal/engine/session_find.go` | Find state, navigation, scrolling, result messages and page highlight painting; match computation calls `FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find are front-end-owned. |
+| `internal/engine/session_hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection and label assignment call `BuildHintTargets`, `CollectHintGlyphs` and `AssignLinkHints`. Overlay painting and input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
 | `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
 | `internal/engine/hints.go` | Link-hint target discovery, glyph collection, label assignment, unique-pair shortening, base-26 encoding and label painting. |
@@ -277,7 +266,6 @@ destination; the tracker lists what remains.
 | `internal/engine/edit_line.go` | Shared line-editor key handling: caret and word motion, deletion, selection replacement, insertion and length caps. |
 | `internal/engine/tab_order.go` | Standard Tab-order target discovery: links, controls and one stop per radio group. |
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
-| `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/grid_text.go` | Plain-text grid rows used by headless snapshots and copy-page output. |
 | `internal/engine/load.go` | Load lifecycle: `LoadFunc`/`LoadResult`, history entry ID allocation, background request start/cancel, loading progress and the result channel. |
@@ -294,9 +282,8 @@ destination; the tracker lists what remains.
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
-| `js_compat.go` | Browser aliases and constructor for the engine runtime. |
-| `js_life.go` | Thin wrappers over the engine JS lifecycle (`StartJS`/`StopJS`, timer delays, redraw throttling and import completion). |
-| `js_host.go` | `browserJSHost`: the browser implementation of the engine contract; becomes the engine session adapter after the split. |
+| `internal/engine/js_life_adapter.go` | Thin JS lifecycle wrappers over `StartJSWithHooks`, timers and import completion. |
+| `internal/engine/js_host_adapter.go` | `Session` implementation of the engine `JSHost` contract. |
 | `internal/engine/js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. Measurement resolves from the laid-out fragments, and a script-created element gets its style computed on demand so `getComputedStyle`/`offsetWidth` see its rules before the next rebuild. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods and element-child views (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`, `firstElementChild`/`lastElementChild`, `children`), because frameworks that hydrate with `document` as the root container call them on the document itself. `<template>.content` is a real inert fragment, and a node whose tag has a registered custom element class is constructed with that class when first wrapped. |
 | `internal/engine/js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |
 | `internal/engine/js_compat.go` | Cheap web-compatibility shims: `dataset`, `outerHTML`, `insertAdjacent*`, attribute helpers, `compareDocumentPosition`, `normalize`, focus/blur/scrollIntoView/getClientRects, Range/Selection, TreeWalker/NodeIterator, TextEncoder/TextDecoder, crypto, structuredClone, AbortController, Blob/File/FileReader, FormData, URL object URLs and queueMicrotask. |
@@ -311,4 +298,4 @@ destination; the tracker lists what remains.
 | `internal/frontend/term_stub.go` | Other-platform build stub; interactive unsupported, dump still works. |
 | `internal/frontend/signals_unix.go` / `signals_other.go` | Platform-specific resize/quit signal wiring so the project cross-compiles. |
 | `internal/app/app.go` | Flags, validation, the build `Version` and dispatch into `execute`; direct engine/host/frontend wiring is the remaining app split. |
-| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`browser_chrome_test.go`, `browser_forms_test.go`, `browser_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `config_test.go`, `ui_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`browser_test.go`, `layout_test.go`). |
+| `*_test.go` | Unit tests alongside the code; no network dependencies. Test files mirror the source files with the same names and prefixes (`session_chrome_test.go`, `session_forms_test.go`, `session_input_test.go`, `layout_grid_test.go`, `layout_flex_test.go`, `session_config_test.go`, `session_console_test.go`, …), keeping shared helpers and cross-cutting cases in the base file (`session_shell_test.go`, `layout_test.go`). |

@@ -3,7 +3,7 @@ package engine
 import "testing"
 
 func TestHistoryCacheLifecycle(t *testing.T) {
-	s := NewSession()
+	s := NewEmptySession()
 	s.Cache = NewPageCache(1 << 20)
 	u := mustParseURL(t, "https://example.com/a")
 	s.Page = &Page{URL: u, Root: &Node{Type: DocumentNode}}

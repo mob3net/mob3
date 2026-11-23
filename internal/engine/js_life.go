@@ -5,7 +5,7 @@ import "time"
 const jsRedrawInterval = 250 * time.Millisecond
 
 // StartJS creates a fresh runtime and runs the page's scripts in order.
-func (s *Session) StartJS(page *Page, h SessionHooks) {
+func (s *Session) StartJSWithHooks(page *Page, h SessionHooks) {
 	s.StopJS()
 	if s.NoJS || page == nil {
 		return

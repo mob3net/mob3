@@ -11,12 +11,10 @@ task needs them, which keeps this page short enough to read in full every time.
 belongs to here, or into the routed page it belongs to, rewritten as the rule in
 force. Do not append history, and do not leave a superseded rule standing.
 
-> **Rewrite in progress.** The engine/frontend boundary migration (B) is ongoing
-> until [docs/agents/boundary-migration.md](docs/agents/boundary-migration.md)
-> is deleted. That file is the working tracker and decision log; keep it
-> current. The target layout and import rules in §4 are in force now, and code
-> may temporarily live in `internal/browser` while it moves to the new
-> packages.
+> **Phase 6 cleanup remains.** The engine/frontend boundary migration (B) is
+> complete: the package layout and import rules in §4 are in force. The
+> [boundary tracker](docs/agents/boundary-migration.md) stays until the Phase 6
+> cleanup (temporary aliases, package globals, final benchmarks) is done.
 
 ## 1. Open on demand
 
@@ -67,13 +65,13 @@ published by the Pages build.
   (parser, style, layout, paint, input) where practical. **Always add or update
   a golden layout fixture when fixing or changing layout or rendering-engine
   behaviour**, even when unit tests exist. Fixtures live in
-  `internal/browser/testdata/pages/` and render through `TestLayoutFixtures`;
+  `internal/engine/testdata/pages/` and render through `TestLayoutFixtures`;
   refresh with
-  `go test ./internal/browser -run TestLayoutFixtures -update` and review the
+  `go test ./internal/engine -run TestLayoutFixtures -update` and review the
   diff. Fixtures use inline `<style>` only, no external assets, generic names
   and content. Imported-stylesheet goldens live in
-  `internal/browser/testdata/import/`; PDF goldens are a small `.pdf` plus its
-  `.txt` in `internal/browser/testdata/pdf/`, refreshed the same way with
+  `internal/engine/testdata/import/`; PDF goldens are a small `.pdf` plus its
+  `.txt` in `internal/engine/testdata/pdf/`, refreshed the same way with
   `-run TestPDFFixtures -update`.
 - **Report site quirks; do not chase them.** When a site relies on
   non-standard HTML, invalid markup or undocumented browser behavior, report
@@ -197,22 +195,19 @@ published by the Pages build.
   exits with its status.
 - `internal/app/` — flag parsing, validation, mode dispatch and the
   interactive session boot. It constructs `host.Session` and
-  `engine.NewConfiguredLoader` directly, and still imports `internal/browser`
-  for session/automation construction and the dump handler until the session
-  split. MCP transport and the dump/PNG output loop live in `internal/app`.
-- `internal/browser/` — package `browser` with the 297-method `Browser`, which
-  embeds `engine.Session` for page/layout/URL/scroll, the load lifecycle and
-  application, forms, JS lifecycle, hit testing, find/hint state, reader,
-  text-scaling and dark mode, plus session construction, loader compatibility
-  aliases, navigation and form/JS load glue, automation and most integration
-  tests until the boundary migration completes. The document loader lives in
-  `internal/engine` and reaches the network only through `protocol.Host`. The
-  engine has no fallback chrome, console, dialog, find-bar or hint-overlay
-  rendering and no fallback shell/prompt input; the front end owns those.
-  Production code imports only `internal/engine` and `internal/protocol`; the
-  dependency test enforces that, so the package is
-  ready to move into `internal/engine`. Nothing under `internal` is imported
-  from outside this module.
+  `engine.NewConfiguredLoader`, then `engine.NewConfiguredSession`,
+  `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`. MCP transport
+  and the dump/PNG output loop live in `internal/app`.
+- `internal/engine/` — the 383-method `Session`: page/layout/URL/scroll, the
+  load lifecycle and application, forms, JS lifecycle, hit testing,
+  find/hint/selection/reader state, text scaling, dark mode, content input and
+  drawing, console/dialog state, the document loader, headless automation and
+  the one-shot dump handler. It reaches the network only through
+  `protocol.Host` and has no terminal or chrome output of its own. Production
+  imports only `internal/protocol` (plus approved vendored modules). The engine
+  has no fallback chrome, console, dialog, find-bar or hint-overlay rendering
+  and no fallback shell/prompt input; the front end owns those. Nothing under
+  `internal` is imported from outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, document loading, find, selection,
@@ -223,17 +218,14 @@ published by the Pages build.
   lives in the front end and the download/curl hint is presentation; the
   engine keeps only a memory-only page cache. MOB³ keeps no global visited list
   or download history. The allowed
-  imports are `app` → the other four and each of them → `protocol`; the front
-  end and the host never import `engine`, and `engine` never imports
-  `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
-  During the migration it also allows `app` to import `internal/browser`;
-  `internal/browser` itself may import only `internal/engine` and
-  `internal/protocol`. Both exceptions end with the session split. The front
-  end never names an engine type, and `internal/protocol` is canonical for the
-  message set. The engine no longer imports `net/http`:
-  JS `fetch`/XHR and cookie parsing use the host broker. Session construction
-  and the loader compatibility layer still live in `internal/browser`; the
-  terminal loop, normal header/footer chrome, the displayed URL/title ledger,
+  imports are `app` → `engine`, `host`, `frontend`, `protocol`, and each of
+  `engine`, `host`, `frontend` → `protocol`; the front end and the host never
+  import `engine`, and `engine` never imports `frontend`, `host`, `net` or
+  `syscall`. A dependency test enforces the graph. The front end never names an
+  engine type, and `internal/protocol` is canonical for the message set. The
+  engine no longer imports `net/http`: JS `fetch`/XHR and cookie parsing use the
+  host broker. The engine owns session construction and headless automation;
+  the terminal loop, normal header/footer chrome, the displayed URL/title ledger,
   content geometry, base shell keys, scrollbar, URL/vim prompt, page find,
   view/zoom windows, JS dialogs, the select popup, download/notice modals, link
   hints, the console (composition, input and find) and session history (list,
@@ -243,7 +235,7 @@ published by the Pages build.
   `frontend/download.go`, `frontend/hints.go`, `frontend/console.go` and
   `frontend/history.go`. The front end validates the committed URL scheme and
   renders only committed history entries for chrome; host-attested final URLs
-  remain for the session split.
+  remain open.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package
@@ -278,8 +270,8 @@ make vendor                                           # after go.mod/go.sum chan
 make hooks                                            # install pre-commit size check
 make docker                                           # multi-arch image
 
-go test ./internal/browser -run TestLayoutFixtures -update   # goldens
-go test ./internal/browser -run TestPDFFixtures -update      # PDF goldens
+go test ./internal/engine -run TestLayoutFixtures -update   # goldens
+go test ./internal/engine -run TestPDFFixtures -update      # PDF goldens
 ```
 
 Build with `make` when CLI or binary behavior changes, then exercise the changed

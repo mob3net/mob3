@@ -16,11 +16,10 @@ landed, and the front end renders the displayed URL/title from validated
 history commits. A focused page form still sends keys through the engine, but
 the front end keeps the chrome. The engine no longer has any fallback chrome,
 console, dialog, find-bar or hint-overlay rendering or fallback shell input.
-Remaining: host-attested final URLs, automation packaging, the `Browser` →
-`Session` split (297 methods), the remaining app/session wiring and Phase 6
-cleanup.
+Remaining: host-attested final URLs and Phase 6 cleanup (aliases/shims,
+package globals, benchmarks, tracker deletion).
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (batch 61 landed).
+Last updated: 2026-11-23 (batch 63 landed).
 
 ## 1. Goal
 
@@ -120,6 +119,7 @@ network destination.
 | D74 | 2026-11-23 | Keep front-end chrome active while a page form owns the keyboard. `State.KeysEngine` still routes keys through the engine, but `State.FrontendChrome` no longer turns false for form focus; the front end composes the header, footer and scrollbar. | This closes the last live-session path where the engine emitted chrome. Form editing is still engine-side, so the session split still moves it, but it can no longer reach the trusted chrome rows. |
 | D75 | 2026-11-23 | Remove every engine fallback UI and input path: console drawing/keys/mouse, the JS dialog direct-key loop, download/notice modals, chrome/header/footer/scrollbar composition, find-bar and console-find drawing, hint-overlay painting, prompt editing, shell key/mouse routing and the `Chrome` event. The engine draws only the page content rectangle and keeps content keys/mouse, forms, find navigation, hint activation and selection. Headless dialogs use the non-interactive defaults. | The front end has owned these surfaces since D58–D74; the fallback only served direct callers and tests and was the largest remaining block of engine presentation code. Removing it also removes the last path where engine state could compose trusted chrome. |
 | D76 | 2026-11-23 | Move the document loader into `internal/engine` (`loader.go`, `loader_config.go`, `loader_page.go`, `loader_images.go`, `loader_pdf.go`, `loader_svg.go`, `loader_certs.go`, `loader_decode.go`, `budget.go`, `version.go`). The loader keeps using `protocol.Host` for network, cache, cookies, settings and accounting. `internal/app` constructs `host.Session` and `engine.NewConfiguredLoader` directly; the browser keeps `Loader` aliases and compatibility constructors for tests and the remaining session shell. | The loader is page-content work, not trusted policy, and it was the last large piece of engine behavior still in the browser package. Moving it now lets the app own host construction and leaves the session split as the only remaining engine extraction. |
+| D77 | 2026-11-23 | Merge `Browser` into `engine.Session` (383 methods), moving automation, the dump handler, content input/drawing, console/dialog state and the remaining shell glue with it. Move the tests and fixtures to `internal/engine`, delete `internal/browser`, and tighten `protocol/deps_test.go` to the final `app` → `engine`/`host`/`frontend`/`protocol` graph. | The package boundary is now complete: one engine session type, no browser shell, no app → browser exception. Phase 6 is cleanup only. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -150,11 +150,10 @@ moved.
 
 Known exceptions to remove during the migration:
 
-- `app` still imports `internal/browser` for session/automation construction
-  and the dump handler; it constructs `host.Session` and the engine loader
-  directly. The dependency test therefore allows any project import from
-  `app`. This ends with the session split. `internal/browser` itself is
-  restricted to `internal/engine` and `internal/protocol`.
+- `app` imports only `internal/engine`, `internal/host`, `internal/frontend`
+  and `internal/protocol`. It constructs the host, loader, session, automation
+  and dump handler through the engine constructors. The dependency test
+  enforces the final graph; there is no browser package.
 - None for `net/http`: JS `fetch`/XHR and `document.cookie` now go through the
   host broker. Terminal capability detection is front-end-owned.
 
@@ -172,7 +171,7 @@ seam; the note names which part goes where.
 
 | Current file(s) | Final side | Remaining work |
 | --- | --- | --- |
-| `internal/app/app.go`, `internal/app/execute.go` | app + frontend | `app` owns flags/validation, the build `Version`, mode dispatch and the interactive boot. It constructs `host.Session` and `engine.NewConfiguredLoader` directly and still calls `browser.NewSession`, `NewAutomationWithConfig`, `NewDumpHandler`/`DumpLimits` and the layout/zoom/version helpers; session construction follows the split. |
+| `internal/app/app.go`, `internal/app/execute.go` | done | `app` owns flags/validation, the build `Version`, mode dispatch and the interactive boot. It constructs `host.Session`, the engine loader, `engine.NewConfiguredSession`, `engine.NewAutomationWithConfig` and `engine.NewDumpHandler`. |
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load start/cancel/progress, load-result application, entry IDs and layout rebuild are engine. Command routing, input resolution/config submission, hook implementations, hint/status effects and shell state still move; content-rect geometry already moved. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Page hit testing moved to `engine/hit.go`; form editing is `engine/forms.go`; the engine now draws only the page rectangle; shared line editing is `engine.EditLineKey`. |
 | `browser_history.go` | engine + frontend | Page cache, limits, suspend/cache, restore application and scavenge are engine-owned; history commits, reload and `about:history` data remain. The ordered back/forward list and scroll offsets are front-end-owned (D54/D72). |
@@ -373,14 +372,14 @@ The engine draws only the page rectangle and keeps no fallback composition.
 - [x] Move paint and the content frame; keep native-image/terminal encoding in the browser until Phase 5.
 - [x] Move the PDF parser and document model (3b4a).
 - [x] Move JS/DOM (`js*.go`); the engine runtime and DOM now live in `internal/engine`.
-- [~] Split the session: `engine.Session` now owns page/layout/URL/scroll,
-      geometry, rendering configuration, JS runtime, PDF page starts, the
-      bounded page cache, load lifecycle, deferred-image counters, focus/hover,
-      reader, text-scaling, dark-mode, form/selection, find and hint state plus
-      helper methods; `Browser` embeds it. Shell fields and wrappers still need
-      to move.
-- [ ] Rename `Browser` → `Session` and remove `internal/browser`. The shell
-      remains at 297 methods at the last audit.
+- [x] Split the session: the single `engine.Session` owns page/layout/URL/
+      scroll, geometry, rendering configuration, JS runtime, PDF page starts,
+      the bounded page cache, load lifecycle, deferred-image counters,
+      focus/hover, reader, text-scaling, dark-mode, form/selection, find and
+      hint state, content input/drawing, console/dialog state and the shell
+      glue. Headless automation and the dump handler moved with it.
+- [x] Rename `Browser` → `Session`, move the tests and fixtures and delete
+      `internal/browser`. The merged type has 383 methods.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
       lists them.
 
@@ -425,10 +424,10 @@ The engine draws only the page rectangle and keeps no fallback composition.
 - [x] Form editing decisions, Tab focus effects and submission moved to
       `engine/forms.go`; the shell supplies navigation/status/rebuild effects.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
-- [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
-      navigation to the front end), then rename to `Session`.
-- [ ] Move the remaining whole-app tests to seam tests in `app`.
-- [ ] Remove aliases and bridges.
+- [x] 3c: split `Browser` at the seam and rename it to `Session`.
+- [x] Move the remaining whole-app tests to the engine and app seam tests.
+- [~] Remove aliases and bridges: the browser compat files are gone; the
+      temporary lowercase aliases in `engine/aliases.go` remain for Phase 6.
 - [x] Engine import gate rejects `net/http`; the engine has no `net/http`
       import. (`net/url` remains, as a pure value package.)
 
@@ -548,33 +547,34 @@ trusted-shell split, then Phase 6. Dependency order:
 
 **C. Session split and app wiring**
 
-- [ ] Split `Browser` (297 methods): page/content state → `engine.Session`;
+- [x] Split `Browser` (297 methods): page/content state → `engine.Session`;
       command/hook implementations, chrome, navigation and console state →
       front end.
 - [x] Move the document loader into `engine` and construct the host/loader
       directly in `app`.
+- [x] Move automation, the dump handler, the console/dialog state and content
+      input/drawing into `engine.Session`; the front end owns all chrome and
+      terminal output.
 - [x] Move Loader image/SVG/about/PDF assembly into the engine; the host keeps
       fetch, cache, cookies, settings and policy.
 - [x] Replace the loader host fields with the `protocol.Host` port,
       implemented by `host.Session`; browser production imports are now only
       `engine` and `protocol`.
-- [ ] Rename `Browser` → `Session` and remove `internal/browser`.
+- [x] Rename `Browser` → `Session` and remove `internal/browser`.
 - [x] Move `browser.Execute`, `RunOptions` and mode dispatch into
       `internal/app`; the interactive boot now lives in `app/execute.go`.
-- [ ] Replace the remaining `browser.NewSession`/`Dump` calls with direct
-      host/engine/frontend construction after the session split.
-- [ ] Tighten `protocol/deps_test.go`: `app` → `engine`, `host`, `frontend`,
+- [x] Replace the remaining `browser.NewSession`/`Dump` calls with direct
+      engine construction.
+- [x] Tighten `protocol/deps_test.go`: `app` → `engine`, `host`, `frontend`,
       `protocol`; no `browser` package.
 
 **D. Tests and Phase 6**
 
-- [ ] Move whole-app tests to seam tests in `app`; keep engine, layout and PDF
-      fixtures with their packages and update the documented paths.
-- [ ] Remove the browser-side shims, adapters and dead aliases
-      (`engine_compat.go`, `layout_compat.go`, `paint_compat.go`,
-      `js_compat.go`, `page_compat.go`, `pdf_compat.go`,
-      `style_units_compat.go`, `certs.go`, `render_gfx.go`); the real bridges
-      (`frame_protocol.go`, `js_host.go`, `js_life.go`) move with the session.
+- [x] Move whole-app tests to the engine and app seam tests; the layout and
+      PDF fixtures now live in `internal/engine/testdata/`.
+- [~] Remove the browser-side shims: the browser package and its compat files
+      are gone; `engine/aliases.go` still holds temporary lowercase aliases for
+      Phase 6.
 - [ ] Remove the unused `protocol.Selection` event, or wire it if a front-end
       consumer appears.
 - [ ] Record the Phase 6 benchmark deltas. The 60 s codec fuzz already runs in
@@ -587,13 +587,12 @@ trusted-shell split, then Phase 6. Dependency order:
 
 - [x] 61: moved the loader (`loader*.go`, `budget.go`, `version.go`) into
       `internal/engine`; `internal/app` constructs `host.Session` and the
-      loader directly. Loader tests still run from `internal/browser` through
-      the compatibility alias and move with the package in 63.
+      loader directly. Loader tests moved with the package in 63.
 - [ ] 62: move `automation.go` and the dump handler to their final sides;
       remove the remaining `browser.NewSession`/`NewDumpHandler` calls from
       `app`.
-- [ ] 63: rename `Browser` → `Session`, move the tests/fixtures, delete
-      `internal/browser` and tighten the dependency test.
+- [x] 63: renamed `Browser` → `Session`, moved the tests/fixtures, deleted
+      `internal/browser` and tightened the dependency test.
 - [ ] 64: Phase 6 — remove aliases/shims, turn package globals into session
       options, record the benchmark deltas, fold durable rules into
       `AGENTS.md`/`architecture.md`, and delete this tracker.
@@ -612,11 +611,11 @@ test.
 
 | Risk | Mitigation |
 | --- | --- |
-| `Browser` is a 297-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
+| `Session` has 383 methods; Go cannot split its methods across packages | The package boundary is complete. Phase 6 can split the type by file/subsystem and remove the temporary aliases without crossing packages. |
 | Chrome state is spread across Browser fields | Define the `State`/overlay contract before moving input or drawing. Move shell key routing and chrome composition together so there is one source of truth. |
 | Loader mixes host fetch, engine assembly and session orchestration | Split orchestration with the session; keep the per-request host fetcher snapshot (D40). |
 | Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options during app wiring; required before any multi-session work. |
-| Test migration (20k lines in `internal/browser`) | Move tests with their files; keep fixture goldens with the engine; build an app seam harness for whole-app cases. |
+| Test migration (20k lines) | Tests moved with their files into `internal/engine`; fixture goldens moved to `internal/engine/testdata/`; app seam tests stay in `internal/app`. |
 | Overlay composition | Move modal/chrome layout and input together; keep engine overlays clipped to the content rect until then. |
 | Silent visual drift | `-dump` and `-png` hashes plus frame goldens and PTY checks at every batch. |
 | Performance drift | Reusable buffers, no per-frame allocations, metadata only on layout changes, benchmark at every phase. |
@@ -627,7 +626,7 @@ test.
 Baseline recorded 2026-11-22 on linux/amd64, i7-1255U, Go 1.27. Absolute values
 are machine-specific; the gate is the delta on the same machine. The synthetic
 page is `boundaryBaselineHTML()` in
-`internal/browser/boundary_baseline_test.go`.
+`internal/engine/boundary_baseline_test.go`.
 
 | Metric | Baseline | Gate |
 | --- | --- | --- |
@@ -644,7 +643,7 @@ page is `boundaryBaselineHTML()` in
 
 The codec benchmark is `BenchmarkCodecFrame` in `internal/protocol`; the parse,
 paint, draw and content-frame benchmarks are in
-`internal/browser/boundary_baseline_test.go`. A later process split is expected
+`internal/engine/boundary_baseline_test.go`. A later process split is expected
 to add a second Go runtime and IPC; those numbers are recorded separately and
 are not B's budget. The per-phase sections below are historical; the Phase 6
 summary is still to be recorded after the shell split.
@@ -1064,7 +1063,7 @@ git diff --check
 go test -race ./internal/...
 go test -fuzz=FuzzDecodeCommand -fuzztime=60s ./internal/protocol
 go test -fuzz=FuzzDecodeEvent -fuzztime=60s ./internal/protocol
-go test ./internal/browser -run TestLayoutFixtures -update   # only when intentional
+go test ./internal/engine -run TestLayoutFixtures -update   # only when intentional
 ```
 
 Also compare the baseline corpus hashes for `-dump` and `-png` before handing
@@ -1076,7 +1075,7 @@ work back.
 - [ ] Chrome, dialogs and history are front-end-owned; the URL/title ledger is
       front-end-rendered and host-attested final URLs remain. The engine cannot
       emit header, footer or dialog cells.
-- [ ] `Browser` is split and renamed; `internal/browser` is gone.
+- [x] `Browser` is split and renamed; `internal/browser` is gone.
 - [ ] `app` constructs the session directly and the dependency test forbids a
       `browser` package.
 - [ ] Whole-app tests and fixtures moved to their final packages.
@@ -1200,5 +1199,6 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 50: updated the `Browser` method count (296 → 309), documented the new engine load/layout/hit/cache/apply files and protocol/browser host/test files, corrected remaining ownership (load-result application, restore, hit testing, layout rebuild), and recorded the command-routing/fallback/rename work still ahead. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 51: forms, input and JS lifecycle |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 57: corrected the method count to 328, updated the browser-shell description, removed stale form-editing/select-popup claims, clarified the remaining fallback UI and recorded the next batches. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 58: fallback console/dialog removal |
+| 2026-11-23 | 9j | Batch 63: merged `Browser` into `engine.Session` (383 methods) and moved automation, the dump handler, content input/drawing, console/dialog state and the remaining shell glue into `internal/engine`. Moved all tests and fixtures to `internal/engine` (with `session_*` names for the former browser tests), deleted `internal/browser`, and tightened `protocol/deps_test.go` to the final app → engine/host/frontend/protocol graph. Only the temporary lowercase aliases and Phase 6 cleanup remain. | `go test ./...`, `go vet`, full `-race`, engine/app/frontend/host/protocol tests, dependency test, PTY help/navigation, dump/PNG hashes | Batch 64: Phase 6 cleanup |
 | 2026-11-23 | 9i | Batch 61: moved the document loader into `internal/engine` (`loader.go`, `loader_config.go`, `loader_page.go`, `loader_images.go`, `loader_pdf.go`, `loader_svg.go`, `loader_certs.go`, `loader_decode.go`, `budget.go`, `version.go`). The loader keeps `protocol.Host` for all network/cache/cookie/settings/accounting; `internal/app` constructs `host.Session` and the engine loader directly; the browser keeps aliases and a test-only host factory. Removed the browser fetch/page-fetcher/PDF/cache-loader files and the browser byte limiter, moved its tests to the engine. Loader integration tests still run from `internal/browser` through the alias until the package moves. | `go test ./...`, `go vet`, full `-race`, engine/browser/app tests, PTY help/navigation, dump/PNG hashes | Batch 62: automation, dump handler and remaining app wiring |
 | 2026-11-23 | 9h | Batch 58: removed all remaining engine fallback UI and input in one sweep: console drawing/keys/mouse, JS dialog direct-key loop, download/notice modals, chrome/header/footer/scrollbar composition, find-bar/console-find drawing, hint-overlay painting, prompt editing, shell key/mouse routing and the `Chrome` event. The engine now draws only the page rectangle and keeps content keys/mouse, forms, find navigation, hint activation and selection; headless dialogs use non-interactive defaults. Removed the fallback-only tests and retargeted shared-state tests. | `go test ./...`, `go vet`, full `-race`, browser/frontend/protocol tests, PTY help/quit, dump/PNG hashes | Loader move into the engine |

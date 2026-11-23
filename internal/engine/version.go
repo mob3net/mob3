@@ -6,3 +6,6 @@ var BuildVersion = "dev"
 
 // SetBuildVersion installs the application version.
 func SetBuildVersion(v string) { BuildVersion = v }
+
+// HelpPageDocument renders the built-in help page with the current version.
+func HelpPageDocument() string { return HelpPageHTML(BuildVersion) }

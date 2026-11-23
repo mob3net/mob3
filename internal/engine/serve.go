@@ -29,7 +29,7 @@ type RuntimeHooks interface {
 // from the trusted front end through the transport; page loads, JavaScript
 // timers, deferred images and imports are serviced here, and the resulting
 // shell state leaves as events.
-func (s *Session) Serve(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink, h RuntimeHooks) error {
+func (s *Session) ServeWithHooks(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink, h RuntimeHooks) error {
 	var jsTimer, progressTimer *time.Timer
 	defer func() {
 		if jsTimer != nil {

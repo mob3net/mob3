@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"browser/internal/browser"
+	"browser/internal/engine"
 	"browser/internal/protocol"
 )
 
@@ -22,7 +22,7 @@ type automationRunner interface {
 // automationHandler owns the Automation engine on the session goroutine and
 // answers MCP operations that arrive through the protocol.
 type automationHandler struct {
-	a *browser.Automation
+	a *engine.Automation
 
 	mu     sync.Mutex
 	cancel context.CancelFunc

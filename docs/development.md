@@ -67,7 +67,7 @@ debugging recipe in `docs/agents/debugging.md`; delete it afterwards.
 - `mob3 -h` and the in-app `about:help` page are canonical for flags and keys.
   `docs/cli.md` and `docs/keys.md` must stay in sync.
 - `docs/automation.md` documents the MCP tools. Tool names come from
-  `mcpToolDefinitions()` in `internal/browser/mcp.go`.
+  `mcpToolDefinitions()` in `internal/app/mcp.go`.
 - `AGENTS.md` is the agent entry point; domain-specific engine, UI, network,
   build and JS decisions live under `docs/agents/` and are not published by the
   site build.
@@ -99,7 +99,10 @@ screenshot changes.
 | Path | Purpose |
 | --- | --- |
 | `cmd/mob3/` | Executable entry point |
-| `internal/browser/` | HTML, CSS, layout, rendering, fetching, JS, UI, automation and MCP |
+| `internal/engine/` | HTML, CSS, layout, rendering, JS/DOM, PDF, images, loader, session, automation and dump |
+| `internal/host/` | Network, cookies, cache, certificates, settings and request log |
+| `internal/frontend/` | Terminal, input, chrome, ANSI/PNG and native images |
+| `internal/app/` | Flags, mode dispatch, wiring, MCP transport and dump output |
 | `docs/` | User documentation |
 | `.github/pages/` | GitHub Pages template and build script |
 | `vendor/` | Committed Go dependencies |
