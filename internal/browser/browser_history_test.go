@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"context"
 	"fmt"
 	"image"
@@ -100,7 +101,7 @@ func navigateAndFinish(t *testing.T, b *Browser, target string) {
 	t.Helper()
 	b.Navigate(target, true)
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatalf("navigation to %s did not finish", target)
@@ -111,7 +112,7 @@ func TestHistoryCommitRecordsSession(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
 	h := attachHistory(b)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: u.Path, Root: ParseHTML("<html><body>ok</body></html>")}, nil
 	}
@@ -196,7 +197,7 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
 	h := attachHistory(b)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		var doc strings.Builder
 		doc.WriteString(`<html><body><p><a href="#target">jump</a></p>`)
@@ -262,7 +263,7 @@ func TestBackRestoresPageScroll(t *testing.T) {
 	b.setLoader(NewLoader())
 	h := attachHistory(b)
 	loads := 0
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		loads++
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
@@ -305,7 +306,7 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 	b.setLoader(NewLoader())
 	h := attachHistory(b)
 	loads := 0
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		loads++
 		u := mustParse(t, target)
 		page := &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body><h1>page</h1></body></html>`)}
@@ -342,7 +343,7 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
 	attachHistory(b)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body><p>x</p></body></html>`)}, nil
 	}
@@ -353,7 +354,7 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 		t.Fatalf("cached pages = %d, want %d", got, maxCachedPages)
 	}
 	// The most recently replaced page must still be cached for an immediate back.
-	if b.Cache.Get(b.nextEntryID-2) == nil {
+	if b.Cache.Get(b.NextEntryID-2) == nil {
 		t.Fatal("most recent page was evicted from the cache")
 	}
 }
@@ -364,7 +365,7 @@ func TestAboutPagesAreNotCached(t *testing.T) {
 	attachHistory(b)
 	navigateAndFinish(t, b, "https://example.com/a")
 	navigateAndFinish(t, b, "about:help")
-	if b.Cache.Get(b.entryID) != nil {
+	if b.Cache.Get(b.EntryID) != nil {
 		t.Fatal("about:help was cached")
 	}
 }
@@ -392,7 +393,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			b := NewBrowser(80, 10)
 			h := attachHistory(b)
-			b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+			b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 				u, err := url.Parse(target)
 				if err != nil {
 					return nil, err
@@ -407,7 +408,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 			b.Navigate("https://example.com/start", true)
 			for i := 0; i < 2; i++ {
 				select {
-				case res := <-b.loadCh:
+				case res := <-b.LoadCh:
 					b.finishLoad(res)
 				case <-time.After(2 * time.Second):
 					t.Fatalf("load %d did not finish", i+1)
@@ -423,7 +424,7 @@ func TestJSRedirectsDuringLoadCoalesce(t *testing.T) {
 func TestScriptRedirectLoopStops(t *testing.T) {
 	b := NewBrowser(80, 10)
 	h := attachHistory(b)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return nil, err
@@ -436,7 +437,7 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 	stopped := false
 	for i := 0; i < maxAutoNavigations+3; i++ {
 		select {
-		case res := <-b.loadCh:
+		case res := <-b.LoadCh:
 			b.finishLoad(res)
 		case <-time.After(2 * time.Second):
 			t.Fatal("redirect loop stalled without a result")
@@ -459,7 +460,7 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 
 func TestMetaRefreshLoopStops(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return nil, err
@@ -472,7 +473,7 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 	stopped := false
 	for i := 0; i < maxAutoNavigations+3; i++ {
 		select {
-		case res := <-b.loadCh:
+		case res := <-b.LoadCh:
 			b.finishLoad(res)
 		case <-time.After(2 * time.Second):
 			t.Fatal("meta refresh loop stalled without a result")
@@ -498,12 +499,12 @@ func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
 	redir := &Page{URL: uRedir, Base: uRedir, Root: ParseHTML(
 		`<html><head><meta http-equiv="refresh" content="0;url=/target"></head><body>redirecting</body></html>`)}
 	target := &Page{URL: uTarget, Base: uTarget, Root: ParseHTML(`<html><body>target</body></html>`)}
-	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) { return target, nil }
+	b.LoadFn = func(context.Context, string, string, []byte, string) (*Page, error) { return target, nil }
 
 	id := b.nextHistoryID()
-	b.finishLoad(loadResult{seq: b.LoadSeq, page: redir, u: uRedir, entryID: id, historyPush: true, method: http.MethodGet})
+	b.finishLoad(engine.LoadResult{Seq: b.LoadSeq, Page: redir, URL: uRedir, EntryID: id, HistoryPush: true, Method: http.MethodGet})
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("meta refresh navigation did not finish")
@@ -523,11 +524,11 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	h := attachHistory(b)
 	u := mustParse(t, "https://example.com/start")
 	next := mustParse(t, "https://example.com/next")
-	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) {
+	b.LoadFn = func(context.Context, string, string, []byte, string) (*Page, error) {
 		return &Page{URL: next, Base: next, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
 	}
 	id := b.nextHistoryID()
-	b.finishLoad(loadResult{seq: b.LoadSeq, entryID: id, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, historyPush: true, method: http.MethodGet})
+	b.finishLoad(engine.LoadResult{Seq: b.LoadSeq, EntryID: id, Page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, URL: u, HistoryPush: true, Method: http.MethodGet})
 	if b.JS == nil {
 		t.Fatal("no JS runtime")
 	}
@@ -536,7 +537,7 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 		t.Fatal("queued navigation was not applied")
 	}
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("navigation did not finish")
@@ -573,7 +574,7 @@ func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	b.Cache.SetLimitBytes(2 << 20) // single-page cap is 1 MiB
 	u := mustParse(t, "https://example.com/heavy")
 	b.URL = u
-	b.entryID = 1
+	b.EntryID = 1
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<html><body><p>heavy</p></body></html>`),
 		RawHTML: strings.Repeat("x", 1200*1024)}
 	if b.cacheCurrentPage() {
@@ -692,20 +693,20 @@ func TestRestoreFetchesUncachedEntryWithScroll(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.setLoader(NewLoader())
 	h := attachHistory(b)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Title: target, Root: ParseHTML(`<html><body>` + strings.Repeat("<p>line</p>", 40) + `</body></html>`)}, nil
 	}
 	navigateAndFinish(t, b, "https://example.com/a")
 	b.restoreEntry(9, "https://example.com/c", 7)
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("restore did not load")
 	}
-	if b.entryID != 9 || b.URL == nil || b.URL.Path != "/c" {
-		t.Fatalf("entry=%d url=%v", b.entryID, b.URL)
+	if b.EntryID != 9 || b.URL == nil || b.URL.Path != "/c" {
+		t.Fatalf("entry=%d url=%v", b.EntryID, b.URL)
 	}
 	if b.Scroll != 7 {
 		t.Fatalf("scroll = %d, want 7", b.Scroll)

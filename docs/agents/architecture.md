@@ -103,7 +103,8 @@ destination; the tracker lists what remains.
   chrome/overlay/dialog/console rendering, the memory-only page cache,
   host-backed loader image/SVG/about/PDF orchestration, automation, and most
   integration tests. `Browser` embeds `engine.Session`, which now owns page,
-  layout, URL, scroll, focus/hover, reader, text-scaling and dark-mode state;
+  layout, URL, scroll, load start/cancel/progress, focus/hover, reader,
+  text-scaling and dark-mode state;
   the methods and shell fields are still being moved. MCP transport lives in
   `internal/app`. Production code imports only `internal/engine` and
   `internal/protocol`; the dependency test enforces this, so the package is
@@ -241,7 +242,7 @@ destination; the tracker lists what remains.
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
 | `config.go` | Browser-side runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
-| `browser.go` | Session shell around `engine.Session`: the `Browser` struct, navigation and load lifecycle (progress, cancel, `finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. Page/layout/URL/scroll live in `engine.Session`. |
+| `browser.go` | Session shell around `engine.Session`: the `Browser` struct, input resolution and the config-page branch, load-result application (`finishLoad`), page rebuild and mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling, `EscapeHTML`. Load start/cancel/progress, entry IDs and the result channel live in `engine.Session`. |
 | `browser_chrome.go` | Session-side fallback composition: `draw` paints content, composes chrome/overlays, and emits either a content-only frame plus `Chrome` or a full-screen fallback. Status/footer labels, graphics cycling, selection/control overlays, the fallback scrollbar and memory readout remain here. |
 | `shell.go` | `protocol.State` snapshot and the engine-side view of the front-end content rectangle (`contentRect`, `headerRows`, `viewport`). The front end computes the rectangle; the legacy derivation remains for direct callers and tests. |
 | `browser_forms.go` | Form controls: Tab stepping, control activation, input value editing and caret handling, and GET/POST submission. Focus state, validation, control predicates, Tab-target discovery, radio/select stepping, label lookup, form requests, input-fragment updates, range hit testing and input-line helpers live in `engine` (`form_state.go`, `validate.go`, `form_edit.go`, `tab_order.go`, `form_step.go`). |
@@ -270,6 +271,7 @@ destination; the tracker lists what remains.
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/grid_text.go` | Plain-text grid rows used by headless snapshots and copy-page output. |
+| `internal/engine/load.go` | Load lifecycle: `LoadFunc`/`LoadResult`, history entry ID allocation, background request start/cancel, loading progress and the result channel. |
 | `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |

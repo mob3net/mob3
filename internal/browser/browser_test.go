@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"browser/internal/host"
 	"browser/internal/protocol"
 	"bytes"
@@ -184,7 +185,7 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 	b.Page = page
 	b.URL = page.URL
 	b.setLoader(NewLoader())
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
 	}
@@ -196,7 +197,7 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 		t.Fatal("a throwing click handler swallowed the link navigation")
 	}
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("fallback navigation did not finish")
@@ -235,8 +236,8 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 	if body == nil || body.Attr("data-clicked") != "yes" {
 		t.Fatal("keyboard follow did not run the link click handler")
 	}
-	if b.entryID != 0 {
-		t.Fatalf("prevented click navigated: entry=%d", b.entryID)
+	if b.EntryID != 0 {
+		t.Fatalf("prevented click navigated: entry=%d", b.EntryID)
 	}
 }
 
@@ -244,7 +245,7 @@ func TestNavigateSearchesQuery(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.loader.setSearchURL("https://www.bing.com/search?q=%s")
 	ch := make(chan string, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		ch <- target
 		return &Page{}, nil
 	}
@@ -263,7 +264,7 @@ func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.URL = mustParse(t, "https://example.com/")
 	called := false
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		called = true
 		return &Page{}, nil
 	}
@@ -279,7 +280,7 @@ func TestRemotePageCannotNavigateToLocalFile(t *testing.T) {
 func TestNavigateAsyncAndStop(t *testing.T) {
 	b := NewBrowser(40, 10)
 	started := make(chan struct{})
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		close(started)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -302,7 +303,7 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 	}
 	// A late result from the canceled load must be ignored.
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(200 * time.Millisecond):
 	}
@@ -314,7 +315,7 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 func TestReloadButtonBecomesStopWhileLoading(t *testing.T) {
 	b := NewBrowser(60, 10)
 	started := make(chan struct{})
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		close(started)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -366,9 +367,9 @@ func TestReloadButtonBecomesStopWhileLoading(t *testing.T) {
 func TestNavigateAsyncSuccess(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Navigate("data:text/html,<title>Loaded</title><p>hi</p>", false)
-	var res loadResult
+	var res engine.LoadResult
 	select {
-	case res = <-b.loadCh:
+	case res = <-b.LoadCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("load did not finish")
 	}
@@ -426,14 +427,14 @@ func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.URL = mustParse(t, "https://example.com/challenge")
 	var got string
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		got = target
 		u := mustParse(t, target)
 		return &Page{URL: u, Base: u, Root: ParseHTML("<html><body><p>challenge</p></body></html>"), Title: "challenge"}, nil
 	}
 	b.Navigate("about:retry", true)
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("retry did not start a load")
@@ -441,8 +442,8 @@ func TestTryAnywayRetriesBlockedURL(t *testing.T) {
 	if got != "https://example.com/challenge" {
 		t.Fatalf("retry target = %q", got)
 	}
-	if b.entryID != 0 {
-		t.Fatalf("retry pushed history: entry=%d", b.entryID)
+	if b.EntryID != 0 {
+		t.Fatalf("retry pushed history: entry=%d", b.EntryID)
 	}
 }
 
@@ -454,7 +455,7 @@ func TestTryAnywayWithoutURL(t *testing.T) {
 		t.Fatalf("status = %q", b.status)
 	}
 	select {
-	case <-b.loadCh:
+	case <-b.LoadCh:
 		t.Fatal("retry without a URL started a load")
 	default:
 	}
@@ -469,7 +470,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	b.rebuild()
 
 	requested := make(chan string, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		requested <- target
 		p := &Page{URL: u, Base: u, Root: ParseHTML("<html><body>no scripts</body></html>")}
 		return p, nil
@@ -489,9 +490,9 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("J did not reload the page")
 	}
-	var res loadResult
+	var res engine.LoadResult
 	select {
-	case res = <-b.loadCh:
+	case res = <-b.LoadCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("reload result did not arrive")
 	}
@@ -848,7 +849,7 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Layout = BuildLayout(doc, nil, 60)
-	b.loadFn = func(_ context.Context, _, target string, _ []byte, _ string) (*Page, error) {
+	b.LoadFn = func(_ context.Context, _, target string, _ []byte, _ string) (*Page, error) {
 		tu := mustParse(t, target)
 		return &Page{URL: tu, Base: tu, Root: ParseHTML("<html><body>pdf</body></html>")}, nil
 	}
@@ -861,14 +862,14 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	if !b.Loading {
 		t.Fatal("PDF download did not start a load")
 	}
-	var res loadResult
+	var res engine.LoadResult
 	select {
-	case res = <-b.loadCh:
+	case res = <-b.LoadCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("PDF download did not finish")
 	}
-	if res.downloadName != "chosen.pdf" {
-		t.Fatalf("download name carried = %q", res.downloadName)
+	if res.DownloadName != "chosen.pdf" {
+		t.Fatalf("download name carried = %q", res.DownloadName)
 	}
 	b.finishLoad(res)
 	if b.download != nil {
@@ -994,7 +995,7 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 		Download: true, DownloadName: "archive.zip",
 	}
 	b.LoadSeq = 1
-	b.finishLoad(loadResult{seq: 1, page: page, u: u, entryID: b.nextHistoryID(), historyPush: true, method: http.MethodGet})
+	b.finishLoad(engine.LoadResult{Seq: 1, Page: page, URL: u, EntryID: b.nextHistoryID(), HistoryPush: true, Method: http.MethodGet})
 	if b.download == nil {
 		t.Fatal("non-HTML response did not offer the curl popup")
 	}
@@ -1004,8 +1005,8 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 	if !strings.Contains(b.download.command, "archive.zip") || !strings.Contains(b.download.command, u.String()) {
 		t.Fatalf("command = %q", b.download.command)
 	}
-	if b.entryID != 0 {
-		t.Fatalf("download pushed history: entry=%d", b.entryID)
+	if b.EntryID != 0 {
+		t.Fatalf("download pushed history: entry=%d", b.EntryID)
 	}
 }
 
@@ -1324,8 +1325,8 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	if b.status != "" {
 		t.Fatalf("status = %q, want empty", b.status)
 	}
-	if b.entryID != 0 {
-		t.Fatalf("right-click navigated: entry=%d", b.entryID)
+	if b.EntryID != 0 {
+		t.Fatalf("right-click navigated: entry=%d", b.EntryID)
 	}
 }
 

@@ -75,7 +75,7 @@ func (b *Browser) suspendCurrentPage() {
 // cacheCurrentPage stores the applied page under the current front-end entry
 // ID. It reports whether the page was cached.
 func (b *Browser) cacheCurrentPage() bool {
-	if b.Page == nil || b.Page.Root == nil || b.URL == nil || b.Page.Download || b.entryID == 0 {
+	if b.Page == nil || b.Page.Root == nil || b.URL == nil || b.Page.Download || b.EntryID == 0 {
 		return false
 	}
 	switch b.URL.Scheme {
@@ -86,7 +86,7 @@ func (b *Browser) cacheCurrentPage() bool {
 	if weight > b.Cache.PageCap() {
 		return false
 	}
-	b.Cache.Put(b.entryID, &cachedPage{
+	b.Cache.Put(b.EntryID, &cachedPage{
 		Page: b.Page, JS: b.JS, ReaderRoot: b.ReaderRoot,
 		ReaderSavedScroll: b.ReaderSavedScroll, Method: b.LastMethod,
 		Body: b.LastBody, ContentType: b.LastContentType, At: time.Now(), Bytes: weight,
@@ -110,7 +110,7 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 		b.loader.beginPage()
 	}
 	b.LoadSeq++
-	b.entryID = entryID
+	b.EntryID = entryID
 	b.Page = c.Page
 	b.URL = c.Page.URL
 	b.ImagesPaused = false
@@ -159,7 +159,7 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 	b.clearLinkHints()
 	if b.URL != nil && b.Page != nil && b.Page.Root != nil {
 		if u, err := url.Parse(rawURL); err == nil && sameDocument(u, b.URL) {
-			b.entryID = entryID
+			b.EntryID = entryID
 			b.URL = u
 			b.Scroll = scroll
 			b.clampScroll()

@@ -108,7 +108,7 @@ func (a *Automation) waitLoad(ctx context.Context) error {
 	}
 	for a.b.Loading {
 		select {
-		case res := <-a.b.loadCh:
+		case res := <-a.b.LoadCh:
 			a.b.finishLoad(res)
 		case <-ctx.Done():
 			a.b.cancelLoadNow()

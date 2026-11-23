@@ -253,7 +253,7 @@ func TestHistoryShortcutKey(t *testing.T) {
 	b := NewBrowser(60, 10)
 	b.HandleKey("H")
 	select {
-	case res := <-b.loadCh:
+	case res := <-b.LoadCh:
 		b.finishLoad(res)
 	case <-time.After(2 * time.Second):
 		t.Fatal("H did not load about:history")
@@ -479,7 +479,7 @@ func TestColonPromptQuitsLikeQ(t *testing.T) {
 	// The :o-style prompt keeps q as ordinary input.
 	b = NewBrowser(60, 12)
 	b.URL = mustParse(t, "https://example.com/page")
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		return &Page{URL: b.URL, Base: b.URL, Root: ParseHTML("<html><body>ok</body></html>")}, nil
 	}
 	b.HandleKey("o")

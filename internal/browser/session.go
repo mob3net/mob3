@@ -118,7 +118,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 			if quit || b.sessionQuit {
 				return out.Send(protocol.Event{Body: protocol.Quit{}})
 			}
-		case res := <-b.loadCh:
+		case res := <-b.LoadCh:
 			b.finishLoad(res)
 		case batch := <-b.ImageCh:
 			if !b.applyDeferredImageBatch(batch) {

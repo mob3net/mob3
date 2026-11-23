@@ -16,7 +16,7 @@ import (
 func newTestAutomation(t *testing.T, pages map[string]string) *Automation {
 	t.Helper()
 	a := NewAutomation(80, 24)
-	a.b.loadFn = func(_ context.Context, _ string, target string, _ []byte, _ string) (*Page, error) {
+	a.b.LoadFn = func(_ context.Context, _ string, target string, _ []byte, _ string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return nil, err
@@ -536,8 +536,8 @@ func TestAutomationSubmitPOST(t *testing.T) {
 		"/": `<html><body><form action="/post" method="post"><input name="q" value="old"></form></body></html>`,
 	})
 	var gotMethod, gotBody string
-	baseLoad := a.b.loadFn
-	a.b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	baseLoad := a.b.LoadFn
+	a.b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return nil, err

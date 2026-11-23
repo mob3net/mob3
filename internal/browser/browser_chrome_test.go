@@ -305,7 +305,7 @@ func TestHeaderClicks(t *testing.T) {
 	}
 
 	targetCh := make(chan string, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		select {
 		case targetCh <- target:
 		default:

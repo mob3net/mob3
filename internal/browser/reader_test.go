@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"net/url"
 	"strings"
 	"testing"
@@ -65,9 +66,9 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	nextURL, _ := url.Parse("https://example.com/new")
 	nextDoc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("New article text. ", 20) + `</p></article></body></html>`)
-	b.finishLoad(loadResult{
-		page: &Page{URL: nextURL, Base: nextURL, Root: nextDoc, Title: "New"},
-		u:    nextURL,
+	b.finishLoad(engine.LoadResult{
+		Page: &Page{URL: nextURL, Base: nextURL, Root: nextDoc, Title: "New"},
+		URL:  nextURL,
 	})
 	if !b.Reader || b.ReaderRoot == nil {
 		t.Fatal("reader mode did not survive navigation")
@@ -78,9 +79,9 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 
 	emptyURL, _ := url.Parse("https://example.com/empty")
 	emptyDoc := ParseHTML(`<html><body><nav>Menu only</nav></body></html>`)
-	b.finishLoad(loadResult{
-		page: &Page{URL: emptyURL, Base: emptyURL, Root: emptyDoc, Title: "Empty"},
-		u:    emptyURL,
+	b.finishLoad(engine.LoadResult{
+		Page: &Page{URL: emptyURL, Base: emptyURL, Root: emptyDoc, Title: "Empty"},
+		URL:  emptyURL,
 	})
 	if !b.Reader || b.ReaderRoot != nil {
 		t.Fatal("reader preference did not survive an unavailable page")
@@ -92,9 +93,9 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	lastURL, _ := url.Parse("https://example.com/last")
 	lastDoc := ParseHTML(`<html><body><article><p>` +
 		strings.Repeat("Last article text. ", 20) + `</p></article></body></html>`)
-	b.finishLoad(loadResult{
-		page: &Page{URL: lastURL, Base: lastURL, Root: lastDoc, Title: "Last"},
-		u:    lastURL,
+	b.finishLoad(engine.LoadResult{
+		Page: &Page{URL: lastURL, Base: lastURL, Root: lastDoc, Title: "Last"},
+		URL:  lastURL,
 	})
 	if !b.Reader || b.ReaderRoot == nil {
 		t.Fatal("reader mode did not resume on the next article")

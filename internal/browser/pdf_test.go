@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"bytes"
 	"compress/zlib"
 	"encoding/base64"
@@ -424,7 +425,7 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 	b := NewBrowser(80, 24)
 	b.setLoader(loader)
 	b.Reader = true
-	b.finishLoad(loadResult{page: page, u: page.URL})
+	b.finishLoad(engine.LoadResult{Page: page, URL: page.URL})
 	if b.ReaderRoot != nil {
 		t.Fatal("reader mode extracted the PDF page")
 	}

@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -706,7 +707,7 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	b.consolePane = consoleStorage
 	b.consoleEdit = true
 	withQuietStdout(t, func() {
-		b.finishLoad(loadResult{page: page, u: page.URL})
+		b.finishLoad(engine.LoadResult{Page: page, URL: page.URL})
 	})
 	if len(b.jsLog) != 1 || !strings.Contains(b.jsLog[0], "fresh") {
 		t.Fatalf("console log = %v, want only the new page log", b.jsLog)
@@ -726,7 +727,7 @@ func TestConsoleKeepsLogOnFailedNavigation(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.jsLog = []string{"[error] old"}
 	withQuietStdout(t, func() {
-		b.finishLoad(loadResult{err: errors.New("boom"), u: u})
+		b.finishLoad(engine.LoadResult{Err: errors.New("boom"), URL: u})
 	})
 	if len(b.jsLog) != 1 || b.jsLog[0] != "[error] old" {
 		t.Fatalf("failed navigation cleared the log: %v", b.jsLog)

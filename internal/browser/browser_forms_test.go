@@ -212,7 +212,7 @@ func TestInputTypingAndSubmit(t *testing.T) {
 	b.HandleKey("i")
 
 	targetCh := make(chan string, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		select {
 		case targetCh <- target:
 		default:
@@ -848,7 +848,7 @@ func TestMouseClickSubmitButton(t *testing.T) {
 		t.Fatal("button fragment not laid out")
 	}
 	targetCh := make(chan string, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		select {
 		case targetCh <- target:
 		default:
@@ -891,7 +891,7 @@ func TestHomeSearchFormUsesURLResolution(t *testing.T) {
 			t.Fatal("home page has no search form")
 		}
 		ch := make(chan string, 1)
-		b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 			ch <- target
 			return &Page{URL: mustParse(t, "https://example.com/"), Base: u, Root: ParseHTML("<html></html>")}, nil
 		}
@@ -945,7 +945,7 @@ func TestFormPOSTSubmission(t *testing.T) {
 		method, target, ctype, body string
 	}
 	ch := make(chan req, 1)
-	b.loadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
 		ch <- req{method: method, target: target, ctype: contentType, body: string(body)}
 		return &Page{URL: u, Base: u, Root: ParseHTML("<html></html>")}, nil
 	}

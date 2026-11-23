@@ -57,8 +57,6 @@ type Browser struct {
 	// History cache. The front end owns the ordered entry list and scroll
 	// offsets; the engine only keeps a bounded memory-only page cache keyed by
 	// the front-end entry ID.
-	entryID         uint64
-	nextEntryID     uint64
 	historyView     []string
 	historyViewCur  int
 	historyObserver func(protocol.HistoryCommit)
@@ -138,7 +136,6 @@ type Browser struct {
 	// jsPageBudget caps one page's load-time script phase. It defaults to
 	// jsPageBudget and exists as a field so tests can shorten it.
 
-	loadCh chan loadResult
 	// interactive marks the terminal UI, where a background dynamic import can
 	// wait for the event loop instead of blocking it.
 	// importCh delivers completed background dynamic imports to the event loop.
@@ -150,8 +147,6 @@ type Browser struct {
 	// the viewport approaches that row or the end of the document, so a batch
 	// far down the page cannot reflow and repaint the visible frame. Zero means
 	// nothing is pending.
-	cancelLoad context.CancelFunc
-	loadFn     func(context.Context, string, string, []byte, string) (*Page, error)
 
 	// pendingDownloadName carries a download attribute from the clicked link
 	// into the next load, so a non-renderable response keeps that filename.
@@ -247,30 +242,6 @@ type Browser struct {
 	consoleTabHits []consoleTabHit
 }
 
-type loadResult struct {
-	seq         int
-	page        *Page
-	err         error
-	u           *url.URL
-	method      string
-	body        []byte
-	contentType string
-	// entryID is the front-end history entry this load belongs to. The engine
-	// keys its page cache by it and reports the final URL under the same ID.
-	entryID uint64
-	// historyPush appends a new history entry on completion; false updates the
-	// entry in place (reload, replace or a back/forward restore).
-	historyPush bool
-	// restoreScroll, when set, overrides the usual start-at-top behaviour.
-	// It is used by history back/forward to return to the position the user
-	// last had on that entry.
-	restoreScroll    int
-	hasRestoreScroll bool
-	// downloadName is the anchor's download attribute, so a non-renderable
-	// response still offers the filename the page asked for.
-	downloadName string
-}
-
 // NewBrowser creates a browser with a viewport size.
 func NewBrowser(w, h int) *Browser {
 	if w < 20 {
@@ -285,13 +256,13 @@ func NewBrowser(w, h int) *Browser {
 			Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
 			CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
 			JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
-			Cache:   engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
-			ImageCh: make(chan engine.ImageBatch, 1),
+			Cache:       engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
+			ImageCh:     make(chan engine.ImageBatch, 1),
+			LoadCh:      make(chan engine.LoadResult, 1),
+			NextEntryID: 1,
 		},
 		loader:         loader,
-		nextEntryID:    1,
 		historyViewCur: -1,
-		loadCh:         make(chan loadResult, 1),
 		importCh:       make(chan jsImportTask, 16),
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),
@@ -402,14 +373,10 @@ func (b *Browser) Navigate(input string, push bool) {
 }
 
 // nextHistoryID allocates an opaque ID for a new front-end history entry.
-func (b *Browser) nextHistoryID() uint64 {
-	id := b.nextEntryID
-	b.nextEntryID++
-	return id
-}
+func (b *Browser) nextHistoryID() uint64 { return b.Session.NextHistoryID() }
 
 func (b *Browser) navigateRequest(method, input string, body []byte, contentType string, push bool) {
-	entryID, historyPush := b.entryID, push
+	entryID, historyPush := b.EntryID, push
 	if push || entryID == 0 {
 		entryID = b.nextHistoryID()
 		historyPush = true
@@ -420,7 +387,7 @@ func (b *Browser) navigateRequest(method, input string, body []byte, contentType
 // navigateRequestForce is navigateRequest with an optional one-shot block
 // bypass. It backs the "Try anyway" link (about:retry) on the blocked page.
 func (b *Browser) navigateRequestForce(method, input string, body []byte, contentType string, push bool, forceBlocks bool) {
-	entryID, historyPush := b.entryID, push
+	entryID, historyPush := b.EntryID, push
 	if push || entryID == 0 {
 		entryID = b.nextHistoryID()
 		historyPush = true
@@ -477,32 +444,25 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 			b.configNotice = "Settings not changed: use the Apply button on the config page"
 		}
 		page := b.configPage(u, applied)
-		b.finishLoad(loadResult{
-			seq: b.LoadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: protocol.MethodGet,
-			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
+		b.finishLoad(engine.LoadResult{
+			Seq: b.LoadSeq, Page: page, URL: u, EntryID: entryID, HistoryPush: historyPush, Method: protocol.MethodGet,
+			RestoreScroll: restoreScroll, HasRestoreScroll: hasRestoreScroll,
 		})
 		return
 	}
 	b.clearInputFocus()
 	b.suspendCurrentPage()
-	b.cancelLoadNow()
 	b.cancelDeferredImageLoad()
 	b.ImagesPaused = false
 	b.applyImageCap()
 	if b.loader != nil {
 		b.loader.beginPage()
 	}
-	b.LoadSeq++
-	seq := b.LoadSeq
-	ctx, cancel := context.WithCancel(context.Background())
-	b.cancelLoad = cancel
-	b.Loading = true
-	b.startProgress()
 	b.status = "Loading " + u.String() + " … (Esc stops)"
 	b.clearSelection()
 
 	target := u.String()
-	load := b.loadFn
+	load := b.LoadFn
 	if load == nil {
 		loader := b.loader
 		load = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
@@ -512,76 +472,15 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 			return loader.LoadRequest(ctx, method, target, body, contentType, nil)
 		}
 	}
-	go func() {
-		page, loadErr := load(ctx, method, target, body, contentType)
-		select {
-		case b.loadCh <- loadResult{
-			seq: seq, page: page, err: loadErr, u: u,
-			entryID: entryID, historyPush: historyPush,
-			method: method, body: body, contentType: contentType,
-			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
-			downloadName: downloadName,
-		}:
-		case <-ctx.Done():
-		}
-	}()
+	b.Session.BeginLoad(load, u, method, target, body, contentType, entryID, historyPush, restoreScroll, hasRestoreScroll, downloadName)
 }
 
-func (b *Browser) cancelLoadNow() {
-	if b.cancelLoad != nil {
-		b.cancelLoad()
-		b.cancelLoad = nil
-	}
-	b.Loading = false
-	b.clearProgress()
-}
-
-// startProgress resets the URL-row loading indicator for a new navigation.
-func (b *Browser) startProgress() {
-	b.Progress = 0.05
-	b.ProgressHold = 0
-}
-
-// finishProgress completes the indicator and leaves it visible briefly so the
-// end of a fast load is still perceptible.
-func (b *Browser) finishProgress() {
-	if b.Progress <= 0 {
-		return
-	}
-	b.Progress = 1
-	b.ProgressHold = progressLingerTicks
-}
-
-func (b *Browser) clearProgress() {
-	b.Progress = 0
-	b.ProgressHold = 0
-}
-
-// progressActive reports whether the event loop should keep ticking the
-// loading indicator.
-func (b *Browser) progressActive() bool {
-	return b.Loading || b.ProgressHold > 0
-}
-
-// tickProgress advances the indicator. It reports whether the bar changed
-// enough to justify a repaint.
-func (b *Browser) tickProgress() bool {
-	if b.Loading {
-		b.Progress += (0.9 - b.Progress) * 0.08
-		if b.Progress > 0.9 {
-			b.Progress = 0.9
-		}
-		return true
-	}
-	if b.ProgressHold > 0 {
-		b.ProgressHold--
-		if b.ProgressHold == 0 {
-			b.Progress = 0
-			return true
-		}
-	}
-	return false
-}
+func (b *Browser) cancelLoadNow()       { b.Session.CancelLoadNow() }
+func (b *Browser) startProgress()       { b.Session.StartProgress() }
+func (b *Browser) finishProgress()      { b.Session.FinishProgress() }
+func (b *Browser) clearProgress()       { b.Session.ClearProgress() }
+func (b *Browser) progressActive() bool { return b.Session.ProgressActive() }
+func (b *Browser) tickProgress() bool   { return b.Session.TickProgress() }
 
 // stopLoading aborts the in-flight page load and ignores its late result.
 func (b *Browser) stopLoading() {
@@ -604,8 +503,8 @@ func (b *Browser) stopLoading() {
 
 // finishLoad applies a completed load. Stale results from canceled navigations
 // are ignored.
-func (b *Browser) finishLoad(res loadResult) {
-	if res.seq != b.LoadSeq {
+func (b *Browser) finishLoad(res engine.LoadResult) {
+	if res.Seq != b.LoadSeq {
 		return
 	}
 	note := b.pendingStatus
@@ -626,29 +525,29 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.quitPending = false
 	b.jsErr = false
 	b.moduleErr = false
-	b.cancelLoad = nil
+	b.CancelLoad = nil
 	b.Loading = false
-	if res.err != nil {
+	if res.Err != nil {
 		b.AutoNavigations = 0
 		b.LoopStopped = false
-		b.status = "Error: " + res.err.Error()
+		b.status = "Error: " + res.Err.Error()
 		b.finishProgress()
 		if b.Page == nil {
-			doc := engine.LoadErrorPageHTML(res.err.Error())
+			doc := engine.LoadErrorPageHTML(res.Err.Error())
 			root := ParseHTML(doc)
-			page := &Page{URL: res.u, Base: res.u, Root: root, RawHTML: doc, Title: "Error", Status: 0}
+			page := &Page{URL: res.URL, Base: res.URL, Root: root, RawHTML: doc, Title: "Error", Status: 0}
 			engine.ApplyPageStyles(root, page)
 			b.Page = page
-			b.URL = res.u
+			b.URL = res.URL
 			b.rebuild()
 		}
 		return
 	}
-	page := res.page
-	if page != nil && page.Download && res.method == protocol.MethodGet && page.URL != nil {
+	page := res.Page
+	if page != nil && page.Download && res.Method == protocol.MethodGet && page.URL != nil {
 		name := page.DownloadName
-		if res.downloadName != "" {
-			name = res.downloadName
+		if res.DownloadName != "" {
+			name = res.DownloadName
 		}
 		b.showDownload(page.URL.String(), name)
 		b.status = "Download link — y copies the curl command"
@@ -659,14 +558,14 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.Page = page
 	b.URL = page.URL
 	b.ImagesPaused = false
-	if b.URL != nil && res.u != nil && res.u.Fragment != "" && b.URL.Fragment == "" {
+	if b.URL != nil && res.URL != nil && res.URL.Fragment != "" && b.URL.Fragment == "" {
 		u := *b.URL
-		u.Fragment = res.u.Fragment
+		u.Fragment = res.URL.Fragment
 		b.URL = &u
 	}
-	b.LastMethod = res.method
-	b.LastBody = res.body
-	b.LastContentType = res.contentType
+	b.LastMethod = res.Method
+	b.LastBody = res.Body
+	b.LastContentType = res.ContentType
 	b.Layout = nil
 	b.BigTextBlocked = false
 	// <noscript> is not active when scripting is enabled. Remove it before
@@ -684,7 +583,7 @@ func (b *Browser) finishLoad(res loadResult) {
 			// one history entry; Back should skip the redirecting page rather
 			// than land on it and be forwarded again.
 			b.AutoNavigations++
-			b.navigateRequestEntry(protocol.MethodGet, target, nil, "", res.entryID, res.historyPush, false)
+			b.navigateRequestEntry(protocol.MethodGet, target, nil, "", res.EntryID, res.HistoryPush, false)
 			return
 		}
 	}
@@ -692,7 +591,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.startJS(page)
 	// A navigation queued by the page's own load-time scripts is also a
 	// client redirect: keep the same history entry instead of adding one.
-	if b.applyPendingJS(true, res.entryID, res.historyPush) {
+	if b.applyPendingJS(true, res.EntryID, res.HistoryPush) {
 		return
 	}
 	if b.LoopStopped {
@@ -727,29 +626,29 @@ func (b *Browser) finishLoad(res loadResult) {
 	case note != "" && b.status == "":
 		b.status = note
 	}
-	if frag := res.u.Fragment; frag != "" {
+	if frag := res.URL.Fragment; frag != "" {
 		b.scrollToAnchor(frag)
 	}
-	if res.hasRestoreScroll {
-		b.Scroll = res.restoreScroll
+	if res.HasRestoreScroll {
+		b.Scroll = res.RestoreScroll
 		b.clampScroll()
 	}
-	if !res.historyPush && b.entryID == 0 {
+	if !res.HistoryPush && b.EntryID == 0 {
 		// A replace with no current entry does not create one, matching the
 		// old replaceHistoryEntry path (about:retry from a failed first load).
-		res.entryID = 0
+		res.EntryID = 0
 	}
-	b.entryID = res.entryID
-	if b.URL != nil && res.entryID != 0 {
-		if !res.historyPush {
-			b.dropCachedEntryUnless(res.entryID, b.URL.String())
+	b.EntryID = res.EntryID
+	if b.URL != nil && res.EntryID != 0 {
+		if !res.HistoryPush {
+			b.dropCachedEntryUnless(res.EntryID, b.URL.String())
 		}
 		title := ""
 		if b.Page != nil {
 			title = b.Page.Title
 		}
 		b.emitHistoryCommit(protocol.HistoryCommit{
-			EntryID: res.entryID, URL: b.URL.String(), Title: title, Scroll: b.Scroll, Push: res.historyPush,
+			EntryID: res.EntryID, URL: b.URL.String(), Title: title, Scroll: b.Scroll, Push: res.HistoryPush,
 		})
 	}
 	b.AutoNavigations = 0
@@ -816,7 +715,7 @@ func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bo
 	if duringLoad {
 		b.navigateRequestEntry(protocol.MethodGet, target, nil, "", entryID, historyPush, false)
 	} else if replace {
-		b.navigateRequestEntry(protocol.MethodGet, target, nil, "", b.entryID, false, false)
+		b.navigateRequestEntry(protocol.MethodGet, target, nil, "", b.EntryID, false, false)
 	} else {
 		b.Navigate(target, true)
 	}
@@ -1290,7 +1189,7 @@ func (b *Browser) followLink(li *LinkInfo) {
 						b.status = readerLinkUnavailable
 						return
 					}
-					b.entryID = b.nextHistoryID()
+					b.EntryID = b.nextHistoryID()
 					b.URL = u
 					b.status = ""
 					b.prev = nil
@@ -1299,7 +1198,7 @@ func (b *Browser) followLink(li *LinkInfo) {
 						title = b.Page.Title
 					}
 					b.emitHistoryCommit(protocol.HistoryCommit{
-						EntryID: b.entryID, URL: u.String(), Title: title, Scroll: b.Scroll, Push: true,
+						EntryID: b.EntryID, URL: u.String(), Title: title, Scroll: b.Scroll, Push: true,
 					})
 					return
 				}

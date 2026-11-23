@@ -90,6 +90,11 @@ type Session struct {
 	LastBody            []byte
 	LastContentType     string
 	LoadSeq             int
+	LoadCh              chan LoadResult
+	CancelLoad          context.CancelFunc
+	LoadFn              LoadFunc
+	EntryID             uint64
+	NextEntryID         uint64
 	NextScroll          int
 	NextScrollSet       bool
 	PendingDownloadName string
@@ -112,7 +117,9 @@ type Session struct {
 }
 
 // NewSession creates an empty page session.
-func NewSession() *Session { return &Session{ImageCh: make(chan ImageBatch, 1)} }
+func NewSession() *Session {
+	return &Session{ImageCh: make(chan ImageBatch, 1), LoadCh: make(chan LoadResult, 1), NextEntryID: 1}
+}
 
 // PageKind classifies the current page for the shell.
 func (s *Session) PageKind() protocol.PageKind {
