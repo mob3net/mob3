@@ -1094,7 +1094,7 @@ func TestXHRLocalNetworkGuard(t *testing.T) {
 	})
 	page := newJSPage(`<html><body></body></html>`, "")
 	j := newJSRuntime(b, page)
-	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil); !errors.Is(err, errLocalNetworkBlocked) {
+	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil, false); !errors.Is(err, errLocalNetworkBlocked) {
 		t.Fatalf("public-page XHR error = %v, want local-network block", err)
 	}
 	if reached {
@@ -1104,7 +1104,7 @@ func TestXHRLocalNetworkGuard(t *testing.T) {
 	page.Local = true
 	page.URL = mustURL(t, "http://127.0.0.1:3000/")
 	page.Base = page.URL
-	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil); err != nil {
+	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://127.0.0.1:8080/x"), nil, nil, false); err != nil {
 		t.Fatalf("local-page XHR was blocked: %v", err)
 	}
 	if !reached {
@@ -1276,7 +1276,7 @@ func TestXHRMixedContent(t *testing.T) {
 	})
 	page := newJSPage(`<html><body></body></html>`, "")
 	j := newJSRuntime(b, page)
-	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil); !errors.Is(err, errMixedContentBlocked) {
+	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil, false); !errors.Is(err, errMixedContentBlocked) {
 		t.Fatalf("secure-page XHR error = %v, want mixed-content block", err)
 	}
 	if reached {
@@ -1284,7 +1284,7 @@ func TestXHRMixedContent(t *testing.T) {
 	}
 	// The same request is allowed from an insecure document.
 	page.URL = mustURL(t, "http://example.com/")
-	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil); err != nil {
+	if _, _, _, _, _, err := j.HTTPXHR("fetch", "GET", mustURL(t, "http://example.com/x"), nil, nil, false); err != nil {
 		t.Fatalf("insecure-page XHR was blocked: %v", err)
 	}
 	if !reached {

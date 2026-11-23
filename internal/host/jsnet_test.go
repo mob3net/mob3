@@ -121,3 +121,39 @@ func TestJSFetchBlocksPublicPageToLocal(t *testing.T) {
 		t.Fatalf("error = %v, want ErrLocalNetworkBlocked", err)
 	}
 }
+
+func TestJSFetchNoCORSSkipsCORSResponseCheck(t *testing.T) {
+	var gotOrigin string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotOrigin = r.Header.Get("Origin")
+		_, _ = w.Write([]byte("ping"))
+	}))
+	defer srv.Close()
+	f := testJSFetcher(t, nil)
+	resp, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "GET", Origin: "http://other.example",
+		Purpose: protocol.FetchFetch, Kind: "fetch", NoCORS: true, PageLocal: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != 200 || string(resp.Body) != "ping" {
+		t.Fatalf("response = %d %q", resp.Status, resp.Body)
+	}
+	if gotOrigin != "" {
+		t.Fatalf("no-cors request sent Origin %q", gotOrigin)
+	}
+}
+
+func TestJSFetchNoCORSStillRejectsNonSimple(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	f := testJSFetcher(t, nil)
+	_, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "PUT", Origin: "http://other.example",
+		Purpose: protocol.FetchFetch, Kind: "fetch", NoCORS: true, PageLocal: true,
+	})
+	if err == nil {
+		t.Fatal("non-simple no-cors request was allowed")
+	}
+}

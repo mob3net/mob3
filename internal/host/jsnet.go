@@ -78,7 +78,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	}
 	httpReq.Header.Set("User-Agent", f.Settings.UserAgent())
 	httpReq.Header.Set("Accept", "*/*")
-	if crossOrigin {
+	if crossOrigin && !req.NoCORS {
 		httpReq.Header.Set("Origin", urlOrigin(origin))
 	}
 	for k, v := range headers {
@@ -121,7 +121,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	}
 	out.ContentType = resp.Header.Get("Content-Type")
 	out.Headers = responseHeaders(resp.Header, crossOrigin)
-	if crossOrigin && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
+	if crossOrigin && !req.NoCORS && !corsAllowed(resp.Header.Get("Access-Control-Allow-Origin"), origin) {
 		return out, errors.New("cross-origin response blocked by CORS")
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResourceSize+1))

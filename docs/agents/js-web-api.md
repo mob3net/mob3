@@ -20,7 +20,8 @@ Works well:
   `preventDefault`, `composedPath` on scripted and browser-generated events,
   `element.click()`.
 - Network: `fetch`, `Headers`/`Request`/`Response`, `XMLHttpRequest`, cookies,
-  same-origin and simple CORS cross-origin requests, `URL`/`URLSearchParams`.
+  same-origin, simple CORS cross-origin requests and `fetch` with
+  `mode: "no-cors"` (opaque response), `URL`/`URLSearchParams`.
 - Storage: in-memory `localStorage`/`sessionStorage` (`getItem`/`setItem`/
   `removeItem`/`clear`, `length`, and named property get/set/delete) and
   `document.cookie`.
@@ -83,8 +84,9 @@ Known unsupported families (do not present these as available):
   Intersection/Resize/Performance observers (observers fire one synthetic
   entry), iframe browsing contexts (inert stub), video/audio playback,
   `form.elements` (HTMLFormControlsCollection) and `form.requestSubmit()`.
-- Network/browser: streaming fetch, upload progress, CORS preflight and
-  credentialed cross-origin requests, `sendBeacon`,
+- Network/browser: streaming fetch, upload progress, CORS preflight,
+  credentialed cross-origin requests, readable `no-cors` responses (they are
+  opaque: status 0, empty body and headers), `sendBeacon`,
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,

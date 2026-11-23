@@ -335,6 +335,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 	method := "GET"
 	body := ""
 	headers := map[string][]string{}
+	mode := "cors"
 	if ro := jsObject(input); ro != nil {
 		u := ro.Get("url")
 		if u == nil || sobek.IsUndefined(u) || sobek.IsNull(u) || u.String() == "" {
@@ -350,6 +351,9 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 		if b := ro.Get("body"); b != nil && !sobek.IsUndefined(b) && !sobek.IsNull(b) {
 			body = b.String()
 		}
+		if v := ro.Get("mode"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) && v.String() != "" {
+			mode = v.String()
+		}
 	} else {
 		target = input.String()
 	}
@@ -362,6 +366,9 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 		}
 		if b := init.Get("body"); b != nil && !sobek.IsUndefined(b) && !sobek.IsNull(b) {
 			body = b.String()
+		}
+		if v := init.Get("mode"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) && v.String() != "" {
+			mode = v.String()
 		}
 		if sig := jsObject(init.Get("signal")); sig != nil && j.eventFlag(sig, "aborted") {
 			return failAbort()
@@ -385,15 +392,32 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 		return fail("Cross-origin fetch blocked")
 	}
 	method = strings.ToUpper(method)
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = "cors"
+	}
+	switch mode {
+	case "cors", "no-cors", "same-origin":
+	default:
+		return fail("Invalid fetch mode: " + mode)
+	}
+	crossOrigin := !sameOrigin(u, j.page.URL)
+	if mode == "same-origin" && crossOrigin {
+		return fail("Cross-origin fetch blocked")
+	}
 	reqHeaders := make(map[string]string, len(headers))
 	for k, vs := range headers {
 		if len(vs) > 0 {
 			reqHeaders[canonicalHeaderKey(k)] = strings.Join(vs, ", ")
 		}
 	}
-	status, data, ctype, respHeaders, final, err := j.HTTPXHR("fetch", method, u, []byte(body), reqHeaders)
+	status, data, ctype, respHeaders, final, err := j.HTTPXHR("fetch", method, u, []byte(body), reqHeaders, mode == "no-cors")
 	if err != nil {
 		return fail(err.Error())
+	}
+	if mode == "no-cors" && crossOrigin {
+		_ = resolve(j.responseValue(&fetchResponse{typ: "opaque"}))
+		return j.vm.ToValue(p)
 	}
 	finalURL := u.String()
 	if final != nil {
@@ -412,6 +436,7 @@ func (j *jsRuntime) fetchFunc(call sobek.FunctionCall) sobek.Value {
 }
 
 type fetchResponse struct {
+	typ        string
 	status     int
 	text       string
 	url        string
@@ -429,7 +454,11 @@ func (j *jsRuntime) responseValue(st *fetchResponse) *sobek.Object {
 	_ = o.Set("ok", st.status >= 200 && st.status <= 299)
 	_ = o.Set("url", st.url)
 	_ = o.Set("redirected", st.redirected)
-	_ = o.Set("type", "basic")
+	typ := st.typ
+	if typ == "" {
+		typ = "basic"
+	}
+	_ = o.Set("type", typ)
 	_ = o.Set("headers", j.headersValue(st.headers))
 	j.accessor(o, "bodyUsed", func() sobek.Value { return j.vm.ToValue(used) }, nil)
 	bodyText := j.host.DecodeBody(st.data, st.ctype)
@@ -635,6 +664,7 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 	method := "GET"
 	body := ""
 	headers := map[string][]string{}
+	mode := "cors"
 	if ro := jsObject(input); ro != nil {
 		if v := ro.Get("url"); v != nil && !sobek.IsUndefined(v) {
 			target = v.String()
@@ -648,6 +678,9 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 		if v := ro.Get("body"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			body = v.String()
 		}
+		if v := ro.Get("mode"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) && v.String() != "" {
+			mode = v.String()
+		}
 	}
 	if init != nil {
 		if v := init.Get("method"); v != nil && !sobek.IsUndefined(v) && v.String() != "" {
@@ -658,6 +691,9 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 		}
 		if v := init.Get("body"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) {
 			body = v.String()
+		}
+		if v := init.Get("mode"); v != nil && !sobek.IsUndefined(v) && !sobek.IsNull(v) && v.String() != "" {
+			mode = v.String()
 		}
 	}
 	base := j.page.Base
@@ -674,6 +710,7 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 	_ = o.Set("method", strings.ToUpper(method))
 	_ = o.Set("headers", j.headersObject(headers))
 	_ = o.Set("body", body)
+	_ = o.Set("mode", strings.ToLower(strings.TrimSpace(mode)))
 	_ = o.Set("bodyUsed", false)
 	j.method(o, "clone", func(sobek.FunctionCall) sobek.Value {
 		cp := j.vm.NewObject()
@@ -681,6 +718,7 @@ func (j *jsRuntime) newRequestObject(call sobek.FunctionCall) sobek.Value {
 		_ = cp.Set("method", strings.ToUpper(method))
 		_ = cp.Set("headers", j.headersObject(headers))
 		_ = cp.Set("body", body)
+		_ = cp.Set("mode", strings.ToLower(strings.TrimSpace(mode)))
 		_ = cp.Set("bodyUsed", false)
 		return cp
 	})
@@ -878,7 +916,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 		st.readyState = 3
 		j.fireXHR(st, "readystatechange")
 
-		status, data, ctype, headers, final, err := j.HTTPXHR("xhr", st.method, st.url, body, st.reqHeaders)
+		status, data, ctype, headers, final, err := j.HTTPXHR("xhr", st.method, st.url, body, st.reqHeaders, false)
 		st.readyState = 4
 		if err != nil {
 			st.status = 0
@@ -948,7 +986,7 @@ func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	}
 }
 
-func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string) (status int, data []byte, ctype string, headers map[string][]string, final *url.URL, err error) {
+func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte, reqHeaders map[string]string, noCORS bool) (status int, data []byte, ctype string, headers map[string][]string, final *url.URL, err error) {
 	if len(body) > maxResourceSize {
 		return 0, nil, "", nil, nil, errors.New("request body too large")
 	}
@@ -966,6 +1004,7 @@ func (j *jsRuntime) HTTPXHR(kind string, method string, u *url.URL, body []byte,
 		Purpose:     purpose,
 		Origin:      j.page.URL.String(),
 		Credentials: true,
+		NoCORS:      noCORS,
 		Kind:        kind,
 		PageLocal:   j.page.Local,
 	}

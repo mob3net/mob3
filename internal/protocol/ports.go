@@ -49,6 +49,10 @@ type FetchRequest struct {
 	Purpose     FetchPurpose
 	Origin      string
 	Credentials bool
+	// NoCORS marks a fetch with mode "no-cors". The host skips the CORS
+	// response check and does not send Origin; the engine turns a cross-origin
+	// result into an opaque response.
+	NoCORS bool
 	// Kind is the request-log label ("fetch", "xhr", "js", …).
 	Kind string
 	// PageLocal records whether the initiating document may reach local

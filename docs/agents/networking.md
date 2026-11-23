@@ -58,10 +58,13 @@ agreement, the non-negotiable constraints and the change protocol.
   same-origin requests (default ports normalized). Simple cross-origin requests
   (GET/HEAD/POST with safelisted headers) are sent with an `Origin` header and
   succeed only when the response carries `Access-Control-Allow-Origin` for the
-  page origin or `*`; cross-origin cookies are not sent. Preflight, credentialed
-  cross-origin requests and same-origin-to-cross-origin redirects are not
-  supported. Cross-origin responses without a matching CORS header fail, so
-  cookies cannot be read cross-site through XHR or fetch.
+  page origin or `*`; cross-origin cookies are not sent. `fetch` with
+  `mode: "no-cors"` is sent without `Origin` and skips the CORS response check;
+  the engine receives an opaque response (status 0, empty body and headers).
+  Non-simple no-cors requests still fail. Preflight, credentialed cross-origin
+  requests and same-origin-to-cross-origin redirects are not supported.
+  CORS cross-origin responses without a matching header fail, so cookies cannot
+  be read cross-site through XHR or fetch.
 - **Local-network guard:** a document loaded from a public `http`/`https`
   address may not fetch subresources, `fetch` or XHR from loopback, RFC 1918 or
   ULA private, link-local, CGNAT or reserved addresses. Literal hosts and local

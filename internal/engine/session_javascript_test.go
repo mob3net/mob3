@@ -1886,3 +1886,64 @@ func TestJSScriptInnerHTMLIsRawText(t *testing.T) {
 		t.Fatalf("innerHTML = %q, want %q (log: %s)", got, want, strings.Join(b.jsLog, "; "))
 	}
 }
+
+func TestJSFetchNoCORSReturnsOpaque(t *testing.T) {
+	loader := newTestLoader()
+	calls := 0
+	gotOrigin := ""
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		gotOrigin = req.Header.Get("Origin")
+		return &http.Response{
+			StatusCode: 204, Status: "204 No Content", Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader("ignored")), Request: req,
+		}, nil
+	})})
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("https://other.example/ping", {mode: "no-cors"})
+			.then(function (r) {
+				return r.text().then(function (text) {
+					document.title = [r.type, r.status, r.ok, r.url, r.headers.get("X-Test") || "", text].join("|");
+				});
+			})
+			.catch(function (e) { document.title = "error:" + e; });
+	`)
+	b := NewSession(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if calls != 1 {
+		t.Fatalf("no-cors fetch made %d requests, want 1", calls)
+	}
+	if gotOrigin != "" {
+		t.Fatalf("no-cors request sent Origin %q", gotOrigin)
+	}
+	if want := "opaque|0|false|||"; page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
+	}
+}
+
+func TestJSFetchRequestObjectNoCORS(t *testing.T) {
+	loader := newTestLoader()
+	calls := 0
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader("ignored")), Request: req,
+		}, nil
+	})})
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch(new Request("https://other.example/ping", {mode: "no-cors"}))
+			.then(function (r) { document.title = r.type + "|" + r.status; })
+			.catch(function (e) { document.title = "error:" + e; });
+	`)
+	b := NewSession(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if calls != 1 {
+		t.Fatalf("request-object no-cors fetch made %d requests, want 1", calls)
+	}
+	if want := "opaque|0"; page.Title != want {
+		t.Fatalf("title = %q, want %q", page.Title, want)
+	}
+}
