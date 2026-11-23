@@ -102,7 +102,7 @@ func TestAsyncImportsShareModuleRecords(t *testing.T) {
 			t.Fatal(err)
 		}
 		select {
-		case task := <-b.importCh:
+		case task := <-b.ImportCh:
 			b.finishJSImport(task)
 		case <-time.After(5 * time.Second):
 			t.Fatal("background import did not complete")
@@ -126,7 +126,7 @@ func TestAsyncDynamicImportCompletes(t *testing.T) {
 		t.Fatal(err)
 	}
 	select {
-	case task := <-b.importCh:
+	case task := <-b.ImportCh:
 		b.finishJSImport(task)
 	case <-time.After(5 * time.Second):
 		t.Fatal("background import did not complete")

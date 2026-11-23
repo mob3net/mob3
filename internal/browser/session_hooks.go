@@ -1,6 +1,11 @@
 package browser
 
-import "browser/internal/protocol"
+import (
+	"time"
+
+	"browser/internal/engine"
+	"browser/internal/protocol"
+)
 
 func (b *Browser) BeginPage() {
 	if b.loader != nil {
@@ -32,6 +37,11 @@ func (b *Browser) NavigateRequest(method, target string, body []byte, contentTyp
 }
 func (b *Browser) ActivateHintControl(n *Node, r Rect) { b.activateHintControl(n, r) }
 func (b *Browser) OpenSelectMenu(n *Node)              { b.openSelectMenu(n) }
+func (b *Browser) ConsoleOpen() bool                   { return b.consoleOpen }
+func (b *Browser) HoverRebuild() (bool, time.Time)     { return b.hoverRebuildPending, b.hoverRebuildAt }
+func (b *Browser) ClearHoverRebuild()                  { b.hoverRebuildPending = false }
+func (b *Browser) NewJSHost() engine.JSHost            { return newJSHost(b) }
+func (b *Browser) SetModuleErr(v bool)                 { b.moduleErr = v }
 func (b *Browser) StartJS(page *Page)                  { b.startJS(page) }
 func (b *Browser) ApplyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool {
 	return b.applyPendingJS(duringLoad, entryID, historyPush)

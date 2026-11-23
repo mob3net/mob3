@@ -53,7 +53,7 @@ func (h browserJSHost) ShowUploadNotice()             { h.b.showUploadNotice() }
 func (h browserJSHost) QueueFormSubmit(form *Node)    { h.b.queueFormSubmit(form) }
 func (h browserJSHost) Interactive() bool             { return h.b.Interactive }
 func (h browserJSHost) AbortGen() uint64              { return h.b.abortGen.Load() }
-func (h browserJSHost) ImportCh() chan<- jsImportTask { return h.b.importCh }
+func (h browserJSHost) ImportCh() chan<- jsImportTask { return h.b.ImportCh }
 
 func (h browserJSHost) UserAgent() string {
 	if h.b.loader == nil {

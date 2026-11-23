@@ -2,6 +2,7 @@ package engine
 
 import (
 	"net/url"
+	"time"
 
 	"browser/internal/protocol"
 )
@@ -32,6 +33,11 @@ type SessionHooks interface {
 	NavigateRequest(method, target string, body []byte, contentType string, push bool)
 	ActivateHintControl(*Node, Rect)
 	OpenSelectMenu(*Node)
+	ConsoleOpen() bool
+	HoverRebuild() (pending bool, at time.Time)
+	ClearHoverRebuild()
+	NewJSHost() JSHost
+	SetModuleErr(bool)
 }
 
 // ApplyLoadResult applies a completed navigation result. Stale results are

@@ -99,7 +99,7 @@ destination; the tracker lists what remains.
   interactive terminal/session boot; it still imports `internal/browser` for
   loader/session construction, the dump handler, automation types and the build
   version. `app → browser` is the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 309-method `Browser`,
+- `internal/browser/` still holds the session shell: the 318-method `Browser`,
   input resolution and the config-page branch, form and JS lifecycle adapters,
   fallback chrome/overlay/dialog/console rendering, loader fetch orchestration
   through `protocol.Host`, automation, and most integration tests. `Browser` embeds `engine.Session`, which now owns page,
@@ -223,7 +223,7 @@ destination; the tracker lists what remains.
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
 | `internal/browser/output.go` | Injected terminal writer for the legacy direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/browser/host_port.go` | Host-session factory injection so new loaders get a `protocol.Host` without importing `internal/host`. |
-| `internal/browser/session_hooks.go` | `engine.SessionHooks` implementation: JS start, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
+| `internal/browser/session_hooks.go` | `engine.SessionHooks` implementation: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
 | `internal/browser/pdf.go` | Thin PDF loader bridge over `engine.AssemblePDFPage`. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
@@ -279,12 +279,13 @@ destination; the tracker lists what remains.
 | `internal/engine/history_cache.go` | Back/forward cache glue: cache limit and page cap, cache/suspend the current page, entry removal, drop-all and the one-shot scavenge request. |
 | `internal/engine/session_apply.go` | Load-result application and cached-page restore, driven through the `SessionHooks` trusted-shell effects (JS, console, modals, rebuild, status, download and history commit). |
 | `internal/engine/forms.go` | Form editing and focus: Tab order, control activation/stepping, text/range editing, submission, label targets and form requests, with UI/JS effects supplied by `SessionHooks`. |
+| `internal/engine/js_life.go` | JS runtime lifecycle: start/stop, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. |
 | `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
 | `js_compat.go` | Browser aliases and constructor for the engine runtime. |
-| `js_life.go` | Browser JS lifecycle: `startJS`, stop, timer loop and dynamic-import completion; moves with the engine session. |
+| `js_life.go` | Thin wrappers over the engine JS lifecycle (`StartJS`/`StopJS`, timer delays, redraw throttling and import completion). |
 | `js_host.go` | `browserJSHost`: the browser implementation of the engine contract; becomes the engine session adapter after the split. |
 | `internal/engine/js_dom.go` | DOM wrappers: document/element/text objects, selectors, attributes plus a live NamedNodeMap-style `element.attributes`, reflected HTMLElement properties (`hidden`, `title`, `lang`, `dir`, `tabIndex`, `contentEditable`, `draggable`, `inert`, …), `innerHTML`, style and class lists, canvas placeholders. Measurement resolves from the laid-out fragments, and a script-created element gets its style computed on demand so `getComputedStyle`/`offsetWidth` see its rules before the next rebuild. The property and method API is defined once on the element/text prototypes and resolves its node from the receiver, so a wrapper costs only its node fields; the `dataset` proxy is built lazily and cached per element. The document wrapper also carries the Node mutation methods and element-child views (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `contains`, `hasChildNodes`, `firstChild`/`lastChild`, `firstElementChild`/`lastElementChild`, `children`), because frameworks that hydrate with `document` as the root container call them on the document itself. `<template>.content` is a real inert fragment, and a node whose tag has a registered custom element class is constructed with that class when first wrapped. |
 | `internal/engine/js_events.go` | Event constructors (`Event`, `CustomEvent`, `MouseEvent`, `KeyboardEvent` and friends), `document.createEvent`, `dispatchEvent`, `MessageChannel` and `MutationObserver` stubs; HTML/SVG element constructor globals and prototype chains for `instanceof` checks. The DOM API is installed on `Element.prototype`, so SVG elements (which extend `Element`, not `HTMLElement`) inherit `appendChild`, `setAttribute` and the rest. |

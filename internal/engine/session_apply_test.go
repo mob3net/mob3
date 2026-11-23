@@ -2,6 +2,7 @@ package engine
 
 import (
 	"testing"
+	"time"
 
 	"browser/internal/protocol"
 )
@@ -29,6 +30,11 @@ func (h *testSessionHooks) Navigate(string, bool)                               
 func (h *testSessionHooks) NavigateRequest(string, string, []byte, string, bool)             {}
 func (h *testSessionHooks) ActivateHintControl(*Node, Rect)                                  {}
 func (h *testSessionHooks) OpenSelectMenu(*Node)                                             {}
+func (h *testSessionHooks) ConsoleOpen() bool                                                { return false }
+func (h *testSessionHooks) HoverRebuild() (bool, time.Time)                                  { return false, time.Time{} }
+func (h *testSessionHooks) ClearHoverRebuild()                                               {}
+func (h *testSessionHooks) NewJSHost() JSHost                                                { return nil }
+func (h *testSessionHooks) SetModuleErr(bool)                                                {}
 func (h *testSessionHooks) TakePendingStatus() string                                        { return "" }
 func (h *testSessionHooks) ShowDownload(string, string)                                      {}
 func (h *testSessionHooks) EmitHistoryCommit(c protocol.HistoryCommit) {

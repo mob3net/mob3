@@ -124,7 +124,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 			if !b.applyDeferredImageBatch(batch) {
 				b.skipDraw = true
 			}
-		case task := <-b.importCh:
+		case task := <-b.ImportCh:
 			b.finishJSImport(task)
 			if b.JS != nil && b.JS.ConsumeDirty() {
 				b.rebuild()

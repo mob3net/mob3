@@ -135,8 +135,6 @@ type Browser struct {
 
 	// interactive marks the terminal UI, where a background dynamic import can
 	// wait for the event loop instead of blocking it.
-	// importCh delivers completed background dynamic imports to the event loop.
-	importCh chan jsImportTask
 	// imageTotal and imageDone drive the loading bar and footer count while a
 	// deferred image batch is in flight.
 	// pendingImageRow is the topmost laid-out row of images whose decoded data
@@ -253,11 +251,11 @@ func NewBrowser(w, h int) *Browser {
 			Cache:       engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
 			ImageCh:     make(chan engine.ImageBatch, 1),
 			LoadCh:      make(chan engine.LoadResult, 1),
+			ImportCh:    make(chan engine.ImportTask, 16),
 			NextEntryID: 1,
 		},
 		loader:         loader,
 		historyViewCur: -1,
-		importCh:       make(chan jsImportTask, 16),
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),
 	}
