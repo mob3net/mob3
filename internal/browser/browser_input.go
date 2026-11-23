@@ -415,14 +415,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		b.handleSelectMenuMouse(ev)
 		return false
 	}
-	if b.viewMenu != nil {
-		b.handleViewMenuMouse(ev)
-		return false
-	}
-	if b.zoomMenu != nil {
-		b.handleZoomMenuMouse(ev)
-		return false
-	}
 	if b.prompt {
 		if ev.Motion || ev.Wheel != 0 || !ev.Press {
 			return false
@@ -432,11 +424,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		for _, hit := range b.headerHits {
 			if x < hit.x || x >= hit.x+hit.w || y < hit.y || y >= hit.y+hit.h {
 				continue
-			}
-			if hit.kind == headerZoom {
-				b.closeURLPrompt()
-				b.openZoomMenu()
-				return false
 			}
 			if hit.kind == headerURL {
 				b.promptCursor = b.promptOffsetAt(x-hit.x, hit.w)
@@ -521,8 +508,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					b.setInputFocus(nil)
 				}
 				b.openURLPrompt()
-			case headerZoom:
-				b.openZoomMenu()
 			}
 			return false
 		}
@@ -731,12 +716,6 @@ func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 	if b.selectMenu != nil {
 		return true, b.handleSelectMenuKey(k)
 	}
-	if b.viewMenu != nil {
-		return true, b.handleViewMenuKey(k)
-	}
-	if b.zoomMenu != nil {
-		return true, b.handleZoomMenuKey(k)
-	}
 	if b.consoleOpen {
 		return true, b.handleConsoleKey(k)
 	}
@@ -831,10 +810,6 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.openLinkHints(true)
 	case "i":
 		b.cycleGraphics()
-	case "X":
-		b.openViewMenu()
-	case "Z":
-		b.openZoomMenu()
 	case "u":
 		if b.URL != nil {
 			b.status = b.URL.String()

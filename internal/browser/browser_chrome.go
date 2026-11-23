@@ -743,10 +743,6 @@ func (b *Browser) paintShellOverlays(g *Grid) {
 		b.paintNotice(g)
 	case b.selectMenu != nil && !b.selectFrontend:
 		b.paintSelectMenu(g)
-	case b.viewMenu != nil:
-		b.paintViewMenu(g)
-	case b.zoomMenu != nil:
-		b.paintZoomMenu(g)
 	}
 }
 

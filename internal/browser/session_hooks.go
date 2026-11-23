@@ -22,10 +22,6 @@ func (b *Browser) ResetUI() {
 	b.downloadFrontend = false
 	b.noticeFrontend = false
 	b.HintsFrontend = false
-	b.viewMenu = nil
-	b.viewMenuHits = nil
-	b.zoomMenu = nil
-	b.zoomMenuHits = nil
 	b.quitPending = false
 	b.jsErr = false
 	b.moduleErr = false

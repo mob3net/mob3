@@ -862,19 +862,19 @@ func TestModalDisablesScaledText(t *testing.T) {
 	if !b.BigText {
 		t.Fatal("scaled text should be enabled in kitty by default")
 	}
-	b.HandleKey("X")
+	b.selectMenu = &selectMenuDialog{}
 	drawQuiet(b)
 	if b.BigText {
-		t.Fatal("scaled text stayed on while the view modal was open")
+		t.Fatal("scaled text stayed on while a modal was open")
 	}
-	b.HandleKey("esc")
+	b.selectMenu = nil
 	drawQuiet(b)
 	if !b.BigText {
 		t.Fatal("scaled text did not return after the modal closed")
 	}
 }
 
-func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
+func TestZoomBadgeShows(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.Zoom = 1.5
 	drawQuiet(b)
@@ -902,90 +902,6 @@ func TestZoomBadgeShowsAndOpensMenu(t *testing.T) {
 	if line := plainLine(b.prev[1]); !strings.Contains(line, "150%") {
 		t.Fatalf("URL row = %q, want the 150%% badge", line)
 	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: badge.x + 1, Y: badge.y + 1, Press: true})
-	})
-	if b.zoomMenu == nil {
-		t.Fatal("clicking the zoom badge did not open the zoom window")
-	}
-	if b.Zoom != 1.5 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
-	}
-	drawQuiet(b)
-	var row *zoomMenuHit
-	for i := range b.zoomMenuHits {
-		if b.zoomMenuHits[i].idx == 4 { // 100%
-			row = &b.zoomMenuHits[i]
-			break
-		}
-	}
-	if row == nil {
-		t.Fatalf("100%% row missing from the zoom window: %+v", b.zoomMenuHits)
-	}
-	withQuietStdout(t, func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: row.rect.X + 1, Y: row.rect.Y + 1, Press: true})
-	})
-	if b.Zoom != 1 {
-		t.Fatalf("clicking 100%% left zoom at %g, want 1", b.Zoom)
-	}
-	if b.zoomMenu != nil {
-		t.Fatal("the zoom window stayed open after a choice")
-	}
-	drawQuiet(b)
-	found := false
-	for _, hit := range b.headerHits {
-		if hit.kind == headerZoom {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("zoom badge hidden at 100%%: %+v", b.headerHits)
-	}
-	if line := plainLine(b.prev[1]); !strings.Contains(line, "100%") {
-		t.Fatalf("URL row = %q, want the 100%% badge", line)
-	}
-}
-
-// TestShiftZOpensZoomMenu checks the keyboard shortcut for the zoom window.
-func TestShiftZOpensZoomMenu(t *testing.T) {
-	b := NewBrowser(80, 10)
-	b.HandleKey("Z")
-	if b.zoomMenu == nil {
-		t.Fatal("Z did not open the zoom window")
-	}
-	if b.Zoom != 1 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
-	}
-	b.HandleKey("esc")
-	if b.zoomMenu != nil {
-		t.Fatal("esc did not close the zoom window")
-	}
-}
-
-func TestZoomMenuKeyboard(t *testing.T) {
-	b := NewBrowser(80, 10)
-	b.openZoomMenu()
-	if b.zoomMenu == nil || b.zoomMenu.idx != 4 {
-		t.Fatalf("zoom menu = %+v, want 100%% selected", b.zoomMenu)
-	}
-	b.HandleKey("down")
-	b.HandleKey("enter")
-	if b.Zoom != 1.25 || b.zoomMenu != nil {
-		t.Fatalf("zoom=%g menu=%+v, want 1.25 and closed", b.Zoom, b.zoomMenu)
-	}
-	if b.status != "Zoom 125%" {
-		t.Fatalf("status = %q, want Zoom 125%%", b.status)
-	}
-	b.openZoomMenu()
-	b.HandleKey("esc")
-	if b.zoomMenu != nil || b.Zoom != 1.25 {
-		t.Fatalf("Esc changed zoom or left the menu open: zoom=%g menu=%+v", b.Zoom, b.zoomMenu)
-	}
-	b.Zoom = 1.4 // not a preset, from a -zoom value
-	b.openZoomMenu()
-	if b.zoomMenu == nil || b.zoomMenu.idx != 6 {
-		t.Fatalf("zoom menu at 140%% = %+v, want nearest preset 150%%", b.zoomMenu)
-	}
 }
 
 func TestZoomBadgeClickClosesPrompt(t *testing.T) {
@@ -1008,11 +924,8 @@ func TestZoomBadgeClickClosesPrompt(t *testing.T) {
 	if b.prompt {
 		t.Fatal("clicking the zoom badge did not close the URL prompt")
 	}
-	if b.zoomMenu == nil {
-		t.Fatal("clicking the zoom badge did not open the zoom window")
-	}
 	if b.Zoom != 2 {
-		t.Fatalf("opening the zoom window changed zoom to %g", b.Zoom)
+		t.Fatalf("badge click changed zoom to %g", b.Zoom)
 	}
 }
 

@@ -74,7 +74,7 @@ func (b *Browser) frontendChromePath() bool {
 func (b *Browser) keysEngine() bool {
 	return b.prompt || b.FindActive || b.consoleOpen || b.dialog != nil ||
 		b.download != nil || b.notice != nil || b.selectMenu != nil ||
-		b.viewMenu != nil || b.zoomMenu != nil || b.quitPending ||
+		b.quitPending ||
 		b.Forms.InputFocus != nil || b.Forms.ControlFocus != nil || b.LinkHints || b.HintConfirm
 }
 

@@ -14,11 +14,11 @@ surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
 select, download/notice, hints, the console and the session history list) are
 landed, and the front end renders the displayed URL/title from validated
 history commits. A focused page form still sends keys through the engine, but
-the front end keeps the chrome. Remaining: host-attested final URLs, fallback UI removal, loader/automation
-packaging, the `Browser` → `Session` split (341 methods), direct app wiring and
-Phase 6 cleanup.
+the front end keeps the chrome. Remaining: host-attested final URLs, remaining fallback UI (console/dialogs/
+select), loader/automation packaging, the `Browser` → `Session` split (332
+methods), direct app wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (batch 54 landed).
+Last updated: 2026-11-23 (batch 55 landed).
 
 ## 1. Goal
 
@@ -383,7 +383,7 @@ the engine keeps its fallback composition only for direct callers and tests.
       helper methods; `Browser` embeds it. Methods and shell fields still need
       to move.
 - [ ] Rename `Browser` → `Session` and remove `internal/browser`. The load
-      wrappers remain at 341 methods at the last audit.
+      wrappers remain at 332 methods at the last audit.
 - [ ] Remove the browser wrappers, aliases and adapters; the ownership table
       lists them.
 
@@ -421,6 +421,7 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] JS runtime lifecycle moved to `internal/engine/js_life.go`: start/stop, timer deadlines, redraw throttling, hover rebuilds, pending-navigation drain and dynamic-import completion. The browser supplies the `JSHost` adapter and UI state through `SessionHooks`.
 - [x] Front-end command dispatch moved to `engine.Session.HandleCommand` through `CommandHooks`; the browser supplies resize/navigation/UI effects.
 - [x] The transport event loop moved to `engine.Session.Serve` (`serve.go`) behind `RuntimeHooks`; the browser supplies draw/state/frame/usage effects and the direct-key dialog fallback.
+- [x] Removed the engine fallback view/zoom windows and their mouse/keyboard/draw code; `X`/`Z` are front-end-only. Fallback console, dialogs and select popup remain.
 - [ ] Form editing decisions, Tab focus effects and submission remain
       session-side with the other shell effects (JS events, navigation, status
       and rebuilds).
@@ -551,7 +552,7 @@ trusted-shell split, then Phase 6. Dependency order:
 
 **C. Session split and app wiring**
 
-- [ ] Split `Browser` (341 methods): page/content state → `engine.Session`;
+- [ ] Split `Browser` (332 methods): page/content state → `engine.Session`;
       chrome, navigation, prompts, menus, console and form focus → front end.
 - [x] Move Loader image/SVG/about/PDF assembly into the engine; the host keeps
       fetch, cache, cookies, settings and policy.
@@ -596,7 +597,7 @@ test.
 
 | Risk | Mitigation |
 | --- | --- |
-| `Browser` is a 341-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
+| `Browser` is a 332-method monolith; Go cannot split its methods across packages | Move leaf subsystems first, then split the session state in one batch. The remaining engine content is smaller than the old package; keep aliases only until the batch is green. |
 | Chrome state is spread across Browser fields | Define the `State`/overlay contract before moving input or drawing. Move shell key routing and chrome composition together so there is one source of truth. |
 | Loader mixes host fetch, engine assembly and session orchestration | Split orchestration with the session; keep the per-request host fetcher snapshot (D40). |
 | Package globals (`layoutZoom`, `cellW`, `cellH`, `DefaultLayoutBudget`, memory limits) | Turn them into session options during app wiring; required before any multi-session work. |
@@ -1178,5 +1179,6 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 9b | Batch 52: moved JS runtime lifecycle into `internal/engine/js_life.go`: start/stop, timer deadlines, redraw throttling, hover rebuilds, pending-navigation drain and dynamic-import completion. The browser keeps the `JSHost` adapter and UI state via `SessionHooks`; `ImportCh` moved to the engine session. | `go test ./...`, `go vet`, full `-race`, browser JS/module/timer tests, PTY scripted pages, dump/PNG hashes | Batch 53: command routing |
 | 2026-11-23 | 9c | Batch 53: moved front-end command dispatch into `internal/engine/commands.go` (`Session.HandleCommand`) behind `CommandHooks`: init/resize, navigation/history/restore, key/mouse/scroll, app actions, find/select/modal/hint/console results, abort and client errors. Browser `handleCommand` is a wrapper; the `Serve` event loop remains. | `go test ./...`, `go vet`, full `-race`, browser command/input/console tests, PTY keys/mouse/scroll, dump/PNG hashes | Batch 54: `Serve` loop and fallback UI removal |
 | 2026-11-23 | 9d | Batch 54: moved the transport event loop into `internal/engine/serve.go` (`Session.Serve`) behind `RuntimeHooks`: load/image/import/timer/progress/usage events, draw/state/frame emission and shutdown. Browser `Serve` is a wrapper; terminal/shell effects and the direct-key dialog fallback remain. | `go test ./...`, `go vet`, full `-race`, browser session transport tests, PTY navigation/console, dump/PNG hashes | Batch 55: fallback UI removal |
+| 2026-11-23 | 9e | Batch 55: removed the engine fallback view and zoom windows: menu state, hit regions, drawing, keyboard/mouse handling and app-action entry points. `X`/`Z` and the zoom badge are front-end-only. Removed the corresponding engine menu tests; front-end menu tests remain. | `go test ./...`, `go vet`, full `-race`, browser/front-end menu tests, PTY X/Z and zoom, dump/PNG hashes | Batch 56: fallback select/dialog/console removal |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` after batch 50: updated the `Browser` method count (296 → 309), documented the new engine load/layout/hit/cache/apply files and protocol/browser host/test files, corrected remaining ownership (load-result application, restore, hit testing, layout rebuild), and recorded the command-routing/fallback/rename work still ahead. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 51: forms, input and JS lifecycle |

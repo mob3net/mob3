@@ -200,7 +200,7 @@ published by the Pages build.
   session construction, the dump handler, automation types and the build
   version until the session split. MCP transport and the dump/PNG output loop
   live in `internal/app`.
-- `internal/browser/` — package `browser` with the 341-method `Browser`, which
+- `internal/browser/` — package `browser` with the 332-method `Browser`, which
   embeds `engine.Session` for page/layout/URL/scroll and the load lifecycle,
   plus loader/session construction, navigation and form/JS load glue, fallback
   chrome/dialogs and most integration tests until the boundary migration

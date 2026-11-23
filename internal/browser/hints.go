@@ -342,7 +342,7 @@ func (b *Browser) inlineImagesEnabled() bool {
 	if b.gfx == nil || b.LinkHints {
 		return false
 	}
-	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil && b.viewMenu == nil && b.zoomMenu == nil
+	return b.dialog == nil && b.download == nil && b.notice == nil && b.selectMenu == nil
 }
 
 // paintLinkHints draws the chosen letters of each matching link with a yellow
