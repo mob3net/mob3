@@ -7,6 +7,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 
 	"browser/internal/protocol"
@@ -18,6 +19,110 @@ func testJSFetcher(t *testing.T, jar http.CookieJar) *Fetcher {
 		Client:   &http.Client{Jar: jar},
 		Settings: NewSettings("test-agent", ""),
 		Requests: NewRequestLog(),
+	}
+}
+
+func TestJSFetchDoesNotRewireSharedClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	f := testJSFetcher(t, nil)
+	called := false
+	f.Client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		called = true
+		return nil
+	}
+	if _, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "GET", Origin: srv.URL,
+		Purpose: protocol.FetchFetch, Kind: "fetch", Credentials: true, PageLocal: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	next := &http.Request{URL: &url.URL{Scheme: "http", Host: "other.example"}}
+	if err := f.Client.CheckRedirect(next, nil); err != nil || !called {
+		t.Fatalf("shared client redirect policy was replaced: called=%v err=%v", called, err)
+	}
+}
+
+func TestFetchRedirectSurvivesPageXHR(t *testing.T) {
+	landing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("landed"))
+	}))
+	defer landing.Close()
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/go" {
+			http.Redirect(w, r, landing.URL, http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("xhr"))
+	}))
+	defer front.Close()
+	f := testJSFetcher(t, nil)
+	if _, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: front.URL + "/xhr", Method: "GET", Origin: front.URL,
+		Purpose: protocol.FetchFetch, Kind: "fetch", Credentials: true, PageLocal: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(front.URL + "/go")
+	data, _, _, status, err := f.FetchRequest(context.Background(), http.MethodGet, u, nil, "")
+	if err != nil {
+		t.Fatalf("navigation redirect after a page XHR failed: %v", err)
+	}
+	if status != http.StatusOK || string(data) != "landed" {
+		t.Fatalf("response = %d %q", status, data)
+	}
+}
+
+func TestJSFetchConcurrentUsesPrivateClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	f := testJSFetcher(t, nil)
+	const workers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+				URL: srv.URL, Method: "GET", Origin: srv.URL,
+				Purpose: protocol.FetchXHR, Kind: "xhr", Credentials: true, PageLocal: true,
+			})
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestJSFetchOmitCredentialsDropsCookie(t *testing.T) {
+	var gotCookie string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie = r.Header.Get("Cookie")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	jar, _ := cookiejar.New(nil)
+	jar.SetCookies(u, []*http.Cookie{{Name: "a", Value: "1"}})
+	f := testJSFetcher(t, jar)
+	if _, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "GET", Origin: srv.URL,
+		Purpose: protocol.FetchFetch, Kind: "fetch", PageLocal: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if gotCookie != "" {
+		t.Fatalf("credentials-omitted request sent cookie %q", gotCookie)
 	}
 }
 

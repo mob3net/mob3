@@ -64,7 +64,10 @@ agreement, the non-negotiable constraints and the change protocol.
   Non-simple no-cors requests still fail. Preflight, credentialed cross-origin
   requests and same-origin-to-cross-origin redirects are not supported.
   CORS cross-origin responses without a matching header fail, so cookies cannot
-  be read cross-site through XHR or fetch.
+  be read cross-site through XHR or fetch. Every script request clones the
+  session `http.Client` and sets its redirect policy on the copy, because the
+  per-origin policy must never leak into navigations or concurrent image loads
+  and a shared client cannot be mutated from a request goroutine.
 - **Local-network guard:** a document loaded from a public `http`/`https`
   address may not fetch subresources, `fetch` or XHR from loopback, RFC 1918 or
   ULA private, link-local, CGNAT or reserved addresses. Literal hosts and local

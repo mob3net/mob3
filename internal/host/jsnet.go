@@ -84,13 +84,13 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	for k, v := range headers {
 		httpReq.Header.Set(k, v)
 	}
-	client := f.Client
+	// Never write to the session client: the redirect policy is per request.
+	// Cloning keeps the shared transport (and its pooling) while leaving the
+	// one shared *http.Client untouched for navigations and concurrent image
+	// loads.
+	client := *f.Client
 	if crossOrigin || !req.Credentials {
-		c := *f.Client
-		if crossOrigin {
-			c.Jar = nil
-		}
-		client = &c
+		client.Jar = nil
 	}
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
