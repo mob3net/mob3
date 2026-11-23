@@ -2,7 +2,7 @@ package browser
 
 import (
 	"browser/internal/engine"
-	"browser/internal/frontend"
+	"browser/internal/protocol"
 	"strings"
 	"unicode/utf8"
 )
@@ -959,24 +959,24 @@ func (b *Browser) handlePageKey(k string) bool {
 
 // Mouse types live in the frontend; these aliases keep session call sites and
 // tests on the existing API during the migration.
-type MouseEvent = frontend.MouseEvent
+type MouseEvent = protocol.MouseEvent
 
 const (
-	MouseButtonLeft    = frontend.MouseButtonLeft
-	MouseButtonMiddle  = frontend.MouseButtonMiddle
-	MouseButtonRight   = frontend.MouseButtonRight
-	MouseButtonBack    = frontend.MouseButtonBack
-	MouseButtonForward = frontend.MouseButtonForward
+	MouseButtonLeft    = protocol.MouseButtonLeft
+	MouseButtonMiddle  = protocol.MouseButtonMiddle
+	MouseButtonRight   = protocol.MouseButtonRight
+	MouseButtonBack    = protocol.MouseButtonBack
+	MouseButtonForward = protocol.MouseButtonForward
 )
 
-func ParseMouseToken(tok string) (MouseEvent, bool) { return frontend.ParseMouseToken(tok) }
+func ParseMouseToken(tok string) (MouseEvent, bool) { return protocol.ParseMouseToken(tok) }
 
-func mouseToken(ev MouseEvent) string { return frontend.MouseToken(ev) }
+func mouseToken(ev MouseEvent) string { return protocol.MouseToken(ev) }
 
 func parseSGRMouse(params string, release bool) (MouseEvent, bool) {
-	return frontend.ParseSGRMouse(params, release)
+	return protocol.ParseSGRMouse(params, release)
 }
 
 func parseX10Mouse(b, x, y byte) (MouseEvent, bool) {
-	return frontend.ParseX10Mouse(b, x, y)
+	return protocol.ParseX10Mouse(b, x, y)
 }

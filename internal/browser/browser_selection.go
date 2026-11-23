@@ -1,13 +1,13 @@
 package browser
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
 	"unicode/utf8"
 
 	"browser/internal/engine"
-	"browser/internal/frontend"
 	"browser/internal/protocol"
 )
 
@@ -95,7 +95,7 @@ func (b *Browser) copyText(text string) bool {
 		if w == nil {
 			w = os.Stdout
 		}
-		if _, err := fmt.Fprint(w, frontend.OSC52(text)); err != nil {
+		if _, err := fmt.Fprint(w, osc52(text)); err != nil {
 			b.status = "Copy failed"
 			return false
 		}
@@ -236,4 +236,8 @@ func (b *Browser) copyRenderedPage(visibleOnly bool) {
 	} else {
 		b.status = fmt.Sprintf("%s (%d lines)", label, pageLines+1)
 	}
+}
+
+func osc52(text string) string {
+	return "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\x07"
 }

@@ -197,7 +197,8 @@ destination; the tracker lists what remains.
 | `internal/frontend/hints.go` | Link-hint overlay painting and prefix matching data. |
 | `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
-| `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
+| `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
+| `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
 | `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers and tests. Normal frames, interactive overlays and form-focused chrome are composed by the front end; removed when the remaining fallback moves. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
