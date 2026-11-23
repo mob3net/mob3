@@ -329,8 +329,7 @@ type Browser struct {
 	footerHits     []headerHit
 	consoleTabHits []consoleTabHit
 
-	selAnchor cellPos
-	selCursor cellPos
+	selection engine.Selection
 	selecting bool
 }
 

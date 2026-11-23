@@ -4,32 +4,27 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
+	"browser/internal/engine"
 	"browser/internal/frontend"
 	"browser/internal/protocol"
-	"unicode/utf8"
 )
 
-// cellPos is a cell in document coordinates (row 0 is the top of the page).
-type cellPos struct{ X, Y int }
+// Selection ordering, text extraction and painting live in the engine. The
+// browser keeps the drag state and clipboard policy.
 
-// selectionOrder returns the selection endpoints in reading order.
-func (b *Browser) selectionOrder() (cellPos, cellPos) {
-	a, c := b.selAnchor, b.selCursor
-	if a.Y > c.Y || (a.Y == c.Y && a.X > c.X) {
-		a, c = c, a
-	}
-	return a, c
-}
-
-func (b *Browser) hasSelection() bool {
-	return b.selAnchor != b.selCursor
-}
+func (b *Browser) hasSelection() bool { return b.selection.Has() }
 
 func (b *Browser) clearSelection() {
-	b.selAnchor = cellPos{}
-	b.selCursor = cellPos{}
+	b.selection.Clear()
 	b.selecting = false
+}
+
+func (b *Browser) startSelection(p engine.CellPos) {
+	b.selection.Anchor = p
+	b.selection.Cursor = p
+	b.selecting = true
 }
 
 // updateSelection moves the drag endpoint, auto-scrolling when it leaves the
@@ -52,53 +47,10 @@ func (b *Browser) updateSelection(x, y, top, bottom int) {
 	if docY < 0 {
 		docY = 0
 	}
-	b.selCursor = cellPos{X: x, Y: docY}
+	b.selection.SetCursor(engine.CellPos{X: x, Y: docY})
 }
 
-// selectedText reconstructs the text covered by the current selection.
-func (b *Browser) selectedText() string {
-	if b.layout == nil || !b.hasSelection() {
-		return ""
-	}
-	a, c := b.selectionOrder()
-	var sb strings.Builder
-	lastY := -1
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Text == "" {
-			continue
-		}
-		if f.Y < a.Y || f.Y > c.Y {
-			continue
-		}
-		x0, x1 := f.X, f.X+f.W-1
-		if f.Y == a.Y && a.X > x0 {
-			x0 = a.X
-		}
-		if f.Y == c.Y && c.X < x1 {
-			x1 = c.X
-		}
-		if x1 < x0 {
-			continue
-		}
-		if lastY >= 0 && f.Y != lastY {
-			sb.WriteByte('\n')
-		}
-		lastY = f.Y
-		cx := f.X
-		for _, r := range f.Text {
-			rw := runeWidth(r)
-			if rw == 0 {
-				continue
-			}
-			if cx >= x0 && cx <= x1 {
-				sb.WriteRune(r)
-			}
-			cx += rw
-		}
-	}
-	return strings.TrimRight(sb.String(), "\n")
-}
+func (b *Browser) selectedText() string { return b.selection.Text(b.layout) }
 
 // copySelection sends the selected page text to the terminal clipboard with
 // OSC 52. Terminals and multiplexers must support it for the copy to arrive.
@@ -160,66 +112,11 @@ func (b *Browser) copyText(text string) bool {
 	return true
 }
 
-func (b *Browser) selectionSummary() string {
-	n := utf8.RuneCountInString(b.selectedText())
-	if n == 0 {
-		return "Selection"
-	}
-	return fmt.Sprintf("Selected %d chars (y copies)", n)
-}
+func (b *Browser) selectionSummary() string { return b.selection.Summary(b.layout) }
 
-// paintSelection highlights selected cells in the content viewport. Only cells
-// covered by rendered text fragments are tinted, so selecting across several
-// lines does not paint empty margins or unrelated columns.
+// paintSelection highlights selected cells in the content viewport.
 func (b *Browser) paintSelection(g *Grid, top, bottom int) {
-	if !b.hasSelection() || b.layout == nil {
-		return
-	}
-	a, c := b.selectionOrder()
-	selBG := RGB(0x2f, 0x6f, 0xbf)
-	selFG := RGB(0xf8, 0xfa, 0xfc)
-	for i := range b.layout.Frags {
-		f := &b.layout.Frags[i]
-		if f.Kind != fragText || f.Text == "" || f.W < 1 {
-			continue
-		}
-		y := f.Y - b.scroll + top
-		if y < top || y >= bottom || y >= g.H {
-			continue
-		}
-		if f.Y < a.Y || f.Y > c.Y {
-			continue
-		}
-		x0, x1 := f.X, f.X+f.W-1
-		if f.Y == a.Y && a.X > x0 {
-			x0 = a.X
-		}
-		if f.Y == c.Y && c.X < x1 {
-			x1 = c.X
-		}
-		if x0 < f.X {
-			x0 = f.X
-		}
-		if x1 >= f.X+f.W {
-			x1 = f.X + f.W - 1
-		}
-		if x0 < 0 {
-			x0 = 0
-		}
-		if x1 >= g.W {
-			x1 = g.W - 1
-		}
-		for x := x0; x <= x1; x++ {
-			cell := &g.Cells[y*g.W+x]
-			if cell.Img {
-				continue
-			}
-			cell.BG = selBG
-			if cell.R != ' ' && cell.R != 0 {
-				cell.FG = selFG
-			}
-		}
-	}
+	b.selection.Paint(g, b.layout, b.scroll, top, bottom)
 }
 
 // copyPageText copies the whole rendered page as plain text: the rows -dump

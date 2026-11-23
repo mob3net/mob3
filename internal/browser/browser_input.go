@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/engine"
 	"browser/internal/frontend"
 	"strings"
 	"unicode"
@@ -947,10 +948,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 					}
 				}
 				b.setInputFocus(nil)
-				p := cellPos{X: x, Y: docY}
-				b.selAnchor = p
-				b.selCursor = p
-				b.selecting = true
+				b.startSelection(engine.CellPos{X: x, Y: docY})
 				b.status = ""
 			}
 		}

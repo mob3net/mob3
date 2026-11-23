@@ -169,7 +169,8 @@ seam; the note names which part goes where.
 | `browser.go`, `shell.go`, `session.go` | engine + frontend | Page/content state, load lifecycle and command routing are engine. Content-rect geometry, navigation and shell state are frontend. `Browser` becomes `Session`. |
 | `browser_chrome.go`, `ui.go`, `find.go`, `hints.go`, `browser_input.go` | frontend + engine | Normal header/footer drawing, chrome mouse routing, scrollbar, base shell keys, quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, the select popup, download/notice modals, link hints, console composition/input/find are frontend (`frontend/chrome.go`, `frontend/session.go`, `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`, `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`, `frontend/console.go`). Engine fallback modals/hints/console drawing still live here; engine find match computation/highlights, page hit testing, form editing and hint target computation remain. |
 | `browser_history.go`, `browser_pdf.go` | frontend | Back/forward list, scroll restore, `about:history` data and the download/curl hint are session/front-end state (D54). The page cache is memory-only and stays with the session. |
-| `browser_forms.go`, `browser_selection.go` | engine | Form state and selection are page content. |
+| `browser_forms.go` | engine | Form state and editing are page content. |
+| `browser_selection.go` | engine wrapper | Selection range, extraction and painting moved to `internal/engine/selection.go`; the browser keeps drag state and clipboard policy. |
 | `reader.go` | done | Extraction and `ReaderRules` moved to `internal/engine/reader.go`; the browser file is a thin alias. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
 | `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. Move image/SVG/about/PDF orchestration into the engine session. |
@@ -378,8 +379,10 @@ the engine keeps its fallback composition only for direct callers and tests.
 
 - [x] 3a: HTML, style, layout, paint, PDF and dark moved, with aliases.
 - [x] Reader extraction and its stylesheet moved to `internal/engine/reader.go`.
-- [ ] Find, selection, hints and form state still live in the browser with
-      engine-side computation.
+- [x] Selection range, extraction and painting moved to
+      `internal/engine/selection.go`.
+- [ ] Find, hints and form state still live in the browser with engine-side
+      computation.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
 - [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
       navigation to the front end), then rename to `Session`.
@@ -1095,3 +1098,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 7q | Batch 16: closed the form-focus chrome gap. `frontendChromeActive` now follows the normal front-end chrome path even when `KeysEngine` is true, so a focused page form still routes keys through the engine while the front end composes header/footer/scrollbar. Added a state test for form focus and updated the chrome/ownership docs. | `go test ./...`, `go vet`, full `-race`, chrome state tests, PTY form/help, dump/PNG hashes | Host-attested URL/session split |
 | 2026-11-23 | 7r | Batch 17: moved mode dispatch and the interactive session boot from `internal/browser/cli.go` to `internal/app/execute.go`. The app now builds the loader/session, owns terminal enter/leave, presenter/transport wiring and the loop; browser exposes narrow `NewConfiguredLoader`/`NewSession`/`Dump`/`RunMCPBoot` helpers. `browser.Execute`/`RunOptions` and `cli.go` are gone. | `go test ./...`, `go vet`, full `-race`, app/browser tests, PTY interactive boot, MCP tools/list smoke, dump/PNG hashes | Session split (Browser → engine.Session), then direct app wiring |
 | 2026-11-23 | 7s | Batch 18: first session-split content leaf. Reader extraction, candidate scoring, junk filtering and `ReaderRules` moved to `internal/engine/reader.go`; `browser/reader.go` is a thin alias. Extraction tests moved to the engine; browser keeps reader-mode integration tests. | `go test ./...`, `go vet`, full `-race`, engine/browser reader tests, dump/PNG hashes | Continue content leaves (selection, hints, forms), then session type split |
+| 2026-11-23 | 7t | Batch 19: moved selection range, ordering, text extraction, summary and viewport painting to `internal/engine/selection.go`. The browser keeps drag state and clipboard/front-end policy and calls the engine selection. Added engine selection tests; browser drag/copy tests updated. | `go test ./...`, `go vet`, full `-race`, engine/browser selection tests, dump/PNG hashes | Continue content leaves (hints, forms), then session type split |

@@ -222,13 +222,14 @@ destination; the tracker lists what remains.
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
-| `browser_selection.go` | Drag selection: anchor/cursor ordering, text extraction, OSC 52 copying, and selection painting. |
+| `browser_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `engine.Selection`. |
 | `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. Browser-side today; moves with the session. `automation_transport.go` exposes it through the MCP protocol client. |
 | `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs, the page select popup, the `X` view/`Z` zoom windows and their rendering. Interactive presentation and input for all of these are front-end-owned. |
 | `find.go` | Page and console HTML match computation, scrolling and match highlights. The visible find bar, query, caret and next/previous are front-end-owned. |
 | `hints.go` | Engine-side target discovery and following for link hints: each visible link's own text, labels, glyph cells, case-insensitive prefix filtering and the F destination-confirmation step. The overlay painting and prefix input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
+| `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |

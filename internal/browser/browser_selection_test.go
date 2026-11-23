@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"browser/internal/engine"
 )
 
 func TestMouseDragSelection(t *testing.T) {
@@ -106,8 +108,8 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	if first == nil || middle == nil || last == nil {
 		t.Fatalf("missing paragraph fragments: %v %v %v", first, middle, last)
 	}
-	b.selAnchor = cellPos{X: first.X, Y: first.Y}
-	b.selCursor = cellPos{X: last.X + last.W - 1, Y: last.Y}
+	b.selection.Anchor = engine.CellPos{X: first.X, Y: first.Y}
+	b.selection.Cursor = engine.CellPos{X: last.X + last.W - 1, Y: last.Y}
 	top, bottom := b.viewport()
 	g := NewGrid(40, 16, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintSelection(g, top, bottom)
@@ -124,8 +126,8 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 func TestCopySelectionUsesOSC52(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.layout = &Layout{Frags: []Frag{{Kind: fragText, Text: "hello", X: 0, Y: 0, W: 5}}}
-	b.selAnchor = cellPos{X: 0, Y: 0}
-	b.selCursor = cellPos{X: 4, Y: 0}
+	b.selection.Anchor = engine.CellPos{X: 0, Y: 0}
+	b.selection.Cursor = engine.CellPos{X: 4, Y: 0}
 	var buf bytes.Buffer
 	b.clipboardWriter = &buf
 	b.HandleKey("y")
