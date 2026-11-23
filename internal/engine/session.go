@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -99,10 +100,19 @@ type Session struct {
 	ImageTotal      int
 	ImageDone       int
 	PendingImageRow int
+	Images          ImageLoader
+	ImageCh         chan ImageBatch
+	ImageCancel     context.CancelFunc
+
+	// Native-image placement cache. Encoded blobs stay stable across frames so
+	// a repaint does not re-encode every picture.
+	placementCache  map[placementKey]*placementEntry
+	placementBytes  int
+	nextPlacementID int
 }
 
 // NewSession creates an empty page session.
-func NewSession() *Session { return &Session{} }
+func NewSession() *Session { return &Session{ImageCh: make(chan ImageBatch, 1)} }
 
 // PageKind classifies the current page for the shell.
 func (s *Session) PageKind() protocol.PageKind {

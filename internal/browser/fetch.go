@@ -3,20 +3,16 @@ package browser
 import (
 	"browser/internal/engine"
 	"browser/internal/host"
-	"bytes"
 	"context"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"math"
 	"mime"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +24,6 @@ import (
 
 const (
 	maxResourceSize = 12 << 20
-	maxImagePixels  = 25_000_000 // 25 MP; bounds decompression cost
 )
 
 // DefaultSearchURL is the template used when input looks like a search query.
@@ -40,13 +35,8 @@ const DefaultSearchURL = "https://html.duckduckgo.com/html/?q=%s"
 // the extra byte distinguishes an exact-limit body from a truncated one.
 var errResourceTooLarge = host.ErrResourceTooLarge
 
-// imageConfigOK rejects decompression bombs before decoding pixel data.
-func imageConfigOK(cfg image.Config) bool {
-	if cfg.Width <= 0 || cfg.Height <= 0 {
-		return false
-	}
-	return int64(cfg.Width)*int64(cfg.Height) <= maxImagePixels
-}
+// imageConfigOK keeps the browser test surface for the engine helper.
+func imageConfigOK(cfg image.Config) bool { return engine.ImageConfigOK(cfg) }
 
 // Loader fetches documents and their resources.
 // defaultUserAgent is the browser's identifying User-Agent.
@@ -553,329 +543,75 @@ func lookupCharset(label string) (*charmap.Charmap, bool) {
 // combineMedia joins an @import/link media condition with a rule's own @media
 // condition. A comma-listed import condition is approximated.
 
-// srcsetCandidate is one entry from a srcset attribute.
-type srcsetCandidate struct {
-	url string
-	w   int
-	x   float64
-}
+// imageSource and pickSrcset keep the historical browser test surface while
+// the implementation lives in the engine.
+func imageSource(n *Node, viewportPx int) string { return engine.ImageSource(n, viewportPx) }
 
-// imageSource chooses the URL to download for an img, honouring a surrounding
-// picture's matching source elements, srcset width/density candidates, and
-// common data-src lazy-loading fallbacks when no standard source is present.
-func imageSource(n *Node, viewportPx int) string {
-	if n == nil {
-		return ""
-	}
-	if n.Tag != "img" {
-		// A non-image element can carry a CSS background image. The style is
-		// only available after the first layout pass, so these are picked up by
-		// the deferred image batch.
-		if n.Style == nil || n.Style.BackgroundImage == "" {
-			return ""
-		}
-		return n.Style.BackgroundImage
-	}
-	preferred := viewportPx * 2 / 5
-	if preferred < 160 {
-		preferred = 160
-	}
-	if preferred > 1024 {
-		preferred = 1024
-	}
-	if pic := pictureParent(n); pic != nil {
-		for _, c := range pic.Children {
-			if c.Type != ElementNode || c.Tag != "source" || !imageTypeAllowed(c.Attr("type")) {
-				continue
-			}
-			if media := c.Attr("media"); media != "" && !mediaMatches(media, viewportPx, false) {
-				continue
-			}
-			if src := pickSrcset(c.Attr("srcset"), preferred); src != "" {
-				return src
-			}
-		}
-	}
-	if src := pickSrcset(n.Attr("srcset"), preferred); src != "" {
-		return src
-	}
-	if src := n.Attr("src"); src != "" {
-		return src
-	}
-	for _, attr := range []string{"data-srcset", "data-lazy-srcset"} {
-		if src := pickSrcset(n.Attr(attr), preferred); src != "" {
-			return src
-		}
-	}
-	for _, attr := range []string{"data-src", "data-lazy-src", "data-original", "data-default-src"} {
-		if src := n.Attr(attr); src != "" {
-			return src
-		}
-	}
-	return ""
-}
-
-func pictureParent(n *Node) *Node {
-	if n == nil || n.Parent == nil || n.Parent.Tag != "picture" {
-		return nil
-	}
-	return n.Parent
-}
-
-func imageTypeAllowed(typ string) bool {
-	typ = strings.ToLower(strings.TrimSpace(typ))
-	if typ == "" {
-		return true
-	}
-	for _, bad := range []string{"avif", "jxl", "heic", "heif"} {
-		if strings.Contains(typ, bad) {
-			return false
-		}
-	}
-	return true
-}
-
-// pickSrcset selects the smallest width candidate at least as wide as
-// preferred, or the widest available; for density descriptors it picks the
-// candidate closest to 1x.
-func pickSrcset(s string, preferred int) string {
-	candidates := parseSrcset(s)
-	if len(candidates) == 0 {
-		return ""
-	}
-	bestW, bestD := -1, ""
-	for _, c := range candidates {
-		if c.w <= 0 {
-			continue
-		}
-		if c.w >= preferred {
-			if bestW < 0 || c.w < bestW {
-				bestW, bestD = c.w, c.url
-			}
-		}
-	}
-	if bestD != "" {
-		return bestD
-	}
-	for _, c := range candidates {
-		if c.w > bestW {
-			bestW, bestD = c.w, c.url
-		}
-	}
-	if bestD != "" {
-		return bestD
-	}
-	bestDiff, bestX := -1.0, ""
-	for _, c := range candidates {
-		diff := c.x - 1
-		if diff < 0 {
-			diff = -diff
-		}
-		if bestX == "" || diff < bestDiff {
-			bestDiff, bestX = diff, c.url
-		}
-	}
-	return bestX
-}
-
-// isJSSpace reports the ASCII whitespace bytes a srcset candidate splits on.
-func isJSSpace(c byte) bool {
-	switch c {
-	case ' ', '\t', '\n', '\r', '\v', '\f':
-		return true
-	}
-	return false
-}
-
-func parseSrcset(s string) []srcsetCandidate {
-	var out []srcsetCandidate
-	for i := 0; i < len(s); {
-		for i < len(s) && (isJSSpace(s[i]) || s[i] == ',') {
-			i++
-		}
-		start := i
-		for i < len(s) && !isJSSpace(s[i]) && s[i] != ',' {
-			i++
-		}
-		url := s[start:i]
-		for i < len(s) && isJSSpace(s[i]) {
-			i++
-		}
-		descStart := i
-		for i < len(s) && s[i] != ',' {
-			i++
-		}
-		desc := strings.TrimSpace(s[descStart:i])
-		if url == "" {
-			continue
-		}
-		c := srcsetCandidate{url: url}
-		if strings.HasSuffix(desc, "w") {
-			if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimSuffix(desc, "w"))); err == nil {
-				c.w = n
-			}
-		} else if strings.HasSuffix(desc, "x") {
-			if f, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(desc, "x")), 64); err == nil {
-				c.x = f
-			}
-		}
-		out = append(out, c)
-		if i < len(s) && s[i] == ',' {
-			i++
-		}
-	}
-	return out
-}
-
-// loadImages downloads images referenced by the document. It reports whether
-// any image gained a new source, so a post-script refresh can decide whether a
-// rebuild is needed.
-// imageTask is one image to fetch without touching the DOM, so the work can run
-// on a background goroutine.
-type imageTask struct {
-	node *Node
-	src  string
-	url  *url.URL
-}
-
-// imageLoadResult is one decoded image (or failure) returned to the main loop.
-type imageLoadResult struct {
-	Node   *Node
-	Src    string
-	Img    image.Image
-	Failed bool
-}
+func pickSrcset(s string, preferred int) string { return engine.PickSrcset(s, preferred) }
 
 // imageTasks collects images that still need loading. It must run on the main
 // layout goroutine because it reads node attributes.
 func (l *Loader) imageTasks(root *Node, base *url.URL) []imageTask {
-	if l.noImages || root == nil || base == nil {
+	if l.noImages {
 		return nil
 	}
-	var tasks []imageTask
-	for _, n := range root.FindAll(func(n *Node) bool {
-		if n.Tag == "img" {
-			return true
-		}
-		return n.Style != nil && n.Style.BackgroundImage != ""
-	}) {
-		src := imageSource(n, l.imageViewportPx)
-		if src == "" {
-			continue
-		}
-		if n.ImgSrc == src && (n.Img != nil || n.ImgFailed) {
-			continue
-		}
-		t := imageTask{node: n, src: src}
-		if u, err := base.Parse(src); err == nil {
-			t.url = u
-		}
-		tasks = append(tasks, t)
-	}
-	return tasks
+	return engine.ImageTasks(root, base, l.imageViewportPx)
 }
+
+// ImageContext prepares the request context for a page's image batch.
+func (l *Loader) ImageContext(page *Page) context.Context {
+	if page == nil {
+		return context.Background()
+	}
+	return withRequestPage(context.Background(), page.URL, page.Local)
+}
+
+// ImageResults fetches and decodes a task list, streaming results as they
+// finish.
+func (l *Loader) ImageResults(ctx context.Context, tasks []imageTask) <-chan imageLoadResult {
+	return l.imageResultStream(ctx, tasks)
+}
+
+// LoadImages applies the synchronous image pass used by direct callers and
+// tests.
+func (l *Loader) LoadImages(ctx context.Context, root *Node, base *url.URL) bool {
+	return l.loadImages(ctx, root, base)
+}
+
+// ImagesDisabled reports whether image loading is turned off.
+func (l *Loader) ImagesDisabled() bool { return l.noImages }
+
+// DeferImages reports whether the page uses deferred image loading.
+func (l *Loader) DeferImages() bool { return l.deferImages }
+
+// ImageViewportPx is the CSS-pixel viewport width used for source-set picks.
+func (l *Loader) ImageViewportPx() int { return l.imageViewportPx }
 
 // fitImage downscales a decoded image so neither side exceeds the loader's
-// pixel cap, preserving aspect ratio. Images already inside the cap are
-// returned unchanged, so only oversized photos pay for a resample.
+// pixel cap.
 func (l *Loader) fitImage(img image.Image) image.Image {
 	maxW, maxH := l.imageCap()
-	if img == nil || (maxW <= 0 && maxH <= 0) {
-		return img
-	}
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w < 1 || h < 1 {
-		return img
-	}
-	nw, nh := w, h
-	if maxW > 0 && nw > maxW {
-		f := float64(maxW) / float64(nw)
-		nw = maxW
-		nh = int(math.Round(float64(nh) * f))
-	}
-	if maxH > 0 && nh > maxH {
-		f := float64(maxH) / float64(nh)
-		nh = maxH
-		nw = int(math.Round(float64(nw) * f))
-	}
-	if nw < 1 {
-		nw = 1
-	}
-	if nh < 1 {
-		nh = 1
-	}
-	if nw == w && nh == h {
-		return img
-	}
-	return scaleImage(img, nw, nh)
+	return engine.FitImage(img, maxW, maxH)
 }
 
-// recoverImage runs a decoder and converts a panic into an error. Raster and
-// SVG decoders parse untrusted bytes, and a panic in one of them would take
-// down the whole process; the browser shows a broken image instead.
-func recoverImage(fn func() (image.Image, error)) (img image.Image, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			img, err = nil, fmt.Errorf("image decode failed: %v", r)
-		}
-	}()
-	return fn()
+// recoverImage, safeDecodeConfig, safeDecodeImage and decodeMedia keep the
+// historical browser test surface while the implementations live in the
+// engine.
+func recoverImage(fn func() (image.Image, error)) (image.Image, error) {
+	return engine.RecoverImage(fn)
 }
 
-func safeDecodeConfig(data []byte) (cfg image.Config, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("image config decode failed: %v", r)
-		}
-	}()
-	cfg, _, err = image.DecodeConfig(bytes.NewReader(data))
-	return cfg, err
-}
+func safeDecodeConfig(data []byte) (image.Config, error) { return engine.SafeDecodeConfig(data) }
 
-func safeDecodeImage(data []byte) (image.Image, error) {
-	return recoverImage(func() (image.Image, error) {
-		img, _, err := image.Decode(bytes.NewReader(data))
-		return img, err
-	})
-}
+func safeDecodeImage(data []byte) (image.Image, error) { return engine.SafeDecodeImage(data) }
 
-// decodeMedia decodes one image response: SVG through the vector rasterizer,
-// everything else through the raster decoders with the megapixel limit applied.
-// Both paths contain panics.
 func decodeMedia(ctx context.Context, ctype string, data []byte) (image.Image, error) {
-	if isSVG(ctype, data) {
-		return decodeSVG(data)
-	}
-	cfg, err := safeDecodeConfig(data)
-	if err != nil || !imageConfigOK(cfg) {
-		return nil, fmt.Errorf("unsupported image")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return safeDecodeImage(data)
+	return engine.DecodeMedia(ctx, ctype, data)
 }
 
-// imageDecodeWeight estimates the RGBA bytes a decode will hold so the budget
-// can admit several small images but only one or two large ones.
+// imageDecodeWeight keeps the browser test surface for the engine helper.
 func imageDecodeWeight(ctype string, data []byte) int64 {
-	if isSVG(ctype, data) {
-		return int64(maxSVGDim) * int64(maxSVGDim) * 4
-	}
-	cfg, err := safeDecodeConfig(data)
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
-		return 1 << 20
-	}
-	n := int64(cfg.Width) * int64(cfg.Height) * 4
-	max := int64(maxImagePixels) * 4
-	if n > max {
-		n = max
-	}
-	if n < 1 {
-		n = 1
-	}
-	return n
+	return engine.ImageDecodeWeight(ctype, data)
 }
 
 // decodeAndFit decodes one image under the in-flight byte budget and scales it
@@ -956,17 +692,17 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask) <-cha
 			go func() {
 				defer wg.Done()
 				for t := range jobs {
-					if t.url == nil {
+					if t.URL == nil {
 						select {
-						case out <- imageLoadResult{Node: t.node, Src: t.src, Failed: true}:
+						case out <- imageLoadResult{Node: t.Node, Src: t.Src, Failed: true}:
 						case <-ctx.Done():
 							return
 						}
 						continue
 					}
-					img, ok := l.fetchImageResult(ctx, t.url, gen)
+					img, ok := l.fetchImageResult(ctx, t.URL, gen)
 					select {
-					case out <- imageLoadResult{Node: t.node, Src: t.src, Img: img, Failed: !ok}:
+					case out <- imageLoadResult{Node: t.Node, Src: t.Src, Img: img, Failed: !ok}:
 					case <-ctx.Done():
 						return
 					}

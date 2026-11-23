@@ -335,7 +335,7 @@ func (b *Browser) presentGrid(g *Grid, placements []ImagePlacement) {
 		b.chromeBuf = protocol.Chrome{Show: false}
 		b.chromeReady = true
 		b.frameBuf = toProtocolFrameInto(&b.frameBuf, g, 0)
-		b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements, g.W, g.H)
+		b.frameBuf.Placements = b.Session.ProtocolPlacements(b.frameBuf.Placements[:0], placements, g.W, g.H)
 		b.frameReady = true
 		return
 	}
@@ -364,7 +364,7 @@ func (b *Browser) presentComposed(content, screen *Grid, top, contentH int, plac
 	}
 	b.chromeReady = true
 	b.frameBuf = toProtocolFrameInto(&b.frameBuf, content, 0)
-	b.frameBuf.Placements = b.protocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
+	b.frameBuf.Placements = b.Session.ProtocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
 	b.frameReady = true
 }
 
@@ -821,7 +821,7 @@ func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.prev[i] = lines[i]
 	}
 	if b.gfx != nil {
-		b.gfx.PlaceAll(&sb, b.protocolPlacements(nil, placements, g.W, g.H))
+		b.gfx.PlaceAll(&sb, b.Session.ProtocolPlacements(nil, placements, g.W, g.H))
 	}
 	if sb.Len() > 0 {
 		_, _ = os.Stdout.WriteString(sb.String())

@@ -120,7 +120,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 			}
 		case res := <-b.loadCh:
 			b.finishLoad(res)
-		case batch := <-b.imageCh:
+		case batch := <-b.ImageCh:
 			if !b.applyDeferredImageBatch(batch) {
 				b.skipDraw = true
 			}

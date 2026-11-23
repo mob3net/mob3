@@ -142,11 +142,6 @@ type Browser struct {
 	// wait for the event loop instead of blocking it.
 	// importCh delivers completed background dynamic imports to the event loop.
 	importCh chan jsImportTask
-	// imageCh delivers background image loads for the current page.
-	imageCh chan imageBatch
-	// imagesPaused stops timer-driven rebuilds from restarting a background
-	// image load after the user pressed Esc.
-	imageCancel context.CancelFunc
 	// imageTotal and imageDone drive the loading bar and footer count while a
 	// deferred image batch is in flight.
 	// pendingImageRow is the topmost laid-out row of images whose decoded data
@@ -203,14 +198,9 @@ type Browser struct {
 	// State snapshot; the front end draws the header/footer from it. Chrome
 	// rows remain the fallback for overlays, the console, the find bar and
 	// tests.
-	frontendChrome bool
-	chromeBuf      protocol.Chrome
-	chromeReady    bool
-	// placementCache keeps encoded image blobs stable across frames so native
-	// image output does not re-encode every picture on every repaint.
-	placementCache   map[placementKey]*placementEntry
-	placementBytes   int
-	nextPlacementID  int
+	frontendChrome   bool
+	chromeBuf        protocol.Chrome
+	chromeReady      bool
 	nextDialogID     uint32
 	nextSelectID     uint32
 	selectFrontend   bool
@@ -293,14 +283,14 @@ func NewBrowser(w, h int) *Browser {
 			Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
 			CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
 			JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
-			Cache: engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
+			Cache:   engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
+			ImageCh: make(chan engine.ImageBatch, 1),
 		},
 		loader:         NewLoader(),
 		nextEntryID:    1,
 		historyViewCur: -1,
 		loadCh:         make(chan loadResult, 1),
 		importCh:       make(chan jsImportTask, 16),
-		imageCh:        make(chan imageBatch, 1),
 		home:           "about:home",
 		configToken:    host.NewConfigToken(),
 	}
@@ -315,6 +305,11 @@ func NewBrowser(w, h int) *Browser {
 // default loader.
 func (b *Browser) setLoader(l *Loader) {
 	b.loader = l
+	if l == nil {
+		b.Session.Images = nil
+	} else {
+		b.Session.Images = l
+	}
 	if l != nil {
 		l.historyFn = b.historyViewSnapshot
 		l.setMemoryBudget(effectiveMemoryLimit())

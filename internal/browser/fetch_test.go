@@ -1505,7 +1505,7 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	b.URL = page.URL
 	b.LoadSeq = 1
 	b.DeferredImages = true
-	if !b.applyDeferredImageBatch(imageBatch{seq: 1, results: results, done: true}) {
+	if !b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: results, Done: true}) {
 		t.Fatal("batch did not apply")
 	}
 	if img.Img == nil {

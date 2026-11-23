@@ -18,7 +18,7 @@ the front end keeps the chrome. Remaining: host-attested final URLs, the
 `Browser` → `Session` split (296 methods), direct app wiring, the host/loader
 shims, and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-23 (audited against the code after batch 42).
+Last updated: 2026-11-23 (batch 43 landed).
 
 ## 1. Goal
 
@@ -178,14 +178,13 @@ seam; the note names which part goes where.
 | `find.go` | engine + session | Match streams, whitespace normalisation and match rectangles moved to `internal/engine/find.go`; find state, navigation, painting and front-end messages remain session-side. |
 | `reader.go` | done | Extraction and `ReaderRules` moved to `internal/engine/reader.go`; the browser file is a thin alias. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
-| `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. Move image/SVG/about/PDF orchestration into the engine session. |
-| `placement.go` | engine | Image placement encoding and the bounded immutable PNG cache; it feeds the frame contract. |
+| `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. The image source/task model, task ordering, stream port, decoding/fit, SVG serialization and placement cache are engine-owned; image/SVG/about/PDF loader fetch orchestration still crosses here. |
 | `dump_transport.go` | app + engine | Terminal sizing/encoding and transport loop are in `internal/app/dump.go`; the load/layout/paint handler stays with the engine session. |
 | `automation_transport.go`, `mcp.go` | done | MCP client, handler and JSON-RPC server moved to `internal/app`; the automation library stays with the session until the type split. |
 | `automation.go` | engine | Headless automation is the engine-side implementation. |
 | `mcp.go` | app/frontend | MCP JSON-RPC client; consumes the transport, not engine internals. |
 | `config.go` | app + engine | Host token, engine form markup and the app/session apply path. |
-| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps the `Graphics` interface, protocol mode aliases and inline-SVG loading until those move. |
+| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps the `Graphics` interface, protocol mode aliases and inline-SVG budget pass until those move. |
 | `internal/engine/*`, `internal/host/*`, `internal/frontend/*`, `internal/protocol/*`, `dark.go`, `js*.go` | done | Already on their final side; responsibilities are in [architecture.md](architecture.md#current-layout-during-migration). |
 
 ## 4. Phases
@@ -408,6 +407,7 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Radio-group and select stepping moved to
       `internal/engine/form_step.go`.
 - [x] Form focus transitions moved onto `engine.FormState`.
+- [x] Image source selection, task/result/batch model, viewport ordering, deferred-load scheduling, decode/fit helpers, inline-SVG serialization and the placement/encode cache moved to `internal/engine`; the `ImageLoader` port is implemented by the browser loader.
 - [ ] Form editing decisions, Tab focus effects and submission remain
       session-side with the other shell effects (JS events, navigation, status
       and rebuilds).
@@ -1150,4 +1150,5 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8o | Batch 40: moved mouse event types, button constants and SGR/X10/token codecs to `internal/protocol/mouse.go`; `frontend/mouse.go` is now an alias layer. Browser input uses the protocol types directly, and selection has a local OSC 52 encoder, removing the frontend import from both files. | `go test ./...`, `go vet`, full `-race`, protocol/frontend/browser input tests, PTY clicks/wheel, dump/PNG hashes | Remove remaining frontend imports |
 | 2026-11-23 | 8p | Batch 41: moved graphics modes to `internal/protocol/graphics.go`; frontend aliases them. Browser now exposes a `Graphics` interface and receives the renderer/factory from the app, removing the renderer constructor from the browser. The only remaining browser `frontend` import is `frontend_bridge.go`. | `go test ./...`, `go vet`, full `-race`, protocol/frontend/app/browser graphics tests, PTY `i` cycle, dump/PNG hashes | Remove the last frontend bridge |
 | 2026-11-23 | 8q | Batch 42: removed the last browser `frontend` import. Frame/PNG encoders are injected by the app; headless snapshots and copy-page use `engine.GridLines`; color-mode helpers moved to the app/frontend; `frontend_bridge.go` is gone. Added engine and browser plain-text grid parity tests. | `go test ./...`, `go vet`, full `-race`, engine/browser/frontend encoding tests, PTY graphics/images, dump/PNG hashes | Remove host shims and continue session split |
+| 2026-11-23 | 8r | Batch 43: moved image source/srcset selection, image task/result/batch model, viewport ordering and visible-change checks into `internal/engine`; added the `ImageLoader` port and moved deferred-load scheduling/refresh onto `engine.Session`. Moved PNG encode/scale, decode/fit helpers and the bounded placement cache into the engine, and moved inline-SVG serialization into `internal/engine/inline_svg.go`. The browser keeps batch application, pending-row layout and rebuild/frame invalidation. | `go test ./...`, `go vet`, full `-race`, engine/browser image/SVG/placement tests, PTY image modes, dump/PNG hashes | Batch 44: PDF/about loader orchestration |
 | 2026-11-23 | docs | Audited this tracker and `architecture.md` against the code after batch 42: corrected the `Browser` method count (306 → 296), updated the app/browser import reasons, helper names and remaining-file ownership, documented the missing browser files and host shims, clarified the page-cache owner and marked `frontend_bridge.go` as removed. No behavior change. | `git diff --check`, `go test ./...`, `go vet`, `gofmt` | Batch 43: move image/SVG orchestration into the engine session |

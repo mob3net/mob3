@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEscapeStopsDeferredImageLoad(t *testing.T) {
@@ -25,7 +26,7 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	b.URL = u
 	b.LoadSeq = 1
 	b.DeferredImages = true
-	b.imageCancel = func() {}
+	b.ImageCancel = func() {}
 
 	b.HandleKey("esc")
 	if b.DeferredImages {
@@ -60,7 +61,7 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	if img == nil {
 		t.Fatal("image missing")
 	}
-	batch := imageBatch{seq: 1, results: []imageLoadResult{{
+	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: img, Src: "pic.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
 	if !b.applyDeferredImageBatch(batch) {
@@ -69,7 +70,7 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	if !b.DeferredImages {
 		t.Fatal("a partial batch cleared the deferred state")
 	}
-	if !b.applyDeferredImageBatch(imageBatch{seq: 1, done: true}) {
+	if !b.applyDeferredImageBatch(imageBatch{Seq: 1, Done: true}) {
 		t.Fatal("done batch did not request a progress repaint")
 	}
 	if b.DeferredImages {
@@ -97,15 +98,15 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 		{Kind: fragText, Node: byID["a"], Y: 0},
 	}}
 	tasks := []imageTask{
-		{node: byID["d"], src: "d.png"},
-		{node: byID["c"], src: "c.png"},
-		{node: byID["b"], src: "b.png"},
-		{node: byID["a"], src: "a.png"},
+		{Node: byID["d"], Src: "d.png"},
+		{Node: byID["c"], Src: "c.png"},
+		{Node: byID["b"], Src: "b.png"},
+		{Node: byID["a"], Src: "a.png"},
 	}
 	b.sortImageTasks(tasks)
 	var got []string
 	for _, task := range tasks {
-		got = append(got, task.node.Attr("id"))
+		got = append(got, task.Node.Attr("id"))
 	}
 	// a/b are visible (stable DOM order puts b before a), c is one screen
 	// away, d is far down the document.
@@ -123,7 +124,7 @@ func TestDeferredImageProgressBar(t *testing.T) {
 	b.DeferredImages = true
 	b.ImageTotal = 10
 	b.Progress = 0.9
-	if !b.applyDeferredImageBatch(imageBatch{seq: b.LoadSeq, results: make([]imageLoadResult, 4)}) {
+	if !b.applyDeferredImageBatch(imageBatch{Seq: b.LoadSeq, Results: make([]imageLoadResult, 4)}) {
 		t.Fatal("partial batch did not request a repaint")
 	}
 	if b.Progress < 0.93 || b.Progress > 0.94 {
@@ -132,7 +133,7 @@ func TestDeferredImageProgressBar(t *testing.T) {
 	if !b.DeferredImages {
 		t.Fatal("partial batch finished the load")
 	}
-	if !b.applyDeferredImageBatch(imageBatch{seq: b.LoadSeq, results: make([]imageLoadResult, 6), done: true}) {
+	if !b.applyDeferredImageBatch(imageBatch{Seq: b.LoadSeq, Results: make([]imageLoadResult, 6), Done: true}) {
 		t.Fatal("done batch did not request a repaint")
 	}
 	if b.Progress != 1 || b.ProgressHold == 0 {
@@ -320,7 +321,7 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 	}
 	before := b.Layout
 	b.prev = []string{"frame"}
-	batch := imageBatch{seq: 1, results: []imageLoadResult{{
+	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
 	if !b.applyDeferredImageBatch(batch) {
@@ -345,7 +346,7 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	near := nodeByID(b.Page.Root, "near")
 	before := b.Layout
 	b.prev = []string{"frame"}
-	batch := imageBatch{seq: 1, results: []imageLoadResult{{
+	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: near, Src: "near.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
 	if !b.applyDeferredImageBatch(batch) {
@@ -370,7 +371,7 @@ func TestDeferredImageWithoutFragmentRebuilds(t *testing.T) {
 	if nodeRow(b.Layout, ghost) >= 0 {
 		t.Fatal("display:none image was laid out")
 	}
-	batch := imageBatch{seq: 1, results: []imageLoadResult{{
+	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: ghost, Src: "ghost.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
 	b.applyDeferredImageBatch(batch)
@@ -384,7 +385,7 @@ func TestPendingImageLayoutWaitsForViewport(t *testing.T) {
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
 	far := nodeByID(b.Page.Root, "far")
 	row := nodeRow(b.Layout, far)
-	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
+	b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
 	if b.PendingImageRow == 0 {
@@ -417,7 +418,7 @@ func TestPendingImageLayoutRebuildsAtDocumentEnd(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
 	far := nodeByID(b.Page.Root, "far")
-	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
+	b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
 	before := b.Layout
@@ -433,7 +434,7 @@ func TestDrawAppliesPendingImageLayout(t *testing.T) {
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
 	far := nodeByID(b.Page.Root, "far")
 	row := nodeRow(b.Layout, far)
-	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
+	b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
 	before := b.Layout
@@ -454,7 +455,7 @@ func TestBelowViewportImageBatchKeepsVisibleRows(t *testing.T) {
 	far := nodeByID(b.Page.Root, "far")
 	drawQuiet(b)
 	before := append([]string(nil), b.prev...)
-	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
+	b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
 	out := capturedDraw(t, b)
@@ -518,4 +519,40 @@ func writtenRows(out string) []int {
 		i = j + 2
 	}
 	return rows
+}
+
+func TestStartDeferredImageLoadStreams(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 8, 8))); err != nil {
+		t.Fatal(err)
+	}
+	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	doc := ParseHTML(`<html><body><img id="x" src="` + dataURL + `"></body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := NewBrowser(60, 20)
+	b.loader.noImages = false
+	b.loader.deferImages = true
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.LoadSeq = 1
+	b.rebuild()
+	if !b.DeferredImages {
+		t.Fatal("deferred image load did not start")
+	}
+	defer b.cancelDeferredImageLoad()
+	deadline := time.After(2 * time.Second)
+	for b.DeferredImages {
+		select {
+		case batch := <-b.ImageCh:
+			if !b.applyDeferredImageBatch(batch) {
+				t.Fatal("streamed batch did not request a repaint")
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for deferred image results")
+		}
+	}
+	img := doc.FindFirst("img")
+	if img == nil || img.Img == nil {
+		t.Fatal("streamed image was not installed")
+	}
 }

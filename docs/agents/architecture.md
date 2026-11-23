@@ -175,7 +175,12 @@ destination; the tracker lists what remains.
 | `internal/engine/layout_links.go` | Link rectangles, overlay anchors, and fixed/sticky scroll re-anchoring (sticky groups clamp against their containing block). |
 | `internal/engine/layout_util.go` | Width/rune helpers, text transforms, tab expansion, visible-text extraction and page-background fallback. |
 | `internal/engine/render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, z-index paint ordering, image-placement collection, `PaintLayout*`, SVG decoding via the vendored renderer. |
-| `render_gfx.go` | Browser `Graphics` interface, protocol graphics-mode aliases and inline-SVG loading. The app injects the frontend renderer; Kitty/iTerm2 output is in `internal/frontend/gfx.go`. |
+| `internal/engine/image_source.go` | Image source selection: `srcset`/density candidates, `<picture>` sources and common lazy-load data attributes. |
+| `internal/engine/image_task.go` | Image task/result/batch model, the `ImageLoader` port, deferred-load scheduling, viewport-first ordering and visible-change checks. |
+| `internal/engine/inline_svg.go` | Inline SVG serialization back to XML, including restoration of SVG camelCase tag and attribute names. |
+| `internal/engine/placement.go` | Native-image placement cache, PNG encoding, image scaling and frame clipping into `protocol.Placement`. |
+| `internal/engine/image_decode.go` | Hostile-input image decoding: panic containment, decompression-bomb checks, SVG/raster dispatch, decode weight and aspect-preserving downscale. |
+| `render_gfx.go` | Browser `Graphics` interface, protocol graphics-mode aliases and the inline-SVG budget pass. SVG serialization lives in `internal/engine/inline_svg.go`; the app injects the frontend renderer. |
 | `paint_compat.go` | Browser aliases and wrappers for the engine grid/paint API and SVG decoders. Temporary. |
 | `encoders.go` | Injected frame/PNG encoder hooks; the browser does not import `internal/frontend`. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
@@ -207,7 +212,6 @@ destination; the tracker lists what remains.
 | `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers and tests. Normal frames, interactive overlays and form-focused chrome are composed by the front end; removed when the remaining fallback moves. |
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
-| `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
 | `internal/browser/pdf.go` | PDF response to page-model integration: page slicing, `Page n/N` metadata and HTML assembly. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
@@ -219,7 +223,7 @@ destination; the tracker lists what remains.
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling, decoding and budgets. Raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
+| `fetch.go` | Browser-side loader orchestration: image/SVG/about/PDF/blocked handling and fetch budgets. Image source selection/task collection, task ordering, decoding/fit, placement and SVG serialization are engine-owned (`internal/engine/image_source.go`, `image_task.go`, `image_decode.go`, `placement.go`, `inline_svg.go`); raw HTTP/data fetch, cache, cookies, TLS, policy and request accounting are delegated to `internal/host`. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |
@@ -237,7 +241,7 @@ destination; the tracker lists what remains.
 | `memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`), the percentage-derived JS/image/SVG budgets, the weighted decoded-image byte limiter, and the one-shot scavenge request consumed between frames. |
 | `pdf_compat.go` | Browser aliases and wrappers for the engine PDF parser/document model. |
 | `browser_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
-| `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
+| `browser_images.go` | Thin deferred-image bridge: engine task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
 | `browser_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `engine.Selection`. |
 | `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. Browser-side today; moves with the session. `automation_transport.go` exposes it through the MCP protocol client. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |

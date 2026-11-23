@@ -1,4 +1,4 @@
-package browser
+package engine
 
 import (
 	"bytes"
@@ -11,8 +11,21 @@ import (
 	"browser/internal/protocol"
 )
 
-// encodePNG encodes an image for a protocol placement or an iTerm2 payload.
-func encodePNG(img image.Image) ([]byte, error) {
+// placementKey and placementEntry are the bounded encode cache used by native
+// image placement.
+type placementKey struct {
+	ptr  uintptr
+	src  string
+	w, h int
+}
+
+type placementEntry struct {
+	id   int
+	data []byte
+}
+
+// EncodePNG encodes an image for a protocol placement or an iTerm2 payload.
+func EncodePNG(img image.Image) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.BestSpeed}
 	if err := enc.Encode(&buf, img); err != nil {
@@ -35,9 +48,9 @@ func imagePointer(img image.Image) uintptr {
 	return 0
 }
 
-// scaleImage resizes src to w x h with area sampling. The result is always
+// ScaleImage resizes src to w x h with area sampling. The result is always
 // straight-alpha NRGBA so it can be encoded as PNG.
-func scaleImage(src image.Image, w, h int) *image.NRGBA {
+func ScaleImage(src image.Image, w, h int) *image.NRGBA {
 	if w < 1 {
 		w = 1
 	}
@@ -62,8 +75,8 @@ func scaleImage(src image.Image, w, h int) *image.NRGBA {
 			if x1 <= x0 {
 				x1 = x0 + 1
 			}
-			sx := maxInt(1, (x1-x0)/4)
-			sy := maxInt(1, (y1-y0)/4)
+			sx := MaxInt(1, (x1-x0)/4)
+			sy := MaxInt(1, (y1-y0)/4)
 			var sr, sg, sb, sa uint64
 			var n uint64
 			for yy := y0; yy < y1; yy += sy {
@@ -110,68 +123,55 @@ const maxPlacementCacheBytes = 8 << 20
 // maxPlacementCacheEntries bounds the number of distinct images.
 const maxPlacementCacheEntries = 64
 
-// placementKey identifies one decoded image. ptr is a best-effort identity;
-// src and bounds keep a reused address from aliasing another page's image.
-type placementKey struct {
-	ptr  uintptr
-	src  string
-	w, h int
-}
-
-type placementEntry struct {
-	id   int
-	data []byte
-}
-
 // placementImage returns the stable id and encoded bytes for one image,
 // encoding it once and caching the result across frames.
-func (b *Browser) placementImage(p ImagePlacement) *placementEntry {
+func (s *Session) placementImage(p ImagePlacement) *placementEntry {
 	if p.Img == nil || p.W <= 0 || p.H <= 0 || p.TotalRows <= 0 {
 		return nil
 	}
 	bounds := p.Img.Bounds()
 	key := placementKey{ptr: imagePointer(p.Img), src: p.Src, w: bounds.Dx(), h: bounds.Dy()}
-	if b.placementCache == nil {
-		b.placementCache = make(map[placementKey]*placementEntry)
+	if s.placementCache == nil {
+		s.placementCache = make(map[placementKey]*placementEntry)
 	}
-	if e := b.placementCache[key]; e != nil {
+	if e := s.placementCache[key]; e != nil {
 		return e
 	}
-	data, err := encodePNG(p.Img)
+	data, err := EncodePNG(p.Img)
 	if err != nil || len(data) > protocol.DefaultLimits.MaxImageBytes {
 		// An image that cannot fit one placement is omitted rather than
 		// failing the whole frame.
 		return nil
 	}
-	if b.nextPlacementID == 0 {
-		b.nextPlacementID = 1
+	if s.nextPlacementID == 0 {
+		s.nextPlacementID = 1
 	}
-	e := &placementEntry{id: b.nextPlacementID, data: data}
-	b.nextPlacementID++
+	e := &placementEntry{id: s.nextPlacementID, data: data}
+	s.nextPlacementID++
 	if len(data) > maxPlacementCacheBytes {
 		return e
 	}
-	b.placementCache[key] = e
-	b.placementBytes += len(data)
-	b.evictPlacements()
+	s.placementCache[key] = e
+	s.placementBytes += len(data)
+	s.evictPlacements()
 	return e
 }
 
-func (b *Browser) evictPlacements() {
-	for b.placementBytes > maxPlacementCacheBytes || len(b.placementCache) > maxPlacementCacheEntries {
-		for key, e := range b.placementCache {
-			delete(b.placementCache, key)
-			b.placementBytes -= len(e.data)
+func (s *Session) evictPlacements() {
+	for s.placementBytes > maxPlacementCacheBytes || len(s.placementCache) > maxPlacementCacheEntries {
+		for key, e := range s.placementCache {
+			delete(s.placementCache, key)
+			s.placementBytes -= len(e.data)
 			break
 		}
 	}
 }
 
-// protocolPlacements maps engine image fragments to wire placements and clips
+// ProtocolPlacements maps engine image fragments to wire placements and clips
 // them to the frame. Layout can place an image partly outside the viewport
 // (negative offsets or a box wider than the terminal); the wire contract
 // requires every placement to be inside the frame.
-func (b *Browser) protocolPlacements(dst []protocol.Placement, placements []ImagePlacement, w, h int) []protocol.Placement {
+func (s *Session) ProtocolPlacements(dst []protocol.Placement, placements []ImagePlacement, w, h int) []protocol.Placement {
 	dst = dst[:0]
 	for _, p := range placements {
 		if p.W <= 0 || p.H <= 0 || p.TotalRows <= 0 {
@@ -194,7 +194,7 @@ func (b *Browser) protocolPlacements(dst []protocol.Placement, placements []Imag
 		if x1 <= x0 || y1 <= y0 {
 			continue
 		}
-		e := b.placementImage(p)
+		e := s.placementImage(p)
 		if e == nil {
 			continue
 		}
