@@ -13,11 +13,11 @@ terminal front end, live session loop, app dispatch and the interactive chrome
 surfaces (normal header/footer, scrollbar, prompts, find, menus, dialogs,
 select, download/notice, hints, the console and the session history list) are
 landed, and the front end renders the displayed URL/title from validated
-history commits. The engine still composes chrome while a focused page form
-holds the key path. Remaining: host-attested final URLs, the `Browser` →
-`Session` split, direct app wiring and Phase 6 cleanup.
+history commits. A focused page form still sends keys through the engine, but
+the front end keeps the chrome. Remaining: host-attested final URLs, the
+`Browser` → `Session` split, direct app wiring and Phase 6 cleanup.
 Branch: `core-rewrite`.
-Last updated: 2026-11-22 (audited against the code).
+Last updated: 2026-11-23 (audited against the code).
 
 ## 1. Goal
 
@@ -114,6 +114,7 @@ network destination.
 | D71 | 2026-11-22 | Move console HTML find to the front end. `Find` gains a page/HTML scope; the engine computes HTML matches and sends visible highlight rectangles plus counts in `ConsoleView`; the front end owns the find bar, query/caret, next/previous and close. The engine keeps the old console find path for direct callers and tests. | The console is now entirely front-end-owned for interactive presentation and input; the engine only computes layout-aware HTML matches and highlights. Navigation state and the session split remain. |
 | D72 | 2026-11-23 | Move session-history ownership to the front end while the engine keeps the memory-only page cache. The front end owns the ordered entry list, the current index and scroll offsets. It sends a bounded `History` snapshot (entries plus current) before opening `about:history`, and the engine renders it with the existing `HistoryPageHTML`/`AppPageHTML` shell. A dedicated `History` command keeps `Navigate` generic and lets reload or a typed `about:history` reuse the latest snapshot. The engine page cache is keyed by the front-end entry ID, and back/forward becomes a restore request. `State.URL` remains engine-produced in this batch; trusted URL ownership stays with the session split. | User decision: engine-rendered history preserves the normal page model (layout, find, selection, dark mode and dump/PNG/MCP parity) and matches the config/help pattern. Front-end ownership keeps D2/D54; the engine receives only display data and page-cache keys. |
 | D73 | 2026-11-23 | Front end owns the displayed URL/title. `HistoryCommit` gains `Title`; the front end validates the URL scheme/length, stores the title/URL on the history entry and substitutes that entry for `State.URL/Title` in normal chrome. Dynamic title updates are accepted only while the engine reports the committed URL. The engine still reports the final URL; host-attested final URLs and the process split remain. | This is a small ownership step without a navigation-approval round trip. It removes engine `State` from the address bar and rejects unsupported schemes, while acknowledging that a compromised engine can still misreport the final URL until the host/process boundary exists. |
+| D74 | 2026-11-23 | Keep front-end chrome active while a page form owns the keyboard. `State.KeysEngine` still routes keys through the engine, but `State.FrontendChrome` no longer turns false for form focus; the front end composes the header, footer and scrollbar. The engine fallback remains for direct callers and tests. | This closes the last live-session path where the engine emitted chrome. Form editing is still engine-side, so the session split still moves it, but it can no longer reach the trusted chrome rows. |
 
 Append new decisions with the next ID. Do not rewrite an earlier row; supersede
 it with a new one and mark the old one "superseded by Dn".
@@ -200,9 +201,8 @@ Phase 3 under D19.
 \*\* Phase 2 is partial only for host-attested final URLs. Every interactive
 chrome surface, overlay, dialog, hint, console, find bar, the session history
 list, content geometry and the displayed URL/title ledger are front-end-owned;
-the engine keeps its fallback composition for direct callers, tests and while a
-focused page form keeps keys engine-side. `protocol.Dialog`/`DialogResult` are
-wired in the interactive path.
+the engine keeps its fallback composition only for direct callers and tests.
+`protocol.Dialog`/`DialogResult` are wired in the interactive path.
 
 ### Phase 0 — Contract and baseline
 
@@ -247,7 +247,7 @@ wired in the interactive path.
 
 - [x] Front end draws the normal header and footer from `protocol.State`.
       The engine keeps `Chrome` composition as the fallback for direct callers,
-      tests and the engine-owned form-input path.
+      tests.
 - [x] Header/footer and scrollbar mouse are front-end-owned and send
       `App`/`Navigate`/`Scroll` actions. Page-area mouse remains engine-side.
 - [x] Prompts, notices, dialogs, console, menus and the find bar are
@@ -297,9 +297,9 @@ wired in the interactive path.
       view/zoom menu state and the fallback flags. Selection stays engine-side
       and crosses only as clipboard text; image progress is part of the footer
       text, so no extra state message is needed.
-- [ ] While a focused page form (or an engine-only fallback modal) holds the
-      key path, `State.FrontendChrome` is false and the engine composes chrome.
-      Closing that gap belongs with the session split.
+- [x] A focused page form still routes keys through the engine, but
+      `State.FrontendChrome` stays true; the front end composes the header,
+      footer and scrollbar. The engine no longer emits chrome in a live session.
 - [x] Back/forward history, scroll restore and `about:history` data moved to
       the front end (D54/D72). The front end owns the list/index/scroll and
       sends a bounded `History` snapshot; the engine keys its page cache by
@@ -421,7 +421,7 @@ wired in the interactive path.
 - [~] Split chrome presentation: normal header/footer, scrollbar, prompts,
       find, menus, dialogs, select, download/notice, hints, the console and
       history are front-end-drawn. The engine `Chrome`/full-frame fallback
-      remains for direct callers, tests and the engine-owned form-input path.
+      remains for direct callers and tests.
       The URL/title display ledger is front-end-owned; host attestation
       remains.
 - [x] Move native image placement to the front end: encode `ImagePlacement`
@@ -472,11 +472,9 @@ trusted-shell split, then Phase 6. Dependency order:
 - [~] Toolbar, footer, scrollbar, overlays, console, find bar and menus are
       front-end-drawn on the interactive path. `Browser.drawChrome`,
       `presentComposed`, `protocol.Chrome` and the full-frame fallback remain
-      for direct callers, tests and the engine-owned form-input path.
-- [ ] While a focused page form keeps `State.KeysEngine` true, the engine also
-      composes chrome. Make the front end own chrome in that state, or move form
-      editing out of the engine key path, so the engine cannot emit chrome in a
-      live session.
+      for direct callers and tests.
+- [x] A focused page form keeps `State.KeysEngine` true for key routing, but
+      the front end keeps `FrontendChrome` true and composes the chrome.
 - [x] Move content-rect geometry (`headerRows`, `viewport`, `contentRect`) to
       the front end; `ContentBounds` is computed there and sent in
       `Init`/`Resize`. The engine keeps a legacy derivation for direct callers
@@ -1089,4 +1087,5 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-22 | 7m | Audit: corrected the stale status, Phase 2/5 checklists and file-ownership notes to match the landed console/find/dialog/chrome ownership. Recorded the remaining trust gap (a focused page form makes `State.FrontendChrome` false and lets the engine compose chrome), the unused `protocol.Selection` event and the unused `Navigate.RestoreScroll`, and updated the `Browser` method count to 303. No behavior change. | `go test ./...`, `go vet`, `gofmt`, `git diff --check`, dump/PNG hashes | Batch 13: navigation state, trusted URL and content-rectangle geometry |
 | 2026-11-23 | 7n | Batch 13 (D72): moved the session history list, current index, scroll offsets and `about:history` snapshot to the front end. Added `History`, `Restore` and `HistoryCommit`; the engine now keys its memory-only page cache by front-end entry ID, emits final URLs, restores cached/same-document entries, and no longer owns back/forward or `App` history actions. Automation keeps its own headless history list. Trusted URL/title ownership remains deferred. | `go test ./...`, `go vet`, full `-race`, protocol/history/cache/restore tests, front-end snapshot/commit/mouse tests, PTY H/back/forward, dump/PNG hashes | Trusted URL, content-rectangle geometry, then session split |
 | 2026-11-23 | 7o | Batch 14: moved content-rectangle geometry to the front end. `ContentBounds` computes the chrome reservation; `Init`/`Resize` carry `ContentTop`/`ContentHeight`; the engine uses the supplied rectangle and keeps the legacy derivation only for direct callers/tests. Terminal dimensions still travel for the fallback screen. Added geometry and protocol tests; PTY and hashes unchanged. | `go test ./...`, `go vet`, full `-race`, geometry/state/protocol tests, PTY H/back, dump/PNG hashes | Trusted URL/title, then session split |
-| 2026-11-23 | 7p | Batch 15: moved the displayed URL/title ledger to the front end. `HistoryCommit` now carries the page title; the front end validates scheme/length, stores the entry, and substitutes it for `State.URL/Title` in normal chrome. Dynamic title updates are accepted only while the engine reports the committed URL. Invalid commits are ignored. Host-attested final URLs remain for the session split. | `go test ./...`, `go vet`, full `-race`, protocol/commit/ledger/validation tests, PTY H/back, dump/PNG hashes | Host-attested URL, then session split |
+| 2026-11-23 | 7p | Batch 15: moved the displayed URL/title ledger to the front end. `HistoryCommit` now carries the page title; the front end validates scheme/length, stores the entry, and substitutes it for `State.URL/Title` in normal chrome. Dynamic title updates are accepted only while the engine reports the committed URL. Invalid commits are ignored. Host-attested final URLs remain for the session split. | `go test ./...`, `go vet`, full `-race`, protocol/commit/ledger/validation tests, PTY H/back, dump/PNG hashes | Form chrome gap, then host-attested URL/session split |
+| 2026-11-23 | 7q | Batch 16: closed the form-focus chrome gap. `frontendChromeActive` now follows the normal front-end chrome path even when `KeysEngine` is true, so a focused page form still routes keys through the engine while the front end composes header/footer/scrollbar. Added a state test for form focus and updated the chrome/ownership docs. | `go test ./...`, `go vet`, full `-race`, chrome state tests, PTY form/help, dump/PNG hashes | Host-attested URL/session split |

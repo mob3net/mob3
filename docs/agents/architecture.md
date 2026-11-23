@@ -113,10 +113,10 @@ destination; the tracker lists what remains.
   keys its page cache by the front-end entry ID. It also owns the displayed
   URL/title: committed history entries replace `State.URL/Title` for chrome,
   with a scheme/length check. The engine still reports the final URL, so
-  host-attested authenticity remains. While a page form field (or an
-  engine-only fallback modal) holds the key path, `State.FrontendChrome` is
-  false and the engine composes chrome; closing that gap is part of the
-  session split.
+  host-attested authenticity remains. While a page form field holds the key
+  path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
+  stays true and the front end composes the header, footer and scrollbar. The
+  engine fallback remains only for direct callers and tests.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -185,7 +185,7 @@ destination; the tracker lists what remains.
 | `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL/title ledger: entries, current index, scroll tracking, validated `HistoryCommit` updates, `about:history` snapshot and back/forward restore requests. |
-| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. The engine fallback still paints chrome for direct callers, tests and while a focused page form keeps the engine on the key path. |
+| `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. The engine fallback remains for direct callers and tests; a focused page form still sends keys through the engine but no longer hands it chrome. |
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
 | `internal/frontend/select.go` | Page select popup model, layout and `SelectResult` answer. |
@@ -194,7 +194,7 @@ destination; the tracker lists what remains.
 | `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
 | `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
 | `internal/frontend/mouse.go` | Mouse event/token types and SGR/X10 decoding. |
-| `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers, tests and the engine-owned form-input path. Normal frames and interactive overlays are composed by the front end; removed when the remaining chrome moves. |
+| `internal/protocol` `Chrome` message | Fallback display-list bridge: header/footer cell layer for direct callers and tests. Normal frames, interactive overlays and form-focused chrome are composed by the front end; removed when the remaining fallback moves. |
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |

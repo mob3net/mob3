@@ -305,3 +305,17 @@ func TestFrontendDownloadMatchesEngine(t *testing.T) {
 		}
 	}
 }
+
+func TestFormFocusKeepsFrontendChrome(t *testing.T) {
+	b := NewBrowser(80, 24)
+	b.emitFrames = true
+	b.frontendChrome = true
+	b.inputFocus = &Node{Tag: "input"}
+	st := b.stateMessage()
+	if !st.KeysEngine {
+		t.Fatal("form focus did not keep engine keys")
+	}
+	if !st.FrontendChrome {
+		t.Fatal("form focus handed chrome back to the engine")
+	}
+}

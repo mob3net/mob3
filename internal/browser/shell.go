@@ -78,11 +78,12 @@ func (b *Browser) keysEngine() bool {
 		b.inputFocus != nil || b.controlFocus != nil || b.linkHints || b.hintConfirm
 }
 
-// frontendChromeActive is the normal path while the front end also owns the
-// base key/mouse state. Page form fields and engine-owned fallback modals keep
-// the engine on the chrome and key path, which is the remaining trust gap.
+// frontendChromeActive reports whether the front end composes the page chrome.
+// A focused page form still sends keys through the engine, but the chrome and
+// scrollbar stay front-end-owned so the engine cannot emit header/footer cells
+// in a live session.
 func (b *Browser) frontendChromeActive() bool {
-	return b.frontendChromePath() && !b.keysEngine()
+	return b.frontendChromePath()
 }
 
 // contentRect computes the content rectangle once for a frame. Target state:
