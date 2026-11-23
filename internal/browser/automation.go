@@ -776,16 +776,16 @@ func (a *Automation) Evaluate(ctx context.Context, expression string) (string, e
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	b := a.b
-	if b.js == nil {
+	if b.JS == nil {
 		return "", errors.New("JavaScript is disabled or no page is loaded")
 	}
-	v, err := b.js.RunCode("automation", expression)
+	v, err := b.JS.RunCode("automation", expression)
 	if b.consumePendingJS() {
 		if err := a.waitLoad(ctx); err != nil {
 			return "", err
 		}
 	}
-	if b.js.ConsumeDirty() {
+	if b.JS.ConsumeDirty() {
 		b.rebuild()
 	}
 	if err != nil {
@@ -1069,11 +1069,11 @@ func (a *Automation) fillControlLocked(n *Node, value string) error {
 // committed and applies any DOM mutations the handler made.
 func (a *Automation) fireChangeLocked(n *Node) {
 	b := a.b
-	if b.js == nil {
+	if b.JS == nil {
 		return
 	}
-	b.js.FireNodeEvent(n, "change")
-	if b.js.ConsumeDirty() {
+	b.JS.FireNodeEvent(n, "change")
+	if b.JS.ConsumeDirty() {
 		b.rebuild()
 	}
 }
@@ -1639,7 +1639,7 @@ func (a *Automation) waitStepLocked(ctx context.Context, deadline time.Time) err
 			return err
 		}
 	}
-	if b.js != nil {
+	if b.JS != nil {
 		b.runJSTimers()
 		if b.consumePendingJS() || b.loading {
 			if err := a.waitLoad(ctx); err != nil {
@@ -1671,7 +1671,7 @@ func (a *Automation) waitStepLocked(ctx context.Context, deadline time.Time) err
 // flushDirtyLocked rebuilds immediately when a timer changed the DOM but the
 // interactive redraw coalescing deferred it.
 func (a *Automation) flushDirtyLocked() {
-	if a.b.js != nil && a.b.js.ConsumeDirty() {
+	if a.b.JS != nil && a.b.JS.ConsumeDirty() {
 		a.b.rebuild()
 	}
 }

@@ -39,7 +39,7 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	}
 
 	// A later timer-driven rebuild must not restart the paused batch.
-	b.js = &jsRuntime{}
+	b.JS = &jsRuntime{}
 	b.rebuild()
 	if b.deferredImages {
 		t.Fatal("rebuild restarted a paused image load")

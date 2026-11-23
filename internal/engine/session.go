@@ -51,6 +51,10 @@ type Session struct {
 	HintConfirm     bool
 	HintConfirmLink int
 	HintsFrontend   bool
+
+	// JavaScript runtime and page tracking.
+	JS        *JSRuntime
+	PDFStarts []int
 }
 
 // NewSession creates an empty page session.
@@ -233,4 +237,72 @@ func (s *Session) HasSelection() bool { return s.Selection.Has() }
 func (s *Session) ClearSelection() {
 	s.Selection.Clear()
 	s.Selecting = false
+}
+
+// UpdatePDFPageStarts records the layout row where each PDF page begins.
+func (s *Session) UpdatePDFPageStarts() {
+	s.PDFStarts = s.PDFStarts[:0]
+	if s.Page == nil || s.Page.PDF == nil || s.Layout == nil {
+		return
+	}
+	nodes := s.Page.PDF.PageNodes
+	if len(nodes) == 0 {
+		return
+	}
+	index := make(map[*Node]int, len(nodes))
+	for i, n := range nodes {
+		index[n] = i
+	}
+	starts := make([]int, len(nodes))
+	for i := range starts {
+		starts[i] = -1
+	}
+	for _, f := range s.Layout.Frags {
+		for n := f.Node; n != nil; n = n.Parent {
+			i, ok := index[n]
+			if !ok {
+				continue
+			}
+			if starts[i] < 0 || f.Y < starts[i] {
+				starts[i] = f.Y
+			}
+			break
+		}
+	}
+	last := 0
+	for i := range starts {
+		if starts[i] < 0 {
+			starts[i] = last
+			continue
+		}
+		last = starts[i]
+	}
+	s.PDFStarts = starts
+}
+
+// PDFPageNumber returns the page shown at the top of the viewport.
+func (s *Session) PDFPageNumber() int {
+	if s.Page == nil || s.Page.PDF == nil {
+		return 0
+	}
+	n := len(s.Page.PDF.Pages)
+	if n == 0 {
+		return 0
+	}
+	cur := 1
+	for i, y := range s.PDFStarts {
+		if i >= n {
+			break
+		}
+		if y <= s.Scroll {
+			cur = i + 1
+		}
+	}
+	if cur > n {
+		cur = n
+	}
+	if cur < 1 {
+		cur = 1
+	}
+	return cur
 }

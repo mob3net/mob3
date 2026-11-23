@@ -99,7 +99,7 @@ func TestConsoleRequestPane(t *testing.T) {
 		t.Fatal("request was not started")
 	}
 	b.loader.finishRequest(id, gen, 200, 2048, 10*time.Millisecond, nil)
-	b.loader.recordCacheHit(gen, "GET", "https://example.com/b.js", "js", 512)
+	b.loader.recordCacheHit(gen, "GET", "https://example.com/b.JS", "js", 512)
 	lines := b.requestLines()
 	if len(lines) != 2 || !strings.Contains(lines[0], "200") ||
 		!strings.Contains(lines[0], "2.0K") || !strings.Contains(lines[0], "css") ||
@@ -239,8 +239,8 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
 	})
-	b.js = newJSRuntime(b, nil)
-	b.js.SetStorageLocalData(map[string]string{
+	b.JS = newJSRuntime(b, nil)
+	b.JS.SetStorageLocalData(map[string]string{
 		"config": strings.Repeat("x", 200),
 	})
 	const width = 40
@@ -512,9 +512,9 @@ func TestConsoleContentCannotInjectTerminalControls(t *testing.T) {
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	check("request")
 
-	b.js = newJSRuntime(b, nil)
-	b.js.SetStorageLocalData(map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"})
-	b.js.SetStorageSessionData(map[string]string{})
+	b.JS = newJSRuntime(b, nil)
+	b.JS.SetStorageLocalData(map[string]string{"k\x1b[2J": "v\x1b]52;c;x\x07"})
+	b.JS.SetStorageSessionData(map[string]string{})
 	b.selectConsolePane(consoleStorage)
 	withQuietStdout(t, func() { b.drawConsole(60, 20) })
 	check("storage")

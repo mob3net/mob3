@@ -171,13 +171,13 @@ func metaRefreshTarget(page *Page) string { return engine.MetaRefreshTarget(page
 // cached (about: pages, downloads) simply have their runtime stopped.
 func (b *Browser) suspendCurrentPage() {
 	cached := b.cacheCurrentPage()
-	if b.js != nil {
+	if b.JS != nil {
 		if cached {
-			b.js.Freeze()
+			b.JS.Freeze()
 		} else {
-			b.js.Stop()
+			b.JS.Stop()
 		}
-		b.js = nil
+		b.JS = nil
 	}
 }
 
@@ -191,7 +191,7 @@ func (b *Browser) cacheCurrentPage() bool {
 	case "", "about", "data", "javascript", "mailto", "tel":
 		return false
 	}
-	weight := pageWeight(b.Page, b.js, b.lastBody, b.ReaderRoot)
+	weight := pageWeight(b.Page, b.JS, b.lastBody, b.ReaderRoot)
 	if weight > b.historyCachePageCap() {
 		// A page heavier than the single-page allowance would pin the whole
 		// cache, so leave it out and let Back reload it instead.
@@ -199,7 +199,7 @@ func (b *Browser) cacheCurrentPage() bool {
 	}
 	c := &cachedPage{
 		page:              b.Page,
-		js:                b.js,
+		js:                b.JS,
 		readerRoot:        b.ReaderRoot,
 		readerSavedScroll: b.ReaderSavedScroll,
 		method:            b.lastMethod,
@@ -313,7 +313,7 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.BigTextBlocked = false
 	b.resetConsole()
 	if c.js != nil {
-		b.js = c.js
+		b.JS = c.js
 		c.js.Resume()
 	}
 	b.ReaderRoot = nil

@@ -12,15 +12,15 @@ func (b *Browser) startJS(page *Page) {
 	if b.jsPageBudget > 0 {
 		j.SetPageBudget(b.jsPageBudget)
 	}
-	b.js = j
+	b.JS = j
 	j.StartPage(page)
 	b.moduleErr = j.ModuleErr()
 }
 
 func (b *Browser) stopJS() {
-	if b.js != nil {
-		b.js.Stop()
-		b.js = nil
+	if b.JS != nil {
+		b.JS.Stop()
+		b.JS = nil
 	}
 }
 
@@ -32,8 +32,8 @@ func (b *Browser) nextJSTimerDelay() (time.Duration, bool) {
 	if b.hoverRebuildPending {
 		next = b.hoverRebuildAt
 	}
-	if b.js != nil {
-		if d, ok := b.js.NextTimerDelay(); ok {
+	if b.JS != nil {
+		if d, ok := b.JS.NextTimerDelay(); ok {
 			at := time.Now().Add(d)
 			if next.IsZero() || at.Before(next) {
 				next = at
@@ -60,14 +60,14 @@ func (b *Browser) runJSTimers() bool {
 		b.rebuild()
 		return true
 	}
-	if b.js == nil {
+	if b.JS == nil {
 		return false
 	}
-	b.js.Tick(now)
+	b.JS.Tick(now)
 	if b.consumePendingJS() {
 		return false
 	}
-	if !b.js.Dirty() {
+	if !b.JS.Dirty() {
 		return false
 	}
 	wait := jsRedrawInterval
@@ -77,13 +77,13 @@ func (b *Browser) runJSTimers() bool {
 	if !b.lastRebuild.IsZero() && now.Sub(b.lastRebuild) < wait {
 		return false
 	}
-	b.js.ConsumeDirty()
+	b.JS.ConsumeDirty()
 	b.rebuild()
 	return true
 }
 
 func (b *Browser) finishJSImport(task jsImportTask) {
-	if b.js != nil {
-		b.js.FinishImport(task)
+	if b.JS != nil {
+		b.JS.FinishImport(task)
 	}
 }

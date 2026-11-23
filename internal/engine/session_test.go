@@ -80,3 +80,21 @@ func TestSessionFindHintsAndSelection(t *testing.T) {
 		t.Fatal("selection not cleared")
 	}
 }
+
+func TestSessionPDFPageTracking(t *testing.T) {
+	page := &PDFDocument{Pages: []PDFPageText{{}, {}}}
+	nodes := []*Node{{Type: ElementNode, Tag: "div"}, {Type: ElementNode, Tag: "div"}}
+	page.PageNodes = nodes
+	s := Session{
+		Page:   &Page{PDF: page},
+		Layout: &Layout{Frags: []Frag{{Node: nodes[0], Y: 0}, {Node: nodes[1], Y: 40}}},
+		Scroll: 45,
+	}
+	s.UpdatePDFPageStarts()
+	if len(s.PDFStarts) != 2 || s.PDFStarts[1] != 40 {
+		t.Fatalf("starts = %v", s.PDFStarts)
+	}
+	if got := s.PDFPageNumber(); got != 2 {
+		t.Fatalf("page = %d, want 2", got)
+	}
+}

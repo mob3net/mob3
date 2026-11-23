@@ -456,7 +456,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	root := ParseHTML(`<html><body></body></html>`)
 	b := NewBrowser(100, 20)
 	b.Page = &Page{URL: u, Base: u, Root: root, PDF: doc}
-	b.pdfStarts = []int{0, 40, 80, 120, 160}
+	b.PDFStarts = []int{0, 40, 80, 120, 160}
 
 	text, hint, cell, ok := b.pdfFooterLine(120)
 	if !ok {
@@ -532,7 +532,7 @@ func TestPDFFooterDownloadHit(t *testing.T) {
 	b := NewBrowser(100, 12)
 	b.Page = &Page{URL: u, Base: u, Root: root, PDF: &PDFDocument{Pages: []PDFPageText{{Number: 1}}}}
 	b.Layout = &Layout{Height: 20}
-	b.pdfStarts = []int{0}
+	b.PDFStarts = []int{0}
 
 	// Draw into a pipe so both the painted line and its hit region are real.
 	old := os.Stdout

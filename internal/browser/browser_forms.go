@@ -297,9 +297,9 @@ func (b *Browser) toggleControl(n *Node) {
 			b.fireSelectChange(res.Select)
 			return
 		}
-		if b.js != nil {
-			b.js.FireNodeEvent(n, "input")
-			b.js.FireNodeEvent(n, "change")
+		if b.JS != nil {
+			b.JS.FireNodeEvent(n, "input")
+			b.JS.FireNodeEvent(n, "change")
 		}
 		b.rebuild()
 	}
@@ -307,9 +307,9 @@ func (b *Browser) toggleControl(n *Node) {
 
 // fireSelectChange notifies scripts and repaints after a select value changes.
 func (b *Browser) fireSelectChange(sel *Node) {
-	if b.js != nil && sel != nil {
-		b.js.FireNodeEvent(sel, "input")
-		b.js.FireNodeEvent(sel, "change")
+	if b.JS != nil && sel != nil {
+		b.JS.FireNodeEvent(sel, "input")
+		b.JS.FireNodeEvent(sel, "change")
 	}
 	b.rebuild()
 }
@@ -324,8 +324,8 @@ func (b *Browser) setInputFocus(n *Node) {
 	}
 	b.clearControlFocus()
 	old := b.Forms.FocusInput(n)
-	if old != nil && b.js != nil {
-		b.js.FireNodeEvent(old, "change")
+	if old != nil && b.JS != nil {
+		b.JS.FireNodeEvent(old, "change")
 	}
 	if n != nil {
 		if isRangeInput(n) {
@@ -371,11 +371,11 @@ func (b *Browser) setInputValue(n *Node, v string) {
 	n.Value = v
 	n.ValueSet = true
 	dirty := false
-	if b.js != nil {
-		b.js.FireNodeEvent(n, "input")
+	if b.JS != nil {
+		b.JS.FireNodeEvent(n, "input")
 		// The rebuild below uses any DOM mutations the handler made, so do
 		// not schedule a second timer-driven rebuild for the same keystroke.
-		dirty = b.js.ConsumeDirty()
+		dirty = b.JS.ConsumeDirty()
 	}
 	if b.consumePendingJS() {
 		return
@@ -418,8 +418,8 @@ func (b *Browser) submitForm(form *Node) (started bool, reason string) {
 		return false, msg
 	}
 	prevented := false
-	if b.js != nil {
-		prevented = b.js.FireNodeEvent(form, "submit")
+	if b.JS != nil {
+		prevented = b.JS.FireNodeEvent(form, "submit")
 	}
 	if b.consumePendingJS() {
 		return true, ""
@@ -460,7 +460,7 @@ func (b *Browser) queueFormSubmit(form *Node) {
 	if !ok {
 		return
 	}
-	if b.js == nil {
+	if b.JS == nil {
 		if method == http.MethodPost {
 			b.navigateRequest(method, target, body, contentType, true)
 		} else {
@@ -468,7 +468,7 @@ func (b *Browser) queueFormSubmit(form *Node) {
 		}
 		return
 	}
-	b.js.SetPendingForm(&FormSubmission{Method: method, Target: target, Body: body, ContentType: contentType})
+	b.JS.SetPendingForm(&FormSubmission{Method: method, Target: target, Body: body, ContentType: contentType})
 }
 
 // resolveLabelTarget maps a click on label text to its control. Clicks on the
@@ -655,9 +655,9 @@ func (b *Browser) setRangeValue(n *Node, value float64) {
 	}
 	n.Value = formatRangeNumber(value)
 	n.ValueSet = true
-	if b.js != nil {
-		b.js.FireNodeEvent(n, "input")
-		b.js.FireNodeEvent(n, "change")
+	if b.JS != nil {
+		b.JS.FireNodeEvent(n, "input")
+		b.JS.FireNodeEvent(n, "change")
 	}
 	b.rebuild()
 }

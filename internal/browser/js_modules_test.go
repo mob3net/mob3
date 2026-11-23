@@ -19,7 +19,7 @@ func TestInlineModuleImportsAndRuns(t *testing.T) {
 			`document.getElementById("out").textContent = msg;`)
 	b := NewBrowser(40, 10)
 	b.startJS(page)
-	if b.js == nil {
+	if b.JS == nil {
 		t.Fatal("runtime was not created")
 	}
 	if got := page.Root.FindFirst("p").TextContent(); got != "from module" {
@@ -96,7 +96,7 @@ func TestAsyncImportsShareModuleRecords(t *testing.T) {
 	b.interactive = true
 	b.startJS(page)
 	for i := 0; i < 2; i++ {
-		if _, err := b.js.RunCode("test",
+		if _, err := b.JS.RunCode("test",
 			`import("`+dep+`").then(function (m) {`+
 				`document.getElementById("out").textContent = String(globalThis.hits) + ":" + String(m.n);});`); err != nil {
 			t.Fatal(err)
@@ -120,7 +120,7 @@ func TestAsyncDynamicImportCompletes(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.interactive = true
 	b.startJS(page)
-	if _, err := b.js.RunCode("test",
+	if _, err := b.JS.RunCode("test",
 		`import("data:text/javascript,export const v = 9;").then(function (m) {`+
 			`document.getElementById("out").textContent = String(m.v);});`); err != nil {
 		t.Fatal(err)

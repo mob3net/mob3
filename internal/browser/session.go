@@ -126,7 +126,7 @@ func (b *Browser) Serve(ctx context.Context, abort <-chan struct{}, in <-chan pr
 			}
 		case task := <-b.importCh:
 			b.finishJSImport(task)
-			if b.js != nil && b.js.ConsumeDirty() {
+			if b.JS != nil && b.JS.ConsumeDirty() {
 				b.rebuild()
 			}
 			b.consumePendingJS()

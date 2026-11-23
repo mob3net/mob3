@@ -326,10 +326,10 @@ func TestBackKeepsPageJavaScriptState(t *testing.T) {
 	if b.Page.Title != "A1" {
 		t.Fatalf("cached title = %q, want A1", b.Page.Title)
 	}
-	if b.js == nil {
+	if b.JS == nil {
 		t.Fatal("cached page lost its JavaScript runtime")
 	}
-	v, err := b.js.RunCode("test", "window.__runs")
+	v, err := b.JS.RunCode("test", "window.__runs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,10 +528,10 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 	}
 	id := b.nextHistoryID()
 	b.finishLoad(loadResult{seq: b.loadSeq, entryID: id, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, historyPush: true, method: http.MethodGet})
-	if b.js == nil {
+	if b.JS == nil {
 		t.Fatal("no JS runtime")
 	}
-	b.js.SetPendingNav("/next")
+	b.JS.SetPendingNav("/next")
 	if !b.consumePendingJS() {
 		t.Fatal("queued navigation was not applied")
 	}

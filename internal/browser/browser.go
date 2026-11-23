@@ -159,7 +159,6 @@ type Browser struct {
 	// jsPageBudget and exists as a field so tests can shorten it.
 	jsPageBudget time.Duration
 	layoutBudget LayoutBudget
-	js           *jsRuntime
 
 	loadCh chan loadResult
 	// interactive marks the terminal UI, where a background dynamic import can
@@ -824,11 +823,11 @@ func (b *Browser) consumePendingJS() bool { return b.applyPendingJS(false, 0, fa
 // such a redirect keeps the same history entry, matching browser behaviour,
 // while a click or timer navigation after the page settled still pushes.
 func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool {
-	if b.js == nil {
+	if b.JS == nil {
 		return false
 	}
-	if pf := b.js.PendingForm(); pf != nil {
-		b.js.SetPendingForm(nil)
+	if pf := b.JS.PendingForm(); pf != nil {
+		b.JS.SetPendingForm(nil)
 		if duringLoad {
 			b.navigateRequestEntry(pf.Method, pf.Target, pf.Body, pf.ContentType, entryID, historyPush, false)
 		} else {
@@ -836,13 +835,13 @@ func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bo
 		}
 		return true
 	}
-	if b.js.PendingNav() == "" {
+	if b.JS.PendingNav() == "" {
 		return false
 	}
-	target := b.js.PendingNav()
-	replace := b.js.PendingReplace()
-	b.js.SetPendingNav("")
-	b.js.SetPendingReplace(false)
+	target := b.JS.PendingNav()
+	replace := b.JS.PendingReplace()
+	b.JS.SetPendingNav("")
+	b.JS.SetPendingReplace(false)
 	if b.autoNavigations >= maxAutoNavigations {
 		b.loopStopped = true
 		return false
@@ -864,7 +863,7 @@ func (b *Browser) rebuild() {
 	}
 	// Frameworks inject their component CSS as <style> elements after load;
 	// collect new or changed ones before this layout pass.
-	if b.js != nil && !b.Reader {
+	if b.JS != nil && !b.Reader {
 		b.Page.CollectDynamicStyles()
 	}
 	// The new layout includes every image decoded so far, so nothing is left
@@ -872,7 +871,7 @@ func (b *Browser) rebuild() {
 	b.pendingImageRow = 0
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
-	if b.js != nil && !b.Reader && (b.loader == nil || !b.loader.deferImages) {
+	if b.JS != nil && !b.Reader && (b.loader == nil || !b.loader.deferImages) {
 		// Deferred image loading is scheduled after layout, where the image
 		// positions are known.
 		b.refreshImages()
@@ -1178,22 +1177,22 @@ func (b *Browser) setPageHover(n *Node) {
 	old := b.HoverNode
 	if old != nil {
 		markHoverChain(old, false)
-		if b.js != nil && b.liveNode(old) {
-			b.js.FireNodeEvent(old, "mouseout")
-			b.js.FireNodeEvent(old, "mouseleave")
+		if b.JS != nil && b.liveNode(old) {
+			b.JS.FireNodeEvent(old, "mouseout")
+			b.JS.FireNodeEvent(old, "mouseleave")
 		}
 	}
 	b.HoverNode = n
 	dirty := false
 	if n != nil {
 		markHoverChain(n, true)
-		if b.js != nil && b.liveNode(n) {
-			b.js.FireNodeEvent(n, "mouseover")
-			b.js.FireNodeEvent(n, "mouseenter")
+		if b.JS != nil && b.liveNode(n) {
+			b.JS.FireNodeEvent(n, "mouseover")
+			b.JS.FireNodeEvent(n, "mouseenter")
 		}
 	}
-	if b.js != nil {
-		dirty = b.js.ConsumeDirty()
+	if b.JS != nil {
+		dirty = b.JS.ConsumeDirty()
 	}
 	// Hover-driven style passes are delayed in interactive sessions so fast
 	// pointer movement does not rebuild the page for every cell. Automation
@@ -1257,10 +1256,10 @@ func (b *Browser) followFocused() {
 	}
 	// Run the link's click handlers before navigating. Bare "#" links often
 	// open dialogs or menus from JavaScript and cancel the default navigation.
-	if b.js != nil && li.Node != nil && b.liveNode(li.Node) {
-		prevented := b.js.DispatchClick(li.Node)
-		if prevented && !(b.js.EventErr() && linkFallbackOK(li.Href)) {
-			if b.js.ConsumeDirty() {
+	if b.JS != nil && li.Node != nil && b.liveNode(li.Node) {
+		prevented := b.JS.DispatchClick(li.Node)
+		if prevented && !(b.JS.EventErr() && linkFallbackOK(li.Href)) {
+			if b.JS.ConsumeDirty() {
 				b.rebuild()
 			}
 			b.consumePendingJS()

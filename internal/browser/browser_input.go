@@ -407,14 +407,14 @@ func (b *Browser) clickContent(x, docY int) {
 	b.clearControlFocus()
 	if idx := b.linkAt(x, docY); idx >= 0 {
 		li := b.Layout.Links[idx]
-		if b.js != nil && b.liveNode(li.Node) {
-			if b.js.DispatchClick(li.Node) {
-				if b.js.EventErr() && linkFallbackOK(li.Href) {
+		if b.JS != nil && b.liveNode(li.Node) {
+			if b.JS.DispatchClick(li.Node) {
+				if b.JS.EventErr() && linkFallbackOK(li.Href) {
 					b.Focus = idx
 					b.followLink(li)
 					return
 				}
-				if b.js.ConsumeDirty() {
+				if b.JS.ConsumeDirty() {
 					b.rebuild()
 				}
 				b.consumePendingJS()
@@ -438,9 +438,9 @@ func (b *Browser) clickContent(x, docY int) {
 		return
 	}
 	prevented := false
-	if b.js != nil && b.liveNode(n) {
-		prevented = b.js.DispatchClick(n)
-		if b.js.ConsumeDirty() {
+	if b.JS != nil && b.liveNode(n) {
+		prevented = b.JS.DispatchClick(n)
+		if b.JS.ConsumeDirty() {
 			b.rebuild()
 		}
 	}
