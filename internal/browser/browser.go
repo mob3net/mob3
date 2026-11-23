@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"browser/internal/engine"
@@ -62,14 +61,9 @@ type Browser struct {
 	// the front-end entry ID.
 	entryID         uint64
 	nextEntryID     uint64
-	historyCache    map[uint64]*cachedPage
 	historyView     []string
 	historyViewCur  int
 	historyObserver func(protocol.HistoryCommit)
-	histMu          sync.RWMutex
-	// historyCacheBytes bounds the estimated size of the back/forward page cache.
-	// Zero disables page caching.
-	historyCacheBytes int64
 	// memLimitBytes is the process soft heap limit in bytes; zero leaves the
 	// runtime default in place.
 	memLimitBytes int64
@@ -296,18 +290,18 @@ func NewBrowser(w, h int) *Browser {
 			Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
 			CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
 			JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
+			Cache: engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
 		},
-		loader:            NewLoader(),
-		nextEntryID:       1,
-		historyCache:      make(map[uint64]*cachedPage),
-		historyViewCur:    -1,
-		historyCacheBytes: historyCacheBudget(effectiveMemoryLimit()),
-		loadCh:            make(chan loadResult, 1),
-		importCh:          make(chan jsImportTask, 16),
-		imageCh:           make(chan imageBatch, 1),
-		home:              "about:home",
-		configToken:       host.NewConfigToken(),
+		loader:         NewLoader(),
+		nextEntryID:    1,
+		historyViewCur: -1,
+		loadCh:         make(chan loadResult, 1),
+		importCh:       make(chan jsImportTask, 16),
+		imageCh:        make(chan imageBatch, 1),
+		home:           "about:home",
+		configToken:    host.NewConfigToken(),
 	}
+	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
 	setLayoutZoom(b.Zoom)
 	return b

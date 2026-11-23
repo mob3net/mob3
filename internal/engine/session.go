@@ -76,6 +76,9 @@ type Session struct {
 	JS        *JSRuntime
 	PDFStarts []int
 
+	// Memory-only back/forward page cache.
+	Cache *PageCache
+
 	// Load lifecycle.
 	Loading             bool
 	Progress            float64

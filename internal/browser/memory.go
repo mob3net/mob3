@@ -113,10 +113,7 @@ func (b *Browser) setMemoryLimitMB(mb int) {
 	if b.JS != nil {
 		b.JS.SetMemLimit(b.JSMemLimit)
 	}
-	b.historyCacheBytes = historyCacheBudget(base)
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
+	b.Cache.SetLimitBytes(historyCacheBudget(base))
 	if b.loader != nil {
 		b.loader.setMemoryBudget(base)
 	}

@@ -184,11 +184,11 @@ func TestHistoryPage(t *testing.T) {
 
 func TestJavaScriptToggleDropsPageCache(t *testing.T) {
 	b := NewBrowser(80, 10)
-	b.historyCache[1] = &cachedPage{js: &jsRuntime{}}
-	b.historyCache[2] = &cachedPage{}
+	b.Cache.Put(1, &cachedPage{JS: &jsRuntime{}})
+	b.Cache.Put(2, &cachedPage{})
 	b.dropCachedPages()
-	if len(b.historyCache) != 0 {
-		t.Fatalf("cache still has %d pages", len(b.historyCache))
+	if b.Cache.Len() != 0 {
+		t.Fatalf("cache still has %d pages", b.Cache.Len())
 	}
 }
 
@@ -349,11 +349,11 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 	for i := 0; i < maxCachedPages+3; i++ {
 		navigateAndFinish(t, b, fmt.Sprintf("https://example.com/p%d", i))
 	}
-	if got := len(b.historyCache); got != maxCachedPages {
+	if got := b.Cache.Len(); got != maxCachedPages {
 		t.Fatalf("cached pages = %d, want %d", got, maxCachedPages)
 	}
 	// The most recently replaced page must still be cached for an immediate back.
-	if b.historyCache[b.nextEntryID-2] == nil {
+	if b.Cache.Get(b.nextEntryID-2) == nil {
 		t.Fatal("most recent page was evicted from the cache")
 	}
 }
@@ -364,7 +364,7 @@ func TestAboutPagesAreNotCached(t *testing.T) {
 	attachHistory(b)
 	navigateAndFinish(t, b, "https://example.com/a")
 	navigateAndFinish(t, b, "about:help")
-	if b.historyCache[b.entryID] != nil {
+	if b.Cache.Get(b.entryID) != nil {
 		t.Fatal("about:help was cached")
 	}
 }
@@ -549,35 +549,28 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 
 func TestHistoryCacheEvictsByWeight(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.historyCacheBytes = 3 << 20
+	b.Cache.SetLimitBytes(3 << 20)
 	now := time.Now()
 	for i := 0; i < 4; i++ {
-		b.historyCache[uint64(i+1)] = &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)}
+		b.Cache.Put(uint64(i+1), &cachedPage{Bytes: 1 << 20, At: now.Add(time.Duration(i) * time.Second)})
 	}
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
-	total := int64(0)
-	for _, c := range b.historyCache {
-		total += c.bytes
+	if total := b.Cache.CachedBytes(); total > b.Cache.LimitBytes() {
+		t.Fatalf("cached bytes = %d, budget = %d", total, b.Cache.LimitBytes())
 	}
-	if total > b.historyCacheBytes {
-		t.Fatalf("cached bytes = %d, budget = %d", total, b.historyCacheBytes)
+	if b.Cache.Len() != 3 {
+		t.Fatalf("cached pages = %d, want 3", b.Cache.Len())
 	}
-	if len(b.historyCache) != 3 {
-		t.Fatalf("cached pages = %d, want 3", len(b.historyCache))
-	}
-	if b.historyCache[1] != nil {
+	if b.Cache.Get(1) != nil {
 		t.Fatal("oldest page survived the weight budget")
 	}
-	if b.historyCache[4] == nil {
+	if b.Cache.Get(4) == nil {
 		t.Fatal("newest page was evicted")
 	}
 }
 
 func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.historyCacheBytes = 2 << 20 // single-page cap is 1 MiB
+	b.Cache.SetLimitBytes(2 << 20) // single-page cap is 1 MiB
 	u := mustParse(t, "https://example.com/heavy")
 	b.URL = u
 	b.entryID = 1
@@ -586,14 +579,14 @@ func TestHistoryCacheSkipsHeavyPage(t *testing.T) {
 	if b.cacheCurrentPage() {
 		t.Fatal("page heavier than the single-page cap was cached")
 	}
-	if b.historyCache[1] != nil {
+	if b.Cache.Get(1) != nil {
 		t.Fatal("heavy page was stored in the cache")
 	}
 	b.Page.RawHTML = "<html><body><p>light</p></body></html>"
 	if !b.cacheCurrentPage() {
 		t.Fatal("light page was not cached")
 	}
-	if c := b.historyCache[1]; c == nil || c.bytes <= 0 {
+	if c := b.Cache.Get(1); c == nil || c.Bytes <= 0 {
 		t.Fatal("light page has no recorded weight")
 	}
 }
@@ -620,19 +613,19 @@ func TestPageWeightCountsScriptsImagesAndRuntime(t *testing.T) {
 		t.Fatalf("weight = %d, does not count source, scripts and image", plain)
 	}
 	withJS := pageWeight(page, &jsRuntime{}, nil, nil)
-	if withJS-plain < jsRuntimeWeight {
-		t.Fatalf("runtime allowance = %d, want at least %d", withJS-plain, jsRuntimeWeight)
+	if withJS-plain < 4<<20 {
+		t.Fatalf("runtime allowance = %d, want at least %d", withJS-plain, 4<<20)
 	}
 }
 
 func TestHistoryCacheDisabledDropsEntries(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.historyCache[1] = &cachedPage{bytes: 1 << 20}
+	b.Cache.Put(1, &cachedPage{Bytes: 1 << 20})
 	b.setHistoryCacheLimitMB(0)
-	if b.historyCacheBytes != 0 {
-		t.Fatalf("budget = %d, want 0", b.historyCacheBytes)
+	if b.Cache.LimitBytes() != 0 {
+		t.Fatalf("budget = %d, want 0", b.Cache.LimitBytes())
 	}
-	if len(b.historyCache) != 0 {
+	if b.Cache.Len() != 0 {
 		t.Fatal("disabling the page cache kept an entry")
 	}
 	if b.cacheCurrentPage() {
@@ -645,7 +638,7 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
 	b := NewBrowser(60, 10)
 	b.setMemoryLimitMB(1024)
-	if got, want := b.historyCacheBytes, memoryFraction(int64(1)<<30, historyCachePercent); got != want {
+	if got, want := b.Cache.LimitBytes(), memoryFraction(int64(1)<<30, historyCachePercent); got != want {
 		t.Fatalf("history cache = %d, want %d", got, want)
 	}
 	if got, want := b.loader.cache.limitBytes(), memoryFraction(int64(1)<<30, resourceCachePercent); got != want {
@@ -653,36 +646,23 @@ func TestMemoryLimitDerivesCaches(t *testing.T) {
 	}
 	// Clearing the limit restores the fallback budgets.
 	b.setMemoryLimitMB(0)
-	if b.historyCacheBytes != fallbackHistoryCacheBytes {
-		t.Fatalf("history cache fallback = %d, want %d", b.historyCacheBytes, fallbackHistoryCacheBytes)
+	if b.Cache.LimitBytes() != fallbackHistoryCacheBytes {
+		t.Fatalf("history cache fallback = %d, want %d", b.Cache.LimitBytes(), fallbackHistoryCacheBytes)
 	}
 	if got := b.loader.cache.limitBytes(); got != fallbackResourceCacheBytes {
 		t.Fatalf("resource cache fallback = %d, want %d", got, fallbackResourceCacheBytes)
 	}
 }
 
-func cachedBytes(history map[uint64]*cachedPage) int64 {
-	total := int64(0)
-	for _, c := range history {
-		if c != nil {
-			total += c.bytes
-		}
-	}
-	return total
-}
-
 func TestLightEvictionDoesNotScavenge(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
 	now := time.Now()
 	for i := 0; i < 12; i++ {
-		b.historyCache[uint64(i+1)] = &cachedPage{bytes: 1 << 20, at: now.Add(time.Duration(i) * time.Second)}
+		b.Cache.Put(uint64(i+1), &cachedPage{Bytes: 1 << 20, At: now.Add(time.Duration(i) * time.Second)})
 	}
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
-	if cachedBytes(b.historyCache) > b.historyCacheBytes {
-		t.Fatalf("cached bytes = %d, budget = %d", cachedBytes(b.historyCache), b.historyCacheBytes)
+	b.Cache.SetLimitBytes(8 << 20)
+	if b.Cache.CachedBytes() > b.Cache.LimitBytes() {
+		t.Fatalf("cached bytes = %d, budget = %d", b.Cache.CachedBytes(), b.Cache.LimitBytes())
 	}
 	if b.takeScavengePending() {
 		t.Fatal("small evictions requested a scavenge")
@@ -691,24 +671,15 @@ func TestLightEvictionDoesNotScavenge(t *testing.T) {
 
 func TestHeavyEvictionRequestsScavenge(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.historyCacheBytes = 8 << 20 // heavy threshold is 2 MiB
 	now := time.Now()
-	b.historyCache[1] = &cachedPage{bytes: 1 << 20, at: now}
-	b.historyCache[2] = &cachedPage{bytes: 4 << 20, at: now.Add(time.Second)}
-	b.historyCache[3] = &cachedPage{bytes: 4 << 20, at: now.Add(2 * time.Second)}
-	// Only the light oldest page is evicted to fit the budget, so no scavenge.
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
+	b.Cache.Put(1, &cachedPage{Bytes: 1 << 20, At: now})
+	b.Cache.Put(2, &cachedPage{Bytes: 4 << 20, At: now.Add(time.Second)})
+	b.Cache.Put(3, &cachedPage{Bytes: 4 << 20, At: now.Add(2 * time.Second)})
+	b.Cache.SetLimitBytes(8 << 20)
 	if b.takeScavengePending() {
 		t.Fatal("fitting the budget with a light eviction requested a scavenge")
 	}
-	// A new heavy page pushes out the older heavy one (4 MiB), which is at
-	// least a quarter of the budget.
-	b.historyCache[4] = &cachedPage{bytes: 4 << 20, at: now.Add(3 * time.Second)}
-	b.histMu.Lock()
-	b.trimHistoryCacheLocked()
-	b.histMu.Unlock()
+	b.Cache.Put(4, &cachedPage{Bytes: 4 << 20, At: now.Add(3 * time.Second)})
 	if !b.takeScavengePending() {
 		t.Fatal("heavy eviction did not request a scavenge")
 	}

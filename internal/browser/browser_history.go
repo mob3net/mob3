@@ -10,27 +10,16 @@ import (
 	"browser/internal/protocol"
 )
 
-// maxCachedPages bounds the session's back/forward page cache. Oldest entries
-// are dropped first; nothing is written to disk.
-const maxCachedPages = 10
+// maxCachedPages and cachedPage are engine-owned now.
+const maxCachedPages = engine.MaxCachedPages
 
-// The history cache budget is derived from -mem-limit/GOMEMLIMIT (12%) with a
-// 128 MB fallback; see memory.go. It is a soft accounting budget, not an
-// allocation: pages are weighed when they are suspended and dropped once the
-// total would exceed it.
+type cachedPage = engine.CachedPage
 
-// Weight estimates for a cached page. They are deliberately coarse: the cache
-// only needs to compare pages, and decoded images plus a live JS runtime
-// dominate the real cost. A DOM node with its slices, attribute strings and
-// presentation style measures about 200 bytes in our own heap measurements,
-// and the JavaScript runtime keeps one wrapper per wrapped node.
-const (
-	nodeWeightBase  = 200
-	nodeAttrWeight  = 48
-	ruleWeightBase  = 384
-	jsRuntimeWeight = 4 << 20
-	jsNodeWeight    = 128
-)
+func pageWeight(page *Page, js *jsRuntime, body []byte, readerRoot *Node) int64 {
+	return engine.PageWeight(page, js, body, readerRoot)
+}
+func domWeight(root *Node) int64        { return engine.DOMWeight(root) }
+func imageWeight(img image.Image) int64 { return engine.ImageWeight(img) }
 
 // maxAutoNavigations caps a chain of consecutive scripted or meta-refresh
 // redirects. Each one needs a fresh page load, so a site that redirects to
@@ -38,104 +27,10 @@ const (
 // bound. User-started navigations and any page that settles reset the count.
 const maxAutoNavigations = 20
 
-// cachedPage is a fully applied page kept for back and forward navigation. The
-// DOM, scripts' runtime state and reader extraction survive, so returning to
-// the entry skips fetching, parsing and script execution.
-type cachedPage struct {
-	page              *Page
-	js                *jsRuntime
-	readerRoot        *Node
-	readerSavedScroll int
-	method            string
-	body              []byte
-	contentType       string
-	at                time.Time
-	// bytes is the estimated retained size used to keep the cache within its
-	// budget. It is computed once when the page is suspended.
-	bytes int64
-}
-
-// pageWeight estimates the retained bytes of a page, its scripts, its decoded
-// images, its DOM and the JavaScript runtime that keeps it alive.
-func pageWeight(page *Page, js *jsRuntime, body []byte, readerRoot *Node) int64 {
-	if page == nil || page.Root == nil {
-		return 0
-	}
-	w := int64(len(page.RawHTML)) + int64(len(body))
-	for _, s := range page.Scripts {
-		w += int64(len(s.Code))
-	}
-	w += int64(len(page.Author)) * ruleWeightBase
-	w += domWeight(page.Root)
-	if readerRoot != nil && readerRoot != page.Root {
-		w += domWeight(readerRoot)
-	}
-	if js != nil {
-		w += jsRuntimeWeight + int64(js.NodeCount())*jsNodeWeight
-		w += int64(js.TemplateCount()) * nodeWeightBase
-		w += int64(js.DatasetCount()) * jsNodeWeight
-		w += int64(js.ModuleSourceBytes())
-	}
-	return w
-}
-
-// domWeight estimates a subtree's retained bytes: nodes, their attribute
-// strings, text, editable values and decoded images.
-func domWeight(root *Node) int64 {
-	if root == nil {
-		return 0
-	}
-	w := int64(0)
-	var walk func(*Node)
-	walk = func(n *Node) {
-		w += nodeWeightBase
-		for i := range n.Attrs {
-			w += int64(len(n.Attrs[i].Key)+len(n.Attrs[i].Value)) + nodeAttrWeight
-		}
-		w += int64(len(n.Text) + len(n.Value) + len(n.ImgSrc))
-		if n.Img != nil {
-			w += imageWeight(n.Img)
-		}
-		for _, c := range n.Children {
-			walk(c)
-		}
-	}
-	walk(root)
-	return w
-}
-
-// imageWeight estimates the bytes a decoded image keeps resident. Most decoders
-// produce 4 bytes per pixel; the common compact formats are cheaper.
-func imageWeight(img image.Image) int64 {
-	if img == nil {
-		return 0
-	}
-	b := img.Bounds()
-	px := int64(b.Dx()) * int64(b.Dy())
-	if px <= 0 {
-		return 0
-	}
-	switch img.(type) {
-	case *image.Paletted, *image.Gray:
-		return px
-	case *image.Gray16:
-		return px * 2
-	case *image.YCbCr:
-		// 4:2:0 keeps one luma byte and half a chroma sample per pixel.
-		return px + px/2
-	}
-	return px * 4
-}
-
 // historyCachePageCap is the largest single page the back/forward cache will keep.
 // Half the budget leaves room for the page you came from while stopping one
 // heavy page from pinning the whole allowance.
-func (b *Browser) historyCachePageCap() int64 {
-	if b.historyCacheBytes <= 0 {
-		return 0
-	}
-	return b.historyCacheBytes / 2
-}
+func (b *Browser) historyCachePageCap() int64 { return b.Cache.PageCap() }
 
 // setHistoryCacheLimitMB applies a new back/forward cache budget and trims the
 // cache immediately. Zero disables page caching.
@@ -143,21 +38,18 @@ func (b *Browser) setHistoryCacheLimitMB(mb int) {
 	if mb < 0 {
 		mb = 0
 	}
-	b.historyCacheBytes = int64(mb) << 20
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	b.trimHistoryCacheLocked()
+	b.Cache.SetLimitBytes(int64(mb) << 20)
 }
 
 // noteEvictedPage asks the event loop for one scavenge when the evicted page
 // held a large part of the cache budget, so its memory returns to the OS now
 // instead of waiting for the background scavenger. Small evictions do not
 // justify a stop-the-world pass.
-func (b *Browser) noteEvictedPage(size int64) {
+func (b *Browser) noteEvictedPage(size, limit int64) {
 	if size <= 0 {
 		return
 	}
-	if b.historyCacheBytes > 0 && size < b.historyCacheBytes/4 {
+	if limit > 0 && size < limit/4 {
 		return
 	}
 	b.scavengePending.Store(true)
@@ -191,100 +83,22 @@ func (b *Browser) cacheCurrentPage() bool {
 	case "", "about", "data", "javascript", "mailto", "tel":
 		return false
 	}
-	weight := pageWeight(b.Page, b.JS, b.LastBody, b.ReaderRoot)
-	if weight > b.historyCachePageCap() {
-		// A page heavier than the single-page allowance would pin the whole
-		// cache, so leave it out and let Back reload it instead.
+	weight := engine.PageWeight(b.Page, b.JS, b.LastBody, b.ReaderRoot)
+	if weight > b.Cache.PageCap() {
 		return false
 	}
-	c := &cachedPage{
-		page:              b.Page,
-		js:                b.JS,
-		readerRoot:        b.ReaderRoot,
-		readerSavedScroll: b.ReaderSavedScroll,
-		method:            b.LastMethod,
-		body:              b.LastBody,
-		contentType:       b.LastContentType,
-		at:                time.Now(),
-		bytes:             weight,
-	}
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	b.historyCache[b.entryID] = c
-	b.trimHistoryCacheLocked()
+	b.Cache.Put(b.entryID, &cachedPage{
+		Page: b.Page, JS: b.JS, ReaderRoot: b.ReaderRoot,
+		ReaderSavedScroll: b.ReaderSavedScroll, Method: b.LastMethod,
+		Body: b.LastBody, ContentType: b.LastContentType, At: time.Now(), Bytes: weight,
+	})
 	return true
-}
-
-// trimHistoryCacheLocked drops cached pages until the cache is within its page
-// count and estimated byte budget. The least recently cached pages go first;
-// the newest page survives even when the budget is tiny so Back can restore one
-// step without a load. The caller holds histMu.
-func (b *Browser) trimHistoryCacheLocked() {
-	type slot struct {
-		id    uint64
-		at    time.Time
-		bytes int64
-	}
-	var slots []slot
-	total := int64(0)
-	for id, c := range b.historyCache {
-		if c == nil {
-			continue
-		}
-		slots = append(slots, slot{id: id, at: c.at, bytes: c.bytes})
-		total += c.bytes
-	}
-	if b.historyCacheBytes <= 0 {
-		for _, s := range slots {
-			delete(b.historyCache, s.id)
-		}
-		return
-	}
-	evictOldest := func() bool {
-		if len(slots) == 0 {
-			return false
-		}
-		oldest := 0
-		for i := 1; i < len(slots); i++ {
-			if slots[i].at.Before(slots[oldest].at) {
-				oldest = i
-			}
-		}
-		total -= slots[oldest].bytes
-		b.noteEvictedPage(slots[oldest].bytes)
-		delete(b.historyCache, slots[oldest].id)
-		slots = append(slots[:oldest], slots[oldest+1:]...)
-		return true
-	}
-	for len(slots) > maxCachedPages {
-		evictOldest()
-	}
-	for total > b.historyCacheBytes && len(slots) > 1 {
-		evictOldest()
-	}
 }
 
 // dropCachedEntryUnless removes an entry's cached page when its URL differs
 // from u. A same-URL reload keeps the old cached page, matching the old history
 // semantics.
-func (b *Browser) dropCachedEntryUnless(id uint64, u string) {
-	if id == 0 {
-		return
-	}
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	c := b.historyCache[id]
-	if c == nil {
-		return
-	}
-	if c.page != nil && c.page.URL != nil && c.page.URL.String() == u {
-		return
-	}
-	if c.js != nil {
-		c.js.Stop()
-	}
-	delete(b.historyCache, id)
-}
+func (b *Browser) dropCachedEntryUnless(id uint64, u string) { b.Cache.DeleteUnlessURL(id, u) }
 
 // applyCachedPage restores a page kept by the back/forward cache without any
 // network or script work. The scroll position and reader extraction from the
@@ -297,35 +111,30 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 		b.loader.beginPage()
 	}
 	b.LoadSeq++
-	b.histMu.Lock()
-	// Restoring counts as the entry's most recent use.
-	c.at = time.Now()
-	b.historyCache[entryID] = c
-	b.histMu.Unlock()
 	b.entryID = entryID
-	b.Page = c.page
-	b.URL = c.page.URL
+	b.Page = c.Page
+	b.URL = c.Page.URL
 	b.ImagesPaused = false
-	b.LastMethod = c.method
-	b.LastBody = c.body
-	b.LastContentType = c.contentType
+	b.LastMethod = c.Method
+	b.LastBody = c.Body
+	b.LastContentType = c.ContentType
 	b.Layout = nil
 	b.BigTextBlocked = false
 	b.resetConsole()
-	if c.js != nil {
-		b.JS = c.js
-		c.js.Resume()
+	if c.JS != nil {
+		b.JS = c.JS
+		c.JS.Resume()
 	}
 	b.ReaderRoot = nil
 	b.ReaderSavedScroll = 0
 	readerFailed := false
 	if b.Reader {
-		if c.readerRoot != nil {
-			b.ReaderRoot = c.readerRoot
-			b.ReaderSavedScroll = c.readerSavedScroll
-		} else if c.page.PDF != nil {
+		if c.ReaderRoot != nil {
+			b.ReaderRoot = c.ReaderRoot
+			b.ReaderSavedScroll = c.ReaderSavedScroll
+		} else if c.Page.PDF != nil {
 			readerFailed = true
-		} else if root, ok := extractReaderPage(c.page.Root, c.page.Title); ok {
+		} else if root, ok := extractReaderPage(c.Page.Root, c.Page.Title); ok {
 			b.ReaderRoot = root
 		} else {
 			readerFailed = true
@@ -337,7 +146,7 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.Focus = -1
 	b.Hover = -1
 	b.clearSelection()
-	b.status = b.pageLoadStatus(c.page, readerFailed)
+	b.status = b.pageLoadStatus(c.Page, readerFailed)
 	b.prev = nil
 }
 
@@ -362,12 +171,7 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 			return
 		}
 	}
-	b.histMu.Lock()
-	c := b.historyCache[entryID]
-	if c != nil {
-		c.at = time.Now()
-	}
-	b.histMu.Unlock()
+	c := b.Cache.Get(entryID)
 	if c != nil {
 		b.applyCachedPage(entryID, c, scroll)
 		return
@@ -403,13 +207,4 @@ func (b *Browser) reload() {
 // dropCachedPages clears the back/forward page cache. It is used when a
 // session-wide setting changes, because restoring a page built under the old
 // setting would be inconsistent.
-func (b *Browser) dropCachedPages() {
-	b.histMu.Lock()
-	defer b.histMu.Unlock()
-	for id, c := range b.historyCache {
-		if c != nil && c.js != nil {
-			c.js.Stop()
-		}
-		delete(b.historyCache, id)
-	}
-}
+func (b *Browser) dropCachedPages() { b.Cache.DropAll() }

@@ -85,7 +85,7 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-dark", Value: onOff(b.Dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
-		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.JSMemLimit>>20), cacheMB, int(b.historyCacheBytes>>20)), Editable: true},
+		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.JSMemLimit>>20), cacheMB, int(b.Cache.LimitBytes()>>20)), Editable: true},
 		{Flag: "-layout-budget", Value: b.LayoutBudget.Name, Note: "select", Editable: true, Options: []string{"low", "standard", "high", "none"}},
 		{Flag: "-zoom", Value: zoomPercentLabel(b.Zoom), Note: "percent, 25-200; + - step", Editable: true},
 		{Flag: "-text-scale", Value: textScaleValue(b.NoBigText), Note: "select", Editable: true, Options: []string{"auto", "off"}},
