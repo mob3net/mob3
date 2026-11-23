@@ -37,6 +37,8 @@ type Session struct {
 	Interactive     bool
 	NoDraw          bool
 	ScaledLayout    bool
+	LastBuild       time.Duration
+	LastRebuild     time.Time
 
 	// View and page-display state.
 	Focus             int

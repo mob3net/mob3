@@ -71,10 +71,10 @@ func (b *Browser) runJSTimers() bool {
 		return false
 	}
 	wait := jsRedrawInterval
-	if 2*b.lastBuild > wait {
-		wait = 2 * b.lastBuild
+	if 2*b.LastBuild > wait {
+		wait = 2 * b.LastBuild
 	}
-	if !b.lastRebuild.IsZero() && now.Sub(b.lastRebuild) < wait {
+	if !b.LastRebuild.IsZero() && now.Sub(b.LastRebuild) < wait {
 		return false
 	}
 	b.JS.ConsumeDirty()

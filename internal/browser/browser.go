@@ -151,9 +151,6 @@ type Browser struct {
 	// pendingDownloadName carries a download attribute from the clicked link
 	// into the next load, so a non-renderable response keeps that filename.
 
-	lastRebuild time.Time
-	lastBuild   time.Duration
-
 	consoleOpen   bool
 	consoleScroll int
 	reqScroll     int
@@ -726,25 +723,8 @@ func (b *Browser) rebuild() {
 	if b.Page == nil {
 		return
 	}
-	// Frameworks inject their component CSS as <style> elements after load;
-	// collect new or changed ones before this layout pass.
-	if b.JS != nil && !b.Reader {
-		b.Page.CollectDynamicStyles()
-	}
-	// The new layout includes every image decoded so far, so nothing is left
-	// waiting for the viewport.
-	b.PendingImageRow = 0
-	// Scripts may set image sources on any interaction that triggers a rebuild.
-	// Scanning here is cheap when nothing changed.
-	if b.JS != nil && !b.Reader && (b.loader == nil || !b.loader.deferImages) {
-		// Deferred image loading is scheduled after layout, where the image
-		// positions are known.
-		b.refreshImages()
-	}
-	b.hoverRebuildPending = false
-	// Timer-driven DOM changes (for example marquee animations) rebuild the
-	// page constantly. Keep an active hint session alive and recompute its
-	// hints against the new layout instead of dismissing it.
+	// Keep an active hint session alive and recompute its hints against the
+	// new layout instead of dismissing it.
 	wasHints := b.LinkHints
 	hintAsk := b.HintAsk
 	hintPrefix := b.HintPrefix
@@ -758,51 +738,15 @@ func (b *Browser) rebuild() {
 	}
 	b.clearLinkHints()
 	b.clearHintConfirm()
-	start := time.Now()
 	b.BigText = b.scaledTextWanted()
-	root, author := b.Page.Root, b.Page.Author
-	if b.Reader && b.ReaderRoot != nil {
-		root, author = b.ReaderRoot, readerRules
+	if b.loader == nil {
+		b.Session.Images = nil
+	} else {
+		b.Session.Images = b.loader
 	}
-	deadline := time.Time{}
-	if b.LayoutBudget.Time > 0 {
-		deadline = start.Add(b.LayoutBudget.Time)
-	}
-	layoutWidth := b.Width
-	// Interactive pages reserve the rightmost column for the scrollbar, so
-	// text and images wrap before it instead of painting underneath it.
-	if !b.NoDraw && layoutWidth >= 2 {
-		layoutWidth--
-	}
-	b.BigText = b.scaledTextWanted()
-	imagesOff := b.loader != nil && b.loader.noImages
-	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.BigText, b.Dark, b.HideFixed, b.NoSticky, imagesOff, deadline, b.LayoutBudget)
-	b.Layout.BackgroundsOff = b.HideBackgrounds
-	b.updatePDFPageStarts()
-	if b.BigText && layoutTextOverlaps(b.Layout) {
-		// Scaled kitty glyphs are wider than their base font. On dense
-		// multi-column pages that pushes text from one column over another, so
-		// this page falls back to normal-size text for the rest of its session.
-		b.BigTextBlocked = true
-		b.BigText = false
-		start = time.Now()
-		deadline = time.Time{}
-		if b.LayoutBudget.Time > 0 {
-			deadline = start.Add(b.LayoutBudget.Time)
-		}
-		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.Dark, b.HideFixed, b.NoSticky, imagesOff, deadline, b.LayoutBudget)
-		b.Layout.BackgroundsOff = b.HideBackgrounds
-		b.updatePDFPageStarts()
-	}
-	b.ScaledLayout = b.BigText
-	b.PageHasHover = rulesUseHover(author)
-	b.lastBuild = time.Since(start)
-	b.lastRebuild = time.Now()
-	if b.Layout != nil {
-		b.Layout.SetFixedScroll(b.Scroll)
-	}
+	b.Session.RebuildLayout(b.viewportHeight(), b.BigText)
 	b.reindexFind()
-	if b.Layout.Truncated {
+	if b.Layout != nil && b.Layout.Truncated {
 		if b.status == "" {
 			b.status = layoutTruncatedStatus
 		}
@@ -810,18 +754,12 @@ func (b *Browser) rebuild() {
 		b.status = ""
 	}
 	b.Hover = -1
-	b.clampScroll()
 	if wasHints {
 		b.reopenLinkHints(hintAsk, hintPrefix)
 	} else if wasConfirm {
 		if link := b.findHintLink(confirmNode, confirmHref); link >= 0 {
 			b.beginHintConfirm(link)
 		}
-	}
-	// Layout now knows where each image sits, so a deferred batch can be
-	// ordered viewport-first.
-	if b.loader != nil && b.loader.deferImages && !b.Reader && !b.DeferredImages {
-		b.startDeferredImageLoad()
 	}
 }
 

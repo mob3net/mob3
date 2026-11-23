@@ -790,8 +790,8 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 	first := b.Layout
-	b.lastBuild = 100 * time.Millisecond
-	b.lastRebuild = time.Now()
+	b.LastBuild = 100 * time.Millisecond
+	b.LastRebuild = time.Now()
 	time.Sleep(25 * time.Millisecond)
 	if b.runJSTimers() {
 		t.Fatal("timer rebuilt inside the coalescing interval")
@@ -802,7 +802,7 @@ func TestTimerRedrawsAreCoalesced(t *testing.T) {
 	if !b.JS.Dirty() {
 		t.Fatal("dirty flag was cleared before the deferred rebuild")
 	}
-	b.lastRebuild = time.Now().Add(-time.Second)
+	b.LastRebuild = time.Now().Add(-time.Second)
 	if !b.runJSTimers() {
 		t.Fatal("deferred timer rebuild did not run after the interval")
 	}
