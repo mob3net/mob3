@@ -1220,17 +1220,17 @@ func (b *Browser) emitConsoleView() {
 		lines := b.htmlLines(w - 2)
 		start := paneStart(len(lines), b.htmlScroll, l.bodyRows)
 		for i, m := range b.findMatches {
-			rects := m.rects
+			rects := m.Rects
 			if len(rects) == 0 {
-				rects = []findRect{{x: m.x, line: m.line, w: m.w}}
+				rects = []findRect{{X: m.X, Line: m.Line, W: m.W}}
 			}
 			for _, r := range rects {
-				rel := r.line - start
+				rel := r.Line - start
 				if rel < 0 || rel >= l.bodyRows {
 					continue
 				}
 				v.Highlights = append(v.Highlights, protocol.ConsoleHighlight{
-					Line: rel, X: 1 + r.x, W: r.w, Current: i == b.findIdx,
+					Line: rel, X: 1 + r.X, W: r.W, Current: i == b.findIdx,
 				})
 			}
 		}

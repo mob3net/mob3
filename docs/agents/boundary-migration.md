@@ -172,6 +172,7 @@ seam; the note names which part goes where.
 | `browser_forms.go` | engine | Form state and editing are page content. |
 | `browser_selection.go` | engine wrapper | Selection range, extraction and painting moved to `internal/engine/selection.go`; the browser keeps drag state and clipboard policy. |
 | `hints.go` | engine + session | Glyph types, label assignment, unique-pair shortening and base-26 encoding moved to `internal/engine/hints.go`; target collection, painting, activation and confirmation remain session-side. |
+| `find.go` | engine + session | Match streams, whitespace normalisation and match rectangles moved to `internal/engine/find.go`; find state, navigation, painting and front-end messages remain session-side. |
 | `reader.go` | done | Extraction and `ReaderRules` moved to `internal/engine/reader.go`; the browser file is a thin alias. |
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
 | `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. Move image/SVG/about/PDF orchestration into the engine session. |
@@ -385,8 +386,10 @@ the engine keeps its fallback composition only for direct callers and tests.
 - [x] Hint label assignment, glyph types and encoding moved to
       `internal/engine/hints.go`; target collection, painting and activation
       remain session-side.
-- [ ] Find and form state still live in the browser with engine-side
-      computation.
+- [x] Find match streams and highlight rectangles moved to
+      `internal/engine/find.go`; find navigation, painting and messages remain
+      session-side.
+- [ ] Form state still lives in the browser.
 - [x] 3b: JS, DOM, events, compat, stubs, modules, web and Intl moved.
 - [ ] 3c: split `Browser` at the seam (page state to the engine, chrome and
       navigation to the front end), then rename to `Session`.
@@ -1104,3 +1107,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 7s | Batch 18: first session-split content leaf. Reader extraction, candidate scoring, junk filtering and `ReaderRules` moved to `internal/engine/reader.go`; `browser/reader.go` is a thin alias. Extraction tests moved to the engine; browser keeps reader-mode integration tests. | `go test ./...`, `go vet`, full `-race`, engine/browser reader tests, dump/PNG hashes | Continue content leaves (selection, hints, forms), then session type split |
 | 2026-11-23 | 7t | Batch 19: moved selection range, ordering, text extraction, summary and viewport painting to `internal/engine/selection.go`. The browser keeps drag state and clipboard/front-end policy and calls the engine selection. Added engine selection tests; browser drag/copy tests updated. | `go test ./...`, `go vet`, full `-race`, engine/browser selection tests, dump/PNG hashes | Continue content leaves (hints, forms), then session type split |
 | 2026-11-23 | 7u | Batch 20: moved link-hint label assignment into `internal/engine/hints.go`: glyph/char types, single/pair assignment, unique-pair shortening and base-26 encoding. The browser keeps target collection, painting, activation and confirmation. Pure hint tests moved to the engine; browser hint tests updated. | `go test ./...`, `go vet`, full `-race`, engine/browser hint tests, PTY f/F checks, dump/PNG hashes | Continue content leaves (find/forms), then session type split |
+| 2026-11-23 | 7v | Batch 21: moved find match computation into `internal/engine/find.go`: page/HTML streams, whitespace normalisation, overlapping case-insensitive spans, match grouping and highlight rectangles. The browser keeps find state, navigation, painting, result messages and the engine console fallback. Added engine find tests; browser find tests updated. | `go test ./...`, `go vet`, full `-race`, engine/browser find tests, PTY find/n/N, dump/PNG hashes | Form state leaf, then session type split |

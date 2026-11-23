@@ -51,7 +51,7 @@ func TestFindPageIncrementalAndNavigate(t *testing.T) {
 	g := NewGrid(60, 20, RGB(0, 0, 0), RGB(255, 255, 255))
 	b.paintFindPage(g, 0, 20)
 	m := b.findMatches[b.findIdx]
-	if got := g.Cells[m.y*g.W+m.x].BG; got != b.findMatchBG(true) {
+	if got := g.Cells[m.Y*g.W+m.X].BG; got != b.findMatchBG(true) {
 		t.Fatalf("current match background = %+v, want %+v", got, b.findMatchBG(true))
 	}
 
@@ -117,7 +117,7 @@ func TestFindMultiWordQuery(t *testing.T) {
 			if got := len(b.findMatches); got != 2 {
 				t.Fatalf("matches = %d, want 2", got)
 			}
-			if got := len(b.findMatches[0].rects); got < tc.minRects {
+			if got := len(b.findMatches[0].Rects); got < tc.minRects {
 				t.Fatalf("highlight rects = %d, want at least %d", got, tc.minRects)
 			}
 		})
@@ -177,8 +177,8 @@ func TestFindHTMLConsole(t *testing.T) {
 	start := paneStart(len(b.htmlLines(b.width-2)), b.htmlScroll, l.bodyRows)
 	b.paintFindHTML(g, start, l.bodyY, l.bodyRows)
 	m := b.findMatches[b.findIdx]
-	y := l.bodyY + m.line - start
-	if got := g.Cells[y*g.W+1+m.x].BG; got != b.findMatchBG(true) {
+	y := l.bodyY + m.Line - start
+	if got := g.Cells[y*g.W+1+m.X].BG; got != b.findMatchBG(true) {
 		t.Fatalf("HTML match background = %+v, want %+v", got, b.findMatchBG(true))
 	}
 }
