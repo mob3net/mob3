@@ -2,7 +2,6 @@ package browser
 
 import (
 	"image"
-	"net/url"
 
 	"browser/internal/engine"
 	"browser/internal/protocol"
@@ -47,86 +46,14 @@ func (b *Browser) dropCachedEntryUnless(id uint64, u string) {
 	b.Session.DropCachedEntryUnless(id, u)
 }
 
-// applyCachedPage restores a page kept by the back/forward cache without any
-// network or script work. The scroll position and reader extraction from the
-// entry are reapplied.
+// applyCachedPage restores a page kept by the back/forward cache.
 func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
-	b.suspendCurrentPage()
-	b.clearInputFocus()
-	b.cancelLoadNow()
-	if b.loader != nil {
-		b.loader.beginPage()
-	}
-	b.LoadSeq++
-	b.EntryID = entryID
-	b.Page = c.Page
-	b.URL = c.Page.URL
-	b.ImagesPaused = false
-	b.LastMethod = c.Method
-	b.LastBody = c.Body
-	b.LastContentType = c.ContentType
-	b.Layout = nil
-	b.BigTextBlocked = false
-	b.resetConsole()
-	if c.JS != nil {
-		b.JS = c.JS
-		c.JS.Resume()
-	}
-	b.ReaderRoot = nil
-	b.ReaderSavedScroll = 0
-	readerFailed := false
-	if b.Reader {
-		if c.ReaderRoot != nil {
-			b.ReaderRoot = c.ReaderRoot
-			b.ReaderSavedScroll = c.ReaderSavedScroll
-		} else if c.Page.PDF != nil {
-			readerFailed = true
-		} else if root, ok := extractReaderPage(c.Page.Root, c.Page.Title); ok {
-			b.ReaderRoot = root
-		} else {
-			readerFailed = true
-		}
-	}
-	b.rebuild()
-	b.Scroll = scroll
-	b.clampScroll()
-	b.Focus = -1
-	b.Hover = -1
-	b.clearSelection()
-	b.status = b.pageLoadStatus(c.Page, readerFailed)
-	b.prev = nil
+	b.Session.ApplyCachedPage(entryID, c, scroll, b)
 }
 
-// restoreEntry returns to a front-end history entry. A same-document target
-// updates the fragment and scroll in place; a cached page is restored without
-// a load; anything else is fetched with the entry's scroll offset.
+// restoreEntry returns to a front-end history entry.
 func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
-	if entryID == 0 {
-		return
-	}
-	b.clearLinkHints()
-	if b.URL != nil && b.Page != nil && b.Page.Root != nil {
-		if u, err := url.Parse(rawURL); err == nil && sameDocument(u, b.URL) {
-			b.EntryID = entryID
-			b.URL = u
-			b.Scroll = scroll
-			b.clampScroll()
-			b.Focus = -1
-			b.Hover = -1
-			b.status = ""
-			b.prev = nil
-			return
-		}
-	}
-	c := b.Cache.Get(entryID)
-	if c != nil {
-		b.applyCachedPage(entryID, c, scroll)
-		return
-	}
-	b.suspendCurrentPage()
-	b.NextScroll = scroll
-	b.NextScrollSet = true
-	b.navigateRequestEntry(protocol.MethodGet, rawURL, nil, "", entryID, false, false)
+	b.Session.RestoreEntry(entryID, rawURL, scroll, b)
 }
 
 // emitHistoryCommit reports a completed load to the front end list and any
