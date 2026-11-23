@@ -1,6 +1,7 @@
-package browser
+package app
 
 import (
+	"browser/internal/browser"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,7 +28,7 @@ func TestDocsCoverFlagsAndTools(t *testing.T) {
 		}
 	}
 
-	help := helpPageHTML()
+	help := browser.HelpPageHTML()
 	start := strings.Index(help, "<h2>Command line</h2>")
 	if start < 0 {
 		t.Fatal("help page has no command-line section")

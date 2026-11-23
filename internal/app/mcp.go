@@ -1,4 +1,4 @@
-package browser
+package app
 
 import (
 	"bufio"
@@ -130,7 +130,7 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 		},
 		"serverInfo": map[string]any{
 			"name":    "mob3",
-			"version": buildVersion,
+			"version": Version,
 		},
 		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
 			"links as [n], and form-control positions; click accepts link, text, selector, x/y. " +
@@ -154,7 +154,7 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 		var shot struct {
 			Scale int `json:"scale"`
 		}
-		if err := decodeArgs(p.Arguments, &shot); err != nil {
+		if err := decodeMCPArgs(p.Arguments, &shot); err != nil {
 			return toolError(req.ID, err)
 		}
 		if shot.Scale < 1 {
@@ -172,7 +172,7 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 		return successResponse(req.ID, mcpToolResult{
 			Content: []mcpContent{
 				{Type: "image", Data: base64.StdEncoding.EncodeToString(data), MimeType: "image/png"},
-				{Type: "text", Text: clipText(meta, 20000)},
+				{Type: "text", Text: clipMCPText(meta, 20000)},
 			},
 		})
 	}
@@ -181,7 +181,7 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 		return toolError(req.ID, err)
 	}
 	return successResponse(req.ID, mcpToolResult{
-		Content: []mcpContent{{Type: "text", Text: clipText(text, 20000)}},
+		Content: []mcpContent{{Type: "text", Text: clipMCPText(text, 20000)}},
 	})
 }
 
@@ -405,4 +405,22 @@ func mcpToolDefinitions() []map[string]any {
 			"inputSchema": object(map[string]any{}),
 		},
 	}
+}
+
+func decodeMCPArgs(raw json.RawMessage, dst any) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		return fmt.Errorf("invalid arguments: %w", err)
+	}
+	return nil
+}
+
+func clipMCPText(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }

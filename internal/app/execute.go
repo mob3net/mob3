@@ -81,12 +81,24 @@ func execute(o runOptions) int {
 	browser.SetColorMode(browser.DetectColorMode())
 
 	if o.MCP {
-		return browser.RunMCPBoot(browser.MCPOptions{
+		auto := browser.NewAutomationWithConfig(browser.AutomationConfig{
 			Loader: loader, Width: o.Width, Height: o.Height, Zoom: zoomFactor,
 			NoJS: o.NoJS, NoPDF: o.NoPDF, JSMemLimit: jsMemLimit,
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
-			Home: o.Home, Reader: o.Reader, Dark: o.Dark, Target: o.Target,
-		}, os.Stdin, os.Stdout, os.Stderr)
+			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
+		})
+		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %v\n", err)
+			return 1
+		}
+		defer session.Close()
+		client := &automationClient{s: session}
+		ctx := context.Background()
+		if err := client.Navigate(ctx, o.Target); err != nil {
+			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %v\n", err)
+		}
+		return RunMCP(client, os.Stdin, os.Stdout, os.Stderr)
 	}
 
 	if !interactive {

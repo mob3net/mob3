@@ -1,6 +1,7 @@
-package browser
+package app
 
 import (
+	"browser/internal/browser"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,8 +11,7 @@ import (
 )
 
 func TestAutomationTransportRoundTrip(t *testing.T) {
-	auto := NewAutomation(60, 20)
-	auto.b.noJS = true
+	auto := browser.NewAutomationWithConfig(browser.AutomationConfig{Width: 60, Height: 20, NoJS: true})
 	session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestAutomationTransportRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
-		t.Fatalf("screenshot is not a PNG: %x", data[:minInt(len(data), 8)])
+		t.Fatalf("screenshot is not a PNG: %x", data[:min(len(data), 8)])
 	}
 	text, err := client.RunCommand(ctx, "snapshot", json.RawMessage(`{}`))
 	if err != nil {

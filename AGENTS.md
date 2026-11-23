@@ -196,7 +196,8 @@ published by the Pages build.
   exits with its status.
 - `internal/app/` — flag parsing, validation, mode dispatch and the
   interactive session boot. It still imports `internal/browser` for the
-  session type and non-interactive render/MCP helpers until the session split.
+  session type and non-interactive render helpers until the session split. MCP
+  transport lives in `internal/app`.
 - `internal/browser/` — package `browser` with the 306-method `Browser`, its
   construction helpers, chrome/dialogs/navigation loads and tests until the
   boundary migration completes. Nothing under `internal` is imported from

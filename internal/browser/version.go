@@ -1,5 +1,7 @@
 package browser
 
+import "browser/internal/engine"
+
 // buildVersion is the app's build version, set at startup with SetBuildVersion.
 // It is used by session-generated pages, the config view, the copy header and
 // MCP metadata so they agree with -version.
@@ -12,3 +14,6 @@ func SetBuildVersion(v string) {
 	}
 	buildVersion = v
 }
+
+// HelpPageHTML renders the built-in help page with the current build version.
+func HelpPageHTML() string { return engine.HelpPageHTML(buildVersion) }

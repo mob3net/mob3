@@ -99,8 +99,8 @@ destination; the tracker lists what remains.
   the temporary wiring exception.
 - `internal/browser/` still holds the session shell: the 306-method `Browser`,
   chrome/overlay composition, dialogs, navigation loads, the memory-only page
-  cache, session setup, Loader image/SVG/about/PDF orchestration, MCP and
-  automation, and most integration tests.
+  cache, Loader image/SVG/about/PDF orchestration, automation, and most
+  integration tests. MCP transport lives in `internal/app`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -199,7 +199,7 @@ destination; the tracker lists what remains.
 | `internal/frontend/gfx.go` | Graphics modes and capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output. |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. |
-| `internal/browser/automation_transport.go` | MCP protocol client and engine-side `automationHandler`; the automation library remains the handler implementation. |
+| `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
@@ -224,7 +224,7 @@ destination; the tracker lists what remains.
 | `browser_images.go` | Deferred image batching: viewport-first task sorting, worker batch start/apply, and refresh after script-driven rebuilds. |
 | `browser_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `engine.Selection`. |
 | `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. Browser-side today; moves with the session. `automation_transport.go` exposes it through the MCP protocol client. |
-| `mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
+| `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs, the page select popup, the `X` view/`Z` zoom windows and their rendering. Interactive presentation and input for all of these are front-end-owned. |
 | `find.go` | Find state, navigation, scrolling, result messages and match highlights; match computation calls `engine.FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret and next/previous are front-end-owned. |
 | `hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection, label assignment and painting call `engine` (`BuildHintTargets`, `CollectHintGlyphs`, `AssignLinkHints`, `PaintHintLabels`). The overlay input is front-end-owned (`frontend/hints.go`). |

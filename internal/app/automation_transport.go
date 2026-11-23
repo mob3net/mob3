@@ -1,4 +1,4 @@
-package browser
+package app
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"browser/internal/browser"
 	"browser/internal/protocol"
 )
 
@@ -21,7 +22,7 @@ type automationRunner interface {
 // automationHandler owns the Automation engine on the session goroutine and
 // answers MCP operations that arrive through the protocol.
 type automationHandler struct {
-	a *Automation
+	a *browser.Automation
 
 	mu     sync.Mutex
 	cancel context.CancelFunc

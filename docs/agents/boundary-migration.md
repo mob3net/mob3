@@ -177,7 +177,8 @@ seam; the note names which part goes where.
 | `memory.go` | host + app + engine | Process limit and budget policy are host/app; per-session enforcement is engine. |
 | `fetch.go`, `browser_images.go` | engine + host | Host keeps fetch, cache, cookies, policy and accounting. Move image/SVG/about/PDF orchestration into the engine session. |
 | `placement.go` | engine | Image placement encoding and the bounded immutable PNG cache; it feeds the frame contract. |
-| `dump_transport.go`, `automation_transport.go` | app | One-shot dump/PNG handler and MCP client; no engine state. |
+| `dump_transport.go` | app | One-shot dump/PNG handler; no engine state. |
+| `automation_transport.go`, `mcp.go` | done | MCP client, handler and JSON-RPC server moved to `internal/app`; the automation library stays with the session until the type split. |
 | `automation.go` | engine | Headless automation is the engine-side implementation. |
 | `mcp.go` | app/frontend | MCP JSON-RPC client; consumes the transport, not engine internals. |
 | `config.go` | app + engine | Host token, engine form markup and the app/session apply path. |
@@ -1128,3 +1129,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8c | Batch 28: moved standard Tab-order target discovery into `internal/engine/tab_order.go`: links, text/non-text controls and one stop per radio group (checked or first). The browser keeps Tab stepping, focus changes and status. Added an engine tab-order test. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, PTY Tab, dump/PNG hashes | Session type split, or remaining form editing next |
 | 2026-11-23 | 8d | Batch 29: moved radio-group, single-select and multi-select stepping into `internal/engine/form_step.go`; the browser applies visibility/status/change effects. Added engine stepping tests. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, dump/PNG hashes | Remaining form editing/submission, then session split |
 | 2026-11-23 | 8e | Batch 30: moved control toggling into `internal/engine/form_toggle.go` (checkbox/radio/option/select action result), Tab index selection into `tab_order.go`, and input focus transitions onto `FormState`. The browser still owns menus, JS events, navigation, status and rebuilds. Added engine toggle/tab/focus tests. Forms now stop at the shell-effect boundary. | `go test ./...`, `go vet`, full `-race`, engine/browser form tests, PTY form/Tab, dump/PNG hashes | Session type split |
+| 2026-11-23 | 8f | Batch 31: moved MCP into `internal/app`: `mcp.go`, `automation_transport.go`, the handler/client, MCP boot and tool-definition docs test. Browser exposes `NewAutomationWithConfig`; app owns the JSON-RPC server and protocol client. Added app MCP protocol/screenshot/error tests. | `go test ./...`, `go vet`, full `-race`, app MCP and browser automation transport tests, MCP tools/list smoke, dump/PNG hashes | Session type split |

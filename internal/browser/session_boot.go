@@ -1,9 +1,6 @@
 package browser
 
 import (
-	"context"
-	"fmt"
-	"io"
 	"strings"
 
 	"browser/internal/protocol"
@@ -164,8 +161,8 @@ func Dump(o DumpOptions) int {
 		o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, o.JSMemLimit, o.Budget, o.Zoom)
 }
 
-// MCPOptions carries one MCP server invocation.
-type MCPOptions struct {
+// AutomationConfig is the headless session configuration used by MCP.
+type AutomationConfig struct {
 	Loader        *Loader
 	Width, Height int
 	Zoom          float64
@@ -175,44 +172,31 @@ type MCPOptions struct {
 	LayoutBudget  LayoutBudget
 	Home          string
 	Reader, Dark  bool
-	Target        string
 }
 
-// RunMCPBoot starts the headless automation session and serves MCP on the
-// supplied streams.
-func RunMCPBoot(o MCPOptions, in io.Reader, out, errOut io.Writer) int {
-	w, h := o.Width, o.Height
+// NewAutomationWithConfig creates a configured headless session.
+func NewAutomationWithConfig(c AutomationConfig) *Automation {
+	w, h := c.Width, c.Height
 	if w <= 0 {
 		w = 100
 	}
 	if h <= 0 {
 		h = 30
 	}
-	auto := NewAutomation(w, h)
-	auto.b.zoom = o.Zoom
-	SetLayoutZoom(o.Zoom)
-	if o.Loader != nil {
-		auto.b.setLoader(o.Loader)
-		o.Loader.noImages = true
+	a := NewAutomation(w, h)
+	a.b.zoom = c.Zoom
+	SetLayoutZoom(c.Zoom)
+	if c.Loader != nil {
+		a.b.setLoader(c.Loader)
+		c.Loader.noImages = true
 	}
-	auto.b.noJS = o.NoJS
-	auto.b.noPDF = o.NoPDF
-	auto.b.jsMemLimit = o.JSMemLimit
-	auto.b.memLimitBytes = o.MemLimitBytes
-	auto.b.layoutBudget = o.LayoutBudget
-	auto.b.home = o.Home
-	auto.b.reader = o.Reader
-	auto.b.dark = o.Dark
-	session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
-	if err != nil {
-		fmt.Fprintf(errOut, "mob3 mcp: session: %v\n", err)
-		return 1
-	}
-	defer session.Close()
-	client := &automationClient{s: session}
-	ctx := context.Background()
-	if err := client.Navigate(ctx, o.Target); err != nil {
-		fmt.Fprintf(errOut, "mob3 mcp: initial page: %v\n", err)
-	}
-	return RunMCP(client, in, out, errOut)
+	a.b.noJS = c.NoJS
+	a.b.noPDF = c.NoPDF
+	a.b.jsMemLimit = c.JSMemLimit
+	a.b.memLimitBytes = c.MemLimitBytes
+	a.b.layoutBudget = c.LayoutBudget
+	a.b.home = c.Home
+	a.b.reader = c.Reader
+	a.b.dark = c.Dark
+	return a
 }
