@@ -394,12 +394,14 @@ type Crash struct {
 
 func (Crash) eventKind() Kind { return EvCrash }
 
-// HistoryCommit reports the final URL of a completed load. Push appends a new
-// entry (merging into the current one when the URL is unchanged); otherwise the
-// entry identified by EntryID is updated in place.
+// HistoryCommit reports the final URL and title of a completed load. Push
+// appends a new entry (merging into the current one when the URL is unchanged);
+// otherwise the entry identified by EntryID is updated in place. The front end
+// validates and renders these values instead of trusting State.URL/Title.
 type HistoryCommit struct {
 	EntryID uint64
 	URL     string
+	Title   string
 	Scroll  int
 	Push    bool
 }

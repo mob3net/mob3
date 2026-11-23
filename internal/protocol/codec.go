@@ -284,6 +284,7 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		kind = EvHistoryCommit
 		e.u64(v.EntryID)
 		e.str(v.URL)
+		e.str(v.Title)
 		e.i32(v.Scroll)
 		e.bool(v.Push)
 	case Download:
@@ -606,7 +607,7 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		}
 		body = FindResults{Query: query, Current: current, Total: total, Rects: rects}
 	case EvHistoryCommit:
-		body = HistoryCommit{EntryID: d.u64(), URL: d.str(), Scroll: d.i32(), Push: d.bool()}
+		body = HistoryCommit{EntryID: d.u64(), URL: d.str(), Title: d.str(), Scroll: d.i32(), Push: d.bool()}
 	case EvDownload:
 		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
 	case EvNotice:

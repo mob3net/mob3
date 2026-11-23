@@ -818,8 +818,12 @@ func (b *Browser) finishLoad(res loadResult) {
 		if !res.historyPush {
 			b.dropCachedEntryUnless(res.entryID, b.url.String())
 		}
+		title := ""
+		if b.page != nil {
+			title = b.page.Title
+		}
 		b.emitHistoryCommit(protocol.HistoryCommit{
-			EntryID: res.entryID, URL: b.url.String(), Scroll: b.scroll, Push: res.historyPush,
+			EntryID: res.entryID, URL: b.url.String(), Title: title, Scroll: b.scroll, Push: res.historyPush,
 		})
 	}
 	b.autoNavigations = 0
@@ -1392,8 +1396,12 @@ func (b *Browser) followLink(li *LinkInfo) {
 					b.url = u
 					b.status = ""
 					b.prev = nil
+					title := ""
+					if b.page != nil {
+						title = b.page.Title
+					}
 					b.emitHistoryCommit(protocol.HistoryCommit{
-						EntryID: b.entryID, URL: u.String(), Scroll: b.scroll, Push: true,
+						EntryID: b.entryID, URL: u.String(), Title: title, Scroll: b.scroll, Push: true,
 					})
 					return
 				}

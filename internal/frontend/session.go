@@ -209,6 +209,7 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 	case protocol.State:
+		v = l.pageState(v)
 		if l.hintActive {
 			l.hintBase = v
 			if !v.KeysEngine {

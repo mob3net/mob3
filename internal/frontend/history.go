@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"net/url"
 	"strings"
 
 	"browser/internal/protocol"
@@ -11,6 +12,7 @@ import (
 type historyEntry struct {
 	id     uint64
 	url    string
+	title  string
 	scroll int
 }
 
@@ -18,6 +20,44 @@ type historyEntry struct {
 // engine HistoryPageHTML window: older entries cannot be shown or marked
 // current anyway.
 const historyLimit = 50
+
+// Display limits keep a hostile engine from parking an unbounded URL or title
+// in the trusted history ledger.
+const (
+	maxDisplayURL   = 4096
+	maxDisplayTitle = 512
+)
+
+// validDisplayURL accepts only the schemes the session can render. The front
+// end owns the address bar, so a malformed or unsupported commit is ignored.
+func validDisplayURL(raw string) bool {
+	if raw == "" || len(raw) > maxDisplayURL {
+		return false
+	}
+	if strings.IndexFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "about", "data":
+		return true
+	}
+	return false
+}
+
+func cleanTitle(s string) string {
+	if len(s) <= maxDisplayTitle {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= maxDisplayTitle {
+		return s
+	}
+	return string(r[:maxDisplayTitle])
+}
 
 // isAboutHistory reports whether input names the built-in history page.
 func isAboutHistory(input string) bool {
@@ -36,10 +76,10 @@ func (l *SessionLoop) recordHistoryScroll() {
 // Push appends a new entry, merging into the current one when the URL is
 // unchanged; otherwise the entry is updated in place.
 func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
-	if v.URL == "" || v.EntryID == 0 {
+	if v.EntryID == 0 || !validDisplayURL(v.URL) {
 		return
 	}
-	e := historyEntry{id: v.EntryID, url: v.URL, scroll: v.Scroll}
+	e := historyEntry{id: v.EntryID, url: v.URL, title: cleanTitle(v.Title), scroll: v.Scroll}
 	if v.Push {
 		if l.historyIndex >= 0 && l.historyIndex < len(l.history) &&
 			l.history[l.historyIndex].url == v.URL {
@@ -62,6 +102,25 @@ func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
 		l.historyIndex = len(l.history) - 1
 	}
 	l.history[l.historyIndex] = e
+}
+
+// pageState replaces the engine's URL/title with the front-end ledger. A title
+// change is accepted only while the engine still reports the committed URL.
+func (l *SessionLoop) pageState(v protocol.State) protocol.State {
+	if l.historyIndex < 0 || l.historyIndex >= len(l.history) {
+		return v
+	}
+	e := &l.history[l.historyIndex]
+	if v.URL == e.url && v.Title != "" {
+		e.title = cleanTitle(v.Title)
+	}
+	if e.url != "" {
+		v.URL = e.url
+	}
+	if e.title != "" {
+		v.Title = e.title
+	}
+	return v
 }
 
 // sendHistorySnapshot sends the bounded display snapshot the engine renders

@@ -43,9 +43,9 @@ transport implementation, not another architecture change.
 
 Each batch lands with tests green; type aliases are temporary and removed at
 the end. Steps 1, 2 and 6 are landed. Step 3's normal chrome, dialogs, console,
-find, history list and content geometry are landed but the trusted URL/title
-remains; step 4's session type and step 5's Loader orchestration remain; step 7
-is Phase 6.
+find, history list, content geometry and the displayed URL/title ledger are
+landed; host-attested final URLs, step 4's session type and step 5's Loader
+orchestration remain; step 7 is Phase 6.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
@@ -53,8 +53,9 @@ is Phase 6.
    instead of raw escape cells, ANSI and native-image encoding in the front
    end.
 3. **Partial.** Normal chrome, overlays, dialogs, hints, the console, the
-   find bar, the session history list/index/scroll and content geometry are
-   front-end-owned. The trusted URL/title remains engine-side.
+   find bar, the session history list/index/scroll, content geometry and the
+   displayed URL/title ledger are front-end-owned. The engine still reports the
+   committed final URL; host attestation remains.
 4. **Partial.** Leaf subsystems moved into `internal/engine`; the session type
    and `Browser` → `Session` split remain.
 5. **Partial.** Host `Fetch`, decompression/charset/parse and MCP are split;
@@ -109,10 +110,13 @@ destination; the tracker lists what remains.
   composition/input/find. It also owns the session history list, current
   index, scroll offsets, the `about:history` display snapshot and the
   content-rectangle geometry (`ContentBounds` → `Init`/`Resize`); the engine
-  keys its page cache by the front-end entry ID. It does not yet own the
-  trusted URL/title. While a page form field (or an engine-only fallback
-  modal) holds the key path, `State.FrontendChrome` is false and the engine
-  composes chrome; closing that gap is part of the session split.
+  keys its page cache by the front-end entry ID. It also owns the displayed
+  URL/title: committed history entries replace `State.URL/Title` for chrome,
+  with a scheme/length check. The engine still reports the final URL, so
+  host-attested authenticity remains. While a page form field (or an
+  engine-only fallback modal) holds the key path, `State.FrontendChrome` is
+  false and the engine composes chrome; closing that gap is part of the
+  session split.
 - `internal/browser` has no import rule during the migration; the dependency
   test covers the five target packages. Both temporary exceptions end with the
   session split.
@@ -180,7 +184,7 @@ destination; the tracker lists what remains.
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven normal chrome composition, chrome-layer fallback and terminal writes. |
 | `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
-| `internal/frontend/history.go` | Front-end-owned session history: entries, current index, scroll tracking, `HistoryCommit` updates, `about:history` snapshot and back/forward restore requests. |
+| `internal/frontend/history.go` | Front-end-owned session history and displayed URL/title ledger: entries, current index, scroll tracking, validated `HistoryCommit` updates, `about:history` snapshot and back/forward restore requests. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. The engine fallback still paints chrome for direct callers, tests and while a focused page form keeps the engine on the key path. |
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
