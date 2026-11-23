@@ -98,3 +98,25 @@ func TestSessionPDFPageTracking(t *testing.T) {
 		t.Fatalf("page = %d, want 2", got)
 	}
 }
+
+func TestSessionScrollMathAndAnchor(t *testing.T) {
+	node := &Node{Type: ElementNode, Tag: "h2", Attrs: []Attr{{Key: "id", Value: "target"}}}
+	s := Session{
+		Layout: &Layout{Height: 100, Frags: []Frag{{Node: node, Y: 40}}},
+		Scroll: 200,
+	}
+	if got := s.MaxScroll(20); got != 80 {
+		t.Fatalf("max = %d", got)
+	}
+	s.ClampScroll(20)
+	if s.Scroll != 80 {
+		t.Fatalf("clamp = %d", s.Scroll)
+	}
+	s.Scroll = 40
+	if got := s.ScrollPercent(20); got != 50 {
+		t.Fatalf("percent = %d", got)
+	}
+	if !s.ScrollToAnchor("target", 20) || s.Scroll != 39 {
+		t.Fatalf("anchor scroll = %d", s.Scroll)
+	}
+}

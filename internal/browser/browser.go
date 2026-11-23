@@ -81,15 +81,11 @@ type Browser struct {
 	// heavy cached page was evicted, so its memory returns to the OS at once.
 	scavengePending atomic.Bool
 	// nextScroll is consumed by the next navigation started from history.
-	nextScroll    int
-	nextScrollSet bool
 	// autoNavigations counts consecutive scripted/meta redirects so a
 	// self-redirect loop can be stopped. loopStopped reports that the cap was
 	// hit while applying the current page.
-	autoNavigations int
-	loopStopped     bool
-	home            string
-	cliConfig       map[string]string
+	home      string
+	cliConfig map[string]string
 	// configNotice shows why an edited about:config value was rejected, such
 	// as an unreadable -certs bundle.
 	configNotice string
@@ -167,35 +163,22 @@ type Browser struct {
 	// importCh delivers completed background dynamic imports to the event loop.
 	importCh chan jsImportTask
 	// imageCh delivers background image loads for the current page.
-	imageCh        chan imageBatch
-	deferredImages bool
+	imageCh chan imageBatch
 	// imagesPaused stops timer-driven rebuilds from restarting a background
 	// image load after the user pressed Esc.
-	imagesPaused bool
-	imageCancel  context.CancelFunc
+	imageCancel context.CancelFunc
 	// imageTotal and imageDone drive the loading bar and footer count while a
 	// deferred image batch is in flight.
-	imageTotal int
-	imageDone  int
 	// pendingImageRow is the topmost laid-out row of images whose decoded data
 	// arrived while they sat below the viewport. Their layout is deferred until
 	// the viewport approaches that row or the end of the document, so a batch
 	// far down the page cannot reflow and repaint the visible frame. Zero means
 	// nothing is pending.
-	pendingImageRow int
-	loadSeq         int
-	cancelLoad      context.CancelFunc
-	loading         bool
-	progress        float64
-	progressHold    int
-	loadFn          func(context.Context, string, string, []byte, string) (*Page, error)
+	cancelLoad context.CancelFunc
+	loadFn     func(context.Context, string, string, []byte, string) (*Page, error)
 
-	lastMethod      string
-	lastBody        []byte
-	lastContentType string
 	// pendingDownloadName carries a download attribute from the clicked link
 	// into the next load, so a non-renderable response keeps that filename.
-	pendingDownloadName string
 
 	lastRebuild time.Time
 	lastBuild   time.Duration
@@ -465,8 +448,8 @@ func (b *Browser) navigateRequestForce(method, input string, body []byte, conten
 func (b *Browser) navigateRequestEntry(method, input string, body []byte, contentType string, entryID uint64, historyPush, forceBlocks bool) {
 	// A download-attribute name belongs to this load only, so consume it even
 	// when the navigation is rejected before a request is made.
-	downloadName := b.pendingDownloadName
-	b.pendingDownloadName = ""
+	downloadName := b.PendingDownloadName
+	b.PendingDownloadName = ""
 	if strings.EqualFold(strings.TrimSpace(input), "about:retry") {
 		if b.URL == nil {
 			b.status = "Nothing to retry"
@@ -476,7 +459,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		input = b.URL.String()
 		forceBlocks = true
 		historyPush = false
-		b.nextScrollSet = false
+		b.NextScrollSet = false
 	}
 	u, err := ResolveInput(input, b.URL, b.searchTemplate())
 	if err != nil {
@@ -487,8 +470,8 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 	if method == "" {
 		method = http.MethodGet
 	}
-	restoreScroll, hasRestoreScroll := b.nextScroll, b.nextScrollSet
-	b.nextScrollSet = false
+	restoreScroll, hasRestoreScroll := b.NextScroll, b.NextScrollSet
+	b.NextScrollSet = false
 	if isAboutConfigURL(u) && b.Reader {
 		b.status = "Config is not available in reader mode — press R to turn it off"
 		b.draw()
@@ -501,7 +484,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		if b.loader != nil {
 			b.loader.beginPage()
 		}
-		b.loadSeq++
+		b.LoadSeq++
 		q := configValues(method, u, body)
 		applied := false
 		if b.consumeConfigToken(q.Get(configTokenParam)) {
@@ -512,7 +495,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 		}
 		page := b.configPage(u, applied)
 		b.finishLoad(loadResult{
-			seq: b.loadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: http.MethodGet,
+			seq: b.LoadSeq, page: page, u: u, entryID: entryID, historyPush: historyPush, method: http.MethodGet,
 			restoreScroll: restoreScroll, hasRestoreScroll: hasRestoreScroll,
 		})
 		return
@@ -521,16 +504,16 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 	b.suspendCurrentPage()
 	b.cancelLoadNow()
 	b.cancelDeferredImageLoad()
-	b.imagesPaused = false
+	b.ImagesPaused = false
 	b.applyImageCap()
 	if b.loader != nil {
 		b.loader.beginPage()
 	}
-	b.loadSeq++
-	seq := b.loadSeq
+	b.LoadSeq++
+	seq := b.LoadSeq
 	ctx, cancel := context.WithCancel(context.Background())
 	b.cancelLoad = cancel
-	b.loading = true
+	b.Loading = true
 	b.startProgress()
 	b.status = "Loading " + u.String() + " … (Esc stops)"
 	b.clearSelection()
@@ -566,51 +549,51 @@ func (b *Browser) cancelLoadNow() {
 		b.cancelLoad()
 		b.cancelLoad = nil
 	}
-	b.loading = false
+	b.Loading = false
 	b.clearProgress()
 }
 
 // startProgress resets the URL-row loading indicator for a new navigation.
 func (b *Browser) startProgress() {
-	b.progress = 0.05
-	b.progressHold = 0
+	b.Progress = 0.05
+	b.ProgressHold = 0
 }
 
 // finishProgress completes the indicator and leaves it visible briefly so the
 // end of a fast load is still perceptible.
 func (b *Browser) finishProgress() {
-	if b.progress <= 0 {
+	if b.Progress <= 0 {
 		return
 	}
-	b.progress = 1
-	b.progressHold = progressLingerTicks
+	b.Progress = 1
+	b.ProgressHold = progressLingerTicks
 }
 
 func (b *Browser) clearProgress() {
-	b.progress = 0
-	b.progressHold = 0
+	b.Progress = 0
+	b.ProgressHold = 0
 }
 
 // progressActive reports whether the event loop should keep ticking the
 // loading indicator.
 func (b *Browser) progressActive() bool {
-	return b.loading || b.progressHold > 0
+	return b.Loading || b.ProgressHold > 0
 }
 
 // tickProgress advances the indicator. It reports whether the bar changed
 // enough to justify a repaint.
 func (b *Browser) tickProgress() bool {
-	if b.loading {
-		b.progress += (0.9 - b.progress) * 0.08
-		if b.progress > 0.9 {
-			b.progress = 0.9
+	if b.Loading {
+		b.Progress += (0.9 - b.Progress) * 0.08
+		if b.Progress > 0.9 {
+			b.Progress = 0.9
 		}
 		return true
 	}
-	if b.progressHold > 0 {
-		b.progressHold--
-		if b.progressHold == 0 {
-			b.progress = 0
+	if b.ProgressHold > 0 {
+		b.ProgressHold--
+		if b.ProgressHold == 0 {
+			b.Progress = 0
 			return true
 		}
 	}
@@ -619,18 +602,18 @@ func (b *Browser) tickProgress() bool {
 
 // stopLoading aborts the in-flight page load and ignores its late result.
 func (b *Browser) stopLoading() {
-	if !b.loading {
-		if b.deferredImages {
-			b.imagesPaused = true
+	if !b.Loading {
+		if b.DeferredImages {
+			b.ImagesPaused = true
 			b.cancelDeferredImageLoad()
 			b.finishProgress()
 			b.status = "Stopped loading images"
 		}
 		return
 	}
-	b.autoNavigations = 0
-	b.loopStopped = false
-	b.loadSeq++
+	b.AutoNavigations = 0
+	b.LoopStopped = false
+	b.LoadSeq++
 	b.cancelLoadNow()
 	b.cancelDeferredImageLoad()
 	b.status = "Stopped loading"
@@ -639,7 +622,7 @@ func (b *Browser) stopLoading() {
 // finishLoad applies a completed load. Stale results from canceled navigations
 // are ignored.
 func (b *Browser) finishLoad(res loadResult) {
-	if res.seq != b.loadSeq {
+	if res.seq != b.LoadSeq {
 		return
 	}
 	note := b.pendingStatus
@@ -661,10 +644,10 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.jsErr = false
 	b.moduleErr = false
 	b.cancelLoad = nil
-	b.loading = false
+	b.Loading = false
 	if res.err != nil {
-		b.autoNavigations = 0
-		b.loopStopped = false
+		b.AutoNavigations = 0
+		b.LoopStopped = false
 		b.status = "Error: " + res.err.Error()
 		b.finishProgress()
 		if b.Page == nil {
@@ -692,15 +675,15 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	b.Page = page
 	b.URL = page.URL
-	b.imagesPaused = false
+	b.ImagesPaused = false
 	if b.URL != nil && res.u != nil && res.u.Fragment != "" && b.URL.Fragment == "" {
 		u := *b.URL
 		u.Fragment = res.u.Fragment
 		b.URL = &u
 	}
-	b.lastMethod = res.method
-	b.lastBody = res.body
-	b.lastContentType = res.contentType
+	b.LastMethod = res.method
+	b.LastBody = res.body
+	b.LastContentType = res.contentType
 	b.Layout = nil
 	b.BigTextBlocked = false
 	// <noscript> is not active when scripting is enabled. Remove it before
@@ -711,13 +694,13 @@ func (b *Browser) finishLoad(res loadResult) {
 	}
 	loopStopped := false
 	if target := metaRefreshTarget(page); target != "" && target != page.URL.String() {
-		if b.autoNavigations >= maxAutoNavigations {
+		if b.AutoNavigations >= maxAutoNavigations {
 			loopStopped = true
 		} else {
 			// A meta refresh is a client redirect, so browsers coalesce it into
 			// one history entry; Back should skip the redirecting page rather
 			// than land on it and be forwarded again.
-			b.autoNavigations++
+			b.AutoNavigations++
 			b.navigateRequestEntry(http.MethodGet, target, nil, "", res.entryID, res.historyPush, false)
 			return
 		}
@@ -729,8 +712,8 @@ func (b *Browser) finishLoad(res loadResult) {
 	if b.applyPendingJS(true, res.entryID, res.historyPush) {
 		return
 	}
-	if b.loopStopped {
-		b.loopStopped = false
+	if b.LoopStopped {
+		b.LoopStopped = false
 		loopStopped = true
 	}
 	b.ReaderRoot = nil
@@ -786,11 +769,11 @@ func (b *Browser) finishLoad(res loadResult) {
 			EntryID: res.entryID, URL: b.URL.String(), Title: title, Scroll: b.Scroll, Push: res.historyPush,
 		})
 	}
-	b.autoNavigations = 0
+	b.AutoNavigations = 0
 	b.prev = nil
-	if b.deferredImages {
-		b.progress = 0.9
-		b.progressHold = 0
+	if b.DeferredImages {
+		b.Progress = 0.9
+		b.ProgressHold = 0
 	} else {
 		b.finishProgress()
 	}
@@ -842,11 +825,11 @@ func (b *Browser) applyPendingJS(duringLoad bool, entryID uint64, historyPush bo
 	replace := b.JS.PendingReplace()
 	b.JS.SetPendingNav("")
 	b.JS.SetPendingReplace(false)
-	if b.autoNavigations >= maxAutoNavigations {
-		b.loopStopped = true
+	if b.AutoNavigations >= maxAutoNavigations {
+		b.LoopStopped = true
 		return false
 	}
-	b.autoNavigations++
+	b.AutoNavigations++
 	if duringLoad {
 		b.navigateRequestEntry(http.MethodGet, target, nil, "", entryID, historyPush, false)
 	} else if replace {
@@ -868,7 +851,7 @@ func (b *Browser) rebuild() {
 	}
 	// The new layout includes every image decoded so far, so nothing is left
 	// waiting for the viewport.
-	b.pendingImageRow = 0
+	b.PendingImageRow = 0
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
 	if b.JS != nil && !b.Reader && (b.loader == nil || !b.loader.deferImages) {
@@ -955,7 +938,7 @@ func (b *Browser) rebuild() {
 	}
 	// Layout now knows where each image sits, so a deferred batch can be
 	// ordered viewport-first.
-	if b.loader != nil && b.loader.deferImages && !b.Reader && !b.deferredImages {
+	if b.loader != nil && b.loader.deferImages && !b.Reader && !b.DeferredImages {
 		b.startDeferredImageLoad()
 	}
 }
@@ -1127,26 +1110,9 @@ func (b *Browser) resizeWithContent(w, h, top, contentH int) {
 	b.rebuild()
 }
 
-func (b *Browser) maxScroll() int {
-	if b.Layout == nil {
-		return 0
-	}
-	m := b.Layout.Height - b.viewportHeight()
-	if m < 0 {
-		return 0
-	}
-	return m
-}
+func (b *Browser) maxScroll() int { return b.Session.MaxScroll(b.viewportHeight()) }
 
-func (b *Browser) clampScroll() {
-	max := b.maxScroll()
-	if b.Scroll < 0 {
-		b.Scroll = 0
-	}
-	if b.Scroll > max {
-		b.Scroll = max
-	}
-}
+func (b *Browser) clampScroll() { b.Session.ClampScroll(b.viewportHeight()) }
 
 func (b *Browser) scrollBy(n int) {
 	b.clearLinkHints()
@@ -1316,7 +1282,7 @@ func (b *Browser) followLink(li *LinkInfo) {
 			// A PDF is worth fetching because the viewer can show it; the
 			// attribute also names the file if the response is not a PDF after
 			// all.
-			b.pendingDownloadName = li.Node.Attr("download")
+			b.PendingDownloadName = li.Node.Attr("download")
 			b.Navigate(target, true)
 			return
 		}
@@ -1475,33 +1441,7 @@ func shellQuote(s string) string {
 }
 
 func (b *Browser) scrollToAnchor(frag string) bool {
-	if b.Layout == nil || frag == "" {
-		return false
-	}
-	if unescaped, err := url.PathUnescape(frag); err == nil {
-		frag = unescaped
-	}
-	best := -1
-	for i := range b.Layout.Frags {
-		f := &b.Layout.Frags[i]
-		for p := f.Node; p != nil; p = p.Parent {
-			if p.Type != ElementNode {
-				continue
-			}
-			if p.Attr("id") == frag || p.Attr("name") == frag {
-				if best < 0 || f.Y < best {
-					best = f.Y
-				}
-				break
-			}
-		}
-	}
-	if best >= 0 {
-		b.Scroll = best - 1
-		b.clampScroll()
-		return true
-	}
-	return false
+	return b.Session.ScrollToAnchor(frag, b.viewportHeight())
 }
 
 // EscapeHTML escapes text for error pages.

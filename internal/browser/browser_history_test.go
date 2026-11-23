@@ -449,7 +449,7 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 	if !stopped {
 		t.Fatalf("redirect loop was not stopped; status = %q", b.status)
 	}
-	if b.loading {
+	if b.Loading {
 		t.Fatal("a load is still running after the loop was stopped")
 	}
 	if len(h.entries) != 1 {
@@ -485,7 +485,7 @@ func TestMetaRefreshLoopStops(t *testing.T) {
 	if !stopped {
 		t.Fatalf("meta refresh loop was not stopped; status = %q", b.status)
 	}
-	if b.loading {
+	if b.Loading {
 		t.Fatal("a load is still running after the loop was stopped")
 	}
 }
@@ -501,7 +501,7 @@ func TestMetaRefreshCoalescesHistoryEntry(t *testing.T) {
 	b.loadFn = func(context.Context, string, string, []byte, string) (*Page, error) { return target, nil }
 
 	id := b.nextHistoryID()
-	b.finishLoad(loadResult{seq: b.loadSeq, page: redir, u: uRedir, entryID: id, historyPush: true, method: http.MethodGet})
+	b.finishLoad(loadResult{seq: b.LoadSeq, page: redir, u: uRedir, entryID: id, historyPush: true, method: http.MethodGet})
 	select {
 	case res := <-b.loadCh:
 		b.finishLoad(res)
@@ -527,7 +527,7 @@ func TestClickTimeJSNavigationPushesHistory(t *testing.T) {
 		return &Page{URL: next, Base: next, Root: ParseHTML(`<html><body>next</body></html>`)}, nil
 	}
 	id := b.nextHistoryID()
-	b.finishLoad(loadResult{seq: b.loadSeq, entryID: id, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, historyPush: true, method: http.MethodGet})
+	b.finishLoad(loadResult{seq: b.LoadSeq, entryID: id, page: &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>start</body></html>`)}, u: u, historyPush: true, method: http.MethodGet})
 	if b.JS == nil {
 		t.Fatal("no JS runtime")
 	}

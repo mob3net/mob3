@@ -62,8 +62,8 @@ func TestStateMessage(t *testing.T) {
 	b.Page = &Page{URL: b.URL, Title: "Title", Root: ParseHTML("<p>x</p>")}
 	b.Layout = &Layout{Height: 100}
 	b.Scroll = 5
-	b.loading = true
-	b.progress = 0.42
+	b.Loading = true
+	b.Progress = 0.42
 	b.status = "Ready"
 	b.Dark = true
 	b.Reader = true
@@ -71,7 +71,7 @@ func TestStateMessage(t *testing.T) {
 	b.moduleErr = true
 	b.PageHasHover = true
 	b.BigText = true
-	b.loopStopped = true
+	b.LoopStopped = true
 	b.loader.noImages = false
 
 	st := b.stateMessage()

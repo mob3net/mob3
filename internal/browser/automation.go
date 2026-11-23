@@ -79,7 +79,7 @@ func (a *Automation) Navigate(ctx context.Context, target string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.recordHistoryScrollLocked()
-	before := a.b.loadSeq
+	before := a.b.LoadSeq
 	a.b.Navigate(target, true)
 	if err := a.waitLoad(ctx); err != nil {
 		return err
@@ -87,7 +87,7 @@ func (a *Automation) Navigate(ctx context.Context, target string) error {
 	if a.b.Page == nil {
 		return fmt.Errorf("navigation failed: %s", nonEmptyStatus(a.b.status))
 	}
-	if a.b.loadSeq == before {
+	if a.b.LoadSeq == before {
 		switch {
 		case strings.HasPrefix(a.b.status, "Invalid URL:"),
 			strings.HasPrefix(a.b.status, "Blocked "),
@@ -105,7 +105,7 @@ func (a *Automation) waitLoad(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	for a.b.loading {
+	for a.b.Loading {
 		select {
 		case res := <-a.b.loadCh:
 			a.b.finishLoad(res)
@@ -1342,7 +1342,7 @@ func (a *Automation) Submit(ctx context.Context, selector string) error {
 // waitPendingLocked applies any navigation queued by input/change/submit
 // handlers and waits for the resulting load.
 func (a *Automation) waitPendingLocked(ctx context.Context) error {
-	if a.b.consumePendingJS() || a.b.loading {
+	if a.b.consumePendingJS() || a.b.Loading {
 		return a.waitLoad(ctx)
 	}
 	return nil
@@ -1634,14 +1634,14 @@ func writeDOMText(sb *strings.Builder, n *Node) {
 // rebuild, and sleeps briefly.
 func (a *Automation) waitStepLocked(ctx context.Context, deadline time.Time) error {
 	b := a.b
-	if b.loading {
+	if b.Loading {
 		if err := a.waitLoad(ctx); err != nil {
 			return err
 		}
 	}
 	if b.JS != nil {
 		b.runJSTimers()
-		if b.consumePendingJS() || b.loading {
+		if b.consumePendingJS() || b.Loading {
 			if err := a.waitLoad(ctx); err != nil {
 				return err
 			}

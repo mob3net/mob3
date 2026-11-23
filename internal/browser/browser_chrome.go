@@ -452,7 +452,7 @@ func (b *Browser) drawChrome(g *Grid) {
 		backLabel, helpLabel := " ← Back ", " ? Help "
 		forwardLabel := " → "
 		reloadLabel, reloadKind := " ⟳ ", headerReload
-		if b.loading {
+		if b.Loading {
 			reloadLabel, reloadKind = " × ", headerStop
 		}
 		homeLabel := " ⌂ "
@@ -475,8 +475,8 @@ func (b *Browser) drawChrome(g *Grid) {
 				return
 			}
 			g.Fill(x, y, width, 1, fieldBG)
-			if b.progress > 0 {
-				filled := int(b.progress*float64(width) + 0.5)
+			if b.Progress > 0 {
+				filled := int(b.Progress*float64(width) + 0.5)
 				if filled < 1 {
 					filled = 1
 				}
@@ -845,23 +845,7 @@ func tailWidth(s string, max int) string {
 	return string(runes[start:])
 }
 
-func (b *Browser) scrollPercent() int {
-	if b.Layout == nil || b.Layout.Height <= 0 {
-		return 0
-	}
-	view := b.Layout.Height - b.viewportHeight()
-	if view <= 0 {
-		return 0
-	}
-	pct := b.Scroll * 100 / view
-	if pct < 0 {
-		pct = 0
-	}
-	if pct > 100 {
-		pct = 100
-	}
-	return pct
-}
+func (b *Browser) scrollPercent() int { return b.Session.ScrollPercent(b.viewportHeight()) }
 
 type statusLevel int
 
@@ -927,8 +911,8 @@ func (b *Browser) footerLeft() string {
 	if li := b.focusedLink(); li != nil {
 		return " → " + b.resolveHref(li.Href)
 	}
-	if b.deferredImages && b.imageTotal > 0 {
-		return fmt.Sprintf(" Loading images %d/%d", b.imageDone, b.imageTotal)
+	if b.DeferredImages && b.ImageTotal > 0 {
+		return fmt.Sprintf(" Loading images %d/%d", b.ImageDone, b.ImageTotal)
 	}
 	return " Ready"
 }
@@ -1011,7 +995,7 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 		return
 	}
 	b.graphicsMode = mode
-	b.imagesPaused = false
+	b.ImagesPaused = false
 	b.gfx = NewGFXRenderer(mode, b.cellW, b.cellH)
 	hideImages := mode == GraphicsNone
 	if b.loader != nil {

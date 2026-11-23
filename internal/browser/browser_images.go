@@ -21,9 +21,9 @@ func (b *Browser) cancelDeferredImageLoad() {
 		b.imageCancel()
 		b.imageCancel = nil
 	}
-	b.deferredImages = false
-	b.imageTotal = 0
-	b.imageDone = 0
+	b.DeferredImages = false
+	b.ImageTotal = 0
+	b.ImageDone = 0
 }
 
 // sortImageTasks orders pending images by their position relative to the
@@ -92,7 +92,7 @@ func (b *Browser) sortImageTasks(tasks []imageTask) {
 // goroutine. The page is already laid out and visible; results arrive on
 // imageCh and are applied by the event loop.
 func (b *Browser) startDeferredImageLoad() {
-	if b.imagesPaused || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil || b.Reader {
+	if b.ImagesPaused || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil || b.Reader {
 		return
 	}
 	tasks := b.loader.imageTasks(b.Page.Root, b.Page.Base)
@@ -101,17 +101,17 @@ func (b *Browser) startDeferredImageLoad() {
 	}
 	b.sortImageTasks(tasks)
 	b.cancelDeferredImageLoad()
-	b.imageTotal = len(tasks)
-	b.imageDone = 0
+	b.ImageTotal = len(tasks)
+	b.ImageDone = 0
 	// Keep the URL-row progress bar visible while images stream in; the
 	// document itself is already complete.
-	b.progress = 0.9
-	b.progressHold = 0
+	b.Progress = 0.9
+	b.ProgressHold = 0
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = withRequestPage(ctx, b.Page.URL, b.Page.Local)
 	b.imageCancel = cancel
-	b.deferredImages = true
-	seq := b.loadSeq
+	b.DeferredImages = true
+	seq := b.LoadSeq
 	go func() {
 		stream := b.loader.imageResultStream(ctx, tasks)
 		var pending []imageLoadResult
@@ -192,7 +192,7 @@ func (b *Browser) imageChangeReachesViewport(nodes []*Node) (bool, int) {
 // may be waiting. While every pending image is still below the fold it leaves
 // the layout and the frame untouched.
 func (b *Browser) applyPendingImageLayout() {
-	if b.pendingImageRow <= 0 || b.Layout == nil {
+	if b.PendingImageRow <= 0 || b.Layout == nil {
 		return
 	}
 	viewH := b.viewportHeight()
@@ -201,10 +201,10 @@ func (b *Browser) applyPendingImageLayout() {
 	}
 	viewBottom := b.Scroll + viewH
 	atBottom := b.Layout.Height > 0 && viewBottom >= b.Layout.Height
-	if !atBottom && b.pendingImageRow >= viewBottom {
+	if !atBottom && b.PendingImageRow >= viewBottom {
 		return
 	}
-	b.pendingImageRow = 0
+	b.PendingImageRow = 0
 	b.rebuild()
 	b.prev = nil
 }
@@ -213,16 +213,16 @@ func (b *Browser) applyPendingImageLayout() {
 // page, rebuilding only when the new images can affect what the viewport shows.
 // It reports whether anything changed.
 func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
-	if b.Page == nil || batch.seq != b.loadSeq || !b.deferredImages {
+	if b.Page == nil || batch.seq != b.LoadSeq || !b.DeferredImages {
 		return false
 	}
-	if b.imageTotal > 0 {
-		b.imageDone += len(batch.results)
-		if b.imageDone > b.imageTotal {
-			b.imageDone = b.imageTotal
+	if b.ImageTotal > 0 {
+		b.ImageDone += len(batch.results)
+		if b.ImageDone > b.ImageTotal {
+			b.ImageDone = b.ImageTotal
 		}
-		frac := float64(b.imageDone) / float64(b.imageTotal)
-		b.progress = 0.9 + 0.09*frac
+		frac := float64(b.ImageDone) / float64(b.ImageTotal)
+		b.Progress = 0.9 + 0.09*frac
 	}
 	changed := false
 	var changedNodes []*Node
@@ -247,7 +247,7 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 		}
 	}
 	if batch.done {
-		b.deferredImages = false
+		b.DeferredImages = false
 		b.imageCancel = nil
 		b.finishProgress()
 	}
@@ -256,11 +256,11 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 			// The new images sit below the viewport, so their boxes cannot move
 			// anything the user can see. Keep the current layout and frame, and
 			// lay them out only when the viewport approaches their row.
-			if b.pendingImageRow == 0 || top < b.pendingImageRow {
-				b.pendingImageRow = top
+			if b.PendingImageRow == 0 || top < b.PendingImageRow {
+				b.PendingImageRow = top
 			}
 		} else {
-			b.pendingImageRow = 0
+			b.PendingImageRow = 0
 			b.rebuild()
 			// Native terminal placements and kitty scaled glyphs are drawn
 			// outside the cell text, so a line diff cannot erase a stale copy.

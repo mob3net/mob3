@@ -243,7 +243,7 @@ destination; the tracker lists what remains.
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
-| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, JS runtime, PDF page starts, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus page/find/hint/PDF helpers. |
+| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, JS runtime, PDF page starts, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
 | `js_compat.go` | Browser aliases and constructor for the engine runtime. |

@@ -55,6 +55,27 @@ type Session struct {
 	// JavaScript runtime and page tracking.
 	JS        *JSRuntime
 	PDFStarts []int
+
+	// Load lifecycle.
+	Loading             bool
+	Progress            float64
+	ProgressHold        int
+	AutoNavigations     int
+	LoopStopped         bool
+	LastMethod          string
+	LastBody            []byte
+	LastContentType     string
+	LoadSeq             int
+	NextScroll          int
+	NextScrollSet       bool
+	PendingDownloadName string
+
+	// Deferred image loading.
+	DeferredImages  bool
+	ImagesPaused    bool
+	ImageTotal      int
+	ImageDone       int
+	PendingImageRow int
 }
 
 // NewSession creates an empty page session.
@@ -305,4 +326,77 @@ func (s *Session) PDFPageNumber() int {
 		cur = 1
 	}
 	return cur
+}
+
+// MaxScroll is the largest scroll offset for the given viewport height.
+func (s *Session) MaxScroll(viewportH int) int {
+	if s.Layout == nil {
+		return 0
+	}
+	m := s.Layout.Height - viewportH
+	if m < 0 {
+		return 0
+	}
+	return m
+}
+
+// ClampScroll keeps the scroll offset inside the page.
+func (s *Session) ClampScroll(viewportH int) {
+	max := s.MaxScroll(viewportH)
+	if s.Scroll < 0 {
+		s.Scroll = 0
+	}
+	if s.Scroll > max {
+		s.Scroll = max
+	}
+}
+
+// ScrollPercent is the rounded scroll position as a percentage.
+func (s *Session) ScrollPercent(viewportH int) int {
+	if s.Layout == nil || s.Layout.Height <= 0 {
+		return 0
+	}
+	view := s.Layout.Height - viewportH
+	if view <= 0 {
+		return 0
+	}
+	pct := s.Scroll * 100 / view
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return pct
+}
+
+// ScrollToAnchor moves to the first fragment with the given id or name.
+func (s *Session) ScrollToAnchor(frag string, viewportH int) bool {
+	if s.Layout == nil || frag == "" {
+		return false
+	}
+	if unescaped, err := url.PathUnescape(frag); err == nil {
+		frag = unescaped
+	}
+	best := -1
+	for i := range s.Layout.Frags {
+		f := &s.Layout.Frags[i]
+		for p := f.Node; p != nil; p = p.Parent {
+			if p.Type != ElementNode {
+				continue
+			}
+			if p.Attr("id") == frag || p.Attr("name") == frag {
+				if best < 0 || f.Y < best {
+					best = f.Y
+				}
+				break
+			}
+		}
+	}
+	if best >= 0 {
+		s.Scroll = best - 1
+		s.ClampScroll(viewportH)
+		return true
+	}
+	return false
 }

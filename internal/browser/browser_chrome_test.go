@@ -109,9 +109,9 @@ func TestHeaderNarrow(t *testing.T) {
 func TestLoadingProgressPaintsURLRow(t *testing.T) {
 	b := NewBrowser(80, 10)
 	b.color = true
-	b.loading = true
+	b.Loading = true
 	b.startProgress()
-	b.progress = 0.5
+	b.Progress = 0.5
 	drawQuiet(b)
 	if !strings.Contains(b.prev[1], "48;2;31;79;138") {
 		t.Fatalf("URL row has no progress fill: %q", b.prev[1])
@@ -785,7 +785,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.rebuild()
 	page := b.Page
-	seq := b.loadSeq
+	seq := b.LoadSeq
 	hasImage := func() bool {
 		for _, f := range b.Layout.Frags {
 			if f.Kind == fragImage {
@@ -799,7 +799,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // native -> blocks
-	if b.Page != page || b.loadSeq != seq {
+	if b.Page != page || b.LoadSeq != seq {
 		t.Fatal("changing to blocks reloaded the page")
 	}
 	if b.gfx != nil || !hasImage() {
@@ -807,7 +807,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // blocks -> none
-	if b.Page != page || b.loadSeq != seq {
+	if b.Page != page || b.LoadSeq != seq {
 		t.Fatal("changing to none reloaded the page")
 	}
 	if !b.loader.noImages {
@@ -818,7 +818,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	}
 
 	b.cycleGraphics() // none -> native
-	if b.Page != page || b.loadSeq != seq {
+	if b.Page != page || b.LoadSeq != seq {
 		t.Fatal("changing back to native graphics reloaded the page")
 	}
 	if !hasImage() {

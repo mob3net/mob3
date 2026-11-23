@@ -17,8 +17,8 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 	}{
 		{"ready", func(b *Browser) {}},
 		{"loading", func(b *Browser) {
-			b.loading = true
-			b.progress = 0.5
+			b.Loading = true
+			b.Progress = 0.5
 			b.status = "Loading"
 		}},
 		{"prompt", func(b *Browser) {

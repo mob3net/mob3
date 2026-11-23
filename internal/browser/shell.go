@@ -99,7 +99,7 @@ func (b *Browser) contentRect() contentRect {
 func (b *Browser) stateMessage() protocol.State {
 	st := protocol.State{
 		Status:    b.status,
-		Loading:   b.loading,
+		Loading:   b.Loading,
 		Scroll:    b.Scroll,
 		MaxScroll: b.maxScroll(),
 	}
@@ -109,8 +109,8 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.Page != nil {
 		st.Title = b.Page.Title
 	}
-	if b.progress > 0 {
-		p := int(b.progress*100 + 0.5)
+	if b.Progress > 0 {
+		p := int(b.Progress*100 + 0.5)
 		if p < 0 {
 			p = 0
 		}
@@ -141,7 +141,7 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.BigText {
 		st.Flags |= protocol.StateBigText
 	}
-	if b.loopStopped {
+	if b.LoopStopped {
 		st.Flags |= protocol.StateLoopStopped
 	}
 	if b.gfx != nil {

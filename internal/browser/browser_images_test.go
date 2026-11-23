@@ -23,15 +23,15 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
-	b.loadSeq = 1
-	b.deferredImages = true
+	b.LoadSeq = 1
+	b.DeferredImages = true
 	b.imageCancel = func() {}
 
 	b.HandleKey("esc")
-	if b.deferredImages {
+	if b.DeferredImages {
 		t.Fatal("Esc left the deferred image load active")
 	}
-	if !b.imagesPaused {
+	if !b.ImagesPaused {
 		t.Fatal("Esc did not pause deferred images")
 	}
 	if b.status != "Stopped loading images" {
@@ -41,7 +41,7 @@ func TestEscapeStopsDeferredImageLoad(t *testing.T) {
 	// A later timer-driven rebuild must not restart the paused batch.
 	b.JS = &jsRuntime{}
 	b.rebuild()
-	if b.deferredImages {
+	if b.DeferredImages {
 		t.Fatal("rebuild restarted a paused image load")
 	}
 }
@@ -54,8 +54,8 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	b.loader.noImages = false
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
-	b.loadSeq = 1
-	b.deferredImages = true
+	b.LoadSeq = 1
+	b.DeferredImages = true
 	img := doc.FindFirst("img")
 	if img == nil {
 		t.Fatal("image missing")
@@ -66,13 +66,13 @@ func TestDeferredImageBatchesStayActiveUntilDone(t *testing.T) {
 	if !b.applyDeferredImageBatch(batch) {
 		t.Fatal("partial batch did not apply")
 	}
-	if !b.deferredImages {
+	if !b.DeferredImages {
 		t.Fatal("a partial batch cleared the deferred state")
 	}
 	if !b.applyDeferredImageBatch(imageBatch{seq: 1, done: true}) {
 		t.Fatal("done batch did not request a progress repaint")
 	}
-	if b.deferredImages {
+	if b.DeferredImages {
 		t.Fatal("the done batch did not finish the deferred load")
 	}
 }
@@ -120,38 +120,38 @@ func TestImageTasksPrioritiseViewport(t *testing.T) {
 func TestDeferredImageProgressBar(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`)}
-	b.deferredImages = true
-	b.imageTotal = 10
-	b.progress = 0.9
-	if !b.applyDeferredImageBatch(imageBatch{seq: b.loadSeq, results: make([]imageLoadResult, 4)}) {
+	b.DeferredImages = true
+	b.ImageTotal = 10
+	b.Progress = 0.9
+	if !b.applyDeferredImageBatch(imageBatch{seq: b.LoadSeq, results: make([]imageLoadResult, 4)}) {
 		t.Fatal("partial batch did not request a repaint")
 	}
-	if b.progress < 0.93 || b.progress > 0.94 {
-		t.Fatalf("partial image progress = %v, want about 0.936", b.progress)
+	if b.Progress < 0.93 || b.Progress > 0.94 {
+		t.Fatalf("partial image progress = %v, want about 0.936", b.Progress)
 	}
-	if !b.deferredImages {
+	if !b.DeferredImages {
 		t.Fatal("partial batch finished the load")
 	}
-	if !b.applyDeferredImageBatch(imageBatch{seq: b.loadSeq, results: make([]imageLoadResult, 6), done: true}) {
+	if !b.applyDeferredImageBatch(imageBatch{seq: b.LoadSeq, results: make([]imageLoadResult, 6), done: true}) {
 		t.Fatal("done batch did not request a repaint")
 	}
-	if b.progress != 1 || b.progressHold == 0 {
-		t.Fatalf("finished image progress = %v hold=%d, want complete", b.progress, b.progressHold)
+	if b.Progress != 1 || b.ProgressHold == 0 {
+		t.Fatalf("finished image progress = %v hold=%d, want complete", b.Progress, b.ProgressHold)
 	}
-	if b.deferredImages {
+	if b.DeferredImages {
 		t.Fatal("done batch left the deferred load active")
 	}
 }
 
 func TestFooterShowsImageLoadingCount(t *testing.T) {
 	b := NewBrowser(60, 20)
-	b.deferredImages = true
-	b.imageTotal = 5
-	b.imageDone = 2
+	b.DeferredImages = true
+	b.ImageTotal = 5
+	b.ImageDone = 2
 	if got := b.footerLeft(); got != " Loading images 2/5" {
 		t.Fatalf("footer = %q", got)
 	}
-	b.deferredImages = false
+	b.DeferredImages = false
 	if got := b.footerLeft(); got != " Ready" {
 		t.Fatalf("footer after images = %q", got)
 	}
@@ -281,8 +281,8 @@ func deferredImageFixture(t *testing.T, html string) *Browser {
 	b.loader = loader
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
-	b.loadSeq = 1
-	b.deferredImages = true
+	b.LoadSeq = 1
+	b.DeferredImages = true
 	b.rebuild()
 	return b
 }
@@ -332,8 +332,8 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 	if b.prev == nil {
 		t.Fatal("below-fold image cleared the frame diff")
 	}
-	if b.pendingImageRow != row {
-		t.Fatalf("pending row = %d, want %d", b.pendingImageRow, row)
+	if b.PendingImageRow != row {
+		t.Fatalf("pending row = %d, want %d", b.PendingImageRow, row)
 	}
 	if far.Img == nil {
 		t.Fatal("decoded image was not installed on the node")
@@ -354,8 +354,8 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	if b.Layout == before {
 		t.Fatal("visible image did not rebuild the layout")
 	}
-	if b.pendingImageRow != 0 {
-		t.Fatalf("visible image left a pending row %d", b.pendingImageRow)
+	if b.PendingImageRow != 0 {
+		t.Fatalf("visible image left a pending row %d", b.PendingImageRow)
 	}
 	// Half-block art lives in cells the line diff already repaints, so a
 	// text-only frame does not need a full clear that would blink the screen.
@@ -374,8 +374,8 @@ func TestDeferredImageWithoutFragmentRebuilds(t *testing.T) {
 		Node: ghost, Src: "ghost.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
 	b.applyDeferredImageBatch(batch)
-	if b.pendingImageRow != 0 {
-		t.Fatalf("image without a fragment was deferred to row %d", b.pendingImageRow)
+	if b.PendingImageRow != 0 {
+		t.Fatalf("image without a fragment was deferred to row %d", b.PendingImageRow)
 	}
 }
 
@@ -387,7 +387,7 @@ func TestPendingImageLayoutWaitsForViewport(t *testing.T) {
 	b.applyDeferredImageBatch(imageBatch{seq: 1, results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
-	if b.pendingImageRow == 0 {
+	if b.PendingImageRow == 0 {
 		t.Fatal("below-fold image was not deferred")
 	}
 	before := b.Layout
@@ -396,13 +396,13 @@ func TestPendingImageLayoutWaitsForViewport(t *testing.T) {
 	if b.Layout != before {
 		t.Fatal("distant scroll rebuilt the page for a pending image")
 	}
-	if b.pendingImageRow == 0 {
+	if b.PendingImageRow == 0 {
 		t.Fatal("distant scroll cleared the pending row")
 	}
 	// The image's own row is now inside the viewport.
 	b.Scroll = row - 1
 	b.applyPendingImageLayout()
-	if b.pendingImageRow != 0 {
+	if b.PendingImageRow != 0 {
 		t.Fatal("image entering the viewport stayed pending")
 	}
 	if b.Layout == before {
@@ -423,7 +423,7 @@ func TestPendingImageLayoutRebuildsAtDocumentEnd(t *testing.T) {
 	before := b.Layout
 	b.Scroll = b.Layout.Height
 	b.applyPendingImageLayout()
-	if b.pendingImageRow != 0 || b.Layout == before {
+	if b.PendingImageRow != 0 || b.Layout == before {
 		t.Fatal("pending image at the end of the document was not laid out")
 	}
 }
@@ -443,7 +443,7 @@ func TestDrawAppliesPendingImageLayout(t *testing.T) {
 	}
 	b.Scroll = row - 1
 	drawQuiet(b)
-	if b.pendingImageRow != 0 || b.Layout == before {
+	if b.PendingImageRow != 0 || b.Layout == before {
 		t.Fatal("the frame that reached the image did not lay it out")
 	}
 }

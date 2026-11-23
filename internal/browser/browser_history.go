@@ -191,7 +191,7 @@ func (b *Browser) cacheCurrentPage() bool {
 	case "", "about", "data", "javascript", "mailto", "tel":
 		return false
 	}
-	weight := pageWeight(b.Page, b.JS, b.lastBody, b.ReaderRoot)
+	weight := pageWeight(b.Page, b.JS, b.LastBody, b.ReaderRoot)
 	if weight > b.historyCachePageCap() {
 		// A page heavier than the single-page allowance would pin the whole
 		// cache, so leave it out and let Back reload it instead.
@@ -202,9 +202,9 @@ func (b *Browser) cacheCurrentPage() bool {
 		js:                b.JS,
 		readerRoot:        b.ReaderRoot,
 		readerSavedScroll: b.ReaderSavedScroll,
-		method:            b.lastMethod,
-		body:              b.lastBody,
-		contentType:       b.lastContentType,
+		method:            b.LastMethod,
+		body:              b.LastBody,
+		contentType:       b.LastContentType,
 		at:                time.Now(),
 		bytes:             weight,
 	}
@@ -296,7 +296,7 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	if b.loader != nil {
 		b.loader.beginPage()
 	}
-	b.loadSeq++
+	b.LoadSeq++
 	b.histMu.Lock()
 	// Restoring counts as the entry's most recent use.
 	c.at = time.Now()
@@ -305,10 +305,10 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.entryID = entryID
 	b.Page = c.page
 	b.URL = c.page.URL
-	b.imagesPaused = false
-	b.lastMethod = c.method
-	b.lastBody = c.body
-	b.lastContentType = c.contentType
+	b.ImagesPaused = false
+	b.LastMethod = c.method
+	b.LastBody = c.body
+	b.LastContentType = c.contentType
 	b.Layout = nil
 	b.BigTextBlocked = false
 	b.resetConsole()
@@ -373,8 +373,8 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 		return
 	}
 	b.suspendCurrentPage()
-	b.nextScroll = scroll
-	b.nextScrollSet = true
+	b.NextScroll = scroll
+	b.NextScrollSet = true
 	b.navigateRequestEntry(http.MethodGet, rawURL, nil, "", entryID, false, false)
 }
 
@@ -393,11 +393,11 @@ func (b *Browser) reload() {
 	if b.URL == nil {
 		return
 	}
-	method := b.lastMethod
+	method := b.LastMethod
 	if method == "" {
 		method = http.MethodGet
 	}
-	b.navigateRequest(method, b.URL.String(), b.lastBody, b.lastContentType, false)
+	b.navigateRequest(method, b.URL.String(), b.LastBody, b.LastContentType, false)
 }
 
 // dropCachedPages clears the back/forward page cache. It is used when a

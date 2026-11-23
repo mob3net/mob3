@@ -852,7 +852,7 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.openFind(findScopePage)
 		return false
 	}
-	if k == "esc" && (b.loading || b.deferredImages) {
+	if k == "esc" && (b.Loading || b.DeferredImages) {
 		b.stopLoading()
 		return false
 	}

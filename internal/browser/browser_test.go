@@ -182,7 +182,7 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 	b.rebuild()
 	b.Focus = 0
 	withQuietStdout(t, b.followFocused)
-	if !b.loading {
+	if !b.Loading {
 		t.Fatal("a throwing click handler swallowed the link navigation")
 	}
 	select {
@@ -204,7 +204,7 @@ func TestPreventedLinkClickWithoutErrorStays(t *testing.T) {
 	b.rebuild()
 	b.Focus = 0
 	b.followFocused()
-	if b.loading {
+	if b.Loading {
 		t.Fatal("a healthy preventDefault handler should suppress navigation")
 	}
 }
@@ -280,11 +280,11 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("load did not start")
 	}
-	if !b.loading {
+	if !b.Loading {
 		t.Fatal("browser is not marked as loading")
 	}
 	b.HandleKey("esc")
-	if b.loading {
+	if b.Loading {
 		t.Fatal("Esc did not stop loading")
 	}
 	if b.status != "Stopped loading" {
@@ -332,7 +332,7 @@ func TestReloadButtonBecomesStopWhileLoading(t *testing.T) {
 		t.Fatalf("stop button width = %d, want %d", stop.w, stringWidth(" × "))
 	}
 	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: stop.x + 1, Y: stop.y + 1, Press: true})
-	if b.loading {
+	if b.Loading {
 		t.Fatal("clicking stop did not cancel the load")
 	}
 	if b.status != "Stopped loading" {
@@ -373,24 +373,24 @@ func TestLoadingProgress(t *testing.T) {
 	if b.progressActive() {
 		t.Fatal("idle browser reports active progress")
 	}
-	b.loading = true
+	b.Loading = true
 	b.startProgress()
-	if !b.progressActive() || b.progress != 0.05 {
-		t.Fatalf("start = %v active=%v", b.progress, b.progressActive())
+	if !b.progressActive() || b.Progress != 0.05 {
+		t.Fatalf("start = %v active=%v", b.Progress, b.progressActive())
 	}
 	for i := 0; i < 200; i++ {
 		if !b.tickProgress() {
 			t.Fatal("loading tick did not repaint")
 		}
 	}
-	if b.progress <= 0.5 || b.progress > 0.9 {
-		t.Fatalf("progress after loading ticks = %v", b.progress)
+	if b.Progress <= 0.5 || b.Progress > 0.9 {
+		t.Fatalf("progress after loading ticks = %v", b.Progress)
 	}
 
-	b.loading = false
+	b.Loading = false
 	b.finishProgress()
-	if b.progress != 1 {
-		t.Fatalf("finish progress = %v", b.progress)
+	if b.Progress != 1 {
+		t.Fatalf("finish progress = %v", b.Progress)
 	}
 	for i := 0; i < progressLingerTicks-1; i++ {
 		if b.tickProgress() {
@@ -400,15 +400,15 @@ func TestLoadingProgress(t *testing.T) {
 	if !b.progressActive() {
 		t.Fatal("progress cleared too early")
 	}
-	if !b.tickProgress() || b.progress != 0 || b.progressActive() {
-		t.Fatalf("progress did not clear: %v active=%v", b.progress, b.progressActive())
+	if !b.tickProgress() || b.Progress != 0 || b.progressActive() {
+		t.Fatalf("progress did not clear: %v active=%v", b.Progress, b.progressActive())
 	}
 
-	b.loading = true
+	b.Loading = true
 	b.startProgress()
 	b.cancelLoadNow()
-	if b.progressActive() || b.progress != 0 {
-		t.Fatalf("cancel did not clear progress: %v active=%v", b.progress, b.progressActive())
+	if b.progressActive() || b.Progress != 0 {
+		t.Fatalf("cancel did not clear progress: %v active=%v", b.Progress, b.progressActive())
 	}
 }
 
@@ -455,7 +455,7 @@ func TestJavaScriptKeyTogglesAndReloads(t *testing.T) {
 	u := mustParse(t, "https://example.com/")
 	b.Page = &Page{URL: u, Base: u, Root: ParseHTML("<html><body>scripted</body></html>")}
 	b.URL = u
-	b.lastMethod = "GET"
+	b.LastMethod = "GET"
 	b.rebuild()
 
 	requested := make(chan string, 1)
@@ -823,7 +823,7 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 		t.Fatalf("command = %q, want %q", b.download.command, want)
 	}
 	// No request is made for a non-PDF download link.
-	if b.loading {
+	if b.Loading {
 		t.Fatal("non-PDF download link started a load")
 	}
 	if b.URL.String() != "https://filesamples.com/formats/zip" {
@@ -848,7 +848,7 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 	if b.download != nil {
 		t.Fatal("PDF download opened the curl popup without fetching")
 	}
-	if !b.loading {
+	if !b.Loading {
 		t.Fatal("PDF download did not start a load")
 	}
 	var res loadResult
@@ -983,7 +983,7 @@ func TestNonHTMLNavigationOffersDownload(t *testing.T) {
 		URL: u, Base: u, Root: ParseHTML(`<p>cannot display</p>`),
 		Download: true, DownloadName: "archive.zip",
 	}
-	b.loadSeq = 1
+	b.LoadSeq = 1
 	b.finishLoad(loadResult{seq: 1, page: page, u: u, entryID: b.nextHistoryID(), historyPush: true, method: http.MethodGet})
 	if b.download == nil {
 		t.Fatal("non-HTML response did not offer the curl popup")
