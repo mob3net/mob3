@@ -17,7 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-const Version = 3
+// 4: HistoryCommit dropped Title.
+const Version = 4
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
