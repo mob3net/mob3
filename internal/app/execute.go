@@ -112,7 +112,7 @@ func execute(o runOptions) int {
 		return 2
 	}
 	zoomFactor := zoomPct / 100
-	browser.SetColorMode(browser.DetectColorMode())
+	frontend.SetColorMode(frontend.DetectColorMode())
 
 	if o.MCP {
 		auto := browser.NewAutomationWithConfig(browser.AutomationConfig{
@@ -121,6 +121,7 @@ func execute(o runOptions) int {
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
 			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
 		})
+		auto.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
 		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %v\n", err)
@@ -193,6 +194,7 @@ func execute(o runOptions) int {
 		GFX:           graphicsFor(graphicsMode, cellW, cellH),
 		NewGraphics:   graphicsFor,
 	})
+	b.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
 	presenter := frontend.NewPresenter(os.Stdout, b.Color())
 	presenterMode := graphicsMode
 	if presenterMode == frontend.GraphicsAuto || presenterMode == frontend.GraphicsBlocks || presenterMode == frontend.GraphicsNone {

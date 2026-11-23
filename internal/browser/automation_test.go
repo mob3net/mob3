@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"browser/internal/engine"
 )
 
 // newTestAutomation wires a headless session to a fixed set of paths.
@@ -905,5 +907,29 @@ func TestAutomationDiagnosticCommands(t *testing.T) {
 	}
 	if got, err := a.RunCommand(ctx, "requests", nil); err != nil || !strings.Contains(got, "Requests:") {
 		t.Fatalf("requests = %q, %v", got, err)
+	}
+}
+
+func TestPageTextMatchesMonoEncoding(t *testing.T) {
+	g := NewGrid(8, 1, RGB(0, 0, 0), RGB(255, 255, 255))
+	g.Put(0, 0, 'A', nil, RGB(0, 0, 0), Color{})
+	g.Put(1, 0, 'B', nil, RGB(0, 0, 0), Color{})
+	g.Cells[2].Img = true
+	g.Cells[2].R = 'C'
+	g.Cells[3].Run = 1
+	for i := 4; i <= 6; i++ {
+		g.Cells[i].Skip = true
+	}
+	g.Put(7, 0, 'Z', nil, RGB(0, 0, 0), Color{})
+	g.Runs = []ScaledRun{{X: 3, Y: 0, Cells: 3, Scale: 2, Text: "Hi"}}
+	want := gridLines(g, false)
+	got := engine.GridLines(g)
+	if len(got) != len(want) {
+		t.Fatalf("rows = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("row %d = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

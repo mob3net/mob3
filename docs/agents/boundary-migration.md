@@ -182,7 +182,7 @@ seam; the note names which part goes where.
 | `automation.go` | engine | Headless automation is the engine-side implementation. |
 | `mcp.go` | app/frontend | MCP JSON-RPC client; consumes the transport, not engine internals. |
 | `config.go` | app + engine | Host token, engine form markup and the app/session apply path. |
-| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frontend_bridge.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps only inline-SVG loading until that moves. |
+| `engine_compat.go`, `layout_compat.go`, `paint_compat.go`, `frame_protocol.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`, `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`, `render_gfx.go`, `js_host.go`, `js_life.go` | delete/merge | Aliases, adapters and thin wrappers. `frame_protocol.go` becomes an engine-side frame mapper; `render_gfx.go` keeps only inline-SVG loading until that moves. |
 | `internal/engine/*`, `internal/host/*`, `internal/frontend/*`, `internal/protocol/*`, `dark.go`, `js*.go` | done | Already on their final side; responsibilities are in [architecture.md](architecture.md#current-layout-during-migration). |
 
 ## 4. Phases
@@ -552,7 +552,7 @@ trusted-shell split, then Phase 6. Dependency order:
       fixtures with their packages and update the documented paths.
 - [ ] Remove the browser-side shims, adapters and dead aliases
       (`engine_compat.go`, `layout_compat.go`, `paint_compat.go`,
-      `frontend_bridge.go`, `js_compat.go`, `page_compat.go`, `pdf_compat.go`,
+      `js_compat.go`, `page_compat.go`, `pdf_compat.go`,
       `style_units_compat.go`, `cookie_compat.go`, `network_compat.go`,
       `cache.go`, `certs.go`, `render_gfx.go`); the real bridges
       (`frame_protocol.go`, `js_host.go`, `js_life.go`) move with the session.
@@ -1145,3 +1145,4 @@ measurements, next step. Do not rewrite old entries.
 | 2026-11-23 | 8n | Batch 39: moved the dump/PNG transport loop into `internal/app/dump.go`; browser keeps only the one-shot load/layout/paint handler, now free of terminal encoding. App owns terminal sizing, color, frames and diagnostics. Moved the dump baseline hash tests to use the exported handler. | `go test ./...`, `go vet`, full `-race`, app/browser dump tests, dump/PNG hashes | Move remaining methods and shell fields |
 | 2026-11-23 | 8o | Batch 40: moved mouse event types, button constants and SGR/X10/token codecs to `internal/protocol/mouse.go`; `frontend/mouse.go` is now an alias layer. Browser input uses the protocol types directly, and selection has a local OSC 52 encoder, removing the frontend import from both files. | `go test ./...`, `go vet`, full `-race`, protocol/frontend/browser input tests, PTY clicks/wheel, dump/PNG hashes | Remove remaining frontend imports |
 | 2026-11-23 | 8p | Batch 41: moved graphics modes to `internal/protocol/graphics.go`; frontend aliases them. Browser now exposes a `Graphics` interface and receives the renderer/factory from the app, removing the renderer constructor from the browser. The only remaining browser `frontend` import is `frontend_bridge.go`. | `go test ./...`, `go vet`, full `-race`, protocol/frontend/app/browser graphics tests, PTY `i` cycle, dump/PNG hashes | Remove the last frontend bridge |
+| 2026-11-23 | 8q | Batch 42: removed the last browser `frontend` import. Frame/PNG encoders are injected by the app; headless snapshots and copy-page use `engine.GridLines`; color-mode helpers moved to the app/frontend; `frontend_bridge.go` is gone. Added engine and browser plain-text grid parity tests. | `go test ./...`, `go vet`, full `-race`, engine/browser/frontend encoding tests, PTY graphics/images, dump/PNG hashes | Remove host shims and continue session split |

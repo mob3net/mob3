@@ -122,7 +122,9 @@ destination; the tracker lists what remains.
   stays true and the front end composes the header, footer and scrollbar. The
   engine fallback remains only for direct callers and tests.
 - `internal/browser` has no import rule during the migration; the dependency
-  test covers the five target packages. Both temporary exceptions end with the
+  test covers the five target packages. The browser no longer imports
+  `internal/frontend`: frame/PNG encoders and the graphics renderer are injected
+  by the app. Both temporary exceptions end with the
   session split.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
@@ -172,7 +174,7 @@ destination; the tracker lists what remains.
 | `internal/engine/render.go` | Terminal cell framebuffer, clipping, image downsampling, half-block rendering, z-index paint ordering, image-placement collection, `PaintLayout*`, SVG decoding via the vendored renderer. |
 | `render_gfx.go` | Browser `Graphics` interface, protocol graphics-mode aliases and inline-SVG loading. The app injects the frontend renderer; Kitty/iTerm2 output is in `internal/frontend/gfx.go`. |
 | `paint_compat.go` | Browser aliases and wrappers for the engine grid/paint API and SVG decoders. Temporary. |
-| `frontend_bridge.go` | Temporary bridges to `internal/frontend`: grid-to-frame conversion for `Lines`/`LinesMono`/`PNG`, color modes and code helpers. Removed when the engine package makes the seam direct. |
+| `encoders.go` | Injected frame/PNG encoder hooks; the browser does not import `internal/frontend`. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
 | `internal/frontend/png.go` | Protocol-frame-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `frame_protocol.go` | Browser-side mapper from the painted content grid to `protocol.Frame`; the only place internal cell fields become wire values. Moves to the engine session with the split. |
@@ -246,6 +248,7 @@ destination; the tracker lists what remains.
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
+| `internal/engine/grid_text.go` | Plain-text grid rows used by headless snapshots and copy-page output. |
 | `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |

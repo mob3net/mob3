@@ -753,12 +753,14 @@ func (b *Browser) paintShellOverlays(g *Grid) {
 
 // flushGrid writes changed cells to the terminal.
 func (b *Browser) flushGrid(g *Grid, placements []ImagePlacement) {
-	var lines []string
-	if b.color {
-		lines = b.encodeGrid(g, true, false)
-	} else {
-		lines = b.encodeGrid(g, false, true)
+	enc := b.frameEncoder
+	if enc == nil {
+		enc = defaultFrameEncoder
 	}
+	if enc == nil {
+		return
+	}
+	lines := enc(toProtocolFrameInto(&b.frameBuf, g, 0), b.color, !b.color)
 	// Scrolling can leave the terminal in a shifted state (for example after a
 	// stray wrap), and cells covered by scaled text are skipped when painting.
 	// Clear the whole screen and repaint on any scroll change so stale content

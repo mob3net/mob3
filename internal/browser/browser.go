@@ -95,10 +95,12 @@ type Browser struct {
 	skipDraw        bool
 	clipboardWriter io.Writer
 
-	color       bool
-	prev        []string
-	gfx         Graphics
-	newGraphics func(GraphicsMode, int, int) Graphics
+	color        bool
+	prev         []string
+	gfx          Graphics
+	newGraphics  func(GraphicsMode, int, int) Graphics
+	frameEncoder func(protocol.Frame, bool, bool) []string
+	pngEncoder   func(protocol.Frame, int) ([]byte, error)
 	// screenGrid and contentGrid are reused between frames. The content grid
 	// is exactly the page viewport; the screen grid adds chrome and overlays.
 	screenGrid  *Grid

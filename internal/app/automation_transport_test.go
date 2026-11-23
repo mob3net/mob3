@@ -2,6 +2,7 @@ package app
 
 import (
 	"browser/internal/browser"
+	"browser/internal/frontend"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 
 func TestAutomationTransportRoundTrip(t *testing.T) {
 	auto := browser.NewAutomationWithConfig(browser.AutomationConfig{Width: 60, Height: 20, NoJS: true})
+	auto.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
 	session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 	if err != nil {
 		t.Fatal(err)

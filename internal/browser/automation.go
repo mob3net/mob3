@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"browser/internal/engine"
 	"browser/internal/protocol"
 )
 
@@ -180,7 +181,7 @@ func (a *Automation) pageTextLocked(vh int) string {
 	if g == nil {
 		return ""
 	}
-	lines := gridLines(g, false)
+	lines := engine.GridLines(g)
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
@@ -204,7 +205,7 @@ func (a *Automation) Screenshot(scale int) ([]byte, error) {
 	if g == nil {
 		return nil, errors.New("no page loaded")
 	}
-	return gridPNG(g, scale)
+	return a.b.screenshotPNG(g, scale)
 }
 
 func (a *Automation) linkLinesLocked(vh int) []string {
