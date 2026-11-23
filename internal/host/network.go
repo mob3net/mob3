@@ -113,6 +113,8 @@ func IsLocalIP(ip net.IP) bool {
 	}
 	if ip4 := ip.To4(); ip4 != nil {
 		switch {
+		case ip4[0] == 0: // 0.0.0.0/8, routed to loopback by some stacks
+			return true
 		case ip4[0] == 100 && ip4[1]&0xc0 == 0x40: // 100.64.0.0/10 CGNAT
 			return true
 		case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0: // 192.0.0.0/24

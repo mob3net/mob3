@@ -240,6 +240,25 @@ func TestJSFetchFromDataDocumentBlocksLocalNetwork(t *testing.T) {
 	}
 }
 
+func TestJSFetchRedirectToLocalBlocked(t *testing.T) {
+	f := testJSFetcher(t, nil)
+	calls := 0
+	f.Client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return redirectResponse(r, "https://127.0.0.1/secret"), nil
+	})}
+	_, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: "https://public.example/start", Method: "GET", Origin: "https://public.example",
+		Purpose: protocol.FetchFetch, Kind: "fetch", Credentials: true, PageLocal: false,
+	})
+	if !errors.Is(err, ErrLocalNetworkBlocked) {
+		t.Fatalf("error = %v, want ErrLocalNetworkBlocked", err)
+	}
+	if calls != 1 {
+		t.Fatalf("transport calls = %d, want the redirect blocked before dialing", calls)
+	}
+}
+
 func TestJSFetchNoCORSSkipsCORSResponseCheck(t *testing.T) {
 	var gotOrigin string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

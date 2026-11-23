@@ -1,6 +1,24 @@
 package protocol
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestStripControlsDropsBidiAndZeroWidth(t *testing.T) {
+	in := "pay\u200Bpal\u202E.com\u2066\u200E\uFEFF\u00AD"
+	if got := StripControls(in); got != "paypal.com" {
+		t.Fatalf("StripControls = %q", got)
+	}
+	// ZWJ/ZWNJ carry emoji and joining semantics and must survive.
+	emoji := "a\u200Db\u200Cc"
+	if got := StripControls(emoji); got != emoji {
+		t.Fatalf("StripControls dropped ZWJ/ZWNJ: %q", got)
+	}
+	if got := StripControls("x\x1b[31my\nz"); strings.ContainsAny(got, "\x1b\n") {
+		t.Fatalf("StripControls kept a control: %q", got)
+	}
+}
 
 func TestRunsEqual(t *testing.T) {
 	a := []ScaledRun{

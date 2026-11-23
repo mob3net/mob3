@@ -28,7 +28,7 @@ func dumpPage(loader *engine.Loader, target string, width, viewportH int, noColo
 	})
 	session, err := (&protocol.InProc{Limits: engine.DumpLimits(width, pngOut), EventQueue: 4}).Open(context.Background(), 1, h)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: %s\n", cleanError(err))
 		return 1
 	}
 	defer session.Close()
@@ -42,7 +42,7 @@ func dumpPage(loader *engine.Loader, target string, width, viewportH int, noColo
 			if pngOut {
 				data, err := frontend.RenderPNG(v, 1)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "mob3: png: %v\n", err)
+					fmt.Fprintf(os.Stderr, "mob3: png: %s\n", cleanError(err))
 					return 1
 				}
 				if _, err := os.Stdout.Write(data); err != nil {

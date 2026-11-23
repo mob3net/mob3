@@ -57,6 +57,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		f.RecordBlocked(gen, method, u, req.Kind, err)
 		return out, err
 	}
+	blockLocal := RequestMetaFrom(ctx).BlockLocal
 	var reqID int
 	start := time.Now()
 	if req.Kind != "" {
@@ -96,12 +97,18 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
 		}
+		if blockLocal && IsLocalURL(next.URL) {
+			return ErrLocalNetworkBlocked
+		}
 		if origin.Scheme == "https" && next.URL.Scheme == "http" {
 			return ErrMixedContentBlocked
 		}
 		if !crossOrigin && !sameOrigin(next.URL, origin) {
 			return errors.New("cross-origin redirect blocked")
 		}
+		// The dial guard and proxy decision must see the redirect target, not
+		// the pre-redirect URL.
+		*next = *next.WithContext(WithRequestTarget(next.Context(), next.URL))
 		return nil
 	}
 	resp, err := client.Do(httpReq)

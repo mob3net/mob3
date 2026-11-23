@@ -14,6 +14,15 @@ import (
 	"browser/internal/protocol"
 )
 
+// cleanError keeps page- or URL-derived error text out of the terminal's
+// control, bidi and zero-width sequences.
+func cleanError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return protocol.StripControls(err.Error())
+}
+
 type runOptions struct {
 	Dump, PNG     bool
 	Width, Height int
@@ -99,7 +108,7 @@ func execute(o runOptions) int {
 		DeferImages:  interactive && !o.MCP,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: -certs: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))
 		return 2
 	}
 	jsMemLimit := engine.JSMemLimit()
@@ -126,14 +135,14 @@ func execute(o runOptions) int {
 		auto.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
 		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %v\n", err)
+			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %s\n", cleanError(err))
 			return 1
 		}
 		defer session.Close()
 		client := &automationClient{s: session}
 		ctx := context.Background()
 		if err := client.Navigate(ctx, o.Target); err != nil {
-			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %v\n", err)
+			fmt.Fprintf(os.Stderr, "mob3 mcp: initial page: %s\n", cleanError(err))
 		}
 		return RunMCP(client, os.Stdin, os.Stdout, os.Stderr)
 	}
@@ -146,7 +155,7 @@ func execute(o runOptions) int {
 	stdin := os.Stdin
 	state, err := frontend.MakeRaw(stdin)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%v); rendering to stdout.\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: interactive mode unavailable (%s); rendering to stdout.\n", cleanError(err))
 		return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color,
 			o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, jsMemLimit, budget, zoomFactor)
 	}
@@ -236,7 +245,7 @@ func execute(o runOptions) int {
 
 	session, err := (&protocol.InProc{}).Open(context.Background(), 1, b)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: session: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: session: %s\n", cleanError(err))
 		return 1
 	}
 	defer session.Close()
@@ -245,11 +254,11 @@ func execute(o runOptions) int {
 		Width: w, Height: h, ContentTop: top, ContentHeight: contentH,
 		CellW: cellW, CellH: cellH, Zoom: zoomFactor, Caps: b.Capabilities(),
 	}}); err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: session init: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: session init: %s\n", cleanError(err))
 		return 1
 	}
 	if err := session.Send(protocol.Command{Body: protocol.Navigate{URL: o.Target, Push: true}}); err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: session navigate: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: session navigate: %s\n", cleanError(err))
 		return 1
 	}
 	loop := &frontend.SessionLoop{
@@ -259,7 +268,7 @@ func execute(o runOptions) int {
 	}
 	loop.State.Clipboard = os.Stdout
 	if err := loop.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mob3: %s\n", cleanError(err))
 		return 1
 	}
 	return 0

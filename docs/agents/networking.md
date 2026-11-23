@@ -70,12 +70,14 @@ agreement, the non-negotiable constraints and the change protocol.
   and a shared client cannot be mutated from a request goroutine.
 - **Local-network guard:** a document loaded from a public `http`/`https`
   address may not fetch subresources, `fetch` or XHR from loopback, RFC 1918 or
-  ULA private, link-local, CGNAT or reserved addresses. Literal hosts and local
-  names (`localhost`, `*.localhost`, `*.local`) are rejected before the request
-  is made; names that merely resolve locally are rejected after DNS resolution
-  at connect time. A document that itself loaded from a local address keeps
-  access, and top-level navigation is never blocked. Blocked requests show as
-  `ERR` in the console request list. A resource cached while browsing a local
+  ULA private, link-local, CGNAT, `0.0.0.0/8` or reserved addresses. Literal
+  hosts and local names (`localhost`, `*.localhost`, `*.local`) are rejected
+  before the request and again on every redirect hop; names that merely resolve
+  locally are rejected after DNS resolution at connect time. A redirect also
+  retargets the request metadata so the dial guard and proxy decision inspect
+  the host actually being contacted. A document that itself loaded from a local
+  address keeps access, and top-level navigation is never blocked. Blocked
+  requests show as `ERR` in the console request list. A resource cached while browsing a local
   document is not reused by a public document. With an environment HTTP proxy
   the target is resolved by the proxy, so only literal and local names are
   caught.

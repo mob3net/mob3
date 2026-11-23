@@ -404,14 +404,36 @@ func (f Frame) Validate(lim Limits) error {
 }
 
 // StripControls removes terminal control characters from untrusted text so a
-// status, console or crash line cannot carry an escape sequence.
+// status, console or crash line cannot carry an escape sequence. It also drops
+// the invisible bidi and zero-width formatting characters that can reorder or
+// hide chrome text (a URL or title spoof); ZWJ and ZWNJ stay because they carry
+// emoji and cursive-joining semantics.
 func StripControls(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r < 32 || (r >= 0x7f && r < 0xa0) {
+		if r < 32 || (r >= 0x7f && r < 0xa0) || isDisplayFormat(r) {
 			return -1
 		}
 		return r
 	}, s)
+}
+
+func isDisplayFormat(r rune) bool {
+	switch r {
+	case 0x00ad, // soft hyphen
+		0x061c,         // Arabic letter mark
+		0x180e,         // Mongolian vowel separator
+		0x200b,         // zero-width space
+		0x200e,         // left-to-right mark
+		0x200f,         // right-to-left mark
+		0x2028, 0x2029, // line/paragraph separator
+		0x202a, 0x202b, 0x202c, 0x202d, 0x202e, // bidi embedding/override
+		0x2060, 0x2061, 0x2062, 0x2063, 0x2064, // word joiner and invisible operators
+		0x2066, 0x2067, 0x2068, 0x2069, // bidi isolates
+		0x206a, 0x206b, 0x206c, 0x206d, 0x206e, 0x206f, // deprecated format controls
+		0xfeff: // zero-width no-break space / BOM
+		return true
+	}
+	return false
 }
 
 // SafeRune reports whether a rune may be painted as page text. Control

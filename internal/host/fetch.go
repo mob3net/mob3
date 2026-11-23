@@ -134,22 +134,11 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		req.Header.Set("User-Agent", f.Settings.UserAgent())
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
 		req.Header.Set("Accept-Language", "en")
-		client := f.Client
-		if meta.PageSecure && meta.Kind != "" && meta.Kind != "doc" {
-			// A secure subresource may not redirect back down to HTTP.
-			c := *f.Client
-			c.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return errors.New("too many redirects")
-				}
-				if next.URL.Scheme == "http" {
-					return ErrMixedContentBlocked
-				}
-				return nil
-			}
-			client = &c
-		}
-		resp, e := client.Do(req)
+		// The redirect policy is per request. Cloning also keeps the shared
+		// client untouched for concurrent fetches.
+		c := *f.Client
+		c.CheckRedirect = redirectCheck(meta.BlockLocal, meta.PageSecure && meta.Kind != "" && meta.Kind != "doc")
+		resp, e := c.Do(req)
 		if e != nil {
 			if IsLocalNetworkError(e) {
 				e = ErrLocalNetworkBlocked
@@ -180,6 +169,26 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		return b, ctype, resp.Request.URL, resp.StatusCode, nil
 	}
 	return nil, "", u, 0, errors.New("unsupported URL scheme: " + u.Scheme)
+}
+
+// redirectCheck enforces the redirect limit, mixed-content rule and
+// local-network policy on every hop, not just the initial URL. It also
+// retargets the request metadata so the dial guard and the proxy decision see
+// the host actually being contacted.
+func redirectCheck(blockLocal, secureSubresource bool) func(*http.Request, []*http.Request) error {
+	return func(next *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("too many redirects")
+		}
+		if secureSubresource && next.URL.Scheme == "http" {
+			return ErrMixedContentBlocked
+		}
+		if blockLocal && IsLocalURL(next.URL) {
+			return ErrLocalNetworkBlocked
+		}
+		*next = *next.WithContext(WithRequestTarget(next.Context(), next.URL))
+		return nil
+	}
 }
 
 // ParseDataURI decodes a data: URL.

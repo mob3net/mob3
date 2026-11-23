@@ -24,12 +24,19 @@ type Session struct {
 	cache    *ResourceCache
 	requests *RequestLog
 	token    *ConfigToken
-	// attestedID/URL hold the final URL of the latest document fetch. The
-	// front end reads it by entry ID; the engine only triggers the fetch.
-	attestedMu  sync.Mutex
-	attestedID  uint64
-	attestedURL string
+	// attested holds the final URL of recent document fetches by entry ID. It
+	// is bounded because the front end only needs the entries whose commits
+	// have not been applied yet; overlapping loads can otherwise evict an
+	// earlier entry before its commit arrives. The engine only triggers the
+	// fetch; the URL is trusted host data.
+	attestedMu    sync.Mutex
+	attested      map[uint64]string
+	attestedOrder []uint64
 }
+
+// attestedSlots bounds the attested-URL map. It comfortably covers the
+// back/forward cache window and several loads completing out of order.
+const attestedSlots = 32
 
 // NewSession builds an empty host session. The caller applies UA, search,
 // image caps and cache limits through the protocol.Host methods.
@@ -42,6 +49,7 @@ func NewSession() *Session {
 		cache:    NewResourceCache(0),
 		requests: NewRequestLog(),
 		token:    NewConfigToken(),
+		attested: make(map[uint64]string),
 	}
 }
 
@@ -50,10 +58,33 @@ func NewSession() *Session {
 func (s *Session) AttestedURL(entryID uint64) (string, bool) {
 	s.attestedMu.Lock()
 	defer s.attestedMu.Unlock()
-	if entryID == 0 || s.attestedID != entryID || s.attestedURL == "" {
+	if entryID == 0 {
 		return "", false
 	}
-	return s.attestedURL, true
+	u, ok := s.attested[entryID]
+	if !ok || u == "" {
+		return "", false
+	}
+	return u, true
+}
+
+// attest stores the trusted final URL for one document entry, keeping only the
+// newest attestedSlots IDs.
+func (s *Session) attest(entryID uint64, final string) {
+	if entryID == 0 || final == "" {
+		return
+	}
+	s.attestedMu.Lock()
+	defer s.attestedMu.Unlock()
+	if _, exists := s.attested[entryID]; !exists {
+		s.attestedOrder = append(s.attestedOrder, entryID)
+		if len(s.attestedOrder) > attestedSlots {
+			oldest := s.attestedOrder[0]
+			s.attestedOrder = s.attestedOrder[1:]
+			delete(s.attested, oldest)
+		}
+	}
+	s.attested[entryID] = final
 }
 
 func (s *Session) fetcher() *Fetcher {
@@ -81,10 +112,7 @@ func (s *Session) Fetch(ctx context.Context, method string, u *url.URL, body []b
 	local := IsLocalHost(final.Hostname()) || (space.Local.Load() && !RequestUsesProxy(final.String()))
 	if final != nil {
 		if meta := protocol.RequestMetaFrom(ctx); meta.EntryID != 0 && meta.Kind == "doc" {
-			s.attestedMu.Lock()
-			s.attestedID = meta.EntryID
-			s.attestedURL = final.String()
-			s.attestedMu.Unlock()
+			s.attest(meta.EntryID, final.String())
 		}
 	}
 	return protocol.HostFetch{Data: data, ContentType: ctype, FinalURL: final, Status: status, PageLocal: local}, nil
