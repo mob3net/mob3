@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+
+	"browser/internal/protocol"
 )
 
 func (b *Session) zoomBadge() string {
@@ -189,13 +191,18 @@ func (b *Session) flushGrid(g *Grid, placements []ImagePlacement) {
 	if enc == nil {
 		return
 	}
-	lines := enc(toProtocolFrameInto(&b.frameBuf, g, 0), b.color, !b.color)
+	frame := toProtocolFrameInto(&b.frameBuf, g, 0)
+	lines := enc(frame, b.color, !b.color)
 	// Scrolling can leave the terminal in a shifted state (for example after a
 	// stray wrap), and cells covered by scaled text are skipped when painting.
-	// Clear the whole screen and repaint on any scroll change so stale content
-	// can never show through the skipped cells.
+	// Clear the whole screen and repaint on any scroll change or scaled-run
+	// move so stale content can never show through the skipped cells.
 	if b.Scroll != b.lastScroll {
 		b.lastScroll = b.Scroll
+		b.prev = nil
+	}
+	if !protocol.RunsEqual(b.lastRuns, frame.Runs) {
+		b.lastRuns = append(b.lastRuns[:0], frame.Runs...)
 		b.prev = nil
 	}
 	// Entering or leaving hint/modal mode switches between native inline

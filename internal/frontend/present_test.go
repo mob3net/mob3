@@ -98,6 +98,39 @@ func TestPresenterResetsOnScrollAndNative(t *testing.T) {
 	}
 }
 
+func TestPresenterRepaintsWhenScaledRunsMove(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	f := testRowFrame("head", "sub1", "sub2")
+	f.Cells[0].Run = 1
+	f.Cells[f.W].Flags |= protocol.CellSkip
+	f.Runs = []protocol.ScaledRun{{X: 0, Y: 0, Cells: f.W, Scale: 2, Text: "Hi"}}
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "\x1b[2J") {
+		t.Fatalf("unchanged frame forced a clear: %q", out.String())
+	}
+
+	// The run moves down one row; the row it leaves is now skip-only, so a
+	// line diff could not clear the old subtitle painted there.
+	moved := testRowFrame("head", "sub1", "sub2")
+	moved.Cells[moved.W].Run = 1
+	moved.Cells[2*moved.W].Flags |= protocol.CellSkip
+	moved.Runs = []protocol.ScaledRun{{X: 0, Y: 1, Cells: moved.W, Scale: 2, Text: "Hi"}}
+	out.Reset()
+	if err := p.Present(moved, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\x1b[2J") {
+		t.Fatalf("moved scaled run did not force a clear: %q", out.String())
+	}
+}
+
 func BenchmarkPresenterFrame(b *testing.B) {
 	const w, h = 100, 35
 	f := protocol.Frame{Version: 1, W: w, H: h, Cells: make([]protocol.Cell, w*h)}

@@ -456,7 +456,9 @@ agreement, the non-negotiable constraints and the change protocol.
   be waiting. A batch that touches the viewport rebuilds at once; half-block
   text modes repaint the affected rows through the normal line diff, while
   native terminal placements or kitty scaled text force the same full repaint
-  as scrolling so stale graphics cannot survive. Offscreen images are still
+  as scrolling so stale graphics cannot survive; the front end triggers it
+  whenever a frame's scaled-run set differs from the previous frame, because
+  the cells under a run are skipped by the line diff. Offscreen images are still
   queued after the visible ones and load eventually. While a batch is pending the URL-row progress bar stays
   visible at 90% and advances toward completion as images finish, and an idle
   footer shows `Loading images n/total` until the batch is done (`Esc` completes

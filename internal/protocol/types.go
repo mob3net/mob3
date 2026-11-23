@@ -128,6 +128,24 @@ type ScaledRun struct {
 	Attrs uint8
 }
 
+// RunsEqual reports whether two frames carry scaled-text runs with the same
+// positions, footprint, scale and text. Cells covered by a run are skipped when
+// painting, so a run that moves or changes shape needs a full repaint; a plain
+// line diff would leave the old rows behind. Style-only changes are excluded:
+// rewriting the run's top row replaces the whole multicell.
+func RunsEqual(a, b []ScaledRun) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].X != b[i].X || a[i].Y != b[i].Y || a[i].Cells != b[i].Cells ||
+			a[i].Scale != b[i].Scale || a[i].Text != b[i].Text {
+			return false
+		}
+	}
+	return true
+}
+
 // PlacementFormat identifies the encoding of Placement.Data.
 type PlacementFormat uint8
 

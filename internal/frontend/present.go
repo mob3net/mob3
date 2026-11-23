@@ -153,6 +153,13 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		p.lastScroll = scroll
 		p.prev = nil
 	}
+	// Cells covered by a scaled run are skipped when a row is painted, so a
+	// moved or resized run must repaint the whole screen instead of leaving the
+	// old glyphs and the text they covered in place. A layout reflow (images
+	// arriving, a hover rebuild) can move runs without changing the scroll.
+	if !protocol.RunsEqual(p.lastFrame.Runs, f.Runs) {
+		p.prev = nil
+	}
 	p.lastFrame = f
 	p.hasFrame = true
 	if p.state.FrontendChrome {

@@ -283,6 +283,7 @@ type Session struct {
 	// selectMenu is the pending single-select choice awaiting the front end.
 	selectMenu  *selectMenuDialog
 	lastScroll  int
+	lastRuns    []protocol.ScaledRun
 	usage       procUsage
 	quitPending bool
 }

@@ -266,6 +266,10 @@ agreement, the non-negotiable constraints and the change protocol.
   an opaque fixed-chrome fill (a cookie bar or fixed header) is likewise
   painted at normal size: terminal-side scaled text composites above the cell
   grid and would spill large glyphs over the fixed fill that is painted later.
+  Cells covered by a run are skipped when its rows are painted, so a plain line
+  diff cannot erase what an earlier run left there. Any frame whose run set
+  differs from the previous frame's (a reflow can move headings without a
+  scroll) therefore forces a whole-screen repaint.
   While a modal window or popup is open the page is rebuilt without scaled
   text and restored when it closes, so terminal-side glyphs cannot paint over
   the modal; this is the text counterpart of native images falling back to
