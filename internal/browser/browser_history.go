@@ -3,7 +3,6 @@ package browser
 import (
 	"image"
 	"net/url"
-	"time"
 
 	"browser/internal/engine"
 	"browser/internal/protocol"
@@ -26,78 +25,27 @@ func imageWeight(img image.Image) int64 { return engine.ImageWeight(img) }
 // bound. User-started navigations and any page that settles reset the count.
 const maxAutoNavigations = 20
 
-// historyCachePageCap is the largest single page the back/forward cache will keep.
-// Half the budget leaves room for the page you came from while stopping one
-// heavy page from pinning the whole allowance.
-func (b *Browser) historyCachePageCap() int64 { return b.Cache.PageCap() }
+// historyCachePageCap is the largest single page the back/forward cache keeps.
+func (b *Browser) historyCachePageCap() int64 { return b.Session.HistoryCachePageCap() }
 
-// setHistoryCacheLimitMB applies a new back/forward cache budget and trims the
-// cache immediately. Zero disables page caching.
-func (b *Browser) setHistoryCacheLimitMB(mb int) {
-	if mb < 0 {
-		mb = 0
-	}
-	b.Cache.SetLimitBytes(int64(mb) << 20)
-}
+// setHistoryCacheLimitMB applies a new back/forward cache budget.
+func (b *Browser) setHistoryCacheLimitMB(mb int) { b.Session.SetHistoryCacheLimitMB(mb) }
 
-// noteEvictedPage asks the event loop for one scavenge when the evicted page
-// held a large part of the cache budget, so its memory returns to the OS now
-// instead of waiting for the background scavenger. Small evictions do not
-// justify a stop-the-world pass.
-func (b *Browser) noteEvictedPage(size, limit int64) {
-	if size <= 0 {
-		return
-	}
-	if limit > 0 && size < limit/4 {
-		return
-	}
-	b.scavengePending.Store(true)
-}
+// noteEvictedPage asks the event loop for one scavenge after a large eviction.
+func (b *Browser) noteEvictedPage(size, limit int64) { b.Session.NoteEvictedPage(size, limit) }
 
 func metaRefreshTarget(page *Page) string { return engine.MetaRefreshTarget(page) }
 
-// suspendCurrentPage keeps the applied page for back/forward when it belongs
-// to the current front-end entry, and detaches its JavaScript runtime without
-// destroying it so timers and DOM state resume on return. Pages that cannot be
-// cached (about: pages, downloads) simply have their runtime stopped.
-func (b *Browser) suspendCurrentPage() {
-	cached := b.cacheCurrentPage()
-	if b.JS != nil {
-		if cached {
-			b.JS.Freeze()
-		} else {
-			b.JS.Stop()
-		}
-		b.JS = nil
-	}
-}
+// suspendCurrentPage keeps the applied page for back/forward.
+func (b *Browser) suspendCurrentPage() { b.Session.SuspendCurrentPage() }
 
-// cacheCurrentPage stores the applied page under the current front-end entry
-// ID. It reports whether the page was cached.
-func (b *Browser) cacheCurrentPage() bool {
-	if b.Page == nil || b.Page.Root == nil || b.URL == nil || b.Page.Download || b.EntryID == 0 {
-		return false
-	}
-	switch b.URL.Scheme {
-	case "", "about", "data", "javascript", "mailto", "tel":
-		return false
-	}
-	weight := engine.PageWeight(b.Page, b.JS, b.LastBody, b.ReaderRoot)
-	if weight > b.Cache.PageCap() {
-		return false
-	}
-	b.Cache.Put(b.EntryID, &cachedPage{
-		Page: b.Page, JS: b.JS, ReaderRoot: b.ReaderRoot,
-		ReaderSavedScroll: b.ReaderSavedScroll, Method: b.LastMethod,
-		Body: b.LastBody, ContentType: b.LastContentType, At: time.Now(), Bytes: weight,
-	})
-	return true
-}
+// cacheCurrentPage stores the applied page under the current entry ID.
+func (b *Browser) cacheCurrentPage() bool { return b.Session.CacheCurrentPage() }
 
-// dropCachedEntryUnless removes an entry's cached page when its URL differs
-// from u. A same-URL reload keeps the old cached page, matching the old history
-// semantics.
-func (b *Browser) dropCachedEntryUnless(id uint64, u string) { b.Cache.DeleteUnlessURL(id, u) }
+// dropCachedEntryUnless removes a cached page whose URL changed.
+func (b *Browser) dropCachedEntryUnless(id uint64, u string) {
+	b.Session.DropCachedEntryUnless(id, u)
+}
 
 // applyCachedPage restores a page kept by the back/forward cache without any
 // network or script work. The scroll position and reader extraction from the
@@ -206,4 +154,4 @@ func (b *Browser) reload() {
 // dropCachedPages clears the back/forward page cache. It is used when a
 // session-wide setting changes, because restoring a page built under the old
 // setting would be inconsistent.
-func (b *Browser) dropCachedPages() { b.Cache.DropAll() }
+func (b *Browser) dropCachedPages() { b.Session.DropCachedPages() }

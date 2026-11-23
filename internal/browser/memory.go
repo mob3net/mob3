@@ -206,6 +206,4 @@ func (l *byteLimiter) release(n int64) {
 }
 
 // takeScavengePending consumes one pending scavenge request.
-func (b *Browser) takeScavengePending() bool {
-	return b.scavengePending.Swap(false)
-}
+func (b *Browser) takeScavengePending() bool { return b.Session.TakeScavengePending() }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"browser/internal/protocol"
@@ -81,6 +82,8 @@ type Session struct {
 
 	// Memory-only back/forward page cache.
 	Cache *PageCache
+	// scavengePending asks the event loop for one debug.FreeOSMemory call.
+	scavengePending atomic.Bool
 
 	// Load lifecycle.
 	Loading             bool

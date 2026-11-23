@@ -52,7 +52,7 @@ func TestSessionFindHintsAndSelection(t *testing.T) {
 	}
 	s.ClearFind()
 	if s.FindActive || s.FindText != "" || s.FindMatches != nil {
-		t.Fatalf("clear find = %+v", s)
+		t.Fatalf("clear find active=%v text=%q matches=%v", s.FindActive, s.FindText, s.FindMatches)
 	}
 
 	s.HintTargets = []HintTarget{{Link: 0}}

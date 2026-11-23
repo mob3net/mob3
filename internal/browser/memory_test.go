@@ -171,7 +171,7 @@ func TestJSMemorySamplerInterrupts(t *testing.T) {
 
 func TestTakeScavengePendingConsumesOnce(t *testing.T) {
 	b := NewBrowser(60, 10)
-	b.scavengePending.Store(true)
+	b.Session.NoteEvictedPage(1, 0)
 	if !b.takeScavengePending() {
 		t.Fatal("pending scavenge was not reported")
 	}
