@@ -635,6 +635,54 @@ func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
 	return true, false
 }
 
+// handleConsoleMouse owns pointer reports on the console screen. Tabs switch
+// sections, the input row focuses the JS/Tools prompt, the footer >_ icon
+// closes the console, and the wheel scrolls the active section. Every report is
+// consumed so a click cannot reach the page underneath.
+func (l *SessionLoop) handleConsoleMouse(ev MouseEvent) bool {
+	v := l.consoleView
+	if v.Width <= 0 || v.Height <= 0 || v.Quit || l.consoleFindActive {
+		return true
+	}
+	if ev.Wheel != 0 {
+		delta := 3
+		if ev.Wheel > 0 {
+			delta = -3
+		}
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: delta})
+		return true
+	}
+	if ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < 0 || y < 0 || x >= v.Width || y >= v.Height {
+		return true
+	}
+	layout := consoleLayoutFor(v.Height, l.consolePane)
+	switch {
+	case y == layout.tabsY:
+		if pane := consoleTabAt(v.Tabs, v.Width, x); pane >= 0 {
+			l.consolePane = pane
+			l.consoleEdit = false
+			l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: pane})
+			l.presentConsole()
+		}
+	case layout.inputY >= 0 && y == layout.inputY:
+		if l.consolePane != 4 {
+			l.consolePane = 0
+		}
+		l.consoleEdit = true
+		l.consoleCursor = len(l.consoleText)
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+		l.presentConsole()
+	case y == layout.footerY && v.Width >= 6 && x >= v.Width-stringWidth(">_"):
+		l.consoleActive = false
+		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleClose})
+	}
+	return true
+}
+
 func (l *SessionLoop) handleConsoleFindKey(k string) (handled, quit bool) {
 	switch k {
 	case "esc", "enter", "tab", "backtab":
@@ -1564,6 +1612,9 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 	}
 	if l.promptActive {
 		return l.handlePromptMouse(ev)
+	}
+	if l.consoleActive {
+		return l.handleConsoleMouse(ev)
 	}
 	if l.findActive && ev.Y == l.State.Page.Height {
 		// The find bar replaces the footer; it has no clickable labels.

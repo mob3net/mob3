@@ -159,6 +159,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; <b>y</b> copies the active section</td></tr>
+<tr><td>click the console input row</td><td>focus the JavaScript or Tools input</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
 <tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>

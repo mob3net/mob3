@@ -42,6 +42,27 @@ func consoleLayoutFor(h, pane int) consoleLayout {
 	return l
 }
 
+// consoleTabAt returns the tab under console-menu column x, or -1. It uses the
+// same width walk as BuildConsoleFrame so clicks land on the drawn labels.
+func consoleTabAt(tabs []string, w, x int) int {
+	pos := 0
+	for i, title := range tabs {
+		if pos >= w {
+			break
+		}
+		title = protocol.StripControls(title)
+		tw := stringWidth(title)
+		if tw > w-pos {
+			tw = w - pos
+		}
+		if x >= pos && x < pos+tw {
+			return i
+		}
+		pos += tw
+	}
+	return -1
+}
+
 // BuildConsoleFrame renders one console snapshot into a full-screen frame.
 func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 	w, h := v.Width, v.Height

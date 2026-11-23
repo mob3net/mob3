@@ -712,8 +712,9 @@ agreement, the non-negotiable constraints and the change protocol.
   input row is part of the logs body, pinned to its bottom. Clicking a tab
   switches sections, and `Tab`/`Shift-Tab` or `h`/`l` cycle through the same
   five tabs.
-  Mouse reporting stays enabled so tabs and the input row can be clicked (plain
-  terminal drag-selection needs the Shift override).
+  Mouse reporting stays enabled so tabs and the input row can be clicked, and
+  the wheel scrolls the active section (plain terminal drag-selection needs the
+  Shift override).
   `:` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
   usual JS timeout/memory guards. The input row supports the same Ctrl/Alt

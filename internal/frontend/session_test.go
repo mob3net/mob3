@@ -804,6 +804,77 @@ func TestConsoleQuitAndCloseKeys(t *testing.T) {
 	}
 }
 
+func TestConsoleMouseTabsInputAndClose(t *testing.T) {
+	s := &recordSession{}
+	loop := &SessionLoop{Session: s}
+	tabs := []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: 0, Tabs: tabs,
+	}})
+	if !loop.consoleActive {
+		t.Fatal("console did not activate")
+	}
+
+	// Click the Storage tab: walk the same widths the menu draws.
+	x := 0
+	for _, title := range tabs[:2] {
+		x += stringWidth(title)
+	}
+	if !loop.handleChromeMouse(MouseEvent{X: x + 1, Y: 1, Press: true}) {
+		t.Fatal("tab click not consumed")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: 2}) {
+		t.Fatalf("tab action = %#v", s.cmds)
+	}
+	if loop.consolePane != 2 {
+		t.Fatalf("pane = %d", loop.consolePane)
+	}
+
+	// Click the input row on the logs pane.
+	loop.consolePane = 0
+	s.cmds = nil
+	inputY := consoleLayoutFor(24, 0).inputY
+	if !loop.handleChromeMouse(MouseEvent{X: 3, Y: inputY + 1, Press: true}) {
+		t.Fatal("input click not consumed")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleFocus}) {
+		t.Fatalf("input action = %#v", s.cmds)
+	}
+	if !loop.consoleEdit {
+		t.Fatal("input row click did not focus the input")
+	}
+
+	// The footer >_ icon closes the console.
+	s.cmds = nil
+	loop.consoleEdit = false
+	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 24, Press: true}) {
+		t.Fatal("footer icon click not consumed")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
+		t.Fatalf("footer action = %#v", s.cmds)
+	}
+	if loop.consoleActive {
+		t.Fatal("footer icon did not close the console")
+	}
+
+	// The wheel and a body click stay in the console rather than the page.
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Pane: 0, Tabs: tabs}})
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Wheel: 1, X: 5, Y: 5}) {
+		t.Fatal("wheel not consumed")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -3}) {
+		t.Fatalf("wheel action = %#v", s.cmds)
+	}
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{X: 5, Y: 5, Press: true}) {
+		t.Fatal("body click not consumed")
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("body click sent %#v", s.cmds)
+	}
+}
+
 func (l *SessionLoop) writeConsoleQuitForTest() { l.consoleView.Quit = true }
 
 func TestConsoleFindKeys(t *testing.T) {

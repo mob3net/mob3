@@ -64,8 +64,10 @@ with the mouse or the arrow keys and `Enter`.
 the JavaScript input row, `Tab`/`Shift-Tab` or `h`/`l` switch sections, `j`/`k` and
 `g`/`G` scroll the active section, and `y` copies the whole active section (the
 logs, the raw page HTML, the request list, storage, or the Tools scrollback).
-`Esc` leaves the input row first and closes the console on the next press; `!`
-closes it immediately.
+Clicking a tab switches sections, clicking the input row focuses it, and the
+console footer keeps a clickable `>_` icon that closes it; the wheel scrolls the
+active section. `Esc` leaves the input row first and closes the console on the
+next press; `!` closes it immediately.
 
 ## URL prompt
 
