@@ -171,9 +171,10 @@ published by the Pages build.
 - **Terminal-only presentation.** No GUI toolkit, no native window. All output
   is ANSI/Unicode in the terminal, and a terminal cell is the layout unit.
 - **PDF viewer.** PDF responses are read by an in-repo, standard-library-only
-  parser (`pdf_object.go`, `pdf_text.go`, `pdf.go`) and shown as extracted text
-  pages; no rasterizer, no cgo, no new module. Scanned pages, figures, images,
-  annotations and links are not rendered, and encrypted documents are refused.
+  parser (`internal/engine/pdf_object.go`, `pdf_text.go`, `pdf_document.go`) and
+  shown as extracted text pages; no rasterizer, no cgo, no new module. Scanned
+  pages, figures, images, annotations and links are not rendered, and encrypted
+  documents are refused.
   `-no-pdf` restores the download prompt. Do not add a PDF rendering library
   without a new explicit user decision.
 - **Images.** Disabled by default for speed (`-graphics=none`): no external
@@ -195,14 +196,17 @@ published by the Pages build.
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])` and
   exits with its status.
 - `internal/app/` — flag parsing, validation, mode dispatch and the
-  interactive session boot. It still imports `internal/browser` for the
-  session type and the one-shot render handler until the session split. MCP
-  transport and the dump/PNG output loop live in `internal/app`.
-- `internal/browser/` — package `browser` with the 306-method `Browser`, which
-  embeds `engine.Session` for page/layout/URL/scroll, plus construction helpers,
-  chrome/dialogs/navigation loads and tests until the boundary migration
-  completes. Nothing under `internal` is imported from
-  outside this module.
+  interactive session boot. It still imports `internal/browser` for loader and
+  session construction, the dump handler, automation types and the build
+  version until the session split. MCP transport and the dump/PNG output loop
+  live in `internal/app`.
+- `internal/browser/` — package `browser` with the 296-method `Browser`, which
+  embeds `engine.Session` for page/layout/URL/scroll, plus loader/session
+  construction, navigation and form/JS load glue, fallback chrome/dialogs and
+  most integration tests until the boundary migration completes. The package
+  still imports `internal/host`, `net/http` and `os`, which blocks moving it
+  into `internal/engine`. Nothing under `internal` is imported from outside
+  this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, find, selection, hints, reader),

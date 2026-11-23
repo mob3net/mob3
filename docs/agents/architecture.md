@@ -95,15 +95,18 @@ destination; the tracker lists what remains.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
   and `internal/app` exist. `app` owns flags, validation, mode dispatch and the
   interactive terminal/session boot; it still imports `internal/browser` for
-  the session type, non-interactive render and MCP helpers. `app → browser` is
-  the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 306-method `Browser`,
-  chrome/overlay composition, dialogs, navigation loads, the memory-only page
-  cache, Loader image/SVG/about/PDF orchestration, automation, and most
+  loader/session construction, the dump handler, automation types and the build
+  version. `app → browser` is the temporary wiring exception.
+- `internal/browser/` still holds the session shell: the 296-method `Browser`,
+  navigation/load glue, form and JS lifecycle adapters, fallback
+  chrome/overlay/dialog/console rendering, the memory-only page cache,
+  host-backed loader image/SVG/about/PDF orchestration, automation, and most
   integration tests. `Browser` embeds `engine.Session`, which now owns page,
   layout, URL, scroll, focus/hover, reader, text-scaling and dark-mode state;
   the methods and shell fields are still being moved. MCP transport lives in
-  `internal/app`.
+  `internal/app`. The package still imports `internal/host`, `net/http` and
+  `os`; removing those is the prerequisite for moving it into
+  `internal/engine`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -122,9 +125,9 @@ destination; the tracker lists what remains.
   stays true and the front end composes the header, footer and scrollbar. The
   engine fallback remains only for direct callers and tests.
 - `internal/browser` has no import rule during the migration; the dependency
-  test covers the five target packages. The browser no longer imports
-  `internal/frontend`: frame/PNG encoders and the graphics renderer are injected
-  by the app. Both temporary exceptions end with the
+  test covers the five target packages. The browser's production code no
+  longer imports `internal/frontend`: frame/PNG encoders and the graphics
+  renderer are injected by the app. Both temporary exceptions end with the
   session split.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
@@ -205,6 +208,11 @@ destination; the tracker lists what remains.
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
 | `internal/browser/placement.go` | `ImagePlacement` to `protocol.Placement`, bounded encoded-image cache and page image scaling. |
+| `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
+| `internal/browser/pdf.go` | PDF response to page-model integration: page slicing, `Page n/N` metadata and HTML assembly. |
+| `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
+| `internal/browser/version.go` | Injected build version and the help-page wrapper. |
+| `internal/browser/cache.go`, `cache_loader.go`, `certs.go`, `cookie_compat.go`, `network_compat.go`, `page_compat.go` | Browser shims and aliases over `internal/host` and `internal/engine`; delete or merge in Phase 6. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
