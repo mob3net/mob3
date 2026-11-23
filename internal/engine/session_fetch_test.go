@@ -673,6 +673,46 @@ func TestBranding(t *testing.T) {
 	}
 }
 
+func TestDataDocumentNavigationRejected(t *testing.T) {
+	b := newTestSession(40, 10)
+	b.Navigate("data:text/html,<title>x</title><p>hi</p>", true)
+	if b.Loading {
+		t.Fatal("a top-level data: document started loading")
+	}
+	if !strings.Contains(b.status, "data: pages are not supported") {
+		t.Fatalf("status = %q", b.status)
+	}
+	if b.Page != nil {
+		t.Fatal("a data: document was applied")
+	}
+}
+
+func TestResolveRejectsDataDocuments(t *testing.T) {
+	for _, in := range []string{
+		"data:text/html,<p>x</p>",
+		"DATA:text/html;base64,PGk+eDwvaT4=",
+		" data:application/pdf;base64,AAAA",
+	} {
+		if u, err := ResolveURL(in, nil); err == nil {
+			t.Fatalf("%q resolved to %v", in, u)
+		}
+	}
+	// Inline data: URLs are still resolved as subresources by their own path.
+	const gif = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+	loader, docURL := htmlFixtureLoader(t, `<img src="`+gif+`">`)
+	loader.NoImages = false
+	page, err := loader.Load(docURL, nil)
+	if err != nil {
+		t.Fatalf("document with a data: image failed to load: %v", err)
+	}
+	if img := page.Root.FindFirst("img"); img == nil || img.Img == nil {
+		t.Fatal("data: image subresource was not decoded")
+	}
+	if _, err := ResolveInput("about:blank", nil, ""); err != nil {
+		t.Fatalf("about: input was rejected: %v", err)
+	}
+}
+
 func TestResolveURL(t *testing.T) {
 	base := mustParse(t, "https://example.com/a/b")
 	cases := []struct {
@@ -828,7 +868,7 @@ func mustParse(t *testing.T, s string) *url.URL {
 	return u
 }
 
-func TestLoadDataPageWithImage(t *testing.T) {
+func TestLoadPageWithImage(t *testing.T) {
 	im := image.NewRGBA(image.Rect(0, 0, 16, 16))
 	for y := 0; y < 16; y++ {
 		for x := 0; x < 16; x++ {
@@ -837,9 +877,9 @@ func TestLoadDataPageWithImage(t *testing.T) {
 	}
 	imgURL := dataImageURL(t, im)
 	htmlSrc := `<html><head><title>T</title></head><body><p>hi</p><img src="` + imgURL + `"></body></html>`
-	loader := newTestLoader()
+	loader, docURL := htmlFixtureLoader(t, htmlSrc)
 	loader.NoImages = false
-	page, err := loader.Load("data:text/html,"+url.PathEscape(htmlSrc), nil)
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -865,8 +905,8 @@ func TestLoadDataPageWithImage(t *testing.T) {
 func TestImagesDisabledByDefault(t *testing.T) {
 	imgURL := dataImageURL(t, image.NewRGBA(image.Rect(0, 0, 4, 4)))
 	src := `<html><body><img src="` + imgURL + `" alt="logo"></body></html>`
-	loader := newTestLoader()
-	page, err := loader.Load("data:text/html,"+url.PathEscape(src), nil)
+	loader, docURL := htmlFixtureLoader(t, src)
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -892,7 +932,8 @@ func TestImagesDisabledByDefault(t *testing.T) {
 
 func TestPageKeepsRawHTML(t *testing.T) {
 	source := "<!DOCTYPE html>\n<html><body><p>raw source</p></body></html>"
-	page, err := newTestLoader().Load("data:text/html,"+url.PathEscape(source), nil)
+	loader, docURL := htmlFixtureLoader(t, source)
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1474,10 +1515,10 @@ func TestDeferredImagesLoadLater(t *testing.T) {
 	imgURL := dataImageURL(t, image.NewRGBA(image.Rect(0, 0, 4, 4)))
 	src := `<html><body><img src="` + imgURL + `" alt="pic"></body></html>`
 
-	loader := newTestLoader()
+	loader, docURL := htmlFixtureLoader(t, src)
 	loader.NoImages = false
 	loader.DeferImageLoad = true
-	page, err := loader.Load("data:text/html,"+url.PathEscape(src), nil)
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

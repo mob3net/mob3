@@ -61,7 +61,16 @@ func WithRequestPage(ctx context.Context, page *url.URL, pageLocal bool) context
 	m := RequestMetaFrom(ctx)
 	if page != nil {
 		m.PageURL = page.String()
-		m.BlockLocal = (page.Scheme == "http" || page.Scheme == "https") && !pageLocal
+		switch page.Scheme {
+		case "data":
+			// A data: document has no host and an opaque origin, so it is
+			// never local. It cannot be navigated to any more, but internal
+			// callers still get the local-network guard rather than an
+			// exemption.
+			m.BlockLocal = true
+		case "http", "https":
+			m.BlockLocal = !pageLocal
+		}
 		m.PageSecure = page.Scheme == "https"
 	}
 	return context.WithValue(ctx, RequestMetaKey{}, m)

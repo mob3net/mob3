@@ -87,8 +87,11 @@ agreement, the non-negotiable constraints and the change protocol.
   navigation and documents loaded over `http` are unaffected. Blocked requests
   show as `ERR` in the console request list.
 - **Local files:** `file:` URLs are rejected and bare paths are never probed on
-  disk. Documents come from `http`, `https`, `about:` or `data:` only, so no
-  document can load a local stylesheet, script, image or module.
+  disk. Documents come from `http`, `https` or `about:` only; `data:` is
+  resolved only as an inline subresource (image, stylesheet, script, module),
+  never as a top-level document, so a page cannot navigate itself into an
+  opaque-origin document that escapes the document policy. No document can load
+  a local stylesheet, script, image or module.
 - **PDF responses:** `application/pdf` (and the rare `application/x-pdf` /
   `application/acrobat`) opens in the text viewer. When the media type is
   missing or a generic binary type, the first 1 KB is sniffed for the `%PDF-`

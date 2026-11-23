@@ -473,7 +473,9 @@ agreement, the non-negotiable constraints and the change protocol.
   current page; the next navigation or graphics change resumes loading. Dump
   and automation loads stay synchronous.
 - **Refused schemes:** `javascript:`, `mailto:` and `tel:` links show a status
-  message.
+  message. `data:` is not accepted as a top-level document (`data: pages are not
+  supported`); it stays available for inline images, stylesheets, scripts and
+  modules.
 - **URL input rules:** opening the URL prompt (`o`, `Ctrl-L`, `:` or clicking
   the URL field) prefills the current URL and selects it all, so typing replaces it
   like a normal browser address bar; Backspace clears the selection first. A
@@ -504,8 +506,8 @@ agreement, the non-negotiable constraints and the change protocol.
   query; the default is `https://html.duckduckgo.com/html/?q=%s` (the
   server-rendered endpoint; the main DuckDuckGo page is JS-only and renders
   blank without scripts), and an empty value disables the fallback. Valid URLs,
-  `example.com`, `host:port`, `about:`/`data:` and base-relative
-  references still resolve as URLs. The fallback applies only to typed
+  `example.com`, `host:port`, `about:` and base-relative references still
+  resolve as URLs. The fallback applies only to typed
   navigation and the start page's `q` search box, not link hrefs or ordinary
   form actions. Local files are not supported.
 - **Non-HTML content:** a “cannot display” page is shown (plain text is shown in

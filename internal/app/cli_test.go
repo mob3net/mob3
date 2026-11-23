@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"image/png"
 	"io"
-	"net/url"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -13,10 +14,17 @@ import (
 	"browser/internal/engine"
 )
 
-// dataPage returns an in-memory HTML document for dump tests. The product no
-// longer reads local files, so fixtures are passed as data: URLs.
-func dataPage(html string) string {
-	return "data:text/html;charset=utf-8," + url.PathEscape(html)
+// fixturePage serves an in-memory HTML document for dump tests. Top-level
+// data: documents are not supported, so tests use a loopback server and keep
+// the real flag and loader path.
+func fixturePage(t *testing.T, html string) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, html)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
 }
 
 // runCaptured runs Run while capturing stdout.
@@ -79,7 +87,7 @@ func TestRunHelpShowsVersionLicenseCopyrightAndGraphicsAlias(t *testing.T) {
 
 func TestRunGraphicsAlias(t *testing.T) {
 	src := `<html><body><p>alias</p></body></html>`
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-g", "none", dataPage(src)})
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-g", "none", fixturePage(t, src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -90,7 +98,7 @@ func TestRunGraphicsAlias(t *testing.T) {
 
 func TestRunDump(t *testing.T) {
 	src := `<html><body><p>hello from data</p></body></html>`
-	code, out := runCaptured(t, []string{"-dump", "-no-color", dataPage(src)})
+	code, out := runCaptured(t, []string{"-dump", "-no-color", fixturePage(t, src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -107,7 +115,7 @@ func TestRunDumpHeightLimit(t *testing.T) {
 		sb.WriteString("</p>")
 	}
 	src := "<html><body>" + sb.String() + "</body></html>"
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-height", "5", dataPage(src)})
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-width", "40", "-height", "5", fixturePage(t, src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -124,7 +132,7 @@ func TestRunDumpHeightLimit(t *testing.T) {
 
 func TestRunPNGHeight(t *testing.T) {
 	src := `<html><body><p>png height</p></body></html>`
-	code, out := runCaptured(t, []string{"-png", "-width", "20", "-height", "5", dataPage(src)})
+	code, out := runCaptured(t, []string{"-png", "-width", "20", "-height", "5", fixturePage(t, src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -145,7 +153,7 @@ func TestRunDumpReader(t *testing.T) {
 		<img src="/pic.png" alt="A picture">
 		</article>
 	</body></html>`
-	code, out := runCaptured(t, []string{"-dump", "-no-color", "-reader", dataPage(src)})
+	code, out := runCaptured(t, []string{"-dump", "-no-color", "-reader", fixturePage(t, src)})
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
@@ -162,11 +170,11 @@ func TestRunDumpReader(t *testing.T) {
 
 func TestRunDumpDarkChangesPalette(t *testing.T) {
 	src := `<html><body><p>Dark palette text</p></body></html>`
-	lightCode, light := runCaptured(t, []string{"-dump", "-color", dataPage(src)})
+	lightCode, light := runCaptured(t, []string{"-dump", "-color", fixturePage(t, src)})
 	if lightCode != 0 {
 		t.Fatalf("light exit code = %d", lightCode)
 	}
-	darkCode, dark := runCaptured(t, []string{"-dump", "-color", "-dark", dataPage(src)})
+	darkCode, dark := runCaptured(t, []string{"-dump", "-color", "-dark", fixturePage(t, src)})
 	if darkCode != 0 {
 		t.Fatalf("dark exit code = %d", darkCode)
 	}
@@ -198,7 +206,7 @@ func TestRunRejectsLocalFile(t *testing.T) {
 func TestRunZoomFlag(t *testing.T) {
 	defer engine.SetZoom(1)
 	src := `<html><body style="margin:0"><p style="margin:0 0 0 64px">indent</p></body></html>`
-	page := dataPage(src)
+	page := fixturePage(t, src)
 	indentOf := func(out []byte) int {
 		for _, line := range strings.Split(string(out), "\n") {
 			if i := strings.Index(line, "indent"); i >= 0 {
@@ -233,7 +241,7 @@ func TestRunZoomFlag(t *testing.T) {
 func TestRunCertsFlag(t *testing.T) {
 	code, out := runCaptured(t, []string{
 		"-certs", "embedded", "-dump", "-no-color", "-width", "40",
-		"data:text/html,<p>certs ok</p>",
+		fixturePage(t, "<p>certs ok</p>"),
 	})
 	if code != 0 {
 		t.Fatalf("embedded certs dump exit code = %d", code)
@@ -244,7 +252,7 @@ func TestRunCertsFlag(t *testing.T) {
 
 	code, _ = runCaptured(t, []string{
 		"-certs", "bundle.pem",
-		"-dump", "data:text/html,<p>x</p>",
+		"-dump", "about:blank",
 	})
 	if code != 2 {
 		t.Fatalf("certificate file exit code = %d, want 2", code)

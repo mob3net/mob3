@@ -227,6 +227,19 @@ func TestJSFetchBlocksPublicPageToLocal(t *testing.T) {
 	}
 }
 
+func TestJSFetchFromDataDocumentBlocksLocalNetwork(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	f := testJSFetcher(t, nil)
+	_, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "GET", Origin: "data:text/html,<p>x</p>",
+		Purpose: protocol.FetchFetch, Kind: "fetch", PageLocal: false,
+	})
+	if !errors.Is(err, ErrLocalNetworkBlocked) {
+		t.Fatalf("error = %v, want ErrLocalNetworkBlocked", err)
+	}
+}
+
 func TestJSFetchNoCORSSkipsCORSResponseCheck(t *testing.T) {
 	var gotOrigin string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

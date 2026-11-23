@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"browser/internal/protocol"
@@ -26,7 +28,11 @@ func TestAutomationTransportRoundTrip(t *testing.T) {
 	defer session.Close()
 	client := &automationClient{s: session}
 	ctx := context.Background()
-	if err := client.Navigate(ctx, "data:text/html,<h1>Hello transport</h1>"); err != nil {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<h1>Hello transport</h1>`))
+	}))
+	defer srv.Close()
+	if err := client.Navigate(ctx, srv.URL); err != nil {
 		t.Fatal(err)
 	}
 	if snap := client.Snapshot(); !bytes.Contains([]byte(snap), []byte("Hello transport")) {

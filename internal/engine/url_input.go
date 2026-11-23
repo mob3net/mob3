@@ -17,8 +17,14 @@ func ResolveInput(input string, base *url.URL, searchURL string) (*url.URL, erro
 	if strings.HasPrefix(lower, "file:") {
 		return nil, errors.New("local files are not supported")
 	}
-	if strings.HasPrefix(lower, "about:") || strings.HasPrefix(lower, "data:") {
+	if strings.HasPrefix(lower, "about:") {
 		return url.Parse(s)
+	}
+	// data: stays available for inline subresources (images, styles, scripts),
+	// but a script-capable data: document would be an opaque origin outside the
+	// document policy and the local-network guard.
+	if strings.HasPrefix(lower, "data:") {
+		return nil, errors.New("data: pages are not supported")
 	}
 	for _, bad := range []string{"javascript:", "mailto:", "tel:", "ftp:"} {
 		if strings.HasPrefix(lower, bad) {

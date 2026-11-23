@@ -311,7 +311,9 @@ func TestNavigateAsyncAndStop(t *testing.T) {
 
 func TestNavigateAsyncSuccess(t *testing.T) {
 	b := newTestSession(40, 10)
-	b.Navigate("data:text/html,<title>Loaded</title><p>hi</p>", false)
+	loader, target := htmlFixtureLoader(t, `<title>Loaded</title><p>hi</p>`)
+	b.setLoader(loader)
+	b.Navigate(target, false)
 	var res LoadResult
 	select {
 	case res = <-b.LoadCh:

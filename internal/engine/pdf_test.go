@@ -3,7 +3,6 @@ package engine
 import (
 	"bytes"
 	"compress/zlib"
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
@@ -289,9 +288,8 @@ func TestPDFUnsupportedFilter(t *testing.T) {
 
 func TestPDFLoadEndToEnd(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Loaded from a data URL) Tj ET", "")
-	loader := newTestLoader()
+	loader, target := fixtureLoader(t, []byte(data), "application/pdf")
 	loader.NoImages = true
-	target := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(data)
 	page, err := loader.Load(target, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -327,10 +325,10 @@ func TestPDFLoadEndToEnd(t *testing.T) {
 
 func TestPDFDisabledFallsBackToDownload(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Ignored) Tj ET", "")
-	loader := newTestLoader()
+	loader, docURL := fixtureLoader(t, []byte(data), "application/pdf")
 	loader.NoImages = true
 	loader.NoPDF = true
-	page, err := loader.Load("data:application/pdf;base64,"+base64.StdEncoding.EncodeToString(data), nil)
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,8 +413,8 @@ func TestPDFMalformedInputDoesNotPanic(t *testing.T) {
 
 func TestPDFReaderModeKeepsDocument(t *testing.T) {
 	data := pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (Reader keeps pages) Tj ET", "")
-	loader := newTestLoader()
-	page, err := loader.Load("data:application/pdf;base64,"+base64.StdEncoding.EncodeToString(data), nil)
+	loader, docURL := fixtureLoader(t, []byte(data), "application/pdf")
+	page, err := loader.Load(docURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -812,9 +810,8 @@ func pdfTwoPageFixture() []byte {
 }
 
 func TestPDFPageSelection(t *testing.T) {
-	target := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(pdfTwoPageFixture())
 	load := func(page int) *Page {
-		loader := newTestLoader()
+		loader, target := fixtureLoader(t, []byte(pdfTwoPageFixture()), "application/pdf")
 		loader.NoImages = true
 		loader.PDFPage = page
 		p, err := loader.Load(target, nil)

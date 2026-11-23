@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"image"
@@ -37,11 +36,6 @@ table{border-collapse:collapse} td{border:1px solid #999;padding:2px 6px}
 </style></head><body><h1>Boundary baseline</h1>
 <div class="grid"><div class="box">left</div><div class="box">right</div></div>
 <table>` + rows.String() + `</table>` + paras.String() + `</body></html>`
-}
-
-func boundaryBaselineURL() string {
-	html := boundaryBaselineHTML()
-	return "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 }
 
 func captureStdout(t *testing.T, fn func()) []byte {
@@ -87,8 +81,9 @@ func dumpBaseline(t *testing.T, png bool) []byte {
 // app from a browser test.
 func dumpPageForTest(t *testing.T, png bool, viewportH int) int {
 	t.Helper()
+	loader, target := htmlFixtureLoader(t, boundaryBaselineHTML())
 	h := NewDumpHandler(DumpConfig{
-		Loader: newTestLoader(), Target: boundaryBaselineURL(), Width: 100,
+		Loader: loader, Target: target, Width: 100,
 		ViewportH: viewportH, NoJS: true, PNG: png,
 		Budget: DefaultLayoutBudget, Zoom: 1,
 	})

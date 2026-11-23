@@ -126,8 +126,9 @@ published by the Pages build.
 - **No filesystem I/O.** The binary must not read or write files: no
   configuration, bookmark, certificate, cache, history, log or download files,
   and no local page files (`file:` URLs are rejected and bare paths are never
-  probed). All content comes from the network, `about:` or `data:`, and every
-  cache and piece of state is memory-only; closing MOB³ saves nothing. The
+  probed). Documents come from the network or `about:`; `data:` is accepted
+  only as an inline subresource, never as a page, and every cache and piece of
+  state is memory-only; closing MOB³ saves nothing. The
   download popup only copies a `curl` command. The memory footer uses Go's
   runtime statistics, not `/proc`. OS-level reads by Go's TLS, DNS and timezone
   libraries are the only filesystem access and are not application storage. Do

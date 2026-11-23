@@ -74,9 +74,10 @@ complete most browser checks, and it is not a security boundary.
 ## Local files and downloads
 
 Local file pages are not supported. `file:` URLs are rejected, bare paths are
-never probed on disk, and every document comes from `http`, `https`, `about:`
-or `data:`. Remote pages therefore cannot use the viewport, a stylesheet, a
-script, an image or XHR to read a local file.
+never probed on disk, and every document comes from `http`, `https` or
+`about:`. `data:` is accepted only as an inline subresource (images,
+stylesheets, scripts), never as a document. Remote pages therefore cannot use
+the viewport, a stylesheet, a script, an image or XHR to read a local file.
 
 MOB³ never saves downloads. A download link opens a popup with a
 ready-to-copy `curl` command without fetching the file, except for a `.pdf`
