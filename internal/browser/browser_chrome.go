@@ -947,32 +947,6 @@ func (b *Browser) jsStatusText() string {
 	return "JavaScript:on"
 }
 
-// initGraphicsModes records the cycle order: native inline graphics when
-// available, then blocks, then none. The requested mode becomes the starting
-// point, so `-graphics=none` can still be cycled up to full graphics.
-func (b *Browser) initGraphicsModes(requested GraphicsMode) {
-	current := DetectGraphics(requested)
-	native := current
-	if native != GraphicsKitty && native != GraphicsITerm {
-		detected := DetectGraphics(GraphicsAuto)
-		if detected == GraphicsKitty || detected == GraphicsITerm {
-			native = detected
-		} else {
-			native = GraphicsNone
-		}
-	}
-	modes := make([]GraphicsMode, 0, 3)
-	if native == GraphicsKitty || native == GraphicsITerm {
-		modes = append(modes, native)
-	}
-	modes = append(modes, GraphicsBlocks, GraphicsNone)
-	b.graphicsModes = modes
-	b.graphicsMode = current
-	if current == GraphicsAuto {
-		b.graphicsMode = native
-	}
-}
-
 // cycleGraphics switches full graphics -> blocks -> none -> full, skipping
 // modes the terminal does not support.
 func (b *Browser) cycleGraphics() {
@@ -996,7 +970,10 @@ func (b *Browser) setGraphicsMode(mode GraphicsMode) {
 	}
 	b.graphicsMode = mode
 	b.ImagesPaused = false
-	b.gfx = NewGFXRenderer(mode, b.CellW, b.CellH)
+	b.gfx = nil
+	if b.newGraphics != nil {
+		b.gfx = b.newGraphics(mode, b.CellW, b.CellH)
+	}
 	hideImages := mode == GraphicsNone
 	if b.loader != nil {
 		b.loader.noImages = hideImages

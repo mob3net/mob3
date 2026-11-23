@@ -42,6 +42,37 @@ func onOff(v bool) string {
 	return "off"
 }
 
+func graphicsFor(mode browser.GraphicsMode, w, h int) browser.Graphics {
+	g := frontend.NewGFXRenderer(mode, w, h)
+	if g == nil {
+		return nil
+	}
+	return g
+}
+
+// graphicsModesFor records the i-key cycle: native inline graphics when
+// available, then blocks, then none.
+func graphicsModesFor(requested frontend.GraphicsMode) []browser.GraphicsMode {
+	current := frontend.DetectGraphics(requested)
+	native := current
+	if native != frontend.GraphicsKitty && native != frontend.GraphicsITerm {
+		if detected := frontend.DetectGraphics(frontend.GraphicsAuto); detected == frontend.GraphicsKitty || detected == frontend.GraphicsITerm {
+			native = detected
+		} else {
+			native = frontend.GraphicsNone
+		}
+	}
+	modes := make([]browser.GraphicsMode, 0, 3)
+	if native == frontend.GraphicsKitty || native == frontend.GraphicsITerm {
+		modes = append(modes, native)
+	}
+	modes = append(modes, frontend.GraphicsBlocks, frontend.GraphicsNone)
+	if current == frontend.GraphicsAuto {
+		current = native
+	}
+	return modes
+}
+
 // execute runs one MOB³ invocation after flag parsing and validation.
 func execute(o runOptions) int {
 	if o.MemLimit > 0 {
@@ -51,11 +82,11 @@ func execute(o runOptions) int {
 		o.Dump = true
 	}
 	interactive := !o.Dump && frontend.IsTTY(os.Stdin) && frontend.IsTTY(os.Stdout)
-	graphicsMode := browser.ParseGraphicsMode(o.Graphics)
+	graphicsMode := frontend.ParseGraphicsMode(o.Graphics)
 	loader, err := browser.NewConfiguredLoader(browser.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,
-		NoImages:     graphicsMode == browser.GraphicsNone,
+		NoImages:     graphicsMode == frontend.GraphicsNone,
 		IgnoreBlocks: o.IgnoreBlocks,
 		Search:       o.Search,
 		UserAgent:    o.UA,
@@ -155,11 +186,14 @@ func execute(o runOptions) int {
 		JSMemLimit: jsMemLimit, LayoutBudget: budget,
 		MemLimitBytes: int64(o.MemLimit) << 20, NoBigText: noBigText,
 		CellW: cellW, CellH: cellH, Graphics: graphicsMode,
+		GraphicsModes: graphicsModesFor(graphicsMode),
+		GFX:           graphicsFor(graphicsMode, cellW, cellH),
+		NewGraphics:   graphicsFor,
 	})
 	presenter := frontend.NewPresenter(os.Stdout, b.Color())
 	presenterMode := graphicsMode
-	if presenterMode == browser.GraphicsAuto || presenterMode == browser.GraphicsBlocks || presenterMode == browser.GraphicsNone {
-		presenterMode = browser.DetectGraphics(browser.GraphicsAuto)
+	if presenterMode == frontend.GraphicsAuto || presenterMode == frontend.GraphicsBlocks || presenterMode == frontend.GraphicsNone {
+		presenterMode = frontend.DetectGraphics(frontend.GraphicsAuto)
 	}
 	presenter.SetGraphics(presenterMode, cellW, cellH)
 

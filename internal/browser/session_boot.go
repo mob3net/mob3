@@ -55,6 +55,9 @@ type SessionConfig struct {
 	NoBigText     bool
 	CellW, CellH  int
 	Graphics      GraphicsMode
+	GraphicsModes []GraphicsMode
+	GFX           Graphics
+	NewGraphics   func(GraphicsMode, int, int) Graphics
 }
 
 // NewSession creates and configures the page session used by the interactive
@@ -88,8 +91,10 @@ func NewSession(c SessionConfig) *Browser {
 	if c.CellH > 0 {
 		b.CellH = c.CellH
 	}
-	b.gfx = NewGFXRenderer(c.Graphics, b.CellW, b.CellH)
-	b.initGraphicsModes(c.Graphics)
+	b.graphicsModes = c.GraphicsModes
+	b.graphicsMode = c.Graphics
+	b.gfx = c.GFX
+	b.newGraphics = c.NewGraphics
 	return b
 }
 

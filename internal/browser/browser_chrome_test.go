@@ -438,6 +438,7 @@ func TestGraphicsFooterLabelClick(t *testing.T) {
 	b := NewBrowser(180, 10)
 	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.newGraphics = newTestGraphics
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	drawQuiet(b)
@@ -736,6 +737,7 @@ func TestCycleGraphicsModes(t *testing.T) {
 	b := NewBrowser(80, 20)
 	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.newGraphics = newTestGraphics
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	if b.loader != nil {
@@ -781,6 +783,7 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
+	b.newGraphics = newTestGraphics
 	b.graphicsMode = GraphicsKitty
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.rebuild()

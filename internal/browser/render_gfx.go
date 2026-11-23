@@ -3,29 +3,28 @@ package browser
 import (
 	"strings"
 
-	"browser/internal/frontend"
+	"browser/internal/protocol"
 )
 
-// Graphics modes and the terminal renderer are frontend-owned. These aliases
-// keep the existing CLI and tests on the same types while the migration
-// completes.
-type GraphicsMode = frontend.GraphicsMode
+// Graphics modes are shared plain values; the renderer is injected by the app.
+type GraphicsMode = protocol.GraphicsMode
 
 const (
-	GraphicsAuto   = frontend.GraphicsAuto
-	GraphicsNone   = frontend.GraphicsNone
-	GraphicsBlocks = frontend.GraphicsBlocks
-	GraphicsKitty  = frontend.GraphicsKitty
-	GraphicsITerm  = frontend.GraphicsITerm
+	GraphicsAuto   = protocol.GraphicsAuto
+	GraphicsNone   = protocol.GraphicsNone
+	GraphicsBlocks = protocol.GraphicsBlocks
+	GraphicsKitty  = protocol.GraphicsKitty
+	GraphicsITerm  = protocol.GraphicsITerm
 )
 
-func ParseGraphicsMode(s string) GraphicsMode       { return frontend.ParseGraphicsMode(s) }
-func DetectGraphics(mode GraphicsMode) GraphicsMode { return frontend.DetectGraphics(mode) }
-
-type gfxRenderer = frontend.GFX
-
-func NewGFXRenderer(mode GraphicsMode, cellW, cellH int) *gfxRenderer {
-	return frontend.NewGFXRenderer(mode, cellW, cellH)
+// Graphics is the terminal image renderer the app injects.
+type Graphics interface {
+	Mode() GraphicsMode
+	TextSizing() bool
+	BeginFrame(*strings.Builder)
+	ClearScreen(*strings.Builder)
+	Clear(*strings.Builder)
+	PlaceAll(*strings.Builder, []protocol.Placement)
 }
 
 func (l *Loader) resetSVGBudget() {

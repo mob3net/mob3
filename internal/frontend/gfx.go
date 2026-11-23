@@ -12,19 +12,14 @@ import (
 	"browser/internal/protocol"
 )
 
-type GraphicsMode int
+type GraphicsMode = protocol.GraphicsMode
 
 const (
-	// GraphicsAuto detects the best protocol from the environment.
-	GraphicsAuto GraphicsMode = iota
-	// GraphicsNone loads and draws no images, which is the fastest default.
-	GraphicsNone
-	// GraphicsBlocks always uses Unicode half-block art.
-	GraphicsBlocks
-	// GraphicsKitty uses the kitty graphics protocol.
-	GraphicsKitty
-	// GraphicsITerm uses the iTerm2 OSC 1337 inline-image protocol.
-	GraphicsITerm
+	GraphicsAuto   = protocol.GraphicsAuto
+	GraphicsNone   = protocol.GraphicsNone
+	GraphicsBlocks = protocol.GraphicsBlocks
+	GraphicsKitty  = protocol.GraphicsKitty
+	GraphicsITerm  = protocol.GraphicsITerm
 )
 
 // ParseGraphicsMode turns a -graphics flag value into a mode.
