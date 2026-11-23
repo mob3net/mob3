@@ -25,8 +25,8 @@ func (b *Browser) currentTabNode() *Node {
 	if b.forms.ControlFocus != nil {
 		return b.forms.ControlFocus
 	}
-	if b.Layout != nil && b.focus >= 0 && b.focus < len(b.Layout.Links) {
-		return b.Layout.Links[b.focus].Node
+	if b.Layout != nil && b.Focus >= 0 && b.Focus < len(b.Layout.Links) {
+		return b.Layout.Links[b.Focus].Node
 	}
 	return nil
 }
@@ -37,7 +37,7 @@ func (b *Browser) tabStep(delta int) {
 	if len(targets) == 0 {
 		b.clearInputFocus()
 		b.clearControlFocus()
-		b.focus = -1
+		b.Focus = -1
 		b.status = "No focusable elements"
 		return
 	}
@@ -49,7 +49,7 @@ func (b *Browser) tabStep(delta int) {
 // field starts editing, and other controls get a highlight and key handling.
 func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 	if t.Link < 0 && isTextInput(t.Node) {
-		b.focus = -1
+		b.Focus = -1
 		b.setInputFocus(t.Node)
 		b.ensureInputVisible(t.Node)
 		return
@@ -61,13 +61,13 @@ func (b *Browser) setTabFocus(t tabTarget, index, total int) {
 		b.clearControlFocus()
 	}
 	if t.Link >= 0 {
-		b.focus = t.Link
+		b.Focus = t.Link
 		b.ensureFocusVisible()
 		li := b.Layout.Links[t.Link]
 		b.status = fmt.Sprintf("%d/%d  %s", index, total, b.resolveHref(li.Href))
 		return
 	}
-	b.focus = -1
+	b.Focus = -1
 	b.forms.ControlFocus = t.Node
 	if t.Node.Tag == "select" && t.Node.HasAttr("multiple") {
 		b.forms.ControlOption = firstSelectOption(t.Node)

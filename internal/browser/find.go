@@ -184,7 +184,7 @@ func (b *Browser) computeFindMatches() []findMatch {
 	if b.findScope == findScopeHTML {
 		return engine.FindHTMLMatches(b.htmlLines(b.width-2), b.findText)
 	}
-	return engine.FindPageMatches(b.Layout, b.findText, b.bigText)
+	return engine.FindPageMatches(b.Layout, b.findText, b.BigText)
 }
 
 func (b *Browser) findNext(dir int) {

@@ -86,9 +86,9 @@ func TestDarkReaderMode(t *testing.T) {
 	u, _ := url.Parse("https://example.com/article")
 	b := NewBrowser(60, 20)
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Article"}
-	b.dark = true
+	b.Dark = true
 	b.HandleKey("R")
-	if !b.reader {
+	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
 	if colorLum(b.Layout.PageBG) > 0.2 {
@@ -116,7 +116,7 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	if b.HandleKey("D") {
 		t.Fatal("D asked to quit")
 	}
-	if !b.dark {
+	if !b.Dark {
 		t.Fatal("D did not enable dark mode")
 	}
 	if b.status != "Dark mode on" {
@@ -139,7 +139,7 @@ func TestDarkModeToggleAndFooterLabel(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.x + 1, Y: hit.y + 1, Press: true})
 	})
-	if b.dark {
+	if b.Dark {
 		t.Fatal("clicking the dark label did not disable dark mode")
 	}
 	if b.status != "Dark mode off" {

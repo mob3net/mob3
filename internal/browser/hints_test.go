@@ -35,15 +35,15 @@ func TestLinkHintsPickLetterFromText(t *testing.T) {
 	if b.linkHints {
 		t.Fatal("following a hint left hint mode on")
 	}
-	if b.focus != 0 {
-		t.Fatalf("focus = %d, want 0", b.focus)
+	if b.Focus != 0 {
+		t.Fatalf("focus = %d, want 0", b.Focus)
 	}
 
 	// Reopening and typing the lowercase form works too.
 	b.HandleKey("f")
 	b.HandleKey("d")
-	if b.linkHints || b.focus != 0 {
-		t.Fatalf("lowercase hint: active=%v focus=%d", b.linkHints, b.focus)
+	if b.linkHints || b.Focus != 0 {
+		t.Fatalf("lowercase hint: active=%v focus=%d", b.linkHints, b.Focus)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestLinkHintsSkipUsedLetters(t *testing.T) {
 		t.Fatalf("second label = %q, want o because d is already used", got)
 	}
 	b.HandleKey("o")
-	if b.linkHints || b.focus != 1 {
-		t.Fatalf("following o: active=%v focus=%d", b.linkHints, b.focus)
+	if b.linkHints || b.Focus != 1 {
+		t.Fatalf("following o: active=%v focus=%d", b.linkHints, b.Focus)
 	}
 }
 
@@ -109,8 +109,8 @@ func TestLinkHintsTwoLettersAndFiltering(t *testing.T) {
 	if b.linkHints {
 		t.Fatal("typing the hint did not follow the link")
 	}
-	if b.focus != 27 {
-		t.Fatalf("focus = %d, want link 27 for %q", b.focus, h.Label)
+	if b.Focus != 27 {
+		t.Fatalf("focus = %d, want link 27 for %q", b.Focus, h.Label)
 	}
 }
 
@@ -406,8 +406,8 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 	if b.linkHints || !b.hintConfirm {
 		t.Fatalf("choosing a hint: active=%v confirm=%v", b.linkHints, b.hintConfirm)
 	}
-	if b.focus != -1 {
-		t.Fatalf("focus = %d, want no navigation before confirmation", b.focus)
+	if b.Focus != -1 {
+		t.Fatalf("focus = %d, want no navigation before confirmation", b.Focus)
 	}
 	if strings.HasPrefix(b.status, "Follow ") {
 		t.Fatalf("status still starts with Follow: %q", b.status)
@@ -429,8 +429,8 @@ func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 	if b.hintConfirm {
 		t.Fatal("Enter did not confirm the link")
 	}
-	if b.focus != 0 {
-		t.Fatalf("focus = %d, want 0 after confirmation", b.focus)
+	if b.Focus != 0 {
+		t.Fatalf("focus = %d, want 0 after confirmation", b.Focus)
 	}
 }
 
@@ -445,8 +445,8 @@ func TestCapitalFConfirmationCancel(t *testing.T) {
 	if b.hintConfirm {
 		t.Fatal("Esc left the confirmation open")
 	}
-	if b.focus != -1 {
-		t.Fatalf("focus = %d, want no navigation after cancel", b.focus)
+	if b.Focus != -1 {
+		t.Fatalf("focus = %d, want no navigation after cancel", b.Focus)
 	}
 	if b.status != exitHint {
 		t.Fatalf("status = %q, want the exit hint", b.status)

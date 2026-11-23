@@ -180,7 +180,7 @@ func TestPreventedLinkClickWithErrorFallsBack(t *testing.T) {
 	}
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
-	b.focus = 0
+	b.Focus = 0
 	withQuietStdout(t, b.followFocused)
 	if !b.loading {
 		t.Fatal("a throwing click handler swallowed the link navigation")
@@ -202,7 +202,7 @@ func TestPreventedLinkClickWithoutErrorStays(t *testing.T) {
 	b.URL = page.URL
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	if b.loading {
 		t.Fatal("a healthy preventDefault handler should suppress navigation")
@@ -219,7 +219,7 @@ func TestKeyboardLinkRunsClickHandler(t *testing.T) {
 	withQuietStdout(t, func() { b.startJS(page) })
 	b.rebuild()
 	b.Scroll = 1
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	body := page.Root.FindFirst("body")
 	if body == nil || body.Attr("data-clicked") != "yes" {
@@ -614,12 +614,12 @@ func TestHoverMenuSurvivesPaddingGaps(t *testing.T) {
 	if textFrag("Item") == nil {
 		t.Fatal("moving through the menu padding closed it")
 	}
-	for p := b.hoverNode; p != nil; p = p.Parent {
+	for p := b.HoverNode; p != nil; p = p.Parent {
 		if p.Attr("class") == "menu" {
 			return
 		}
 	}
-	t.Fatalf("pointer is not inside the menu hover chain: %v", b.hoverNode)
+	t.Fatalf("pointer is not inside the menu hover chain: %v", b.HoverNode)
 }
 
 func TestHoverOpensCSSMenu(t *testing.T) {
@@ -667,15 +667,15 @@ func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 	r := b.Layout.Links[0].Rects[0]
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{X: r.X + 1, Y: top + r.Y + 1, Motion: true})
-	if b.hover != 0 {
-		t.Fatalf("hover = %d, want 0", b.hover)
+	if b.Hover != 0 {
+		t.Fatalf("hover = %d, want 0", b.Hover)
 	}
 	if got, want := b.footerLeft(), " → https://example.com/target"; got != want {
 		t.Fatalf("footer = %q, want %q", got, want)
 	}
 	b.HandleMouse(MouseEvent{X: b.width - 1, Y: top + 1, Motion: true})
-	if b.hover != -1 {
-		t.Fatalf("hover = %d after leaving link", b.hover)
+	if b.Hover != -1 {
+		t.Fatalf("hover = %d after leaving link", b.Hover)
 	}
 }
 
@@ -813,7 +813,7 @@ func TestDownloadLinkOpensPopupWithoutFetching(t *testing.T) {
 	if len(b.Layout.Links) != 1 {
 		t.Fatalf("links = %d", len(b.Layout.Links))
 	}
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	if b.download == nil {
 		t.Fatal("non-PDF download did not open the curl popup")
@@ -842,7 +842,7 @@ func TestDownloadPDFLinkNavigatesToViewer(t *testing.T) {
 		tu := mustParse(t, target)
 		return &Page{URL: tu, Base: tu, Root: ParseHTML("<html><body>pdf</body></html>")}, nil
 	}
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	// A PDF download is fetched so the viewer can show it.
 	if b.download != nil {
@@ -890,7 +890,7 @@ func TestDownloadPDFDetection(t *testing.T) {
 		b.Page = &Page{URL: u, Base: u, Root: doc}
 		b.URL = u
 		b.Layout = BuildLayout(doc, nil, 60)
-		b.focus = 0
+		b.Focus = 0
 		b.followFocused()
 		got := b.download == nil
 		if got != c.pdf {
@@ -906,7 +906,7 @@ func TestDownloadAttributeNameWins(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.Layout = BuildLayout(doc, nil, 60)
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	if b.download == nil {
 		t.Fatal("download link did not open the popup")
@@ -1088,15 +1088,15 @@ func TestReaderModeModalLinkWarnsWithoutScrolling(t *testing.T) {
 		b := NewBrowser(40, 10)
 		b.Page = &Page{URL: u, Base: u, Root: doc}
 		b.URL = u
-		b.reader = true
-		b.readerRoot = doc
+		b.Reader = true
+		b.ReaderRoot = doc
 		b.rebuild()
 		if len(b.Layout.Links) == 0 {
 			t.Fatal("link not laid out")
 		}
 		b.Layout.Height = 100
 		b.Scroll = 3
-		b.focus = 0
+		b.Focus = 0
 		b.followFocused()
 		if b.status != readerLinkUnavailable {
 			t.Fatalf("href %q status = %q, want %q", href, b.status, readerLinkUnavailable)
@@ -1116,11 +1116,11 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	b := NewBrowser(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
-	b.reader = true
-	b.readerRoot = doc
+	b.Reader = true
+	b.ReaderRoot = doc
 	b.rebuild()
 	b.Layout.Height = 100
-	b.focus = 0
+	b.Focus = 0
 	b.followFocused()
 	if b.status == readerLinkUnavailable {
 		t.Fatal("existing anchor was rejected in reader mode")

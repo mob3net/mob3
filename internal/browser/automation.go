@@ -354,7 +354,7 @@ func (a *Automation) Click(ctx context.Context, target ClickTarget) error {
 		if target.Link > len(b.Layout.Links) {
 			return fmt.Errorf("link %d out of range (%d links)", target.Link, len(b.Layout.Links))
 		}
-		b.focus = target.Link - 1
+		b.Focus = target.Link - 1
 		b.followFocused()
 		return a.waitLoad(ctx)
 	case target.Text != "":
@@ -399,7 +399,7 @@ func (a *Automation) clickNodeLocked(n *Node) error {
 	for i := range b.Layout.Links {
 		li := b.Layout.Links[i]
 		if li.Node == anchor {
-			b.focus = i
+			b.Focus = i
 			b.followFocused()
 			return nil
 		}

@@ -100,9 +100,10 @@ destination; the tracker lists what remains.
 - `internal/browser/` still holds the session shell: the 306-method `Browser`,
   chrome/overlay composition, dialogs, navigation loads, the memory-only page
   cache, Loader image/SVG/about/PDF orchestration, automation, and most
-  integration tests. `Browser` embeds `engine.Session`, which now owns the page,
-  layout, URL and scroll fields; the methods and shell fields are still being
-  moved. MCP transport lives in `internal/app`.
+  integration tests. `Browser` embeds `engine.Session`, which now owns page,
+  layout, URL, scroll, focus/hover, reader, text-scaling and dark-mode state;
+  the methods and shell fields are still being moved. MCP transport lives in
+  `internal/app`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -242,7 +243,7 @@ destination; the tracker lists what remains.
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `reader.go` | Browser aliases for `engine.ExtractReaderPage`/`engine.ReaderRules`; temporary until the session split. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |
-| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL` and `Scroll`. |
+| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, focus/hover, reader state, text scaling and dark mode, plus page kind/color/link helpers. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |
 | `js_compat.go` | Browser aliases and constructor for the engine runtime. |

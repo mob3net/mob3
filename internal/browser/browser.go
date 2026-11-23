@@ -46,11 +46,7 @@ type Browser struct {
 	cellW, cellH  int
 	// pdfStarts holds the layout row where each PDF page begins, so the footer
 	// can name the page under the viewport.
-	pdfStarts    []int
-	focus        int
-	hover        int
-	hoverNode    *Node
-	pageHasHover bool
+	pdfStarts []int
 	// hoverRebuildPending coalesces the style pass for pointer hover changes so
 	// moving across a large page cannot rebuild the whole document per cell.
 	hoverRebuildPending bool
@@ -62,12 +58,8 @@ type Browser struct {
 	status    string
 
 	// Reader mode renders an extracted article document instead of the page.
-	reader            bool
-	readerRoot        *Node
-	readerSavedScroll int
 
 	// Dark mode remaps the rendered page palette.
-	dark bool
 
 	// History cache. The front end owns the ordered entry list and scroll
 	// offsets; the engine only keeps a bounded memory-only page cache keyed by
@@ -118,10 +110,9 @@ type Browser struct {
 	noDraw          bool
 	clipboardWriter io.Writer
 
-	color   bool
-	prev    []string
-	gfx     *gfxRenderer
-	bigText bool
+	color bool
+	prev  []string
+	gfx   *gfxRenderer
 	// screenGrid and contentGrid are reused between frames. The content grid
 	// is exactly the page viewport; the screen grid adds chrome and overlays.
 	screenGrid  *Grid
@@ -135,7 +126,6 @@ type Browser struct {
 	scaledLayout bool
 	// bigTextBlocked disables kitty scaled text for a page whose scaled runs
 	// overlap neighbouring columns.
-	bigTextBlocked bool
 
 	// Graphics modes available to the i key, in cycle order, and the current
 	// one. The list starts with native inline graphics when available.
@@ -358,8 +348,8 @@ func NewBrowser(w, h int) *Browser {
 		h = 24
 	}
 	b := &Browser{
-		Session: engine.NewSession(),
-		loader:  NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, focus: -1, hover: -1, zoom: 1,
+		Session: &engine.Session{Focus: -1, Hover: -1},
+		loader:  NewLoader(), width: w, height: h, contentTop: -1, cellW: 8, cellH: 16, zoom: 1,
 		nextEntryID:       1,
 		historyCache:      make(map[uint64]*cachedPage),
 		historyViewCur:    -1,
@@ -521,7 +511,7 @@ func (b *Browser) navigateRequestEntry(method, input string, body []byte, conten
 	}
 	restoreScroll, hasRestoreScroll := b.nextScroll, b.nextScrollSet
 	b.nextScrollSet = false
-	if isAboutConfigURL(u) && b.reader {
+	if isAboutConfigURL(u) && b.Reader {
 		b.status = "Config is not available in reader mode — press R to turn it off"
 		b.draw()
 		return
@@ -734,7 +724,7 @@ func (b *Browser) finishLoad(res loadResult) {
 	b.lastBody = res.body
 	b.lastContentType = res.contentType
 	b.Layout = nil
-	b.bigTextBlocked = false
+	b.BigTextBlocked = false
 	// <noscript> is not active when scripting is enabled. Remove it before
 	// evaluating meta refresh, otherwise no-JS bypass pages redirect us to
 	// their "enable JavaScript" endpoint.
@@ -765,26 +755,26 @@ func (b *Browser) finishLoad(res loadResult) {
 		b.loopStopped = false
 		loopStopped = true
 	}
-	b.readerRoot = nil
-	b.readerSavedScroll = 0
+	b.ReaderRoot = nil
+	b.ReaderSavedScroll = 0
 	readerFailed := false
-	if b.reader {
+	if b.Reader {
 		// PDF pages are already a clean text view; reader mode stays enabled
 		// for the next page but keeps the full document.
 		if page.PDF != nil {
 			readerFailed = true
 		} else if root, ok := extractReaderPage(page.Root, page.Title); ok {
-			b.readerRoot = root
+			b.ReaderRoot = root
 		} else {
 			readerFailed = true
 		}
 	}
-	if !b.reader && (b.loader == nil || !b.loader.deferImages) {
+	if !b.Reader && (b.loader == nil || !b.loader.deferImages) {
 		b.refreshImages()
 	}
 	b.rebuild()
 	b.Scroll = 0
-	b.focus = -1
+	b.Focus = -1
 	b.clearControlFocus()
 	b.status = b.pageLoadStatus(page, readerFailed)
 	switch {
@@ -895,7 +885,7 @@ func (b *Browser) rebuild() {
 	}
 	// Frameworks inject their component CSS as <style> elements after load;
 	// collect new or changed ones before this layout pass.
-	if b.js != nil && !b.reader {
+	if b.js != nil && !b.Reader {
 		b.Page.CollectDynamicStyles()
 	}
 	// The new layout includes every image decoded so far, so nothing is left
@@ -903,7 +893,7 @@ func (b *Browser) rebuild() {
 	b.pendingImageRow = 0
 	// Scripts may set image sources on any interaction that triggers a rebuild.
 	// Scanning here is cheap when nothing changed.
-	if b.js != nil && !b.reader && (b.loader == nil || !b.loader.deferImages) {
+	if b.js != nil && !b.Reader && (b.loader == nil || !b.loader.deferImages) {
 		// Deferred image loading is scheduled after layout, where the image
 		// positions are known.
 		b.refreshImages()
@@ -926,10 +916,10 @@ func (b *Browser) rebuild() {
 	b.clearLinkHints()
 	b.clearHintConfirm()
 	start := time.Now()
-	b.bigText = b.scaledTextWanted()
+	b.BigText = b.scaledTextWanted()
 	root, author := b.Page.Root, b.Page.Author
-	if b.reader && b.readerRoot != nil {
-		root, author = b.readerRoot, readerRules
+	if b.Reader && b.ReaderRoot != nil {
+		root, author = b.ReaderRoot, readerRules
 	}
 	deadline := time.Time{}
 	if b.layoutBudget.Time > 0 {
@@ -941,28 +931,28 @@ func (b *Browser) rebuild() {
 	if !b.noDraw && layoutWidth >= 2 {
 		layoutWidth--
 	}
-	b.bigText = b.scaledTextWanted()
+	b.BigText = b.scaledTextWanted()
 	imagesOff := b.loader != nil && b.loader.noImages
-	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.bigText, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
+	b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), b.BigText, b.Dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
 	b.Layout.BackgroundsOff = b.hideBackgrounds
 	b.updatePDFPageStarts()
-	if b.bigText && layoutTextOverlaps(b.Layout) {
+	if b.BigText && layoutTextOverlaps(b.Layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
 		// multi-column pages that pushes text from one column over another, so
 		// this page falls back to normal-size text for the rest of its session.
-		b.bigTextBlocked = true
-		b.bigText = false
+		b.BigTextBlocked = true
+		b.BigText = false
 		start = time.Now()
 		deadline = time.Time{}
 		if b.layoutBudget.Time > 0 {
 			deadline = start.Add(b.layoutBudget.Time)
 		}
-		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
+		b.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, b.viewportHeight(), false, b.Dark, b.hideFixed, b.noSticky, imagesOff, deadline, b.layoutBudget)
 		b.Layout.BackgroundsOff = b.hideBackgrounds
 		b.updatePDFPageStarts()
 	}
-	b.scaledLayout = b.bigText
-	b.pageHasHover = rulesUseHover(author)
+	b.scaledLayout = b.BigText
+	b.PageHasHover = rulesUseHover(author)
 	b.lastBuild = time.Since(start)
 	b.lastRebuild = time.Now()
 	if b.Layout != nil {
@@ -976,7 +966,7 @@ func (b *Browser) rebuild() {
 	} else if b.status == layoutTruncatedStatus {
 		b.status = ""
 	}
-	b.hover = -1
+	b.Hover = -1
 	b.clampScroll()
 	if wasHints {
 		b.reopenLinkHints(hintAsk, hintPrefix)
@@ -987,7 +977,7 @@ func (b *Browser) rebuild() {
 	}
 	// Layout now knows where each image sits, so a deferred batch can be
 	// ordered viewport-first.
-	if b.loader != nil && b.loader.deferImages && !b.reader && !b.deferredImages {
+	if b.loader != nil && b.loader.deferImages && !b.Reader && !b.deferredImages {
 		b.startDeferredImageLoad()
 	}
 }
@@ -1005,13 +995,13 @@ func (b *Browser) overlayOpen() bool {
 // Modals disable it because terminal-side scaled glyphs composite above the
 // cell grid and would paint over the modal.
 func (b *Browser) scaledTextWanted() bool {
-	return b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.bigTextBlocked && !b.overlayOpen()
+	return b.gfx != nil && b.gfx.TextSizing() && !b.noBigText && !b.BigTextBlocked && !b.overlayOpen()
 }
 
 // toggleReader switches between the page and an extracted article view without
 // touching history or the live page DOM.
 func (b *Browser) toggleReader() {
-	if !b.reader && isAboutConfigURL(b.URL) {
+	if !b.Reader && isAboutConfigURL(b.URL) {
 		b.status = "Reader mode is unavailable on the config page"
 		return
 	}
@@ -1019,12 +1009,12 @@ func (b *Browser) toggleReader() {
 		b.status = "Reader mode unavailable"
 		return
 	}
-	if b.reader {
-		b.reader = false
-		b.readerRoot = nil
+	if b.Reader {
+		b.Reader = false
+		b.ReaderRoot = nil
 		b.rebuild()
-		b.Scroll = b.readerSavedScroll
-		b.readerSavedScroll = 0
+		b.Scroll = b.ReaderSavedScroll
+		b.ReaderSavedScroll = 0
 		b.clampScroll()
 		b.status = "Reader mode off"
 		return
@@ -1038,21 +1028,21 @@ func (b *Browser) toggleReader() {
 		b.status = "Reader mode unavailable"
 		return
 	}
-	b.readerSavedScroll = b.Scroll
-	b.reader = true
-	b.readerRoot = root
+	b.ReaderSavedScroll = b.Scroll
+	b.Reader = true
+	b.ReaderRoot = root
 	b.Scroll = 0
-	b.focus = -1
+	b.Focus = -1
 	b.clearSelection()
 	b.rebuild()
 	b.status = "Reader mode — R to exit"
 }
 
 func (b *Browser) toggleDark() {
-	b.dark = !b.dark
+	b.Dark = !b.Dark
 	b.rebuild()
 	b.status = "Dark mode on"
-	if !b.dark {
+	if !b.Dark {
 		b.status = "Dark mode off"
 	}
 }
@@ -1096,7 +1086,7 @@ func (b *Browser) applyZoom(z float64) {
 		setLayoutZoom(z)
 		// A page whose scaled runs overlapped may be fine at another zoom, so
 		// re-evaluate the fallback instead of keeping it for the session.
-		b.bigTextBlocked = false
+		b.BigTextBlocked = false
 		b.prev = nil
 		b.rebuild()
 		if limit := b.maxScroll(); b.Scroll > limit {
@@ -1183,7 +1173,7 @@ func (b *Browser) clampScroll() {
 func (b *Browser) scrollBy(n int) {
 	b.clearLinkHints()
 	b.clearHintConfirm()
-	b.hover = -1
+	b.Hover = -1
 	b.Scroll += n
 	b.clampScroll()
 	switch {
@@ -1196,28 +1186,17 @@ func (b *Browser) scrollBy(n int) {
 	}
 }
 
-func (b *Browser) focusedLink() *LinkInfo {
-	if b.Layout == nil || b.focus < 0 || b.focus >= len(b.Layout.Links) {
-		return nil
-	}
-	return b.Layout.Links[b.focus]
-}
-
-func (b *Browser) hoveredLink() *LinkInfo {
-	if b.Layout == nil || b.hover < 0 || b.hover >= len(b.Layout.Links) {
-		return nil
-	}
-	return b.Layout.Links[b.hover]
-}
+func (b *Browser) focusedLink() *LinkInfo { return b.Session.FocusedLink() }
+func (b *Browser) hoveredLink() *LinkInfo { return b.Session.HoveredLink() }
 
 // setPageHover updates the element chain used for CSS :hover and dispatches
 // pointer enter/leave events. A style pass runs only when the page has hover
 // rules or a handler mutated the DOM.
 func (b *Browser) setPageHover(n *Node) {
-	if n == b.hoverNode {
+	if n == b.HoverNode {
 		return
 	}
-	old := b.hoverNode
+	old := b.HoverNode
 	if old != nil {
 		markHoverChain(old, false)
 		if b.js != nil && b.liveNode(old) {
@@ -1225,7 +1204,7 @@ func (b *Browser) setPageHover(n *Node) {
 			b.js.FireNodeEvent(old, "mouseleave")
 		}
 	}
-	b.hoverNode = n
+	b.HoverNode = n
 	dirty := false
 	if n != nil {
 		markHoverChain(n, true)
@@ -1240,7 +1219,7 @@ func (b *Browser) setPageHover(n *Node) {
 	// Hover-driven style passes are delayed in interactive sessions so fast
 	// pointer movement does not rebuild the page for every cell. Automation
 	// and tests without an event loop need the result synchronously.
-	if b.pageHasHover || dirty {
+	if b.PageHasHover || dirty {
 		if b.keys != nil || b.sessionIn != nil {
 			b.hoverRebuildPending = true
 			b.hoverRebuildAt = time.Now().Add(hoverRebuildDelay)
@@ -1278,7 +1257,7 @@ func (b *Browser) updateHover(x, y, top, bottom int) {
 	if y >= top && y < bottom {
 		idx = b.linkAt(x, b.Scroll+(y-top))
 	}
-	b.hover = idx
+	b.Hover = idx
 }
 
 func (b *Browser) resolveHref(href string) string {
@@ -1375,12 +1354,12 @@ func (b *Browser) followLink(li *LinkInfo) {
 					// A bare "#" link is a page-modal trigger on many sites.
 					// In reader mode it would reload the page and jump to the
 					// top, so warn instead of navigating.
-					if b.reader {
+					if b.Reader {
 						b.status = readerLinkUnavailable
 						return
 					}
 				} else {
-					if !b.scrollToAnchor(u.Fragment) && b.reader {
+					if !b.scrollToAnchor(u.Fragment) && b.Reader {
 						b.status = readerLinkUnavailable
 						return
 					}
@@ -1409,9 +1388,7 @@ func (b *Browser) followLink(li *LinkInfo) {
 // reader snapshot.
 const readerLinkUnavailable = "Reader mode: link is not available"
 
-func sameDocument(a, b *url.URL) bool {
-	return a.Scheme == b.Scheme && a.Host == b.Host && a.Path == b.Path && a.RawQuery == b.RawQuery
-}
+func sameDocument(a, b *url.URL) bool { return engine.SameDocument(a, b) }
 
 // showNotice opens a small informational modal.
 // showStatusDetails opens the full warning or error text in a modal, because

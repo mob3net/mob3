@@ -98,19 +98,8 @@ func (b *Browser) scrollBarTo(y int) {
 	b.scrollBy(target - b.Scroll)
 }
 
-func (b *Browser) pageFG() Color {
-	if b.Layout != nil && b.Layout.Body != nil && b.Layout.Body.Style != nil && b.Layout.Body.Style.Color.Set {
-		return b.Layout.Body.Style.Color
-	}
-	return RGB(0x1f, 0x23, 0x28)
-}
-
-func (b *Browser) pageBG() Color {
-	if b.Layout != nil && b.Layout.PageBG.Set {
-		return b.Layout.PageBG
-	}
-	return RGB(255, 255, 255)
-}
+func (b *Browser) pageFG() Color { return b.Session.PageFG() }
+func (b *Browser) pageBG() Color { return b.Session.PageBG() }
 
 // drawShortcutLabel draws a label with its first letter underlined to suggest
 // the keyboard shortcut. Leading punctuation or symbols such as '≡' are left
@@ -291,7 +280,7 @@ func (b *Browser) draw() {
 	if b.Layout != nil {
 		b.Layout.SetFixedScroll(b.Scroll)
 	}
-	PaintLayoutBig(cg, b.Layout, b.Scroll, 0, contentH, b.focusedLink(), fg, collect, b.bigText)
+	PaintLayoutBig(cg, b.Layout, b.Scroll, 0, contentH, b.focusedLink(), fg, collect, b.BigText)
 	b.paintControlFocus(cg, 0, contentH)
 	b.paintInputSelection(cg, 0, contentH)
 	b.paintInputCursor(cg, 0, contentH)
@@ -702,8 +691,8 @@ func (b *Browser) drawChrome(g *Grid) {
 				}{
 					{b.graphicsStatusText(), headerGraphics, false, false},
 					{b.jsStatusText(), headerJS, !b.noJS, b.jsErr},
-					{b.darkStatusText(), headerDark, b.dark, false},
-					{b.readerStatusText(), headerReader, b.reader, false},
+					{b.darkStatusText(), headerDark, b.Dark, false},
+					{b.readerStatusText(), headerReader, b.Reader, false},
 				}
 				for _, label := range labels {
 					i := strings.Index(fm.right, label.text)
@@ -951,14 +940,14 @@ const (
 )
 
 func (b *Browser) readerStatusText() string {
-	if b.reader {
+	if b.Reader {
 		return "Reader:on"
 	}
 	return "Reader:off"
 }
 
 func (b *Browser) darkStatusText() string {
-	if b.dark {
+	if b.Dark {
 		return "Dark:on"
 	}
 	return "Dark:off"

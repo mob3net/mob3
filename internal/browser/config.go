@@ -81,8 +81,8 @@ func (b *Browser) configItems() []configItem {
 		{Flag: "-graphics", Value: get("-graphics", "none"), Note: "startup"},
 		{Flag: "-no-js", Value: onOff(b.noJS), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-no-pdf", Value: onOff(b.noPDF), Note: "checkbox", Editable: true, Checkbox: true},
-		{Flag: "-reader", Value: onOff(b.reader), Note: "startup; R toggles"},
-		{Flag: "-dark", Value: onOff(b.dark), Note: "startup; D toggles"},
+		{Flag: "-reader", Value: onOff(b.Reader), Note: "startup; R toggles"},
+		{Flag: "-dark", Value: onOff(b.Dark), Note: "startup; D toggles"},
 		{Flag: "-ignore-blocks", Value: onOff(ignore), Note: "checkbox", Editable: true, Checkbox: true},
 		{Flag: "-home", Value: b.home, Note: "immediate", Editable: true},
 		{Flag: "-mem-limit", Value: strconv.Itoa(int(b.memLimitBytes >> 20)), Note: fmt.Sprintf("MB; 0 = unlimited/Go default; JS %d MB, cache %d MB, history %d MB", int(b.jsMemLimit>>20), cacheMB, int(b.historyCacheBytes>>20)), Editable: true},
@@ -187,7 +187,7 @@ func (b *Browser) applyConfig(q url.Values) {
 		if pct, valid := parseZoomPercent(v[0]); valid {
 			b.zoom = pct / 100
 			setLayoutZoom(b.zoom)
-			b.bigTextBlocked = false
+			b.BigTextBlocked = false
 		}
 	}
 	if v, ok := q["text-scale"]; ok && len(v) > 0 {
@@ -196,7 +196,7 @@ func (b *Browser) applyConfig(q url.Values) {
 			b.noBigText = true
 		case "auto", "on", "true", "":
 			b.noBigText = false
-			b.bigTextBlocked = false
+			b.BigTextBlocked = false
 		}
 	}
 	if v, ok := q["ua"]; ok && len(v) > 0 && b.loader != nil {

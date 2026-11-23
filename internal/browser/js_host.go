@@ -30,7 +30,7 @@ func (h browserJSHost) Width() int      { return h.b.width }
 func (h browserJSHost) Height() int     { return h.b.height }
 func (h browserJSHost) CellW() int      { return h.b.cellW }
 func (h browserJSHost) CellH() int      { return h.b.cellH }
-func (h browserJSHost) Dark() bool      { return h.b.dark }
+func (h browserJSHost) Dark() bool      { return h.b.Dark }
 func (h browserJSHost) Layout() *Layout { return h.b.Layout }
 func (h browserJSHost) Scroll() int     { return h.b.Scroll }
 func (h browserJSHost) SetScroll(v int) { h.b.Scroll = v }

@@ -522,7 +522,7 @@ func TestURLPromptHistoryKeys(t *testing.T) {
 func TestQuitConfirmationBeatsHoveredLink(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.Layout = &Layout{Links: []*LinkInfo{{Href: "/target"}}}
-	b.hover = 0
+	b.Hover = 0
 	b.HandleKey("q")
 	if !b.quitPending || b.status != quitConfirmText {
 		t.Fatalf("q did not ask: pending=%v status=%q", b.quitPending, b.status)

@@ -423,9 +423,9 @@ func TestPDFReaderModeKeepsDocument(t *testing.T) {
 	}
 	b := NewBrowser(80, 24)
 	b.setLoader(loader)
-	b.reader = true
+	b.Reader = true
 	b.finishLoad(loadResult{page: page, u: page.URL})
-	if b.readerRoot != nil {
+	if b.ReaderRoot != nil {
 		t.Fatal("reader mode extracted the PDF page")
 	}
 	if b.status != "Reader mode unavailable" {

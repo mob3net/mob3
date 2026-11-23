@@ -65,12 +65,12 @@ func TestStateMessage(t *testing.T) {
 	b.loading = true
 	b.progress = 0.42
 	b.status = "Ready"
-	b.dark = true
-	b.reader = true
+	b.Dark = true
+	b.Reader = true
 	b.jsErr = true
 	b.moduleErr = true
-	b.pageHasHover = true
-	b.bigText = true
+	b.PageHasHover = true
+	b.BigText = true
 	b.loopStopped = true
 	b.loader.noImages = false
 

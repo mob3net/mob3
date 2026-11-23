@@ -4,9 +4,9 @@ import (
 	"image"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
+	"browser/internal/engine"
 	"browser/internal/protocol"
 )
 
@@ -163,43 +163,7 @@ func (b *Browser) noteEvictedPage(size int64) {
 	b.scavengePending.Store(true)
 }
 
-func metaRefreshTarget(page *Page) string {
-	if page == nil || page.Root == nil {
-		return ""
-	}
-	metas := page.Root.FindAll(func(n *Node) bool {
-		return n.Tag == "meta" && strings.EqualFold(n.Attr("http-equiv"), "refresh")
-	})
-	for _, m := range metas {
-		content := strings.TrimSpace(m.Attr("content"))
-		if content == "" {
-			continue
-		}
-		rest := content
-		if i := strings.IndexByte(content, ';'); i >= 0 {
-			rest = content[i+1:]
-		}
-		rest = strings.TrimSpace(rest)
-		if len(rest) >= 4 && strings.EqualFold(rest[:4], "url=") {
-			rest = rest[4:]
-		}
-		rest = strings.Trim(strings.TrimSpace(rest), `"'`)
-		if rest == "" {
-			continue
-		}
-		base := page.Base
-		if base == nil {
-			base = page.URL
-		}
-		if base == nil {
-			return ""
-		}
-		if u, err := base.Parse(rest); err == nil {
-			return u.String()
-		}
-	}
-	return ""
-}
+func metaRefreshTarget(page *Page) string { return engine.MetaRefreshTarget(page) }
 
 // suspendCurrentPage keeps the applied page for back/forward when it belongs
 // to the current front-end entry, and detaches its JavaScript runtime without
@@ -227,7 +191,7 @@ func (b *Browser) cacheCurrentPage() bool {
 	case "", "about", "data", "javascript", "mailto", "tel":
 		return false
 	}
-	weight := pageWeight(b.Page, b.js, b.lastBody, b.readerRoot)
+	weight := pageWeight(b.Page, b.js, b.lastBody, b.ReaderRoot)
 	if weight > b.historyCachePageCap() {
 		// A page heavier than the single-page allowance would pin the whole
 		// cache, so leave it out and let Back reload it instead.
@@ -236,8 +200,8 @@ func (b *Browser) cacheCurrentPage() bool {
 	c := &cachedPage{
 		page:              b.Page,
 		js:                b.js,
-		readerRoot:        b.readerRoot,
-		readerSavedScroll: b.readerSavedScroll,
+		readerRoot:        b.ReaderRoot,
+		readerSavedScroll: b.ReaderSavedScroll,
 		method:            b.lastMethod,
 		body:              b.lastBody,
 		contentType:       b.lastContentType,
@@ -346,23 +310,23 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.lastBody = c.body
 	b.lastContentType = c.contentType
 	b.Layout = nil
-	b.bigTextBlocked = false
+	b.BigTextBlocked = false
 	b.resetConsole()
 	if c.js != nil {
 		b.js = c.js
 		c.js.Resume()
 	}
-	b.readerRoot = nil
-	b.readerSavedScroll = 0
+	b.ReaderRoot = nil
+	b.ReaderSavedScroll = 0
 	readerFailed := false
-	if b.reader {
+	if b.Reader {
 		if c.readerRoot != nil {
-			b.readerRoot = c.readerRoot
-			b.readerSavedScroll = c.readerSavedScroll
+			b.ReaderRoot = c.readerRoot
+			b.ReaderSavedScroll = c.readerSavedScroll
 		} else if c.page.PDF != nil {
 			readerFailed = true
 		} else if root, ok := extractReaderPage(c.page.Root, c.page.Title); ok {
-			b.readerRoot = root
+			b.ReaderRoot = root
 		} else {
 			readerFailed = true
 		}
@@ -370,8 +334,8 @@ func (b *Browser) applyCachedPage(entryID uint64, c *cachedPage, scroll int) {
 	b.rebuild()
 	b.Scroll = scroll
 	b.clampScroll()
-	b.focus = -1
-	b.hover = -1
+	b.Focus = -1
+	b.Hover = -1
 	b.clearSelection()
 	b.status = b.pageLoadStatus(c.page, readerFailed)
 	b.prev = nil
@@ -391,8 +355,8 @@ func (b *Browser) restoreEntry(entryID uint64, rawURL string, scroll int) {
 			b.URL = u
 			b.Scroll = scroll
 			b.clampScroll()
-			b.focus = -1
-			b.hover = -1
+			b.Focus = -1
+			b.Hover = -1
 			b.status = ""
 			b.prev = nil
 			return

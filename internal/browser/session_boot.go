@@ -68,8 +68,8 @@ func NewSession(c SessionConfig) *Browser {
 	if c.Loader != nil {
 		b.setLoader(c.Loader)
 	}
-	b.reader = c.Reader
-	b.dark = c.Dark
+	b.Reader = c.Reader
+	b.Dark = c.Dark
 	b.home = c.Home
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
@@ -196,7 +196,7 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 	a.b.memLimitBytes = c.MemLimitBytes
 	a.b.layoutBudget = c.LayoutBudget
 	a.b.home = c.Home
-	a.b.reader = c.Reader
-	a.b.dark = c.Dark
+	a.b.Reader = c.Reader
+	a.b.Dark = c.Dark
 	return a
 }

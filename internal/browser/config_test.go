@@ -194,7 +194,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 	u := mustParse(t, "https://example.com/article")
 	b.Page = &Page{URL: u, Base: u, Title: "Article"}
 	b.URL = u
-	b.reader = true
+	b.Reader = true
 	oldPage := b.Page
 	withQuietStdout(t, func() { b.Navigate("about:config", true) })
 	if b.Page != oldPage {
@@ -213,7 +213,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
 	cfg.URL = cfgURL
 	cfg.HandleKey("R")
-	if cfg.reader {
+	if cfg.Reader {
 		t.Fatal("reader mode was enabled on the config page")
 	}
 	if cfg.status != "Reader mode is unavailable on the config page" {

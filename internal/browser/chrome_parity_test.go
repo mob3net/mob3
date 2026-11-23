@@ -43,7 +43,7 @@ func TestFrontendChromeMatchesEngine(t *testing.T) {
 		{"hover-link", func(b *Browser) {
 			b.Page = &Page{Title: "Example", Root: &Node{}, Base: b.URL, URL: b.URL}
 			b.Layout = &Layout{Links: []*LinkInfo{{Href: "/next"}}}
-			b.hover = 0
+			b.Hover = 0
 		}},
 		{"zoom", func(b *Browser) {
 			b.zoom = 1.5

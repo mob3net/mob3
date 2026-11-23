@@ -120,10 +120,10 @@ func (b *Browser) stateMessage() protocol.State {
 		st.Progress = uint8(p)
 	}
 	st.Kind = b.pageKind()
-	if b.dark {
+	if b.Dark {
 		st.Flags |= protocol.StateDark
 	}
-	if b.reader {
+	if b.Reader {
 		st.Flags |= protocol.StateReader
 	}
 	if b.jsErr {
@@ -132,13 +132,13 @@ func (b *Browser) stateMessage() protocol.State {
 	if b.moduleErr {
 		st.Flags |= protocol.StateModuleError
 	}
-	if b.pageHasHover {
+	if b.PageHasHover {
 		st.Flags |= protocol.StateHover
 	}
 	if b.loader != nil && !b.loader.noImages {
 		st.Flags |= protocol.StateImages
 	}
-	if b.bigText {
+	if b.BigText {
 		st.Flags |= protocol.StateBigText
 	}
 	if b.loopStopped {
@@ -193,17 +193,4 @@ func footerLevelMessage(l statusLevel) protocol.FooterLevel {
 	}
 }
 
-func (b *Browser) pageKind() protocol.PageKind {
-	if b.Page == nil {
-		return protocol.PageHTML
-	}
-	switch {
-	case b.Page.PDF != nil:
-		return protocol.PagePDF
-	case b.Page.Download:
-		return protocol.PageDownload
-	case b.URL != nil && b.URL.Scheme == "about":
-		return protocol.PageAbout
-	}
-	return protocol.PageHTML
-}
+func (b *Browser) pageKind() protocol.PageKind { return b.Session.PageKind() }

@@ -92,7 +92,7 @@ func (b *Browser) sortImageTasks(tasks []imageTask) {
 // goroutine. The page is already laid out and visible; results arrive on
 // imageCh and are applied by the event loop.
 func (b *Browser) startDeferredImageLoad() {
-	if b.imagesPaused || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil || b.reader {
+	if b.imagesPaused || b.loader == nil || b.loader.noImages || b.Page == nil || b.Page.Root == nil || b.Reader {
 		return
 	}
 	tasks := b.loader.imageTasks(b.Page.Root, b.Page.Base)
@@ -266,7 +266,7 @@ func (b *Browser) applyDeferredImageBatch(batch imageBatch) bool {
 			// outside the cell text, so a line diff cannot erase a stale copy.
 			// Half-block art lives in the cells the diff repaints, so a
 			// text-only frame keeps the diff and avoids a full-screen blink.
-			if b.inlineImagesEnabled() || b.bigText {
+			if b.inlineImagesEnabled() || b.BigText {
 				b.prev = nil
 			}
 		}

@@ -245,7 +245,7 @@ func (b *Browser) applyHintResult(v protocol.HintResult) {
 		return
 	}
 	if t.Link >= 0 {
-		b.focus = t.Link
+		b.Focus = t.Link
 		b.followFocused()
 	}
 }

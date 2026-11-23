@@ -139,7 +139,7 @@ func BenchmarkBoundaryDraw(b *testing.B) {
 	br.Page = &Page{Root: root, Title: "bench"}
 	br.Layout = ly
 	br.color = true
-	br.bigText = false
+	br.BigText = false
 	old := os.Stdout
 	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
@@ -219,7 +219,7 @@ func BenchmarkBoundarySessionFrame(b *testing.B) {
 	br.Page = &Page{Root: root, Title: "bench"}
 	br.Layout = ly
 	br.color = true
-	br.bigText = false
+	br.BigText = false
 	br.emitFrames = true
 	br.sessionOut = &codecSink{}
 	b.ReportAllocs()
@@ -240,7 +240,7 @@ func BenchmarkBoundaryTextRepaint(b *testing.B) {
 	br.Page = &Page{Root: root, Title: "bench"}
 	br.Layout = ly
 	br.color = true
-	br.bigText = false
+	br.BigText = false
 	br.emitFrames = true
 	sink := &codecSink{}
 	br.sessionOut = sink
@@ -269,7 +269,7 @@ func BenchmarkBoundaryStateChromeRepaint(b *testing.B) {
 	br.Page = &Page{Root: root, Title: "bench"}
 	br.Layout = ly
 	br.color = true
-	br.bigText = false
+	br.BigText = false
 	br.emitFrames = true
 	br.frontendChrome = true
 	sink := &codecSink{}
@@ -317,7 +317,7 @@ func BenchmarkBoundaryComposedRepaint(b *testing.B) {
 	br.Page = &Page{Root: root, Title: "bench"}
 	br.Layout = ly
 	br.color = true
-	br.bigText = false
+	br.BigText = false
 	br.emitFrames = true
 	br.frontendChrome = true
 	sink := &codecSink{}

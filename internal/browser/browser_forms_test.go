@@ -293,8 +293,8 @@ func TestTabReachesAllFormControls(t *testing.T) {
 	}
 
 	b.HandleKey("tab")
-	if b.focus != 0 {
-		t.Fatalf("first tab focused link %d", b.focus)
+	if b.Focus != 0 {
+		t.Fatalf("first tab focused link %d", b.Focus)
 	}
 	b.HandleKey("tab")
 	if b.forms.ControlFocus != check {

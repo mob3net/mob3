@@ -21,7 +21,7 @@ func TestReaderToggle(t *testing.T) {
 	if b.HandleKey("R") {
 		t.Fatal("R asked to quit")
 	}
-	if !b.reader {
+	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
 	if b.status != "Reader mode — R to exit" {
@@ -39,7 +39,7 @@ func TestReaderToggle(t *testing.T) {
 	}
 	b.Scroll = 4
 	b.HandleKey("R")
-	if b.reader {
+	if b.Reader {
 		t.Fatal("reader mode did not turn off")
 	}
 	if b.Scroll != originalScroll {
@@ -58,7 +58,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "Old"}
 	b.rebuild()
 	b.HandleKey("R")
-	if !b.reader {
+	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
 
@@ -69,7 +69,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 		page: &Page{URL: nextURL, Base: nextURL, Root: nextDoc, Title: "New"},
 		u:    nextURL,
 	})
-	if !b.reader || b.readerRoot == nil {
+	if !b.Reader || b.ReaderRoot == nil {
 		t.Fatal("reader mode did not survive navigation")
 	}
 	if text := strings.Join(strings.Fields(layoutText(b.Layout)), " "); !strings.Contains(text, "New article text") {
@@ -82,7 +82,7 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 		page: &Page{URL: emptyURL, Base: emptyURL, Root: emptyDoc, Title: "Empty"},
 		u:    emptyURL,
 	})
-	if !b.reader || b.readerRoot != nil {
+	if !b.Reader || b.ReaderRoot != nil {
 		t.Fatal("reader preference did not survive an unavailable page")
 	}
 	if b.status != "Reader mode unavailable" {
@@ -96,11 +96,11 @@ func TestReaderPersistsAcrossNavigation(t *testing.T) {
 		page: &Page{URL: lastURL, Base: lastURL, Root: lastDoc, Title: "Last"},
 		u:    lastURL,
 	})
-	if !b.reader || b.readerRoot == nil {
+	if !b.Reader || b.ReaderRoot == nil {
 		t.Fatal("reader mode did not resume on the next article")
 	}
 	b.HandleKey("R")
-	if b.reader || b.readerRoot != nil {
+	if b.Reader || b.ReaderRoot != nil {
 		t.Fatal("R did not turn reader mode off")
 	}
 }
@@ -122,7 +122,7 @@ func TestReaderLinkClickSkipsPageJavaScript(t *testing.T) {
 	b.startJS(page)
 	b.rebuild()
 	b.HandleKey("R")
-	if !b.reader {
+	if !b.Reader {
 		t.Fatal("reader mode did not turn on")
 	}
 	var link *LinkInfo
@@ -171,13 +171,13 @@ func TestReaderFooterLabel(t *testing.T) {
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
 	})
-	if !b.reader {
+	if !b.Reader {
 		t.Fatal("clicking the reader label did not enable reader mode")
 	}
 	withQuietStdout(t, func() {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: readerHit.x + 1, Y: readerHit.y + 1, Press: true})
 	})
-	if b.reader {
+	if b.Reader {
 		t.Fatal("clicking the reader label did not disable reader mode")
 	}
 }

@@ -126,12 +126,12 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
 	b.noBigText = true
 	b.rebuild()
-	if b.bigText {
+	if b.BigText {
 		t.Fatal("scaled text was not disabled")
 	}
 	b.noBigText = false
 	b.rebuild()
-	if !b.bigText {
+	if !b.BigText {
 		t.Fatal("scaled text should be enabled in kitty by default")
 	}
 }
@@ -853,17 +853,17 @@ func TestModalDisablesScaledText(t *testing.T) {
 	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
 	b.rebuild()
-	if !b.bigText {
+	if !b.BigText {
 		t.Fatal("scaled text should be enabled in kitty by default")
 	}
 	b.HandleKey("X")
 	drawQuiet(b)
-	if b.bigText {
+	if b.BigText {
 		t.Fatal("scaled text stayed on while the view modal was open")
 	}
 	b.HandleKey("esc")
 	drawQuiet(b)
-	if !b.bigText {
+	if !b.BigText {
 		t.Fatal("scaled text did not return after the modal closed")
 	}
 }

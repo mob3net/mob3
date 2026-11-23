@@ -222,7 +222,7 @@ func TestAnchorLinksPushHistoryAndRestoreScroll(t *testing.T) {
 	if idx < 0 {
 		t.Fatal("anchor link not laid out")
 	}
-	b.focus = idx
+	b.Focus = idx
 	b.followFocused()
 
 	if len(h.entries) != 2 {

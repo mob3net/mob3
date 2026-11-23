@@ -481,8 +481,8 @@ func TestHintTransportRoundTrip(t *testing.T) {
 		t.Fatalf("hints = %+v frontend=%v", sink.hints, b.hintsFrontend)
 	}
 	b.applyHintResult(protocol.HintResult{Target: sink.hints.Items[0].Target})
-	if b.linkHints || b.hintsFrontend || b.focus != 0 {
-		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.linkHints, b.hintsFrontend, b.focus)
+	if b.linkHints || b.hintsFrontend || b.Focus != 0 {
+		t.Fatalf("hint result: active=%v frontend=%v focus=%d", b.linkHints, b.hintsFrontend, b.Focus)
 	}
 }
 

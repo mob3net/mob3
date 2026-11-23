@@ -199,7 +199,7 @@ func (b *Browser) chooseHint(target int) {
 		return
 	}
 	if !ask {
-		b.focus = t.Link
+		b.Focus = t.Link
 		b.followFocused()
 		return
 	}
@@ -246,7 +246,7 @@ func (b *Browser) focusControlTarget(n *Node, option *Node) {
 	if n == nil {
 		return
 	}
-	b.focus = -1
+	b.Focus = -1
 	b.forms.ControlFocus = n
 	b.forms.ControlOption = option
 	if n.Tag == "select" && n.HasAttr("multiple") && option == nil {
@@ -334,7 +334,7 @@ func (b *Browser) handleHintConfirmKey(k string) bool {
 	case "enter", "y", "Y":
 		b.clearHintConfirm()
 		if link >= 0 {
-			b.focus = link
+			b.Focus = link
 			b.followFocused()
 		}
 		return false

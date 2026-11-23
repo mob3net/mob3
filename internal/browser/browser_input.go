@@ -410,7 +410,7 @@ func (b *Browser) clickContent(x, docY int) {
 		if b.js != nil && b.liveNode(li.Node) {
 			if b.js.DispatchClick(li.Node) {
 				if b.js.EventErr() && linkFallbackOK(li.Href) {
-					b.focus = idx
+					b.Focus = idx
 					b.followLink(li)
 					return
 				}
@@ -424,7 +424,7 @@ func (b *Browser) clickContent(x, docY int) {
 		if b.consumePendingJS() {
 			return
 		}
-		b.focus = idx
+		b.Focus = idx
 		b.followFocused()
 		return
 	}
@@ -433,7 +433,7 @@ func (b *Browser) clickContent(x, docY int) {
 		n = target
 	}
 	if n != nil && isDisabledControl(n) {
-		b.focus = -1
+		b.Focus = -1
 		b.status = ""
 		return
 	}
@@ -453,7 +453,7 @@ func (b *Browser) clickContent(x, docY int) {
 		b.submitNode(n)
 		return
 	}
-	b.focus = -1
+	b.Focus = -1
 	b.status = ""
 }
 
@@ -570,7 +570,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	}
 	if y < b.headerRows() && b.height >= 2 {
 		if ev.Motion {
-			b.hover = -1
+			b.Hover = -1
 			b.setPageHover(nil)
 		}
 		if !ev.Press || ev.Motion {
@@ -614,7 +614,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 	}
 	if y == b.height-1 {
 		if ev.Motion {
-			b.hover = -1
+			b.Hover = -1
 			b.setPageHover(nil)
 			return false
 		}
@@ -697,7 +697,7 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 								b.status = "Copied URL"
 								// Drop the hovered-link line so the copy
 								// confirmation replaces it in the footer.
-								b.hover = -1
+								b.Hover = -1
 								b.setPageHover(nil)
 							}
 						}
@@ -906,7 +906,7 @@ func (b *Browser) handlePageKey(k string) bool {
 		b.openVimPrompt()
 	case "f":
 		if li := b.currentFindLink(); li != nil {
-			b.focus = li.Index
+			b.Focus = li.Index
 			b.followFocused()
 			return false
 		}
@@ -943,7 +943,7 @@ func (b *Browser) handlePageKey(k string) bool {
 		if b.findText != "" {
 			b.clearFind()
 		}
-		b.focus = -1
+		b.Focus = -1
 		b.clearControlFocus()
 		b.clearSelection()
 		b.status = exitHint
