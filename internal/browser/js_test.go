@@ -981,9 +981,7 @@ func TestSelectChangeFiresJavaScript(t *testing.T) {
 	b.startJS(page)
 	b.rebuild()
 	sel := page.Root.FindFirst("select")
-	b.toggleControl(sel)
-	b.HandleKey("down")
-	b.HandleKey("enter")
+	b.Session.StepSingleSelect(sel, 1, b)
 	if page.Title != "change:two" {
 		t.Fatalf("title = %q, want change:two", page.Title)
 	}

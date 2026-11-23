@@ -1072,39 +1072,6 @@ func TestConsoleYCopiesActiveSection(t *testing.T) {
 	}
 }
 
-func TestSelectPopupActiveRowContrastsWithFrame(t *testing.T) {
-	doc := ParseHTML(`<html><body><form>
-		<select name="choice"><option>One</option><option selected>Two</option><option>Three</option></select>
-	</form></body></html>`)
-	u := mustParse(t, "https://example.com/")
-	b := NewBrowser(60, 20)
-	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.URL = u
-	b.rebuild()
-	sel := doc.FindFirst("select")
-	b.openSelectMenu(sel)
-	if b.selectMenu == nil {
-		t.Fatal("select popup did not open")
-	}
-	g := NewGrid(60, 20, RGB(0, 0, 0), RGB(255, 255, 255))
-	b.paintSelectMenu(g)
-	if b.modalBox.W == 0 || len(b.selectHits) == 0 {
-		t.Fatalf("select popup was not painted: box=%+v hits=%d", b.modalBox, len(b.selectHits))
-	}
-	box := b.modalBox
-	borderBG := g.Cells[box.Y*g.W+box.X].BG
-	titleBG := g.Cells[(box.Y+1)*g.W+box.X+1].BG
-	row := b.selectHits[b.selectMenu.idx]
-	rowBG := g.Cells[row.rect.Y*g.W+row.rect.X+1].BG
-	if rowBG == borderBG || rowBG == titleBG {
-		t.Fatalf("active option background %+v matches the window frame, border %+v title %+v",
-			rowBG, borderBG, titleBG)
-	}
-	if rowBG == modalBG {
-		t.Fatalf("active option background %+v is the plain modal body", rowBG)
-	}
-}
-
 func TestConsoleYTypesWhileEditingInput(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.consoleOpen = true

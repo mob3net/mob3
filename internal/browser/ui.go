@@ -1133,7 +1133,6 @@ func paneStart(total, scroll, rows int) int {
 // HTML find or an engine-owned modal needs its cell overlay.
 func (b *Browser) consoleEngineFallback() bool {
 	return b.FindActive ||
-		(b.selectMenu != nil && !b.selectFrontend) ||
 		(b.download != nil && !b.downloadFrontend) ||
 		(b.notice != nil && !b.noticeFrontend)
 }
@@ -1367,18 +1366,10 @@ type noticeDialog struct {
 	message string
 }
 
-// selectHit is one clickable option row in the open select popup.
-type selectHit struct {
-	rect   Rect
-	option *Node
-}
-
 // selectMenuDialog is the popup listing every option of a single select.
 type selectMenuDialog struct {
 	node    *Node
 	options []*Node
-	idx     int
-	scroll  int
 }
 
 // openSelectMenu shows all options of a single select with the current value
@@ -1395,8 +1386,7 @@ func (b *Browser) openSelectMenu(sel *Node) {
 			break
 		}
 	}
-	b.selectMenu = &selectMenuDialog{node: sel, options: opts, idx: idx}
-	b.selectHits = nil
+	b.selectMenu = &selectMenuDialog{node: sel, options: opts}
 	b.status = ""
 	if b.sessionOut != nil {
 		b.nextSelectID++
@@ -1429,235 +1419,8 @@ func (b *Browser) commitSelectOption(opt *Node) {
 	setAttr(opt, "selected", "")
 	sel := m.node
 	b.selectMenu = nil
-	b.selectHits = nil
 	b.status = ""
 	b.fireSelectChange(sel)
-}
-
-// handleSelectMenuKey drives the option popup from the keyboard.
-func (b *Browser) handleSelectMenuKey(k string) bool {
-	m := b.selectMenu
-	if m == nil || len(m.options) == 0 {
-		return false
-	}
-	switch k {
-	case "esc", "q", "ctrl-c":
-		b.selectMenu = nil
-		b.selectHits = nil
-	case "up", "k", "ctrl-p":
-		if m.idx > 0 {
-			m.idx--
-		}
-	case "down", "j", "ctrl-n":
-		if m.idx < len(m.options)-1 {
-			m.idx++
-		}
-	case "home", "g":
-		m.idx = 0
-	case "end", "G":
-		m.idx = len(m.options) - 1
-	case "enter", " ":
-		b.commitSelectOption(m.options[m.idx])
-	}
-	return false
-}
-
-// handleSelectMenuMouse chooses a clicked option or closes the popup when the
-// dimmed backdrop or the close button is clicked.
-func (b *Browser) handleSelectMenuMouse(ev MouseEvent) {
-	if !ev.Press || ev.Motion || ev.Wheel != 0 || ev.Button != MouseButtonLeft {
-		return
-	}
-	x, y := ev.X-1, ev.Y-1
-	for _, hit := range b.selectHits {
-		r := hit.rect
-		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
-			b.commitSelectOption(hit.option)
-			return
-		}
-	}
-	switch b.modalMouseAction(ev) {
-	case "close", "outside":
-		b.selectMenu = nil
-		b.selectHits = nil
-		b.status = ""
-	}
-}
-
-// menuRow is one visible line of a centered choice menu. marker is the
-// two-cell prefix drawn before the label ("✓ " for the current value, "  " for
-// none, "☑ "/"☐ " for a switch, "● " for the active zoom).
-type menuRow struct {
-	label  string
-	marker string
-}
-
-// paintChoiceMenu draws a centered list dialog with the active row highlighted,
-// scrolls it so the active row stays visible, and returns the click rectangle
-// of every visible row. Each caller keeps its own title, hint, markers and
-// payload; this owns the shared geometry so the select popup, the view options
-// window and the zoom window cannot drift apart. A nil scroll computes the
-// window for this paint; otherwise the caller's persistent position is clamped
-// and written back.
-func (b *Browser) paintChoiceMenu(g *Grid, title, hint string, minW int, rows []menuRow, active int, scroll *int) []Rect {
-	if len(rows) == 0 || g.W < 8 || g.H < 4 {
-		return nil
-	}
-	maxLabel := 0
-	for _, row := range rows {
-		if w := stringWidth(row.marker + row.label); w > maxLabel {
-			maxLabel = w
-		}
-	}
-	boxW := maxLabel + 6
-	if w := stringWidth(hint) + 4; w > boxW {
-		boxW = w
-	}
-	if boxW < minW {
-		boxW = minW
-	}
-	if boxW > g.W {
-		boxW = g.W
-	}
-	if boxW < 8 {
-		return nil
-	}
-	inner := boxW - 4
-	maxRows := g.H - 4
-	if maxRows < 1 {
-		maxRows = 1
-	}
-	visible := len(rows)
-	if visible > maxRows {
-		visible = maxRows
-	}
-	top := 0
-	if scroll != nil {
-		top = *scroll
-	}
-	if active < top {
-		top = active
-	}
-	if active >= top+visible {
-		top = active - visible + 1
-	}
-	if top < 0 {
-		top = 0
-	}
-	if top+visible > len(rows) {
-		top = len(rows) - visible
-	}
-	if scroll != nil {
-		*scroll = top
-	}
-	boxH := visible + 4
-	if boxH > g.H {
-		boxH = g.H
-	}
-	x, y := b.modalFrame(g, boxW, boxH, title)
-	fg := RGB(0x1f, 0x23, 0x28)
-	style := &Style{Bold: true, Color: fg, FontSize: 16, LineHeight: 1}
-	// The active row must not reuse the frame/title blue, or it reads as part
-	// of the window chrome instead of as the highlighted option.
-	activeBG := RGB(0x1f, 0x4f, 0x9f)
-	activeFG := RGB(0xff, 0xff, 0xff)
-	rects := make([]Rect, 0, visible)
-	for i := 0; i < visible; i++ {
-		idx := top + i
-		row := rows[idx]
-		rowBG, rowFG := modalBG, fg
-		if idx == active {
-			rowBG, rowFG = activeBG, activeFG
-		}
-		g.Fill(x+1, y+2+i, boxW-2, 1, rowBG)
-		text := padWidth(truncateWidth(row.marker+row.label, inner), inner)
-		g.Text(x+2, y+2+i, text, style, rowFG)
-		rects = append(rects, Rect{X: x + 1, Y: y + 2 + i, W: boxW - 2, H: 1})
-	}
-	g.Text(x+2, y+boxH-2, padWidth(truncateWidth(hint, boxW-4), boxW-4), style, fg)
-	modalDim(g, x, y, boxW, boxH)
-	return rects
-}
-
-// paintSelectMenu overlays the open single-select option popup.
-func (b *Browser) paintSelectMenu(g *Grid) {
-	m := b.selectMenu
-	if m == nil || len(m.options) == 0 {
-		return
-	}
-	rows := make([]menuRow, len(m.options))
-	for i, opt := range m.options {
-		rows[i] = menuRow{label: optionLabel(opt), marker: "  "}
-		if opt.HasAttr("selected") {
-			rows[i].marker = "✓ "
-		}
-	}
-	rects := b.paintChoiceMenu(g, "Select an option",
-		" ↑↓ choose · Enter select · Esc close ", 40, rows, m.idx, &m.scroll)
-	if len(rects) == 0 {
-		return
-	}
-	b.selectHits = b.selectHits[:0]
-	for i, rect := range rects {
-		b.selectHits = append(b.selectHits, selectHit{rect: rect, option: m.options[m.scroll+i]})
-	}
-}
-
-// viewOption is one toggleable row in the page view window.
-type viewOption struct {
-	label string
-	on    func(*Browser) bool
-	set   func(*Browser, bool)
-}
-
-// viewOptions returns the switches offered by the page view window. The fixed
-// element switch is the first entry; future view toggles register here.
-func viewOptions() []viewOption {
-	return []viewOption{
-		{
-			label: "Fixed elements",
-			on:    func(b *Browser) bool { return !b.HideFixed },
-			set: func(b *Browser, on bool) {
-				b.HideFixed = !on
-				b.rebuild()
-				if on {
-					b.status = "Fixed elements shown"
-				} else {
-					b.status = "Fixed elements hidden"
-				}
-			},
-		},
-		{
-			label: "Sticky elements",
-			on:    func(b *Browser) bool { return !b.NoSticky },
-			set: func(b *Browser, on bool) {
-				// Off keeps the boxes in normal flow: they scroll with the page
-				// instead of following their top offset.
-				b.NoSticky = !on
-				b.rebuild()
-				if on {
-					b.status = "Sticky elements enabled"
-				} else {
-					b.status = "Sticky elements disabled"
-				}
-			},
-		},
-		{
-			label: "Background images",
-			on:    func(b *Browser) bool { return !b.HideBackgrounds },
-			set: func(b *Browser, on bool) {
-				// The images stay loaded and laid out; the switch only replaces
-				// their pixels with a neutral placeholder.
-				b.HideBackgrounds = !on
-				b.rebuild()
-				if on {
-					b.status = "Background images shown"
-				} else {
-					b.status = "Background images hidden"
-				}
-			},
-		},
-	}
 }
 
 // downloadDialog is the modal curl hint offered for download links and
@@ -1756,7 +1519,6 @@ func (b *Browser) runTransportDialog(d *jsDialog) (string, bool) {
 	// A dialog takes over from an open select popup; the front end cancels its
 	// local copy when it starts the dialog.
 	b.selectMenu = nil
-	b.selectHits = nil
 	b.selectFrontend = false
 	b.selectID = 0
 	b.download = nil

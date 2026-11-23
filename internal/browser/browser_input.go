@@ -411,10 +411,6 @@ func (b *Browser) HandleMouse(ev MouseEvent) bool {
 		}
 		return false
 	}
-	if b.selectMenu != nil {
-		b.handleSelectMenuMouse(ev)
-		return false
-	}
 	if b.prompt {
 		if ev.Motion || ev.Wheel != 0 || !ev.Press {
 			return false
@@ -712,9 +708,6 @@ func (b *Browser) handleShellKey(k string) (handled, quit bool) {
 			b.status = ""
 		}
 		return true, false
-	}
-	if b.selectMenu != nil {
-		return true, b.handleSelectMenuKey(k)
 	}
 	if b.consoleOpen {
 		return true, b.handleConsoleKey(k)

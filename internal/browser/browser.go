@@ -206,10 +206,8 @@ type Browser struct {
 	// notice holds a small informational modal, such as the unsupported
 	// file-upload message.
 	notice *noticeDialog
-	// selectMenu is the open popup listing every option of a single select.
+	// selectMenu is the pending single-select choice awaiting the front end.
 	selectMenu *selectMenuDialog
-	// selectHits are the clickable option rows of the open select popup.
-	selectHits []selectHit
 	// modalClose is the close-button hit region of the modal drawn last.
 	modalClose Rect
 	// modalBox is the full modal rectangle, used to close on backdrop clicks.

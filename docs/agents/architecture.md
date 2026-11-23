@@ -99,7 +99,7 @@ destination; the tracker lists what remains.
   interactive terminal/session boot; it still imports `internal/browser` for
   loader/session construction, the dump handler, automation types and the build
   version. `app → browser` is the temporary wiring exception.
-- `internal/browser/` still holds the session shell: the 332-method `Browser`,
+- `internal/browser/` still holds the session shell: the 328-method `Browser`,
   input resolution and the config-page branch, form and JS lifecycle adapters,
   fallback chrome/overlay/dialog/console rendering, loader fetch orchestration
   through `protocol.Host`, automation, and most integration tests. `Browser` embeds `engine.Session`, which now owns page,
@@ -257,7 +257,7 @@ destination; the tracker lists what remains.
 | `browser_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `engine.Selection`. |
 | `automation.go` | Headless `Automation` implementation: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. Browser-side today; moves with the session. `automation_transport.go` exposes it through the MCP protocol client. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
-| `ui.go` | Engine-side fallback for the JS console, alert/confirm/prompt dialogs and the page select popup. The front-end-owned view and zoom windows no longer have an engine fallback. |
+| `ui.go` | Engine-side fallback for the JS console and alert/confirm/prompt dialogs. The front-end-owned view/zoom windows and select popup no longer have an engine fallback; the engine only stores the pending select choice for the front-end result. |
 | `find.go` | Find state, navigation, scrolling, result messages and match highlights; match computation calls `engine.FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret and next/previous are front-end-owned. |
 | `hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection, label assignment and painting call `engine` (`BuildHintTargets`, `CollectHintGlyphs`, `AssignLinkHints`, `PaintHintLabels`). The overlay input is front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |

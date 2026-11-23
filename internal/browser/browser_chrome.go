@@ -741,8 +741,6 @@ func (b *Browser) paintShellOverlays(g *Grid) {
 		b.paintDownload(g)
 	case b.notice != nil && !b.noticeFrontend:
 		b.paintNotice(g)
-	case b.selectMenu != nil && !b.selectFrontend:
-		b.paintSelectMenu(g)
 	}
 }
 

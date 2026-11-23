@@ -16,7 +16,6 @@ func (b *Browser) BeginPage() {
 
 func (b *Browser) ResetUI() {
 	b.selectMenu = nil
-	b.selectHits = nil
 	b.selectFrontend = false
 	b.selectID = 0
 	b.downloadFrontend = false

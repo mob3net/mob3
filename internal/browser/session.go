@@ -78,7 +78,6 @@ func (b *Browser) applySelectResult(v protocol.SelectResult) {
 	m := b.selectMenu
 	if v.Cancel || m == nil || v.Index < 0 || v.Index >= len(m.options) {
 		b.selectMenu = nil
-		b.selectHits = nil
 		b.status = ""
 		return
 	}

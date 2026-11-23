@@ -2,7 +2,6 @@ package browser
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -19,87 +18,6 @@ func TestToggleCheckbox(t *testing.T) {
 	b.toggleControl(n)
 	if n.HasAttr("checked") {
 		t.Fatal("checkbox was not unchecked")
-	}
-}
-
-func TestToggleSelect(t *testing.T) {
-	sel := &Node{Type: ElementNode, Tag: "select", Attrs: []Attr{{Key: "name", Value: "text-scale"}}}
-	auto := &Node{Type: ElementNode, Tag: "option", Parent: sel, Attrs: []Attr{{Key: "selected", Value: ""}}}
-	off := &Node{Type: ElementNode, Tag: "option", Parent: sel}
-	auto.Children = []*Node{{Type: TextNode, Text: "auto", Parent: auto}}
-	off.Children = []*Node{{Type: TextNode, Text: "off", Parent: off}}
-	sel.Children = []*Node{auto, off}
-	b := NewBrowser(40, 10)
-	if got := inputValue(sel); got != "auto" {
-		t.Fatalf("select value = %q", got)
-	}
-	b.toggleControl(sel)
-	if b.selectMenu == nil || len(b.selectMenu.options) != 2 || b.selectMenu.idx != 0 {
-		t.Fatalf("select popup = %+v", b.selectMenu)
-	}
-	b.HandleKey("down")
-	b.HandleKey("enter")
-	if b.selectMenu != nil {
-		t.Fatal("select popup did not close after choosing")
-	}
-	if got := inputValue(sel); got != "off" {
-		t.Fatalf("after choosing = %q", got)
-	}
-	b.toggleControl(sel)
-	b.HandleKey("esc")
-	if b.selectMenu != nil {
-		t.Fatal("escape did not close the select popup")
-	}
-	if got := inputValue(sel); got != "off" {
-		t.Fatalf("escape changed the value to %q", got)
-	}
-}
-
-func TestSelectClickOpensAllOptions(t *testing.T) {
-	doc := ParseHTML(`<html><body><form action="/submit">
-		<select name="choice"><option value="one">One</option><option value="two" selected>Two</option><option value="three">Three</option></select>
-	</form></body></html>`)
-	u, _ := url.Parse("https://example.com/")
-	b := NewBrowser(60, 20)
-	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.URL = u
-	b.rebuild()
-	sel := doc.FindFirst("select")
-	var rect Rect
-	for i := range b.Layout.Frags {
-		f := &b.Layout.Frags[i]
-		if f.Kind == fragText && f.Node == sel {
-			rect = Rect{X: f.X, Y: f.Y, W: f.W, H: f.H}
-			break
-		}
-	}
-	if rect.W == 0 {
-		t.Fatal("select widget was not rendered")
-	}
-	clickDoc := func(x, docY int) {
-		top, _ := b.viewport()
-		sx, sy := x+1, docY-b.Scroll+top+1
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy, Press: true})
-		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: sx, Y: sy})
-	}
-	clickDoc(rect.X, rect.Y)
-	if b.selectMenu == nil || len(b.selectMenu.options) != 3 {
-		t.Fatalf("select popup = %+v", b.selectMenu)
-	}
-	drawQuiet(b)
-	if len(b.selectHits) != 3 {
-		t.Fatalf("select popup rows = %+v", b.selectHits)
-	}
-	if b.modalBox.W < 40 {
-		t.Fatalf("select popup width = %d, want at least 40", b.modalBox.W)
-	}
-	hit := b.selectHits[2]
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: hit.rect.X + 1, Y: hit.rect.Y + 1, Press: true})
-	if b.selectMenu != nil {
-		t.Fatal("select popup did not close after clicking an option")
-	}
-	if got := inputValue(sel); got != "three" {
-		t.Fatalf("select value = %q, want three", got)
 	}
 }
 
@@ -1072,43 +990,3 @@ func TestTextareaTypingPatchesLayout(t *testing.T) {
 // TestLongSelectMenuScrolls pins the shared choice-menu painter's scroll
 // window: a long option list follows the active row, and a click maps to the
 // option actually drawn under the pointer rather than the first one.
-func TestLongSelectMenuScrolls(t *testing.T) {
-	var opts strings.Builder
-	for i := 0; i < 40; i++ {
-		fmt.Fprintf(&opts, `<option value="v%d">Option %d</option>`, i, i)
-	}
-	doc := ParseHTML(`<html><body><form action="/submit"><select name="n">` + opts.String() + `</select></form></body></html>`)
-	u, _ := url.Parse("https://example.com/")
-	b := NewBrowser(60, 12)
-	b.Page = &Page{URL: u, Base: u, Root: doc, Title: "form"}
-	b.URL = u
-	b.rebuild()
-	sel := doc.FindFirst("select")
-	b.openSelectMenu(sel)
-	if b.selectMenu == nil || len(b.selectMenu.options) != 40 {
-		t.Fatalf("select popup = %+v", b.selectMenu)
-	}
-	for i := 0; i < 39; i++ {
-		b.HandleKey("down")
-	}
-	drawQuiet(b)
-	m := b.selectMenu
-	if m == nil || m.idx != 39 {
-		t.Fatalf("popup = %+v, want the last option active", m)
-	}
-	if m.scroll == 0 {
-		t.Fatal("popup did not scroll a long option list")
-	}
-	if len(b.selectHits) == 0 || b.selectHits[0].option != selectOptions(sel)[m.scroll] {
-		t.Fatal("first visible row does not map to the scrolled option")
-	}
-	scroll := m.scroll
-	first := b.selectHits[0].rect
-	b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: first.X + 1, Y: first.Y + 1, Press: true})
-	if b.selectMenu != nil {
-		t.Fatal("popup stayed open after clicking a row")
-	}
-	if got, want := inputValue(sel), fmt.Sprintf("v%d", scroll); got != want {
-		t.Fatalf("select value = %q, want %q", got, want)
-	}
-}
