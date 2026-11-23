@@ -1,24 +1,13 @@
 package host
 
 import (
+	"browser/internal/protocol"
 	"sync"
 	"time"
 )
 
 // Record is one network request shown in the console request pane.
-type Record struct {
-	ID      int
-	Gen     int
-	Method  string
-	URL     string
-	Kind    string
-	Status  int
-	Size    int
-	Elapsed time.Duration
-	Err     string
-	Done    bool
-	Cached  bool
-}
+type Record = protocol.RequestRecord
 
 // RequestLog is the in-memory request list for one page generation.
 type RequestLog struct {

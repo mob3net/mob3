@@ -2,7 +2,6 @@ package browser
 
 import (
 	"browser/internal/engine"
-	"browser/internal/host"
 	"context"
 	"crypto/x509"
 	"errors"
@@ -33,7 +32,7 @@ const DefaultSearchURL = "https://html.duckduckgo.com/html/?q=%s"
 
 // errResourceTooLarge reports a response body over maxResourceSize. Reading
 // the extra byte distinguishes an exact-limit body from a truncated one.
-var errResourceTooLarge = host.ErrResourceTooLarge
+var errResourceTooLarge = protocol.ErrResourceTooLarge
 
 // imageConfigOK keeps the browser test surface for the engine helper.
 func imageConfigOK(cfg image.Config) bool { return engine.ImageConfigOK(cfg) }
@@ -43,9 +42,7 @@ func imageConfigOK(cfg image.Config) bool { return engine.ImageConfigOK(cfg) }
 const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
 
 type Loader struct {
-	client    *host.Client
-	cookies   *cookieJar
-	settings  *host.Settings
+	host      protocol.Host
 	noScripts bool
 	// certSource labels the active TLS trust store ("system" or "embedded")
 	// and certPool holds its roots. A nil pool means the platform store. See
@@ -81,37 +78,34 @@ type Loader struct {
 	svgBudgetPixels int64
 	svgPixels       int64
 	svgCount        int
-	// cache holds raw subresources and decoded images for this session.
-	cache *resourceCache
-	// requests is the in-memory console request log.
-	requests *host.RequestLog
 }
 
 // setUserAgent replaces the User-Agent used by later requests.
-func (l *Loader) setUserAgent(ua string)       { l.settings.SetUserAgent(ua) }
-func (l *Loader) requestUserAgent() string     { return l.settings.UserAgent() }
-func (l *Loader) setSearchURL(template string) { l.settings.SetSearchURL(template) }
-func (l *Loader) searchTemplate() string       { return l.settings.SearchURL() }
-func (l *Loader) setImageCap(w, h int)         { l.settings.SetImageCaps(w, h) }
-func (l *Loader) imageCap() (int, int)         { return l.settings.ImageCaps() }
+func (l *Loader) setUserAgent(ua string)       { l.host.SetUserAgent(ua) }
+func (l *Loader) requestUserAgent() string     { return l.host.UserAgent() }
+func (l *Loader) setSearchURL(template string) { l.host.SetSearchURL(template) }
+func (l *Loader) searchTemplate() string       { return l.host.SearchURL() }
+func (l *Loader) setImageCap(w, h int)         { l.host.SetImageCaps(w, h) }
+func (l *Loader) imageCap() (int, int)         { return l.host.ImageCaps() }
 
 // NewLoader creates a loader with cookie support and a sane timeout. The
 // platform trust store is used until SetCertSource selects another one; the
 // client's transport is a stable wrapper so that swap never races a request.
 func NewLoader() *Loader {
-	jar := newCookieJar()
-	client := host.NewClient(jar)
+	h := newLoaderHost()
 	l := &Loader{
-		cache:           newResourceCache(resourceCacheBudget(effectiveMemoryLimit())),
-		cookies:         jar,
+		host:            h,
 		noImages:        true,
 		imageViewportPx: 800,
-		client:          client,
-		settings:        host.NewSettings(defaultUserAgent, DefaultSearchURL),
-		requests:        host.NewRequestLog(),
-		certSource:      CertSourceSystem,
+		certSource:      "system",
 	}
 	l.imageBudget = newByteLimiter(imageByteBudget(0))
+	if h != nil {
+		h.SetUserAgent(defaultUserAgent)
+		h.SetSearchURL(DefaultSearchURL)
+		h.SetCacheLimitBytes(resourceCacheBudget(effectiveMemoryLimit()))
+		l.certSource = h.CertSource()
+	}
 	l.setMemoryBudget(effectiveMemoryLimit())
 	return l
 }
@@ -224,18 +218,16 @@ func (l *Loader) loadRequest(ctx context.Context, method, input string, body []b
 		}
 		return l.loadAbout(ctx, u)
 	}
-	ctx = withRequestMeta(ctx, l.currentPageGeneration(), "doc")
-	space := &pageSpace{}
-	ctx = withPageSpace(ctx, space)
-	data, ctype, finalURL, status, err := l.fetchRequest(ctx, method, u, body, contentType)
+	ctx = protocol.WithRequestMeta(ctx, l.currentPageGeneration(), "doc")
+	res, err := l.host.Fetch(ctx, method, u, body, contentType)
 	if err != nil {
 		return nil, err
 	}
-	pageLocal := isLocalHost(finalURL.Hostname()) ||
-		(space.Local.Load() && !requestUsesProxy(finalURL.String()))
+	data, ctype, finalURL, status := res.Data, res.ContentType, res.FinalURL, res.Status
+	pageLocal := res.PageLocal
 	// Every subresource fetch inherits this context, so the guard knows
 	// whether the document itself came from a local address.
-	ctx = withRequestPage(ctx, finalURL, pageLocal)
+	ctx = protocol.WithRequestPage(ctx, finalURL, pageLocal)
 	mediaType := ""
 	if mt, _, err := mime.ParseMediaType(ctype); err == nil {
 		mediaType = strings.ToLower(mt)
@@ -306,24 +298,14 @@ func (l *Loader) loadAbout(ctx context.Context, u *url.URL) (*Page, error) {
 	return page, nil
 }
 
-// newFetcher snapshots the loader's current host dependencies. A fresh value
-// per request lets concurrent navigations and subresources fetch without
-// mutating shared state.
-func (l *Loader) newFetcher() *host.Fetcher {
-	return &host.Fetcher{
-		Client:   l.client.HTTP(),
-		Cache:    l.cache.ResourceCache,
-		Settings: l.settings,
-		Requests: l.requests,
-	}
-}
-
 // fetchCtx and fetchRequest are the raw host fetch path.
 func (l *Loader) fetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
-	return l.newFetcher().FetchCtx(ctx, u)
+	res, err := l.host.FetchCtx(ctx, u)
+	return res.Data, res.ContentType, res.FinalURL, res.Status, err
 }
 func (l *Loader) fetchRequest(ctx context.Context, method string, u *url.URL, body []byte, contentType string) (data []byte, ctype string, final *url.URL, status int, err error) {
-	return l.newFetcher().FetchRequest(ctx, method, u, body, contentType)
+	res, err := l.host.Fetch(ctx, method, u, body, contentType)
+	return res.Data, res.ContentType, res.FinalURL, res.Status, err
 }
 
 // jsMIMEEssences lists the response types a classic script may execute as.
@@ -479,7 +461,7 @@ func (l *Loader) ImageContext(page *Page) context.Context {
 	if page == nil {
 		return context.Background()
 	}
-	return withRequestPage(context.Background(), page.URL, page.Local)
+	return protocol.WithRequestPage(context.Background(), page.URL, page.Local)
 }
 
 // ImageResults fetches and decodes a task list, streaming results as they
@@ -550,14 +532,14 @@ func (l *Loader) decodeAndFit(ctx context.Context, ctype string, data []byte) (i
 
 // fetchImageResult downloads and decodes one image, using the session cache.
 func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, gen int) (image.Image, bool) {
-	u, err := applyMixedContent(ctx, u)
+	u, err := l.host.ApplyMixedContent(ctx, u)
 	if err != nil {
 		l.recordBlocked(gen, "GET", u, "img", err)
 		return nil, false
 	}
 	key := u.String()
-	meta := requestMetaFrom(ctx)
-	if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.BlockLocal && cachedLocal) {
+	meta := protocol.RequestMetaFrom(ctx)
+	if cached, rawSize, cachedLocal, ok := l.host.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
 		l.recordCacheHit(gen, "GET", key, "img", rawSize)
 		return cached, true
 	}
@@ -569,7 +551,7 @@ func (l *Loader) fetchImageResult(ctx context.Context, u *url.URL, gen int) (ima
 	if err != nil {
 		return nil, false
 	}
-	l.cache.putImage(key, img, len(data), !meta.BlockLocal)
+	l.host.PutCachedImage(key, img, len(data), !meta.BlockLocal)
 	return img, true
 }
 
@@ -582,8 +564,8 @@ func (l *Loader) imageResultStream(ctx context.Context, tasks []imageTask) <-cha
 		close(out)
 		return out
 	}
-	ctx = withRequestKind(ctx, "img")
-	gen := requestMetaFrom(ctx).Gen
+	ctx = protocol.WithRequestKind(ctx, "img")
+	gen := protocol.RequestMetaFrom(ctx).Gen
 	if gen == 0 {
 		gen = l.currentPageGeneration()
 	}
@@ -643,7 +625,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 	if l.noImages {
 		return false
 	}
-	ctx = withRequestKind(ctx, "img")
+	ctx = protocol.WithRequestKind(ctx, "img")
 	imgs := root.FindAll(func(n *Node) bool {
 		if n.Tag == "img" {
 			return true
@@ -653,7 +635,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 	if len(imgs) == 0 {
 		return false
 	}
-	meta := requestMetaFrom(ctx)
+	meta := protocol.RequestMetaFrom(ctx)
 	gen := meta.Gen
 	if gen == 0 {
 		gen = l.currentPageGeneration()
@@ -678,14 +660,14 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 			n.ImgFailed = true
 			continue
 		}
-		u, mcErr := applyMixedContent(ctx, u)
+		u, mcErr := l.host.ApplyMixedContent(ctx, u)
 		if mcErr != nil {
 			l.recordBlocked(gen, "GET", u, "img", mcErr)
 			n.ImgFailed = true
 			continue
 		}
 		key := u.String()
-		if cached, rawSize, cachedLocal, ok := l.cache.getImage(key); ok && !(meta.BlockLocal && cachedLocal) {
+		if cached, rawSize, cachedLocal, ok := l.host.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
 			l.recordCacheHit(gen, "GET", key, "img", rawSize)
 			n.Img = cached
 			continue
@@ -715,7 +697,7 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 				return
 			}
 			node.Img = img
-			l.cache.putImage(key, img, len(data), !meta.BlockLocal)
+			l.host.PutCachedImage(key, img, len(data), !meta.BlockLocal)
 		}(n, u)
 	}
 	wg.Wait()
@@ -726,27 +708,34 @@ func (l *Loader) loadImages(ctx context.Context, root *Node, base *url.URL) bool
 
 // historyPageHTML renders the in-memory session history as clickable links.
 
-func (l *Loader) beginPage() int             { return l.requests.BeginPage() }
-func (l *Loader) currentPageGeneration() int { return l.requests.CurrentPageGeneration() }
+func (l *Loader) beginPage() int             { return l.host.BeginPage() }
+func (l *Loader) currentPageGeneration() int { return l.host.CurrentPageGeneration() }
 func (l *Loader) startRequest(gen int, method, rawURL, kind string) (int, bool) {
-	return l.requests.Start(gen, method, rawURL, kind)
+	return l.host.StartRequest(gen, method, rawURL, kind)
 }
 func (l *Loader) recordCacheHit(gen int, method, rawURL, kind string, size int) {
-	l.requests.RecordCacheHit(gen, method, rawURL, kind, size)
+	l.host.RecordCacheHit(gen, method, rawURL, kind, size)
 }
 func (l *Loader) finishRequest(id, gen, status, size int, elapsed time.Duration, err error) {
-	l.requests.Finish(id, gen, status, size, elapsed, err)
+	l.host.FinishRequest(id, gen, status, size, elapsed, err)
 }
-func (l *Loader) requestSnapshot() []host.Record { return l.requests.Snapshot() }
-func (l *Loader) requestCount() int              { return l.requests.Count() }
+func (l *Loader) requestSnapshot() []protocol.RequestRecord { return l.host.RequestSnapshot() }
+func (l *Loader) requestCount() int                         { return l.host.RequestCount() }
 
-type requestRecord = host.Record
+func (l *Loader) ConfigToken() protocol.ConfigToken {
+	if l == nil || l.host == nil {
+		return nil
+	}
+	return l.host.ConfigToken()
+}
+
+type requestRecord = protocol.RequestRecord
 
 func (l *Loader) imageCapW() int { w, _ := l.imageCap(); return w }
 func (l *Loader) imageCapH() int { _, h := l.imageCap(); return h }
 
 func (l *Loader) recordBlocked(gen int, method string, u *url.URL, kind string, err error) {
-	l.newFetcher().RecordBlocked(gen, method, u, kind, err)
+	l.host.RecordBlocked(gen, method, u, kind, err)
 }
 
 // Built-in page rendering moved to the engine; these names keep the

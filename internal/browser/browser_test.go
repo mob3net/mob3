@@ -2,6 +2,7 @@ package browser
 
 import (
 	"browser/internal/host"
+	"browser/internal/protocol"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 
 func init() {
 	SetDefaultOutput(func(p []byte) (int, error) { return os.Stdout.Write(p) })
+	SetHostFactory(func() protocol.Host { return host.NewSession() })
 }
 
 var testSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")

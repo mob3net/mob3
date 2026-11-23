@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	"browser/internal/engine"
-	"browser/internal/host"
 	"browser/internal/protocol"
 	"time"
 )
@@ -82,7 +81,7 @@ type Browser struct {
 	// form. A config submission applies only when it presents this token, so
 	// page content cannot rewrite session settings by navigating to
 	// about:config with a query.
-	configToken *host.ConfigToken
+	configToken protocol.ConfigToken
 
 	prompt          bool
 	promptText      string
@@ -280,6 +279,7 @@ func NewBrowser(w, h int) *Browser {
 	if h < 5 {
 		h = 24
 	}
+	loader := NewLoader()
 	b := &Browser{
 		Session: &engine.Session{
 			Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
@@ -288,13 +288,13 @@ func NewBrowser(w, h int) *Browser {
 			Cache:   engine.NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
 			ImageCh: make(chan engine.ImageBatch, 1),
 		},
-		loader:         NewLoader(),
+		loader:         loader,
 		nextEntryID:    1,
 		historyViewCur: -1,
 		loadCh:         make(chan loadResult, 1),
 		importCh:       make(chan jsImportTask, 16),
 		home:           "about:home",
-		configToken:    host.NewConfigToken(),
+		configToken:    loader.ConfigToken(),
 	}
 	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
@@ -307,6 +307,11 @@ func NewBrowser(w, h int) *Browser {
 // default loader.
 func (b *Browser) setLoader(l *Loader) {
 	b.loader = l
+	if l != nil {
+		b.configToken = l.ConfigToken()
+	} else {
+		b.configToken = nil
+	}
 	if l == nil {
 		b.Session.Images = nil
 	} else {

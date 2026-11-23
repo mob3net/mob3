@@ -132,8 +132,8 @@ func (l *Loader) setMemoryBudget(base int64) {
 	l.svgMu.Lock()
 	l.svgBudgetPixels = svgPixelBudget(base)
 	l.svgMu.Unlock()
-	if l.cache != nil {
-		l.cache.setLimit(resourceCacheBudget(base))
+	if l.host != nil {
+		l.host.SetCacheLimitBytes(resourceCacheBudget(base))
 	}
 }
 

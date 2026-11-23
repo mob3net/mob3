@@ -69,8 +69,8 @@ func (b *Browser) configItems() []configItem {
 		ignore = b.loader.ignoreBlocks
 	}
 	cacheMB := int64(0)
-	if b.loader != nil && b.loader.cache != nil {
-		cacheMB = b.loader.cache.limitBytes() >> 20
+	if b.loader != nil {
+		cacheMB = b.loader.host.CacheLimitBytes() >> 20
 	}
 	return []configItem{
 		{Flag: "-dump", Value: get("-dump", "off"), Note: "startup"},

@@ -599,10 +599,10 @@ func (b *Browser) requestLinesWidth(width int) []string {
 // requestCacheSummary is the pinned cache usage line shown below the request
 // list.
 func (b *Browser) requestCacheSummary() string {
-	if b.loader == nil || b.loader.cache == nil {
+	if b.loader == nil || b.loader.host == nil {
 		return "Cache: unavailable"
 	}
-	used, limit, entries := b.loader.cache.stats()
+	used, limit, entries := b.loader.host.CacheStats()
 	if limit <= 0 {
 		return fmt.Sprintf("Cache: disabled · %d entries", entries)
 	}
@@ -831,7 +831,7 @@ func (b *Browser) storageLinesWidth(width int) []string {
 	if b.URL == nil || b.loader == nil || (b.URL.Scheme != "http" && b.URL.Scheme != "https") {
 		out = append(out, "  (not available for this page)")
 	} else {
-		cookies := b.loader.cookies.cookieViews(b.URL)
+		cookies := b.loader.host.CookieViews(b.URL)
 		sort.Slice(cookies, func(i, j int) bool {
 			if cookies[i].Name != cookies[j].Name {
 				return cookies[i].Name < cookies[j].Name

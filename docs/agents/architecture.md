@@ -77,8 +77,9 @@ orchestration remain; step 7 is Phase 6.
 - Frame goldens cover layout and rendering, plus new frame-snapshot tests for
   the seam.
 - Dependencies are checked by a test, not by review. During the migration the
-  test allows `app` to import `internal/browser` and leaves `internal/browser`
-  unrestricted; both exceptions end with the session split.
+  test allows `app` to import `internal/browser` and restricts
+  `internal/browser` to `internal/engine`/`internal/protocol`; the app
+  exception ends with the session split.
 - The engine cannot emit chrome. Header/footer, prompts, menus, console, find
   bar, overlays and dialogs are composed by the front end from `State` or
   overlay messages; back/forward history and the download/curl hint live on the
@@ -104,9 +105,9 @@ destination; the tracker lists what remains.
   integration tests. `Browser` embeds `engine.Session`, which now owns page,
   layout, URL, scroll, focus/hover, reader, text-scaling and dark-mode state;
   the methods and shell fields are still being moved. MCP transport lives in
-  `internal/app`. Production code no longer imports `net/http` or `os`; the
-  remaining `internal/host` dependency is in the loader/policy shims and is the
-  prerequisite for moving the package into `internal/engine`.
+  `internal/app`. Production code imports only `internal/engine` and
+  `internal/protocol`; the dependency test enforces this, so the package is
+  ready to move into `internal/engine`.
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the live session loop
@@ -124,11 +125,12 @@ destination; the tracker lists what remains.
   path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
   stays true and the front end composes the header, footer and scrollbar. The
   engine fallback remains only for direct callers and tests.
-- `internal/browser` has no import rule during the migration; the dependency
-  test covers the five target packages. The browser's production code no
-  longer imports `internal/frontend`: frame/PNG encoders and the graphics
-  renderer are injected by the app. Both temporary exceptions end with the
-  session split.
+- `internal/browser` may import only `internal/engine` and `internal/protocol`
+  during the migration, and the dependency test enforces that. The browser's
+  production code no longer imports `internal/frontend`, `internal/host`,
+  `net/http` or `os`: encoders and the graphics renderer are injected by the
+  app, and host state arrives through `protocol.Host`. The remaining app →
+  browser exception ends with the session split.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
   certificates, the request log, JS fetch/XHR and the config token. There is no
   global visited list or download history by design (D54): back/forward history
@@ -215,20 +217,22 @@ destination; the tracker lists what remains.
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
 | `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
 | `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
-| `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser holds this value without importing `net/http`. |
+| `internal/protocol/host.go` | `Host` port, host fetch result, request record and config-token interfaces. |
+| `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
+| `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and config token. |
 | `internal/browser/output.go` | Injected terminal writer for the legacy direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/browser/page_fetcher.go` | Loader adapter for engine page-resource fetch, body decoding and JavaScript MIME checks. |
 | `internal/browser/pdf.go` | Thin PDF loader bridge over `engine.AssemblePDFPage`. |
 | `internal/browser/session_boot.go` | Loader/session/automation construction and `SessionConfig`; the app supplies flags and terminal setup. |
 | `internal/browser/version.go` | Injected build version and the help-page wrapper. |
-| `internal/browser/cache.go`, `cache_loader.go`, `certs.go`, `cookie_compat.go`, `network_compat.go`, `page_compat.go` | Browser shims and aliases over `internal/host` and `internal/engine`; delete or merge in Phase 6. |
+| `internal/browser/certs.go`, `page_compat.go` | Thin browser wrappers over `protocol.Host`/`internal/engine`; delete or merge in Phase 6. |
 | `internal/browser/dump_transport.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding moved to the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; the browser automation library remains the handler implementation. |
 | `internal/browser/session.go` | Interactive `Serve` loop: frame stashing with placements, command routing, load/image/import/timer/progress/usage events, state emission and the fallback direct-key dialog path. Presentation is front-end-owned. |
 | `internal/app/execute.go` | Mode dispatch and interactive session boot: loader/session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
 | `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
-| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. It holds `host.Client`, `host.Settings`, `host.ResourceCache` and `host.RequestLog`; about/blocked/PDF assembly and image helpers are engine-owned. Removing this host dependency is the remaining loader split. |
+| `fetch.go` | Browser-side loader fetch orchestration: request policy, response classification, scripts/images and fetch budgets. Host fetching, settings, cache, cookies, certificates and request accounting go through `protocol.Host`; about/blocked/PDF assembly and image helpers are engine-owned. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
 | `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |

@@ -152,7 +152,7 @@ func TestConsoleStorageSection(t *testing.T) {
 	b.Page = page
 	b.URL = mustParse(t, "https://example.com/")
 	withQuietStdout(t, func() { b.startJS(page) })
-	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
+	testHost(b.loader).Cookies().SetCookies(b.URL, []*http.Cookie{
 		{Name: "sid", Value: "abc", Path: "/", HttpOnly: true},
 		{Name: "seen", Value: "yes", Path: "/"},
 	})
@@ -171,7 +171,7 @@ func TestConsoleStorageSection(t *testing.T) {
 func TestConsoleStorageCookieDetails(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.URL = mustParse(t, "https://example.com/api/page")
-	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
+	testHost(b.loader).Cookies().SetCookies(b.URL, []*http.Cookie{
 		{Name: "sid", Value: "abc", Domain: ".example.com", Path: "/api", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode},
 		{Name: "plain", Value: "v", Path: "/"},
 		{Name: "old", Value: "x", Path: "/", Expires: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -236,7 +236,7 @@ func TestConsoleToolLinesWrap(t *testing.T) {
 func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	b := NewBrowser(60, 20)
 	b.URL = mustParse(t, "https://example.com/")
-	b.loader.cookies.SetCookies(b.URL, []*http.Cookie{
+	testHost(b.loader).Cookies().SetCookies(b.URL, []*http.Cookie{
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
 	})
 	b.JS = newJSRuntime(b, nil)

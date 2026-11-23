@@ -1,6 +1,7 @@
 package host
 
 import (
+	"browser/internal/protocol"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -15,7 +16,7 @@ import (
 
 const maxResourceSize = 12 << 20
 
-var ErrResourceTooLarge = errors.New("resource too large")
+var ErrResourceTooLarge = protocol.ErrResourceTooLarge
 
 // FetchResponse is one raw HTTP/data response.
 type FetchResponse struct {

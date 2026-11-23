@@ -10,6 +10,7 @@ import (
 
 	"browser/internal/browser"
 	"browser/internal/frontend"
+	"browser/internal/host"
 	"browser/internal/protocol"
 )
 
@@ -74,6 +75,11 @@ func graphicsModesFor(requested frontend.GraphicsMode) []browser.GraphicsMode {
 }
 
 // execute runs one MOB³ invocation after flag parsing and validation.
+func init() {
+	// The app owns host construction; browser only sees the host port.
+	browser.SetHostFactory(func() protocol.Host { return host.NewSession() })
+}
+
 func execute(o runOptions) int {
 	if o.MemLimit > 0 {
 		debug.SetMemoryLimit(int64(o.MemLimit) << 20)

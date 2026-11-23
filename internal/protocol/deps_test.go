@@ -47,6 +47,14 @@ var importBoundary = map[string]importRule{
 	"internal/app": {
 		allowAnyProject: true,
 	},
+	// During the migration the old browser shell may only reach the content
+	// engine and the wire types; the front end, host and terminal packages are
+	// off limits already.
+	"internal/browser": {
+		allowProject: map[string]bool{"internal/engine": true, "internal/protocol": true},
+		forbidStd:    map[string]bool{"net": true, "net/http": true, "syscall": true},
+		forbidOS:     true,
+	},
 }
 
 func TestImportBoundary(t *testing.T) {

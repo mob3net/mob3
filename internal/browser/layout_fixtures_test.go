@@ -120,7 +120,7 @@ func TestLayoutImportedCSSGolden(t *testing.T) {
 	}
 	pageFile := filepath.Join(dir, "page.html")
 	loader := NewLoader()
-	loader.client = newTestHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		rel := filepath.FromSlash(strings.TrimPrefix(req.URL.Path, "/"))
 		data, err := os.ReadFile(filepath.Join(dir, rel))
 		if err != nil {

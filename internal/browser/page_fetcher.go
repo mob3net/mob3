@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"browser/internal/protocol"
 	"context"
 	"net/url"
 
@@ -11,7 +12,7 @@ import (
 type loaderPageFetcher struct{ l *Loader }
 
 func (f loaderPageFetcher) FetchPageResource(ctx context.Context, u *url.URL, kind string) ([]byte, string, int, error) {
-	ctx = withRequestKind(ctx, kind)
+	ctx = protocol.WithRequestKind(ctx, kind)
 	data, ctype, _, status, err := f.l.fetchCtx(ctx, u)
 	return data, ctype, status, err
 }

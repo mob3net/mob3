@@ -62,10 +62,10 @@ func (h browserJSHost) UserAgent() string {
 	return h.b.loader.requestUserAgent()
 }
 func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
-	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
+	if h.b.loader == nil || h.b.loader.host == nil || u == nil {
 		return nil
 	}
-	cookies := h.b.loader.cookies.DocumentCookieValues(u)
+	cookies := h.b.loader.host.DocumentCookieValues(u)
 	out := make([]engine.Cookie, 0, len(cookies))
 	for _, c := range cookies {
 		out = append(out, engine.Cookie{Name: c.Name, Value: c.Value})
@@ -73,10 +73,10 @@ func (h browserJSHost) DocumentCookies(u *url.URL) []engine.Cookie {
 	return out
 }
 func (h browserJSHost) SetDocumentCookie(u *url.URL, raw string) {
-	if h.b.loader == nil || h.b.loader.cookies == nil || u == nil {
+	if h.b.loader == nil || h.b.loader.host == nil || u == nil {
 		return
 	}
-	h.b.loader.cookies.setDocumentCookieRaw(u, raw)
+	h.b.loader.host.SetDocumentCookieRaw(u, raw)
 }
 func (h browserJSHost) FetchResource(ctx context.Context, u *url.URL) ([]byte, string, *url.URL, int, error) {
 	if h.b.loader == nil {
@@ -88,14 +88,14 @@ func (h browserJSHost) JSFetch(ctx context.Context, req protocol.FetchRequest) (
 	if h.b.loader == nil {
 		return protocol.FetchResponse{}, errors.New("loader unavailable")
 	}
-	return h.b.loader.newFetcher().JSFetch(ctx, req)
+	return h.b.loader.host.JSFetch(ctx, req)
 }
 
 func (h browserJSHost) RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context {
-	ctx := withRequestKind(context.Background(), kind)
-	ctx = withRequestPage(ctx, page, pageLocal)
+	ctx := protocol.WithRequestKind(context.Background(), kind)
+	ctx = protocol.WithRequestPage(ctx, page, pageLocal)
 	if target != nil {
-		ctx = withRequestTarget(ctx, target)
+		ctx = protocol.WithRequestTarget(ctx, target)
 	}
 	return ctx
 }
@@ -110,12 +110,12 @@ func (h browserJSHost) MIMEEssence(contentType string) string {
 }
 
 func (h browserJSHost) CheckRequest(ctx context.Context, u *url.URL) error {
-	meta := requestMetaFrom(ctx)
-	if meta.BlockLocal && isLocalURL(u) {
-		return errLocalNetworkBlocked
+	meta := protocol.RequestMetaFrom(ctx)
+	if meta.BlockLocal && h.b.loader.host.IsLocalURL(u) {
+		return protocol.ErrLocalNetworkBlocked
 	}
 	if meta.PageSecure && u.Scheme == "http" {
-		return errMixedContentBlocked
+		return protocol.ErrMixedContentBlocked
 	}
 	return nil
 }

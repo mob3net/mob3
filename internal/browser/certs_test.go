@@ -85,7 +85,7 @@ func TestSetCertSourceRejectsFiles(t *testing.T) {
 	if l.certSource != CertSourceSystem || l.certPool != nil {
 		t.Fatalf("failed load changed the trust store to %q", l.certSource)
 	}
-	if tr := l.client.Transport(); tr == nil || tr.TLSClientConfig != nil {
+	if tr := testHost(l).Client().Transport(); tr == nil || tr.TLSClientConfig != nil {
 		t.Fatal("failed load rebuilt the transport")
 	}
 }

@@ -204,8 +204,8 @@ published by the Pages build.
   embeds `engine.Session` for page/layout/URL/scroll, plus loader/session
   construction, navigation and form/JS load glue, fallback chrome/dialogs and
   most integration tests until the boundary migration completes. Production
-  code no longer imports `net/http` or `os`; `internal/host` remains in the
-  loader/policy shims, which blocks moving the package into `internal/engine`.
+  code imports only `internal/engine` and `internal/protocol`; the dependency
+  test enforces that, so the package is ready to move into `internal/engine`.
   Nothing under `internal` is imported from outside this module.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/engine` (HTML,
@@ -219,10 +219,11 @@ published by the Pages build.
   imports are `app` → the other four and each of them → `protocol`; the front
   end and the host never import `engine`, and `engine` never imports
   `frontend`, `host`, `net` or `syscall`. A dependency test enforces the graph.
-  During the migration it also allows `app` to import `internal/browser` and
-  leaves `internal/browser` unrestricted; both exceptions end with the session
-  split. The front end never names an engine type, and `internal/protocol` is
-  canonical for the message set. The engine no longer imports `net/http`:
+  During the migration it also allows `app` to import `internal/browser`;
+  `internal/browser` itself may import only `internal/engine` and
+  `internal/protocol`. Both exceptions end with the session split. The front
+  end never names an engine type, and `internal/protocol` is canonical for the
+  message set. The engine no longer imports `net/http`:
   JS `fetch`/XHR and cookie parsing use the host broker. Session construction
   and the engine-side load result still live in `internal/browser`; the
   terminal loop, normal header/footer chrome, the displayed URL/title ledger,
