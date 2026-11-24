@@ -84,11 +84,14 @@ agreement, the non-negotiable constraints and the change protocol.
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
 - **History:** `H`, the toolbar History button and the footer shortcut open a
-  front-end history overlay. It lists the session's URLs newest first with the
-  current entry marked, scrolls the selected row, restores on Enter/Space or a
-  click, and closes on Esc/q/× or a click outside. `about:history` remains
-  available as a rendered page with clickable links. Both use the in-memory
-  session ledger, capped at the latest 50 entries; nothing is persisted.
+  front-end history overlay. It lists every page visited across all tabs,
+  newest first, marks the current tab's entry, scrolls the selected row, opens
+  the chosen URL in the current tab on Enter/Space or a click, and closes on
+  Esc/q/× or a click outside. Each tab keeps its own back/forward stack and
+  scroll restoration. `about:history` remains available as a rendered page
+  with clickable links. Both use the in-memory browser-wide visited list; the
+  overlay and rendered page show the latest 50 entries from a bounded
+  500-entry log. Nothing is persisted.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
   History/help use full labels at 80+ columns and icons below; the

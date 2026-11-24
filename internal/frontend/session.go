@@ -60,6 +60,7 @@ type Tab struct {
 	// scroll and push flag but never the trusted URL.
 	history      []historyEntry
 	historyIndex int
+	historyLog   *historyLog
 	AttestedURL  func(entryID uint64) (string, bool)
 
 	findActive  bool

@@ -631,6 +631,9 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	if !hasCommand(loop.Active.Session.(*eventSession), protocol.Graphics{Mode: GraphicsBlocks}) {
 		t.Fatal("new tab did not receive the current browser graphics mode")
 	}
+	if loop.Active.historyLog != loop.history {
+		t.Fatal("new tab did not join the shared history log")
+	}
 }
 
 func TestCloseLastTabAsksToQuit(t *testing.T) {

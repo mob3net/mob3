@@ -141,14 +141,15 @@ reached. Press <b>Esc</b> or <b>Ctrl-C</b> to interrupt a script that is blockin
 the terminal.</p>
 
 <h2>History</h2>
-<p><b>H</b> or the <b>≡ History</b> button opens a history overlay, newest first.
-Use <b>j</b>/<b>k</b> or <b>Up</b>/<b>Down</b> to move, <b>Enter</b> or
-<b>Space</b> to restore the selected entry, and <b>Esc</b>/<b>q</b> to close;
-clicking a row works too. <b>#</b> anchors and scroll positions are kept. Up to
-ten visited pages stay in an in-memory back/forward cache, so <b>Back</b> and
-<b>Forward</b> restore a page, its JavaScript state and your scroll position
-without reloading it. The rendered <b>about:history</b> page is still available
-by URL. Nothing is saved after MOB³ exits. Script and
+<p><b>H</b> or the <b>≡ History</b> button opens a browser-wide history overlay,
+newest first. Use <b>j</b>/<b>k</b> or <b>Up</b>/<b>Down</b> to move,
+<b>Enter</b> or <b>Space</b> to open the selected page in the current tab, and
+<b>Esc</b>/<b>q</b> to close; clicking a row works too. Each tab keeps its own
+<b>Back</b>/<b>Forward</b> stack and scroll position. <b>#</b> anchors and scroll
+positions are kept. Up to ten visited pages stay in an in-memory back/forward
+cache, so <b>Back</b> and <b>Forward</b> restore a page, its JavaScript state and
+your scroll position without reloading it. The rendered <b>about:history</b> page
+is still available by URL. Nothing is saved after MOB³ exits. Script and
 meta-refresh redirect chains stop after 20 hops with
 <b>Redirect loop stopped</b>, so a page that redirects to itself cannot loop
 forever.</p>
