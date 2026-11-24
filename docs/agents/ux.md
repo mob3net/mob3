@@ -310,10 +310,13 @@ agreement, the non-negotiable constraints and the change protocol.
   which is fetched and opens in the viewer. Middle-clicking a link opens it in
   a background tab without moving the current tab. While the URL
   prompt is open, a click on its field keeps it
-  open and a click anywhere else closes it; clicking inside it positions the
-  caret. Shift+mouse reports are ignored and suppress the next redraw so the
-  terminal can keep a native selection over the URL. A left click on the URL
-  bar opens the URL prompt, toolbar
+  open and positions the caret; clicking another chrome control closes the
+  prompt and runs that control in the same click, and clicking elsewhere merely
+  closes it. When a page input has focus, a chrome click acts like Esc for the
+  input and then performs the clicked action, so tabs and toolbar buttons still
+  work in one click. Shift+mouse reports are ignored and suppress the next
+  redraw so the terminal can keep a native selection over the URL. A left click
+  on the URL bar opens the URL prompt, toolbar
   buttons act on click, right-clicking a link opens the destination preview
   (`p`: Enter follows, `y` copies, Esc cancels) and does nothing elsewhere, the
   mouse back button goes back, the mouse forward button goes forward, clicking

@@ -741,6 +741,82 @@ func TestHintAskOpensBackgroundTab(t *testing.T) {
 	}
 }
 
+func TestPromptClickSwitchesTabInOneClick(t *testing.T) {
+	s := &recordSession{}
+	tab := &Tab{Session: s, State: LoopState{Page: protocol.State{
+		FrontendChrome: true, Width: 120, Height: 24, HeaderRows: 2,
+	}}}
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	tab.TabBar = tabs
+	selected := -1
+	tab.Actions = TabActions{Select: func(index int) { selected = index }}
+	tab.startPrompt(false)
+	var hit ChromeHit
+	for _, h := range LayoutChromeWithTabs(tab.State.Page, tabs, 0).Hits {
+		if h.Kind == ChromeHitTab && h.Index == 1 {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no tab hit")
+	}
+	if !tab.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("tab click was not consumed")
+	}
+	if tab.promptActive {
+		t.Fatal("prompt stayed open")
+	}
+	if selected != 1 {
+		t.Fatalf("selected tab = %d", selected)
+	}
+}
+
+func TestChromeClickBlursPageInputInOneClick(t *testing.T) {
+	s := &recordSession{}
+	tab := &Tab{Session: s, State: LoopState{Page: protocol.State{
+		FrontendChrome: true, KeysEngine: true, Width: 120, Height: 24, HeaderRows: 2,
+	}}}
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	tab.TabBar = tabs
+	selected := -1
+	tab.Actions = TabActions{Select: func(index int) { selected = index }}
+	var hit ChromeHit
+	for _, h := range LayoutChromeWithTabs(tab.State.Page, tabs, 0).Hits {
+		if h.Kind == ChromeHitTab && h.Index == 1 {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no tab hit")
+	}
+	if !tab.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("tab click was not consumed")
+	}
+	if selected != 1 {
+		t.Fatalf("selected tab = %d", selected)
+	}
+	foundEsc := false
+	for _, cmd := range s.cmds {
+		if cmd.Body == (protocol.Key{Token: "esc"}) {
+			foundEsc = true
+		}
+	}
+	if !foundEsc {
+		t.Fatalf("chrome click did not blur the page input: %#v", s.cmds)
+	}
+}
+
+func TestContentClickStaysWithFocusedPageInput(t *testing.T) {
+	tab := &Tab{Session: &recordSession{}, State: LoopState{Page: protocol.State{
+		FrontendChrome: true, KeysEngine: true, Width: 80, Height: 24, HeaderRows: 2,
+	}}}
+	if tab.handleChromeMouse(MouseEvent{X: 10, Y: 10, Press: true}) {
+		t.Fatal("content click was stolen by chrome")
+	}
+}
+
 func TestConsoleInputKeys(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
