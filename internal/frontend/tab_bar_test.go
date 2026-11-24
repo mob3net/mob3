@@ -3,11 +3,14 @@ package frontend
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
 	"browser/internal/protocol"
 )
+
+var testANSI = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 
 func TestTabStripSharesToolbarRow(t *testing.T) {
 	st := chromeState()
@@ -238,6 +241,77 @@ func TestTabStripWidthAndScrolling(t *testing.T) {
 	}
 }
 
+func TestTabNumberColonAndCloseAreBold(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "Alpha", Active: true}, {Title: "Beta"}}
+	layout := LayoutChromeWithTabs(st, tabs, 0)
+	var tabHit, closeHit ChromeHit
+	for _, hit := range layout.Hits {
+		if hit.Kind == ChromeHitTab && hit.Index == 0 {
+			tabHit = hit
+		}
+		if hit.Kind == ChromeHitTabClose && hit.Index == 0 {
+			closeHit = hit
+		}
+	}
+	cell := func(x int) protocol.Cell { return layout.Header[x] }
+	if cell(tabHit.X+1).R != '1' || cell(tabHit.X+1).Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("tab number is not bold: %+v", cell(tabHit.X+1))
+	}
+	if cell(tabHit.X+2).R != ':' || cell(tabHit.X+2).Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("tab colon is not bold: %+v", cell(tabHit.X+2))
+	}
+	titleX := tabHit.X + 3
+	if cell(titleX).R == ' ' {
+		titleX++
+	}
+	if cell(titleX).R != 'A' || cell(titleX).Attrs&protocol.AttrBold != 0 {
+		t.Fatalf("tab title styling = %+v", cell(titleX))
+	}
+	closeX := closeHit.X + 1
+	if cell(closeX).R != 'x' || cell(closeX).Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("tab close is not bold: %+v", cell(closeX))
+	}
+}
+
+func TestInactiveTabGradientAndDimTitle(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "Alpha", Active: true}, {Title: "Beta"}}
+	layout := LayoutChromeWithTabs(st, tabs, 0)
+	starts := map[int]int{}
+	var inactiveClose ChromeHit
+	for _, hit := range layout.Hits {
+		if hit.Kind == ChromeHitTab {
+			starts[hit.Index] = hit.X
+		}
+		if hit.Kind == ChromeHitTabClose && hit.Index == 1 {
+			inactiveClose = hit
+		}
+	}
+	active, inactive := starts[0], starts[1]
+	for _, x := range []int{active, active + 19} {
+		if layout.Header[x].BG != colSelectedBG {
+			t.Fatalf("active tab background = %+v, want solid blue", layout.Header[x].BG)
+		}
+	}
+	from, to := layout.Header[inactive].BG, layout.Header[inactive+19].BG
+	if from == to || from == colSelectedBG || to == colSelectedBG {
+		t.Fatalf("inactive tab gradient = %+v -> %+v", from, to)
+	}
+	titleX := inactive + 3
+	if layout.Header[titleX].R != 'B' || layout.Header[titleX].FG != colTabDimFG {
+		t.Fatalf("inactive title styling = %+v", layout.Header[titleX])
+	}
+	if layout.Header[inactive+1].FG != colHeaderFG || layout.Header[inactive+1].Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("inactive number styling = %+v", layout.Header[inactive+1])
+	}
+	if layout.Header[inactiveClose.X+1].R != 'x' || layout.Header[inactiveClose.X+1].Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("inactive close styling = %+v", layout.Header[inactiveClose.X+1])
+	}
+}
+
 func TestPresenterDrawsTabStrip(t *testing.T) {
 	st := chromeState()
 	st.Width = 120
@@ -253,8 +327,9 @@ func TestPresenterDrawsTabStrip(t *testing.T) {
 	if err := p.Present(f, 0, false); err != nil {
 		t.Fatal(err)
 	}
+	text := testANSI.ReplaceAllString(out.String(), "")
 	for _, want := range []string{"Alpha", "Beta"} {
-		if !strings.Contains(out.String(), want) {
+		if !strings.Contains(text, want) {
 			t.Errorf("presented output does not contain %q", want)
 		}
 	}

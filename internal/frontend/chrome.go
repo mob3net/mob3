@@ -74,6 +74,9 @@ var (
 	colHeaderFG   = rgb(0xf6, 0xf8, 0xfa)
 	colFooterFG   = rgb(0x24, 0x29, 0x2f)
 	colButtonBG   = rgb(0x2b, 0x3a, 0x4c)
+	colTabFrom    = rgb(0x3a, 0x45, 0x52)
+	colTabTo      = rgb(0x24, 0x2c, 0x36)
+	colTabDimFG   = rgb(0x8b, 0x98, 0xa8)
 	colURLBG      = rgb(0x13, 0x1d, 0x29)
 	colPromptBG   = rgb(0x27, 0x44, 0x63)
 	colSelectedBG = rgb(0x2f, 0x6f, 0xbf)
@@ -509,11 +512,13 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 	if w < 1 {
 		return
 	}
-	bg, fg := colButtonBG, colHeaderFG
+	accentFG, titleFG := colHeaderFG, colTabDimFG
 	if tab.Active {
-		bg, fg = colSelectedBG, colWhite
+		accentFG, titleFG = colWhite, colWhite
+		g.fill(x, y, w, 1, colSelectedBG)
+	} else {
+		g.hgradient(x, y, w, 1, colTabFrom, colTabTo)
 	}
-	g.fill(x, y, w, 1, bg)
 	title := protocol.StripControls(tab.Title)
 	if title == "" {
 		title = "New Tab"
@@ -534,13 +539,13 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 	if titleW < 0 {
 		titleW = 0
 	}
-	g.text(x, y, lead, fg, protocol.AttrBold)
+	g.text(x, y, lead, accentFG, protocol.AttrBold)
 	if titleW > 0 {
-		g.text(x+leadW, y, fitWidth(title, titleW), fg, 0)
+		g.text(x+leadW, y, fitWidth(title, titleW), titleFG, 0)
 	}
 	if tailW > 0 {
 		closeX := x + w - tailW
-		g.text(closeX, y, tail, fg, protocol.AttrBold)
+		g.text(closeX, y, tail, accentFG, protocol.AttrBold)
 		hitW := tailW
 		if hitW > 2 {
 			hitW = 2
