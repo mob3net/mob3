@@ -21,7 +21,6 @@ type SessionConfig struct {
 	Color          bool
 	Output         io.Writer
 	NoJS, NoPDF    bool
-	JSMemLimit     int64
 	LayoutBudget   LayoutBudget
 	MemLimitBytes  int64
 	NoBigText      bool
@@ -53,7 +52,6 @@ func NewConfiguredSession(c SessionConfig) *Session {
 	b.color = c.Color
 	b.NoJS = c.NoJS
 	b.NoPDF = c.NoPDF
-	b.JSMemLimit = c.JSMemLimit
 	b.LayoutBudget = c.LayoutBudget
 	b.memLimitBytes = c.MemLimitBytes
 	b.NoBigText = c.NoBigText
@@ -106,7 +104,8 @@ func (b *Session) Cleanup(sb *strings.Builder) {
 	}
 }
 
-// JSMemLimit returns the per-session JavaScript heap budget.
+// JSMemLimit returns the total JavaScript heap pool before the BudgetManager
+// divides it across sessions. The one-shot dump path uses it directly.
 func JSMemLimit() int64 { return jsHeapBudget(effectiveMemoryLimit()) }
 
 // ParseZoomPercent parses the -zoom value.
@@ -122,7 +121,6 @@ type AutomationConfig struct {
 	Width, Height  int
 	Zoom           float64
 	NoJS, NoPDF    bool
-	JSMemLimit     int64
 	MemLimitBytes  int64
 	LayoutBudget   LayoutBudget
 	Home           string
@@ -147,7 +145,6 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 	}
 	a.b.NoJS = c.NoJS
 	a.b.NoPDF = c.NoPDF
-	a.b.JSMemLimit = c.JSMemLimit
 	a.b.memLimitBytes = c.MemLimitBytes
 	a.b.LayoutBudget = c.LayoutBudget
 	a.b.home = c.Home

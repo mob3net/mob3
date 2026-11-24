@@ -233,6 +233,7 @@ func (s *Session) ApplyCachedPage(entryID uint64, c *CachedPage, scroll int, h S
 	h.ResetConsole()
 	if c.JS != nil {
 		s.JS = c.JS
+		c.JS.SetMemLimit(s.JSMemLimit)
 		c.JS.Resume()
 	}
 	s.ReaderRoot = nil

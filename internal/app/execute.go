@@ -130,7 +130,7 @@ func execute(o runOptions) int {
 		auto := engine.NewAutomationWithConfig(engine.AutomationConfig{
 			Loader: loader, BrowserContext: browserContext,
 			Width: o.Width, Height: o.Height, Zoom: zoomFactor,
-			NoJS: o.NoJS, NoPDF: o.NoPDF, JSMemLimit: jsMemLimit,
+			NoJS: o.NoJS, NoPDF: o.NoPDF,
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
 			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
 		})
@@ -201,7 +201,7 @@ func execute(o runOptions) int {
 			"-version":       Version,
 		},
 		Color: !o.NoColor, NoJS: o.NoJS, NoPDF: o.NoPDF,
-		JSMemLimit: jsMemLimit, LayoutBudget: budget,
+		LayoutBudget:  budget,
 		MemLimitBytes: int64(o.MemLimit) << 20, NoBigText: noBigText,
 		Output: os.Stdout,
 		CellW:  cellW, CellH: cellH, Graphics: graphicsMode,

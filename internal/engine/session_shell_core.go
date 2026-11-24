@@ -57,6 +57,10 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 	}
 	b.router = newFrameRouter()
 	b.router.Register(b.Frame)
+	b.budgets = bc.Budgets()
+	if b.budgets != nil {
+		b.budgets.Register(b)
+	}
 	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
 	SetZoom(b.Zoom)
@@ -80,7 +84,11 @@ func (b *Session) setLoader(l *Loader) {
 	}
 	if l != nil {
 		l.HistoryFunc = b.historyViewSnapshot
-		l.SetMemoryBudget(effectiveMemoryLimit())
+		if b.budgets != nil {
+			b.applyBudgetShare(b.budgetShare)
+		} else {
+			l.SetMemoryBudget(effectiveMemoryLimit())
+		}
 		if b.Width > 0 {
 			l.ViewportPx = cssWidthPx(b.Width)
 		}

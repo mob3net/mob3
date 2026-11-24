@@ -23,8 +23,9 @@ const (
 // process is unlimited.
 func effectiveMemoryLimit() int64 { return EffectiveMemoryLimit() }
 
-// jsHeapBudget returns the per-page JS ceiling for base. Zero keeps the
-// conservative fallback, used when the process itself is unlimited.
+// jsHeapBudget returns the total JS pool for base before the BudgetManager
+// divides it across sessions. Zero keeps the conservative fallback, used when
+// the process itself is unlimited.
 func jsHeapBudget(base int64) int64 {
 	if base <= 0 {
 		return fallbackJSHeap
@@ -32,6 +33,7 @@ func jsHeapBudget(base int64) int64 {
 	return MemoryFraction(base, jsHeapPercent)
 }
 
+// historyCacheBudget returns the total page-cache pool before it is divided.
 func historyCacheBudget(base int64) int64 {
 	if base <= 0 {
 		return fallbackHistoryCacheBytes
@@ -54,6 +56,10 @@ func (b *Session) setMemoryLimitMB(mb int) {
 		debug.SetMemoryLimit(b.memLimitBytes)
 	}
 	base := effectiveMemoryLimit()
+	if b.budgets != nil {
+		b.budgets.SetBase(base)
+		return
+	}
 	b.JSMemLimit = jsHeapBudget(base)
 	if b.JS != nil {
 		b.JS.SetMemLimit(b.JSMemLimit)
