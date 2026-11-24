@@ -12,11 +12,13 @@ func TestSessionPageState(t *testing.T) {
 	link := &Node{Type: ElementNode, Tag: "a"}
 	doc := ParseHTML(`<html><head><meta http-equiv="refresh" content="0;url=/next"></head><body></body></html>`)
 	s := Session{
-		Page:   &Page{URL: u, Base: u, Root: doc},
-		URL:    u,
-		Layout: &Layout{Links: []*LinkInfo{{Node: link}}},
-		Focus:  0,
-		Hover:  -1,
+		Frame: &Frame{
+			Page:   &Page{URL: u, Base: u, Root: doc},
+			URL:    u,
+			Layout: &Layout{Links: []*LinkInfo{{Node: link}}},
+		},
+		Focus: 0,
+		Hover: -1,
 	}
 	if s.PageKind() != protocol.PageHTML {
 		t.Fatalf("kind = %v", s.PageKind())
@@ -37,10 +39,10 @@ func TestSessionPageState(t *testing.T) {
 
 func TestSessionFindHintsAndSelection(t *testing.T) {
 	link := &Node{Type: ElementNode, Tag: "a"}
-	s := Session{Layout: &Layout{
+	s := Session{Frame: &Frame{Layout: &Layout{
 		Frags: []Frag{{Kind: FragText, Text: "x", Link: &LinkInfo{Index: 3}}},
 		Links: []*LinkInfo{{Node: link}, {}},
-	}}
+	}}}
 	s.OpenFind(FindScopePage)
 	s.FindText = "x"
 	s.FindMatches = []FindMatch{{Frag: 0}}
@@ -85,11 +87,11 @@ func TestSessionPDFPageTracking(t *testing.T) {
 	page := &PDFDocument{Pages: []PDFPageText{{}, {}}}
 	nodes := []*Node{{Type: ElementNode, Tag: "div"}, {Type: ElementNode, Tag: "div"}}
 	page.PageNodes = nodes
-	s := Session{
+	s := Session{Frame: &Frame{
 		Page:   &Page{PDF: page},
 		Layout: &Layout{Frags: []Frag{{Node: nodes[0], Y: 0}, {Node: nodes[1], Y: 40}}},
 		Scroll: 45,
-	}
+	}}
 	s.UpdatePDFPageStarts()
 	if len(s.PDFStarts) != 2 || s.PDFStarts[1] != 40 {
 		t.Fatalf("starts = %v", s.PDFStarts)
@@ -101,10 +103,10 @@ func TestSessionPDFPageTracking(t *testing.T) {
 
 func TestSessionScrollMathAndAnchor(t *testing.T) {
 	node := &Node{Type: ElementNode, Tag: "h2", Attrs: []Attr{{Key: "id", Value: "target"}}}
-	s := Session{
+	s := Session{Frame: &Frame{
 		Layout: &Layout{Height: 100, Frags: []Frag{{Node: node, Y: 40}}},
 		Scroll: 200,
-	}
+	}}
 	if got := s.MaxScroll(20); got != 80 {
 		t.Fatalf("max = %d", got)
 	}
