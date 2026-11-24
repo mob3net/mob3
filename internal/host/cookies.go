@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -192,6 +193,95 @@ func (j *CookieJar) setCookiesLocked(u *url.URL, cookies []*http.Cookie) {
 
 func (j *CookieJar) Cookies(u *url.URL) []*http.Cookie {
 	return j.all.Cookies(u)
+}
+
+// RequestCookiePolicy is the SameSite context for one request chain. TopSite
+// is the schemeful site of the initiating/top-level document (empty when
+// unknown, which disables the comparison). TopLevel marks a document
+// navigation, for which SameSite=Lax allows safe GET/HEAD requests.
+type RequestCookiePolicy struct {
+	TopSite  string
+	TopLevel bool
+}
+
+// siteOf returns scheme://registrable-domain (or scheme://host for an IP or a
+// host without a public suffix) for SameSite comparisons.
+func siteOf(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ""
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "" {
+		return ""
+	}
+	if net.ParseIP(host) == nil {
+		if reg, err := publicsuffix.EffectiveTLDPlusOne(host); err == nil {
+			host = reg
+		}
+	}
+	return scheme + "://" + host
+}
+
+// RequestCookies returns the cookies to attach to a request, applying the
+// stored SameSite attribute against p. An unset SameSite keeps the historical
+// behavior (sent on every matching request). SameSite=None is sent only when
+// the cookie is Secure.
+func (j *CookieJar) RequestCookies(u *url.URL, method string, p RequestCookiePolicy) []*http.Cookie {
+	if j == nil || u == nil {
+		return nil
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	now := time.Now()
+	site := siteOf(u)
+	sameSite := p.TopSite == "" || site == p.TopSite
+	safeTop := p.TopLevel && (strings.EqualFold(method, http.MethodGet) || strings.EqualFold(method, http.MethodHead))
+	type selected struct {
+		c    *http.Cookie
+		path string
+	}
+	var out []selected
+	for id, m := range j.cookies {
+		if !m.expires.IsZero() && !m.expires.After(now) {
+			delete(j.cookies, id)
+			continue
+		}
+		if !cookieApplies(u, id, m) {
+			continue
+		}
+		switch m.sameSite {
+		case http.SameSiteStrictMode:
+			if !sameSite {
+				continue
+			}
+		case http.SameSiteLaxMode:
+			if !sameSite && !safeTop {
+				continue
+			}
+		case http.SameSiteNoneMode:
+			if !m.secure || u.Scheme != "https" {
+				continue
+			}
+		}
+		out = append(out, selected{c: &http.Cookie{Name: id.name, Value: m.value}, path: id.path})
+	}
+	// RFC 6265 5.4: longer paths first. Map iteration order is otherwise
+	// unspecified, so sort for a deterministic header.
+	sort.SliceStable(out, func(i, k int) bool {
+		if len(out[i].path) != len(out[k].path) {
+			return len(out[i].path) > len(out[k].path)
+		}
+		return out[i].c.Name < out[k].c.Name
+	})
+	cookies := make([]*http.Cookie, len(out))
+	for i := range out {
+		cookies[i] = out[i].c
+	}
+	return cookies
 }
 
 func (j *CookieJar) DocumentCookies(u *url.URL) []*http.Cookie {

@@ -8,7 +8,13 @@ agreement, the non-negotiable constraints and the change protocol.
   list for domain scoping, and is shared by page loads, resources, XHR, fetch
   and `document.cookie`. HttpOnly cookies are hidden from JavaScript through a
   separate visible jar, and a script may neither replace nor delete a
-  server-set HttpOnly cookie. The SameSite attribute is stored but not enforced.
+  server-set HttpOnly cookie. SameSite is enforced for explicitly declared
+  cookies: `Strict` only goes same-site, `Lax` also allows top-level
+  `GET`/`HEAD` navigations, and `None` requires `Secure` over HTTPS. A cookie
+  without SameSite keeps the historical send-everywhere behavior. Because the
+  standard jar cannot see request context, the host removes the client jar per
+  request, sets the filtered `Cookie` header itself, and stores each response
+  hop's `Set-Cookie` manually.
 - Page/resource cap: 12 MB. The body is read with a `LimitReader` of cap+1 so
   an oversized response is rejected rather than silently truncated, and data
   URIs are rejected when the encoded or decoded size exceeds the cap. Images

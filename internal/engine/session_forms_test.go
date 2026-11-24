@@ -863,13 +863,14 @@ func TestFormPOSTSubmission(t *testing.T) {
 	b.rebuild()
 
 	type req struct {
-		method, target, ctype, body, origin string
+		method, target, ctype, body, origin, initiator string
 	}
 	ch := make(chan req, 1)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		meta := protocol.RequestMetaFrom(ctx)
 		ch <- req{
 			method: method, target: target, ctype: contentType, body: string(body),
-			origin: protocol.RequestMetaFrom(ctx).Origin,
+			origin: meta.Origin, initiator: meta.PageURL,
 		}
 		return &Page{URL: u, Base: u, Root: ParseHTML("<html></html>")}, nil
 	}
@@ -890,6 +891,9 @@ func TestFormPOSTSubmission(t *testing.T) {
 		}
 		if got.origin != "https://example.com" {
 			t.Errorf("origin = %q", got.origin)
+		}
+		if got.initiator != "https://example.com/form" {
+			t.Errorf("initiator = %q", got.initiator)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("POST form was not submitted")

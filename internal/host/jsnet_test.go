@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"sync"
@@ -13,12 +12,13 @@ import (
 	"browser/internal/protocol"
 )
 
-func testJSFetcher(t *testing.T, jar http.CookieJar) *Fetcher {
+func testJSFetcher(t *testing.T, jar *CookieJar) *Fetcher {
 	t.Helper()
 	return &Fetcher{
-		Client:   &http.Client{Jar: jar},
+		Client:   &http.Client{},
 		Settings: NewSettings("test-agent", ""),
 		Requests: NewRequestLog(),
+		Cookies:  jar,
 	}
 }
 
@@ -112,7 +112,7 @@ func TestJSFetchOmitCredentialsDropsCookie(t *testing.T) {
 	}))
 	defer srv.Close()
 	u, _ := url.Parse(srv.URL)
-	jar, _ := cookiejar.New(nil)
+	jar := NewCookieJar()
 	jar.SetCookies(u, []*http.Cookie{{Name: "a", Value: "1"}})
 	f := testJSFetcher(t, jar)
 	if _, err := f.JSFetch(context.Background(), protocol.FetchRequest{
@@ -135,7 +135,7 @@ func TestJSFetchSameOriginSendsCookie(t *testing.T) {
 	}))
 	defer srv.Close()
 	u, _ := url.Parse(srv.URL)
-	jar, _ := cookiejar.New(nil)
+	jar := NewCookieJar()
 	jar.SetCookies(u, []*http.Cookie{{Name: "a", Value: "1"}})
 	f := testJSFetcher(t, jar)
 	resp, err := f.JSFetch(context.Background(), protocol.FetchRequest{
@@ -168,7 +168,7 @@ func TestJSFetchCrossOriginDropsCookieAndFiltersHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 	u, _ := url.Parse(srv.URL)
-	jar, _ := cookiejar.New(nil)
+	jar := NewCookieJar()
 	jar.SetCookies(u, []*http.Cookie{{Name: "a", Value: "1"}})
 	f := testJSFetcher(t, jar)
 	resp, err := f.JSFetch(context.Background(), protocol.FetchRequest{

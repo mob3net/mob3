@@ -87,6 +87,15 @@ func WithRequestOrigin(ctx context.Context, origin string) context.Context {
 	return context.WithValue(ctx, RequestMetaKey{}, m)
 }
 
+// WithRequestInitiator records the document that started a navigation. It
+// supplies the SameSite top-level site without applying the document's
+// local-network policy to the navigation request itself.
+func WithRequestInitiator(ctx context.Context, rawURL string) context.Context {
+	m := RequestMetaFrom(ctx)
+	m.PageURL = rawURL
+	return context.WithValue(ctx, RequestMetaKey{}, m)
+}
+
 // WithRequestTarget records the URL a request will contact.
 func WithRequestTarget(ctx context.Context, target *url.URL) context.Context {
 	if target == nil {

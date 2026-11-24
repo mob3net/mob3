@@ -36,11 +36,13 @@ cache, log or download files. Closing MOB³ saves nothing.
 
 Cookies are session-only and shared by page loads, resources, XHR, `fetch` and
 `document.cookie`. HttpOnly cookies are hidden from JavaScript, and a script
-cannot replace or delete a server-set HttpOnly cookie. `SameSite` is stored but
-not enforced, so a cross-site form or subresource still carries cookies unless
-the server checks the `Origin` header; MOB³ sends `Origin` on non-GET form
-submissions. A `Secure` cookie can still be planted over an HTTP response,
-because the standard cookie jar accepts it. `localStorage` and
+cannot replace or delete a server-set HttpOnly cookie. Explicit `SameSite`
+values are enforced: `Strict` cookies are sent only to the same site, `Lax`
+also on top-level `GET`/`HEAD` navigations, and `None` only when `Secure` over
+HTTPS. A cookie with no `SameSite` keeps the legacy send-everywhere behavior.
+Non-GET form submissions carry the submitting page's `Origin`, so a server can
+reject cross-site posts. A `Secure` cookie can still be planted over an HTTP
+response, because the standard cookie jar accepts it. `localStorage` and
 `sessionStorage` are in-memory maps and do not persist across restarts.
 
 ## Cross-origin requests

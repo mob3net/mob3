@@ -85,14 +85,15 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	for k, v := range headers {
 		httpReq.Header.Set(k, v)
 	}
-	// Never write to the session client: the redirect policy is per request.
-	// Cloning keeps the shared transport (and its pooling) while leaving the
-	// one shared *http.Client untouched for navigations and concurrent image
-	// loads.
+	// Never write to the session client: the redirect policy and cookies are
+	// per request. Cloning keeps the shared transport (and its pooling) while
+	// leaving the one shared *http.Client untouched for navigations and
+	// concurrent image loads. Cross-origin and credentialless requests never
+	// send or store cookies.
+	useCookies := !crossOrigin && req.Credentials
+	policy := cookiePolicyFor(RequestMetaFrom(ctx))
 	client := *f.Client
-	if crossOrigin || !req.Credentials {
-		client.Jar = nil
-	}
+	client.Jar = nil
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
@@ -106,10 +107,19 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		if !crossOrigin && !sameOrigin(next.URL, origin) {
 			return errors.New("cross-origin redirect blocked")
 		}
+		if useCookies {
+			if next.Response != nil {
+				f.storeCookies(next.Response)
+			}
+			f.applyCookies(next, policy)
+		}
 		// The dial guard and proxy decision must see the redirect target, not
 		// the pre-redirect URL.
 		*next = *next.WithContext(WithRequestTarget(next.Context(), next.URL))
 		return nil
+	}
+	if useCookies {
+		f.applyCookies(httpReq, policy)
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -122,6 +132,9 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		return out, err
 	}
 	defer resp.Body.Close()
+	if useCookies {
+		f.storeCookies(resp)
+	}
 	out.Status = resp.StatusCode
 	if resp.Request != nil && resp.Request.URL != nil {
 		out.FinalURL = resp.Request.URL.String()

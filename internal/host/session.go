@@ -93,6 +93,7 @@ func (s *Session) fetcher() *Fetcher {
 		Cache:    s.cache,
 		Settings: s.settings,
 		Requests: s.requests,
+		Cookies:  s.cookies,
 	}
 }
 

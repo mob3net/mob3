@@ -32,6 +32,35 @@ type Fetcher struct {
 	Cache    *ResourceCache
 	Settings *Settings
 	Requests *RequestLog
+	Cookies  *CookieJar
+}
+
+// cookiePolicyFor derives the SameSite context of a request from its page
+// metadata.
+func cookiePolicyFor(meta RequestMeta) RequestCookiePolicy {
+	u, _ := url.Parse(meta.PageURL)
+	return RequestCookiePolicy{TopSite: siteOf(u), TopLevel: meta.Kind == "doc"}
+}
+
+// applyCookies replaces the Cookie header according to the SameSite policy.
+func (f *Fetcher) applyCookies(req *http.Request, policy RequestCookiePolicy) {
+	if f.Cookies == nil || req == nil {
+		return
+	}
+	req.Header.Del("Cookie")
+	for _, c := range f.Cookies.RequestCookies(req.URL, req.Method, policy) {
+		req.AddCookie(c)
+	}
+}
+
+// storeCookies records Set-Cookie headers from one response. Requests set the
+// client jar to nil so cookies can be filtered per request, which also means
+// every hop must store its own response cookies.
+func (f *Fetcher) storeCookies(resp *http.Response) {
+	if f.Cookies == nil || resp == nil || resp.Request == nil || resp.Request.URL == nil {
+		return
+	}
+	f.Cookies.SetCookies(resp.Request.URL, resp.Cookies())
 }
 
 func (f *Fetcher) FetchCtx(ctx context.Context, u *url.URL) (data []byte, ctype string, final *url.URL, status int, err error) {
@@ -140,10 +169,14 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 			// a server's Origin-based CSRF check see the submitting page.
 			req.Header.Set("Origin", meta.Origin)
 		}
-		// The redirect policy is per request. Cloning also keeps the shared
-		// client untouched for concurrent fetches.
+		// The redirect policy and cookies are per request. Cloning (and
+		// dropping the jar) also keeps the shared client untouched for
+		// concurrent fetches.
+		policy := cookiePolicyFor(meta)
 		c := *f.Client
-		c.CheckRedirect = redirectCheck(meta.BlockLocal, meta.PageSecure && meta.Kind != "" && meta.Kind != "doc")
+		c.Jar = nil
+		c.CheckRedirect = f.redirectCheck(meta.BlockLocal, meta.PageSecure && meta.Kind != "" && meta.Kind != "doc", policy)
+		f.applyCookies(req, policy)
 		resp, e := c.Do(req)
 		if e != nil {
 			if IsLocalNetworkError(e) {
@@ -155,6 +188,7 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 			return nil, "", u, 0, e
 		}
 		defer resp.Body.Close()
+		f.storeCookies(resp)
 		if enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))); enc != "" && enc != "identity" && !resp.Uncompressed {
 			// Go's transport decodes gzip transparently and removes the header.
 			// Anything still marked (brotli, zstd, …) would be parsed as raw
@@ -181,7 +215,7 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 // local-network policy on every hop, not just the initial URL. It also
 // retargets the request metadata so the dial guard and the proxy decision see
 // the host actually being contacted.
-func redirectCheck(blockLocal, secureSubresource bool) func(*http.Request, []*http.Request) error {
+func (f *Fetcher) redirectCheck(blockLocal, secureSubresource bool, policy RequestCookiePolicy) func(*http.Request, []*http.Request) error {
 	return func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
@@ -192,6 +226,10 @@ func redirectCheck(blockLocal, secureSubresource bool) func(*http.Request, []*ht
 		if blockLocal && IsLocalURL(next.URL) {
 			return ErrLocalNetworkBlocked
 		}
+		if next.Response != nil {
+			f.storeCookies(next.Response)
+		}
+		f.applyCookies(next, policy)
 		*next = *next.WithContext(WithRequestTarget(next.Context(), next.URL))
 		return nil
 	}
