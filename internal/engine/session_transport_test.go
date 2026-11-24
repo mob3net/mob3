@@ -225,7 +225,7 @@ func TestSessionFrameCarriesNativePlacements(t *testing.T) {
 	b.color = true
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
 	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: FragImage, X: 1, Y: 0, W: 4, H: 4, Img: img}}}
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics
 	b.emitFrames = true
 	capture := &frameCapture{}
 	b.sessionOut = capture
@@ -256,7 +256,7 @@ func TestSessionClipsOutOfBoundsPlacements(t *testing.T) {
 	b.NoDraw = false
 	b.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "clip"}
 	b.Layout = &Layout{Height: 8, Frags: []Frag{{Kind: FragImage, X: -5, Y: 1, W: 20, H: 3, Img: img}}}
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics
 	b.emitFrames = true
 	capture := &frameCapture{}
 	b.sessionOut = capture

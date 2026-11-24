@@ -52,35 +52,44 @@ func onOff(v bool) string {
 	return "off"
 }
 
-func graphicsFor(mode engine.GraphicsMode, w, h int) engine.Graphics {
-	g := frontend.NewGFXRenderer(mode, w, h)
-	if g == nil {
-		return nil
+// nativeGraphicsMode reports the native protocol the terminal supports, or
+// GraphicsNone when only half-block art is available.
+func nativeGraphicsMode(requested frontend.GraphicsMode) frontend.GraphicsMode {
+	current := frontend.DetectGraphics(requested)
+	if current == frontend.GraphicsKitty || current == frontend.GraphicsITerm {
+		return current
 	}
-	return g
+	if detected := frontend.DetectGraphics(frontend.GraphicsAuto); detected == frontend.GraphicsKitty || detected == frontend.GraphicsITerm {
+		return detected
+	}
+	return frontend.GraphicsNone
+}
+
+// capabilitiesFor reports the terminal features the engine may assume. Native
+// image placement is still performed by the front end.
+func capabilitiesFor(native frontend.GraphicsMode, cellW, cellH int) protocol.Capabilities {
+	var caps protocol.Capabilities
+	switch native {
+	case frontend.GraphicsKitty:
+		caps |= protocol.CapKittyGraphics
+	case frontend.GraphicsITerm:
+		caps |= protocol.CapITermGraphics
+	}
+	if g := frontend.NewGFXRenderer(native, cellW, cellH); g != nil && g.TextSizing() {
+		caps |= protocol.CapKittyText
+	}
+	return caps
 }
 
 // graphicsModesFor records the i-key cycle: native inline graphics when
 // available, then blocks, then none.
 func graphicsModesFor(requested frontend.GraphicsMode) []engine.GraphicsMode {
-	current := frontend.DetectGraphics(requested)
-	native := current
-	if native != frontend.GraphicsKitty && native != frontend.GraphicsITerm {
-		if detected := frontend.DetectGraphics(frontend.GraphicsAuto); detected == frontend.GraphicsKitty || detected == frontend.GraphicsITerm {
-			native = detected
-		} else {
-			native = frontend.GraphicsNone
-		}
-	}
+	native := nativeGraphicsMode(requested)
 	modes := make([]engine.GraphicsMode, 0, 3)
 	if native == frontend.GraphicsKitty || native == frontend.GraphicsITerm {
 		modes = append(modes, native)
 	}
-	modes = append(modes, frontend.GraphicsBlocks, frontend.GraphicsNone)
-	if current == frontend.GraphicsAuto {
-		current = native
-	}
-	return modes
+	return append(modes, frontend.GraphicsBlocks, frontend.GraphicsNone)
 }
 
 // execute runs one MOB³ invocation after flag parsing and validation.
@@ -206,8 +215,7 @@ func execute(o runOptions) int {
 		Output: os.Stdout,
 		CellW:  cellW, CellH: cellH, Graphics: graphicsMode,
 		GraphicsModes: graphicsModesFor(graphicsMode),
-		GFX:           graphicsFor(graphicsMode, cellW, cellH),
-		NewGraphics:   graphicsFor,
+		Caps:          capabilitiesFor(nativeGraphicsMode(graphicsMode), cellW, cellH),
 	})
 	b.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
 	presenter := frontend.NewPresenter(os.Stdout, b.Color())
@@ -230,7 +238,7 @@ func execute(o runOptions) int {
 			sb.WriteString("\x1b[<u")
 		}
 		sb.WriteString("\x1b[?1003l\x1b[?1000l\x1b[?1006l")
-		b.Cleanup(&sb)
+		b.Cleanup()
 		presenter.ClearGraphics(&sb)
 		sb.WriteString("\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l")
 		_, _ = os.Stdout.WriteString(sb.String())

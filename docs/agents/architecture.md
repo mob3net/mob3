@@ -226,7 +226,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/inline_svg.go` | Inline SVG serialization back to XML, including restoration of SVG camelCase tag and attribute names. |
 | `internal/engine/placement.go` | Native-image placement cache, PNG encoding, image scaling and frame clipping into `protocol.Placement`. |
 | `internal/engine/image_decode.go` | Hostile-input image decoding: panic containment, decompression-bomb checks, SVG/raster dispatch, decode weight and aspect-preserving downscale. |
-| `internal/engine/graphics.go` | `Graphics` interface and protocol graphics-mode aliases; the app injects the frontend renderer. |
+| `internal/engine/graphics.go` | Protocol graphics-mode aliases. The engine records native-image and scaled-text capabilities from `protocol.Capabilities`; terminal image placement and ANSI encoding are front-end-owned. |
 | `internal/engine/encoders.go` | Injected frame/PNG encoder hooks; the engine does not import `internal/frontend`. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
 | `internal/frontend/png.go` | Protocol-frame-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |

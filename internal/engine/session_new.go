@@ -27,8 +27,7 @@ type SessionConfig struct {
 	CellW, CellH   int
 	Graphics       GraphicsMode
 	GraphicsModes  []GraphicsMode
-	GFX            Graphics
-	NewGraphics    func(GraphicsMode, int, int) Graphics
+	Caps           protocol.Capabilities
 }
 
 // NewSession creates and configures the page session used by the interactive
@@ -64,8 +63,7 @@ func NewConfiguredSession(c SessionConfig) *Session {
 	b.Output = c.Output
 	b.graphicsModes = c.GraphicsModes
 	b.graphicsMode = c.Graphics
-	b.gfx = c.GFX
-	b.newGraphics = c.NewGraphics
+	b.caps = c.Caps &^ protocol.CapColor
 	return b
 }
 
@@ -74,34 +72,19 @@ func (b *Session) Color() bool { return b.color }
 
 // Capabilities reports the terminal features the session should assume.
 func (b *Session) Capabilities() protocol.Capabilities {
-	var caps protocol.Capabilities
+	caps := b.caps &^ protocol.CapColor
 	if b.color {
 		caps |= protocol.CapColor
-	}
-	if b.gfx != nil {
-		switch b.gfx.Mode() {
-		case GraphicsKitty:
-			caps |= protocol.CapKittyGraphics
-		case GraphicsITerm:
-			caps |= protocol.CapITermGraphics
-		}
-		if b.gfx.TextSizing() {
-			caps |= protocol.CapKittyText
-		}
 	}
 	return caps
 }
 
-// Cleanup stops background work and emits terminal graphics cleanup sequences
-// into sb. The app still owns the alternate-screen and raw-mode sequences.
-func (b *Session) Cleanup(sb *strings.Builder) {
+// Cleanup stops background work. Terminal cleanup stays with the front end.
+func (b *Session) Cleanup() {
 	if b == nil {
 		return
 	}
 	b.cancelLoadNow()
-	if b.gfx != nil {
-		b.gfx.Clear(sb)
-	}
 }
 
 // JSMemLimit returns the total JavaScript heap pool before the BudgetManager

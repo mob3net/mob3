@@ -324,7 +324,7 @@ func BenchmarkBoundarySessionFrameImage(b *testing.B) {
 	br.Page = &Page{Root: ParseHTML(`<html><body></body></html>`), Title: "img"}
 	br.Layout = &Layout{Height: 30, Frags: []Frag{{Kind: FragImage, X: 2, Y: 1, W: 40, H: 20, Img: img}}}
 	br.color = true
-	br.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	br.caps |= protocol.CapKittyGraphics
 	br.emitFrames = true
 	br.sessionOut = &codecSink{}
 	br.draw()
