@@ -33,7 +33,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	if len(req.Body) > maxResourceSize {
 		return out, errors.New("request body too large")
 	}
-	crossOrigin := !sameOrigin(u, origin)
+	crossOrigin := !protocol.SameOrigin(u, origin)
 	headers := make(map[string]string, len(req.Headers))
 	for _, h := range req.Headers {
 		if h.Name == "" || isForbiddenRequestHeader(h.Name) {
@@ -80,7 +80,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	httpReq.Header.Set("User-Agent", f.Settings.UserAgent())
 	httpReq.Header.Set("Accept", "*/*")
 	if crossOrigin && !req.NoCORS {
-		httpReq.Header.Set("Origin", urlOrigin(origin))
+		httpReq.Header.Set("Origin", protocol.OriginOf(origin).String())
 	}
 	for k, v := range headers {
 		httpReq.Header.Set(k, v)
@@ -104,7 +104,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		if origin.Scheme == "https" && next.URL.Scheme == "http" {
 			return ErrMixedContentBlocked
 		}
-		if !crossOrigin && !sameOrigin(next.URL, origin) {
+		if !crossOrigin && !protocol.SameOrigin(next.URL, origin) {
 			return errors.New("cross-origin redirect blocked")
 		}
 		if useCookies {
@@ -155,47 +155,12 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	return out, nil
 }
 
-func sameOrigin(a, b *url.URL) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return strings.EqualFold(a.Scheme, b.Scheme) &&
-		strings.EqualFold(a.Hostname(), b.Hostname()) &&
-		effectivePort(a) == effectivePort(b)
-}
-
-func effectivePort(u *url.URL) string {
-	if p := u.Port(); p != "" {
-		return p
-	}
-	switch strings.ToLower(u.Scheme) {
-	case "http":
-		return "80"
-	case "https":
-		return "443"
-	}
-	return ""
-}
-
-func urlOrigin(u *url.URL) string {
-	if u == nil {
-		return ""
-	}
-	scheme := strings.ToLower(u.Scheme)
-	host := strings.ToLower(u.Host)
-	if (scheme == "http" && strings.HasSuffix(host, ":80")) ||
-		(scheme == "https" && strings.HasSuffix(host, ":443")) {
-		host = host[:strings.LastIndex(host, ":")]
-	}
-	return scheme + "://" + host
-}
-
 func corsAllowed(header string, origin *url.URL) bool {
 	allowed := strings.TrimSpace(header)
 	if allowed == "*" {
 		return true
 	}
-	return allowed != "" && strings.EqualFold(strings.TrimRight(allowed, "/"), strings.TrimRight(urlOrigin(origin), "/"))
+	return allowed != "" && strings.EqualFold(strings.TrimRight(allowed, "/"), strings.TrimRight(protocol.OriginOf(origin).String(), "/"))
 }
 
 func isSimpleCORSRequest(method string, headers map[string]string) bool {

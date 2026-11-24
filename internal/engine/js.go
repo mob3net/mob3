@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/grafana/sobek"
+
+	"browser/internal/protocol"
 )
 
 const (
@@ -578,11 +580,7 @@ func (j *jsRuntime) locationObject() *sobek.Object {
 		_ = o.Set("pathname", u.Path)
 		_ = o.Set("search", prefixQuery(u.RawQuery))
 		_ = o.Set("hash", prefixHash(u.Fragment))
-		origin := u.Scheme + "://" + u.Host
-		if u.Scheme == "about" || u.Scheme == "data" || u.Scheme == "file" {
-			origin = "null"
-		}
-		_ = o.Set("origin", origin)
+		_ = o.Set("origin", protocol.OriginOf(u).String())
 	}
 	j.accessor(o, "href", func() sobek.Value {
 		return j.vm.ToValue(href)
@@ -958,12 +956,10 @@ func (j *jsRuntime) windowObject() *sobek.Object {
 	j.accessor(o, "pageXOffset", func() sobek.Value { return j.vm.ToValue(0) }, nil)
 	j.accessor(o, "pageYOffset", func() sobek.Value { return j.vm.ToValue(scrollPx()) }, nil)
 	origin, secure := "", false
-	if j.page != nil && j.page.URL != nil {
-		u := j.page.URL
-		if u.Scheme == "http" || u.Scheme == "https" {
-			origin = u.Scheme + "://" + u.Host
-			secure = u.Scheme == "https"
-		}
+	if j.page != nil {
+		pageOrigin := protocol.OriginOf(j.page.URL)
+		origin = pageOrigin.HeaderValue()
+		secure = pageOrigin.Scheme == "https"
 	}
 	_ = o.Set("origin", origin)
 	_ = o.Set("isSecureContext", secure)

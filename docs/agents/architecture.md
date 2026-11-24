@@ -131,8 +131,10 @@ Current state: one `Session` holds one page and one JS runtime, iframe elements
 have inert stub documents, and there are no tabs. A shared `BrowserContext`
 now allocates history-entry IDs, and the `Session` embeds a top-level `Frame`
 that owns the page, layout, URL, scroll and JS runtime; the tab loop asks the
-frame for its timers. Shared storage and budgets remain per session. This
-section records the target; it is not implemented yet.
+frame for its timers. The canonical `protocol.Origin` helper is shared by the
+engine and host, and a per-tab `FrameRouter` registers the top-level frame and
+carries copied, origin-checked messages. Shared storage and budgets remain per
+session. This section records the target; it is not implemented yet.
 
 ## Current layout
 
@@ -252,6 +254,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
 | `internal/protocol/graphics.go` | Shared graphics mode values (`auto`, `none`, `blocks`, `kitty`, `iterm`). |
+| `internal/protocol/origin.go` | Canonical tuple origin: lowercase scheme and host, default port omitted, opaque for non-HTTP(S), `String`/`HeaderValue`/`Equal`/`SameOrigin` helpers shared by the engine and host. |
 | `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
 | `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
 | `internal/protocol/host.go` | `Host` port, host fetch result, `AttestedURL`, request record and config-token interfaces. |
@@ -261,7 +264,8 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It currently allocates the opaque history-entry ID sequence, so sessions in different tabs cannot collide in the host's URL-attestation record or the engine page cache; shared storage, budgets and settings join it with the tab and frame model. |
-| `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL`, `Scroll` and JavaScript runtime; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
+| `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
+| `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses a frame boundary. It currently holds the top-level frame. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags, the shared `BrowserContext` and terminal setup. |
 | `internal/engine/version.go` | Injected build version and the help-page wrapper. |
 | `internal/engine/session_certs.go` | Config-page trust-store label. |
