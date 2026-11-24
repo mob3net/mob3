@@ -88,6 +88,9 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 	case Graphics:
 		kind = CmdGraphics
 		e.u8(uint8(v.Mode))
+	case FollowLink:
+		kind = CmdFollowLink
+		e.i32(v.Target)
 	case Resize:
 		kind = CmdResize
 		e.i32(v.Width)
@@ -292,6 +295,10 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 	case OpenTab:
 		kind = EvOpenTab
 		e.str(v.URL)
+	case LinkPreview:
+		kind = EvLinkPreview
+		e.str(v.URL)
+		e.i32(v.Target)
 	case Download:
 		kind = EvDownload
 		e.str(v.URL)
@@ -335,7 +342,7 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		}
 	case Hints:
 		kind = EvHints
-		e.bool(v.Ask)
+		e.u8(uint8(v.Mode))
 		e.str(v.Prefix)
 		e.count(len(v.Items))
 		for _, item := range v.Items {
@@ -409,6 +416,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = Visibility{Active: d.bool()}
 	case CmdGraphics:
 		body = Graphics{Mode: GraphicsMode(d.u8())}
+	case CmdFollowLink:
+		body = FollowLink{Target: d.i32()}
 	case CmdResize:
 		body = Resize{
 			Width: d.i32(), Height: d.i32(),
@@ -601,6 +610,8 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = HistoryCommit{EntryID: d.u64(), URL: d.str(), Scroll: d.i32(), Push: d.bool()}
 	case EvOpenTab:
 		body = OpenTab{URL: d.str()}
+	case EvLinkPreview:
+		body = LinkPreview{URL: d.str(), Target: d.i32()}
 	case EvDownload:
 		body = Download{URL: d.str(), Name: d.str(), Command: d.str()}
 	case EvNotice:
@@ -636,7 +647,7 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		}
 		body = v
 	case EvHints:
-		ask := d.bool()
+		mode := HintMode(d.u8())
 		prefix := d.str()
 		n := d.count(lim.MaxLinks)
 		items := make([]HintItem, n)
@@ -656,7 +667,7 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			item.Href = d.str()
 			items[i] = item
 		}
-		body = Hints{Ask: ask, Prefix: prefix, Items: items}
+		body = Hints{Mode: mode, Prefix: prefix, Items: items}
 	case EvQuit:
 		body = Quit{}
 	case EvAutomationResult:

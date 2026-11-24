@@ -1023,7 +1023,7 @@ func TestReaderModeAnchorLinkStillScrolls(t *testing.T) {
 	}
 }
 
-func TestRightClickCopiesLinkURL(t *testing.T) {
+func TestRightClickPreviewsLinkURL(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
 	u := mustParse(t, "https://example.com/news")
 	b := newTestSession(40, 10)
@@ -1040,25 +1040,16 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 	if frag == nil {
 		t.Fatal("link text fragment not found")
 	}
-	sink := &clipboardSink{}
+	sink := &openTabSink{}
 	b.sessionOut = sink
 	top, _ := b.viewport()
-	// Hover the link first: the footer would otherwise keep showing its URL
-	// instead of the copy confirmation.
-	b.HandleMouse(MouseEvent{X: frag.X + 1, Y: top + frag.Y + 1, Motion: true})
-	if b.hoveredLink() == nil {
-		t.Fatal("hover did not select the link")
-	}
 	b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1, Press: true})
 
-	if got := b.footerLeft(); !strings.Contains(got, "Copied URL") {
-		t.Fatalf("footer = %q, want the copy confirmation", got)
+	if sink.previewURL != "https://example.com/story" {
+		t.Fatalf("preview URL = %q", sink.previewURL)
 	}
-	if sink.text != "https://example.com/story" {
-		t.Fatalf("clipboard text = %q", sink.text)
-	}
-	if b.status != "Copied URL" {
-		t.Fatalf("status = %q", b.status)
+	if sink.previewTarget != 0 {
+		t.Fatalf("preview target = %d", sink.previewTarget)
 	}
 }
 
@@ -1069,65 +1060,19 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
 
-	sink := &clipboardSink{}
+	sink := &openTabSink{}
 	b.sessionOut = sink
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: 2, Y: top + 1, Press: true})
 
-	if sink.text != "" {
-		t.Fatalf("right-click away from a link copied %q", sink.text)
+	if sink.previewURL != "" {
+		t.Fatalf("right-click away from a link previewed %q", sink.previewURL)
 	}
 	if b.status != "" {
 		t.Fatalf("status = %q, want empty", b.status)
 	}
 	if b.EntryID != 0 {
 		t.Fatalf("right-click navigated: entry=%d", b.EntryID)
-	}
-}
-
-func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
-	doc := ParseHTML(`<p><a href="/story">Story link</a></p>`)
-	u := mustParse(t, "https://example.com/news")
-	b := newTestSession(40, 10)
-	b.Page = &Page{URL: u, Base: u, Root: doc}
-	b.Layout = BuildLayout(doc, nil, b.Width)
-	sink := &clipboardSink{}
-	b.sessionOut = sink
-
-	var frag *Frag
-	for i := range b.Layout.Frags {
-		if b.Layout.Frags[i].Kind == FragText && strings.Contains(b.Layout.Frags[i].Text, "Story") {
-			frag = &b.Layout.Frags[i]
-			break
-		}
-	}
-	if frag == nil {
-		t.Fatal("link text fragment not found")
-	}
-	top, _ := b.viewport()
-	copyAt := func() {
-		b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1, Press: true})
-		// Releasing the button must not hide the confirmation.
-		b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: frag.X + 1, Y: top + frag.Y + 1})
-		if b.status != "Copied URL" {
-			t.Fatalf("status after right-click = %q", b.status)
-		}
-		// A redraw between events must not drop the message.
-		if got := b.footerLeft(); !strings.Contains(got, "Copied URL") {
-			t.Fatalf("footer dropped the confirmation: %q", got)
-		}
-	}
-
-	copyAt()
-	b.HandleMouse(MouseEvent{X: 2, Y: top + 1, Motion: true})
-	if b.status != "" {
-		t.Fatalf("pointer motion did not clear the status: %q", b.status)
-	}
-
-	copyAt()
-	b.scrollBy(1)
-	if b.status != "" {
-		t.Fatalf("scrolling did not clear the status: %q", b.status)
 	}
 }
 

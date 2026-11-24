@@ -728,7 +728,7 @@ func TestHintAskOpensBackgroundTab(t *testing.T) {
 	opened := ""
 	loop.Actions = TabActions{OpenTabBackground: func(url string) { opened = url }}
 	items := []protocol.HintItem{{Target: 3, Label: "d", Link: true, Href: "https://example.com/next", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}}}
-	loop.applyEvent(protocol.Event{Body: protocol.Hints{Ask: true, Items: items}})
+	loop.applyEvent(protocol.Event{Body: protocol.Hints{Mode: protocol.HintNewTab, Items: items}})
 	loop.handleHintKey("d")
 	if loop.hintActive {
 		t.Fatal("hint stayed active")

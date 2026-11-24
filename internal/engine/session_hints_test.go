@@ -315,6 +315,25 @@ func TestLinkHintsFocusInputFields(t *testing.T) {
 	}
 }
 
+func TestHintModesFromKeys(t *testing.T) {
+	html := `<html><body><p><a href="/one">One</a> <a href="/two">Two</a></p></body></html>`
+	cases := []struct {
+		key  string
+		mode protocol.HintMode
+	}{
+		{"f", protocol.HintFollow},
+		{"F", protocol.HintNewTab},
+		{"p", protocol.HintPreview},
+	}
+	for _, tc := range cases {
+		b := hintTestSession(t, html, 50, 20)
+		b.HandleKey(tc.key)
+		if !b.LinkHints || b.HintMode != tc.mode {
+			t.Fatalf("%q hints active=%v mode=%v", tc.key, b.LinkHints, b.HintMode)
+		}
+	}
+}
+
 func TestCapitalFConfirmsBeforeFollowing(t *testing.T) {
 	b := hintTestSession(t, `<html><body>
 <p><a href="#one">Documentation</a></p>
@@ -418,7 +437,7 @@ func TestHintsIncludeFixedBarControls(t *testing.T) {
 	b.Layout = BuildLayoutViewportDeadline(doc, nil, 60, 12, false, time.Time{})
 
 	find := func() (button, link bool) {
-		b.openLinkHints(false)
+		b.openLinkHints(protocol.HintFollow)
 		for _, tgt := range b.HintTargets {
 			if tgt.Node != nil && tgt.Node.Attr("id") == "ok" {
 				button = true
@@ -469,7 +488,7 @@ func TestColumnFlexButtonIsHintable(t *testing.T) {
 	if _, ok := VisibleInputRect(b.Layout, btn, b.Scroll, top, bottom); !ok {
 		t.Fatal("fixed column-flex button has no widget fragment")
 	}
-	b.openLinkHints(false)
+	b.openLinkHints(protocol.HintFollow)
 	for _, target := range b.HintTargets {
 		if target.Node == btn {
 			return

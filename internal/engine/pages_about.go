@@ -68,6 +68,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>F</b></td><td>same as <b>f</b>, but opens the chosen link in a background tab</td></tr>
+<tr><td><b>p</b></td><td>preview the chosen link: <b>Enter</b> follows, <b>y</b> copies, <b>Esc</b> cancels</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
@@ -116,8 +117,9 @@ choosing a text field focuses it, checkboxes and radios toggle, a select opens
 its options, multi-select options toggle, and buttons activate. The chosen
 control stays focused for follow-up keys. Links sharing a
 first letter use two adjacent letters. <b>F</b> opens the chosen link in a
-background tab without leaving the current page. <b>Esc</b> or scrolling
-dismisses the hints.</p>
+background tab without leaving the current page. <b>p</b> previews the
+destination and waits: <b>Enter</b> follows, <b>y</b> copies, and
+<b>Esc</b>/<b>n</b> cancels. <b>Esc</b> or scrolling dismisses the hints.</p>
 
 <h2>Reader mode</h2>
 <p><b>R</b> toggles a clean article view and stays on across pages. Start with
@@ -175,7 +177,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the zoom badge in the URL bar</td><td>open the zoom window and choose a preset with the mouse; the current level is always shown</td></tr>
 <tr><td>Shift+drag over the URL</td><td>select it with the terminal</td></tr>
 <tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help in a new tab; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
-<tr><td>right click a link</td><td>copy its URL</td></tr>
+<tr><td>right click a link</td><td>preview its URL; <b>Enter</b> follows, <b>y</b> copies, <b>Esc</b> cancels</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer status message</td><td>open the full warning or error text, like <b>E</b></td></tr>
 <tr><td>click the footer <b>Graphics:…</b> label</td><td>cycle graphics mode, like <b>i</b></td></tr>

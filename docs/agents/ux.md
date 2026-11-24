@@ -124,7 +124,8 @@ agreement, the non-negotiable constraints and the change protocol.
   can be added), `o`/`Ctrl-L` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints that open
-  the chosen link in a background tab, `u` show URL, `E` open the full warning or error
+  the chosen link in a background tab, `p` link hints that preview the
+  destination (Enter follows, `y` copies), `u` show URL, `E` open the full warning or error
   text when the footer had to truncate it (the footer status line is also
   clickable, and the `E` in `Error:` is underlined to advertise the key),
   `d` open the curl download popup for the current PDF page (only in the PDF
@@ -313,9 +314,8 @@ agreement, the non-negotiable constraints and the change protocol.
   caret. Shift+mouse reports are ignored and suppress the next redraw so the
   terminal can keep a native selection over the URL. A left click on the URL
   bar opens the URL prompt, toolbar
-  buttons act on click, right-clicking a link copies its resolved URL (OSC 52,
-  status `Copied URL`, like `y`, which replaces the hovered-link line and holds
-  until the pointer moves or the page scrolls) and does nothing elsewhere, the
+  buttons act on click, right-clicking a link opens the destination preview
+  (`p`: Enter follows, `y` copies, Esc cancels) and does nothing elsewhere, the
   mouse back button goes back, the mouse forward button goes forward, clicking
   the footer
   `Dark:on`/`Dark:off` or `Reader:on`/`Reader:off` labels toggles those modes,

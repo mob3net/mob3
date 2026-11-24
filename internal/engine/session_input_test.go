@@ -7,11 +7,18 @@ import (
 	"browser/internal/protocol"
 )
 
-type openTabSink struct{ url string }
+type openTabSink struct {
+	url           string
+	previewURL    string
+	previewTarget int
+}
 
 func (s *openTabSink) Send(ev protocol.Event) error {
-	if v, ok := ev.Body.(protocol.OpenTab); ok {
+	switch v := ev.Body.(type) {
+	case protocol.OpenTab:
 		s.url = v.URL
+	case protocol.LinkPreview:
+		s.previewURL, s.previewTarget = v.URL, v.Target
 	}
 	return nil
 }

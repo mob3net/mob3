@@ -59,6 +59,14 @@ func (b *Session) emitOpenTab(url string) {
 	_ = b.sessionOut.Send(protocol.Event{Body: protocol.OpenTab{URL: url}})
 }
 
+// emitLinkPreview asks the front end to show a link destination.
+func (b *Session) emitLinkPreview(url string, target int) {
+	if b == nil || b.sessionOut == nil || url == "" {
+		return
+	}
+	_ = b.sessionOut.Send(protocol.Event{Body: protocol.LinkPreview{URL: url, Target: target}})
+}
+
 // clickContent follows a link under the pointer, or clears link focus.
 // JavaScript click handlers run first and may prevent navigation.
 func (b *Session) clickContent(x, docY int) {
@@ -191,24 +199,10 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 			}
 			return false
 		case MouseButtonRight:
-			// Copy the link under the pointer instead of navigating; a
-			// right-click away from a link leaves the page alone. Back stays
-			// on the mouse back button and h.
+			// Show the link destination before following or copying it.
 			docY := b.Scroll + (y - top)
-			if n := b.nodeAt(x, docY); n != nil {
-				if a := NearestAnchor(n); a != nil {
-					if href := strings.TrimSpace(a.Attr("href")); href != "" {
-						b.clearInputFocus()
-						target := b.resolveHref(href)
-						if b.copyText(target) {
-							b.status = "Copied URL"
-							// Drop the hovered-link line so the copy
-							// confirmation replaces it in the footer.
-							b.Hover = -1
-							b.setPageHover(nil)
-						}
-					}
-				}
+			if idx := b.linkAt(x, docY); idx >= 0 && b.Layout != nil && idx < len(b.Layout.Links) {
+				b.emitLinkPreview(b.resolveHref(b.Layout.Links[idx].Href), idx)
 			}
 			return false
 		case MouseButtonLeft:
@@ -334,9 +328,11 @@ func (b *Session) handlePageKey(k string) bool {
 			b.followFocused()
 			return false
 		}
-		b.openLinkHints(false)
+		b.openLinkHints(protocol.HintFollow)
 	case "F":
-		b.openLinkHints(true)
+		b.openLinkHints(protocol.HintNewTab)
+	case "p":
+		b.openLinkHints(protocol.HintPreview)
 	case "u":
 		if b.URL != nil {
 			b.status = b.URL.String()

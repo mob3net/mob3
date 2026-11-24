@@ -56,6 +56,7 @@ func (l *Tab) openHistory() {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeLinkPreview()
 	l.closeDownload(false, 0)
 	l.closeNotice()
 	l.cancelHint()
