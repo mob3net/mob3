@@ -120,10 +120,12 @@ type Session struct {
 	placementBytes  int
 	nextPlacementID int
 
-	loader  *Loader
-	browser *BrowserContext
-	tabID   uint64
-	router  *FrameRouter
+	loader      *Loader
+	browser     *BrowserContext
+	tabID       uint64
+	router      *FrameRouter
+	budgets     *BudgetManager
+	budgetShare budgetShare
 
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
 	// negative top means direct callers/tests use the legacy derivation.
@@ -303,6 +305,10 @@ func NewEmptySession() *Session {
 	}
 	s.router = newFrameRouter()
 	s.router.Register(s.Frame)
+	s.budgets = bc.Budgets()
+	if s.budgets != nil {
+		s.budgets.Register(s)
+	}
 	return s
 }
 

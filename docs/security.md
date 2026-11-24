@@ -156,23 +156,24 @@ is not audited and is not a security boundary.
 
 ## Memory and caches
 
-The back/forward history cache is bounded by estimated page weight (12% of
-`-mem-limit`/`GOMEMLIMIT`, or 128 MB when unlimited): the least recently used
-pages are evicted first, and a page heavier than half the budget is never
+The back/forward history-cache pool is 12% of `-mem-limit`/`GOMEMLIMIT` (or
+128 MB when unlimited), divided across active tabs. Each tab evicts its least
+recently used pages first, and a page heavier than half its share is never
 cached. When a heavy cached page is evicted, one collection plus scavenge runs
 between frames so its memory returns to the OS.
 
 `-mem-limit` sets an optional soft limit on the Go heap, making the runtime
 collect harder as memory approaches it. It is off by default (`0`), so memory is
 unlimited and any `GOMEMLIMIT` environment setting applies. Image decoding and
-inline-SVG rasterization are bounded by percentages of this limit when set, with
-conservative fallbacks otherwise. These limits are best-effort resource bounds,
-not a sandbox.
+inline-SVG rasterization draw on shared pools (12% and 3% of the limit when
+set, with conservative fallbacks otherwise) divided across active tabs. These
+limits are best-effort resource bounds, not a sandbox.
 
 ## JavaScript safety limits
 
 Each script and callback runs under a 2-second sobek interrupt watchdog and a
-per-page absolute heap ceiling (25% of `-mem-limit`/`GOMEMLIMIT`, else 256 MB).
+per-runtime absolute heap ceiling drawn from the shared JS pool (25% of
+`-mem-limit`/`GOMEMLIMIT`, else 256 MB, divided across active sessions).
 One sampler per active runtime checks the ceiling every 75 ms and interrupts only
 a call that is running, so a page cannot reset its budget on every timer
 callback. A page's load-time scripts also share an 8-second budget and a

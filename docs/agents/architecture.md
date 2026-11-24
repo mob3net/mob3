@@ -134,8 +134,9 @@ that owns the page, layout, URL, scroll and JS runtime; the tab loop asks the
 frame for its timers. The canonical `protocol.Origin` helper is shared by the
 engine and host, and a per-tab `FrameRouter` registers the top-level frame and
 carries copied, origin-checked messages. `localStorage` and `sessionStorage`
-now use the shared `StorageBroker`; shared budgets remain per session. This
-section records the target; it is not implemented yet.
+now use the shared `StorageBroker`, and the shared `BudgetManager` divides the
+JS, page-cache, image and SVG pools across sessions. This section records the
+target; it is not implemented yet.
 
 ## Current layout
 
@@ -264,7 +265,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker`; shared budgets and settings join it with the tab and frame model. |
+| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker` and `BudgetManager`; shared settings join it with the tab and frame model. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
 | `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
 | `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses a frame boundary. It currently holds the top-level frame. |
@@ -284,7 +285,8 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/loader_svg.go` | Per-page inline-SVG rasterization with pixel/count budgets. |
 | `internal/engine/loader_certs.go` | Loader trust-store selection and label. |
 | `internal/engine/loader_decode.go` | Charset decoding, single-byte charset table and JavaScript MIME classification. |
-| `internal/engine/budget.go` | Effective memory limit, percentage budgets, `ByteLimiter`, loader memory/cache budget application. |
+| `internal/engine/budget_manager.go` | `BudgetManager`: divides the process JS, history-cache, image-byte and inline-SVG pools across active sessions; the host resource cache stays shared. One session gets the old percentages, two sessions halve each pool. `Session.applyBudgetShare` installs a share on the runtime, page cache and loader. |
+| `internal/engine/budget.go` | Effective memory limit, total percentage budgets, `ByteLimiter`, and loader content/resource-cache budget application. |
 | `internal/engine/version.go` | Injected build version for built-in pages. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
@@ -300,7 +302,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/session_forms.go` | Form wrappers plus the control-focus highlight painter. Tab stepping, control activation, text/range editing, submission, label targets and form requests live in `forms.go` and the other form helpers. |
 | `internal/engine/session_input.go` | Content input: `HandleKey`/`HandleMouse` for page movement, forms, find navigation, hint activation, selection and content clicks, plus mouse escape decoding and `MouseEvent`. |
 | `internal/engine/session_history.go` | Restore/reload/commit wrappers. The page cache, limits, suspend/cache, restore application and scavenge request are engine-owned; the ordered list/index/scroll live in the front end. |
-| `internal/engine/memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the JS/history cache shares. Image/SVG budgets and the byte limiter live in `budget.go`. |
+| `internal/engine/memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the fallback JS/history totals. The shared split lives in `budget_manager.go`; image/SVG totals and the byte limiter live in `budget.go`. |
 | `internal/engine/session_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `internal/engine/session_images.go` | Deferred-image bridge: task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
 | `internal/engine/session_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `Selection`. |

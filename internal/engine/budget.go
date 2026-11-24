@@ -7,9 +7,9 @@ import (
 	"sync"
 )
 
-// Internal budgets when the user did not set a limit. The loader owns the
-// image, SVG and resource-cache shares; the browser keeps the JS and history
-// shares.
+// Total internal pools when the user did not set a limit. BudgetManager divides
+// the JS, history, image and SVG pools across sessions; the host resource
+// cache is shared and not divided.
 const (
 	fallbackImageBytes         = int64(128) << 20
 	fallbackSVGPixels          = int64(8_000_000)
@@ -86,6 +86,16 @@ func NewByteLimiter(limit int64) *ByteLimiter {
 	return &ByteLimiter{limit: limit, wake: make(chan struct{})}
 }
 
+// Limit reports the current byte budget.
+func (l *ByteLimiter) Limit() int64 {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.limit
+}
+
 // SetLimit changes the byte budget and wakes waiters.
 func (l *ByteLimiter) SetLimit(limit int64) {
 	if limit < 1 {
@@ -141,21 +151,34 @@ func (l *ByteLimiter) Release(n int64) {
 }
 
 // SetMemoryBudget derives the loader's image and inline-SVG budgets from the
-// effective process limit. A zero base keeps the conservative fallbacks.
+// effective process limit. A zero base keeps the conservative fallbacks. The
+// session path uses SetContentBudget and SetResourceCacheBudget so a shared
+// BudgetManager can divide the pools across tabs.
 func (l *Loader) SetMemoryBudget(base int64) {
+	l.SetContentBudget(imageByteBudget(base), svgPixelBudget(base))
+	l.SetResourceCacheBudget(resourceCacheBudget(base))
+}
+
+// SetContentBudget installs the loader's image-byte and inline-SVG pixel
+// shares.
+func (l *Loader) SetContentBudget(imageBytes, svgPixels int64) {
 	if l == nil {
 		return
 	}
-	bytes := imageByteBudget(base)
 	if l.ImageBudget != nil {
-		l.ImageBudget.SetLimit(bytes)
+		l.ImageBudget.SetLimit(imageBytes)
 	}
 	l.SVGMu.Lock()
-	l.SVGBudgetPixels = svgPixelBudget(base)
+	l.SVGBudgetPixels = svgPixels
 	l.SVGMu.Unlock()
-	if l.Host != nil {
-		l.Host.SetCacheLimitBytes(resourceCacheBudget(base))
+}
+
+// SetResourceCacheBudget sets the host's shared resource-cache limit.
+func (l *Loader) SetResourceCacheBudget(bytes int64) {
+	if l == nil || l.Host == nil {
+		return
 	}
+	l.Host.SetCacheLimitBytes(bytes)
 }
 
 // SetCacheLimitMB updates the session resource-cache budget in MiB.

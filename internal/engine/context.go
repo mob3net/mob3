@@ -18,11 +18,16 @@ type BrowserContext struct {
 	nextTabID   atomic.Uint64
 	storageOnce sync.Once
 	storage     *StorageBroker
+	budgetsOnce sync.Once
+	budgets     *BudgetManager
 }
 
 // NewBrowserContext creates the shared state for one browser process.
 func NewBrowserContext() *BrowserContext {
-	return &BrowserContext{storage: NewStorageBroker()}
+	return &BrowserContext{
+		storage: NewStorageBroker(),
+		budgets: NewBudgetManager(effectiveMemoryLimit()),
+	}
 }
 
 // Storage returns the context's shared storage pools.
@@ -36,6 +41,19 @@ func (c *BrowserContext) Storage() *StorageBroker {
 		}
 	})
 	return c.storage
+}
+
+// Budgets returns the context's shared memory-budget manager.
+func (c *BrowserContext) Budgets() *BudgetManager {
+	if c == nil {
+		return nil
+	}
+	c.budgetsOnce.Do(func() {
+		if c.budgets == nil {
+			c.budgets = NewBudgetManager(effectiveMemoryLimit())
+		}
+	})
+	return c.budgets
 }
 
 // NextTabID returns a process-unique tab ID for sessionStorage scoping.
