@@ -131,15 +131,17 @@ The frame router is a data boundary by design, so a future process transport
 could move behind it without changing the ownership or security model.
 
 Current state: one `Session` holds one page and one JS runtime, iframe elements
-have inert stub documents, and there are no tabs. A shared `BrowserContext`
-now allocates history-entry IDs, and the `Session` embeds a top-level `Frame`
-that owns the page, layout, URL, scroll and JS runtime; the tab loop asks the
-frame for its timers. The canonical `protocol.Origin` helper is shared by the
-engine and host, and a per-tab `FrameRouter` registers the top-level frame and
-carries copied, origin-checked messages. `localStorage` and `sessionStorage`
-now use the shared `StorageBroker`, and the shared `BudgetManager` divides the
-JS, page-cache, image and SVG pools across sessions. This section records the
-target; it is not implemented yet.
+have inert stub documents, and there is no tab bar or multi-tab routing. The
+front end now has the `Tab`/`SessionLoop` scaffold with one active tab, but it
+is not yet a tab manager for several sessions. A shared `BrowserContext`
+allocates history-entry IDs, and the `Session` embeds a top-level `Frame` that
+owns the page, layout, URL, scroll and JS runtime; the tab loop asks the frame
+for its timers. The canonical `protocol.Origin` helper is shared by the engine
+and host, and a per-tab `FrameRouter` registers the top-level frame and carries
+copied, origin-checked messages. `localStorage` and `sessionStorage` use the
+shared `StorageBroker`, and the shared `BudgetManager` divides the JS,
+page-cache, image and SVG pools across sessions. This section records the
+target; multi-tab routing and iframes are not implemented yet.
 
 ## Current layout
 
