@@ -23,6 +23,7 @@ type Presenter struct {
 	state         protocol.State
 	dialog        *DialogView
 	selectView    *SelectView
+	history       *historyView
 	download      *DownloadView
 	notice        *NoticeView
 	hint          *HintView
@@ -95,6 +96,7 @@ func (p *Presenter) ResetForTab() {
 	p.state = protocol.State{}
 	p.dialog = nil
 	p.selectView = nil
+	p.history = nil
 	p.download = nil
 	p.notice = nil
 	p.hint = nil
@@ -149,6 +151,12 @@ func (p *Presenter) SetSelect(v *SelectView) {
 	p.prev = nil
 }
 
+// SetHistory installs or clears the history popup.
+func (p *Presenter) SetHistory(v *historyView) {
+	p.history = v
+	p.prev = nil
+}
+
 // SetDownload installs or clears the download curl hint.
 func (p *Presenter) SetDownload(v *DownloadView) {
 	p.download = v
@@ -182,7 +190,7 @@ func (p *Presenter) SetState(st protocol.State) {
 // the window is open.
 func (p *Presenter) overlayOpen() bool {
 	return p.state.Menu != protocol.MenuNone || p.dialog != nil ||
-		p.selectView != nil || p.download != nil || p.notice != nil || p.hint != nil
+		p.selectView != nil || p.history != nil || p.download != nil || p.notice != nil || p.hint != nil
 }
 
 // Refresh re-presents the last frame with the current state. It is used when
@@ -284,6 +292,12 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 				}
 			} else if p.selectView != nil {
 				if full, ok := ComposeSelectFrame(p.state, f, p.selectView); ok {
+					f = full
+					lines = EncodeFrame(f, p.color, !p.color)
+					headerRows = p.state.HeaderRows
+				}
+			} else if p.history != nil {
+				if full, ok := ComposeHistoryFrame(p.state, f, p.history); ok {
 					f = full
 					lines = EncodeFrame(f, p.color, !p.color)
 					headerRows = p.state.HeaderRows

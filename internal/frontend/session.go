@@ -83,6 +83,10 @@ type Tab struct {
 	selectView   SelectView
 	selectBase   protocol.State
 
+	historyActive bool
+	historyView   historyView
+	historyBase   protocol.State
+
 	downloadActive bool
 	downloadView   DownloadView
 	downloadBase   protocol.State
@@ -148,6 +152,9 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 	}
 	if l.selectActive {
 		p.SetSelect(&l.selectView)
+	}
+	if l.historyActive {
+		p.SetHistory(&l.historyView)
 	}
 	if l.downloadActive {
 		p.SetDownload(&l.downloadView)
@@ -222,6 +229,7 @@ func (l *Tab) clearOverlaysAfterCrash() {
 	l.hintActive = false
 	l.dialogActive = false
 	l.selectActive = false
+	l.historyActive = false
 	l.downloadActive = false
 	l.noticeActive = false
 	l.consoleActive = false
@@ -234,6 +242,7 @@ func (l *Tab) clearOverlaysAfterCrash() {
 		l.Presenter.SetHint(nil)
 		l.Presenter.SetDialog(nil)
 		l.Presenter.SetSelect(nil)
+		l.Presenter.SetHistory(nil)
 		l.Presenter.SetDownload(nil)
 		l.Presenter.SetNotice(nil)
 	}
@@ -420,6 +429,18 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			l.syncSelect()
 			return false, nil
 		}
+		if l.historyActive {
+			l.historyBase = v
+			if v.KeysEngine {
+				l.closeHistory()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncHistory()
+			return false, nil
+		}
 		if l.menuKind != protocol.MenuNone {
 			l.menuBase = v
 			if v.KeysEngine {
@@ -533,6 +554,9 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	}
 	if l.selectActive {
 		return l.handleSelectKey(k)
+	}
+	if l.historyActive {
+		return l.handleHistoryKey(k)
 	}
 	if l.dialogActive {
 		return l.handleDialogKey(k)
@@ -933,6 +957,7 @@ func (l *Tab) startHints(v protocol.Hints) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeHistory()
 	l.closeDownload(false, 0)
 	l.closeNotice()
 	l.hintActive = true
@@ -1054,6 +1079,7 @@ func (l *Tab) startDownload(v protocol.Download) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeHistory()
 	l.closeNotice()
 	l.downloadActive = true
 	l.downloadView = DownloadView{Name: v.Name, Command: v.Command}
@@ -1134,6 +1160,7 @@ func (l *Tab) startNotice(v protocol.Notice) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeHistory()
 	l.closeDownload(false, 0)
 	l.noticeActive = true
 	l.noticeView = NoticeView{Title: v.Title, Message: v.Message}
@@ -1198,6 +1225,7 @@ func (l *Tab) startSelect(v protocol.Select) {
 	l.closePrompt()
 	l.closeFind()
 	l.closeMenu()
+	l.closeHistory()
 	l.selectActive = true
 	l.selectView = SelectView{ID: v.ID, Options: v.Options, Selected: v.Selected, Index: v.Selected}
 	if l.selectView.Index < 0 || l.selectView.Index >= len(l.selectView.Options) {
@@ -1298,6 +1326,7 @@ func (l *Tab) startDialog(v protocol.Dialog) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeSelect()
+	l.closeHistory()
 	l.closeDownload(false, 0)
 	l.closeNotice()
 	l.cancelHint()
@@ -1827,6 +1856,9 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	}
 	if l.selectActive {
 		return l.handleSelectMouse(ev)
+	}
+	if l.historyActive {
+		return l.handleHistoryMouse(ev)
 	}
 	if l.dialogActive {
 		return l.handleDialogMouse(ev)

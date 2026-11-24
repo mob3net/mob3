@@ -75,7 +75,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, the download curl command, or the active console section</td></tr>
 <tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>Ctrl-Y</b></td><td>copy only the page rows visible at the current scroll, with the same metadata line</td></tr>
-<tr><td><b>H</b></td><td>session history</td></tr>
+<tr><td><b>H</b></td><td>session history overlay; Enter restores an entry</td></tr>
 <tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab; the URL prompt is focused and empty</td></tr>
 <tr><td><b>W</b> / <b>Ctrl-W</b></td><td>close the active tab; the URL prompt keeps Ctrl-W for word delete</td></tr>
 <tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
@@ -141,11 +141,14 @@ reached. Press <b>Esc</b> or <b>Ctrl-C</b> to interrupt a script that is blockin
 the terminal.</p>
 
 <h2>History</h2>
-<p>The <b>≡ History</b> button lists the session history; <b>#</b> links and
-scroll positions are kept. Up to ten visited pages stay in an in-memory
-back/forward cache, so <b>Back</b> and <b>Forward</b> restore a page, its
-JavaScript state and your scroll position without reloading it. Nothing is
-saved after MOB³ exits. Script and
+<p><b>H</b> or the <b>≡ History</b> button opens a history overlay, newest first.
+Use <b>j</b>/<b>k</b> or <b>Up</b>/<b>Down</b> to move, <b>Enter</b> or
+<b>Space</b> to restore the selected entry, and <b>Esc</b>/<b>q</b> to close;
+clicking a row works too. <b>#</b> anchors and scroll positions are kept. Up to
+ten visited pages stay in an in-memory back/forward cache, so <b>Back</b> and
+<b>Forward</b> restore a page, its JavaScript state and your scroll position
+without reloading it. The rendered <b>about:history</b> page is still available
+by URL. Nothing is saved after MOB³ exits. Script and
 meta-refresh redirect chains stop after 20 hops with
 <b>Redirect loop stopped</b>, so a page that redirects to itself cannot loop
 forever.</p>

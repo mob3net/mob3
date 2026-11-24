@@ -196,13 +196,6 @@ func (l *Tab) navigate(target string) {
 	_ = l.Session.Send(protocol.Command{Body: protocol.Navigate{URL: target, Push: true}})
 }
 
-// openHistory opens about:history with the current list snapshot.
-func (l *Tab) openHistory() {
-	l.recordHistoryScroll()
-	l.sendHistorySnapshot()
-	_ = l.Session.Send(protocol.Command{Body: protocol.Navigate{URL: "about:history", Push: true}})
-}
-
 // historyBack moves one entry back. The engine restores its cached page or
 // reloads the URL with the entry's scroll offset.
 func (l *Tab) historyBack() {
