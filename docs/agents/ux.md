@@ -28,8 +28,9 @@ agreement, the non-negotiable constraints and the change protocol.
   accents. In `-no-color` the active tab is still fully bold. Tabs never squeeze
   below their fixed width: when they cannot all fit, `<` / `>` scroll the strip.
 - **Tabs:** every tab is its own protocol session with its own history, scroll,
-  focus, find/hint state and overlays. `localStorage` and cookies are shared;
-  `sessionStorage` is per tab and origin; memory budgets are divided across live
+  focus, find/hint state and overlays. `localStorage` is per origin and shared
+  by tabs on that origin; `sessionStorage` is per tab and origin; cookies follow
+  normal domain rules across tabs. Memory budgets are divided across live
   tabs. Only the active tab draws. A background tab keeps loading and updates
   its title, history and overlays, but its frames are discarded, timers are
   paused, deferred image work is canceled and progress/usage wakeups are off.
