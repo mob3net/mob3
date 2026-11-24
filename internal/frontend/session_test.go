@@ -144,7 +144,7 @@ func TestShellKeysSendAppActions(t *testing.T) {
 		"J":      protocol.App{Action: protocol.AppToggleJS},
 		"i":      protocol.App{Action: protocol.AppToggleImages},
 		"E":      protocol.App{Action: protocol.AppStatusDetails},
-		"d":      protocol.App{Action: protocol.AppDownload},
+		"S":      protocol.App{Action: protocol.AppDownload},
 		"!":      protocol.App{Action: protocol.AppToggleConsole},
 		"?":      protocol.Navigate{URL: "about:help", Push: true},
 	}

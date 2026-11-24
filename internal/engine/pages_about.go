@@ -49,6 +49,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><th>Key</th><th>Action</th></tr>
 <tr><td><b>j</b> / <b>k</b></td><td>scroll down / up one line</td></tr>
 <tr><td><b>Space</b> / <b>b</b></td><td>scroll down / up one screen</td></tr>
+<tr><td><b>d</b> / <b>u</b></td><td>scroll down / up half a page (Vimium-style aliases for <b>Ctrl-D</b>/<b>Ctrl-U</b>)</td></tr>
 <tr><td><b>Ctrl-D</b> / <b>Ctrl-U</b></td><td>scroll half a screen</td></tr>
 <tr><td><b>g</b> / <b>G</b></td><td>top / bottom of page</td></tr>
 <tr><td><b>Tab</b> / <b>Shift-Tab</b></td><td>next / previous link or form control</td></tr>
@@ -71,8 +72,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>p</b></td><td>preview the chosen link: <b>Enter</b> follows, <b>y</b> copies, <b>Esc</b> cancels</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
-<tr><td><b>u</b></td><td>show the current URL</td></tr>
-<tr><td><b>d</b></td><td>open the curl download popup for the current PDF (PDF viewer only; does nothing elsewhere)</td></tr>
+<tr><td><b>S</b></td><td>open the curl download popup for the current PDF (PDF viewer only; does nothing elsewhere)</td></tr>
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, the download curl command, or the active console section</td></tr>
 <tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>Ctrl-Y</b></td><td>copy only the page rows visible at the current scroll, with the same metadata line</td></tr>
@@ -206,7 +206,7 @@ same height so it scrolls like a book, two-column prose is read column by
 column, vertical gaps become blank lines, and runs larger than the body text
 become 32px headlines (two rows, scaled glyphs in kitty). Columns keep their
 alignment. The footer shows <b>Page n/N</b> with a clickable
-<b>(d -&gt; Download name)</b> hint; <b>d</b> opens the same curl popup. Find,
+<b>(S -&gt; Download name)</b> hint; <b>S</b> opens the same curl popup. Find,
 selection, <b>-dump</b> and <b>-png</b> work as on any other page. Figures,
 images and annotations are not rendered, scanned PDFs have no text to show,
 and encrypted PDFs are refused. <b>-no-pdf</b> disables the viewer and shows

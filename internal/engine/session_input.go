@@ -308,9 +308,9 @@ func (b *Session) handlePageKey(k string) bool {
 		b.scrollBy(b.viewportHeight() - 1)
 	case "b", "pgup":
 		b.scrollBy(-(b.viewportHeight() - 1))
-	case "ctrl-d":
+	case "d", "ctrl-d":
 		b.scrollBy(b.viewportHeight() / 2)
-	case "ctrl-u":
+	case "u", "ctrl-u":
 		b.scrollBy(-b.viewportHeight() / 2)
 	case "g", "home":
 		b.Scroll = 0
@@ -333,10 +333,6 @@ func (b *Session) handlePageKey(k string) bool {
 		b.openLinkHints(protocol.HintNewTab)
 	case "p":
 		b.openLinkHints(protocol.HintPreview)
-	case "u":
-		if b.URL != nil {
-			b.status = b.URL.String()
-		}
 	case "n":
 		if b.FindText != "" && b.FindScope == findScopePage {
 			b.findNext(1)

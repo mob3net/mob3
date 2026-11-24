@@ -459,11 +459,11 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	if !ok {
 		t.Fatal("no footer line for a PDF page")
 	}
-	want := " Page 1/5 (d -> Download file-example_PDF_500_kB.pdf)"
+	want := " Page 1/5 (S -> Download file-example_PDF_500_kB.pdf)"
 	if text != want {
 		t.Fatalf("footer = %q, want %q", text, want)
 	}
-	if hint != "(d -> Download file-example_PDF_500_kB.pdf)" {
+	if hint != "(S -> Download file-example_PDF_500_kB.pdf)" {
 		t.Fatalf("hint = %q", hint)
 	}
 	if cell != StringWidth(" Page 1/5")+1 {
@@ -483,7 +483,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	// Narrow footers shorten the name, then fall back to a compact hint.
 	b.Scroll = 0
 	text, _, _, _ = b.pdfFooterLine(45)
-	if text != " Page 1/5 (d -> Download file-example_PDF_5…)" {
+	if text != " Page 1/5 (S -> Download file-example_PDF_5…)" {
 		t.Fatalf("narrow footer = %q", text)
 	}
 	text, hint, _, _ = b.pdfFooterLine(20)
@@ -534,7 +534,7 @@ func TestPDFFooterDownloadHit(t *testing.T) {
 	if !strings.Contains(fm.left, " Page 1/1 ") {
 		t.Fatalf("PDF footer left = %q", fm.left)
 	}
-	if fm.pdfHint != "(d -> Download report.pdf)" || fm.pdfHintX < 0 {
+	if fm.pdfHint != "(S -> Download report.pdf)" || fm.pdfHintX < 0 {
 		t.Fatalf("PDF footer hint = %q at %d", fm.pdfHint, fm.pdfHintX)
 	}
 }

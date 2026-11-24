@@ -61,12 +61,12 @@ func (b *Session) pdfFooterLine(avail int) (text, hint string, hintCell int, ok 
 		name = "PDF"
 	}
 	base := fmt.Sprintf(" Page %d/%d", b.PDFPageNumber(), len(b.Page.PDF.Pages))
-	full := base + " (d -> Download " + name + ")"
+	full := base + " (S -> Download " + name + ")"
 	if StringWidth(full) <= avail {
-		return full, "(d -> Download " + name + ")", StringWidth(base) + 1, true
+		return full, "(S -> Download " + name + ")", StringWidth(base) + 1, true
 	}
 	// Shorten the file name inside the hint before giving the hint up.
-	const prefix, suffix = "(d -> Download ", ")"
+	const prefix, suffix = "(S -> Download ", ")"
 	room := avail - StringWidth(base) - 1 - StringWidth(prefix) - StringWidth(suffix)
 	if room >= 6 {
 		short := TruncateWidth(name, room-1) + "…"

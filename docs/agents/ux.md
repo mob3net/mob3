@@ -107,7 +107,7 @@ agreement, the non-negotiable constraints and the change protocol.
   close, `Ctrl-N`/`Ctrl-P` (or `Alt-Right`/`Alt-Left`) to move next/previous
   without wrapping, and `1`-`9`/`Alt-1`-`Alt-9` to select.
   `j/k` line scroll, `Space/b`
-  page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
+  page scroll, `d/u` or `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),
   `Enter` follow, `Ctrl-O/[` back, `Ctrl-I/]` forward (`Ctrl-I` arrives only
   with kitty key disambiguation; legacy terminals send it as Tab, so `[`/`]`
@@ -125,11 +125,11 @@ agreement, the non-negotiable constraints and the change protocol.
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
   `n`/`N` next/previous find match, `f` link hints, `F` link hints that open
   the chosen link in a background tab, `p` link hints that preview the
-  destination (Enter follows, `y` copies), `u` show URL, `E` open the full warning or error
+  destination (Enter follows, `y` copies), `E` open the full warning or error
   text when the footer had to truncate it (the footer status line is also
   clickable, and the `E` in `Error:` is underlined to advertise the key),
-  `d` open the curl download popup for the current PDF page (only in the PDF
-  viewer; elsewhere `d` does nothing),
+  `S` open the curl download popup for the current PDF page (only in the PDF
+  viewer; elsewhere `S` does nothing),
   `y` copy selected page text, the current URL when nothing is selected,
   the download popup's curl command, or the whole active console section,
   and clear the page highlight, `Y` copy the whole rendered page as plain
@@ -558,9 +558,9 @@ agreement, the non-negotiable constraints and the change protocol.
   Text keeps its column alignment inside `pre-wrap` blocks so tables and
   multi-column pages stay readable; bold and italic come from the font name and
   flags. The footer's left status becomes
-  `Page n/N (d -> Download name)`, where `n` is the page under the viewport as
-  the user scrolls; the `(d -> Download name)` part is a clickable label and
-  `d` does the same, both opening the curl download popup. Outside the PDF
+  `Page n/N (S -> Download name)`, where `n` is the page under the viewport as
+  the user scrolls; the `(S -> Download name)` part is a clickable label and
+  `S` does the same, both opening the curl download popup. Outside the PDF
   viewer `d` does nothing. On narrow terminals
   the file name inside the hint is shortened first, then the hint becomes
   `(d)`, and finally only `Page n/N` remains. `-pdf-page auto|all|N` selects the
