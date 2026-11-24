@@ -45,6 +45,12 @@ agreement, the non-negotiable constraints and the change protocol.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
+- Tabs and real iframes are the recorded target, not current behavior. The
+  model is one Go process with one sobek VM per frame; iframes are
+  postMessage-only (`contentDocument` is null even for a same-origin frame,
+  `frameElement` is null and there is no DOM bridge), and cross-frame access is
+  origin-checked. This is logical origin isolation only, not memory, site or
+  OS isolation.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
@@ -52,7 +58,8 @@ agreement, the non-negotiable constraints and the change protocol.
   the front end reads it by entry ID, so an engine bug cannot forge a new
   history entry's URL through the protocol. This is not process isolation: a
   fully compromised engine shares the process and could read or corrupt
-  trusted memory. Only the future engine child process isolates it.
+  trusted memory. The recorded target keeps the engine in-process, so this
+  remains a value boundary, not memory, site or OS isolation.
 - Mixed content is handled for `https` documents: HTTP image requests
   (including CSS background images and `srcset`/`<picture>` candidates) are
   upgraded to HTTPS without an HTTP fallback, while HTTP scripts, stylesheets,

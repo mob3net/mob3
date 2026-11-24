@@ -8,13 +8,35 @@
 ## What it does not do
 
 - No sandbox, process isolation, site isolation or permission prompts.
+- No memory, site or OS isolation. The recorded target adds in-process tabs and
+  frames with one sobek VM per frame, origin checks and postMessage-only
+  cross-frame access. That is logical origin isolation inside one process; an
+  engine bug or a sobek escape can still cross tab and frame boundaries.
 - No CSP enforcement, certificate warnings or certificate management UI.
   `-certs` changes which root bundle is trusted; it is not certificate
   inspection, revocation checking or pinning.
 - No phishing, malware, tracker or fingerprinting protection.
 - No proxy configuration UI.
-- No private/incognito concept: every session is ephemeral, but pages and
-  scripts are not isolated from each other inside the process.
+- No private/incognito concept: every session is ephemeral. Pages share one
+  process; planned tab and frame separation is logical only.
+
+## In-process tab and frame isolation (target)
+
+The recorded target keeps one Go process and adds tabs and real iframes:
+
+- A tab is one protocol session. A tab owns a frame tree, and each frame has
+  its own document, layout, timers and sobek VM.
+- Cross-frame access is postMessage-only. `contentWindow` is a WindowProxy;
+  `contentDocument` is null even for a same-origin frame, `frameElement` is
+  null, and no DOM object crosses a frame boundary.
+- `localStorage` is shared per origin across tabs; `sessionStorage` is per tab
+  and origin; cookies remain host-owned and origin-scoped.
+- One shared budget covers all JS runtimes, page caches and image/SVG work.
+  Zoom stays browser-global.
+
+This is logical origin isolation, not memory or site isolation. A compromised
+engine or a JavaScript-engine escape can read across tabs and frames, and there
+is no OS sandbox or Spectre mitigation. It is not implemented yet.
 
 ## No persistence
 
