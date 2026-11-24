@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"reflect"
 
@@ -20,6 +19,12 @@ type SessionLoop struct {
 	// switch; the old tab's overlay pointers and native placements are cleared.
 	Presenter *Presenter
 
+	// OpenTab creates and starts one tab with the supplied protocol session ID
+	// and content geometry. CloseTab releases the transport and per-tab engine
+	// resources. The app supplies both; tests may leave them nil.
+	OpenTab  func(id protocol.SessionID, w, h, contentTop, contentHeight int) (*Tab, error)
+	CloseTab func(*Tab)
+
 	Keys   <-chan string
 	Resize <-chan os.Signal
 	Quit   <-chan os.Signal
@@ -29,7 +34,11 @@ type SessionLoop struct {
 	CellW        int
 	CellH        int
 
-	lastTabs []TabView
+	lastTabs      []TabView
+	tabOffset     int
+	lastTabOffset int
+	nextSessionID protocol.SessionID
+	revealPending bool
 }
 
 // Run processes keys, resizes and every tab's events until it quits or the
@@ -48,8 +57,13 @@ func (l *SessionLoop) Run() error {
 		if tab != nil && tab.Stderr == nil {
 			tab.Stderr = os.Stderr
 		}
+		l.installTabActions(tab)
 	}
 	l.syncTabBar()
+	if l.Active.Presenter == nil && l.Presenter != nil {
+		l.Active.AttachPresenter(l.Presenter)
+	}
+	defer l.CloseAll()
 
 	for {
 		cases := make([]reflect.SelectCase, 0, 3+len(l.Tabs))
@@ -104,11 +118,10 @@ func (l *SessionLoop) Run() error {
 			if l.TerminalSize == nil {
 				continue
 			}
-			if w, h, ok := l.TerminalSize(); ok {
-				if err := l.Active.Session.Send(protocol.Command{Body: l.resizeCommand(w, h)}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
-					return fmt.Errorf("session resize: %w", err)
-				}
+			if err := l.resizeTab(l.Active); err != nil {
+				return err
 			}
+			l.revealPending = true
 		case 2:
 			if !ok {
 				l.Quit = nil
@@ -158,6 +171,12 @@ func (l *SessionLoop) handleEvent(tab *Tab, ev protocol.Event) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if l.revealPending {
+		if _, ok := ev.Body.(protocol.State); ok {
+			l.revealActiveTab(l.tabViews())
+			l.revealPending = false
+		}
+	}
 	l.syncTabBar()
 	return quit, nil
 }
@@ -166,25 +185,66 @@ func (l *SessionLoop) removeTab(tab *Tab) {
 	if tab == nil {
 		return
 	}
-	if tab == l.Active {
+	index := -1
+	for i, candidate := range l.Tabs {
+		if candidate == tab {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return
+	}
+	active := tab == l.Active
+	if active {
+		tab.DetachPresenter()
 		l.Active = nil
 	}
-	for i, candidate := range l.Tabs {
-		if candidate != tab {
-			continue
+	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
+	l.releaseTab(tab)
+	if active && len(l.Tabs) > 0 {
+		next := index
+		if next >= len(l.Tabs) {
+			next = len(l.Tabs) - 1
 		}
-		l.Tabs = append(l.Tabs[:i], l.Tabs[i+1:]...)
-		break
-	}
-	if tab.Session != nil {
-		_ = tab.Session.Close()
-		tab.Session = nil
-	}
-	tab.Presenter = nil
-	if l.Active == nil && len(l.Tabs) > 0 {
-		l.activateTab(0)
+		l.activateTab(next)
+		return
 	}
 	l.syncTabBar()
+}
+
+// releaseTab closes the transport and releases any per-tab resources.
+func (l *SessionLoop) releaseTab(tab *Tab) {
+	if tab == nil || tab.Session == nil {
+		return
+	}
+	if l.CloseTab != nil {
+		l.CloseTab(tab)
+	} else {
+		_ = tab.Session.Close()
+	}
+	tab.Session = nil
+	tab.Presenter = nil
+}
+
+// CloseAll releases every remaining tab. It is safe to call more than once.
+func (l *SessionLoop) CloseAll() {
+	for _, tab := range l.Tabs {
+		l.releaseTab(tab)
+	}
+}
+
+func (l *SessionLoop) installTabActions(tab *Tab) {
+	if tab == nil {
+		return
+	}
+	tab.Actions = TabActions{
+		Select: l.selectTab,
+		Cycle:  l.cycleTab,
+		Close:  l.closeTab,
+		New:    l.newTab,
+		Scroll: l.scrollTabs,
+	}
 }
 
 func (l *SessionLoop) selectTab(index int) {
@@ -198,18 +258,204 @@ func (l *SessionLoop) cycleTab(delta int) {
 	if len(l.Tabs) < 2 {
 		return
 	}
-	index := 0
-	for i, tab := range l.Tabs {
-		if tab == l.Active {
-			index = i
-			break
-		}
+	index := l.activeIndex()
+	if index < 0 {
+		return
 	}
 	index = (index + delta) % len(l.Tabs)
 	if index < 0 {
 		index += len(l.Tabs)
 	}
 	l.activateTab(index)
+}
+
+func (l *SessionLoop) activeIndex() int {
+	for i, tab := range l.Tabs {
+		if tab == l.Active {
+			return i
+		}
+	}
+	return -1
+}
+
+func (l *SessionLoop) currentSize() (int, int) {
+	if l.TerminalSize != nil {
+		if w, h, ok := l.TerminalSize(); ok {
+			return w, h
+		}
+	}
+	if l.Active != nil && l.Active.State.Page.Width > 0 && l.Active.State.Page.Height > 0 {
+		return l.Active.State.Page.Width, l.Active.State.Page.Height
+	}
+	return 100, 30
+}
+
+// resizeTab applies the current terminal and content rectangle to one tab. A
+// background tab is resized when it becomes active, so switching after a
+// window resize cannot present a frame laid out for the old size.
+func (l *SessionLoop) resizeTab(tab *Tab) error {
+	if tab == nil || tab.Session == nil {
+		return nil
+	}
+	w, h := l.currentSize()
+	if err := tab.Session.Send(protocol.Command{Body: l.resizeCommand(w, h)}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
+		return err
+	}
+	return nil
+}
+
+func (l *SessionLoop) allocateSessionID() protocol.SessionID {
+	if l.nextSessionID == 0 {
+		for _, tab := range l.Tabs {
+			if tab != nil && tab.SessionID > l.nextSessionID {
+				l.nextSessionID = tab.SessionID
+			}
+		}
+	}
+	l.nextSessionID++
+	return l.nextSessionID
+}
+
+// newTab opens the configured home page in a new tab and switches to it.
+func (l *SessionLoop) newTab() {
+	if l.OpenTab == nil {
+		return
+	}
+	w, h := l.currentSize()
+	top, contentH := ContentBounds(h)
+	id := l.allocateSessionID()
+	tab, err := l.OpenTab(id, w, h, top, contentH)
+	if err != nil {
+		l.showStatusError("New tab failed: " + err.Error())
+		return
+	}
+	if tab == nil {
+		l.showStatusError("New tab failed")
+		return
+	}
+	tab.SessionID = id
+	l.installTabActions(tab)
+	l.Tabs = append(l.Tabs, tab)
+	l.activateTab(len(l.Tabs) - 1)
+}
+
+// closeTab removes one tab. Closing the final tab asks for the normal quit
+// confirmation instead of exiting immediately. Index -1 means the active tab.
+func (l *SessionLoop) closeTab(index int) bool {
+	if index < 0 {
+		index = l.activeIndex()
+	}
+	if index < 0 || index >= len(l.Tabs) {
+		return false
+	}
+	tab := l.Tabs[index]
+	if len(l.Tabs) == 1 {
+		if tab == l.Active {
+			l.Active.startQuit()
+		}
+		return false
+	}
+	active := tab == l.Active
+	if active {
+		tab.DetachPresenter()
+	}
+	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
+	l.releaseTab(tab)
+	if active {
+		l.Active = nil
+		next := index
+		if next >= len(l.Tabs) {
+			next = len(l.Tabs) - 1
+		}
+		l.activateTab(next)
+		return false
+	}
+	l.syncTabBar()
+	return false
+}
+
+// scrollTabs moves the visible window of a tab strip that cannot fit every
+// tab at the minimum width.
+func (l *SessionLoop) scrollTabs(delta int) {
+	views := l.tabViews()
+	if len(views) < 2 {
+		return
+	}
+	visible := l.visibleTabCount(views, l.tabOffset)
+	maxOffset := len(views) - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	offset := l.tabOffset + delta
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	if offset == l.tabOffset {
+		return
+	}
+	l.tabOffset = offset
+	l.revealPending = false
+	l.syncTabBar()
+}
+
+func (l *SessionLoop) visibleTabCount(views []TabView, offset int) int {
+	st := l.chromeState()
+	if st.Width <= 0 || st.Height <= 0 {
+		return len(views)
+	}
+	layout := LayoutChromeWithTabs(st, views, offset)
+	count := 0
+	for _, hit := range layout.Hits {
+		if hit.Kind == ChromeHitTab {
+			count++
+		}
+	}
+	if count < 1 {
+		return len(views)
+	}
+	return count
+}
+
+// chromeState returns a state snapshot with usable geometry. A newly opened
+// tab has no state until its first event, so the strip measures against the
+// active tab or any sibling that already knows the terminal size.
+func (l *SessionLoop) chromeState() protocol.State {
+	if l.Active != nil && l.Active.State.Page.Width > 0 && l.Active.State.Page.Height > 0 {
+		return l.Active.State.Page
+	}
+	for _, tab := range l.Tabs {
+		if tab != nil && tab.State.Page.Width > 0 && tab.State.Page.Height > 0 {
+			return tab.State.Page
+		}
+	}
+	return protocol.State{}
+}
+
+// revealActiveTab scrolls the strip so the active tab is visible.
+func (l *SessionLoop) revealActiveTab(views []TabView) {
+	if len(views) < 2 || l.Active == nil {
+		l.tabOffset = 0
+		return
+	}
+	index := l.activeIndex()
+	if index < 0 {
+		return
+	}
+	visible := l.visibleTabCount(views, l.tabOffset)
+	if l.tabOffset > len(views)-visible {
+		l.tabOffset = len(views) - visible
+	}
+	if l.tabOffset < 0 {
+		l.tabOffset = 0
+	}
+	if index < l.tabOffset {
+		l.tabOffset = index
+	} else if index >= l.tabOffset+visible {
+		l.tabOffset = index - visible + 1
+	}
 }
 
 // activateTab moves the shared presenter to another tab. The old tab keeps its
@@ -226,13 +472,26 @@ func (l *SessionLoop) activateTab(index int) {
 		l.Active.DetachPresenter()
 	}
 	l.Active = target
+	_ = l.resizeTab(target)
+	l.revealPending = l.needsResize(target)
+	l.revealActiveTab(l.tabViews())
 	l.syncTabBar()
 	if l.Presenter != nil {
 		target.AttachPresenter(l.Presenter)
 	}
 }
 
-func (l *SessionLoop) syncTabBar() {
+func (l *SessionLoop) needsResize(tab *Tab) bool {
+	if tab == nil || tab.Session == nil {
+		return false
+	}
+	w, h := l.currentSize()
+	top, contentH := ContentBounds(h)
+	st := tab.State.Page
+	return st.Width != w || st.Height != h || st.HeaderRows != top || st.Height-st.HeaderRows-1 != contentH
+}
+
+func (l *SessionLoop) tabViews() []TabView {
 	views := make([]TabView, 0, len(l.Tabs))
 	for _, tab := range l.Tabs {
 		if tab == nil {
@@ -240,17 +499,61 @@ func (l *SessionLoop) syncTabBar() {
 		}
 		views = append(views, tab.BarView(tab == l.Active))
 	}
-	oldBar := len(l.lastTabs) > 1
-	newBar := len(views) > 1
-	if tabsEqual(l.lastTabs, views) {
+	return views
+}
+
+func (l *SessionLoop) syncTabBar() {
+	views := l.tabViews()
+	if len(views) < 2 {
+		l.tabOffset = 0
+	} else if visible := l.visibleTabCount(views, l.tabOffset); visible > 0 {
+		if max := len(views) - visible; l.tabOffset > max {
+			l.tabOffset = max
+		}
+		if l.tabOffset < 0 {
+			l.tabOffset = 0
+		}
+	}
+	offsetChanged := l.tabOffset != l.lastTabOffset
+	viewsChanged := !tabsEqual(l.lastTabs, views)
+	if !viewsChanged && !offsetChanged {
 		return
 	}
-	l.lastTabs = append(l.lastTabs[:0], views...)
-	// The app wires the + button in the next step; do not show a tab bar for
-	// the current single-tab session until then, but clear one after switching
-	// back from several tabs.
-	if l.Presenter != nil && (newBar || oldBar) {
+	if viewsChanged {
+		l.lastTabs = append(l.lastTabs[:0], views...)
+	}
+	l.lastTabOffset = l.tabOffset
+	for _, tab := range l.Tabs {
+		if tab != nil {
+			tab.TabBar = l.lastTabs
+			tab.TabOffset = l.tabOffset
+		}
+	}
+	if l.Presenter == nil {
+		return
+	}
+	if viewsChanged {
 		l.Presenter.SetTabs(views)
+	}
+	l.Presenter.SetTabOffset(l.tabOffset)
+	if l.Active != nil && l.Active.Presenter == l.Presenter {
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *SessionLoop) showStatusError(message string) {
+	if l.Active == nil {
+		return
+	}
+	st := l.Active.State.Page
+	st.FrontendChrome = true
+	st.FooterLeft = " " + protocol.StripControls(message)
+	st.FooterLevel = protocol.FooterError
+	st.FooterStatusHit = false
+	l.Active.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
 	}
 }
 

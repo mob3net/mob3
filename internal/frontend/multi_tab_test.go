@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 type eventSession struct {
 	events chan protocol.Event
+	cmds   []protocol.Command
 	closed bool
 }
 
@@ -18,7 +20,10 @@ func newEventSession() *eventSession {
 	return &eventSession{events: make(chan protocol.Event, 8)}
 }
 
-func (s *eventSession) Send(protocol.Command) error { return nil }
+func (s *eventSession) Send(c protocol.Command) error {
+	s.cmds = append(s.cmds, c)
+	return nil
+}
 func (s *eventSession) Events() <-chan protocol.Event {
 	return s.events
 }
@@ -76,8 +81,8 @@ func TestSessionLoopRoutesOnlyActiveFrames(t *testing.T) {
 	if background.State.Page.Title != "changed" || background.State.Scroll != 7 {
 		t.Fatalf("background state = %+v scroll=%d", background.State.Page, background.State.Scroll)
 	}
-	if out.Len() != 0 {
-		t.Fatalf("background state drew a frame: %q", out.String())
+	if strings.Contains(out.String(), "Z") {
+		t.Fatalf("background page content reached the terminal: %q", out.String())
 	}
 }
 
@@ -142,5 +147,265 @@ func TestRemoveTabKeepsTheRemainingActiveTab(t *testing.T) {
 	}
 	if second.Session != nil {
 		t.Fatal("removed tab kept its session")
+	}
+}
+
+func TestActivateTabResizesStaleBackgroundTab(t *testing.T) {
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second}, Active: first, Presenter: NewPresenter(io.Discard, true),
+		TerminalSize: func() (int, int, bool) { return 100, 30, true },
+	}
+	loop.syncTabBar()
+	loop.activateTab(1)
+	sess := second.Session.(*eventSession)
+	found := false
+	for _, cmd := range sess.cmds {
+		if resize, ok := cmd.Body.(protocol.Resize); ok {
+			found = true
+			top, contentH := ContentBounds(30)
+			if resize.Width != 100 || resize.Height != 30 ||
+				resize.ContentTop != top || resize.ContentHeight != contentH {
+				t.Fatalf("resize = %+v, want 100x30 content %d/%d", resize, top, contentH)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("switching to a stale background tab did not send a resize")
+	}
+}
+
+func TestActiveTabRevealedAfterResizeState(t *testing.T) {
+	st := chromeState()
+	st.Width = 100
+	var tabs []*Tab
+	for i := 0; i < 6; i++ {
+		tab := multiTab(i+1, fmt.Sprintf("Tab%d", i+1))
+		tab.State.Page = st
+		tabs = append(tabs, tab)
+	}
+	loop := &SessionLoop{
+		Tabs: tabs, Active: tabs[0], Presenter: NewPresenter(io.Discard, true),
+		TerminalSize: func() (int, int, bool) { return 60, 24, true },
+	}
+	loop.syncTabBar()
+	loop.activateTab(5)
+	if !loop.revealPending {
+		t.Fatal("switch to a tab with stale geometry did not mark a reveal")
+	}
+	narrow := st
+	narrow.Width = 60
+	if _, err := loop.handleEvent(tabs[5], protocol.Event{Body: narrow}); err != nil {
+		t.Fatal(err)
+	}
+	visible := loop.visibleTabCount(loop.tabViews(), loop.tabOffset)
+	if visible < 1 || 5 < loop.tabOffset || 5 >= loop.tabOffset+visible {
+		t.Fatalf("active tab hidden after resize: offset=%d visible=%d", loop.tabOffset, visible)
+	}
+	if loop.revealPending {
+		t.Fatal("reveal stayed pending after the new state arrived")
+	}
+}
+
+func TestTabKeysRouteToActions(t *testing.T) {
+	tab := &Tab{State: LoopState{Page: protocol.State{FrontendChrome: true}}}
+	var got []int
+	tab.Actions = TabActions{
+		Select: func(index int) { got = append(got, 100+index) },
+		Cycle:  func(delta int) { got = append(got, 200+delta) },
+		Close: func(index int) bool {
+			got = append(got, 300+index)
+			return false
+		},
+		New: func() { got = append(got, 400) },
+	}
+	cases := []struct {
+		key  string
+		want int
+	}{
+		{"t", 400}, {"ctrl-t", 400},
+		{"W", 299}, {"ctrl-w", 299},
+		{"ctrl-n", 201}, {"alt-right", 201},
+		{"ctrl-p", 199}, {"alt-left", 199},
+		{"2", 101}, {"alt-3", 102},
+	}
+	for _, tc := range cases {
+		got = nil
+		handled, quit := tab.handleShellKey(tc.key)
+		if !handled || quit {
+			t.Fatalf("%q handled=%v quit=%v", tc.key, handled, quit)
+		}
+		if len(got) != 1 || got[0] != tc.want {
+			t.Fatalf("%q actions = %v, want %d", tc.key, got, tc.want)
+		}
+	}
+}
+
+func TestTabBarMouseRoutesActions(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	tab := &Tab{State: LoopState{Page: st}, TabBar: tabs}
+	var selected, closed, created, scrolled = -1, -1, 0, 0
+	tab.Actions = TabActions{
+		Select: func(index int) { selected = index },
+		Close: func(index int) bool {
+			closed = index
+			return false
+		},
+		New: func() { created++ },
+		Scroll: func(delta int) {
+			scrolled += delta
+		},
+	}
+	layout := LayoutChromeWithTabs(st, tabs, 0)
+	click := func(kind ChromeHitKind, index int) bool {
+		for _, hit := range layout.Hits {
+			if hit.Kind != kind || (kind == ChromeHitTab || kind == ChromeHitTabClose) && hit.Index != index {
+				continue
+			}
+			return tab.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true})
+		}
+		t.Fatalf("missing hit %v index %d", kind, index)
+		return false
+	}
+	if !click(ChromeHitTab, 1) || selected != 1 {
+		t.Fatalf("tab click selected=%d", selected)
+	}
+	if !click(ChromeHitTabClose, 0) || closed != 0 {
+		t.Fatalf("close click closed=%d", closed)
+	}
+	if !click(ChromeHitNewTab, -1) || created != 1 {
+		t.Fatalf("new click created=%d", created)
+	}
+	many := make([]TabView, 12)
+	for i := range many {
+		many[i] = TabView{Title: fmt.Sprintf("Tab%d", i+1)}
+	}
+	tab.TabBar = many
+	layout = LayoutChromeWithTabs(st, many, 0)
+	for _, kind := range []ChromeHitKind{ChromeHitTabPrev, ChromeHitTabNext} {
+		found := false
+		for _, hit := range layout.Hits {
+			if hit.Kind != kind {
+				continue
+			}
+			found = tab.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true})
+			break
+		}
+		if !found {
+			t.Fatalf("missing %v hit", kind)
+		}
+	}
+	if scrolled != 0 {
+		t.Fatalf("scroll clicks = %d", scrolled)
+	}
+}
+
+func TestNewTabFactoryActivatesTheTab(t *testing.T) {
+	p := NewPresenter(io.Discard, true)
+	first := multiTab(1, "one")
+	first.Presenter = p
+	first.SessionID = 1
+	var gotID protocol.SessionID
+	var gotW, gotH, gotTop, gotContent int
+	loop := &SessionLoop{
+		Tabs: []*Tab{first}, Active: first, Presenter: p,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int) (*Tab, error) {
+			gotID, gotW, gotH, gotTop, gotContent = id, w, h, top, contentH
+			tab := multiTab(int(id), "New Tab")
+			tab.State.Page.Width = w
+			tab.State.Page.Height = h
+			return tab, nil
+		},
+	}
+	loop.syncTabBar()
+	loop.newTab()
+	if gotID != 2 || gotW != 80 || gotH != 24 {
+		t.Fatalf("factory args id=%d size=%dx%d", gotID, gotW, gotH)
+	}
+	if top, contentH := ContentBounds(24); gotTop != top || gotContent != contentH {
+		t.Fatalf("factory geometry = %d/%d, want %d/%d", gotTop, gotContent, top, contentH)
+	}
+	if len(loop.Tabs) != 2 || loop.Active != loop.Tabs[1] {
+		t.Fatalf("tabs=%d active=%v", len(loop.Tabs), loop.Active)
+	}
+	if loop.Active.SessionID != 2 || loop.Active.Presenter != p {
+		t.Fatalf("new tab id=%d presenter=%v", loop.Active.SessionID, loop.Active.Presenter)
+	}
+}
+
+func TestCloseLastTabAsksToQuit(t *testing.T) {
+	tab := multiTab(1, "one")
+	tab.State.Page = chromeState()
+	closed := false
+	loop := &SessionLoop{
+		Tabs: []*Tab{tab}, Active: tab, Presenter: NewPresenter(io.Discard, true),
+		CloseTab: func(*Tab) { closed = true },
+	}
+	loop.syncTabBar()
+	if loop.closeTab(-1) {
+		t.Fatal("closing the last tab returned quit immediately")
+	}
+	if len(loop.Tabs) != 1 || !tab.quitPending {
+		t.Fatalf("last-tab close did not ask to quit: tabs=%d pending=%v", len(loop.Tabs), tab.quitPending)
+	}
+	if closed {
+		t.Fatal("last tab was released before confirmation")
+	}
+}
+
+func TestCloseTabReleasesAndActivatesNeighbor(t *testing.T) {
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	var released *Tab
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second}, Active: first, Presenter: NewPresenter(io.Discard, true),
+		CloseTab: func(tab *Tab) { released = tab },
+	}
+	loop.syncTabBar()
+	loop.closeTab(0)
+	if released != first || first.Session != nil {
+		t.Fatal("closed tab was not released")
+	}
+	if len(loop.Tabs) != 1 || loop.Active != second {
+		t.Fatalf("tabs=%d active=%v", len(loop.Tabs), loop.Active)
+	}
+}
+
+func TestScrollTabsClampsTheWindow(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	var tabs []*Tab
+	for i := 0; i < 12; i++ {
+		tab := multiTab(i+1, fmt.Sprintf("Tab%d", i+1))
+		tab.State.Page = st
+		tabs = append(tabs, tab)
+	}
+	loop := &SessionLoop{Tabs: tabs, Active: tabs[0]}
+	loop.syncTabBar()
+	visible := loop.visibleTabCount(loop.tabViews(), 0)
+	if visible <= 1 || visible >= len(tabs) {
+		t.Fatalf("visible tabs = %d", visible)
+	}
+	maxOffset := len(tabs) - visible
+	loop.scrollTabs(1)
+	if loop.tabOffset != 1 {
+		t.Fatalf("offset = %d, want 1", loop.tabOffset)
+	}
+	loop.scrollTabs(100)
+	if loop.tabOffset != maxOffset {
+		t.Fatalf("offset = %d, want %d", loop.tabOffset, maxOffset)
+	}
+	loop.scrollTabs(-100)
+	if loop.tabOffset != 0 {
+		t.Fatalf("offset = %d, want 0", loop.tabOffset)
+	}
+	for _, tab := range tabs {
+		if tab.TabOffset != 0 {
+			t.Fatalf("tab bar offset not mirrored: %d", tab.TabOffset)
+		}
 	}
 }
