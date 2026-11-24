@@ -135,18 +135,19 @@ func TestShellKeysSendAppActions(t *testing.T) {
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	cases := map[string]any{
-		"r": protocol.App{Action: protocol.AppReload},
-		"R": protocol.App{Action: protocol.AppToggleReader},
-		"D": protocol.App{Action: protocol.AppToggleDark},
-		"+": protocol.App{Action: protocol.AppZoomIn},
-		"-": protocol.App{Action: protocol.AppZoomOut},
-		"0": protocol.App{Action: protocol.AppZoomReset},
-		"J": protocol.App{Action: protocol.AppToggleJS},
-		"i": protocol.App{Action: protocol.AppToggleImages},
-		"E": protocol.App{Action: protocol.AppStatusDetails},
-		"d": protocol.App{Action: protocol.AppDownload},
-		"!": protocol.App{Action: protocol.AppToggleConsole},
-		"?": protocol.Navigate{URL: "about:help", Push: true},
+		"r":      protocol.App{Action: protocol.AppReload},
+		"ctrl-r": protocol.App{Action: protocol.AppReload},
+		"R":      protocol.App{Action: protocol.AppToggleReader},
+		"D":      protocol.App{Action: protocol.AppToggleDark},
+		"+":      protocol.App{Action: protocol.AppZoomIn},
+		"-":      protocol.App{Action: protocol.AppZoomOut},
+		"0":      protocol.App{Action: protocol.AppZoomReset},
+		"J":      protocol.App{Action: protocol.AppToggleJS},
+		"i":      protocol.App{Action: protocol.AppToggleImages},
+		"E":      protocol.App{Action: protocol.AppStatusDetails},
+		"d":      protocol.App{Action: protocol.AppDownload},
+		"!":      protocol.App{Action: protocol.AppToggleConsole},
+		"?":      protocol.Navigate{URL: "about:help", Push: true},
 	}
 	for key, want := range cases {
 		s.cmds = nil

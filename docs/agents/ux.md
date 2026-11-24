@@ -40,7 +40,7 @@ agreement, the non-negotiable constraints and the change protocol.
   with an empty focused URL prompt. Graphics mode, zoom, terminal cell size and
   the memory readout are browser-wide. Memory is the process total, not one
   tab's share.
-- **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
+- **Config:** the `⚙` toolbar icon opens `about:config` in a new tab, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home,
   mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
@@ -136,7 +136,7 @@ agreement, the non-negotiable constraints and the change protocol.
   `rows` (document height), `scroll` (top visible document row), `zoom`,
   `dark`, `reader`, `js`, `graphics`, `cell` (pixels), `layout_truncated`,
   `copy_truncated` and `lines` (copied page rows),
-  `H` session history, `?` help page, `!` JS console, `q`/`Ctrl-C` ask for
+  `H` session history, `?` help page in a new tab, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting, while `:q` plus Enter exits
   immediately. The quit confirmation takes priority over a hovered link in the
   footer and keeps its warning color. Do
@@ -269,8 +269,8 @@ agreement, the non-negotiable constraints and the change protocol.
   controls, the blocked page's red heading and blue retry box), and
   page-derived text is escaped by the shell. The start page keeps
   its reader-mode column and the PDF viewer keeps its content-sized page boxes.
-- **Help page:** `?` and the toolbar `?` navigate to the built-in
-  `about:help` HTML page. Help lives as a normal rendered document (tables for
+- **Help page:** `?` and the toolbar `?` open the built-in
+  `about:help` HTML page in a new tab. Help lives as a normal rendered document (tables for
   command-line flags, keys, mouse and forms) and shows the current build
   version from `Version`, not as a one-line footer status,
   so every shortcut including `!` is visible and selectable. The flag table

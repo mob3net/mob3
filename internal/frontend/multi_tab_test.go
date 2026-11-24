@@ -287,7 +287,7 @@ func TestNewTabStartsURLPrompt(t *testing.T) {
 	loop := &SessionLoop{
 		Tabs: []*Tab{first}, Active: first, Presenter: first.Presenter,
 		TerminalSize: func() (int, int, bool) { return 80, 24, true },
-		OpenTab: func(id protocol.SessionID, w, h, top, contentH int) (*Tab, error) {
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int, target string) (*Tab, error) {
 			return multiTab(int(id), "New Tab"), nil
 		},
 	}
@@ -413,6 +413,56 @@ func TestTabsKeepSeparateHistoryScrollAndClipboard(t *testing.T) {
 	}
 	if got := decodeOSC52(t, two.String()); got != "two" {
 		t.Fatalf("second clipboard = %q", got)
+	}
+}
+
+func TestHelpAndConfigOpenNewTabs(t *testing.T) {
+	tab := &Tab{State: LoopState{Page: protocol.State{FrontendChrome: true}}}
+	var opened []string
+	tab.Actions = TabActions{NewTabURL: func(url string) { opened = append(opened, url) }}
+	if handled, quit := tab.handleShellKey("?"); !handled || quit {
+		t.Fatal("? was not handled")
+	}
+	tab.activateChromeHit(ChromeHit{Kind: ChromeHitConfig})
+	tab.activateChromeHit(ChromeHit{Kind: ChromeHitHelp})
+	want := []string{"about:help", "about:config", "about:help"}
+	if fmt.Sprint(opened) != fmt.Sprint(want) {
+		t.Fatalf("opened = %v, want %v", opened, want)
+	}
+}
+
+func TestNewTabURLShowsTargetWithoutPrompt(t *testing.T) {
+	first := multiTab(1, "one")
+	first.Presenter = NewPresenter(io.Discard, true)
+	var openedTarget string
+	loop := &SessionLoop{
+		Tabs: []*Tab{first}, Active: first, Presenter: first.Presenter,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int, target string) (*Tab, error) {
+			openedTarget = target
+			return multiTab(int(id), "Help"), nil
+		},
+	}
+	loop.syncTabBar()
+	loop.newTabURL("about:help")
+	if openedTarget != "about:help" {
+		t.Fatalf("target = %q", openedTarget)
+	}
+	if loop.Active.promptActive {
+		t.Fatal("targeted new tab opened the URL prompt")
+	}
+}
+
+func TestHomePageKeepsItsTitleButTabSaysNewTab(t *testing.T) {
+	tab := multiTab(1, "MOB³")
+	tab.State.Page.URL = "about:home"
+	if got := tab.BarView(true).Title; got != "New Tab" {
+		t.Fatalf("home tab label = %q", got)
+	}
+	tab.State.Page.URL = "https://example.test/"
+	tab.State.Page.Title = "Example"
+	if got := tab.BarView(true).Title; got != "Example" {
+		t.Fatalf("page tab label = %q", got)
 	}
 }
 
@@ -550,12 +600,13 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	first.SessionID = 1
 	var gotID protocol.SessionID
 	var gotW, gotH, gotTop, gotContent int
+	var gotTarget string
 	loop := &SessionLoop{
 		Tabs: []*Tab{first}, Active: first, Presenter: p,
 		TerminalSize:  func() (int, int, bool) { return 80, 24, true },
 		GraphicsModes: []GraphicsMode{GraphicsBlocks, GraphicsNone},
-		OpenTab: func(id protocol.SessionID, w, h, top, contentH int) (*Tab, error) {
-			gotID, gotW, gotH, gotTop, gotContent = id, w, h, top, contentH
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int, target string) (*Tab, error) {
+			gotID, gotW, gotH, gotTop, gotContent, gotTarget = id, w, h, top, contentH, target
 			tab := multiTab(int(id), "New Tab")
 			tab.State.Page.Width = w
 			tab.State.Page.Height = h
@@ -565,8 +616,8 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	}
 	loop.syncTabBar()
 	loop.newTab()
-	if gotID != 2 || gotW != 80 || gotH != 24 {
-		t.Fatalf("factory args id=%d size=%dx%d", gotID, gotW, gotH)
+	if gotID != 2 || gotW != 80 || gotH != 24 || gotTarget != "" {
+		t.Fatalf("factory args id=%d size=%dx%d target=%q", gotID, gotW, gotH, gotTarget)
 	}
 	if top, contentH := ContentBounds(24); gotTop != top || gotContent != contentH {
 		t.Fatalf("factory geometry = %d/%d, want %d/%d", gotTop, gotContent, top, contentH)

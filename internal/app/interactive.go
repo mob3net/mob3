@@ -78,7 +78,7 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 	loop = &frontend.SessionLoop{
 		Tabs: []*frontend.Tab{tab}, Active: tab, Presenter: presenter,
 		Keys: keys, Resize: winch, Quit: quitSig,
-		OpenTab:      tabs.openHome,
+		OpenTab:      tabs.open,
 		CloseTab:     tabs.close,
 		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
 		CellW:        cellW, CellH: cellH,
