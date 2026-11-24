@@ -71,6 +71,17 @@ tab and origin. Each area is capped at 5 MiB and the whole browser context at
 32 MiB. Opaque origins get a private area that is not shared with any other
 document.
 
+## Clipboard
+
+Clipboard use is write-only and user-initiated: `y`/`Y`/`Ctrl-Y`, a
+right-click link URL, console `y`, or the download prompt write through OSC 52.
+Page JavaScript cannot read or write the clipboard (`navigator.clipboard` is
+absent and `document.execCommand("copy")` is false). The engine emits plain text;
+the front end allows one clipboard event per copy action, drops unsolicited
+events, strips terminal and display-format controls, caps the payload at
+100 KiB and reports "Clipboard unavailable" when the terminal write fails. MOB³
+never reads the clipboard. Terminal support for OSC 52 still varies.
+
 ## Cross-origin requests
 
 Pages can load cross-origin scripts, styles and images like a normal browser,

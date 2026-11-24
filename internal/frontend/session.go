@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"browser/internal/protocol"
 )
@@ -104,6 +105,10 @@ type SessionLoop struct {
 	promptBase      protocol.State
 	promptHist      promptHistory
 
+	// clipboardPendingUntil authorizes one Clipboard event after a copy action.
+	// It keeps a compromised engine from overwriting the clipboard at will.
+	clipboardPendingUntil time.Time
+
 	// Report handles a contained crash. When nil, the loop writes one short
 	// line to Stderr and sends a ClientError command back to the session.
 	Report func(string)
@@ -144,6 +149,9 @@ func (l *SessionLoop) Run() error {
 				if l.handleChromeMouse(ev) {
 					continue
 				}
+				if ev.Button == MouseButtonRight && ev.Press && !ev.Motion {
+					l.expectClipboard()
+				}
 			}
 			if handled, quit := l.handleShellKey(k); handled {
 				if quit {
@@ -153,6 +161,12 @@ func (l *SessionLoop) Run() error {
 			}
 			if k == "esc" || k == "ctrl-c" {
 				l.Session.Abort()
+			}
+			if !l.State.Page.KeysEngine {
+				switch k {
+				case "y", "Y", "ctrl-y":
+					l.expectClipboard()
+				}
 			}
 			if err := l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
 				if errors.Is(err, protocol.ErrSessionClosed) {
@@ -340,8 +354,15 @@ func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
 	case protocol.HistoryCommit:
 		l.applyHistoryCommit(v)
 	case protocol.Clipboard:
-		if l.State.Clipboard != nil {
-			_, _ = l.State.Clipboard.Write([]byte(OSC52(v.Text)))
+		if !l.takeClipboardPermission() {
+			return false, nil
+		}
+		if l.State.Clipboard == nil {
+			l.clipboardUnavailable()
+			return false, nil
+		}
+		if _, err := l.State.Clipboard.Write([]byte(OSC52(v.Text))); err != nil {
+			l.clipboardUnavailable()
 		}
 	case protocol.Frame:
 		l.consoleActive = false
@@ -614,6 +635,7 @@ func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
 	case "G":
 		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleBottom})
 	case "y":
+		l.expectClipboard()
 		l.consoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
 	case "/":
 		if l.consolePane == 3 {
@@ -890,6 +912,9 @@ func (l *SessionLoop) handleDownloadKey(k string) (handled, quit bool) {
 			}
 		}
 		l.closeDownload(copied, chars)
+		if !copied {
+			l.clipboardUnavailable()
+		}
 	case "esc", "enter", "q", "ctrl-c":
 		l.closeDownload(false, 0)
 	}

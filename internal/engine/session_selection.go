@@ -68,6 +68,7 @@ func (b *Session) copySelection() {
 // copyText sends text to the terminal clipboard with OSC 52 and reports
 // whether it was written.
 func (b *Session) copyText(text string) bool {
+	text = protocol.SanitizeClipboard(text)
 	if text == "" {
 		b.status = "Nothing to copy"
 		return false
