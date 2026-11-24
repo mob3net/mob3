@@ -39,6 +39,7 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 	}
 	loader := NewLoader(nil)
 	b := &Session{
+		Frame: NewFrame(),
 		Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
 		CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
 		JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,

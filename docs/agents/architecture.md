@@ -129,8 +129,9 @@ could move behind it without changing the ownership or security model.
 
 Current state: one `Session` holds one page and one JS runtime, iframe elements
 have inert stub documents, and there are no tabs. A shared `BrowserContext`
-now allocates history-entry IDs; shared storage and budgets remain per session.
-This section records the target; it is not implemented yet.
+now allocates history-entry IDs, and the `Session` embeds a top-level `Frame`
+that owns the page, layout, URL and scroll state; shared storage and budgets
+remain per session. This section records the target; it is not implemented yet.
 
 ## Current layout
 
@@ -259,6 +260,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It currently allocates the opaque history-entry ID sequence, so sessions in different tabs cannot collide in the host's URL-attestation record or the engine page cache; shared storage, budgets and settings join it with the tab and frame model. |
+| `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL` and `Scroll`; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags, the shared `BrowserContext` and terminal setup. |
 | `internal/engine/version.go` | Injected build version and the help-page wrapper. |
 | `internal/engine/session_certs.go` | Config-page trust-store label. |
@@ -322,7 +324,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/js_life.go` | JS runtime lifecycle: start/stop, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. |
 | `internal/engine/commands.go` | Front-end command dispatch: navigation, history, resize, keys, mouse, scroll, app, find, select, modal, hint, console and error commands, with shell effects supplied by `CommandHooks`. |
 | `internal/engine/serve.go` | Transport event loop: load/image/import/timer/progress/usage events, draw/state/frame emission and shutdown, with terminal effects supplied by `RuntimeHooks`. |
-| `internal/engine/session.go` | The engine-side page session state: `Page`, `Layout`, `URL`, `Scroll`, terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
+| `internal/engine/session.go` | The engine-side tab state: the embedded top-level `Frame` (`Page`, `Layout`, `URL`, `Scroll`) plus terminal/content geometry, rendering configuration, JS runtime, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | `JSHost` contract and `ImportTask`: viewport, layout, scroll, focus, hit testing, dialogs, status, form/upload, cookie/fetch brokering and the import queue. The JS runtime holds this interface, not `*Browser`. |

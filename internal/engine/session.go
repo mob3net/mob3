@@ -12,14 +12,13 @@ import (
 	"browser/internal/protocol"
 )
 
-// Session holds one page's content, shell glue and view state. The front end
-// owns the trusted navigation list and terminal presentation; this type keeps
-// the memory-only page cache.
+// Session is one tab: the top-level frame, shell glue and view state. The
+// front end owns the trusted navigation list and terminal presentation; this
+// type keeps the memory-only page cache. The embedded Frame owns the page,
+// layout, URL and scroll position so the tab and frame model can grow without
+// moving the tab-level state.
 type Session struct {
-	Page   *Page
-	Layout *Layout
-	URL    *url.URL
-	Scroll int
+	*Frame
 
 	// Terminal/content geometry and rendering configuration.
 	Width, Height   int
@@ -296,8 +295,9 @@ type Session struct {
 // NewSession creates an empty page session.
 func NewEmptySession() *Session {
 	return &Session{
-		ImageCh: make(chan ImageBatch, 1), LoadCh: make(chan LoadResult, 1),
-		ImportCh: make(chan ImportTask, 16), browser: NewBrowserContext(),
+		Frame: NewFrame(), ImageCh: make(chan ImageBatch, 1),
+		LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16),
+		browser: NewBrowserContext(),
 	}
 }
 
