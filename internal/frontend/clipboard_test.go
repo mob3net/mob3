@@ -36,7 +36,7 @@ func TestOSC52SanitizesAndCapsText(t *testing.T) {
 
 func TestClipboardEventRequiresPendingCopy(t *testing.T) {
 	var out strings.Builder
-	loop := &SessionLoop{State: LoopState{Clipboard: &out}, Stderr: io.Discard}
+	loop := &Tab{State: LoopState{Clipboard: &out}, Stderr: io.Discard}
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "forged"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestClipboardEventRequiresPendingCopy(t *testing.T) {
 
 func TestClipboardPendingPermissionExpires(t *testing.T) {
 	var out strings.Builder
-	loop := &SessionLoop{State: LoopState{Clipboard: &out}, Stderr: io.Discard}
+	loop := &Tab{State: LoopState{Clipboard: &out}, Stderr: io.Discard}
 	loop.clipboardPendingUntil = time.Now().Add(-time.Second)
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "late"}}); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestClipboardPendingPermissionExpires(t *testing.T) {
 }
 
 func TestConsoleCopySetsClipboardPermission(t *testing.T) {
-	loop := &SessionLoop{Session: &recordSession{}, Stderr: io.Discard}
+	loop := &Tab{Session: &recordSession{}, Stderr: io.Discard}
 	loop.handleConsoleKey("y")
 	if loop.clipboardPendingUntil.IsZero() {
 		t.Fatal("console copy did not authorize a clipboard event")
@@ -86,7 +86,7 @@ type errorWriter struct{}
 func (errorWriter) Write([]byte) (int, error) { return 0, errors.New("no clipboard") }
 
 func TestClipboardWriteFailureIsReported(t *testing.T) {
-	loop := &SessionLoop{State: LoopState{Clipboard: errorWriter{}}, Stderr: io.Discard}
+	loop := &Tab{State: LoopState{Clipboard: errorWriter{}}, Stderr: io.Discard}
 	loop.expectClipboard()
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "x"}}); err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestClipboardWriteFailureIsReported(t *testing.T) {
 }
 
 func TestClipboardWithoutWriterIsReported(t *testing.T) {
-	loop := &SessionLoop{Stderr: io.Discard}
+	loop := &Tab{Stderr: io.Discard}
 	loop.expectClipboard()
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "x"}}); err != nil {
 		t.Fatal(err)

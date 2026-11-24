@@ -15,7 +15,7 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)
 	p.SetGraphics(GraphicsKitty, 8, 16)
-	loop := &SessionLoop{Presenter: p, Stderr: io.Discard}
+	loop := &Tab{Presenter: p, Stderr: io.Discard}
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.State{Flags: protocol.StateNativeImages}}); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 
 func TestApplySessionEventDeduplicatesCrash(t *testing.T) {
 	p := NewPresenter(io.Discard, false)
-	loop := &SessionLoop{Presenter: p, Stderr: io.Discard}
+	loop := &Tab{Presenter: p, Stderr: io.Discard}
 	var reports []string
 	report := func(msg string) { reports = append(reports, msg) }
 	loop.Report = report
@@ -75,7 +75,7 @@ func TestApplySessionEventDeduplicatesCrash(t *testing.T) {
 func TestApplySessionEventCrashForcesFullRepaint(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)
-	loop := &SessionLoop{Presenter: p, Stderr: io.Discard}
+	loop := &Tab{Presenter: p, Stderr: io.Discard}
 	f := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'a'}, {R: 'b'}, {R: 'c'}, {R: 'd'}}}
 	if _, err := loop.applyEvent(protocol.Event{Body: f}); err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestApplySessionEventCrashForcesFullRepaint(t *testing.T) {
 func TestPresenterRepaintsAfterConsoleFrame(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)
-	loop := &SessionLoop{Presenter: p, Stderr: io.Discard}
+	loop := &Tab{Presenter: p, Stderr: io.Discard}
 	page := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'a'}, {R: 'b'}, {R: 'p'}, {R: 'q'}}}
 	console := protocol.Frame{W: 2, H: 2, Cells: []protocol.Cell{{R: 'x'}, {R: 'y'}, {R: 'c'}, {R: 'd'}}}
 	for _, f := range []protocol.Frame{page, console} {
@@ -114,7 +114,7 @@ func TestPresenterRepaintsAfterConsoleFrame(t *testing.T) {
 
 func TestShellKeysQuitAndActions(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s, Presenter: NewPresenter(io.Discard, false)}
+	loop := &Tab{Session: s, Presenter: NewPresenter(io.Discard, false)}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	if handled, quit := loop.handleShellKey("q"); !handled || quit || !loop.quitPending {
 		t.Fatalf("q: handled=%v quit=%v pending=%v", handled, quit, loop.quitPending)
@@ -132,7 +132,7 @@ func TestShellKeysQuitAndActions(t *testing.T) {
 
 func TestShellKeysSendAppActions(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	cases := map[string]any{
 		"r": protocol.App{Action: protocol.AppReload},
@@ -161,7 +161,7 @@ func TestShellKeysSendAppActions(t *testing.T) {
 
 func TestShellKeyHistory(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2, Scroll: 4}
 	loop.State.Scroll = 4
 	loop.history = []historyEntry{
@@ -219,7 +219,7 @@ func TestShellKeyHistory(t *testing.T) {
 
 func TestShellKeysStayWithEngineWhenCaptured(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{KeysEngine: true, FrontendChrome: true}
 	for _, key := range []string{"q", "o", "r", "?"} {
 		if handled, _ := loop.handleShellKey(key); handled {
@@ -233,7 +233,7 @@ func TestShellKeysStayWithEngineWhenCaptured(t *testing.T) {
 
 func TestScrollbarMouseSendsScroll(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{
 		FrontendChrome: true, Width: 20, Height: 10, HeaderRows: 1,
 		MaxScroll: 100,
@@ -265,7 +265,7 @@ func TestScrollbarMouseSendsScroll(t *testing.T) {
 
 func TestScrollbarDragGrabsThumb(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	// Content height 12, max scroll 6: an 8-row thumb with a 4-row travel.
 	loop.State.Page = protocol.State{
 		FrontendChrome: true, Width: 20, Height: 14, HeaderRows: 1,
@@ -325,7 +325,7 @@ func TestScrollbarDragGrabsThumb(t *testing.T) {
 
 func TestScrollbarDragEndsOffTrack(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{
 		FrontendChrome: true, Width: 20, Height: 10, HeaderRows: 1,
 		MaxScroll: 100,
@@ -375,7 +375,7 @@ func TestScrollbarDragEndsOffTrack(t *testing.T) {
 
 func TestPromptEditsAndNavigates(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.startPrompt(false)
 	if !loop.promptActive || !loop.promptSelectAll || loop.promptText != loop.State.Page.URL {
@@ -403,7 +403,7 @@ func TestPromptEditsAndNavigates(t *testing.T) {
 
 func TestPromptEscapeAndVimQuit(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.startPrompt(false)
 	if handled, quit := loop.handlePromptKey("esc"); !handled || quit || loop.promptActive {
@@ -421,7 +421,7 @@ func TestPromptEscapeAndVimQuit(t *testing.T) {
 
 func TestPromptMouseMovesCaret(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.startPrompt(false)
 	var hit ChromeHit
@@ -447,7 +447,7 @@ func TestPromptMouseMovesCaret(t *testing.T) {
 
 func TestFindKeysSendQueriesAndResults(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	if handled, _ := loop.handleShellKey("/"); !handled || !loop.findActive {
 		t.Fatalf("slash handled=%v active=%v", handled, loop.findActive)
@@ -484,7 +484,7 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 
 func TestMenuKeysToggleAndZoom(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2, ZoomPercent: 100}
 	if handled, _ := loop.handleShellKey("X"); !handled || loop.menuKind != protocol.MenuView {
 		t.Fatalf("X handled=%v menu=%v", handled, loop.menuKind)
@@ -523,7 +523,7 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 
 func TestMenuNotifiesEngineOverlay(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.startMenu(protocol.MenuView)
 	if len(s.cmds) != 1 ||
@@ -549,7 +549,7 @@ func TestMenuNotifiesEngineOverlay(t *testing.T) {
 
 func TestMenuMouseRowAndBackdrop(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.startMenu(protocol.MenuView)
 	layout := LayoutMenu(loop.State.Page)
@@ -573,7 +573,7 @@ func TestMenuMouseRowAndBackdrop(t *testing.T) {
 
 func TestDialogEventAndAnswers(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Dialog{
 		ID: 7, Kind: protocol.DialogPrompt, Text: "name?", Default: "def",
@@ -612,7 +612,7 @@ func TestDialogEventAndAnswers(t *testing.T) {
 
 func TestSelectEventKeysAndMouse(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Select{
 		ID: 4, Options: []string{"One", "Two", "Three"}, Selected: 0,
@@ -656,7 +656,7 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 func TestDownloadCopyAndNoticeClose(t *testing.T) {
 	s := &recordSession{}
 	var clip strings.Builder
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	loop.State.Clipboard = &clip
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Download{
@@ -698,7 +698,7 @@ func TestDownloadCopyAndNoticeClose(t *testing.T) {
 
 func TestHintEventKeys(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	items := []protocol.HintItem{
 		{Target: 0, Label: "d", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}},
@@ -726,7 +726,7 @@ func TestHintEventKeys(t *testing.T) {
 
 func TestHintAskConfirmsDestination(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
 	items := []protocol.HintItem{{Target: 3, Label: "d", Link: true, Href: "https://example.com/next", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}}}
 	loop.applyEvent(protocol.Event{Body: protocol.Hints{Ask: true, Items: items}})
@@ -742,7 +742,7 @@ func TestHintAskConfirmsDestination(t *testing.T) {
 
 func TestConsoleInputKeys(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	view := protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: 0,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
@@ -784,7 +784,7 @@ func TestConsoleInputKeys(t *testing.T) {
 
 func TestConsoleQuitAndCloseKeys(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Tabs: []string{"a"}}})
 	loop.handleConsoleKey("q")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleQuit}) {
@@ -806,7 +806,7 @@ func TestConsoleQuitAndCloseKeys(t *testing.T) {
 
 func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	tabs := []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: 0, Tabs: tabs,
@@ -875,11 +875,11 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	}
 }
 
-func (l *SessionLoop) writeConsoleQuitForTest() { l.consoleView.Quit = true }
+func (l *Tab) writeConsoleQuitForTest() { l.consoleView.Quit = true }
 
 func TestConsoleFindKeys(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: 3,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},

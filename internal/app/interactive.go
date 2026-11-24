@@ -124,12 +124,17 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 		fmt.Fprintf(os.Stderr, "mob3: session navigate: %s\n", cleanError(err))
 		return 1
 	}
-	loop := &frontend.SessionLoop{
-		Session: session, Presenter: presenter, Keys: keys, Resize: winch, Quit: quitSig,
-		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
-		CellW:        cellW, CellH: cellH, Stderr: os.Stderr, AttestedURL: hostSess.AttestedURL,
+	tab := &frontend.Tab{
+		Session: session, Presenter: presenter, Stderr: os.Stderr,
+		AttestedURL: hostSess.AttestedURL,
 	}
-	loop.State.Clipboard = os.Stdout
+	tab.State.Clipboard = os.Stdout
+	loop := &frontend.SessionLoop{
+		Tabs: []*frontend.Tab{tab}, Active: tab,
+		Keys: keys, Resize: winch, Quit: quitSig,
+		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
+		CellW:        cellW, CellH: cellH,
+	}
 	if err := loop.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: %s\n", cleanError(err))
 		return 1

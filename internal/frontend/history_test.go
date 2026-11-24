@@ -8,8 +8,8 @@ import (
 )
 
 // attestedLoop returns a loop whose host knows the supplied entry URLs.
-func attestedLoop(urls map[uint64]string) *SessionLoop {
-	return &SessionLoop{AttestedURL: func(id uint64) (string, bool) {
+func attestedLoop(urls map[uint64]string) *Tab {
+	return &Tab{AttestedURL: func(id uint64) (string, bool) {
 		u, ok := urls[id]
 		return u, ok
 	}}
@@ -53,7 +53,7 @@ func TestApplyHistoryCommitPushReplaceAndTruncate(t *testing.T) {
 
 func TestSendHistorySnapshotCapsAtLimit(t *testing.T) {
 	s := &recordSession{}
-	l := &SessionLoop{Session: s}
+	l := &Tab{Session: s}
 	for i := 0; i < historyLimit+10; i++ {
 		l.history = append(l.history, historyEntry{id: uint64(i + 1), url: string(rune('a' + i%26))})
 	}
@@ -95,13 +95,14 @@ func TestMouseSideButtonsUseHistory(t *testing.T) {
 	keys <- MouseToken(MouseEvent{Button: MouseButtonForward, X: 2, Y: 1, Press: true, Motion: true})
 	keys <- MouseToken(MouseEvent{Button: MouseButtonForward, X: 2, Y: 1, Press: false})
 	keys <- "eof"
-	loop := &SessionLoop{Session: s, Keys: keys, Stderr: io.Discard}
-	loop.history = []historyEntry{
+	tab := &Tab{Session: s, Stderr: io.Discard}
+	tab.history = []historyEntry{
 		{id: 1, url: "https://example.com/a"},
 		{id: 2, url: "https://example.com/b"},
 		{id: 3, url: "https://example.com/c"},
 	}
-	loop.historyIndex = 2
+	tab.historyIndex = 2
+	loop := &SessionLoop{Tabs: []*Tab{tab}, Active: tab, Keys: keys}
 	if err := loop.Run(); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,7 @@ func TestPageStateUsesHistoryLedger(t *testing.T) {
 }
 
 func TestInvalidHistoryCommitIgnored(t *testing.T) {
-	l := &SessionLoop{}
+	l := &Tab{}
 	for _, u := range []string{"file:///etc/passwd", "javascript:alert(1)", "", "not a url\n"} {
 		l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 1, URL: u, Push: true})
 	}

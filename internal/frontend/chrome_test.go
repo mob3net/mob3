@@ -84,7 +84,7 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &recordSession{}
-			loop := &SessionLoop{Session: s}
+			loop := &Tab{Session: s}
 			loop.State.Page = st
 			var hit ChromeHit
 			for _, h := range LayoutChrome(st).Hits {
@@ -111,7 +111,7 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 
 func TestChromeBackSendsHistoryRestore(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = chromeState()
 	loop.history = []historyEntry{{id: 1, url: "https://example.com/a"}, {id: 2, url: "https://example.com/b"}}
 	loop.historyIndex = 1
@@ -136,7 +136,7 @@ func TestChromeBackSendsHistoryRestore(t *testing.T) {
 
 func TestChromeURLHitStartsPrompt(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = chromeState()
 	var hit ChromeHit
 	for _, h := range LayoutChrome(loop.State.Page).Hits {
@@ -163,7 +163,7 @@ func TestHandleChromeMouseLeavesContentAndPromptAlone(t *testing.T) {
 	st := chromeState()
 	st.PromptActive = true
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = st
 	if loop.handleChromeMouse(MouseEvent{X: 1, Y: 1, Press: true}) {
 		t.Fatal("prompt header mouse was consumed")
@@ -257,7 +257,7 @@ func TestFindBarLayout(t *testing.T) {
 
 func TestChromeZoomHitStartsMenu(t *testing.T) {
 	s := &recordSession{}
-	loop := &SessionLoop{Session: s}
+	loop := &Tab{Session: s}
 	loop.State.Page = chromeState()
 	var hit ChromeHit
 	for _, h := range LayoutChrome(loop.State.Page).Hits {

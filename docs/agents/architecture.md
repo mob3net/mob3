@@ -162,9 +162,10 @@ step; it is not implemented yet and there is no engine child process.
   `internal/protocol` (plus approved vendored modules).
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
-  placement, clipboard encoding, the live session loop
-  (`frontend.SessionLoop`), normal header/footer composition, header/footer
-  and scrollbar mouse input, base shell keys, local quit confirmation, the
+  placement, clipboard encoding, the terminal loop and active-tab routing
+  (`frontend.SessionLoop`, `frontend/tabs.go`), per-tab state
+  (`frontend.Tab`, `frontend/session.go`), normal header/footer composition,
+  header/footer and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
   select popup, download/notice modals, link hints and console
   composition/input/find. It also owns the session history list, current
@@ -244,7 +245,8 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by tests and available for a future process transport; the target keeps one process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup, and the one-shot clipboard permission/failure path. |
+| `internal/frontend/session.go` | `Tab`: one tab's protocol session and per-tab state. It applies events, owns history and overlays, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
+| `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, current index, scroll tracking, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |

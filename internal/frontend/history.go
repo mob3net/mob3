@@ -50,7 +50,7 @@ func isAboutHistory(input string) bool {
 }
 
 // recordHistoryScroll stores the current viewport row on the active entry.
-func (l *SessionLoop) recordHistoryScroll() {
+func (l *Tab) recordHistoryScroll() {
 	if l.historyIndex < 0 || l.historyIndex >= len(l.history) {
 		return
 	}
@@ -60,7 +60,7 @@ func (l *SessionLoop) recordHistoryScroll() {
 // applyHistoryCommit stores the engine's scroll and push flag. A new entry's
 // URL comes from the host; the engine URL is used only for built-in pages and
 // same-document fragment changes. The page title is taken from State.
-func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
+func (l *Tab) applyHistoryCommit(v protocol.HistoryCommit) {
 	if v.EntryID == 0 {
 		return
 	}
@@ -86,7 +86,7 @@ func (l *SessionLoop) applyHistoryCommit(v protocol.HistoryCommit) {
 	l.storeHistoryCommit(v, url)
 }
 
-func (l *SessionLoop) attestedURL(entryID uint64) (string, bool) {
+func (l *Tab) attestedURL(entryID uint64) (string, bool) {
 	if l.AttestedURL == nil {
 		return "", false
 	}
@@ -94,7 +94,7 @@ func (l *SessionLoop) attestedURL(entryID uint64) (string, bool) {
 }
 
 // storeHistoryCommit applies the push/merge rule with the trusted URL.
-func (l *SessionLoop) storeHistoryCommit(v protocol.HistoryCommit, url string) {
+func (l *Tab) storeHistoryCommit(v protocol.HistoryCommit, url string) {
 	e := historyEntry{id: v.EntryID, url: url, scroll: v.Scroll}
 	if v.Push {
 		if l.historyIndex >= 0 && l.historyIndex < len(l.history) &&
@@ -120,7 +120,7 @@ func (l *SessionLoop) storeHistoryCommit(v protocol.HistoryCommit, url string) {
 	l.history[l.historyIndex] = e
 }
 
-func (l *SessionLoop) entryByID(id uint64) *historyEntry {
+func (l *Tab) entryByID(id uint64) *historyEntry {
 	for i := range l.history {
 		if l.history[i].id == id {
 			return &l.history[i]
@@ -131,7 +131,7 @@ func (l *SessionLoop) entryByID(id uint64) *historyEntry {
 
 // allowUnattestedCommit permits built-in pages and same-document fragment
 // changes, which never perform a host document fetch.
-func (l *SessionLoop) allowUnattestedCommit(v protocol.HistoryCommit) bool {
+func (l *Tab) allowUnattestedCommit(v protocol.HistoryCommit) bool {
 	lower := strings.ToLower(v.URL)
 	if lower == "about:home" || strings.HasPrefix(lower, "about:") {
 		return true
@@ -158,7 +158,7 @@ func sameDocumentWithoutFragment(a, b string) bool {
 
 // pageState replaces the engine's URL with the committed history entry. The
 // page title stays engine-supplied and is not part of the trusted URL ledger.
-func (l *SessionLoop) pageState(v protocol.State) protocol.State {
+func (l *Tab) pageState(v protocol.State) protocol.State {
 	if l.historyIndex < 0 || l.historyIndex >= len(l.history) {
 		return v
 	}
@@ -170,7 +170,7 @@ func (l *SessionLoop) pageState(v protocol.State) protocol.State {
 
 // sendHistorySnapshot sends the bounded display snapshot the engine renders
 // for about:history.
-func (l *SessionLoop) sendHistorySnapshot() {
+func (l *Tab) sendHistorySnapshot() {
 	start := 0
 	if len(l.history) > historyLimit {
 		start = len(l.history) - historyLimit
@@ -188,7 +188,7 @@ func (l *SessionLoop) sendHistorySnapshot() {
 
 // navigate starts a top-level load. A typed about:history carries a fresh
 // snapshot so the page reflects the current list.
-func (l *SessionLoop) navigate(target string) {
+func (l *Tab) navigate(target string) {
 	l.recordHistoryScroll()
 	if isAboutHistory(target) {
 		l.sendHistorySnapshot()
@@ -197,7 +197,7 @@ func (l *SessionLoop) navigate(target string) {
 }
 
 // openHistory opens about:history with the current list snapshot.
-func (l *SessionLoop) openHistory() {
+func (l *Tab) openHistory() {
 	l.recordHistoryScroll()
 	l.sendHistorySnapshot()
 	_ = l.Session.Send(protocol.Command{Body: protocol.Navigate{URL: "about:history", Push: true}})
@@ -205,7 +205,7 @@ func (l *SessionLoop) openHistory() {
 
 // historyBack moves one entry back. The engine restores its cached page or
 // reloads the URL with the entry's scroll offset.
-func (l *SessionLoop) historyBack() {
+func (l *Tab) historyBack() {
 	l.recordHistoryScroll()
 	if l.historyIndex <= 0 || len(l.history) == 0 {
 		l.showStatus("No previous page")
@@ -216,7 +216,7 @@ func (l *SessionLoop) historyBack() {
 }
 
 // historyForward moves one entry forward.
-func (l *SessionLoop) historyForward() {
+func (l *Tab) historyForward() {
 	l.recordHistoryScroll()
 	if len(l.history) == 0 || l.historyIndex+1 >= len(l.history) {
 		l.showStatus("No next page")
@@ -226,7 +226,7 @@ func (l *SessionLoop) historyForward() {
 	l.restoreCurrent()
 }
 
-func (l *SessionLoop) restoreCurrent() {
+func (l *Tab) restoreCurrent() {
 	e := l.history[l.historyIndex]
 	if isAboutHistory(e.url) {
 		l.sendHistorySnapshot()
@@ -238,7 +238,7 @@ func (l *SessionLoop) restoreCurrent() {
 
 // reload refreshes the current document. Reloading about:history refreshes the
 // display snapshot as well.
-func (l *SessionLoop) reload() {
+func (l *Tab) reload() {
 	if isAboutHistory(l.State.Page.URL) {
 		l.recordHistoryScroll()
 		l.sendHistorySnapshot()
@@ -247,7 +247,7 @@ func (l *SessionLoop) reload() {
 }
 
 // showStatus shows a transient front-end status line.
-func (l *SessionLoop) showStatus(text string) {
+func (l *Tab) showStatus(text string) {
 	st := l.State.Page
 	st.Status = text
 	st.FooterLeft = " " + text
