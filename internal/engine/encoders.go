@@ -6,22 +6,18 @@ import (
 	"browser/internal/protocol"
 )
 
-// Encoders are injected by the app (and by tests). The browser never imports
-// the frontend package for terminal encoding.
-var (
-	defaultFrameEncoder func(protocol.Frame, bool, bool) []string
-	defaultPNGEncoder   func(protocol.Frame, int) ([]byte, error)
-)
+// The PNG encoder is injected by the app (and by tests) for the MCP screenshot
+// tool. ANSI encoding belongs to the front end.
+var defaultPNGEncoder func(protocol.Frame, int) ([]byte, error)
 
-// SetEncoders installs the frame and PNG encoders for this session.
-func (b *Session) SetEncoders(frame func(protocol.Frame, bool, bool) []string, png func(protocol.Frame, int) ([]byte, error)) {
-	b.frameEncoder = frame
+// SetPNGEncoder installs the PNG encoder for this session.
+func (b *Session) SetPNGEncoder(png func(protocol.Frame, int) ([]byte, error)) {
 	b.pngEncoder = png
 }
 
-// SetEncoders installs encoders for a headless automation session.
-func (a *Automation) SetEncoders(frame func(protocol.Frame, bool, bool) []string, png func(protocol.Frame, int) ([]byte, error)) {
-	a.b.SetEncoders(frame, png)
+// SetPNGEncoder installs the PNG encoder for a headless automation session.
+func (a *Automation) SetPNGEncoder(png func(protocol.Frame, int) ([]byte, error)) {
+	a.b.SetPNGEncoder(png)
 }
 
 func (b *Session) screenshotPNG(g *Grid, scale int) ([]byte, error) {

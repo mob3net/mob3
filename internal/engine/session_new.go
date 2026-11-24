@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"io"
 	"strings"
 
 	"browser/internal/protocol"
@@ -19,7 +18,6 @@ type SessionConfig struct {
 	Home           string
 	CLIConfig      map[string]string
 	Color          bool
-	Output         io.Writer
 	NoJS, NoPDF    bool
 	LayoutBudget   LayoutBudget
 	MemLimitBytes  int64
@@ -60,7 +58,6 @@ func NewConfiguredSession(c SessionConfig) *Session {
 	if c.CellH > 0 {
 		b.CellH = c.CellH
 	}
-	b.Output = c.Output
 	b.graphicsModes = c.GraphicsModes
 	b.graphicsMode = c.Graphics
 	b.caps = c.Caps &^ protocol.CapColor

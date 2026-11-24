@@ -143,7 +143,7 @@ func execute(o runOptions) int {
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
 			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
 		})
-		auto.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
+		auto.SetPNGEncoder(frontend.RenderPNG)
 		session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 mcp: session: %s\n", cleanError(err))
@@ -212,12 +212,11 @@ func execute(o runOptions) int {
 		Color: !o.NoColor, NoJS: o.NoJS, NoPDF: o.NoPDF,
 		LayoutBudget:  budget,
 		MemLimitBytes: int64(o.MemLimit) << 20, NoBigText: noBigText,
-		Output: os.Stdout,
-		CellW:  cellW, CellH: cellH, Graphics: graphicsMode,
+		CellW: cellW, CellH: cellH, Graphics: graphicsMode,
 		GraphicsModes: graphicsModesFor(graphicsMode),
 		Caps:          capabilitiesFor(nativeGraphicsMode(graphicsMode), cellW, cellH),
 	})
-	b.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
+	b.SetPNGEncoder(frontend.RenderPNG)
 	presenter := frontend.NewPresenter(os.Stdout, b.Color())
 	presenterMode := graphicsMode
 	if presenterMode == frontend.GraphicsAuto || presenterMode == frontend.GraphicsBlocks || presenterMode == frontend.GraphicsNone {

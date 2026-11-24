@@ -2,21 +2,14 @@ package engine
 
 import (
 	"browser/internal/host"
-	"bytes"
 	"context"
-	"encoding/base64"
 	"image"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
-
-func init() {
-	SetDefaultOutput(func(p []byte) (int, error) { return os.Stdout.Write(p) })
-}
 
 var testSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
@@ -28,16 +21,9 @@ func plainLine(s string) string {
 // newTestHTTPClient wraps an injected client for the loader.
 func newTestHTTPClient(c *http.Client) *host.Client { return host.NewClientFromHTTP(c) }
 
-// drawQuiet runs draw while discarding terminal output.
-func drawQuiet(b *Session) {
-	old := os.Stdout
-	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err == nil {
-		os.Stdout = devnull
-		defer func() { os.Stdout = old; devnull.Close() }()
-	}
-	b.draw()
-}
+// drawQuiet runs the frame-building draw path. The engine no longer writes a
+// terminal, so no output redirection is needed.
+func drawQuiet(b *Session) { b.draw() }
 
 func TestGridTracksAndPlacement(t *testing.T) {
 	tracks := parseGridTracks("1fr 2fr", 90, 16)
@@ -639,12 +625,6 @@ func TestMouseHoverShowsLinkInFooter(t *testing.T) {
 
 func withQuietStdout(t *testing.T, fn func()) {
 	t.Helper()
-	old := os.Stdout
-	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err == nil {
-		os.Stdout = f
-		defer func() { os.Stdout = old; f.Close() }()
-	}
 	fn()
 }
 
@@ -711,8 +691,16 @@ func TestPageContentCannotInjectTerminalControls(t *testing.T) {
 	b.Page = page
 	b.URL = u
 	b.Layout = BuildLayout(page.Root, nil, 60)
-	withQuietStdout(t, func() { b.draw() })
-	joined := strings.Join(b.prev, "\n")
+	b.draw()
+	var rows []string
+	for y := 0; y < b.frameBuf.H; y++ {
+		var row strings.Builder
+		for x := 0; x < b.frameBuf.W; x++ {
+			row.WriteRune(b.frameBuf.Cells[y*b.frameBuf.W+x].R)
+		}
+		rows = append(rows, row.String())
+	}
+	joined := strings.Join(rows, "\n")
 	for _, bad := range []string{"\x1b]52", "\x1b[2J", "\x07", "\x1b]0", "\u009b"} {
 		if strings.Contains(joined, bad) {
 			t.Fatalf("page content injected terminal control %q: %q", bad, joined)
@@ -1052,8 +1040,8 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 	if frag == nil {
 		t.Fatal("link text fragment not found")
 	}
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	top, _ := b.viewport()
 	// Hover the link first: the footer would otherwise keep showing its URL
 	// instead of the copy confirmation.
@@ -1066,14 +1054,8 @@ func TestRightClickCopiesLinkURL(t *testing.T) {
 	if got := b.footerLeft(); !strings.Contains(got, "Copied URL") {
 		t.Fatalf("footer = %q, want the copy confirmation", got)
 	}
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || string(decoded) != "https://example.com/story" {
-		t.Fatalf("clipboard text = %q, %v", decoded, err)
+	if sink.text != "https://example.com/story" {
+		t.Fatalf("clipboard text = %q", sink.text)
 	}
 	if b.status != "Copied URL" {
 		t.Fatalf("status = %q", b.status)
@@ -1087,13 +1069,13 @@ func TestRightClickAwayFromLinkDoesNothing(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
 
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	top, _ := b.viewport()
 	b.HandleMouse(MouseEvent{Button: MouseButtonRight, X: 2, Y: top + 1, Press: true})
 
-	if buf.Len() != 0 {
-		t.Fatalf("right-click away from a link copied %q", buf.String())
+	if sink.text != "" {
+		t.Fatalf("right-click away from a link copied %q", sink.text)
 	}
 	if b.status != "" {
 		t.Fatalf("status = %q, want empty", b.status)
@@ -1109,8 +1091,8 @@ func TestCopyStatusClearsOnMotionAndScroll(t *testing.T) {
 	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.Layout = BuildLayout(doc, nil, b.Width)
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 
 	var frag *Frag
 	for i := range b.Layout.Frags {

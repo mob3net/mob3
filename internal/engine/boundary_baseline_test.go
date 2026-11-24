@@ -187,7 +187,6 @@ func BenchmarkBoundaryDraw(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		br.prev = nil
 		br.draw()
 	}
 }
@@ -254,7 +253,6 @@ func BenchmarkBoundarySessionFrame(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		br.prev = nil
 		br.draw()
 		br.emitPendingFrame()
 	}
@@ -277,7 +275,6 @@ func BenchmarkBoundaryTextRepaint(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		br.prev = nil
 		br.draw()
 		br.emitPendingFrame()
 		p.Reset()
@@ -307,7 +304,6 @@ func BenchmarkBoundaryStateChromeRepaint(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		br.prev = nil
 		br.draw()
 		br.emitPendingFrame()
 		p.SetState(br.stateMessage())
@@ -355,7 +351,6 @@ func BenchmarkBoundaryComposedRepaint(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		br.prev = nil
 		br.draw()
 		br.emitPendingFrame()
 		p.Reset()

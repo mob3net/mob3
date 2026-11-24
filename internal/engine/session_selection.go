@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -82,21 +81,14 @@ func (b *Session) copyText(text string) bool {
 		text = text[:cut]
 		truncated = true
 	}
-	if b.sessionOut != nil {
-		// The front end owns terminal escapes and the clipboard.
-		if err := b.sessionOut.Send(protocol.Event{Body: protocol.Clipboard{Text: text}}); err != nil {
-			b.status = "Copy failed"
-			return false
-		}
-	} else {
-		w := b.clipboardWriter
-		if w == nil {
-			w = b.writer()
-		}
-		if _, err := fmt.Fprint(w, osc52(text)); err != nil {
-			b.status = "Copy failed"
-			return false
-		}
+	if b.sessionOut == nil {
+		b.status = "Copy unavailable"
+		return false
+	}
+	// The front end owns terminal escapes and the clipboard.
+	if err := b.sessionOut.Send(protocol.Event{Body: protocol.Clipboard{Text: text}}); err != nil {
+		b.status = "Copy failed"
+		return false
 	}
 	n := utf8.RuneCountInString(text)
 	if truncated {
@@ -234,8 +226,4 @@ func (b *Session) copyRenderedPage(visibleOnly bool) {
 	} else {
 		b.status = fmt.Sprintf("%s (%d lines)", label, pageLines+1)
 	}
-}
-
-func osc52(text string) string {
-	return "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\x07"
 }

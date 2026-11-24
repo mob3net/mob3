@@ -20,7 +20,7 @@ func TestAutomationTransportRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	auto := engine.NewAutomationWithConfig(engine.AutomationConfig{Loader: loader, Width: 60, Height: 20, NoJS: true})
-	auto.SetEncoders(frontend.EncodeFrame, frontend.RenderPNG)
+	auto.SetPNGEncoder(frontend.RenderPNG)
 	session, err := (&protocol.InProc{EventQueue: 8}).Open(context.Background(), 1, &automationHandler{a: auto})
 	if err != nil {
 		t.Fatal(err)

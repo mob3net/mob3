@@ -8,7 +8,7 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -320,7 +320,6 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 		t.Fatalf("fixture image row %d is not below the fold", row)
 	}
 	before := b.Layout
-	b.prev = []string{"frame"}
 	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
@@ -329,9 +328,6 @@ func TestDeferredImageBelowViewportKeepsLayout(t *testing.T) {
 	}
 	if b.Layout != before {
 		t.Fatal("below-fold image forced a layout rebuild")
-	}
-	if b.prev == nil {
-		t.Fatal("below-fold image cleared the frame diff")
 	}
 	if b.PendingImageRow != row {
 		t.Fatalf("pending row = %d, want %d", b.PendingImageRow, row)
@@ -345,7 +341,6 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><img id="near" src="near.png" alt="near"></body></html>`)
 	near := nodeByID(b.Page.Root, "near")
 	before := b.Layout
-	b.prev = []string{"frame"}
 	batch := imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: near, Src: "near.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}}
@@ -357,11 +352,6 @@ func TestDeferredImageInViewportRebuilds(t *testing.T) {
 	}
 	if b.PendingImageRow != 0 {
 		t.Fatalf("visible image left a pending row %d", b.PendingImageRow)
-	}
-	// Half-block art lives in cells the line diff already repaints, so a
-	// text-only frame does not need a full clear that would blink the screen.
-	if b.prev == nil {
-		t.Fatal("text-only frame was fully cleared for a visible image")
 	}
 }
 
@@ -449,76 +439,19 @@ func TestDrawAppliesPendingImageLayout(t *testing.T) {
 	}
 }
 
-func TestBelowViewportImageBatchKeepsVisibleRows(t *testing.T) {
+func TestBelowViewportImageBatchKeepsContentFrame(t *testing.T) {
 	b := deferredImageFixture(t, `<html><body><p>top of the page</p>`+
 		`<div style="height:2000px"></div><img id="far" src="far.png" alt="far"></body></html>`)
 	far := nodeByID(b.Page.Root, "far")
 	drawQuiet(b)
-	before := append([]string(nil), b.prev...)
+	before := append(b.frameBuf.Cells[:0:0], b.frameBuf.Cells...)
 	b.applyDeferredImageBatch(imageBatch{Seq: 1, Results: []imageLoadResult{{
 		Node: far, Src: "far.png", Img: image.NewRGBA(image.Rect(0, 0, 8, 8)),
 	}}})
-	out := capturedDraw(t, b)
-	// Progress lives in the URL row and the footer; the page area must not be
-	// rewritten, or the terminal would visibly blink for an offscreen image.
-	for i := b.headerRows(); i < b.Height-1 && i < len(b.prev); i++ {
-		if b.prev[i] != before[i] {
-			t.Fatalf("page row %d changed for a below-fold image:\nbefore %q\nafter  %q",
-				i, before[i], b.prev[i])
-		}
+	drawQuiet(b)
+	if !reflect.DeepEqual(b.frameBuf.Cells, before) {
+		t.Fatal("a below-fold image changed the visible content frame")
 	}
-	for _, row := range writtenRows(out) {
-		if row >= b.headerRows()+1 && row <= b.Height-1 {
-			t.Fatalf("viewport row %d was rewritten for a below-fold image:\n%q", row, out)
-		}
-	}
-	if strings.Contains(out, "\x1b[2J") || strings.Contains(out, "\x1b[1J") || strings.Contains(out, "\x1b[0J") {
-		t.Fatalf("below-fold image cleared the screen:\n%q", out)
-	}
-}
-
-// capturedDraw runs draw while capturing everything it writes.
-func capturedDraw(t *testing.T, b *Session) string {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "draw-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stdout
-	os.Stdout = f
-	b.draw()
-	os.Stdout = old
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
-}
-
-// writtenRows returns the terminal rows targeted by "\x1b[<row>;1H" writes.
-func writtenRows(out string) []int {
-	var rows []int
-	for i := 0; i+2 < len(out); i++ {
-		if out[i] != 0x1b || out[i+1] != '[' {
-			continue
-		}
-		j := i + 2
-		n, digits := 0, 0
-		for j < len(out) && out[j] >= '0' && out[j] <= '9' {
-			n = n*10 + int(out[j]-'0')
-			j++
-			digits++
-		}
-		if digits == 0 || j+2 >= len(out) || out[j] != ';' || out[j+1] != '1' || out[j+2] != 'H' {
-			continue
-		}
-		rows = append(rows, n)
-		i = j + 2
-	}
-	return rows
 }
 
 func TestStartDeferredImageLoadStreams(t *testing.T) {

@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 	"sync/atomic"
@@ -170,16 +169,9 @@ type Session struct {
 	// about:config with a query.
 	configToken protocol.ConfigToken
 
-	clipboardWriter io.Writer
-	// Output is the terminal writer for the legacy direct draw path. The app
-	// sets it to os.Stdout; tests use the package default hook.
-	Output io.Writer
-
-	color        bool
-	caps         protocol.Capabilities
-	prev         []string
-	frameEncoder func(protocol.Frame, bool, bool) []string
-	pngEncoder   func(protocol.Frame, int) ([]byte, error)
+	color      bool
+	caps       protocol.Capabilities
+	pngEncoder func(protocol.Frame, int) ([]byte, error)
 	// contentGrid is reused between frames and is exactly the page viewport.
 	contentGrid *Grid
 	frameBuf    frameScratch
@@ -200,11 +192,6 @@ type Session struct {
 	// with the page instead of following a top offset.
 	// hideBackgrounds paints CSS background images as a neutral placeholder
 	// instead of their pixels; the images stay loaded and laid out.
-
-	// lastNativeImages tracks graphics-mode transitions (hints or a modal
-	// opening/closing) so the next frame is fully repainted and no stale
-	// terminal image survives.
-	lastNativeImages bool
 
 	// frontendOverlay is true while a front-end-owned window (the view or zoom
 	// menu) covers the page. Native images and scaled text are disabled so
@@ -288,8 +275,6 @@ type Session struct {
 	notice *noticeDialog
 	// selectMenu is the pending single-select choice awaiting the front end.
 	selectMenu  *selectMenuDialog
-	lastScroll  int
-	lastRuns    []protocol.ScaledRun
 	usage       procUsage
 	quitPending bool
 }

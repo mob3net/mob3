@@ -128,14 +128,6 @@ func (b *Session) logJS(kind, msg string) {
 	}
 }
 
-func (b *Session) setMouseReporting(on bool) {
-	if on {
-		_, _ = b.writer().Write([]byte("\x1b[?1000h\x1b[?1003h\x1b[?1006h"))
-	} else {
-		_, _ = b.writer().Write([]byte("\x1b[?1003l\x1b[?1000l\x1b[?1006l"))
-	}
-}
-
 func (b *Session) toggleConsole() {
 	b.consoleOpen = !b.consoleOpen
 	if !b.consoleOpen && b.FindScope == findScopeHTML {
@@ -150,13 +142,9 @@ func (b *Session) toggleConsole() {
 	b.consoleEdit = false
 	b.consoleHist.reset()
 	b.toolHist.reset()
-	b.prev = nil
 	if b.consoleOpen {
 		b.jsErr = false
 	}
-	// Keep mouse reporting on so the sections can be selected by clicking.
-	// Terminal text selection needs the usual Shift-drag override.
-	b.setMouseReporting(true)
 	b.draw()
 }
 

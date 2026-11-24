@@ -1,8 +1,6 @@
 package engine
 
 import (
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
@@ -121,22 +119,16 @@ func TestSelectionHighlightsOnlyContent(t *testing.T) {
 	}
 }
 
-func TestCopySelectionUsesOSC52(t *testing.T) {
+func TestCopySelectionEmitsClipboardEvent(t *testing.T) {
 	b := newTestSession(40, 10)
 	b.Layout = &Layout{Frags: []Frag{{Kind: FragText, Text: "hello", X: 0, Y: 0, W: 5}}}
 	b.Selection.Anchor = CellPos{X: 0, Y: 0}
 	b.Selection.Cursor = CellPos{X: 4, Y: 0}
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	b.HandleKey("y")
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || string(decoded) != "hello" {
-		t.Fatalf("clipboard text = %q, %v", decoded, err)
+	if sink.text != "hello" {
+		t.Fatalf("clipboard text = %q", sink.text)
 	}
 	if b.status != "Copied 5 chars" {
 		t.Fatalf("status = %q", b.status)
@@ -149,13 +141,11 @@ func TestCopySelectionUsesOSC52(t *testing.T) {
 func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
 	b := newTestSession(40, 10)
 	b.URL = mustParse(t, "https://example.com/page")
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	b.HandleKey("y")
-	raw := strings.TrimSuffix(strings.TrimPrefix(buf.String(), "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || string(decoded) != "https://example.com/page" {
-		t.Fatalf("clipboard text = %q, %v", decoded, err)
+	if sink.text != "https://example.com/page" {
+		t.Fatalf("clipboard text = %q", sink.text)
 	}
 	if b.status != "Copied URL" {
 		t.Fatalf("status = %q", b.status)
@@ -172,20 +162,11 @@ func TestYankWholePageAsText(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: root}
 	b.URL = u
 	b.rebuild()
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 
 	b.HandleKey("Y")
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(decoded)
+	text := sink.text
 	for _, want := range []string{"First line", "Second line"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("yanked page is missing %q:\n%s", want, text)
@@ -220,14 +201,14 @@ func TestYankWholePageAsText(t *testing.T) {
 
 func TestYankWholePageWithoutPage(t *testing.T) {
 	b := newTestSession(40, 10)
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	b.HandleKey("Y")
 	if b.status != "Nothing to copy" {
 		t.Fatalf("status = %q, want Nothing to copy", b.status)
 	}
-	if buf.Len() != 0 {
-		t.Fatalf("clipboard written without a page: %q", buf.String())
+	if sink.text != "" {
+		t.Fatalf("clipboard written without a page: %q", sink.text)
 	}
 }
 
@@ -246,20 +227,11 @@ func TestCopyViewportText(t *testing.T) {
 	b.URL = u
 	b.rebuild()
 	b.Scroll = 20
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 
 	b.HandleKey("ctrl-y")
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(decoded)
+	text := sink.text
 	if !strings.HasPrefix(text, "# url=https://example.com/scroll ") || !strings.Contains(text, "scroll=20") {
 		t.Fatalf("viewport copy has no scroll header:\n%s", text)
 	}

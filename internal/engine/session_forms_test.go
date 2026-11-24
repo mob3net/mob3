@@ -340,14 +340,15 @@ func TestInputCtrlASelectsAll(t *testing.T) {
 	}
 	drawQuiet(b)
 	found := false
-	for _, line := range b.prev {
-		if strings.Contains(line, "48;2;31;79;159") {
+	wantBG := protoColor(RGB(0x1f, 0x4f, 0x9f))
+	for _, cell := range b.frameBuf.Cells {
+		if cell.BG == wantBG {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("selected field is not painted with the selection background: %v", b.prev)
+		t.Fatal("selected field is not painted with the selection background")
 	}
 
 	// Typing replaces the whole selection.
