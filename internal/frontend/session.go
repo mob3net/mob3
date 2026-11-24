@@ -105,6 +105,51 @@ type Tab struct {
 	Report func(string)
 }
 
+// AttachPresenter gives the shared presenter to this tab, rebuilding every
+// overlay pointer from the tab's own state. The previous tab must drop its
+// presenter first.
+func (l *Tab) AttachPresenter(p *Presenter) {
+	l.Presenter = p
+	if p == nil {
+		return
+	}
+	p.ResetForTab()
+	p.SetState(l.State.Page)
+	if l.dialogActive {
+		p.SetDialog(&l.dialogView)
+	}
+	if l.selectActive {
+		p.SetSelect(&l.selectView)
+	}
+	if l.downloadActive {
+		p.SetDownload(&l.downloadView)
+	}
+	if l.noticeActive {
+		p.SetNotice(&l.noticeView)
+	}
+	if l.hintActive {
+		p.SetHint(&l.hintView)
+	}
+	if l.consoleActive {
+		l.presentConsole()
+		return
+	}
+	_ = p.Refresh()
+}
+
+// DetachPresenter removes the shared presenter from this tab without touching
+// the presenter itself; the loop resets it before the next tab draws.
+func (l *Tab) DetachPresenter() { l.Presenter = nil }
+
+// BarView is this tab's label in the tab bar.
+func (l *Tab) BarView(active bool) TabView {
+	title := l.State.Page.Title
+	if title == "" {
+		title = l.State.Page.URL
+	}
+	return TabView{Title: title, Active: active}
+}
+
 // handleInput applies one key or mouse token to this tab. It reports whether
 // the tab asked to quit. The SessionLoop owns the terminal channel.
 func (l *Tab) handleInput(k string) (quit bool, err error) {

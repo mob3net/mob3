@@ -31,12 +31,26 @@ const (
 	ChromeHitGraphics
 	ChromeHitDownload
 	ChromeHitStatus
+	ChromeHitTab
+	ChromeHitTabClose
+	ChromeHitNewTab
+	ChromeHitTabPrev
+	ChromeHitTabNext
 )
 
-// ChromeHit is one clickable chrome region.
+// ChromeHit is one clickable chrome region. Index identifies the tab for
+// ChromeHitTab and ChromeHitTabClose; it is zero for every other kind.
 type ChromeHit struct {
 	Kind       ChromeHitKind
+	Index      int
 	X, Y, W, H int
+}
+
+// TabView is the tab-bar label for one tab. It is a plain value so the shared
+// presenter and the per-tab mouse handler can draw the same bar.
+type TabView struct {
+	Title  string
+	Active bool
 }
 
 // ChromeLayout is the header and footer the front end draws for a normal
@@ -76,6 +90,14 @@ var (
 // snapshot. The engine still composes the same cells for overlays and tests;
 // this function is the front-end-owned path.
 func LayoutChrome(st protocol.State) ChromeLayout {
+	return LayoutChromeWithTabs(st, nil, 0)
+}
+
+// LayoutChromeWithTabs is LayoutChrome with tabs sharing the toolbar row. With
+// one tab the normal title stays and only the + button is added. With more
+// tabs, the title slot becomes a strip of up to 30-cell tabs. Tabs shrink to 10
+// cells before the strip starts scrolling from offset with < and > buttons.
+func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeLayout {
 	w, h, rows := st.Width, st.Height, st.HeaderRows
 	if w <= 0 || h <= 0 || rows <= 0 || rows >= h {
 		return ChromeLayout{}
@@ -215,8 +237,7 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 		helpX := configX - helpW
 		histX := helpX - historyW
 		if room := histX - x; room > 0 {
-			tx, label := centeredLabel(x, room, title)
-			g.text(tx, 0, label, colTitleFG, protocol.AttrBold)
+			drawTabStrip(g, &out, x, 0, room, tabs, offset, title)
 		}
 		if historyW > 0 {
 			drawButton(histX, 0, historyLabel, ChromeHitHistory, colButtonBG, colHeaderFG)
@@ -396,6 +417,169 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 	}
 	out.Footer = f.cells
 	return out
+}
+
+// drawTabStrip paints either the normal page title (zero or one tab) or the
+// tab strip in the toolbar's title slot. The surrounding controls keep their
+// cells. The + button stays at the right end of the slot, and once tabs cannot
+// shrink below ten cells the strip shows an offset window with < and > buttons
+// beside it.
+func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []TabView, offset int, title string) {
+	if room < 1 {
+		return
+	}
+	const (
+		maxTabW = 30
+		minTabW = 10
+	)
+	newW := 0
+	if room >= 4 {
+		newW = 3
+	}
+	titleRoom := room - newW
+
+	if len(tabs) <= 1 {
+		if titleRoom > 0 {
+			tx, label := centeredLabel(x, titleRoom, title)
+			g.text(tx, y, label, colTitleFG, protocol.AttrBold)
+		}
+		if newW > 0 {
+			drawNewTabButton(g, out, x+room-newW, y, newW)
+		}
+		return
+	}
+
+	avail := titleRoom
+	if avail < 1 {
+		if newW > 0 {
+			drawNewTabButton(g, out, x+room-newW, y, newW)
+		}
+		return
+	}
+
+	// Fit every tab at up to 30 cells when possible.
+	if avail/len(tabs) >= minTabW {
+		widths := make([]int, len(tabs))
+		base := avail / len(tabs)
+		if base > maxTabW {
+			base = maxTabW
+		}
+		extra := avail - base*len(tabs)
+		for i := range widths {
+			widths[i] = base
+		}
+		for i := 0; extra > 0; i = (i + 1) % len(widths) {
+			if widths[i] < maxTabW {
+				widths[i]++
+				extra--
+			}
+			if i == len(widths)-1 && base == maxTabW {
+				break
+			}
+		}
+		cx := x
+		for i, tab := range tabs {
+			drawTab(g, out, cx, y, widths[i], i, tab)
+			cx += widths[i]
+		}
+		if newW > 0 {
+			drawNewTabButton(g, out, x+room-newW, y, newW)
+		}
+		return
+	}
+
+	// Tabs are at their minimum width, so show a window and scrolling buttons.
+	arrowsW := 2
+	viewport := avail - arrowsW
+	if viewport < 1 {
+		if newW > 0 {
+			drawNewTabButton(g, out, x+room-newW, y, newW)
+		}
+		return
+	}
+	visible := viewport / minTabW
+	if visible < 1 {
+		visible = 1
+	}
+	if visible > len(tabs) {
+		visible = len(tabs)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(tabs)-visible {
+		offset = len(tabs) - visible
+	}
+	tabW := viewport / visible
+	if tabW > minTabW {
+		tabW = minTabW
+	}
+	if tabW < 1 {
+		return
+	}
+	cx := x
+	for i := offset; i < offset+visible; i++ {
+		drawTab(g, out, cx, y, tabW, i, tabs[i])
+		cx += tabW
+	}
+	prevX := x + room - newW - arrowsW
+	g.fill(prevX, y, arrowsW, 1, colButtonBG)
+	g.text(prevX, y, "<", colHeaderFG, protocol.AttrBold)
+	g.text(prevX+1, y, ">", colHeaderFG, protocol.AttrBold)
+	out.Hits = append(out.Hits,
+		ChromeHit{Kind: ChromeHitTabPrev, X: prevX, Y: y, W: 1, H: 1},
+		ChromeHit{Kind: ChromeHitTabNext, X: prevX + 1, Y: y, W: 1, H: 1},
+	)
+	if newW > 0 {
+		drawNewTabButton(g, out, x+room-newW, y, newW)
+	}
+}
+
+// drawTab paints one numbered tab with a close region on the right.
+func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView) {
+	if w < 1 {
+		return
+	}
+	bg, fg := colButtonBG, colHeaderFG
+	if tab.Active {
+		bg, fg = colSelectedBG, colWhite
+	}
+	g.fill(x, y, w, 1, bg)
+	closeW := 0
+	if w >= 4 {
+		closeW = 2
+	}
+	number := fmt.Sprintf("%d ", index+1)
+	numberW := stringWidth(number)
+	if numberW > w-closeW {
+		number = truncateWidth(number, w-closeW)
+		numberW = stringWidth(number)
+	}
+	g.text(x, y, number, fg, 0)
+	if titleW := w - numberW - closeW; titleW > 0 {
+		title := protocol.StripControls(tab.Title)
+		if title == "" {
+			title = "New Tab"
+		}
+		g.text(x+numberW, y, fitWidth(title, titleW), fg, 0)
+	}
+	if closeW > 0 {
+		g.text(x+w-1, y, "×", fg, protocol.AttrBold)
+		out.Hits = append(out.Hits, ChromeHit{
+			Kind: ChromeHitTabClose, Index: index, X: x + w - closeW, Y: y, W: closeW, H: 1,
+		})
+	}
+	out.Hits = append(out.Hits, ChromeHit{
+		Kind: ChromeHitTab, Index: index, X: x, Y: y, W: w - closeW, H: 1,
+	})
+}
+
+func drawNewTabButton(g *chromeCanvas, out *ChromeLayout, x, y, w int) {
+	g.fill(x, y, w, 1, colButtonBG)
+	g.text(x, y, " + ", colHeaderFG, protocol.AttrBold)
+	out.Hits = append(out.Hits, ChromeHit{
+		Kind: ChromeHitNewTab, X: x, Y: y, W: w, H: 1,
+	})
 }
 
 func drawFindBar(f *chromeCanvas, st protocol.State) { drawFindBarAt(f, 0, st) }
