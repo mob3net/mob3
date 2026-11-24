@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -22,20 +21,12 @@ type LoopState struct {
 	Page      protocol.State
 }
 
-// SessionLoop drives one protocol session from the terminal. It owns the
-// event loop; the caller owns terminal setup, session construction and the
-// initial Init/Navigate commands.
-type SessionLoop struct {
+// Tab is one terminal browsing context: its protocol session, per-tab state,
+// history and overlays. The SessionLoop owns terminal input, the shared
+// presenter and the event loop; a tab only draws when it is the active one.
+type Tab struct {
 	Session   protocol.Session
 	Presenter *Presenter
-	Keys      <-chan string
-	Resize    <-chan os.Signal
-	Quit      <-chan os.Signal
-
-	// TerminalSize supplies the current width/height for a resize command.
-	TerminalSize func() (w, h int, ok bool)
-	CellW        int
-	CellH        int
 
 	Stderr io.Writer
 	State  LoopState
@@ -114,103 +105,61 @@ type SessionLoop struct {
 	Report func(string)
 }
 
-// Run processes keys, resizes and session events until the session quits or
-// the terminal closes.
-func (l *SessionLoop) Run() error {
+// handleInput applies one key or mouse token to this tab. It reports whether
+// the tab asked to quit. The SessionLoop owns the terminal channel.
+func (l *Tab) handleInput(k string) (quit bool, err error) {
 	if l.Session == nil {
-		return errors.New("nil session")
+		return false, errors.New("nil session")
 	}
-	if l.Stderr == nil {
-		l.Stderr = os.Stderr
+	if k == "eof" {
+		return true, nil
 	}
-	for {
-		select {
-		case k := <-l.Keys:
-			if k == "eof" {
-				return nil
+	if ev, ok := ParseMouseToken(k); ok {
+		// All-motion reporting sends drag reports for a held side button too;
+		// only the initial press may step through history, or one click would
+		// skip several entries. The rest of the report is still a side-button
+		// event, so keep it off the page.
+		if ev.Button == MouseButtonBack {
+			if ev.Press && !ev.Motion {
+				l.historyBack()
 			}
-			if ev, ok := ParseMouseToken(k); ok {
-				// All-motion reporting sends drag reports for a held side
-				// button too; only the initial press may step through history,
-				// or one click would skip several entries. The rest of the
-				// report is still a side-button event, so keep it off the page.
-				if ev.Button == MouseButtonBack {
-					if ev.Press && !ev.Motion {
-						l.historyBack()
-					}
-					continue
-				}
-				if ev.Button == MouseButtonForward {
-					if ev.Press && !ev.Motion {
-						l.historyForward()
-					}
-					continue
-				}
-				if l.handleChromeMouse(ev) {
-					continue
-				}
-				if ev.Button == MouseButtonRight && ev.Press && !ev.Motion {
-					l.expectClipboard()
-				}
+			return false, nil
+		}
+		if ev.Button == MouseButtonForward {
+			if ev.Press && !ev.Motion {
+				l.historyForward()
 			}
-			if handled, quit := l.handleShellKey(k); handled {
-				if quit {
-					return nil
-				}
-				continue
-			}
-			if k == "esc" || k == "ctrl-c" {
-				l.Session.Abort()
-			}
-			if !l.State.Page.KeysEngine {
-				switch k {
-				case "y", "Y", "ctrl-y":
-					l.expectClipboard()
-				}
-			}
-			if err := l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
-				if errors.Is(err, protocol.ErrSessionClosed) {
-					continue
-				}
-				return fmt.Errorf("session key: %w", err)
-			}
-		case <-l.Resize:
-			if l.TerminalSize == nil {
-				continue
-			}
-			if w, h, ok := l.TerminalSize(); ok {
-				if err := l.Session.Send(protocol.Command{Body: l.resizeCommand(w, h)}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
-					return fmt.Errorf("session resize: %w", err)
-				}
-			}
-		case ev, ok := <-l.Session.Events():
-			if !ok {
-				return nil
-			}
-			quit, err := l.applyEvent(ev)
-			if err != nil {
-				return err
-			}
-			if quit {
-				return nil
-			}
-		case <-l.Quit:
-			return nil
+			return false, nil
+		}
+		if l.handleChromeMouse(ev) {
+			return false, nil
+		}
+		if ev.Button == MouseButtonRight && ev.Press && !ev.Motion {
+			l.expectClipboard()
 		}
 	}
-}
-
-// resizeCommand builds the terminal resize plus the front-end-owned content
-// rectangle.
-func (l *SessionLoop) resizeCommand(w, h int) protocol.Resize {
-	top, contentH := ContentBounds(h)
-	return protocol.Resize{
-		Width: w, Height: h, ContentTop: top, ContentHeight: contentH,
-		CellW: l.CellW, CellH: l.CellH,
+	if handled, quit := l.handleShellKey(k); handled {
+		return quit, nil
 	}
+	if k == "esc" || k == "ctrl-c" {
+		l.Session.Abort()
+	}
+	if !l.State.Page.KeysEngine {
+		switch k {
+		case "y", "Y", "ctrl-y":
+			l.expectClipboard()
+		}
+	}
+	if err := l.Session.Send(protocol.Command{Body: protocol.Key{Token: k}}); err != nil {
+		if errors.Is(err, protocol.ErrSessionClosed) {
+			return false, nil
+		}
+		return false, fmt.Errorf("session key: %w", err)
+	}
+	return false, nil
 }
 
-func (l *SessionLoop) applyEvent(ev protocol.Event) (bool, error) {
+func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 	switch v := ev.Body.(type) {
 	case protocol.Quit:
 		return true, nil
@@ -382,7 +331,7 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // handleShellKey consumes base shell keys while the engine is not in a prompt,
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
-func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
+func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	if l.consoleActive {
 		return l.handleConsoleKey(k)
 	}
@@ -489,7 +438,7 @@ func (l *SessionLoop) handleShellKey(k string) (handled, quit bool) {
 	return false, false
 }
 
-func (l *SessionLoop) applyConsoleView(v protocol.ConsoleView) {
+func (l *Tab) applyConsoleView(v protocol.ConsoleView) {
 	if !l.consoleActive {
 		l.consolePane = v.Pane
 		l.consoleEdit = false
@@ -513,7 +462,7 @@ func (l *SessionLoop) applyConsoleView(v protocol.ConsoleView) {
 	l.presentConsole()
 }
 
-func (l *SessionLoop) presentConsole() {
+func (l *Tab) presentConsole() {
 	if l.Presenter == nil {
 		return
 	}
@@ -534,11 +483,11 @@ func (l *SessionLoop) presentConsole() {
 	_ = l.Presenter.PresentConsole(&l.consoleView)
 }
 
-func (l *SessionLoop) consoleAction(a protocol.ConsoleAction) {
+func (l *Tab) consoleAction(a protocol.ConsoleAction) {
 	_ = l.Session.Send(protocol.Command{Body: a})
 }
 
-func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
+func (l *Tab) handleConsoleKey(k string) (handled, quit bool) {
 	if l.consoleFindActive {
 		return l.handleConsoleFindKey(k)
 	}
@@ -661,7 +610,7 @@ func (l *SessionLoop) handleConsoleKey(k string) (handled, quit bool) {
 // sections, the input row focuses the JS/Tools prompt, the footer >_ icon
 // closes the console, and the wheel scrolls the active section. Every report is
 // consumed so a click cannot reach the page underneath.
-func (l *SessionLoop) handleConsoleMouse(ev MouseEvent) bool {
+func (l *Tab) handleConsoleMouse(ev MouseEvent) bool {
 	v := l.consoleView
 	if v.Width <= 0 || v.Height <= 0 || v.Quit || l.consoleFindActive {
 		return true
@@ -705,7 +654,7 @@ func (l *SessionLoop) handleConsoleMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) handleConsoleFindKey(k string) (handled, quit bool) {
+func (l *Tab) handleConsoleFindKey(k string) (handled, quit bool) {
 	switch k {
 	case "esc", "enter", "tab", "backtab":
 		l.consoleFindActive = false
@@ -735,7 +684,7 @@ func (l *SessionLoop) handleConsoleFindKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) startHints(v protocol.Hints) {
+func (l *Tab) startHints(v protocol.Hints) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -752,7 +701,7 @@ func (l *SessionLoop) startHints(v protocol.Hints) {
 	l.syncHint()
 }
 
-func (l *SessionLoop) syncHint() {
+func (l *Tab) syncHint() {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -767,7 +716,7 @@ func (l *SessionLoop) syncHint() {
 	}
 }
 
-func (l *SessionLoop) closeHint() {
+func (l *Tab) closeHint() {
 	if !l.hintActive {
 		return
 	}
@@ -780,12 +729,12 @@ func (l *SessionLoop) closeHint() {
 	}
 }
 
-func (l *SessionLoop) answerHint(target int) {
+func (l *Tab) answerHint(target int) {
 	l.closeHint()
 	_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Target: target}})
 }
 
-func (l *SessionLoop) cancelHint() {
+func (l *Tab) cancelHint() {
 	if !l.hintActive {
 		return
 	}
@@ -793,7 +742,7 @@ func (l *SessionLoop) cancelHint() {
 	_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Cancel: true}})
 }
 
-func (l *SessionLoop) handleHintKey(k string) (handled, quit bool) {
+func (l *Tab) handleHintKey(k string) (handled, quit bool) {
 	if l.hintView.Confirm {
 		switch k {
 		case "enter", "y", "Y":
@@ -856,7 +805,7 @@ func (l *SessionLoop) handleHintKey(k string) (handled, quit bool) {
 	return false, false
 }
 
-func (l *SessionLoop) startDownload(v protocol.Download) {
+func (l *Tab) startDownload(v protocol.Download) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -869,7 +818,7 @@ func (l *SessionLoop) startDownload(v protocol.Download) {
 	l.syncDownload()
 }
 
-func (l *SessionLoop) syncDownload() {
+func (l *Tab) syncDownload() {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -884,7 +833,7 @@ func (l *SessionLoop) syncDownload() {
 	}
 }
 
-func (l *SessionLoop) closeDownload(copied bool, chars int) {
+func (l *Tab) closeDownload(copied bool, chars int) {
 	if !l.downloadActive {
 		return
 	}
@@ -900,7 +849,7 @@ func (l *SessionLoop) closeDownload(copied bool, chars int) {
 	}})
 }
 
-func (l *SessionLoop) handleDownloadKey(k string) (handled, quit bool) {
+func (l *Tab) handleDownloadKey(k string) (handled, quit bool) {
 	switch k {
 	case "y", "Y":
 		chars := 0
@@ -921,7 +870,7 @@ func (l *SessionLoop) handleDownloadKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) handleDownloadMouse(ev MouseEvent) bool {
+func (l *Tab) handleDownloadMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
@@ -936,7 +885,7 @@ func (l *SessionLoop) handleDownloadMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) startNotice(v protocol.Notice) {
+func (l *Tab) startNotice(v protocol.Notice) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -949,7 +898,7 @@ func (l *SessionLoop) startNotice(v protocol.Notice) {
 	l.syncNotice()
 }
 
-func (l *SessionLoop) syncNotice() {
+func (l *Tab) syncNotice() {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -964,7 +913,7 @@ func (l *SessionLoop) syncNotice() {
 	}
 }
 
-func (l *SessionLoop) closeNotice() {
+func (l *Tab) closeNotice() {
 	if !l.noticeActive {
 		return
 	}
@@ -978,7 +927,7 @@ func (l *SessionLoop) closeNotice() {
 	_ = l.Session.Send(protocol.Command{Body: protocol.ModalClose{Kind: protocol.ModalNotice}})
 }
 
-func (l *SessionLoop) handleNoticeKey(k string) (handled, quit bool) {
+func (l *Tab) handleNoticeKey(k string) (handled, quit bool) {
 	switch k {
 	case "enter", "esc", "q", "ctrl-c":
 		l.closeNotice()
@@ -986,7 +935,7 @@ func (l *SessionLoop) handleNoticeKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) handleNoticeMouse(ev MouseEvent) bool {
+func (l *Tab) handleNoticeMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
@@ -1001,7 +950,7 @@ func (l *SessionLoop) handleNoticeMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) startSelect(v protocol.Select) {
+func (l *Tab) startSelect(v protocol.Select) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -1015,7 +964,7 @@ func (l *SessionLoop) startSelect(v protocol.Select) {
 	l.syncSelect()
 }
 
-func (l *SessionLoop) syncSelect() {
+func (l *Tab) syncSelect() {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -1030,7 +979,7 @@ func (l *SessionLoop) syncSelect() {
 	}
 }
 
-func (l *SessionLoop) closeSelect() {
+func (l *Tab) closeSelect() {
 	if !l.selectActive {
 		return
 	}
@@ -1043,13 +992,13 @@ func (l *SessionLoop) closeSelect() {
 	}
 }
 
-func (l *SessionLoop) answerSelect(index int, cancel bool) {
+func (l *Tab) answerSelect(index int, cancel bool) {
 	id := l.selectView.ID
 	l.closeSelect()
 	_ = l.Session.Send(protocol.Command{Body: protocol.SelectResult{ID: id, Index: index, Cancel: cancel}})
 }
 
-func (l *SessionLoop) handleSelectKey(k string) (handled, quit bool) {
+func (l *Tab) handleSelectKey(k string) (handled, quit bool) {
 	n := len(l.selectView.Options)
 	switch k {
 	case "esc", "q", "ctrl-c":
@@ -1079,7 +1028,7 @@ func (l *SessionLoop) handleSelectKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) handleSelectMouse(ev MouseEvent) bool {
+func (l *Tab) handleSelectMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
@@ -1100,7 +1049,7 @@ func (l *SessionLoop) handleSelectMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) startDialog(v protocol.Dialog) {
+func (l *Tab) startDialog(v protocol.Dialog) {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -1119,7 +1068,7 @@ func (l *SessionLoop) startDialog(v protocol.Dialog) {
 	l.syncDialog()
 }
 
-func (l *SessionLoop) syncDialog() {
+func (l *Tab) syncDialog() {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -1134,7 +1083,7 @@ func (l *SessionLoop) syncDialog() {
 	}
 }
 
-func (l *SessionLoop) closeDialog() {
+func (l *Tab) closeDialog() {
 	if !l.dialogActive {
 		return
 	}
@@ -1147,13 +1096,13 @@ func (l *SessionLoop) closeDialog() {
 	}
 }
 
-func (l *SessionLoop) answerDialog(ok bool, text string) {
+func (l *Tab) answerDialog(ok bool, text string) {
 	id := l.dialog.ID
 	l.closeDialog()
 	_ = l.Session.Send(protocol.Command{Body: protocol.DialogResult{ID: id, OK: ok, Text: text}})
 }
 
-func (l *SessionLoop) handleDialogKey(k string) (handled, quit bool) {
+func (l *Tab) handleDialogKey(k string) (handled, quit bool) {
 	switch l.dialog.Kind {
 	case protocol.DialogAlert:
 		switch k {
@@ -1193,7 +1142,7 @@ func (l *SessionLoop) handleDialogKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) handleDialogMouse(ev MouseEvent) bool {
+func (l *Tab) handleDialogMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
@@ -1227,7 +1176,7 @@ func zoomPresetIndex(percent int) int {
 	return idx
 }
 
-func (l *SessionLoop) startMenu(kind protocol.MenuKind) {
+func (l *Tab) startMenu(kind protocol.MenuKind) {
 	if l.menuKind != protocol.MenuNone {
 		return
 	}
@@ -1243,7 +1192,7 @@ func (l *SessionLoop) startMenu(kind protocol.MenuKind) {
 // notifyOverlay tells the engine whether a front-end window covers the page.
 // The engine then repaints native images as half-block art and scaled text at
 // normal size, so neither can composite above the window.
-func (l *SessionLoop) notifyOverlay(open bool) {
+func (l *Tab) notifyOverlay(open bool) {
 	if l.overlaySent == open {
 		return
 	}
@@ -1255,7 +1204,7 @@ func (l *SessionLoop) notifyOverlay(open bool) {
 	_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppFrontendOverlay, Arg: arg}})
 }
 
-func (l *SessionLoop) syncMenu() {
+func (l *Tab) syncMenu() {
 	l.notifyOverlay(true)
 	st := l.State.Page
 	st.Menu = l.menuKind
@@ -1269,7 +1218,7 @@ func (l *SessionLoop) syncMenu() {
 	}
 }
 
-func (l *SessionLoop) closeMenu() {
+func (l *Tab) closeMenu() {
 	if l.menuKind == protocol.MenuNone {
 		return
 	}
@@ -1282,7 +1231,7 @@ func (l *SessionLoop) closeMenu() {
 	}
 }
 
-func (l *SessionLoop) handleMenuKey(k string) (handled, quit bool) {
+func (l *Tab) handleMenuKey(k string) (handled, quit bool) {
 	if k == "ctrl-c" {
 		l.Session.Abort()
 	}
@@ -1329,7 +1278,7 @@ func menuRowCount(kind protocol.MenuKind) int {
 	return 3
 }
 
-func (l *SessionLoop) activateMenu() {
+func (l *Tab) activateMenu() {
 	if l.menuKind == protocol.MenuView {
 		switch l.menuIndex {
 		case 0:
@@ -1348,7 +1297,7 @@ func (l *SessionLoop) activateMenu() {
 	}
 }
 
-func (l *SessionLoop) handleMenuMouse(ev MouseEvent) bool {
+func (l *Tab) handleMenuMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
@@ -1370,7 +1319,7 @@ func (l *SessionLoop) handleMenuMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) startFind() {
+func (l *Tab) startFind() {
 	if l.findActive {
 		return
 	}
@@ -1383,7 +1332,7 @@ func (l *SessionLoop) startFind() {
 	_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: ""}})
 }
 
-func (l *SessionLoop) syncFind() {
+func (l *Tab) syncFind() {
 	st := l.State.Page
 	st.FindActive = true
 	st.FindText = l.findText
@@ -1398,7 +1347,7 @@ func (l *SessionLoop) syncFind() {
 	}
 }
 
-func (l *SessionLoop) closeFind() {
+func (l *Tab) closeFind() {
 	if !l.findActive {
 		return
 	}
@@ -1416,7 +1365,7 @@ func (l *SessionLoop) closeFind() {
 	}
 }
 
-func (l *SessionLoop) findStatus() string {
+func (l *Tab) findStatus() string {
 	if l.findText == "" {
 		return ""
 	}
@@ -1430,7 +1379,7 @@ func (l *SessionLoop) findStatus() string {
 	return fmt.Sprintf("Find %d/%d: %s", cur, l.findTotal, l.findText)
 }
 
-func (l *SessionLoop) handleFindKey(k string) (handled, quit bool) {
+func (l *Tab) handleFindKey(k string) (handled, quit bool) {
 	if k == "ctrl-c" {
 		l.Session.Abort()
 	}
@@ -1465,7 +1414,7 @@ func (l *SessionLoop) handleFindKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) startPrompt(vim bool) {
+func (l *Tab) startPrompt(vim bool) {
 	if l.promptActive {
 		return
 	}
@@ -1479,7 +1428,7 @@ func (l *SessionLoop) startPrompt(vim bool) {
 	l.syncPrompt()
 }
 
-func (l *SessionLoop) syncPrompt() {
+func (l *Tab) syncPrompt() {
 	st := l.State.Page
 	st.PromptActive = true
 	st.PromptText = l.promptText
@@ -1493,7 +1442,7 @@ func (l *SessionLoop) syncPrompt() {
 	}
 }
 
-func (l *SessionLoop) closePrompt() {
+func (l *Tab) closePrompt() {
 	if !l.promptActive {
 		return
 	}
@@ -1509,7 +1458,7 @@ func (l *SessionLoop) closePrompt() {
 	}
 }
 
-func (l *SessionLoop) handlePromptKey(k string) (handled, quit bool) {
+func (l *Tab) handlePromptKey(k string) (handled, quit bool) {
 	switch k {
 	case "enter":
 		text := strings.TrimSpace(l.promptText)
@@ -1560,7 +1509,7 @@ func (l *SessionLoop) handlePromptKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *SessionLoop) startQuit() {
+func (l *Tab) startQuit() {
 	if l.quitPending {
 		return
 	}
@@ -1580,7 +1529,7 @@ func (l *SessionLoop) startQuit() {
 	}
 }
 
-func (l *SessionLoop) cancelQuit() {
+func (l *Tab) cancelQuit() {
 	if !l.quitPending {
 		return
 	}
@@ -1595,7 +1544,7 @@ func (l *SessionLoop) cancelQuit() {
 // handleChromeMouse consumes a pointer report on the front-end-owned header or
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
-func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
+func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	// A scrollbar drag owns the pointer until release: it keeps tracking when
 	// the pointer leaves the track or the content rows, and a release anywhere
 	// ends it so a lost release cannot leave the bar following the pointer.
@@ -1675,7 +1624,7 @@ func (l *SessionLoop) handleChromeMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) handlePromptMouse(ev MouseEvent) bool {
+func (l *Tab) handlePromptMouse(ev MouseEvent) bool {
 	if ev.Wheel != 0 {
 		return false
 	}
@@ -1707,7 +1656,7 @@ func (l *SessionLoop) handlePromptMouse(ev MouseEvent) bool {
 // handleScrollbarMouse owns the scrollbar track in the last content column.
 // It reports whether the report was consumed; other content mouse events pass
 // through to the engine.
-func (l *SessionLoop) handleScrollbarMouse(ev MouseEvent) bool {
+func (l *Tab) handleScrollbarMouse(ev MouseEvent) bool {
 	st := l.State.Page
 	if st.MaxScroll <= 0 || st.Width < 2 {
 		return false
@@ -1745,7 +1694,7 @@ func (l *SessionLoop) handleScrollbarMouse(ev MouseEvent) bool {
 	return true
 }
 
-func (l *SessionLoop) scrollTo(row, contentH int) {
+func (l *Tab) scrollTo(row, contentH int) {
 	st := l.State.Page
 	max := st.MaxScroll
 	_, thumbH := scrollThumb(contentH, max, st.Scroll)
@@ -1767,7 +1716,7 @@ func (l *SessionLoop) scrollTo(row, contentH int) {
 	_ = l.Session.Send(protocol.Command{Body: protocol.Scroll{To: target, HasTo: true}})
 }
 
-func (l *SessionLoop) activateChromeHit(kind ChromeHitKind) {
+func (l *Tab) activateChromeHit(kind ChromeHitKind) {
 	var body protocol.CommandBody
 	switch kind {
 	case ChromeHitBack:

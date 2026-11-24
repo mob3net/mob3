@@ -17,13 +17,13 @@ const maxClipboardBytes = 100 * 1024
 const clipboardPendingWindow = 2 * time.Second
 
 // expectClipboard authorizes the next Clipboard event for a user copy action.
-func (l *SessionLoop) expectClipboard() {
+func (l *Tab) expectClipboard() {
 	l.clipboardPendingUntil = time.Now().Add(clipboardPendingWindow)
 }
 
 // takeClipboardPermission consumes the one-shot copy authorization. A stale or
 // absent permission means the event is unsolicited and must be ignored.
-func (l *SessionLoop) takeClipboardPermission() bool {
+func (l *Tab) takeClipboardPermission() bool {
 	if l.clipboardPendingUntil.IsZero() || time.Now().After(l.clipboardPendingUntil) {
 		l.clipboardPendingUntil = time.Time{}
 		return false
@@ -34,7 +34,7 @@ func (l *SessionLoop) takeClipboardPermission() bool {
 
 // clipboardUnavailable reports a failed or missing terminal clipboard write
 // instead of leaving the engine's "Copied" status in place.
-func (l *SessionLoop) clipboardUnavailable() {
+func (l *Tab) clipboardUnavailable() {
 	st := l.State.Page
 	st.Status = "Clipboard unavailable"
 	l.State.Page = st
