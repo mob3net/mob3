@@ -11,6 +11,9 @@ type Frame struct {
 	Layout *Layout
 	URL    *url.URL
 	Scroll int
+	// JS is the frame's JavaScript runtime. It is nil when scripts are
+	// disabled or before the document starts.
+	JS *JSRuntime
 }
 
 // NewFrame creates an empty top-level frame.

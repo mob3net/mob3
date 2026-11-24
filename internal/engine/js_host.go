@@ -27,9 +27,11 @@ type ImportTask struct {
 	Err    error
 }
 
-// JSHost is the engine's contract with the session/host around the JavaScript
-// runtime. It intentionally exposes no browser package types: viewport state,
-// layout, DOM hit testing, dialogs and brokered I/O only.
+// JSHost is the engine's contract with one frame's JavaScript runtime. It
+// intentionally exposes no browser package types: viewport state, layout, DOM
+// hit testing, dialogs and brokered I/O only. Layout, scroll and node lookup
+// come from the frame; viewport dimensions and shell effects stay tab-level
+// until child frames have their own viewport and input state.
 type JSHost interface {
 	Width() int
 	Height() int

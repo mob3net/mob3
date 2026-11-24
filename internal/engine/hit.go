@@ -24,7 +24,15 @@ func (s *Session) LinkAt(x, y int) int {
 
 // NodeAt returns the nearest element under a document cell, or nil.
 func (s *Session) NodeAt(x, y int) *Node {
-	if s.Layout == nil {
+	if s.Frame == nil {
+		return nil
+	}
+	return s.Frame.NodeAt(x, y)
+}
+
+// NodeAt returns the nearest element under one of the frame's document cells.
+func (f *Frame) NodeAt(x, y int) *Node {
+	if f == nil || f.Layout == nil {
 		return nil
 	}
 	var best *Node
@@ -37,15 +45,15 @@ func (s *Session) NodeAt(x, y int) *Node {
 			best, bestLayer, bestArea, bestDepth = n, layer, area, depth
 		}
 	}
-	for i := len(s.Layout.Frags) - 1; i >= 0; i-- {
-		f := &s.Layout.Frags[i]
-		if f.Node == nil || (f.Kind != FragText && f.Kind != FragImage) {
+	for i := len(f.Layout.Frags) - 1; i >= 0; i-- {
+		frag := &f.Layout.Frags[i]
+		if frag.Node == nil || (frag.Kind != FragText && frag.Kind != FragImage) {
 			continue
 		}
-		if x < f.X || x >= f.X+f.W || y < f.Y || y >= f.Y+f.H {
+		if x < frag.X || x >= frag.X+frag.W || y < frag.Y || y >= frag.Y+frag.H {
 			continue
 		}
-		for p := f.Node; p != nil; p = p.Parent {
+		for p := frag.Node; p != nil; p = p.Parent {
 			if p.Type == ElementNode {
 				consider(p, OverlayLayer(p), -1, nodeDepth(p))
 				break
@@ -54,7 +62,7 @@ func (s *Session) NodeAt(x, y int) *Node {
 	}
 	// Padding and background gaps have no text fragment. Use laid-out element
 	// boxes so hover menus remain reachable while moving between their items.
-	for n, r := range s.Layout.Boxes {
+	for n, r := range f.Layout.Boxes {
 		if r.W <= 0 || r.H <= 0 || x < r.X || x >= r.X+r.W || y < r.Y || y >= r.Y+r.H {
 			continue
 		}

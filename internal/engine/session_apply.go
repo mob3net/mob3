@@ -16,7 +16,7 @@ type SessionHooks interface {
 	BeginPage()
 	ResetUI()
 	ResetConsole()
-	StartJS(*Page)
+	StartJS(*Frame)
 	ApplyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool
 	NavigateEntry(method, target string, body []byte, contentType string, entryID uint64, historyPush, force bool)
 	Rebuild()
@@ -36,7 +36,7 @@ type SessionHooks interface {
 	ConsoleOpen() bool
 	HoverRebuild() (pending bool, at time.Time)
 	ClearHoverRebuild()
-	NewJSHost() JSHost
+	NewJSHost(*Frame) JSHost
 	SetModuleErr(bool)
 }
 
@@ -112,7 +112,7 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 		}
 	}
 	h.ResetConsole()
-	h.StartJS(page)
+	h.StartJS(s.Frame)
 	if h.ApplyPendingJS(true, res.EntryID, res.HistoryPush) {
 		return
 	}
