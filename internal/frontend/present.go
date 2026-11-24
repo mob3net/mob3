@@ -31,6 +31,8 @@ type Presenter struct {
 	lastFrame     protocol.Frame
 	hasFrame      bool
 	lastOverlay   bool
+	tabs          []TabView
+	tabOffset     int
 }
 
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
@@ -56,6 +58,68 @@ func (p *Presenter) ClearGraphics(sb *strings.Builder) {
 // Reset forces the next frame to repaint every row. It is used by tests and by
 // callers that have written over the screen out of band.
 func (p *Presenter) Reset() { p.prev = nil }
+
+// ResetForTab prepares the shared presenter for a tab switch. Native
+// placements from the old tab are removed, all overlay pointers are cleared and
+// the cached frame is dropped so the new tab repaints from scratch.
+func (p *Presenter) ResetForTab() {
+	if p == nil {
+		return
+	}
+	if p.gfx != nil && p.out != nil {
+		var sb strings.Builder
+		p.gfx.Clear(&sb)
+		if sb.Len() > 0 {
+			_, _ = io.WriteString(p.out, sb.String())
+		}
+	}
+	p.prev = nil
+	p.lastFrame = protocol.Frame{}
+	p.hasFrame = false
+	p.lastScroll = 0
+	p.lastNative = false
+	p.nativeSet = false
+	p.state = protocol.State{}
+	p.dialog = nil
+	p.selectView = nil
+	p.download = nil
+	p.notice = nil
+	p.hint = nil
+	p.console = nil
+	p.consoleActive = false
+	p.lastOverlay = false
+}
+
+// SetTabs installs the tab-bar labels. A change forces a repaint because the
+// toolbar row is composed from the presenter's cached state.
+func (p *Presenter) SetTabs(tabs []TabView) {
+	if p == nil || tabsEqual(p.tabs, tabs) {
+		return
+	}
+	p.tabs = append(p.tabs[:0], tabs...)
+	p.prev = nil
+}
+
+// SetTabOffset selects the first visible tab when the strip has to scroll.
+func (p *Presenter) SetTabOffset(offset int) {
+	if p == nil || p.tabOffset == offset {
+		return
+	}
+	p.tabOffset = offset
+	p.prev = nil
+}
+
+func tabsEqual(a, b []TabView) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 // SetState stores the chrome snapshot. Normal frames are composed from it when
 // State.FrontendChrome is set.
@@ -190,7 +254,7 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 	headerRows := 0
 	if p.state.FrontendChrome && p.state.Width == f.W &&
 		p.state.HeaderRows > 0 && p.state.Height == f.H+p.state.HeaderRows+1 {
-		layout := LayoutChrome(p.state)
+		layout := LayoutChromeWithTabs(p.state, p.tabs, p.tabOffset)
 		if len(layout.Header) == p.state.Width*p.state.HeaderRows &&
 			len(layout.Footer) == p.state.Width {
 			if p.state.Menu != protocol.MenuNone {
