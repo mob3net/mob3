@@ -53,6 +53,8 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),
 	}
+	b.router = newFrameRouter()
+	b.router.Register(b.Frame)
 	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
 	SetZoom(b.Zoom)

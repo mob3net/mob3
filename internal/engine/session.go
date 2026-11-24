@@ -122,6 +122,7 @@ type Session struct {
 
 	loader  *Loader
 	browser *BrowserContext
+	router  *FrameRouter
 
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
 	// negative top means direct callers/tests use the legacy derivation.
@@ -293,11 +294,14 @@ type Session struct {
 
 // NewSession creates an empty page session.
 func NewEmptySession() *Session {
-	return &Session{
+	s := &Session{
 		Frame: NewFrame(), ImageCh: make(chan ImageBatch, 1),
 		LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16),
 		browser: NewBrowserContext(),
 	}
+	s.router = newFrameRouter()
+	s.router.Register(s.Frame)
+	return s
 }
 
 // PageKind classifies the current page for the shell.

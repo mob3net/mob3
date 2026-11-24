@@ -1,12 +1,20 @@
 package engine
 
-import "net/url"
+import (
+	"net/url"
+
+	"browser/internal/protocol"
+)
+
+// FrameID identifies one frame inside a tab.
+type FrameID uint32
 
 // Frame is one browsing context. For now it is the tab's top-level document;
 // child frames and a frame tree join it with the iframe work. A frame owns its
 // document, layout, URL and scroll position, while the Session remains the
 // tab-level façade that also carries the shell, loader and history state.
 type Frame struct {
+	id     FrameID
 	Page   *Page
 	Layout *Layout
 	URL    *url.URL
@@ -19,4 +27,21 @@ type Frame struct {
 // NewFrame creates an empty top-level frame.
 func NewFrame() *Frame {
 	return &Frame{}
+}
+
+// ID returns the frame's router ID, or zero when it is not registered.
+func (f *Frame) ID() FrameID {
+	if f == nil {
+		return 0
+	}
+	return f.id
+}
+
+// Origin returns the frame's canonical origin. It is derived from the
+// committed document URL, never from a script-supplied value.
+func (f *Frame) Origin() protocol.Origin {
+	if f == nil {
+		return protocol.Origin{Opaque: true}
+	}
+	return protocol.OriginOf(f.URL)
 }

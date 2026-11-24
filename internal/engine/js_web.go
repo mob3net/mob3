@@ -52,11 +52,7 @@ func (j *jsRuntime) newURL(input string, base sobek.Value) *sobek.Object {
 	_ = o.Set("pathname", path)
 	_ = o.Set("search", prefixQuery(u.RawQuery))
 	_ = o.Set("hash", prefixHash(u.Fragment))
-	origin := u.Scheme + "://" + u.Host
-	if u.Scheme == "" || u.Scheme == "file" || u.Scheme == "about" || u.Scheme == "data" {
-		origin = "null"
-	}
-	_ = o.Set("origin", origin)
+	_ = o.Set("origin", protocol.OriginOf(u).String())
 	_ = o.Set("username", u.User.Username())
 	pw, _ := u.User.Password()
 	_ = o.Set("password", pw)
@@ -947,25 +943,7 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 }
 
 func sameOrigin(a, b *url.URL) bool {
-	if a == nil || b == nil || a.Hostname() == "" {
-		return false
-	}
-	if a.Scheme != "http" && a.Scheme != "https" {
-		return false
-	}
-	if a.Scheme != b.Scheme || !strings.EqualFold(a.Hostname(), b.Hostname()) {
-		return false
-	}
-	port := func(u *url.URL) string {
-		if p := u.Port(); p != "" {
-			return p
-		}
-		if u.Scheme == "https" {
-			return "443"
-		}
-		return "80"
-	}
-	return port(a) == port(b)
+	return protocol.SameOrigin(a, b)
 }
 
 func (j *jsRuntime) fireXHR(st *xhrState, typ string) {

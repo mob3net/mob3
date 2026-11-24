@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+
+	"browser/internal/protocol"
 )
 
 // ResolveInput turns typed input into a URL, falling back to the search
@@ -61,27 +63,10 @@ func ResolveURL(input string, base *url.URL) (*url.URL, error) {
 }
 
 // requestOrigin returns the origin of a document URL in the form browsers use
-// for the Origin header: lowercase scheme and host, no default port, and empty
-// for non-HTTP(S) schemes.
+// for the Origin header: canonical scheme and host, no default port, and empty
+// for opaque or non-HTTP(S) schemes.
 func requestOrigin(u *url.URL) string {
-	if u == nil {
-		return ""
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return ""
-	}
-	host := strings.ToLower(u.Host)
-	switch {
-	case scheme == "http" && strings.HasSuffix(host, ":80"):
-		host = strings.TrimSuffix(host, ":80")
-	case scheme == "https" && strings.HasSuffix(host, ":443"):
-		host = strings.TrimSuffix(host, ":443")
-	}
-	if host == "" {
-		return ""
-	}
-	return scheme + "://" + host
+	return protocol.OriginOf(u).HeaderValue()
 }
 
 func looksLikeSearch(s string) bool {
