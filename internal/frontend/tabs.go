@@ -111,6 +111,16 @@ func (l *SessionLoop) Run() error {
 				return nil
 			}
 			k, _ := recv.Interface().(string)
+			if l.Active.Dead {
+				quit, err := l.Active.handleDeadInput(k)
+				if err != nil {
+					return err
+				}
+				if quit {
+					return nil
+				}
+				continue
+			}
 			quit, err := l.Active.handleInput(k)
 			if err != nil {
 				return err
@@ -139,10 +149,7 @@ func (l *SessionLoop) Run() error {
 		case 3:
 			tab := eventTabs[chosen]
 			if !ok {
-				l.removeTab(tab)
-				if l.Active == nil {
-					return nil
-				}
+				l.markDead(tab, "protocol session ended")
 				continue
 			}
 			ev, _ := recv.Interface().(protocol.Event)
@@ -190,6 +197,21 @@ func (l *SessionLoop) handleEvent(tab *Tab, ev protocol.Event) (bool, error) {
 	}
 	l.syncTabBar()
 	return quit, nil
+}
+
+// markDead contains a failed tab: its transport is released, but the tab keeps
+// its place in the bar and can still be selected, closed or used to open another
+// tab.
+func (l *SessionLoop) markDead(tab *Tab, message string) {
+	if tab == nil {
+		return
+	}
+	tab.MarkDead(message)
+	l.releaseTab(tab)
+	if tab == l.Active && l.Presenter != nil {
+		tab.AttachPresenter(l.Presenter)
+	}
+	l.syncTabBar()
 }
 
 func (l *SessionLoop) removeTab(tab *Tab) {

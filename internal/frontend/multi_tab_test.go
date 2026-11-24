@@ -305,6 +305,117 @@ func TestNewTabStartsURLPrompt(t *testing.T) {
 	}
 }
 
+func TestCrashedTabStaysInTheBar(t *testing.T) {
+	active := multiTab(1, "one")
+	background := multiTab(2, "two")
+	loop := &SessionLoop{
+		Tabs: []*Tab{active, background}, Active: active,
+		Presenter: NewPresenter(io.Discard, true),
+	}
+	loop.syncTabBar()
+	loop.markDead(background, "engine panic")
+	if !background.Dead || background.Session != nil {
+		t.Fatalf("crashed tab = dead %v session %v", background.Dead, background.Session)
+	}
+	if len(loop.Tabs) != 2 {
+		t.Fatalf("crashed tab was removed: %d tabs", len(loop.Tabs))
+	}
+	if background.BarView(false).Title != "Crashed" {
+		t.Fatalf("crashed tab title = %q", background.BarView(false).Title)
+	}
+	if active.Dead || active.Session == nil {
+		t.Fatal("other tab was affected")
+	}
+}
+
+func TestCrashedActiveTabKeepsShellKeys(t *testing.T) {
+	tab := multiTab(1, "one")
+	tab.Presenter = NewPresenter(io.Discard, true)
+	loop := &SessionLoop{Tabs: []*Tab{tab}, Active: tab, Presenter: tab.Presenter}
+	loop.installTabActions(tab)
+	loop.syncTabBar()
+	loop.markDead(tab, "engine panic")
+	if !tab.Dead || tab.Session != nil || tab.Presenter == nil {
+		t.Fatalf("crashed active tab = dead %v session %v presenter %v", tab.Dead, tab.Session, tab.Presenter)
+	}
+	if !strings.Contains(tab.State.Page.FooterLeft, "Page engine stopped") {
+		t.Fatalf("crash footer = %q", tab.State.Page.FooterLeft)
+	}
+	quit, err := tab.handleDeadInput("q")
+	if err != nil || quit || !tab.quitPending {
+		t.Fatalf("q on dead tab: quit=%v pending=%v err=%v", quit, tab.quitPending, err)
+	}
+	quit, err = tab.handleDeadInput("y")
+	if err != nil || !quit {
+		t.Fatalf("y on dead tab: quit=%v err=%v", quit, err)
+	}
+}
+
+func TestBackgroundCrashDoesNotWriteStderr(t *testing.T) {
+	var stderr strings.Builder
+	tab := multiTab(2, "two")
+	tab.Stderr = &stderr
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.Crash{Message: "boom"}}); err != nil {
+		t.Fatal(err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("background crash wrote to stderr: %q", stderr.String())
+	}
+	if tab.CrashMessage != "boom" {
+		t.Fatalf("crash message = %q", tab.CrashMessage)
+	}
+}
+
+func TestTabsKeepSeparateHistoryScrollAndClipboard(t *testing.T) {
+	first := &Tab{AttestedURL: func(id uint64) (string, bool) {
+		if id == 1 {
+			return "https://example.test/one", true
+		}
+		return "", false
+	}, Stderr: io.Discard}
+	second := &Tab{AttestedURL: func(id uint64) (string, bool) {
+		if id == 2 {
+			return "https://example.test/two", true
+		}
+		return "", false
+	}, Stderr: io.Discard}
+	first.applyHistoryCommit(protocol.HistoryCommit{EntryID: 1, Scroll: 3, Push: true})
+	second.applyHistoryCommit(protocol.HistoryCommit{EntryID: 2, Scroll: 9, Push: true})
+	if len(first.history) != 1 || len(second.history) != 1 {
+		t.Fatalf("history lengths = %d/%d", len(first.history), len(second.history))
+	}
+	if first.history[0].url == second.history[0].url {
+		t.Fatal("tabs share a history entry")
+	}
+	if _, err := first.applyEvent(protocol.Event{Body: protocol.State{Scroll: 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.applyEvent(protocol.Event{Body: protocol.State{Scroll: 9}}); err != nil {
+		t.Fatal(err)
+	}
+	if first.State.Scroll != 3 || second.State.Scroll != 9 {
+		t.Fatalf("scroll = %d/%d", first.State.Scroll, second.State.Scroll)
+	}
+
+	var one, two bytes.Buffer
+	first.State.Clipboard = &one
+	second.State.Clipboard = &two
+	first.expectClipboard()
+	second.expectClipboard()
+	if _, err := first.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "one"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.applyEvent(protocol.Event{Body: protocol.Clipboard{Text: "two"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := decodeOSC52(t, one.String()); got != "one" {
+		t.Fatalf("first clipboard = %q", got)
+	}
+	if got := decodeOSC52(t, two.String()); got != "two" {
+		t.Fatalf("second clipboard = %q", got)
+	}
+}
+
 func TestCycleTabStopsAtFirstAndLast(t *testing.T) {
 	var tabs []*Tab
 	for i := 0; i < 3; i++ {

@@ -48,12 +48,16 @@ agreement, the non-negotiable constraints and the change protocol.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
-- Tabs and real iframes are the recorded target, not current behavior. The
-  model is one Go process with one sobek VM per frame; iframes are
-  postMessage-only (`contentDocument` is null even for a same-origin frame,
-  `frameElement` is null and there is no DOM bridge), and cross-frame access is
-  origin-checked. This is logical origin isolation only, not memory, site or
-  OS isolation.
+- Tabs are implemented, but real iframes are still the recorded target. The
+  model is one Go process with one sobek VM per tab; iframe elements have inert
+  stub documents and are postMessage-only (`contentDocument` is null even for a
+  same-origin frame, `frameElement` is null and there is no DOM bridge).
+  Cross-frame access is origin-checked. This is logical origin isolation only,
+  not memory, site or OS isolation.
+- The console request pane is process-wide, not per tab: any tab starting a
+  document load begins a new request generation and clears the shared list.
+  Each tab keeps its own JavaScript log, history, scroll, focus and overlays,
+  but request tagging by tab is not implemented.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
   residual risk from XHR; do not treat MOB³ as a security boundary.
@@ -85,7 +89,7 @@ agreement, the non-negotiable constraints and the change protocol.
   or passes `-ignore-blocks`; even then most checks fail, so sites behind such
   protection are generally not usable. MOB³ is not a security boundary and
   challenge pages may run arbitrary script once explicitly retried.
-- No tabs or automatic downloads. A link with a `download` attribute or a
+- No automatic downloads. A link with a `download` attribute or a
   non-HTML response opens a popup with a copyable `curl` command instead of
   saving the file (PDFs open in the text viewer unless `-no-pdf`). Forms
   support editable text fields, checkbox/radio

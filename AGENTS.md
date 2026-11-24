@@ -120,7 +120,7 @@ published by the Pages build.
   license file and the README License section in sync.
 - **Not a secure browser.** No sandboxing, process or site isolation, CSP
   enforcement, certificate UI or security hardening, and it is not audited.
-  Planned tab and frame separation is logical only inside one Go process
+  Tab and planned frame separation is logical only inside one Go process
   (separate JS runtimes and origin checks), not memory, site or OS isolation.
   This warning stays prominent in `README.md` and on the built-in start and
   help pages. Never present MOB³ as safe for passwords, accounts, payments or
@@ -235,8 +235,8 @@ published by the Pages build.
   renders only committed history entries for chrome. The host records each
   document fetch's final URL and exposes it to the front end by entry ID; the
   engine's `HistoryCommit` URL is ignored. The engine stays in one Go process
-  with the front end and host: planned tabs and frames get separate JS runtimes
-  and origin checks, which is logical isolation, not memory, site or OS
+  with the front end and host: tabs have separate JS runtimes and frames get
+  origin checks, which is logical isolation, not memory, site or OS
   isolation. A fully compromised engine shares the process.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
