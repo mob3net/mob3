@@ -266,8 +266,8 @@ func TestTabNumberColonAndCloseAreBold(t *testing.T) {
 	if cell(titleX).R == ' ' {
 		titleX++
 	}
-	if cell(titleX).R != 'A' || cell(titleX).Attrs&protocol.AttrBold != 0 {
-		t.Fatalf("tab title styling = %+v", cell(titleX))
+	if cell(titleX).R != 'A' || cell(titleX).Attrs&protocol.AttrBold == 0 {
+		t.Fatalf("active tab title is not bold: %+v", cell(titleX))
 	}
 	closeX := closeHit.X + 1
 	if cell(closeX).R != 'x' || cell(closeX).Attrs&protocol.AttrBold == 0 {

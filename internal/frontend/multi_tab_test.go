@@ -305,6 +305,38 @@ func TestNewTabStartsURLPrompt(t *testing.T) {
 	}
 }
 
+func TestCycleTabStopsAtFirstAndLast(t *testing.T) {
+	var tabs []*Tab
+	for i := 0; i < 3; i++ {
+		tabs = append(tabs, multiTab(i+1, fmt.Sprintf("Tab%d", i+1)))
+	}
+	loop := &SessionLoop{
+		Tabs: tabs, Active: tabs[0], Presenter: NewPresenter(io.Discard, true),
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+	}
+	loop.syncTabBar()
+	loop.cycleTab(-1)
+	if loop.Active != tabs[0] {
+		t.Fatal("previous from the first tab wrapped")
+	}
+	loop.cycleTab(1)
+	if loop.Active != tabs[1] {
+		t.Fatal("next did not move to the second tab")
+	}
+	loop.cycleTab(1)
+	if loop.Active != tabs[2] {
+		t.Fatal("next did not move to the last tab")
+	}
+	loop.cycleTab(1)
+	if loop.Active != tabs[2] {
+		t.Fatal("next from the last tab wrapped")
+	}
+	loop.cycleTab(-1)
+	if loop.Active != tabs[1] {
+		t.Fatal("previous did not move back")
+	}
+}
+
 func TestTabKeysRouteToActions(t *testing.T) {
 	tab := &Tab{State: LoopState{Page: protocol.State{FrontendChrome: true}}}
 	var got []int
