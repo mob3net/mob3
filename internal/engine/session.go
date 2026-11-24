@@ -76,6 +76,7 @@ type Session struct {
 	HintTargets     []HintTarget
 	HintPrefix      string
 	HintAsk         bool
+	HintMode        protocol.HintMode
 	HintConfirm     bool
 	HintConfirmLink int
 	HintsFrontend   bool

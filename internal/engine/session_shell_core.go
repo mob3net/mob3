@@ -405,7 +405,7 @@ func (b *Session) rebuild() {
 	// Keep an active hint session alive and recompute its hints against the
 	// new layout instead of dismissing it.
 	wasHints := b.LinkHints
-	hintAsk := b.HintAsk
+	hintMode := b.HintMode
 	hintPrefix := b.HintPrefix
 	wasConfirm := b.HintConfirm
 	var confirmNode *Node
@@ -434,7 +434,7 @@ func (b *Session) rebuild() {
 	}
 	b.Hover = -1
 	if wasHints {
-		b.reopenLinkHints(hintAsk, hintPrefix)
+		b.reopenLinkHints(hintMode, hintPrefix)
 	} else if wasConfirm {
 		if link := b.findHintLink(confirmNode, confirmHref); link >= 0 {
 			b.beginHintConfirm(link)
@@ -738,13 +738,23 @@ func (b *Session) updateHover(x, y, top, bottom int) {
 
 func (b *Session) resolveHref(href string) string { return b.ResolveHref(href) }
 
+// FollowLink follows the engine link at index in the current tab.
+func (b *Session) FollowLink(index int) {
+	if b.Layout == nil || index < 0 || index >= len(b.Layout.Links) {
+		return
+	}
+	b.clearLinkHints()
+	b.clearHintConfirm()
+	b.Focus = index
+	b.followFocused()
+}
+
 func (b *Session) followFocused() {
 	li := b.focusedLink()
 	if li == nil {
 		b.status = "No link selected (press Tab)"
 		return
-	}
-	// Run the link's click handlers before navigating. Bare "#" links often
+	} // Run the link's click handlers before navigating. Bare "#" links often
 	// open dialogs or menus from JavaScript and cancel the default navigation.
 	if b.JS != nil && li.Node != nil && b.liveNode(li.Node) {
 		prevented := b.JS.DispatchClick(li.Node)

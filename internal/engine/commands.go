@@ -11,6 +11,7 @@ type CommandHooks interface {
 	RestoreEntry(entryID uint64, url string, scroll int)
 	SetActive(bool)
 	SetGraphicsMode(protocol.GraphicsMode)
+	FollowLink(int)
 	HandleKey(string) bool
 	ProtocolMouse(protocol.Mouse) bool
 	ApplyScroll(protocol.Scroll)
@@ -40,6 +41,8 @@ func (s *Session) HandleCommand(cmd protocol.Command, h CommandHooks) (bool, err
 		h.SetActive(v.Active)
 	case protocol.Graphics:
 		h.SetGraphicsMode(v.Mode)
+	case protocol.FollowLink:
+		h.FollowLink(v.Target)
 	case protocol.Resize:
 		h.Resize(v)
 	case protocol.Key:

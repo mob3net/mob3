@@ -8,9 +8,12 @@ import (
 
 // HintView is the front-end state of one link-hint session.
 type HintView struct {
-	Ask    bool
-	Prefix string
-	Items  []protocol.HintItem
+	Mode          protocol.HintMode
+	Prefix        string
+	Items         []protocol.HintItem
+	Preview       bool
+	PreviewTarget int
+	PreviewHref   string
 }
 
 // ApplyHints paints the matching hint letters and fallback labels on a content

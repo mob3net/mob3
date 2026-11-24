@@ -89,6 +89,11 @@ type Tab struct {
 	historyView   historyView
 	historyBase   protocol.State
 
+	linkPreviewActive bool
+	linkPreviewURL    string
+	linkPreviewTarget int
+	linkPreviewBase   protocol.State
+
 	downloadActive bool
 	downloadView   DownloadView
 	downloadBase   protocol.State
@@ -232,6 +237,7 @@ func (l *Tab) clearOverlaysAfterCrash() {
 	l.dialogActive = false
 	l.selectActive = false
 	l.historyActive = false
+	l.linkPreviewActive = false
 	l.downloadActive = false
 	l.noticeActive = false
 	l.consoleActive = false
@@ -443,6 +449,18 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			l.syncHistory()
 			return false, nil
 		}
+		if l.linkPreviewActive {
+			l.linkPreviewBase = v
+			if v.KeysEngine {
+				l.closeLinkPreview()
+				return false, nil
+			}
+			l.State.Page = v
+			l.State.Scroll = v.Scroll
+			l.State.Native = v.Flags&protocol.StateNativeImages != 0
+			l.syncLinkPreview()
+			return false, nil
+		}
 		if l.menuKind != protocol.MenuNone {
 			l.menuBase = v
 			if v.KeysEngine {
@@ -516,6 +534,10 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		if l.Actions.OpenTabBackground != nil && validDisplayURL(v.URL) {
 			l.Actions.OpenTabBackground(v.URL)
 		}
+	case protocol.LinkPreview:
+		if validDisplayURL(v.URL) {
+			l.startLinkPreview(v.URL, v.Target)
+		}
 	case protocol.Clipboard:
 		if !l.takeClipboardPermission() {
 			return false, nil
@@ -546,6 +568,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *Tab) handleShellKey(k string) (handled, quit bool) {
+	if l.linkPreviewActive {
+		return l.handleLinkPreviewKey(k)
+	}
 	if l.consoleActive {
 		return l.handleConsoleKey(k)
 	}
@@ -964,10 +989,11 @@ func (l *Tab) startHints(v protocol.Hints) {
 	l.closeMenu()
 	l.closeSelect()
 	l.closeHistory()
+	l.closeLinkPreview()
 	l.closeDownload(false, 0)
 	l.closeNotice()
 	l.hintActive = true
-	l.hintView = HintView{Ask: v.Ask, Prefix: v.Prefix, Items: v.Items}
+	l.hintView = HintView{Mode: v.Mode, Prefix: v.Prefix, Items: v.Items}
 	l.hintBase = l.State.Page
 	if l.hintView.Prefix != "" {
 		l.State.Page.FooterLeft = " Choose hint: " + l.hintView.Prefix + " (Esc cancels)"
@@ -1017,6 +1043,20 @@ func (l *Tab) cancelHint() {
 }
 
 func (l *Tab) handleHintKey(k string) (handled, quit bool) {
+	if l.hintView.Preview {
+		switch k {
+		case "enter":
+			l.answerHint(l.hintView.PreviewTarget)
+		case "y", "Y":
+			l.copyHintURL()
+		case "esc", "n", "N", "ctrl-c":
+			l.cancelHint()
+		default:
+			l.cancelHint()
+			return false, false
+		}
+		return true, false
+	}
 	if k == "esc" || k == "ctrl-c" {
 		l.cancelHint()
 		return true, false
@@ -1045,8 +1085,12 @@ func (l *Tab) handleHintKey(k string) (handled, quit bool) {
 						break
 					}
 				}
-				if l.hintView.Ask && item.Link {
+				if item.Link && l.hintView.Mode == protocol.HintNewTab {
 					l.openHintInNewTab(item.Href)
+					return true, false
+				}
+				if item.Link && l.hintView.Mode == protocol.HintPreview {
+					l.previewHint(item)
 					return true, false
 				}
 				l.answerHint(item.Target)
@@ -1060,6 +1104,26 @@ func (l *Tab) handleHintKey(k string) (handled, quit bool) {
 	}
 	l.cancelHint()
 	return false, false
+}
+
+// previewHint shows a chosen link's destination and waits for Enter or y.
+func (l *Tab) previewHint(item protocol.HintItem) {
+	l.hintView.Preview = true
+	l.hintView.PreviewTarget = item.Target
+	l.hintView.PreviewHref = item.Href
+	l.hintView.Items = nil
+	l.State.Page.FooterLeft = " " + item.Href + "  (Enter follows · y copies · Esc cancels)"
+	l.syncHint()
+}
+
+// copyHintURL cancels the pending hint and copies its destination.
+func (l *Tab) copyHintURL() {
+	href := l.hintView.PreviewHref
+	l.closeHint()
+	if l.Session != nil {
+		_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Cancel: true}})
+	}
+	l.copyURLToClipboard(href)
 }
 
 // openHintInNewTab clears the engine hint state and opens a resolved link in a
@@ -1081,6 +1145,7 @@ func (l *Tab) startDownload(v protocol.Download) {
 	l.closeMenu()
 	l.closeSelect()
 	l.closeHistory()
+	l.closeLinkPreview()
 	l.closeNotice()
 	l.downloadActive = true
 	l.downloadView = DownloadView{Name: v.Name, Command: v.Command}
@@ -1162,6 +1227,7 @@ func (l *Tab) startNotice(v protocol.Notice) {
 	l.closeMenu()
 	l.closeSelect()
 	l.closeHistory()
+	l.closeLinkPreview()
 	l.closeDownload(false, 0)
 	l.noticeActive = true
 	l.noticeView = NoticeView{Title: v.Title, Message: v.Message}
@@ -1227,6 +1293,7 @@ func (l *Tab) startSelect(v protocol.Select) {
 	l.closeFind()
 	l.closeMenu()
 	l.closeHistory()
+	l.closeLinkPreview()
 	l.selectActive = true
 	l.selectView = SelectView{ID: v.ID, Options: v.Options, Selected: v.Selected, Index: v.Selected}
 	if l.selectView.Index < 0 || l.selectView.Index >= len(l.selectView.Options) {
@@ -1328,6 +1395,7 @@ func (l *Tab) startDialog(v protocol.Dialog) {
 	l.closeMenu()
 	l.closeSelect()
 	l.closeHistory()
+	l.closeLinkPreview()
 	l.closeDownload(false, 0)
 	l.closeNotice()
 	l.cancelHint()
@@ -1828,6 +1896,12 @@ func (l *Tab) cancelQuit() {
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
+	if l.linkPreviewActive {
+		if ev.Press {
+			l.closeLinkPreview()
+		}
+		return true
+	}
 	// A scrollbar drag owns the pointer until release: it keeps tracking when
 	// the pointer leaves the track or the content rows, and a release anywhere
 	// ends it so a lost release cannot leave the bar following the pointer.

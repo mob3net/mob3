@@ -25,9 +25,9 @@ type hintTarget = HintTarget
 // openLinkHints starts hint mode and labels every link and editable field that
 // intersects the current viewport. Each label is picked from the target's own
 // text: the first unused letter for up to 26 targets, then two letters for
-// target-heavy pages. With ask set (the F key), choosing a link shows its
-// destination and waits for confirmation; fields are focused directly.
-func (b *Session) openLinkHints(ask bool) {
+// target-heavy pages. The mode selects current-tab follow, background-tab open
+// or destination preview.
+func (b *Session) openLinkHints(mode protocol.HintMode) {
 	if b.Layout == nil {
 		b.status = "No links or fields on this page"
 		return
@@ -54,12 +54,13 @@ func (b *Session) openLinkHints(ask bool) {
 	b.HintItems = append(b.HintItems, buildLinkHints(ids, CollectHintGlyphs(b.Layout, targets, b.Scroll, top, bottom))...)
 	b.LinkHints = true
 	b.HintPrefix = ""
-	b.HintAsk = ask
+	b.HintMode = mode
+	b.HintAsk = mode != protocol.HintFollow
 	b.HintConfirm = false
 	b.HintConfirmLink = -1
 	b.status = "Choose link or control (Esc cancels)"
 	if b.sessionOut != nil {
-		if err := b.sendHints(ask, top, bottom); err != nil {
+		if err := b.sendHints(mode, top, bottom); err != nil {
 			b.clearLinkHints()
 			b.status = "No links or controls in view"
 			return
@@ -68,7 +69,7 @@ func (b *Session) openLinkHints(ask bool) {
 	}
 }
 
-func (b *Session) sendHints(ask bool, top, bottom int) error {
+func (b *Session) sendHints(mode protocol.HintMode, top, bottom int) error {
 	items := make([]protocol.HintItem, 0, len(b.HintItems))
 	for _, h := range b.HintItems {
 		item := protocol.HintItem{Target: h.Target, Label: h.Label}
@@ -88,15 +89,15 @@ func (b *Session) sendHints(ask bool, top, bottom int) error {
 		items = append(items, item)
 	}
 	return b.sessionOut.Send(protocol.Event{Body: protocol.Hints{
-		Ask: ask, Prefix: b.HintPrefix, Items: items,
+		Mode: mode, Prefix: b.HintPrefix, Items: items,
 	}})
 }
 
 // reopenLinkHints restores an active hint session after a layout rebuild. The
 // typed prefix is kept only when at least two hints still match, which is the
 // only state the interactive key handler leaves active.
-func (b *Session) reopenLinkHints(ask bool, prefix string) {
-	b.openLinkHints(ask)
+func (b *Session) reopenLinkHints(mode protocol.HintMode, prefix string) {
+	b.openLinkHints(mode)
 	if !b.LinkHints || prefix == "" {
 		return
 	}

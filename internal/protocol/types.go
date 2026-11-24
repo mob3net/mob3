@@ -17,8 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-// 4: HistoryCommit dropped Title.
-const Version = 4
+// 5: Hints carries an explicit mode.
+const Version = 5
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
@@ -59,6 +59,7 @@ const (
 	CmdRestore
 	CmdVisibility
 	CmdGraphics
+	CmdFollowLink
 )
 
 const (
@@ -79,6 +80,7 @@ const (
 	EvConsoleView
 	EvHistoryCommit
 	EvOpenTab
+	EvLinkPreview
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

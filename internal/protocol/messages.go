@@ -324,9 +324,21 @@ type HintItem struct {
 	Href   string
 }
 
+// HintMode selects what a completed hint does.
+type HintMode uint8
+
+const (
+	// HintFollow follows the link in the current tab.
+	HintFollow HintMode = iota + 1
+	// HintNewTab opens a link in a background tab.
+	HintNewTab
+	// HintPreview shows the destination before following or copying it.
+	HintPreview
+)
+
 // Hints asks the front end to display link hints.
 type Hints struct {
-	Ask    bool
+	Mode   HintMode
 	Prefix string
 	Items  []HintItem
 }
@@ -435,6 +447,22 @@ type OpenTab struct {
 }
 
 func (OpenTab) eventKind() Kind { return EvOpenTab }
+
+// LinkPreview asks the front end to show a link destination before following
+// or copying it. Target is the engine link index used by FollowLink.
+type LinkPreview struct {
+	URL    string
+	Target int
+}
+
+func (LinkPreview) eventKind() Kind { return EvLinkPreview }
+
+// FollowLink follows the engine link at Target in the current tab.
+type FollowLink struct {
+	Target int
+}
+
+func (FollowLink) commandKind() Kind { return CmdFollowLink }
 
 // FindResults reports the current match and the total. Rects are content
 // viewport rectangles for highlighting.

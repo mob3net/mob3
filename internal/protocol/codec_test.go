@@ -40,6 +40,7 @@ func testCommands() []Command {
 		{Session: 17, Seq: 17, Body: Restore{EntryID: 42, URL: "https://example.test/a", Scroll: 9}},
 		{Session: 18, Seq: 18, Body: Visibility{Active: true}},
 		{Session: 19, Seq: 19, Body: Graphics{Mode: GraphicsBlocks}},
+		{Session: 20, Seq: 20, Body: FollowLink{Target: 3}},
 		{Session: 8, Seq: 8, Body: Find{Scope: FindHTML, Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},
@@ -74,12 +75,13 @@ func testEvents() []Event {
 		{Session: 10, Seq: 10, Body: Download{URL: "https://example.test/f.bin", Name: "f.bin", Command: "curl -L -o f.bin -- https://example.test/f.bin"}},
 		{Session: 11, Seq: 11, Body: Select{ID: 9, Options: []string{"One", "Two"}, Selected: 1}},
 		{Session: 12, Seq: 12, Body: Notice{Title: "Notice", Message: "Body"}},
-		{Session: 13, Seq: 13, Body: Hints{Ask: true, Prefix: "d", Items: []HintItem{{
+		{Session: 13, Seq: 13, Body: Hints{Mode: HintPreview, Prefix: "d", Items: []HintItem{{
 			Target: 2, Label: "d", X: 1, Y: 2, W: 3, H: 1,
 			Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
 		}}}},
 		{Session: 15, Seq: 15, Body: HistoryCommit{EntryID: 42, URL: "https://example.test/a", Scroll: 9, Push: true}},
 		{Session: 16, Seq: 16, Body: OpenTab{URL: "https://example.test/new"}},
+		{Session: 17, Seq: 17, Body: LinkPreview{URL: "https://example.test/preview", Target: 4}},
 		{Session: 14, Seq: 14, Body: ConsoleView{
 			Width: 80, Height: 24, Pane: 0, Tabs: []string{" JS logs (1) ", " Requests (0) "},
 			Lines: []string{"[log] hi"}, Input: "1+1", Cursor: 3, Edit: true,
