@@ -67,7 +67,10 @@ agreement, the non-negotiable constraints and the change protocol.
   be read cross-site through XHR or fetch. Every script request clones the
   session `http.Client` and sets its redirect policy on the copy, because the
   per-origin policy must never leak into navigations or concurrent image loads
-  and a shared client cannot be mutated from a request goroutine.
+  and a shared client cannot be mutated from a request goroutine. Form
+  submissions are document requests: a non-GET form POST carries the submitting
+  page's `Origin` header (GET navigations do not), captured before the load
+  starts so a later navigation cannot change it.
 - **Local-network guard:** a document loaded from a public `http`/`https`
   address may not fetch subresources, `fetch` or XHR from loopback, RFC 1918 or
   ULA private, link-local, CGNAT, `0.0.0.0/8` or reserved addresses. Literal

@@ -134,6 +134,12 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		req.Header.Set("User-Agent", f.Settings.UserAgent())
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,text/css;q=0.9,image/*;q=0.8,*/*;q=0.5")
 		req.Header.Set("Accept-Language", "en")
+		if meta.Kind == "doc" && meta.Origin != "" &&
+			method != http.MethodGet && method != http.MethodHead {
+			// Browsers attach Origin to non-GET document requests, which lets
+			// a server's Origin-based CSRF check see the submitting page.
+			req.Header.Set("Origin", meta.Origin)
+		}
 		// The redirect policy is per request. Cloning also keeps the shared
 		// client untouched for concurrent fetches.
 		c := *f.Client

@@ -28,6 +28,9 @@ type RequestMeta struct {
 	TargetURL  string
 	BlockLocal bool
 	PageSecure bool
+	// Origin is the initiating document's origin for a non-GET document
+	// request (a form submission), sent as the Origin header.
+	Origin string
 }
 
 // PageSpace records whether the document's own connection landed on a local
@@ -73,6 +76,14 @@ func WithRequestPage(ctx context.Context, page *url.URL, pageLocal bool) context
 		}
 		m.PageSecure = page.Scheme == "https"
 	}
+	return context.WithValue(ctx, RequestMetaKey{}, m)
+}
+
+// WithRequestOrigin records the initiating document origin for a form
+// submission, so the host can send it as the Origin header.
+func WithRequestOrigin(ctx context.Context, origin string) context.Context {
+	m := RequestMetaFrom(ctx)
+	m.Origin = origin
 	return context.WithValue(ctx, RequestMetaKey{}, m)
 }
 

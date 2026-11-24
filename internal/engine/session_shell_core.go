@@ -246,6 +246,17 @@ func (b *Session) navigateRequestEntry(method, input string, body []byte, conten
 			return loader.LoadRequest(ctx, method, target, body, contentType, nil)
 		}
 	}
+	// A form POST carries the submitting page's origin. Capture it before the
+	// load goroutine starts, because b.URL can change while the load is in
+	// flight.
+	if !strings.EqualFold(method, protocol.MethodGet) {
+		if origin := requestOrigin(b.URL); origin != "" {
+			inner := load
+			load = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+				return inner(protocol.WithRequestOrigin(ctx, origin), method, target, body, contentType)
+			}
+		}
+	}
 	b.BeginLoad(load, u, method, target, body, contentType, entryID, historyPush, restoreScroll, hasRestoreScroll, downloadName)
 }
 

@@ -713,6 +713,20 @@ func TestResolveRejectsDataDocuments(t *testing.T) {
 	}
 }
 
+func TestRequestOrigin(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://Example.COM:443/a", "https://example.com"},
+		{"http://example.com:80/", "http://example.com"},
+		{"http://example.com:8080/", "http://example.com:8080"},
+		{"about:blank", ""},
+	}
+	for _, c := range cases {
+		if got := requestOrigin(mustParse(t, c.in)); got != c.want {
+			t.Errorf("requestOrigin(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestResolveURL(t *testing.T) {
 	base := mustParse(t, "https://example.com/a/b")
 	cases := []struct {

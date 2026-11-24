@@ -31,6 +31,10 @@ func WithRequestTarget(ctx context.Context, target *url.URL) context.Context {
 	return protocol.WithRequestTarget(ctx, target)
 }
 
+func WithRequestOrigin(ctx context.Context, origin string) context.Context {
+	return protocol.WithRequestOrigin(ctx, origin)
+}
+
 func WithRequestMeta(ctx context.Context, gen int, kind string) context.Context {
 	return protocol.WithRequestMeta(ctx, gen, kind)
 }

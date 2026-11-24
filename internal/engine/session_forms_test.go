@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"browser/internal/protocol"
 )
 
 func TestToggleCheckbox(t *testing.T) {
@@ -857,14 +859,18 @@ func TestFormPOSTSubmission(t *testing.T) {
 	u := mustParse(t, "https://example.com/form")
 	b := newTestSession(40, 10)
 	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
 	b.rebuild()
 
 	type req struct {
-		method, target, ctype, body string
+		method, target, ctype, body, origin string
 	}
 	ch := make(chan req, 1)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
-		ch <- req{method: method, target: target, ctype: contentType, body: string(body)}
+		ch <- req{
+			method: method, target: target, ctype: contentType, body: string(body),
+			origin: protocol.RequestMetaFrom(ctx).Origin,
+		}
 		return &Page{URL: u, Base: u, Root: ParseHTML("<html></html>")}, nil
 	}
 	b.submitForm(doc.FindFirst("form"))
@@ -881,6 +887,9 @@ func TestFormPOSTSubmission(t *testing.T) {
 		}
 		if got.ctype != "application/x-www-form-urlencoded" {
 			t.Errorf("content type = %q", got.ctype)
+		}
+		if got.origin != "https://example.com" {
+			t.Errorf("origin = %q", got.origin)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("POST form was not submitted")

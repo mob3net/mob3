@@ -45,6 +45,40 @@ func TestIsLocalIPZeroNetwork(t *testing.T) {
 	}
 }
 
+func TestFormPostSendsOrigin(t *testing.T) {
+	var gotOrigin string
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		gotOrigin = r.Header.Get("Origin")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("ok")),
+			Request:    r,
+		}, nil
+	})}
+	f := &Fetcher{
+		Client: client, Settings: NewSettings("ua", ""),
+		Requests: NewRequestLog(), Cache: NewResourceCache(0),
+	}
+	u, _ := url.Parse("https://target.example/submit")
+	ctx := WithRequestMeta(context.Background(), 1, "doc")
+	ctx = WithRequestOrigin(ctx, "https://page.example")
+	if _, _, _, _, err := f.FetchRequest(ctx, http.MethodPost, u, []byte("a=1"), "application/x-www-form-urlencoded"); err != nil {
+		t.Fatal(err)
+	}
+	if gotOrigin != "https://page.example" {
+		t.Fatalf("POST origin = %q", gotOrigin)
+	}
+
+	gotOrigin = "sentinel"
+	if _, _, _, _, err := f.FetchRequest(ctx, http.MethodGet, u, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if gotOrigin != "" {
+		t.Fatalf("GET sent Origin %q", gotOrigin)
+	}
+}
+
 func TestRedirectToLocalLiteralBlocked(t *testing.T) {
 	calls := 0
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
