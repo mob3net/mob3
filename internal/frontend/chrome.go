@@ -93,10 +93,9 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 	return LayoutChromeWithTabs(st, nil, 0)
 }
 
-// LayoutChromeWithTabs is LayoutChrome with tabs sharing the toolbar row. With
-// one tab the normal title stays and only the + button is added. With more
-// tabs, the title slot becomes a strip of up to 30-cell tabs. Tabs shrink to 10
-// cells before the strip starts scrolling from offset with < and > buttons.
+// LayoutChromeWithTabs is LayoutChrome with tab labels sharing the toolbar
+// row. One tab keeps the normal title and adds the new-tab button; several tabs
+// occupy the title slot, and offset selects the first visible tab.
 func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeLayout {
 	w, h, rows := st.Width, st.Height, st.HeaderRows
 	if w <= 0 || h <= 0 || rows <= 0 || rows >= h {
@@ -419,19 +418,12 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 	return out
 }
 
-// drawTabStrip paints either the normal page title (zero or one tab) or the
-// tab strip in the toolbar's title slot. The surrounding controls keep their
-// cells. The + button stays at the right end of the slot, and once tabs cannot
-// shrink below ten cells the strip shows an offset window with < and > buttons
-// beside it.
+// drawTabStrip paints tab labels in the toolbar title slot.
 func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []TabView, offset int, title string) {
 	if room < 1 {
 		return
 	}
-	const (
-		maxTabW = 30
-		minTabW = 10
-	)
+	const tabW = 20
 	newW := 0
 	if room >= 4 {
 		newW = 3
@@ -457,30 +449,11 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 		return
 	}
 
-	// Fit every tab at up to 30 cells when possible.
-	if avail/len(tabs) >= minTabW {
-		widths := make([]int, len(tabs))
-		base := avail / len(tabs)
-		if base > maxTabW {
-			base = maxTabW
-		}
-		extra := avail - base*len(tabs)
-		for i := range widths {
-			widths[i] = base
-		}
-		for i := 0; extra > 0; i = (i + 1) % len(widths) {
-			if widths[i] < maxTabW {
-				widths[i]++
-				extra--
-			}
-			if i == len(widths)-1 && base == maxTabW {
-				break
-			}
-		}
+	if len(tabs)*tabW <= avail {
 		cx := x
 		for i, tab := range tabs {
-			drawTab(g, out, cx, y, widths[i], i, tab)
-			cx += widths[i]
+			drawTab(g, out, cx, y, tabW, i, tab)
+			cx += tabW
 		}
 		if newW > 0 {
 			drawNewTabButton(g, out, x+room-newW, y, newW)
@@ -488,7 +461,6 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 		return
 	}
 
-	// Tabs are at their minimum width, so show a window and scrolling buttons.
 	arrowsW := 2
 	viewport := avail - arrowsW
 	if viewport < 1 {
@@ -497,7 +469,7 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 		}
 		return
 	}
-	visible := viewport / minTabW
+	visible := viewport / tabW
 	if visible < 1 {
 		visible = 1
 	}
@@ -510,17 +482,14 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 	if offset > len(tabs)-visible {
 		offset = len(tabs) - visible
 	}
-	tabW := viewport / visible
-	if tabW > minTabW {
-		tabW = minTabW
-	}
-	if tabW < 1 {
-		return
-	}
 	cx := x
+	drawW := tabW
+	if drawW > viewport {
+		drawW = viewport
+	}
 	for i := offset; i < offset+visible; i++ {
-		drawTab(g, out, cx, y, tabW, i, tabs[i])
-		cx += tabW
+		drawTab(g, out, cx, y, drawW, i, tabs[i])
+		cx += drawW
 	}
 	prevX := x + room - newW - arrowsW
 	g.fill(prevX, y, arrowsW, 1, colButtonBG)
@@ -545,32 +514,44 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 		bg, fg = colSelectedBG, colWhite
 	}
 	g.fill(x, y, w, 1, bg)
-	closeW := 0
-	if w >= 4 {
-		closeW = 2
+	title := protocol.StripControls(tab.Title)
+	if title == "" {
+		title = "New Tab"
 	}
-	number := fmt.Sprintf("%d ", index+1)
-	numberW := stringWidth(number)
-	if numberW > w-closeW {
-		number = truncateWidth(number, w-closeW)
-		numberW = stringWidth(number)
+
+	lead := fmt.Sprintf(" %d:", index+1)
+	tail := " x "
+	tailW := stringWidth(tail)
+	if tailW > w-1 {
+		tail, tailW = "", 0
 	}
-	g.text(x, y, number, fg, 0)
-	if titleW := w - numberW - closeW; titleW > 0 {
-		title := protocol.StripControls(tab.Title)
-		if title == "" {
-			title = "New Tab"
+	leadW := stringWidth(lead)
+	if leadW+tailW > w {
+		lead = truncateWidth(lead, w-tailW)
+		leadW = stringWidth(lead)
+	}
+	titleW := w - leadW - tailW
+	if titleW < 0 {
+		titleW = 0
+	}
+	g.text(x, y, lead, fg, protocol.AttrBold)
+	if titleW > 0 {
+		g.text(x+leadW, y, fitWidth(title, titleW), fg, 0)
+	}
+	if tailW > 0 {
+		closeX := x + w - tailW
+		g.text(closeX, y, tail, fg, protocol.AttrBold)
+		hitW := tailW
+		if hitW > 2 {
+			hitW = 2
 		}
-		g.text(x+numberW, y, fitWidth(title, titleW), fg, 0)
-	}
-	if closeW > 0 {
-		g.text(x+w-1, y, "×", fg, protocol.AttrBold)
 		out.Hits = append(out.Hits, ChromeHit{
-			Kind: ChromeHitTabClose, Index: index, X: x + w - closeW, Y: y, W: closeW, H: 1,
+			Kind: ChromeHitTabClose, Index: index, X: closeX, Y: y, W: hitW, H: 1,
 		})
 	}
+	tabW := w - tailW
 	out.Hits = append(out.Hits, ChromeHit{
-		Kind: ChromeHitTab, Index: index, X: x, Y: y, W: w - closeW, H: 1,
+		Kind: ChromeHitTab, Index: index, X: x, Y: y, W: tabW, H: 1,
 	})
 }
 

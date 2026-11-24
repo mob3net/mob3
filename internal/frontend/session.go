@@ -21,15 +21,32 @@ type LoopState struct {
 	Page      protocol.State
 }
 
+// TabActions are the session-loop operations a tab can request from its shell
+// keys and tab-bar clicks. Close with index -1 means the active tab.
+type TabActions struct {
+	Select func(index int)
+	Cycle  func(delta int)
+	Close  func(index int) (quit bool)
+	New    func()
+	Scroll func(delta int)
+}
+
 // Tab is one terminal browsing context: its protocol session, per-tab state,
 // history and overlays. The SessionLoop owns terminal input, the shared
 // presenter and the event loop; a tab only draws when it is the active one.
 type Tab struct {
 	Session   protocol.Session
+	SessionID protocol.SessionID
 	Presenter *Presenter
 
 	Stderr io.Writer
 	State  LoopState
+
+	// Actions are installed by the SessionLoop; TabBar and TabOffset mirror the
+	// shared bar so mouse handling uses the same labels and scrolling window.
+	Actions   TabActions
+	TabBar    []TabView
+	TabOffset int
 
 	quitPending bool
 	quitBase    protocol.State
@@ -103,6 +120,9 @@ type Tab struct {
 	// Report handles a contained crash. When nil, the loop writes one short
 	// line to Stderr and sends a ClientError command back to the session.
 	Report func(string)
+	// tabCloseQuit carries a quit request from a tab-bar close click, which is
+	// routed through the boolean handleChromeMouse return.
+	tabCloseQuit bool
 }
 
 // AttachPresenter gives the shared presenter to this tab, rebuilding every
@@ -177,7 +197,9 @@ func (l *Tab) handleInput(k string) (quit bool, err error) {
 			return false, nil
 		}
 		if l.handleChromeMouse(ev) {
-			return false, nil
+			quit := l.tabCloseQuit
+			l.tabCloseQuit = false
+			return quit, nil
 		}
 		if ev.Button == MouseButtonRight && ev.Press && !ev.Motion {
 			l.expectClipboard()
@@ -480,7 +502,55 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 		l.openHistory()
 		return true, false
 	}
+	if handled, quit := l.handleTabKey(k); handled {
+		return true, quit
+	}
 	return false, false
+}
+
+// handleTabKey applies the tab-manager bindings. It runs after the overlay and
+// page-form paths so typing in a prompt or control keeps its own keys.
+func (l *Tab) handleTabKey(k string) (handled, quit bool) {
+	switch k {
+	case "t", "ctrl-t":
+		if l.Actions.New != nil {
+			l.Actions.New()
+		}
+		return true, false
+	case "W", "ctrl-w":
+		if l.Actions.Close != nil {
+			return true, l.Actions.Close(-1)
+		}
+		return true, false
+	case "ctrl-n", "alt-right", "ctrl-tab":
+		if l.Actions.Cycle != nil {
+			l.Actions.Cycle(1)
+		}
+		return true, false
+	case "ctrl-p", "alt-left", "ctrl-backtab":
+		if l.Actions.Cycle != nil {
+			l.Actions.Cycle(-1)
+		}
+		return true, false
+	}
+	if index, ok := tabIndexKey(k); ok {
+		if l.Actions.Select != nil {
+			l.Actions.Select(index)
+		}
+		return true, false
+	}
+	return false, false
+}
+
+func tabIndexKey(k string) (int, bool) {
+	s := k
+	if strings.HasPrefix(s, "alt-") {
+		s = s[4:]
+	}
+	if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+		return int(s[0] - '1'), true
+	}
+	return 0, false
 }
 
 func (l *Tab) applyConsoleView(v protocol.ConsoleView) {
@@ -1658,12 +1728,12 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 		// Header and footer motion must not reach page hover/selection.
 		return true
 	}
-	layout := LayoutChrome(st)
+	layout := LayoutChromeWithTabs(st, l.TabBar, l.TabOffset)
 	for _, hit := range layout.Hits {
 		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
 			continue
 		}
-		l.activateChromeHit(hit.Kind)
+		l.activateChromeHit(hit)
 		return true
 	}
 	return true
@@ -1761,9 +1831,34 @@ func (l *Tab) scrollTo(row, contentH int) {
 	_ = l.Session.Send(protocol.Command{Body: protocol.Scroll{To: target, HasTo: true}})
 }
 
-func (l *Tab) activateChromeHit(kind ChromeHitKind) {
+func (l *Tab) activateChromeHit(hit ChromeHit) {
 	var body protocol.CommandBody
-	switch kind {
+	switch hit.Kind {
+	case ChromeHitTab:
+		if l.Actions.Select != nil {
+			l.Actions.Select(hit.Index)
+		}
+		return
+	case ChromeHitTabClose:
+		if l.Actions.Close != nil && l.Actions.Close(hit.Index) {
+			l.tabCloseQuit = true
+		}
+		return
+	case ChromeHitNewTab:
+		if l.Actions.New != nil {
+			l.Actions.New()
+		}
+		return
+	case ChromeHitTabPrev:
+		if l.Actions.Scroll != nil {
+			l.Actions.Scroll(-1)
+		}
+		return
+	case ChromeHitTabNext:
+		if l.Actions.Scroll != nil {
+			l.Actions.Scroll(1)
+		}
+		return
 	case ChromeHitBack:
 		l.historyBack()
 		return

@@ -25,7 +25,7 @@ func TestTabStripSharesToolbarRow(t *testing.T) {
 			row.WriteRune(c.R)
 		}
 	}
-	for _, want := range []string{"1 Alpha", "2 Beta"} {
+	for _, want := range []string{"1:Alpha", "2:Beta"} {
 		if !strings.Contains(row.String(), want) {
 			t.Errorf("toolbar %q does not contain %q", row.String(), want)
 		}
@@ -142,19 +142,51 @@ func TestTabStripWidthAndScrolling(t *testing.T) {
 	wide := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
 	layout := LayoutChromeWithTabs(st, wide, 0)
 	for i := range wide {
-		w := 0
+		var tabHit, closeHit ChromeHit
 		for _, hit := range layout.Hits {
-			if hit.Index == i && (hit.Kind == ChromeHitTab || hit.Kind == ChromeHitTabClose) {
-				w += hit.W
+			if hit.Index != i {
+				continue
+			}
+			switch hit.Kind {
+			case ChromeHitTab:
+				tabHit = hit
+			case ChromeHitTabClose:
+				closeHit = hit
 			}
 		}
-		if w != 30 {
-			t.Fatalf("tab %d width = %d, want the 30-cell cap", i, w)
+		if tabHit.W != 17 || closeHit.W != 2 {
+			t.Fatalf("tab %d hit widths = %d/%d, want a 20-cell tab", i, tabHit.W, closeHit.W)
 		}
 	}
 	for _, hit := range layout.Hits {
 		if hit.Kind == ChromeHitTabPrev || hit.Kind == ChromeHitTabNext {
 			t.Fatalf("two tabs that fit should not show scrolling arrows: %+v", hit)
+		}
+	}
+
+	st.Width = 100
+	two := []TabView{{Title: "Alpha", Active: true}, {Title: "Beta"}}
+	layout = LayoutChromeWithTabs(st, two, 0)
+	for i := range two {
+		var tabHit, closeHit ChromeHit
+		for _, hit := range layout.Hits {
+			if hit.Index != i {
+				continue
+			}
+			switch hit.Kind {
+			case ChromeHitTab:
+				tabHit = hit
+			case ChromeHitTabClose:
+				closeHit = hit
+			}
+		}
+		if tabHit.W != 17 || closeHit.W != 2 {
+			t.Fatalf("tab %d hit widths = %d/%d, want a 20-cell tab", i, tabHit.W, closeHit.W)
+		}
+	}
+	for _, hit := range layout.Hits {
+		if hit.Kind == ChromeHitTabPrev || hit.Kind == ChromeHitTabNext {
+			t.Fatalf("two tabs should fit without arrows: %+v", hit)
 		}
 	}
 
@@ -193,10 +225,10 @@ func TestTabStripWidthAndScrolling(t *testing.T) {
 			row.WriteRune(c.R)
 		}
 	}
-	if strings.Contains(row.String(), "1 Tab1 ") {
+	if strings.Contains(row.String(), "1:Tab1 x") {
 		t.Fatalf("offset did not hide the first tab: %q", row.String())
 	}
-	if !strings.Contains(row.String(), "6 Tab6") {
+	if !strings.Contains(row.String(), "6:Tab6") {
 		t.Fatalf("offset did not show tab 6: %q", row.String())
 	}
 	for _, hit := range layout.Hits {
@@ -221,7 +253,7 @@ func TestPresenterDrawsTabStrip(t *testing.T) {
 	if err := p.Present(f, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"1 Alpha", "2 Beta"} {
+	for _, want := range []string{"Alpha", "Beta"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("presented output does not contain %q", want)
 		}

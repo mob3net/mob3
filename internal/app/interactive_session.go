@@ -1,0 +1,71 @@
+package app
+
+import (
+	"strconv"
+	"strings"
+
+	"browser/internal/engine"
+	"browser/internal/frontend"
+)
+
+// interactiveSessionFactory holds the per-session configuration that stays
+// constant for every tab in one interactive run.
+type interactiveSessionFactory struct {
+	o              runOptions
+	browserContext *engine.BrowserContext
+	budget         engine.LayoutBudget
+	zoomFactor     float64
+	cellW, cellH   int
+	graphicsMode   frontend.GraphicsMode
+	noBigText      bool
+}
+
+func newInteractiveSessionFactory(o runOptions, browserContext *engine.BrowserContext, budget engine.LayoutBudget, zoomFactor float64, cellW, cellH int, graphicsMode frontend.GraphicsMode) interactiveSessionFactory {
+	return interactiveSessionFactory{
+		o: o, browserContext: browserContext, budget: budget, zoomFactor: zoomFactor,
+		cellW: cellW, cellH: cellH, graphicsMode: graphicsMode,
+		noBigText: bigTextDisabled(o.TextScale),
+	}
+}
+
+func bigTextDisabled(textScale string) bool {
+	switch strings.ToLower(strings.TrimSpace(textScale)) {
+	case "off", "none", "false":
+		return true
+	}
+	return false
+}
+
+// newSession builds one configured engine session for a tab.
+func (f interactiveSessionFactory) newSession(tabLoader *engine.Loader, w, h int) *engine.Session {
+	o := f.o
+	b := engine.NewConfiguredSession(engine.SessionConfig{
+		Loader: tabLoader, BrowserContext: f.browserContext,
+		Width: w, Height: h, Zoom: f.zoomFactor, Interactive: true,
+		Reader: o.Reader, Dark: o.Dark, Home: o.Home,
+		CLIConfig: map[string]string{
+			"-dump":          onOff(o.Dump),
+			"-png":           onOff(o.PNG),
+			"-width":         strconv.Itoa(w),
+			"-height":        strconv.Itoa(o.Height),
+			"-pdf-page":      o.PDFPageLabel,
+			"-graphics":      o.Graphics,
+			"-mem-limit":     strconv.Itoa(o.MemLimit),
+			"-layout-budget": f.budget.Name,
+			"-zoom":          engine.ZoomPercentLabel(f.zoomFactor),
+			"-color":         onOff(o.Color),
+			"-no-color":      onOff(o.NoColor),
+			"-certs":         tabLoader.CertSource(),
+			"-mcp":           onOff(o.MCP),
+			"-version":       Version,
+		},
+		Color: !o.NoColor, NoJS: o.NoJS, NoPDF: o.NoPDF,
+		LayoutBudget:  f.budget,
+		MemLimitBytes: int64(o.MemLimit) << 20, NoBigText: f.noBigText,
+		CellW: f.cellW, CellH: f.cellH, Graphics: f.graphicsMode,
+		GraphicsModes: graphicsModesFor(f.graphicsMode),
+		Caps:          capabilitiesFor(nativeGraphicsMode(f.graphicsMode), f.cellW, f.cellH),
+	})
+	b.SetPNGEncoder(frontend.RenderPNG)
+	return b
+}

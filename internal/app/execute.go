@@ -25,7 +25,7 @@ func execute(o runOptions) int {
 	}
 	hostSess := host.NewSession()
 	browserContext := engine.NewBrowserContext()
-	loader, err := engine.NewConfiguredLoader(hostSess, engine.LoaderConfig{
+	loaderConfig := engine.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,
 		NoImages:     graphicsMode == frontend.GraphicsNone,
@@ -34,7 +34,8 @@ func execute(o runOptions) int {
 		UserAgent:    o.UA,
 		Certs:        o.Certs,
 		DeferImages:  interactive && !o.MCP,
-	})
+	}
+	loader, err := engine.NewConfiguredLoader(hostSess, loaderConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))
 		return 2
@@ -58,5 +59,5 @@ func execute(o runOptions) int {
 	if !interactive {
 		return runDump(o, loader, budget, zoomFactor)
 	}
-	return runInteractive(o, hostSess, loader, browserContext, graphicsMode, budget, zoomFactor)
+	return runInteractive(o, hostSess, loader, loaderConfig, browserContext, graphicsMode, budget, zoomFactor)
 }
