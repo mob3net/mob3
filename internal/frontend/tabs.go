@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 
@@ -34,11 +35,17 @@ type SessionLoop struct {
 	CellW        int
 	CellH        int
 
+	// GraphicsModes is the browser-wide image-mode cycle; CurrentGraphics is
+	// the mode shared by every tab.
+	GraphicsModes   []GraphicsMode
+	CurrentGraphics GraphicsMode
+
 	lastTabs      []TabView
 	tabOffset     int
 	lastTabOffset int
 	nextSessionID protocol.SessionID
 	revealPending bool
+	zoomPercent   int
 }
 
 // Run processes keys, resizes and every tab's events until it quits or the
@@ -58,6 +65,7 @@ func (l *SessionLoop) Run() error {
 			tab.Stderr = os.Stderr
 		}
 		l.installTabActions(tab)
+		l.sendGraphics(tab)
 	}
 	l.syncTabBar()
 	if l.Active.Presenter == nil && l.Presenter != nil {
@@ -171,6 +179,9 @@ func (l *SessionLoop) handleEvent(tab *Tab, ev protocol.Event) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if st, ok := ev.Body.(protocol.State); ok && st.ZoomPercent > 0 {
+		l.zoomPercent = st.ZoomPercent
+	}
 	if l.revealPending {
 		if _, ok := ev.Body.(protocol.State); ok {
 			l.revealActiveTab(l.tabViews())
@@ -239,11 +250,39 @@ func (l *SessionLoop) installTabActions(tab *Tab) {
 		return
 	}
 	tab.Actions = TabActions{
-		Select: l.selectTab,
-		Cycle:  l.cycleTab,
-		Close:  l.closeTab,
-		New:    l.newTab,
-		Scroll: l.scrollTabs,
+		Select:         l.selectTab,
+		Cycle:          l.cycleTab,
+		Close:          l.closeTab,
+		New:            l.newTab,
+		Scroll:         l.scrollTabs,
+		ToggleGraphics: l.cycleGraphics,
+	}
+}
+
+func (l *SessionLoop) sendGraphics(tab *Tab) {
+	if tab == nil || tab.Session == nil || len(l.GraphicsModes) == 0 {
+		return
+	}
+	_ = tab.Session.Send(protocol.Command{Body: protocol.Graphics{Mode: l.CurrentGraphics}})
+}
+
+func (l *SessionLoop) cycleGraphics() {
+	if len(l.GraphicsModes) == 0 {
+		return
+	}
+	next := l.GraphicsModes[0]
+	for i, mode := range l.GraphicsModes {
+		if mode == l.CurrentGraphics {
+			next = l.GraphicsModes[(i+1)%len(l.GraphicsModes)]
+			break
+		}
+	}
+	l.CurrentGraphics = next
+	if l.Presenter != nil {
+		l.Presenter.SetGraphics(next, l.CellW, l.CellH)
+	}
+	for _, tab := range l.Tabs {
+		l.sendGraphics(tab)
 	}
 }
 
@@ -304,6 +343,13 @@ func (l *SessionLoop) resizeTab(tab *Tab) error {
 	return nil
 }
 
+func (l *SessionLoop) setVisible(tab *Tab, active bool) {
+	if tab == nil || tab.Session == nil {
+		return
+	}
+	_ = tab.Session.Send(protocol.Command{Body: protocol.Visibility{Active: active}})
+}
+
 func (l *SessionLoop) allocateSessionID() protocol.SessionID {
 	if l.nextSessionID == 0 {
 		for _, tab := range l.Tabs {
@@ -335,6 +381,8 @@ func (l *SessionLoop) newTab() {
 	}
 	tab.SessionID = id
 	l.installTabActions(tab)
+	l.sendGraphics(tab)
+	tab.startPromptEmpty()
 	l.Tabs = append(l.Tabs, tab)
 	l.activateTab(len(l.Tabs) - 1)
 }
@@ -470,10 +518,13 @@ func (l *SessionLoop) activateTab(index int) {
 	}
 	if l.Active != nil {
 		l.Active.DetachPresenter()
+		l.setVisible(l.Active, false)
 	}
 	l.Active = target
+	l.patchZoom(target)
 	_ = l.resizeTab(target)
 	l.revealPending = l.needsResize(target)
+	l.setVisible(target, true)
 	l.revealActiveTab(l.tabViews())
 	l.syncTabBar()
 	if l.Presenter != nil {
@@ -489,6 +540,18 @@ func (l *SessionLoop) needsResize(tab *Tab) bool {
 	top, contentH := ContentBounds(h)
 	st := tab.State.Page
 	return st.Width != w || st.Height != h || st.HeaderRows != top || st.Height-st.HeaderRows-1 != contentH
+}
+
+// patchZoom updates a tab's cached chrome snapshot before it is presented so a
+// switch cannot briefly show the previous tab's zoom percentage.
+func (l *SessionLoop) patchZoom(tab *Tab) {
+	if tab == nil || l.zoomPercent <= 0 || tab.State.Page.ZoomPercent == l.zoomPercent {
+		return
+	}
+	st := tab.State.Page
+	st.ZoomPercent = l.zoomPercent
+	st.ZoomLabel = fmt.Sprintf(" %d%% ", l.zoomPercent)
+	tab.State.Page = st
 }
 
 func (l *SessionLoop) tabViews() []TabView {

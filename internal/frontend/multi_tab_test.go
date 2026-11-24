@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -31,6 +32,15 @@ func (s *eventSession) Abort() {}
 func (s *eventSession) Close() error {
 	s.closed = true
 	return nil
+}
+
+func hasCommand(s *eventSession, want protocol.CommandBody) bool {
+	for _, cmd := range s.cmds {
+		if reflect.DeepEqual(cmd.Body, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func multiTab(id int, title string) *Tab {
@@ -104,6 +114,12 @@ func TestActivateTabMovesThePresenter(t *testing.T) {
 	}
 	if second.Presenter != p {
 		t.Fatal("second tab did not receive the presenter")
+	}
+	if !hasCommand(first.Session.(*eventSession), protocol.Visibility{Active: false}) {
+		t.Fatal("first tab was not marked inactive")
+	}
+	if !hasCommand(second.Session.(*eventSession), protocol.Visibility{Active: true}) {
+		t.Fatal("second tab was not marked active")
 	}
 	if p.state.Title != "two" {
 		t.Fatalf("presenter state = %q, want the second tab", p.state.Title)
@@ -205,6 +221,87 @@ func TestActiveTabRevealedAfterResizeState(t *testing.T) {
 	}
 	if loop.revealPending {
 		t.Fatal("reveal stayed pending after the new state arrived")
+	}
+}
+
+func TestGraphicsModeIsSharedAcrossTabs(t *testing.T) {
+	p := NewPresenter(io.Discard, true)
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second}, Active: first, Presenter: p,
+		CellW: 8, CellH: 16,
+		GraphicsModes:   []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone},
+		CurrentGraphics: GraphicsKitty,
+	}
+	loop.syncTabBar()
+	loop.cycleGraphics()
+	if loop.CurrentGraphics != GraphicsBlocks {
+		t.Fatalf("current graphics = %v, want blocks", loop.CurrentGraphics)
+	}
+	if p.gfx != nil {
+		t.Fatal("presenter still has a native graphics renderer in blocks mode")
+	}
+	for _, tab := range loop.Tabs {
+		if !hasCommand(tab.Session.(*eventSession), protocol.Graphics{Mode: GraphicsBlocks}) {
+			t.Fatalf("tab %d did not receive the shared graphics mode", tab.SessionID)
+		}
+	}
+	loop.cycleGraphics()
+	if loop.CurrentGraphics != GraphicsNone {
+		t.Fatalf("current graphics = %v, want none", loop.CurrentGraphics)
+	}
+	for _, tab := range loop.Tabs {
+		if !hasCommand(tab.Session.(*eventSession), protocol.Graphics{Mode: GraphicsNone}) {
+			t.Fatalf("tab %d did not receive none", tab.SessionID)
+		}
+	}
+}
+
+func TestSwitchPatchesZoomLabel(t *testing.T) {
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second}, Active: first,
+		Presenter: NewPresenter(io.Discard, true),
+	}
+	loop.syncTabBar()
+	if _, err := loop.handleEvent(first, protocol.Event{Body: protocol.State{
+		Width: 80, Height: 24, HeaderRows: 2, FrontendChrome: true,
+		Title: "one", ZoomPercent: 150, ZoomLabel: " 150% ",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if loop.zoomPercent != 150 {
+		t.Fatalf("tracked zoom = %d", loop.zoomPercent)
+	}
+	loop.activateTab(1)
+	if second.State.Page.ZoomPercent != 150 || !strings.Contains(second.State.Page.ZoomLabel, "150%") {
+		t.Fatalf("switched tab zoom = %d %q", second.State.Page.ZoomPercent, second.State.Page.ZoomLabel)
+	}
+}
+
+func TestNewTabStartsURLPrompt(t *testing.T) {
+	first := multiTab(1, "one")
+	first.Presenter = NewPresenter(io.Discard, true)
+	loop := &SessionLoop{
+		Tabs: []*Tab{first}, Active: first, Presenter: first.Presenter,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int) (*Tab, error) {
+			return multiTab(int(id), "New Tab"), nil
+		},
+	}
+	loop.syncTabBar()
+	loop.newTab()
+	if !loop.Active.promptActive || loop.Active.promptText != "" {
+		t.Fatalf("new tab prompt active=%v text=%q", loop.Active.promptActive, loop.Active.promptText)
+	}
+	if !loop.Active.State.Page.PromptActive || !loop.Active.State.Page.KeysEngine {
+		t.Fatalf("new tab state = %+v", loop.Active.State.Page)
+	}
+	handled, quit := loop.Active.handleShellKey("u")
+	if !handled || quit || loop.Active.promptText != "u" {
+		t.Fatalf("typing did not go to the URL prompt: handled=%v quit=%v text=%q", handled, quit, loop.Active.promptText)
 	}
 }
 
@@ -312,7 +409,8 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	var gotW, gotH, gotTop, gotContent int
 	loop := &SessionLoop{
 		Tabs: []*Tab{first}, Active: first, Presenter: p,
-		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+		TerminalSize:  func() (int, int, bool) { return 80, 24, true },
+		GraphicsModes: []GraphicsMode{GraphicsBlocks, GraphicsNone},
 		OpenTab: func(id protocol.SessionID, w, h, top, contentH int) (*Tab, error) {
 			gotID, gotW, gotH, gotTop, gotContent = id, w, h, top, contentH
 			tab := multiTab(int(id), "New Tab")
@@ -320,6 +418,7 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 			tab.State.Page.Height = h
 			return tab, nil
 		},
+		CurrentGraphics: GraphicsBlocks,
 	}
 	loop.syncTabBar()
 	loop.newTab()
@@ -334,6 +433,9 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	}
 	if loop.Active.SessionID != 2 || loop.Active.Presenter != p {
 		t.Fatalf("new tab id=%d presenter=%v", loop.Active.SessionID, loop.Active.Presenter)
+	}
+	if !hasCommand(loop.Active.Session.(*eventSession), protocol.Graphics{Mode: GraphicsBlocks}) {
+		t.Fatal("new tab did not receive the current browser graphics mode")
 	}
 }
 

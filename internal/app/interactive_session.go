@@ -41,7 +41,7 @@ func (f interactiveSessionFactory) newSession(tabLoader *engine.Loader, w, h int
 	o := f.o
 	b := engine.NewConfiguredSession(engine.SessionConfig{
 		Loader: tabLoader, BrowserContext: f.browserContext,
-		Width: w, Height: h, Zoom: f.zoomFactor, Interactive: true,
+		Width: w, Height: h, Zoom: f.zoomFactor, PreserveZoom: true, Interactive: true,
 		Reader: o.Reader, Dark: o.Dark, Home: o.Home,
 		CLIConfig: map[string]string{
 			"-dump":          onOff(o.Dump),
@@ -52,7 +52,7 @@ func (f interactiveSessionFactory) newSession(tabLoader *engine.Loader, w, h int
 			"-graphics":      o.Graphics,
 			"-mem-limit":     strconv.Itoa(o.MemLimit),
 			"-layout-budget": f.budget.Name,
-			"-zoom":          engine.ZoomPercentLabel(f.zoomFactor),
+			"-zoom":          engine.ZoomPercentLabel(engine.Zoom()),
 			"-color":         onOff(o.Color),
 			"-no-color":      onOff(o.NoColor),
 			"-certs":         tabLoader.CertSource(),

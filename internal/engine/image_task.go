@@ -196,7 +196,7 @@ func (s *Session) CancelDeferredImageLoad() {
 // goroutine. The page is already laid out and visible; results arrive on
 // ImageCh and are applied by the event loop.
 func (s *Session) StartDeferredImageLoad(viewH int) {
-	if s.ImagesPaused || s.Images == nil || s.Images.ImagesDisabled() || s.Page == nil || s.Page.Root == nil || s.Reader {
+	if !s.active || s.ImagesPaused || s.Images == nil || s.Images.ImagesDisabled() || s.Page == nil || s.Page.Root == nil || s.Reader {
 		return
 	}
 	tasks := ImageTasks(s.Page.Root, s.Page.Base, s.Images.ImageViewportPx())

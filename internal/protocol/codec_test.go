@@ -38,6 +38,8 @@ func testCommands() []Command {
 		{Session: 15, Seq: 15, Body: ConsoleAction{Op: ConsoleInput, Text: "1+1"}},
 		{Session: 16, Seq: 16, Body: History{Entries: []HistoryEntry{{URL: "https://example.test/a"}, {URL: "about:help"}}, Current: 1}},
 		{Session: 17, Seq: 17, Body: Restore{EntryID: 42, URL: "https://example.test/a", Scroll: 9}},
+		{Session: 18, Seq: 18, Body: Visibility{Active: true}},
+		{Session: 19, Seq: 19, Body: Graphics{Mode: GraphicsBlocks}},
 		{Session: 8, Seq: 8, Body: Find{Scope: FindHTML, Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},

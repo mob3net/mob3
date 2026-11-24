@@ -9,6 +9,8 @@ type CommandHooks interface {
 	Navigate(string, bool)
 	SetHistoryView(protocol.History)
 	RestoreEntry(entryID uint64, url string, scroll int)
+	SetActive(bool)
+	SetGraphicsMode(protocol.GraphicsMode)
 	HandleKey(string) bool
 	ProtocolMouse(protocol.Mouse) bool
 	ApplyScroll(protocol.Scroll)
@@ -34,6 +36,10 @@ func (s *Session) HandleCommand(cmd protocol.Command, h CommandHooks) (bool, err
 		h.SetHistoryView(v)
 	case protocol.Restore:
 		h.RestoreEntry(v.EntryID, v.URL, v.Scroll)
+	case protocol.Visibility:
+		h.SetActive(v.Active)
+	case protocol.Graphics:
+		h.SetGraphicsMode(v.Mode)
 	case protocol.Resize:
 		h.Resize(v)
 	case protocol.Key:

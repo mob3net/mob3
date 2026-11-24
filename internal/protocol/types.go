@@ -57,6 +57,8 @@ const (
 	CmdConsoleAction
 	CmdHistory
 	CmdRestore
+	CmdVisibility
+	CmdGraphics
 )
 
 const (

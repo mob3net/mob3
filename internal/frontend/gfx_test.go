@@ -21,6 +21,28 @@ func testPlacement(key string, src image.Image, x, y, w, h, rowStart, totalRows 
 	}
 }
 
+func TestResetForTabClearsImageCaches(t *testing.T) {
+	r := NewGFXRenderer(GraphicsKitty, 8, 16)
+	key := gfxKey{key: "1", cols: 1, rows: 1, pxW: 8, pxH: 16}
+	r.kitty[key] = &kittyImage{id: 1, w: 8, h: 16}
+	r.scaled[key] = image.NewNRGBA(image.Rect(0, 0, 8, 16))
+	r.encoded[key] = []byte{1}
+	r.decoded["1"] = image.NewNRGBA(image.Rect(0, 0, 8, 16))
+	r.iterm[itermKey{gfxKey: key}] = "payload"
+	var sb strings.Builder
+	r.ResetForTab(&sb)
+	if len(r.kitty) != 0 || len(r.iterm) != 0 || len(r.scaled) != 0 ||
+		len(r.encoded) != 0 || len(r.decoded) != 0 {
+		t.Fatal("image caches survived a tab reset")
+	}
+	if r.nextID != 1 {
+		t.Fatalf("next image id = %d, want reset", r.nextID)
+	}
+	if !strings.Contains(sb.String(), "a=d,d=A") {
+		t.Fatalf("reset did not remove terminal images: %q", sb.String())
+	}
+}
+
 func TestTargetPixels(t *testing.T) {
 	r := NewGFXRenderer(GraphicsKitty, 8, 16)
 	if r == nil {

@@ -36,10 +36,14 @@ type Session struct {
 	HideBackgrounds bool
 	Interactive     bool
 	NoDraw          bool
-	ScaledLayout    bool
-	LastBuild       time.Duration
-	LastRebuild     time.Time
-	LastState       protocol.State
+	// active marks the tab the front end is presenting. Direct callers and
+	// tests start active; the tab manager sends Visibility when it switches.
+	active       bool
+	zoomGen      uint64
+	ScaledLayout bool
+	LastBuild    time.Duration
+	LastRebuild  time.Time
+	LastState    protocol.State
 
 	// View and page-display state.
 	Focus             int
@@ -285,7 +289,7 @@ func NewEmptySession() *Session {
 	s := &Session{
 		Frame: NewFrame(), ImageCh: make(chan ImageBatch, 1),
 		LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16),
-		browser: bc, tabID: bc.NextTabID(),
+		browser: bc, tabID: bc.NextTabID(), active: true, zoomGen: zoomGen(),
 	}
 	s.router = newFrameRouter()
 	s.router.Register(s.Frame)

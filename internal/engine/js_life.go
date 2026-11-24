@@ -43,7 +43,7 @@ func (f *Frame) stopJS() {
 
 // NextJSTimerDelay returns the next frame timer or hover-rebuild deadline.
 func (s *Session) NextJSTimerDelay(h SessionHooks) (time.Duration, bool) {
-	if s.Frame == nil {
+	if s.Frame == nil || !s.active {
 		return 0, false
 	}
 	return s.Frame.nextJSTimerDelay(h)
@@ -77,7 +77,7 @@ func (f *Frame) nextJSTimerDelay(h SessionHooks) (time.Duration, bool) {
 
 // RunJSTimers runs the frame's due timers and rebuilds when the DOM changed.
 func (s *Session) RunJSTimers(h SessionHooks) bool {
-	if s.Frame == nil {
+	if s.Frame == nil || !s.active {
 		return false
 	}
 	return s.Frame.runJSTimers(s, h)

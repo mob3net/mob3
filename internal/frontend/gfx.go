@@ -198,6 +198,25 @@ func (r *GFX) Clear(sb *strings.Builder) {
 	}
 }
 
+// ResetForTab drops every placement and pixel cache before another tab draws.
+// Placement keys are scoped to one engine session, so reusing the cache across
+// tabs can show images from the previous tab.
+func (r *GFX) ResetForTab(sb *strings.Builder) {
+	if r == nil {
+		return
+	}
+	r.Clear(sb)
+	if r.mode == GraphicsITerm {
+		sb.WriteString("\x1b[2J")
+	}
+	r.kitty = make(map[gfxKey]*kittyImage)
+	r.iterm = make(map[itermKey]string)
+	r.decoded = make(map[string]image.Image)
+	r.scaled = make(map[gfxKey]*image.NRGBA)
+	r.encoded = make(map[gfxKey][]byte)
+	r.nextID = 1
+}
+
 // maxCachedImages bounds the client-side image caches. Eviction never drops an
 // image used by the frame being drawn, so a viewport that shows more images
 // than this keeps them all instead of resetting and rebuilding the cache on
