@@ -3,7 +3,47 @@ package engine
 import (
 	"strings"
 	"testing"
+
+	"browser/internal/protocol"
 )
+
+type openTabSink struct{ url string }
+
+func (s *openTabSink) Send(ev protocol.Event) error {
+	if v, ok := ev.Body.(protocol.OpenTab); ok {
+		s.url = v.URL
+	}
+	return nil
+}
+
+func TestMiddleClickRequestsBackgroundTab(t *testing.T) {
+	doc := ParseHTML(`<p><a href="/next">Next page</a></p>`)
+	u := mustParse(t, "https://example.com/start/")
+	b := newTestSession(40, 10)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.Layout = BuildLayout(doc, nil, b.Width)
+	var frag *Frag
+	for i := range b.Layout.Frags {
+		if b.Layout.Frags[i].Kind == FragText && strings.Contains(b.Layout.Frags[i].Text, "Next") {
+			frag = &b.Layout.Frags[i]
+			break
+		}
+	}
+	if frag == nil {
+		t.Fatal("link fragment not found")
+	}
+	sink := &openTabSink{}
+	b.sessionOut = sink
+	top, _ := b.viewport()
+	b.HandleMouse(MouseEvent{Button: MouseButtonMiddle, X: frag.X + 1, Y: top + frag.Y + 1, Press: true})
+	if sink.url != "https://example.com/next" {
+		t.Fatalf("opened URL = %q", sink.url)
+	}
+	if b.URL != u {
+		t.Fatal("middle click navigated the current tab")
+	}
+}
 
 func TestEscapeShowsExitHint(t *testing.T) {
 	b := newTestSession(80, 10)

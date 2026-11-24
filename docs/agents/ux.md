@@ -123,8 +123,8 @@ agreement, the non-negotiable constraints and the change protocol.
   and the list is built from one `viewOption` registry so later view toggles
   can be added), `o`/`Ctrl-L` URL prompt (or `:` for a Vim-style command prompt where
   `q` or `:q` plus Enter quits like `q`), `/` find in page,
-  `n`/`N` next/previous find match, `f` link hints, `F` link hints with a
-  destination confirmation, `u` show URL, `E` open the full warning or error
+  `n`/`N` next/previous find match, `f` link hints, `F` link hints that open
+  the chosen link in a background tab, `u` show URL, `E` open the full warning or error
   text when the footer had to truncate it (the footer status line is also
   clickable, and the `E` in `Error:` is underlined to advertise the key),
   `d` open the curl download popup for the current PDF page (only in the PDF
@@ -306,7 +306,8 @@ agreement, the non-negotiable constraints and the change protocol.
   and release on the same cell is a
   click: it follows a link using the same rectangles as keyboard focus, or
   clears focus; a download link opens the curl popup, except a PDF download,
-  which is fetched and opens in the viewer. While the URL
+  which is fetched and opens in the viewer. Middle-clicking a link opens it in
+  a background tab without moving the current tab. While the URL
   prompt is open, a click on its field keeps it
   open and a click anywhere else closes it; clicking inside it positions the
   caret. Shift+mouse reports are ignored and suppress the next redraw so the

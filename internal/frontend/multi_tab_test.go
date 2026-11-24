@@ -466,6 +466,53 @@ func TestHomePageKeepsItsTitleButTabSaysNewTab(t *testing.T) {
 	}
 }
 
+func TestOpenTabEventOpensBackgroundTab(t *testing.T) {
+	tab := &Tab{Stderr: io.Discard}
+	opened := ""
+	tab.Actions = TabActions{OpenTabBackground: func(url string) { opened = url }}
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.OpenTab{URL: "https://example.test/next"}}); err != nil {
+		t.Fatal(err)
+	}
+	if opened != "https://example.test/next" {
+		t.Fatalf("opened = %q", opened)
+	}
+	opened = ""
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.OpenTab{URL: "javascript:alert(1)"}}); err != nil {
+		t.Fatal(err)
+	}
+	if opened != "" {
+		t.Fatalf("unsafe URL opened: %q", opened)
+	}
+}
+
+func TestBackgroundNewTabKeepsCurrentTab(t *testing.T) {
+	first := multiTab(1, "one")
+	first.Presenter = NewPresenter(io.Discard, true)
+	var openedTarget string
+	loop := &SessionLoop{
+		Tabs: []*Tab{first}, Active: first, Presenter: first.Presenter,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+		OpenTab: func(id protocol.SessionID, w, h, top, contentH int, target string) (*Tab, error) {
+			openedTarget = target
+			return multiTab(int(id), "Linked"), nil
+		},
+	}
+	loop.syncTabBar()
+	loop.newTabBackground("https://example.test/next")
+	if openedTarget != "https://example.test/next" {
+		t.Fatalf("target = %q", openedTarget)
+	}
+	if loop.Active != first || len(loop.Tabs) != 2 {
+		t.Fatalf("active changed to %v with %d tabs", loop.Active, len(loop.Tabs))
+	}
+	if !hasCommand(loop.Tabs[1].Session.(*eventSession), protocol.Visibility{Active: false}) {
+		t.Fatal("background tab was not suspended")
+	}
+	if loop.Tabs[1].promptActive {
+		t.Fatal("background link tab opened the URL prompt")
+	}
+}
+
 func TestCycleTabStopsAtFirstAndLast(t *testing.T) {
 	var tabs []*Tab
 	for i := 0; i < 3; i++ {

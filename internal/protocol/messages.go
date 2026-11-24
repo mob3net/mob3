@@ -428,6 +428,14 @@ type HistoryCommit struct {
 
 func (HistoryCommit) eventKind() Kind { return EvHistoryCommit }
 
+// OpenTab asks the front end to open URL in a background tab. It backs
+// middle-click on a link and does not change the active tab.
+type OpenTab struct {
+	URL string
+}
+
+func (OpenTab) eventKind() Kind { return EvOpenTab }
+
 // FindResults reports the current match and the total. Rects are content
 // viewport rectangles for highlighting.
 type FindResults struct {

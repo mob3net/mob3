@@ -51,6 +51,14 @@ func (b *Session) liveNode(n *Node) bool {
 	return false
 }
 
+// emitOpenTab asks the front end to open a link in a background tab.
+func (b *Session) emitOpenTab(url string) {
+	if b == nil || b.sessionOut == nil || url == "" {
+		return
+	}
+	_ = b.sessionOut.Send(protocol.Event{Body: protocol.OpenTab{URL: url}})
+}
+
 // clickContent follows a link under the pointer, or clears link focus.
 // JavaScript click handlers run first and may prevent navigation.
 func (b *Session) clickContent(x, docY int) {
@@ -172,6 +180,16 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 	}
 	if ev.Press {
 		switch ev.Button {
+		case MouseButtonMiddle:
+			docY := b.Scroll + (y - top)
+			if n := b.nodeAt(x, docY); n != nil {
+				if a := NearestAnchor(n); a != nil {
+					if href := strings.TrimSpace(a.Attr("href")); href != "" {
+						b.emitOpenTab(b.resolveHref(href))
+					}
+				}
+			}
+			return false
 		case MouseButtonRight:
 			// Copy the link under the pointer instead of navigating; a
 			// right-click away from a link leaves the page alone. Back stays

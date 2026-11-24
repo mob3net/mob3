@@ -721,18 +721,22 @@ func TestHintEventKeys(t *testing.T) {
 	}
 }
 
-func TestHintAskConfirmsDestination(t *testing.T) {
+func TestHintAskOpensBackgroundTab(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	opened := ""
+	loop.Actions = TabActions{OpenTabBackground: func(url string) { opened = url }}
 	items := []protocol.HintItem{{Target: 3, Label: "d", Link: true, Href: "https://example.com/next", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}}}
 	loop.applyEvent(protocol.Event{Body: protocol.Hints{Ask: true, Items: items}})
 	loop.handleHintKey("d")
-	if !loop.hintView.Confirm || loop.hintView.ConfirmHref != "https://example.com/next" {
-		t.Fatalf("confirm = %+v", loop.hintView)
+	if loop.hintActive {
+		t.Fatal("hint stayed active")
 	}
-	loop.handleHintKey("enter")
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.HintResult{Target: 3}) {
+	if opened != "https://example.com/next" {
+		t.Fatalf("opened = %q", opened)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.HintResult{Cancel: true}) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
 }

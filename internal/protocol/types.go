@@ -78,6 +78,7 @@ const (
 	EvHints
 	EvConsoleView
 	EvHistoryCommit
+	EvOpenTab
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

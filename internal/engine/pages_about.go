@@ -67,7 +67,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
-<tr><td><b>F</b></td><td>same as <b>f</b>, but show the destination and wait for <b>Enter</b>/<b>y</b></td></tr>
+<tr><td><b>F</b></td><td>same as <b>f</b>, but opens the chosen link in a background tab</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
 <tr><td><b>u</b></td><td>show the current URL</td></tr>
@@ -115,9 +115,9 @@ link, and typing it follows that link. Form controls are highlighted too:
 choosing a text field focuses it, checkboxes and radios toggle, a select opens
 its options, multi-select options toggle, and buttons activate. The chosen
 control stays focused for follow-up keys. Links sharing a
-first letter use two adjacent letters. <b>F</b> shows the
-destination in yellow first and waits for <b>Enter</b>/<b>y</b>; <b>Esc</b> or
-<b>n</b> cancels. <b>Esc</b> or scrolling dismisses the hints.</p>
+first letter use two adjacent letters. <b>F</b> opens the chosen link in a
+background tab without leaving the current page. <b>Esc</b> or scrolling
+dismisses the hints.</p>
 
 <h2>Reader mode</h2>
 <p><b>R</b> toggles a clean article view and stays on across pages. Start with
@@ -164,6 +164,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>hover a link</td><td>show its target in the footer</td></tr>
 <tr><td>drag over page text</td><td>select it; <b>y</b> copies and clears it</td></tr>
 <tr><td>click a link</td><td>follow it; a download link shows the curl popup, except a .pdf download, which opens in the viewer</td></tr>
+<tr><td>middle-click a link</td><td>open it in a background tab</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click a tab</td><td>switch to it</td></tr>
