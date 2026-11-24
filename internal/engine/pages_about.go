@@ -93,8 +93,9 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 closes the active tab. <b>Ctrl-N</b>/<b>Ctrl-P</b> or
 <b>Alt-Right</b>/<b>Alt-Left</b> move next and previous without wrapping, and
 <b>1</b>-<b>9</b> or <b>Alt-1</b>-<b>Alt-9</b> select a number from the bar.
-Each tab keeps its own history, scroll, focus and overlays, while cookies and
-<b>localStorage</b> are shared and <b>sessionStorage</b> is per tab. Graphics
+Each tab keeps its own history, scroll, focus and overlays, while cookies follow
+normal domain rules across tabs, <b>localStorage</b> is shared by tabs on the
+same origin, and <b>sessionStorage</b> is per tab and origin. Graphics
 mode, zoom and the memory readout are browser-wide. A background tab keeps
 loading and updates its title, but its timers and image work are paused and it
 never draws. A crashed tab stays marked <b>Crashed</b> and can be closed without
