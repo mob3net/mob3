@@ -33,16 +33,19 @@ covers every message. Images cross as encoded bytes with size caps, never as
 `image.Image`. Terminal capability detection is front-end-owned and cookie
 parsing is host-side; JS `fetch`/XHR go through the host broker.
 
-**Non-goals of this step:** no subprocess, no OS sandbox, no tabs, no
-per-site renderer, no behavior or visual change. A later process split is a
-transport implementation, not another architecture change.
+**Non-goals of this step:** the package split itself added no subprocess, OS
+sandbox, tabs or per-site renderer, and no behavior or visual change. The
+target in [Tabs, frames and in-process isolation](#tabs-frames-and-in-process-isolation)
+also keeps one process: a future process transport would sit behind the frame
+router, not change the ownership model.
 
 ### Migration order
 
 All steps are landed. The temporary aliases, test-only host factory and the
 migration tracker are gone. The host records each document's final URL and the
-front end reads it by entry ID; the remaining isolation step is the engine
-child process.
+front end reads it by entry ID. The remaining architecture work is the
+in-process tab and frame model; the engine child process is not part of the
+target.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
@@ -60,7 +63,8 @@ child process.
    the document loader is engine-owned and reaches the network only through
    `protocol.Host`.
 6. **Landed.** Every path, including `-dump`, `-png` and MCP, runs through the
-   in-process transport; a stream transport exists for the later process split.
+   in-process transport; a stream transport exists for tests and a future
+   process transport.
 7. **Landed.** Fuzzing, final benchmarks and cleanup: no aliases, no browser
    package, no unused `Selection` event.
 
@@ -88,10 +92,49 @@ child process.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 
+## Tabs, frames and in-process isolation
+
+The target keeps one Go process. It is logical origin isolation, not memory,
+site or OS isolation. No subprocess, sandbox, per-site renderer or
+OS-specific isolation mechanism is part of the model.
+
+- A tab is one protocol session (`SessionID`). The front end owns the tab list,
+  the active tab, per-tab history and one terminal presenter.
+- A tab owns a frame tree. The top-level document and every iframe are frames.
+  Each frame owns its document/`Page`, `Layout`, URL and origin, viewport,
+  scroll, timers and one sobek VM.
+- There is one sobek VM per frame. No `*sobek.Object`, `*Node` or other engine
+  value crosses a frame or tab boundary. Cross-frame access goes through a
+  frame router that copies data and checks the frame's origin.
+- A frame's origin comes from the URL the host and loader committed for that
+  document, never from a script-supplied value. Every cross-frame and
+  origin-scoped API uses that origin.
+- Iframes are postMessage-only. `contentWindow` is a WindowProxy with
+  `postMessage` and the limited Window surface; `contentDocument` is null even
+  for a same-origin frame, `frameElement` is null, and there is no DOM bridge.
+  `parent` and `top` are WindowProxies, not references to the other frame's
+  document.
+- A process-wide context owns the shared origin storage, memory budgets,
+  settings and globally unique history-entry IDs. `localStorage` is keyed by
+  origin and shared across tabs; `sessionStorage` is keyed by tab and origin.
+- One budget manager covers all runtimes, page caches and image/SVG work, so N
+  tabs do not each take a per-session percentage of the heap.
+- Zoom stays browser-global across tabs; the terminal cell size is
+  process-wide.
+- The front end presents only the active tab; background tabs do not write the
+  terminal.
+
+The frame router is a data boundary by design, so a future process transport
+could move behind it without changing the ownership or security model.
+
+Current state: one `Session` holds one page and one JS runtime, iframe elements
+have inert stub documents, and there are no tabs. This section records the
+target; it is not implemented yet.
+
 ## Current layout
 
-This is the **actual** state; the engine child process remains the only open
-isolation step.
+This is the **actual** state. The tab and frame model is the next architecture
+step; it is not implemented yet and there is no engine child process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -189,7 +232,7 @@ isolation step.
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. The engine loader implements the contract. |
 | `internal/engine/page_assemble.go` | About/blocked/PDF page assembly, the anti-bot response heuristic and `AboutPageName`. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
-| `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by the later child process. |
+| `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by tests and available for a future process transport; the target keeps one process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
