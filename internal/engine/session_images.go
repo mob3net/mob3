@@ -62,7 +62,6 @@ func (b *Session) applyPendingImageLayout() {
 	}
 	b.PendingImageRow = 0
 	b.rebuild()
-	b.prev = nil
 }
 
 // applyDeferredImageBatch installs background image results for the current
@@ -118,13 +117,6 @@ func (b *Session) applyDeferredImageBatch(batch imageBatch) bool {
 		} else {
 			b.PendingImageRow = 0
 			b.rebuild()
-			// Native terminal placements and kitty scaled glyphs are drawn
-			// outside the cell text, so a line diff cannot erase a stale copy.
-			// Half-block art lives in the cells the diff repaints, so a
-			// text-only frame keeps the diff and avoids a full-screen blink.
-			if b.inlineImagesEnabled() || b.BigText {
-				b.prev = nil
-			}
 		}
 	}
 	// A batch with only failures or the final done marker still advances the

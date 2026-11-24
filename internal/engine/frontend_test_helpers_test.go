@@ -3,7 +3,6 @@ package engine
 import "browser/internal/frontend"
 
 func init() {
-	defaultFrameEncoder = frontend.EncodeFrame
 	defaultPNGEncoder = frontend.RenderPNG
 }
 

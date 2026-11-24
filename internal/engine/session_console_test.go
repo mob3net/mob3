@@ -2,8 +2,6 @@ package engine
 
 import (
 	"browser/internal/protocol"
-	"bytes"
-	"encoding/base64"
 	"errors"
 	"net/http"
 	"strings"
@@ -225,29 +223,15 @@ func TestConsoleKeepsLogOnFailedNavigation(t *testing.T) {
 	}
 }
 
-func consoleClipboardText(t *testing.T, buf *bytes.Buffer) string {
-	t.Helper()
-	out := buf.String()
-	if !strings.HasPrefix(out, "\x1b]52;c;") || !strings.HasSuffix(out, "\x07") {
-		t.Fatalf("clipboard sequence = %q", out)
-	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(out, "\x1b]52;c;"), "\x07")
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		t.Fatalf("clipboard payload: %v", err)
-	}
-	return string(decoded)
-}
-
 func TestConsoleYCopiesActiveSection(t *testing.T) {
 	b := newTestSession(60, 20)
 	b.consoleOpen = true
 	b.jsLog = []string{"[log] hello", "[error] boom"}
-	var buf bytes.Buffer
-	b.clipboardWriter = &buf
+	sink := &clipboardSink{}
+	b.sessionOut = sink
 	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
-	if got := consoleClipboardText(t, &buf); got != "[log] hello\n[error] boom" {
-		t.Fatalf("log copy = %q", got)
+	if sink.text != "[log] hello\n[error] boom" {
+		t.Fatalf("log copy = %q", sink.text)
 	}
 	if b.status != "Copied 24 chars" {
 		t.Fatalf("status = %q", b.status)
@@ -256,9 +240,9 @@ func TestConsoleYCopiesActiveSection(t *testing.T) {
 	// The HTML tab copies the raw source, not the width-wrapped display lines.
 	b.Page = &Page{RawHTML: "<html>\n<body>raw source</body>\n</html>"}
 	b.selectConsolePane(consoleHTML)
-	buf.Reset()
+	sink.text = ""
 	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
-	if got := consoleClipboardText(t, &buf); got != b.Page.RawHTML {
-		t.Fatalf("HTML copy = %q", got)
+	if sink.text != b.Page.RawHTML {
+		t.Fatalf("HTML copy = %q", sink.text)
 	}
 }

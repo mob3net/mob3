@@ -567,7 +567,6 @@ func (b *Session) applyZoom(z float64) {
 		// A page whose scaled runs overlapped may be fine at another zoom, so
 		// re-evaluate the fallback instead of keeping it for the session.
 		b.BigTextBlocked = false
-		b.prev = nil
 		b.rebuild()
 		if limit := b.maxScroll(); b.Scroll > limit {
 			b.Scroll = limit
@@ -624,7 +623,6 @@ func (b *Session) resizeWithContent(w, h, top, contentH int) {
 	b.Width, b.Height = w, h
 	b.ContentTop, b.ContentHeight = top, contentH
 	b.applyImageCap()
-	b.prev = nil
 	b.clearSelection()
 	b.rebuild()
 }
@@ -820,7 +818,6 @@ func (b *Session) followLink(li *LinkInfo) {
 					b.EntryID = b.nextHistoryID()
 					b.URL = u
 					b.status = ""
-					b.prev = nil
 					b.emitHistoryCommit(protocol.HistoryCommit{
 						EntryID: b.EntryID, URL: u.String(), Scroll: b.Scroll, Push: true,
 					})

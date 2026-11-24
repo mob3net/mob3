@@ -148,7 +148,6 @@ func (b *Session) handleAppAction(a protocol.App) (bool, error) {
 	case protocol.AppFrontendOverlay:
 		if open := a.Arg != 0; b.frontendOverlay != open {
 			b.frontendOverlay = open
-			b.prev = nil
 		}
 	}
 	return false, nil

@@ -121,6 +121,9 @@ OS-specific isolation mechanism is part of the model.
   tabs do not each take a per-session percentage of the heap.
 - Zoom stays browser-global across tabs; the terminal cell size is
   process-wide.
+- The front end is the only terminal writer. The engine has no terminal
+  writer, ANSI encoder, graphics renderer or clipboard sink; it returns frames,
+  placements and `Clipboard` events.
 - The front end presents only the active tab; background tabs do not write the
   terminal.
 
@@ -227,7 +230,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/placement.go` | Native-image placement cache, PNG encoding, image scaling and frame clipping into `protocol.Placement`. |
 | `internal/engine/image_decode.go` | Hostile-input image decoding: panic containment, decompression-bomb checks, SVG/raster dispatch, decode weight and aspect-preserving downscale. |
 | `internal/engine/graphics.go` | Protocol graphics-mode aliases. The engine records native-image and scaled-text capabilities from `protocol.Capabilities`; terminal image placement and ANSI encoding are front-end-owned. |
-| `internal/engine/encoders.go` | Injected frame/PNG encoder hooks; the engine does not import `internal/frontend`. |
+| `internal/engine/encoders.go` | Injected PNG encoder hook for MCP screenshots. ANSI frame encoding is front-end-owned; the engine does not import `internal/frontend`. |
 | `internal/frontend/frame.go` | Protocol-only ANSI encoder: color modes, SGR, 256-color mapping, structured scaled runs, mono attributes. |
 | `internal/frontend/png.go` | Protocol-frame-to-PNG renderer for `-png` and the MCP `screenshot` tool. Uses Go Mono faces from the approved `golang.org/x/image` module, 8×16 pixel cells, per-cell colors/attributes, half-block image cells, and underline/strike. |
 | `internal/engine/frame_protocol.go` | Mapper from the painted content grid to `protocol.Frame`; the only place internal cell fields become wire values. |
@@ -263,7 +266,6 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/protocol/netctx.go` | Shared request metadata, page-space and local-network/mixed-content error values used by loader and host. |
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
-| `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker` and `BudgetManager`; shared settings join it with the tab and frame model. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
@@ -305,7 +307,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/memory.go` | Process soft heap limit (`-mem-limit`, `debug.SetMemoryLimit`) and the fallback JS/history totals. The shared split lives in `budget_manager.go`; image/SVG totals and the byte limiter live in `budget.go`. |
 | `internal/engine/session_pdf.go` | PDF page tracking for the footer status line (`Page n/N`), the clickable `(d -> Download name)` hint, and the `d` download shortcut. |
 | `internal/engine/session_images.go` | Deferred-image bridge: task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
-| `internal/engine/session_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `Selection`. |
+| `internal/engine/session_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `Selection`. Copy emits a `protocol.Clipboard` event; OSC 52 encoding and the terminal write live in the front end. |
 | `internal/engine/automation.go` | Headless `Automation`: navigation, snapshot, click/type/press/scroll, its own history list, JS evaluation and `RunCommand`. `internal/app/automation_transport.go` exposes it through the MCP protocol client. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `internal/engine/session_console.go` | Console state, actions and `ConsoleView` snapshots; JS dialog request/response state; download/notice state. All console, dialog, download and notice rendering and input are front-end-owned. |

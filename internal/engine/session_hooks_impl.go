@@ -49,7 +49,7 @@ func (b *Session) NavigateEntry(method, target string, body []byte, contentType 
 	b.navigateRequestEntry(method, target, body, contentType, entryID, historyPush, force)
 }
 func (b *Session) Rebuild()            { b.rebuild() }
-func (b *Session) InvalidateFrame()    { b.prev = nil }
+func (b *Session) InvalidateFrame()    {}
 func (b *Session) SetStatus(s string)  { b.status = s }
 func (b *Session) ViewportHeight() int { return b.viewportHeight() }
 func (b *Session) PageLoadStatus(page *Page, readerFailed bool) string {

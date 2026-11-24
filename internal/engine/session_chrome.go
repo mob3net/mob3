@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-
-	"browser/internal/protocol"
 )
 
 func (b *Session) zoomBadge() string {
@@ -125,10 +123,6 @@ func (b *Session) presentContent(content *Grid, placements []ImagePlacement) {
 	b.frameBuf = toProtocolFrameInto(&b.frameBuf, content, 0)
 	b.frameBuf.Placements = b.ProtocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
 	b.frameReady = true
-	if b.emitFrames {
-		return
-	}
-	b.flushGrid(content)
 }
 
 // footerModel computes the footer text, level and width once for the
@@ -179,64 +173,6 @@ func (b *Session) footerModel() footerModel {
 	return footerModel{
 		left: leftText, right: rightText, pdfHint: pdfHint, pdfHintX: pdfHintX,
 		avail: avail, level: level, statusHit: statusHit,
-	}
-}
-
-// flushGrid writes changed cells to the direct-draw test sink. It is not used
-// by the interactive session, which emits a protocol frame and leaves native
-// image placement to the front end.
-func (b *Session) flushGrid(g *Grid) {
-	enc := b.frameEncoder
-	if enc == nil {
-		enc = defaultFrameEncoder
-	}
-	if enc == nil {
-		return
-	}
-	frame := toProtocolFrameInto(&b.frameBuf, g, 0)
-	lines := enc(frame, b.color, !b.color)
-	// Scrolling can leave the terminal in a shifted state (for example after a
-	// stray wrap), and cells covered by scaled text are skipped when painting.
-	// Clear the whole screen and repaint on any scroll change or scaled-run
-	// move so stale content can never show through the skipped cells.
-	if b.Scroll != b.lastScroll {
-		b.lastScroll = b.Scroll
-		b.prev = nil
-	}
-	if !protocol.RunsEqual(b.lastRuns, frame.Runs) {
-		b.lastRuns = append(b.lastRuns[:0], frame.Runs...)
-		b.prev = nil
-	}
-	// Entering or leaving hint/modal mode switches between native inline
-	// images and half-block art. Repaint everything so no stale terminal
-	// image survives.
-	if native := b.inlineImagesEnabled(); native != b.lastNativeImages {
-		b.lastNativeImages = native
-		b.prev = nil
-	}
-	needClear := b.prev == nil || len(b.prev) != len(lines)
-	if needClear {
-		b.prev = make([]string, len(lines))
-	}
-	var sb strings.Builder
-	if needClear {
-		sb.WriteString("\x1b[2J")
-	}
-	for i := range lines {
-		if b.prev[i] == lines[i] {
-			continue
-		}
-		sb.WriteString(fmt.Sprintf("\x1b[%d;1H", i+1))
-		sb.WriteString(lines[i])
-		if !b.color {
-			// No-color lines are trimmed, so clear any longer previous cell
-			// run left on the row (for example an old URL in the prompt).
-			sb.WriteString("\x1b[K")
-		}
-		b.prev[i] = lines[i]
-	}
-	if sb.Len() > 0 {
-		_, _ = b.writer().Write([]byte(sb.String()))
 	}
 }
 
