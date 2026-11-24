@@ -100,6 +100,16 @@ OS-specific isolation mechanism is part of the model.
 
 - A tab is one protocol session (`SessionID`). The front end owns the tab list,
   the active tab, per-tab history and one terminal presenter.
+- The tab manager creates one loader, engine `Session` and protocol session per
+  tab. Tabs share the host, cookies, cache, TLS state, origin storage and
+  `BudgetManager`; each tab owns its loader counters and page cache.
+- The session loop drains every tab's event stream. Only the active tab's frames
+  are presented; a background tab's state, history and overlay events still
+  update its own model. `protocol.Visibility` tells the engine which tab is
+  active; an inactive tab stops drawing, JavaScript timers, deferred images,
+  progress ticks and usage wakeups.
+- A failed tab is contained: its transport is released, the tab stays in the
+  bar marked crashed, and the other tabs keep running.
 - A tab owns a frame tree. The top-level document and every iframe are frames.
   Each frame owns its document/`Page`, `Layout`, URL and origin, viewport,
   scroll, timers and one sobek VM.
@@ -119,8 +129,8 @@ OS-specific isolation mechanism is part of the model.
   origin and shared across tabs; `sessionStorage` is keyed by tab and origin.
 - One budget manager covers all runtimes, page caches and image/SVG work, so N
   tabs do not each take a per-session percentage of the heap.
-- Zoom stays browser-global across tabs; the terminal cell size is
-  process-wide.
+- Zoom and the image graphics mode stay browser-global across tabs; the
+  terminal cell size is process-wide.
 - The front end is the only terminal writer. The engine has no terminal
   writer, ANSI encoder, graphics renderer or clipboard sink; it returns frames,
   placements and `Clipboard` events.
@@ -130,23 +140,23 @@ OS-specific isolation mechanism is part of the model.
 The frame router is a data boundary by design, so a future process transport
 could move behind it without changing the ownership or security model.
 
-Current state: one `Session` holds one page and one JS runtime, iframe elements
-have inert stub documents, and there is no tab bar or multi-tab routing. The
-front end now has the `Tab`/`SessionLoop` scaffold with one active tab, but it
-is not yet a tab manager for several sessions. A shared `BrowserContext`
-allocates history-entry IDs, and the `Session` embeds a top-level `Frame` that
-owns the page, layout, URL, scroll and JS runtime; the tab loop asks the frame
-for its timers. The canonical `protocol.Origin` helper is shared by the engine
-and host, and a per-tab `FrameRouter` registers the top-level frame and carries
-copied, origin-checked messages. `localStorage` and `sessionStorage` use the
-shared `StorageBroker`, and the shared `BudgetManager` divides the JS,
-page-cache, image and SVG pools across sessions. This section records the
-target; multi-tab routing and iframes are not implemented yet.
+Current state: the tab manager and tab bar are implemented. Each tab is a
+protocol session with its own engine `Session` and loader over the shared
+`BrowserContext`; the loop drains all sessions and presents only the active one.
+A background tab keeps loading and updates its own state, history, title and
+overlays but receives no frames, runs no JavaScript timers and does not stream
+deferred images. Closing a tab closes its transport and unregisters its budget
+share. Iframes remain inert stub documents: the frame tree is the remaining
+architecture work. The `Session` embeds a top-level `Frame` that owns the page,
+layout, URL, scroll and JS runtime; the tab loop asks the frame for its timers.
+`localStorage` and `sessionStorage` use the shared `StorageBroker`, and the
+shared `BudgetManager` divides the JS, page-cache, image and SVG pools across
+sessions.
 
 ## Current layout
 
-This is the **actual** state. The tab and frame model is the next architecture
-step; it is not implemented yet and there is no engine child process.
+This is the **actual** state. Tabs are implemented; real iframe browsing
+contexts are the remaining architecture step. There is no engine child process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`

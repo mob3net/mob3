@@ -118,12 +118,18 @@ type Tab struct {
 	// It keeps a compromised engine from overwriting the clipboard at will.
 	clipboardPendingUntil time.Time
 
-	// Report handles a contained crash. When nil, the loop writes one short
-	// line to Stderr and sends a ClientError command back to the session.
+	// Report handles a contained crash. When nil, the error is shown in the
+	// tab's footer and the tab stays in the bar.
 	Report func(string)
 	// tabCloseQuit carries a quit request from a tab-bar close click, which is
 	// routed through the boolean handleChromeMouse return.
 	tabCloseQuit bool
+
+	// Dead marks a tab whose protocol session ended. It keeps its place in the
+	// tab bar so the error stays visible and the user can close it without
+	// taking down the other tabs.
+	Dead         bool
+	CrashMessage string
 }
 
 // AttachPresenter gives the shared presenter to this tab, rebuilding every
@@ -168,7 +174,115 @@ func (l *Tab) BarView(active bool) TabView {
 	if title == "" {
 		title = l.State.Page.URL
 	}
+	if l.Dead {
+		title = "Crashed"
+	}
 	return TabView{Title: title, Active: active}
+}
+
+// MarkDead records a contained session failure. The tab stays in the bar so
+// its error remains visible and the rest of the browser keeps running.
+func (l *Tab) MarkDead(message string) {
+	if l.Dead {
+		return
+	}
+	l.Dead = true
+	if l.CrashMessage == "" {
+		l.CrashMessage = clipCrashMessage(protocol.StripControls(message))
+	}
+	l.clearOverlaysAfterCrash()
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = false
+	st.QuitPending = false
+	st.PromptActive = false
+	st.FindActive = false
+	st.Menu = protocol.MenuNone
+	st.FooterLeft = " Page engine stopped: " + l.CrashMessage
+	st.FooterLevel = protocol.FooterError
+	st.FooterStatusHit = false
+	st.PDFHint, st.PDFHintX = "", -1
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (l *Tab) clearOverlaysAfterCrash() {
+	l.hintActive = false
+	l.dialogActive = false
+	l.selectActive = false
+	l.downloadActive = false
+	l.noticeActive = false
+	l.consoleActive = false
+	l.consoleFindActive = false
+	l.promptActive = false
+	l.findActive = false
+	l.menuKind = protocol.MenuNone
+	l.quitPending = false
+	if l.Presenter != nil {
+		l.Presenter.SetHint(nil)
+		l.Presenter.SetDialog(nil)
+		l.Presenter.SetSelect(nil)
+		l.Presenter.SetDownload(nil)
+		l.Presenter.SetNotice(nil)
+	}
+}
+
+// handleDeadInput keeps tab management and quit usable after the engine has
+// stopped. Page keys and content mouse reports are ignored.
+func (l *Tab) handleDeadInput(k string) (quit bool, err error) {
+	if k == "eof" {
+		return true, nil
+	}
+	if ev, ok := ParseMouseToken(k); ok {
+		l.handleTabBarMouse(ev)
+		return false, nil
+	}
+	if l.quitPending {
+		switch k {
+		case "y", "Y", "enter":
+			return true, nil
+		default:
+			l.cancelQuit()
+			return false, nil
+		}
+	}
+	if handled, quit := l.handleTabKey(k); handled {
+		return quit, nil
+	}
+	switch k {
+	case "q", "ctrl-c":
+		l.startQuit()
+	}
+	return false, nil
+}
+
+// handleTabBarMouse consumes clicks on the tab bar and its new-tab button. It
+// is safe without a session because those actions are owned by the loop.
+func (l *Tab) handleTabBarMouse(ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return false
+	}
+	st := l.State.Page
+	if st.Width <= 0 || st.Height <= 0 {
+		return false
+	}
+	x, y := ev.X-1, ev.Y-1
+	for _, hit := range LayoutChromeWithTabs(st, l.TabBar, l.TabOffset).Hits {
+		switch hit.Kind {
+		case ChromeHitTab, ChromeHitTabClose, ChromeHitNewTab, ChromeHitTabPrev, ChromeHitTabNext:
+		default:
+			continue
+		}
+		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
+			continue
+		}
+		l.activateChromeHit(hit)
+		return true
+	}
+	return false
 }
 
 // handleInput applies one key or mouse token to this tab. It reports whether
@@ -242,14 +356,10 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			l.Presenter.Reset()
 		}
 		l.State.LastCrash = msg
+		l.CrashMessage = msg
 		msg = clipCrashMessage(msg)
 		if l.Report != nil {
 			l.Report(msg)
-		} else {
-			fmt.Fprintf(l.Stderr, "mob3: page engine: %s\n", msg)
-			if l.Session != nil {
-				_ = l.Session.Send(protocol.Command{Body: protocol.ClientError{Message: msg}})
-			}
 		}
 	case protocol.State:
 		v = l.pageState(v)

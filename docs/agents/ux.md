@@ -21,7 +21,24 @@ agreement, the non-negotiable constraints and the change protocol.
   The toolbar
   row uses a subtle horizontal gradient. The page title is centered in the
   space between the left and right buttons and uses a bold amber color for
-  prominence.
+  prominence. With more than one tab, the centered title slot becomes the tab
+  strip; the surrounding controls keep their cells. Each tab shows its number,
+  title, a close `x` and an add-new `+` button. The active tab is solid blue and
+  fully bold; inactive tabs use a gray gradient, a dimmed title and bold
+  accents. In `-no-color` the active tab is still fully bold. Tabs never squeeze
+  below their fixed width: when they cannot all fit, `<` / `>` scroll the strip.
+- **Tabs:** every tab is its own protocol session with its own history, scroll,
+  focus, find/hint state and overlays. `localStorage` and cookies are shared;
+  `sessionStorage` is per tab and origin; memory budgets are divided across live
+  tabs. Only the active tab draws. A background tab keeps loading and updates
+  its title, history and overlays, but its frames are discarded, timers are
+  paused, deferred image work is canceled and progress/usage wakeups are off.
+  Switching resizes the new active tab, restores its overlays and moves the
+  shared presenter. Closing releases the transport and budget share. A crashed
+  tab stays in the bar as `Crashed` and does not stop the others. New tabs open
+  with an empty focused URL prompt. Graphics mode, zoom, terminal cell size and
+  the memory readout are browser-wide. Memory is the process total, not one
+  tab's share.
 - **Config:** the `⚙` toolbar icon opens `about:config`, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home,
@@ -81,7 +98,9 @@ agreement, the non-negotiable constraints and the change protocol.
   regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `f` follows links; `Tab` and
-  `Enter` remain fallbacks.
+  `Enter` remain fallbacks. Tabs use `t`/`Ctrl-T` to open, `W`/`Ctrl-W` to
+  close, `Ctrl-N`/`Ctrl-P` (or `Alt-Right`/`Alt-Left`) to move next/previous
+  without wrapping, and `1`-`9`/`Alt-1`-`Alt-9` to select.
   `j/k` line scroll, `Space/b`
   page scroll, `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),

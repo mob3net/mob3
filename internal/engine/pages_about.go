@@ -76,6 +76,10 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>Ctrl-Y</b></td><td>copy only the page rows visible at the current scroll, with the same metadata line</td></tr>
 <tr><td><b>H</b></td><td>session history</td></tr>
+<tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab; the URL prompt is focused and empty</td></tr>
+<tr><td><b>W</b> / <b>Ctrl-W</b></td><td>close the active tab; the URL prompt keeps Ctrl-W for word delete</td></tr>
+<tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
+<tr><td><b>1</b>-<b>9</b> / <b>Alt-1</b>-<b>Alt-9</b></td><td>select a tab by its number in the tab bar</td></tr>
 <tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
 <tr><td><b>?</b></td><td>this help page</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
@@ -83,6 +87,18 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit after confirmation</td></tr>
 </table>
 <p class="muted">Kitty, WezTerm, Ghostty and foot get enhanced key reporting automatically.</p>
+
+<h2>Tabs</h2>
+<p><b>t</b>/<b>Ctrl-T</b> opens a tab and focuses an empty URL prompt. <b>W</b>/<b>Ctrl-W</b>
+closes the active tab. <b>Ctrl-N</b>/<b>Ctrl-P</b> or
+<b>Alt-Right</b>/<b>Alt-Left</b> move next and previous without wrapping, and
+<b>1</b>-<b>9</b> or <b>Alt-1</b>-<b>Alt-9</b> select a number from the bar.
+Each tab keeps its own history, scroll, focus and overlays, while cookies and
+<b>localStorage</b> are shared and <b>sessionStorage</b> is per tab. Graphics
+mode, zoom and the memory readout are browser-wide. A background tab keeps
+loading and updates its title, but its timers and image work are paused and it
+never draws. A crashed tab stays marked <b>Crashed</b> and can be closed without
+stopping the others.</p>
 
 <h2>Find</h2>
 <p><b>/</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>
@@ -145,6 +161,9 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click a link</td><td>follow it; a download link shows the curl popup, except a .pdf download, which opens in the viewer</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
+<tr><td>click a tab</td><td>switch to it</td></tr>
+<tr><td>click a tab's x or the + button</td><td>close that tab or open a new one</td></tr>
+<tr><td>click &lt; / &gt;</td><td>scroll the tab strip when tabs do not fit</td></tr>
 <tr><td>click outside the URL prompt</td><td>close it</td></tr>
 <tr><td>click in the URL prompt</td><td>place the caret</td></tr>
 <tr><td>click the zoom badge in the URL bar</td><td>open the zoom window and choose a preset with the mouse; the current level is always shown</td></tr>
