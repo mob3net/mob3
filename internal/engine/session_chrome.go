@@ -122,13 +122,13 @@ func (b *Session) draw() {
 // presentContent hands the content rectangle to the front end, or writes it
 // directly when no presentation session is active (tests and automation).
 func (b *Session) presentContent(content *Grid, placements []ImagePlacement) {
+	b.frameBuf = toProtocolFrameInto(&b.frameBuf, content, 0)
+	b.frameBuf.Placements = b.ProtocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
+	b.frameReady = true
 	if b.emitFrames {
-		b.frameBuf = toProtocolFrameInto(&b.frameBuf, content, 0)
-		b.frameBuf.Placements = b.ProtocolPlacements(b.frameBuf.Placements[:0], placements, content.W, content.H)
-		b.frameReady = true
 		return
 	}
-	b.flushGrid(content, placements)
+	b.flushGrid(content)
 }
 
 // footerModel computes the footer text, level and width once for the
@@ -182,8 +182,10 @@ func (b *Session) footerModel() footerModel {
 	}
 }
 
-// flushGrid writes changed cells to the terminal.
-func (b *Session) flushGrid(g *Grid, placements []ImagePlacement) {
+// flushGrid writes changed cells to the direct-draw test sink. It is not used
+// by the interactive session, which emits a protocol frame and leaves native
+// image placement to the front end.
+func (b *Session) flushGrid(g *Grid) {
 	enc := b.frameEncoder
 	if enc == nil {
 		enc = defaultFrameEncoder
@@ -217,15 +219,8 @@ func (b *Session) flushGrid(g *Grid, placements []ImagePlacement) {
 		b.prev = make([]string, len(lines))
 	}
 	var sb strings.Builder
-	if b.gfx != nil {
-		b.gfx.BeginFrame(&sb)
-	}
 	if needClear {
-		if b.gfx != nil {
-			b.gfx.ClearScreen(&sb)
-		} else {
-			sb.WriteString("\x1b[2J")
-		}
+		sb.WriteString("\x1b[2J")
 	}
 	for i := range lines {
 		if b.prev[i] == lines[i] {
@@ -239,9 +234,6 @@ func (b *Session) flushGrid(g *Grid, placements []ImagePlacement) {
 			sb.WriteString("\x1b[K")
 		}
 		b.prev[i] = lines[i]
-	}
-	if b.gfx != nil {
-		b.gfx.PlaceAll(&sb, b.ProtocolPlacements(nil, placements, g.W, g.H))
 	}
 	if sb.Len() > 0 {
 		_, _ = b.writer().Write([]byte(sb.String()))
@@ -375,16 +367,11 @@ func (b *Session) cycleGraphics() {
 }
 
 func (b *Session) setGraphicsMode(mode GraphicsMode) {
-	if mode == b.graphicsMode &&
-		(mode == GraphicsBlocks || mode == GraphicsNone || b.gfx != nil) {
+	if mode == b.graphicsMode {
 		return
 	}
 	b.graphicsMode = mode
 	b.ImagesPaused = false
-	b.gfx = nil
-	if b.newGraphics != nil {
-		b.gfx = b.newGraphics(mode, b.CellW, b.CellH)
-	}
 	hideImages := mode == GraphicsNone
 	if b.loader != nil {
 		b.loader.NoImages = hideImages
@@ -411,14 +398,11 @@ func (b *Session) graphicsStatusText() string {
 	switch {
 	case b.loader != nil && b.loader.NoImages:
 		mode = "none"
-	case b.gfx != nil:
-		switch b.gfx.Mode() {
-		case GraphicsKitty:
-			mode = "kitty"
-		case GraphicsITerm:
+	case b.nativeGraphicsEnabled():
+		if b.nativeGraphicsMode() == GraphicsITerm {
 			mode = "iterm"
-		default:
-			mode = "blocks"
+		} else {
+			mode = "kitty"
 		}
 	default:
 		mode = "blocks"

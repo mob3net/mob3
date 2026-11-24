@@ -440,11 +440,38 @@ func (b *Session) overlayOpen() bool {
 		(b.selectMenu != nil && !b.selectFrontend)
 }
 
+// nativeGraphicsEnabled reports whether the current graphics mode may emit
+// terminal-native image placements. The renderer itself lives in the front
+// end; the engine only records the mode and capability.
+func (b *Session) nativeGraphicsEnabled() bool {
+	if b.graphicsMode == GraphicsBlocks || b.graphicsMode == GraphicsNone {
+		return false
+	}
+	return b.caps&(protocol.CapKittyGraphics|protocol.CapITermGraphics) != 0
+}
+
+// nativeGraphicsMode reports the best native protocol the terminal supports.
+func (b *Session) nativeGraphicsMode() GraphicsMode {
+	switch {
+	case b.caps&protocol.CapKittyGraphics != 0:
+		return GraphicsKitty
+	case b.caps&protocol.CapITermGraphics != 0:
+		return GraphicsITerm
+	}
+	return GraphicsNone
+}
+
+// textSizingEnabled reports whether kitty scaled text is available in the
+// current mode.
+func (b *Session) textSizingEnabled() bool {
+	return b.caps&protocol.CapKittyText != 0 && b.nativeGraphicsEnabled()
+}
+
 // scaledTextWanted reports whether the page should use kitty scaled text.
 // Modals disable it because terminal-side scaled glyphs composite above the
 // cell grid and would paint over the modal.
 func (b *Session) scaledTextWanted() bool {
-	return b.gfx != nil && b.gfx.TextSizing() && !b.NoBigText && !b.BigTextBlocked && !b.overlayOpen()
+	return b.textSizingEnabled() && !b.NoBigText && !b.BigTextBlocked && !b.overlayOpen()
 }
 
 // toggleReader switches between the page and an extracted article view without

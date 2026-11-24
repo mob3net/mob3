@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"browser/internal/protocol"
 )
 
 func hintTestSession(t *testing.T, html string, width, height int) *Session {
@@ -170,7 +172,7 @@ func TestLinkHintsOnlyVisibleLinks(t *testing.T) {
 
 func TestLinkHintsDisableInlineImages(t *testing.T) {
 	b := newTestSession(40, 10)
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics
 	if !b.inlineImagesEnabled() {
 		t.Fatal("inline images should be enabled outside hint mode")
 	}
@@ -182,7 +184,7 @@ func TestLinkHintsDisableInlineImages(t *testing.T) {
 
 func TestModalsDisableInlineImages(t *testing.T) {
 	b := newTestSession(40, 10)
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics
 	modals := []struct {
 		name  string
 		set   func()

@@ -1,12 +1,8 @@
 package engine
 
-import (
-	"strings"
+import "browser/internal/protocol"
 
-	"browser/internal/protocol"
-)
-
-// Graphics modes are shared plain values; the renderer is injected by the app.
+// Graphics modes are shared plain values; the renderer lives in the front end.
 type GraphicsMode = protocol.GraphicsMode
 
 const (
@@ -17,16 +13,6 @@ const (
 	GraphicsITerm  = protocol.GraphicsITerm
 )
 
-// Graphics is the terminal image renderer the app injects.
-type Graphics interface {
-	Mode() GraphicsMode
-	TextSizing() bool
-	BeginFrame(*strings.Builder)
-	ClearScreen(*strings.Builder)
-	Clear(*strings.Builder)
-	PlaceAll(*strings.Builder, []protocol.Placement)
-}
-
 // serializeSVG keeps the historical browser test surface while the
-// implementation lives in the
+// implementation lives in inline_svg.go.
 func serializeSVG(n *Node) string { return SerializeSVG(n) }

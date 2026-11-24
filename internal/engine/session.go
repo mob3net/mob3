@@ -176,9 +176,8 @@ type Session struct {
 	Output io.Writer
 
 	color        bool
+	caps         protocol.Capabilities
 	prev         []string
-	gfx          Graphics
-	newGraphics  func(GraphicsMode, int, int) Graphics
 	frameEncoder func(protocol.Frame, bool, bool) []string
 	pngEncoder   func(protocol.Frame, int) ([]byte, error)
 	// contentGrid is reused between frames and is exactly the page viewport.

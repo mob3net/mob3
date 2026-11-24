@@ -13,7 +13,7 @@ func TestTextScaleCanBeDisabled(t *testing.T) {
 	t.Setenv("TERM", "xterm-kitty")
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	b := newTestSession(40, 10)
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1>`)}
 	b.NoBigText = true
 	b.rebuild()
@@ -111,7 +111,7 @@ func TestFooterShowsJSAndGraphicsState(t *testing.T) {
 		t.Fatalf("footer right = %q", right)
 	}
 	b.loader.NoImages = false
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	if got := b.footerRight(120); !strings.Contains(got, "Graphics:kitty") {
 		t.Fatalf("resolved graphics footer = %q", got)
 	}
@@ -168,32 +168,31 @@ func TestCycleGraphicsModes(t *testing.T) {
 	b := newTestSession(80, 20)
 	b.CellW, b.CellH = 8, 16
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
-	b.newGraphics = newTestGraphics
 	b.graphicsMode = GraphicsKitty
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	if b.loader != nil {
 		b.loader.NoImages = false
 	}
 
 	b.cycleGraphics()
-	if b.graphicsMode != GraphicsBlocks || b.gfx != nil {
-		t.Fatalf("after full graphics: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	if b.graphicsMode != GraphicsBlocks || b.nativeGraphicsEnabled() {
+		t.Fatalf("after full graphics: mode=%v native=%v", b.graphicsMode, b.nativeGraphicsEnabled())
 	}
 	if b.loader != nil && b.loader.NoImages {
 		t.Fatal("blocks mode should keep image loading enabled")
 	}
 
 	b.cycleGraphics()
-	if b.graphicsMode != GraphicsNone || b.gfx != nil {
-		t.Fatalf("after blocks: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	if b.graphicsMode != GraphicsNone || b.nativeGraphicsEnabled() {
+		t.Fatalf("after blocks: mode=%v native=%v", b.graphicsMode, b.nativeGraphicsEnabled())
 	}
 	if b.loader != nil && !b.loader.NoImages {
 		t.Fatal("none mode should disable image loading")
 	}
 
 	b.cycleGraphics()
-	if b.graphicsMode != GraphicsKitty || b.gfx == nil {
-		t.Fatalf("after none: mode=%v gfx=%v", b.graphicsMode, b.gfx)
+	if b.graphicsMode != GraphicsKitty || !b.nativeGraphicsEnabled() {
+		t.Fatalf("after none: mode=%v native=%v", b.graphicsMode, b.nativeGraphicsEnabled())
 	}
 	if b.loader != nil && b.loader.NoImages {
 		t.Fatal("full graphics should enable image loading")
@@ -214,9 +213,8 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	b.Page = &Page{URL: u, Base: u, Root: doc}
 	b.URL = u
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
-	b.newGraphics = newTestGraphics
 	b.graphicsMode = GraphicsKitty
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	b.rebuild()
 	page := b.Page
 	seq := b.LoadSeq
@@ -236,8 +234,8 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	if b.Page != page || b.LoadSeq != seq {
 		t.Fatal("changing to blocks reloaded the page")
 	}
-	if b.gfx != nil || !hasImage() {
-		t.Fatalf("blocks mode gfx=%v image=%v", b.gfx, hasImage())
+	if b.nativeGraphicsEnabled() || !hasImage() {
+		t.Fatalf("blocks mode native=%v image=%v", b.nativeGraphicsEnabled(), hasImage())
 	}
 
 	b.cycleGraphics() // blocks -> none
@@ -258,8 +256,8 @@ func TestGraphicsModeChangeRebuildsWithoutReload(t *testing.T) {
 	if !hasImage() {
 		t.Fatal("image fragment did not return after enabling graphics")
 	}
-	if b.gfx == nil || !b.inlineImagesEnabled() {
-		t.Fatalf("native renderer did not return: gfx=%v", b.gfx)
+	if !b.inlineImagesEnabled() {
+		t.Fatal("native image placement did not return")
 	}
 }
 
@@ -267,7 +265,7 @@ func TestModalDisablesScaledText(t *testing.T) {
 	t.Setenv("TERM", "xterm-kitty")
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	b := newTestSession(40, 10)
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	b.Page = &Page{URL: mustParse(t, "https://example.com"), Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
 	b.rebuild()
 	if !b.BigText {
@@ -301,7 +299,7 @@ func TestFrontendOverlayPaintsBlocks(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	b := newTestSession(40, 20)
 	b.CellW, b.CellH = 8, 16
-	b.gfx = NewGFXRenderer(GraphicsKitty, 8, 16)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	b.loader = newTestLoader()
 	b.loader.NoImages = false
 	u := mustParse(t, "https://example.com/")
@@ -388,8 +386,8 @@ func TestGraphicsDowngradeAndRepaintPlacements(t *testing.T) {
 	b.URL = u
 	b.emitFrames = true
 	b.frontendChrome = true
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
 	b.graphicsModes = []GraphicsMode{GraphicsKitty, GraphicsBlocks, GraphicsNone}
-	b.newGraphics = newTestGraphics
 	b.setGraphicsMode(GraphicsKitty)
 	b.draw()
 	if len(b.frameBuf.Placements) == 0 {

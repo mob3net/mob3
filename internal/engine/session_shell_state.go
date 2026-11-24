@@ -144,7 +144,7 @@ func (b *Session) stateMessage() protocol.State {
 	if b.LoopStopped {
 		st.Flags |= protocol.StateLoopStopped
 	}
-	if b.gfx != nil {
+	if b.nativeGraphicsEnabled() {
 		st.Flags |= protocol.StateNativeImages
 	}
 
