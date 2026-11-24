@@ -37,6 +37,7 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 	if bc == nil {
 		bc = NewBrowserContext()
 	}
+	tabID := bc.NextTabID()
 	loader := NewLoader(nil)
 	b := &Session{
 		Frame: NewFrame(),
@@ -49,6 +50,7 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 		ImportCh:       make(chan ImportTask, 16),
 		loader:         loader,
 		browser:        bc,
+		tabID:          tabID,
 		historyViewCur: -1,
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),

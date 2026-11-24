@@ -120,9 +120,9 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 		{Name: "long", Value: strings.Repeat("y", 200), Path: "/"},
 	})
 	b.JS = newJSRuntime(b, nil)
-	b.JS.SetStorageLocalData(map[string]string{
-		"config": strings.Repeat("x", 200),
-	})
+	if err := b.JS.storageLocalView.Set("config", strings.Repeat("x", 200)); err != nil {
+		t.Fatalf("seed localStorage: %v", err)
+	}
 	const width = 40
 	lines := b.storageLinesWidth(width)
 	for _, line := range lines {

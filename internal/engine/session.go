@@ -122,6 +122,7 @@ type Session struct {
 
 	loader  *Loader
 	browser *BrowserContext
+	tabID   uint64
 	router  *FrameRouter
 
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
@@ -294,10 +295,11 @@ type Session struct {
 
 // NewSession creates an empty page session.
 func NewEmptySession() *Session {
+	bc := NewBrowserContext()
 	s := &Session{
 		Frame: NewFrame(), ImageCh: make(chan ImageBatch, 1),
 		LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16),
-		browser: NewBrowserContext(),
+		browser: bc, tabID: bc.NextTabID(),
 	}
 	s.router = newFrameRouter()
 	s.router.Register(s.Frame)

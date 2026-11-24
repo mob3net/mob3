@@ -27,11 +27,17 @@ func newFrameJSHost(b *Session, f *Frame) jsHost {
 	return frameJSHost{b: b, f: f}
 }
 
-func (h frameJSHost) Width() int      { return h.b.Width }
-func (h frameJSHost) Height() int     { return h.b.Height }
-func (h frameJSHost) CellW() int      { return h.b.CellW }
-func (h frameJSHost) CellH() int      { return h.b.CellH }
-func (h frameJSHost) Dark() bool      { return h.b.Dark }
+func (h frameJSHost) Width() int  { return h.b.Width }
+func (h frameJSHost) Height() int { return h.b.Height }
+func (h frameJSHost) CellW() int  { return h.b.CellW }
+func (h frameJSHost) CellH() int  { return h.b.CellH }
+func (h frameJSHost) Dark() bool  { return h.b.Dark }
+func (h frameJSHost) LocalStorage() *StorageView {
+	return h.b.storageView(StorageLocal, h.f)
+}
+func (h frameJSHost) SessionStorage() *StorageView {
+	return h.b.storageView(StorageSession, h.f)
+}
 func (h frameJSHost) Layout() *Layout { return h.f.Layout }
 func (h frameJSHost) Scroll() int     { return h.f.Scroll }
 func (h frameJSHost) SetScroll(v int) { h.f.Scroll = v }

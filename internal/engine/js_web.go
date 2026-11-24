@@ -192,50 +192,53 @@ func (j *jsRuntime) newURLSearchParams(init sobek.Value) *sobek.Object {
 	return o
 }
 
-func (j *jsRuntime) storageObject(data map[string]string) *sobek.Object {
+func (j *jsRuntime) storageObject(view *StorageView) *sobek.Object {
+	if view == nil {
+		view = newPrivateStorageView()
+	}
+	quota := func() {
+		panic(j.vm.NewTypeError("QuotaExceededError: storage limit exceeded"))
+	}
 	o := j.vm.NewObject()
 	_ = o.Set("getItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
-		if v, ok := data[call.Argument(0).String()]; ok {
+		if v, ok := view.Get(call.Argument(0).String()); ok {
 			return j.vm.ToValue(v)
 		}
 		return sobek.Null()
 	}))
 	_ = o.Set("setItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
-		data[call.Argument(0).String()] = call.Argument(1).String()
+		if err := view.Set(call.Argument(0).String(), call.Argument(1).String()); err != nil {
+			quota()
+		}
 		return sobek.Undefined()
 	}))
 	_ = o.Set("removeItem", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
-		delete(data, call.Argument(0).String())
+		view.Delete(call.Argument(0).String())
 		return sobek.Undefined()
 	}))
 	_ = o.Set("clear", j.vm.ToValue(func(sobek.FunctionCall) sobek.Value {
-		for k := range data {
-			delete(data, k)
-		}
+		view.Clear()
 		return sobek.Undefined()
 	}))
 	_ = o.Set("key", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		i := int(call.Argument(0).ToInteger())
-		keys := make([]string, 0, len(data))
-		for k := range data {
-			keys = append(keys, k)
-		}
+		keys := view.Keys()
 		if i < 0 || i >= len(keys) {
 			return sobek.Null()
 		}
 		return j.vm.ToValue(keys[i])
 	}))
-	j.accessor(o, "length", func() sobek.Value { return j.vm.ToValue(len(data)) }, nil)
+	j.accessor(o, "length", func() sobek.Value { return j.vm.ToValue(view.Len()) }, nil)
 
 	// Web Storage also exposes each key as a named property. Use a proxy so
 	// `storage.key = value`, `storage.key` and `delete storage.key` share the
-	// same map as getItem/setItem/removeItem.
+	// same area as getItem/setItem/removeItem.
 	proxy := j.vm.NewProxy(o, &sobek.ProxyTrapConfig{
 		Get: func(target *sobek.Object, property string, _ sobek.Value) sobek.Value {
 			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return v
 			}
-			if v, ok := data[property]; ok {
+			if v, ok := view.Get(property); ok {
 				return j.vm.ToValue(v)
 			}
 			return sobek.Undefined()
@@ -244,18 +247,20 @@ func (j *jsRuntime) storageObject(data map[string]string) *sobek.Object {
 			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return true // built-in method/accessor names keep precedence
 			}
-			data[property] = value.String()
+			if err := view.Set(property, value.String()); err != nil {
+				quota()
+			}
 			return true
 		},
 		Has: func(target *sobek.Object, property string) bool {
 			if v := target.Get(property); v != nil && !sobek.IsUndefined(v) {
 				return true
 			}
-			_, ok := data[property]
+			_, ok := view.Get(property)
 			return ok
 		},
 		DeleteProperty: func(_ *sobek.Object, property string) bool {
-			delete(data, property)
+			view.Delete(property)
 			return true
 		},
 	})
