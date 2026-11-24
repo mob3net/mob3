@@ -23,6 +23,20 @@ func (s *openTabSink) Send(ev protocol.Event) error {
 	return nil
 }
 
+func TestHalfPageAliases(t *testing.T) {
+	b := newTestSession(80, 24)
+	b.Layout = &Layout{Height: 100}
+	b.HandleKey("d")
+	if b.Scroll <= 0 {
+		t.Fatalf("d did not scroll down: %d", b.Scroll)
+	}
+	down := b.Scroll
+	b.HandleKey("u")
+	if b.Scroll >= down || b.Scroll < 0 {
+		t.Fatalf("u did not scroll up: %d -> %d", down, b.Scroll)
+	}
+}
+
 func TestMiddleClickRequestsBackgroundTab(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/next">Next page</a></p>`)
 	u := mustParse(t, "https://example.com/start/")

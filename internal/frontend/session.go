@@ -665,7 +665,7 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 		return send(protocol.App{Action: protocol.AppToggleImages})
 	case "E":
 		return send(protocol.App{Action: protocol.AppStatusDetails})
-	case "d":
+	case "S":
 		return send(protocol.App{Action: protocol.AppDownload})
 	case "!":
 		return send(protocol.App{Action: protocol.AppToggleConsole})
