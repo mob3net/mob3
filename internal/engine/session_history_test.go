@@ -349,7 +349,7 @@ func TestHistoryCacheIsBounded(t *testing.T) {
 		t.Fatalf("cached pages = %d, want %d", got, maxCachedPages)
 	}
 	// The most recently replaced page must still be cached for an immediate back.
-	if b.Cache.Get(b.NextEntryID-2) == nil {
+	if b.Cache.Get(b.EntryID-1) == nil {
 		t.Fatal("most recent page was evicted from the cache")
 	}
 }

@@ -102,7 +102,6 @@ type Session struct {
 	LoadFn              LoadFunc
 	ImportCh            chan ImportTask
 	EntryID             uint64
-	NextEntryID         uint64
 	NextScroll          int
 	NextScrollSet       bool
 	PendingDownloadName string
@@ -123,7 +122,8 @@ type Session struct {
 	placementBytes  int
 	nextPlacementID int
 
-	loader *Loader
+	loader  *Loader
+	browser *BrowserContext
 
 	// contentTop/contentHeight are the front-end-owned page rectangle. A
 	// negative top means direct callers/tests use the legacy derivation.
@@ -295,7 +295,10 @@ type Session struct {
 
 // NewSession creates an empty page session.
 func NewEmptySession() *Session {
-	return &Session{ImageCh: make(chan ImageBatch, 1), LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16), NextEntryID: 1}
+	return &Session{
+		ImageCh: make(chan ImageBatch, 1), LoadCh: make(chan LoadResult, 1),
+		ImportCh: make(chan ImportTask, 16), browser: NewBrowserContext(),
+	}
 }
 
 // PageKind classifies the current page for the shell.

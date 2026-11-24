@@ -17,14 +17,25 @@ const (
 	maxClipboardBytes     = 100 * 1024
 )
 
-// NewSession creates a session with a viewport size and a default loader.
-// The app replaces the loader when it constructs a configured session.
+// NewSession creates a session with a viewport size, a default loader and a
+// private browser context. The app replaces the loader and supplies the shared
+// context when it constructs a configured session.
 func NewSession(w, h int) *Session {
+	return NewSessionWithBrowserContext(w, h, nil)
+}
+
+// NewSessionWithBrowserContext creates a session that allocates history-entry
+// IDs from bc. A nil bc creates a private context, which is what direct
+// callers and tests use.
+func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 	if w < 20 {
 		w = 80
 	}
 	if h < 5 {
 		h = 24
+	}
+	if bc == nil {
+		bc = NewBrowserContext()
 	}
 	loader := NewLoader(nil)
 	b := &Session{
@@ -35,8 +46,8 @@ func NewSession(w, h int) *Session {
 		ImageCh:        make(chan ImageBatch, 1),
 		LoadCh:         make(chan LoadResult, 1),
 		ImportCh:       make(chan ImportTask, 16),
-		NextEntryID:    1,
 		loader:         loader,
+		browser:        bc,
 		historyViewCur: -1,
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),

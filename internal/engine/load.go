@@ -28,11 +28,14 @@ type LoadResult struct {
 
 const progressLingerTicks = 4
 
-// NextHistoryID allocates an opaque ID for a new history entry.
+// NextHistoryID allocates an opaque ID for a new history entry. The ID comes
+// from the shared browser context so sessions for different tabs never
+// collide.
 func (s *Session) NextHistoryID() uint64 {
-	id := s.NextEntryID
-	s.NextEntryID++
-	return id
+	if s.browser == nil {
+		s.browser = NewBrowserContext()
+	}
+	return s.browser.NextEntryID()
 }
 
 // BeginLoad starts a background page load. The caller supplies the bound load
