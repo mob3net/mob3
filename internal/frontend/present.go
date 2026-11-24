@@ -44,7 +44,20 @@ func NewPresenter(out io.Writer, color bool) *Presenter {
 // SetGraphics installs the terminal image renderer for this presenter. Modes
 // without native graphics leave it nil.
 func (p *Presenter) SetGraphics(mode GraphicsMode, cellW, cellH int) {
+	if p == nil {
+		return
+	}
+	if p.gfx != nil && p.out != nil {
+		var sb strings.Builder
+		p.gfx.ResetForTab(&sb)
+		if sb.Len() > 0 {
+			_, _ = io.WriteString(p.out, sb.String())
+		}
+	}
 	p.gfx = NewGFXRenderer(mode, cellW, cellH)
+	p.prev = nil
+	p.nativeSet = false
+	p.lastNative = false
 }
 
 // ClearGraphics removes placements this presenter has shown. Call it before
@@ -68,7 +81,7 @@ func (p *Presenter) ResetForTab() {
 	}
 	if p.gfx != nil && p.out != nil {
 		var sb strings.Builder
-		p.gfx.Clear(&sb)
+		p.gfx.ResetForTab(&sb)
 		if sb.Len() > 0 {
 			_, _ = io.WriteString(p.out, sb.String())
 		}

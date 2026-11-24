@@ -13,28 +13,36 @@ type SessionConfig struct {
 	BrowserContext *BrowserContext
 	Width, Height  int
 	Zoom           float64
-	Interactive    bool
-	Reader, Dark   bool
-	Home           string
-	CLIConfig      map[string]string
-	Color          bool
-	NoJS, NoPDF    bool
-	LayoutBudget   LayoutBudget
-	MemLimitBytes  int64
-	NoBigText      bool
-	CellW, CellH   int
-	Graphics       GraphicsMode
-	GraphicsModes  []GraphicsMode
-	Caps           protocol.Capabilities
+	// PreserveZoom makes this session join the current browser-wide zoom
+	// instead of installing Zoom and resetting every other tab.
+	PreserveZoom  bool
+	Interactive   bool
+	Reader, Dark  bool
+	Home          string
+	CLIConfig     map[string]string
+	Color         bool
+	NoJS, NoPDF   bool
+	LayoutBudget  LayoutBudget
+	MemLimitBytes int64
+	NoBigText     bool
+	CellW, CellH  int
+	Graphics      GraphicsMode
+	GraphicsModes []GraphicsMode
+	Caps          protocol.Capabilities
 }
 
 // NewSession creates and configures the page session used by the interactive
 // loop. It is the app's only construction entry point while the engine type is
 // still in transition.
 func NewConfiguredSession(c SessionConfig) *Session {
-	b := NewSessionWithBrowserContext(c.Width, c.Height, c.BrowserContext)
-	b.Zoom = c.Zoom
-	SetZoom(c.Zoom)
+	b := newSessionWithBrowserContext(c.Width, c.Height, c.BrowserContext, !c.PreserveZoom)
+	if c.PreserveZoom {
+		b.Zoom = Zoom()
+	} else {
+		b.Zoom = c.Zoom
+		SetZoom(c.Zoom)
+	}
+	b.zoomGen = zoomGen()
 	b.Interactive = c.Interactive
 	if c.Loader != nil {
 		b.setLoader(c.Loader)

@@ -82,6 +82,12 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.u64(v.EntryID)
 		e.str(v.URL)
 		e.i32(v.Scroll)
+	case Visibility:
+		kind = CmdVisibility
+		e.bool(v.Active)
+	case Graphics:
+		kind = CmdGraphics
+		e.u8(uint8(v.Mode))
 	case Resize:
 		kind = CmdResize
 		e.i32(v.Width)
@@ -396,6 +402,10 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = History{Entries: entries, Current: d.i32()}
 	case CmdRestore:
 		body = Restore{EntryID: d.u64(), URL: d.str(), Scroll: d.i32()}
+	case CmdVisibility:
+		body = Visibility{Active: d.bool()}
+	case CmdGraphics:
+		body = Graphics{Mode: GraphicsMode(d.u8())}
 	case CmdResize:
 		body = Resize{
 			Width: d.i32(), Height: d.i32(),

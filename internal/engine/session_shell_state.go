@@ -155,7 +155,7 @@ func (b *Session) stateMessage() protocol.State {
 	st.HeaderRows = b.headerRows()
 	st.FrontendChrome = b.frontendChromeActive()
 	st.ZoomLabel = b.zoomBadge()
-	st.ZoomPercent = int(b.Zoom*100 + 0.5)
+	st.ZoomPercent = int(Zoom()*100 + 0.5)
 	if !b.HideFixed {
 		st.ViewFlags |= protocol.ViewFlagFixed
 	}

@@ -33,9 +33,10 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 	if !ok || cellH <= 0 {
 		cellH = 16
 	}
+	engine.SetZoom(zoomFactor)
 
 	sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cellW, cellH, graphicsMode)
-	tabs := newInteractiveTabs(hostSess, loaderConfig, o.Home, cellW, cellH, zoomFactor, sessions.newSession)
+	tabs := newInteractiveTabs(hostSess, loaderConfig, o.Home, cellW, cellH, sessions.newSession)
 
 	presenter := frontend.NewPresenter(os.Stdout, !o.NoColor)
 	presenterMode := graphicsMode
@@ -81,6 +82,9 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 		CloseTab:     tabs.close,
 		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
 		CellW:        cellW, CellH: cellH,
+
+		GraphicsModes:   graphicsModesFor(graphicsMode),
+		CurrentGraphics: graphicsMode,
 	}
 	if err := loop.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: %s\n", cleanError(err))

@@ -24,11 +24,12 @@ type LoopState struct {
 // TabActions are the session-loop operations a tab can request from its shell
 // keys and tab-bar clicks. Close with index -1 means the active tab.
 type TabActions struct {
-	Select func(index int)
-	Cycle  func(delta int)
-	Close  func(index int) (quit bool)
-	New    func()
-	Scroll func(delta int)
+	Select         func(index int)
+	Cycle          func(delta int)
+	Close          func(index int) (quit bool)
+	New            func()
+	Scroll         func(delta int)
+	ToggleGraphics func()
 }
 
 // Tab is one terminal browsing context: its protocol session, per-tab state,
@@ -483,6 +484,10 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	case "J":
 		return send(protocol.App{Action: protocol.AppToggleJS})
 	case "i":
+		if l.Actions.ToggleGraphics != nil {
+			l.Actions.ToggleGraphics()
+			return true, false
+		}
 		return send(protocol.App{Action: protocol.AppToggleImages})
 	case "E":
 		return send(protocol.App{Action: protocol.AppStatusDetails})
@@ -1530,15 +1535,25 @@ func (l *Tab) handleFindKey(k string) (handled, quit bool) {
 }
 
 func (l *Tab) startPrompt(vim bool) {
+	l.startPromptValue(l.State.Page.URL, vim, true)
+}
+
+// startPromptEmpty opens the URL prompt with no text, used by a fresh tab so
+// the next keystrokes go straight into the address.
+func (l *Tab) startPromptEmpty() {
+	l.startPromptValue("", false, false)
+}
+
+func (l *Tab) startPromptValue(text string, vim, selectAll bool) {
 	if l.promptActive {
 		return
 	}
 	l.promptActive = true
 	l.promptVim = vim
 	l.promptBase = l.State.Page
-	l.promptText = l.State.Page.URL
+	l.promptText = text
 	l.promptCursor = len(l.promptText)
-	l.promptSelectAll = true
+	l.promptSelectAll = selectAll
 	l.promptHist.reset()
 	l.syncPrompt()
 }
@@ -1894,6 +1909,10 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 	case ChromeHitDark:
 		body = protocol.App{Action: protocol.AppToggleDark}
 	case ChromeHitGraphics:
+		if l.Actions.ToggleGraphics != nil {
+			l.Actions.ToggleGraphics()
+			return
+		}
 		body = protocol.App{Action: protocol.AppToggleImages}
 	case ChromeHitDownload:
 		body = protocol.App{Action: protocol.AppDownload}

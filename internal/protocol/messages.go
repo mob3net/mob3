@@ -101,6 +101,23 @@ type Restore struct {
 
 func (Restore) commandKind() Kind { return CmdRestore }
 
+// Visibility tells a session whether its tab is active. An inactive session
+// keeps loading and updating state, but does not draw frames, run JavaScript
+// timers, stream deferred images or animate progress.
+type Visibility struct {
+	Active bool
+}
+
+func (Visibility) commandKind() Kind { return CmdVisibility }
+
+// Graphics sets the image mode for one session. The front end keeps one mode
+// for the whole browser and sends it to every tab.
+type Graphics struct {
+	Mode GraphicsMode
+}
+
+func (Graphics) commandKind() Kind { return CmdGraphics }
+
 // Resize changes the terminal size and the front-end-owned content rectangle.
 type Resize struct {
 	Width, Height             int

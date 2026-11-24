@@ -19,18 +19,17 @@ type interactiveTabs struct {
 	loaderConfig engine.LoaderConfig
 	home         string
 	cellW, cellH int
-	zoom         float64
 	newSession   func(*engine.Loader, int, int) *engine.Session
 	engines      map[*frontend.Tab]*engine.Session
 }
 
-func newInteractiveTabs(hostSess *host.Session, loaderConfig engine.LoaderConfig, home string, cellW, cellH int, zoom float64, newSession func(*engine.Loader, int, int) *engine.Session) *interactiveTabs {
+func newInteractiveTabs(hostSess *host.Session, loaderConfig engine.LoaderConfig, home string, cellW, cellH int, newSession func(*engine.Loader, int, int) *engine.Session) *interactiveTabs {
 	if strings.TrimSpace(home) == "" {
 		home = "about:home"
 	}
 	return &interactiveTabs{
 		hostSess: hostSess, loaderConfig: loaderConfig, home: home,
-		cellW: cellW, cellH: cellH, zoom: zoom, newSession: newSession,
+		cellW: cellW, cellH: cellH, newSession: newSession,
 		engines: make(map[*frontend.Tab]*engine.Session),
 	}
 }
@@ -45,7 +44,7 @@ func (t *interactiveTabs) openWithLoader(id protocol.SessionID, w, h, contentTop
 	}
 	if err := session.Send(protocol.Command{Body: protocol.Init{
 		Width: w, Height: h, ContentTop: contentTop, ContentHeight: contentHeight,
-		CellW: t.cellW, CellH: t.cellH, Zoom: t.zoom, Caps: b.Capabilities(),
+		CellW: t.cellW, CellH: t.cellH, Zoom: 0, Caps: b.Capabilities(),
 	}}); err != nil {
 		_ = session.Close()
 		b.Release()

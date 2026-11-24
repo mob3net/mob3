@@ -45,9 +45,10 @@ const (
 )
 
 var (
-	cellW      = baseCellW
-	cellH      = baseCellH
-	layoutZoom = 1.0
+	cellW          = baseCellW
+	cellH          = baseCellH
+	layoutZoom     = 1.0
+	zoomGeneration uint64
 )
 
 // SetZoom installs a session zoom factor. Every length resolution in the
@@ -59,7 +60,12 @@ func SetZoom(z float64) {
 	layoutZoom = z
 	cellW = baseCellW / z
 	cellH = baseCellH / z
+	zoomGeneration++
 }
+
+// zoomGen reports the global zoom generation so a background tab can tell that
+// its layout predates the current zoom.
+func zoomGen() uint64 { return zoomGeneration }
 
 // Zoom returns the current layout zoom.
 func Zoom() float64 { return layoutZoom }

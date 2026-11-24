@@ -360,6 +360,8 @@ func hasBlockImage(g *Grid) bool {
 
 func TestZoomBadgeShows(t *testing.T) {
 	b := newTestSession(80, 10)
+	SetZoom(1.5)
+	defer SetZoom(1)
 	b.Zoom = 1.5
 	if got, want := b.zoomBadge(), " 150% "; got != want {
 		t.Fatalf("zoom badge = %q, want %q", got, want)

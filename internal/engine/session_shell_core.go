@@ -28,6 +28,10 @@ func NewSession(w, h int) *Session {
 // IDs from bc. A nil bc creates a private context, which is what direct
 // callers and tests use.
 func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
+	return newSessionWithBrowserContext(w, h, bc, true)
+}
+
+func newSessionWithBrowserContext(w, h int, bc *BrowserContext, resetZoom bool) *Session {
 	if w < 20 {
 		w = 80
 	}
@@ -54,6 +58,7 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 		historyViewCur: -1,
 		home:           "about:home",
 		configToken:    loader.ConfigToken(),
+		active:         true,
 	}
 	b.router = newFrameRouter()
 	b.router.Register(b.Frame)
@@ -63,7 +68,12 @@ func NewSessionWithBrowserContext(w, h int, bc *BrowserContext) *Session {
 	}
 	b.Cache.SetOnEvict(b.noteEvictedPage)
 	b.setLoader(b.loader)
-	SetZoom(b.Zoom)
+	if resetZoom {
+		SetZoom(b.Zoom)
+	} else {
+		b.Zoom = Zoom()
+	}
+	b.zoomGen = zoomGen()
 	return b
 }
 
@@ -534,9 +544,10 @@ var zoomSteps = []float64{0.25, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 1.75, 2}
 // per terminal cell, so fixed pixel sizes, images, spacing and kitty scaled
 // headings grow or shrink while text keeps its normal cell size.
 func (b *Session) zoomBy(dir int) {
+	current := Zoom()
 	if dir > 0 {
 		for _, s := range zoomSteps {
-			if s > b.Zoom+1e-9 {
+			if s > current+1e-9 {
 				b.applyZoom(s)
 				return
 			}
@@ -545,7 +556,7 @@ func (b *Session) zoomBy(dir int) {
 		return
 	}
 	for i := len(zoomSteps) - 1; i >= 0; i-- {
-		if zoomSteps[i] < b.Zoom-1e-9 {
+		if zoomSteps[i] < current-1e-9 {
 			b.applyZoom(zoomSteps[i])
 			return
 		}
@@ -561,9 +572,10 @@ func (b *Session) resetZoom() {
 // applyZoom installs a layout zoom factor and rebuilds the page so media
 // queries and every pixel-based length see the new cell ratio.
 func (b *Session) applyZoom(z float64) {
-	if b.Zoom != z {
-		b.Zoom = z
+	if Zoom() != z {
 		SetZoom(z)
+		b.Zoom = z
+		b.zoomGen = zoomGen()
 		// A page whose scaled runs overlapped may be fine at another zoom, so
 		// re-evaluate the fallback instead of keeping it for the session.
 		b.BigTextBlocked = false
@@ -574,6 +586,9 @@ func (b *Session) applyZoom(z float64) {
 		if b.Scroll < 0 {
 			b.Scroll = 0
 		}
+	} else {
+		b.Zoom = z
+		b.zoomGen = zoomGen()
 	}
 	b.status = fmt.Sprintf("Zoom %d%%", int(math.Round(z*100)))
 }

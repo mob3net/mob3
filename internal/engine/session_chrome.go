@@ -7,7 +7,7 @@ import (
 )
 
 func (b *Session) zoomBadge() string {
-	return " " + zoomPercentLabel(b.Zoom) + " "
+	return " " + zoomPercentLabel(Zoom()) + " "
 }
 
 func (b *Session) pageFG() Color { return b.PageFG() }
@@ -300,6 +300,15 @@ func (b *Session) cycleGraphics() {
 		}
 	}
 	b.setGraphicsMode(next)
+}
+
+// SetGraphicsMode applies a browser-wide graphics mode to this session. An
+// unknown value is ignored rather than persisted.
+func (b *Session) SetGraphicsMode(mode GraphicsMode) {
+	if mode < GraphicsAuto || mode > GraphicsITerm {
+		return
+	}
+	b.setGraphicsMode(mode)
 }
 
 func (b *Session) setGraphicsMode(mode GraphicsMode) {
