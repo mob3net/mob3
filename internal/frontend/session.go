@@ -24,13 +24,14 @@ type LoopState struct {
 // TabActions are the session-loop operations a tab can request from its shell
 // keys and tab-bar clicks. Close with index -1 means the active tab.
 type TabActions struct {
-	Select         func(index int)
-	Cycle          func(delta int)
-	Close          func(index int) (quit bool)
-	New            func()
-	NewTabURL      func(url string)
-	Scroll         func(delta int)
-	ToggleGraphics func()
+	Select            func(index int)
+	Cycle             func(delta int)
+	Close             func(index int) (quit bool)
+	New               func()
+	NewTabURL         func(url string)
+	OpenTabBackground func(url string)
+	Scroll            func(delta int)
+	ToggleGraphics    func()
 }
 
 // Tab is one terminal browsing context: its protocol session, per-tab state,
@@ -511,6 +512,10 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		}
 	case protocol.HistoryCommit:
 		l.applyHistoryCommit(v)
+	case protocol.OpenTab:
+		if l.Actions.OpenTabBackground != nil && validDisplayURL(v.URL) {
+			l.Actions.OpenTabBackground(v.URL)
+		}
 	case protocol.Clipboard:
 		if !l.takeClipboardPermission() {
 			return false, nil
@@ -1012,18 +1017,6 @@ func (l *Tab) cancelHint() {
 }
 
 func (l *Tab) handleHintKey(k string) (handled, quit bool) {
-	if l.hintView.Confirm {
-		switch k {
-		case "enter", "y", "Y":
-			l.answerHint(l.hintView.ConfirmTarget)
-		case "esc", "n", "N", "ctrl-c":
-			l.cancelHint()
-		default:
-			l.cancelHint()
-			return false, false
-		}
-		return true, false
-	}
 	if k == "esc" || k == "ctrl-c" {
 		l.cancelHint()
 		return true, false
@@ -1053,12 +1046,7 @@ func (l *Tab) handleHintKey(k string) (handled, quit bool) {
 					}
 				}
 				if l.hintView.Ask && item.Link {
-					l.hintView.Confirm = true
-					l.hintView.ConfirmTarget = item.Target
-					l.hintView.ConfirmHref = item.Href
-					l.hintView.Items = nil
-					l.State.Page.FooterLeft = " " + item.Href + "  (Enter/y follows · Esc cancels)"
-					l.syncHint()
+					l.openHintInNewTab(item.Href)
 					return true, false
 				}
 				l.answerHint(item.Target)
@@ -1072,6 +1060,18 @@ func (l *Tab) handleHintKey(k string) (handled, quit bool) {
 	}
 	l.cancelHint()
 	return false, false
+}
+
+// openHintInNewTab clears the engine hint state and opens a resolved link in a
+// background tab.
+func (l *Tab) openHintInNewTab(href string) {
+	l.closeHint()
+	if l.Session != nil {
+		_ = l.Session.Send(protocol.Command{Body: protocol.HintResult{Cancel: true}})
+	}
+	if l.Actions.OpenTabBackground != nil && validDisplayURL(href) {
+		l.Actions.OpenTabBackground(href)
+	}
 }
 
 func (l *Tab) startDownload(v protocol.Download) {

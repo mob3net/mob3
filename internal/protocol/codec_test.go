@@ -79,6 +79,7 @@ func testEvents() []Event {
 			Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
 		}}}},
 		{Session: 15, Seq: 15, Body: HistoryCommit{EntryID: 42, URL: "https://example.test/a", Scroll: 9, Push: true}},
+		{Session: 16, Seq: 16, Body: OpenTab{URL: "https://example.test/new"}},
 		{Session: 14, Seq: 14, Body: ConsoleView{
 			Width: 80, Height: 24, Pane: 0, Tabs: []string{" JS logs (1) ", " Requests (0) "},
 			Lines: []string{"[log] hi"}, Input: "1+1", Cursor: 3, Edit: true,

@@ -278,13 +278,14 @@ func (l *SessionLoop) installTabActions(tab *Tab) {
 		return
 	}
 	tab.Actions = TabActions{
-		Select:         l.selectTab,
-		Cycle:          l.cycleTab,
-		Close:          l.closeTab,
-		New:            l.newTab,
-		NewTabURL:      l.newTabURL,
-		Scroll:         l.scrollTabs,
-		ToggleGraphics: l.cycleGraphics,
+		Select:            l.selectTab,
+		Cycle:             l.cycleTab,
+		Close:             l.closeTab,
+		New:               l.newTab,
+		NewTabURL:         l.newTabURL,
+		OpenTabBackground: l.newTabBackground,
+		Scroll:            l.scrollTabs,
+		ToggleGraphics:    l.cycleGraphics,
 	}
 }
 
@@ -406,12 +407,21 @@ func (l *SessionLoop) allocateSessionID() protocol.SessionID {
 
 // newTab opens the configured home page in a new tab and switches to it.
 func (l *SessionLoop) newTab() {
-	l.newTabURL("")
+	l.newTabAt("", true)
 }
 
-// newTabURL opens target in a new tab. An empty target opens the home page and
-// focuses its URL prompt; an explicit target (help or config) is shown directly.
+// newTabURL opens target in a new tab and switches to it. An empty target opens
+// the home page and focuses its URL prompt.
 func (l *SessionLoop) newTabURL(target string) {
+	l.newTabAt(target, true)
+}
+
+// newTabBackground opens target without moving away from the current tab.
+func (l *SessionLoop) newTabBackground(target string) {
+	l.newTabAt(target, false)
+}
+
+func (l *SessionLoop) newTabAt(target string, activate bool) {
 	if l.OpenTab == nil {
 		return
 	}
@@ -431,11 +441,16 @@ func (l *SessionLoop) newTabURL(target string) {
 	tab.historyLog = l.ensureHistory()
 	l.installTabActions(tab)
 	l.sendGraphics(tab)
-	if target == "" {
-		tab.startPromptEmpty()
-	}
 	l.Tabs = append(l.Tabs, tab)
-	l.activateTab(len(l.Tabs) - 1)
+	if activate {
+		if target == "" {
+			tab.startPromptEmpty()
+		}
+		l.activateTab(len(l.Tabs) - 1)
+		return
+	}
+	l.setVisible(tab, false)
+	l.syncTabBar()
 }
 
 // closeTab removes one tab. Closing the final tab asks for the normal quit
