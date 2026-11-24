@@ -83,11 +83,12 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
-- **History:** `about:history` lists the session's URLs as
-  clickable links, most recent first, marks the current entry, caps the list at
-  the latest 50 and is generated on demand from in-memory history. `H` or the
-  toolbar History button opens it. The page is memory-only; nothing is
-  persisted.
+- **History:** `H`, the toolbar History button and the footer shortcut open a
+  front-end history overlay. It lists the session's URLs newest first with the
+  current entry marked, scrolls the selected row, restores on Enter/Space or a
+  click, and closes on Esc/q/× or a click outside. `about:history` remains
+  available as a rendered page with clickable links. Both use the in-memory
+  session ledger, capped at the latest 50 entries; nothing is persisted.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
   History/help use full labels at 80+ columns and icons below; the

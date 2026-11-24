@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"image"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -171,21 +170,18 @@ func TestShellKeyHistory(t *testing.T) {
 	}
 	loop.historyIndex = 1
 
-	// H sends the display snapshot and then the normal navigation.
+	// H opens the front-end history overlay without navigating.
 	if handled, quit := loop.handleShellKey("H"); !handled || quit {
 		t.Fatal("H not handled")
 	}
-	want := []protocol.CommandBody{
-		protocol.History{Entries: []protocol.HistoryEntry{{URL: "https://example.com/a"}, {URL: "https://example.com/b"}}, Current: 1},
-		protocol.Navigate{URL: "about:history", Push: true},
+	if !loop.historyActive || len(loop.historyView.entries) != 2 {
+		t.Fatalf("history overlay active=%v rows=%d", loop.historyActive, len(loop.historyView.entries))
 	}
-	if len(s.cmds) != len(want) {
-		t.Fatalf("H commands = %#v", s.cmds)
+	if len(s.cmds) != 0 {
+		t.Fatalf("H sent commands = %#v", s.cmds)
 	}
-	for i := range want {
-		if !reflect.DeepEqual(s.cmds[i].Body, want[i]) {
-			t.Fatalf("H command %d = %#v, want %#v", i, s.cmds[i].Body, want[i])
-		}
+	if handled, quit := loop.handleHistoryKey("esc"); !handled || quit || loop.historyActive {
+		t.Fatal("Esc did not close the history overlay")
 	}
 
 	// Back records the current scroll and restores the target entry.
