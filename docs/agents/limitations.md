@@ -95,8 +95,10 @@ agreement, the non-negotiable constraints and the change protocol.
   unsupported notice). Mouse support covers
   click-to-follow, page drag selection, the URL prompt, right-click link-URL
   copy and wheel scrolling. `y` copies selected page text through OSC 52;
-  terminal-native Shift+drag handles URL selection. The `navigator.clipboard` JavaScript API
-  remains unsupported.
+  terminal-native Shift+drag handles URL selection. Clipboard use is
+  write-only, user-initiated, capped at 100 KiB and dependent on terminal OSC
+  52 support; `navigator.clipboard` and page-triggered copies remain
+  unsupported.
 - TLS trust is selected by `-certs` but never inspected: there is no revocation
   checking (CRL/OCSP), certificate UI, pinning, or warning flow beyond the
   connection error a request returns. The embedded bundle carries only the

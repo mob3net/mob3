@@ -138,6 +138,18 @@ func TestCopySelectionEmitsClipboardEvent(t *testing.T) {
 	}
 }
 
+func TestCopyTextStripsClipboardControls(t *testing.T) {
+	b := newTestSession(40, 10)
+	sink := &clipboardSink{}
+	b.sessionOut = sink
+	if !b.copyText("a\x1bb\x07c\u202e\n") {
+		t.Fatal("copyText failed")
+	}
+	if sink.text != "abc\n" {
+		t.Fatalf("clipboard text = %q", sink.text)
+	}
+}
+
 func TestCopySelectionWithoutSelectionCopiesURL(t *testing.T) {
 	b := newTestSession(40, 10)
 	b.URL = mustParse(t, "https://example.com/page")

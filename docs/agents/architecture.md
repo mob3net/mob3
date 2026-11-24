@@ -244,7 +244,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by tests and available for a future process transport; the target keeps one process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
-| `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup and clipboard writes. |
+| `internal/frontend/session.go` | Live session loop: base shell keys, history keys/back/forward/header actions, local quit, URL/vim prompt, page find, view/zoom windows, JS dialogs, select popup, download/notice modals, link hints, console view/input/find, keys/abort/resize, events, chrome state, header/footer and scrollbar mouse routing, crash dedup, and the one-shot clipboard permission/failure path. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, current index, scroll tracking, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |
@@ -254,7 +254,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/frontend/download.go` | Download curl hint and notice modal layout/drawing. |
 | `internal/frontend/hints.go` | Link-hint overlay painting and prefix matching data. |
 | `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
-| `internal/frontend/clipboard.go` | OSC 52 clipboard encoding. |
+| `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |
 | `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
 | `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
 | `internal/frontend/gfx.go` | Graphics renderer, capability detection, PNG decode/scale/crop and kitty/iTerm2 placement output; the mode type aliases `protocol.GraphicsMode`. |
@@ -262,6 +262,7 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/protocol/origin.go` | Canonical tuple origin: lowercase scheme and host, default port omitted, opaque for non-HTTP(S), `String`/`HeaderValue`/`Equal`/`SameOrigin` helpers shared by the engine and host. |
 | `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
 | `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
+| `internal/protocol/clipboard.go` | `SanitizeClipboard`: drops C0/C1 and display-format controls from copied text while keeping newlines and tabs. |
 | `internal/protocol/host.go` | `Host` port, host fetch result, `AttestedURL`, request record and config-token interfaces. |
 | `internal/protocol/netctx.go` | Shared request metadata, page-space and local-network/mixed-content error values used by loader and host. |
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
