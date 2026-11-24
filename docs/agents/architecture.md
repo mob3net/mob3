@@ -133,8 +133,9 @@ now allocates history-entry IDs, and the `Session` embeds a top-level `Frame`
 that owns the page, layout, URL, scroll and JS runtime; the tab loop asks the
 frame for its timers. The canonical `protocol.Origin` helper is shared by the
 engine and host, and a per-tab `FrameRouter` registers the top-level frame and
-carries copied, origin-checked messages. Shared storage and budgets remain per
-session. This section records the target; it is not implemented yet.
+carries copied, origin-checked messages. `localStorage` and `sessionStorage`
+now use the shared `StorageBroker`; shared budgets remain per session. This
+section records the target; it is not implemented yet.
 
 ## Current layout
 
@@ -263,7 +264,8 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It currently allocates the opaque history-entry ID sequence, so sessions in different tabs cannot collide in the host's URL-attestation record or the engine page cache; shared storage, budgets and settings join it with the tab and frame model. |
+| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker`; shared budgets and settings join it with the tab and frame model. |
+| `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
 | `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
 | `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses a frame boundary. It currently holds the top-level frame. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags, the shared `BrowserContext` and terminal setup. |

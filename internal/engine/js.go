@@ -114,8 +114,8 @@ type jsRuntime struct {
 
 	storageLocal       *sobek.Object
 	storageSession     *sobek.Object
-	storageLocalData   map[string]string
-	storageSessionData map[string]string
+	storageLocalView   *StorageView
+	storageSessionView *StorageView
 	currentScript      *sobek.Object
 
 	nodeListeners map[*Node]map[string][]jsListener
@@ -213,10 +213,19 @@ func NewJSRuntime(host JSHost, page *Page) *jsRuntime {
 	j.installEventConstructors()
 	j.installIntl()
 	j.installFetch()
-	j.storageLocalData = make(map[string]string)
-	j.storageSessionData = make(map[string]string)
-	j.storageLocal = j.storageObject(j.storageLocalData)
-	j.storageSession = j.storageObject(j.storageSessionData)
+	localStorage, sessionStorage := newPrivateStorageView(), newPrivateStorageView()
+	if host != nil {
+		if v := host.LocalStorage(); v != nil {
+			localStorage = v
+		}
+		if v := host.SessionStorage(); v != nil {
+			sessionStorage = v
+		}
+	}
+	j.storageLocalView = localStorage
+	j.storageSessionView = sessionStorage
+	j.storageLocal = j.storageObject(localStorage)
+	j.storageSession = j.storageObject(sessionStorage)
 	j.navObj = j.navigatorObject()
 	j.perfObj = j.performanceObject()
 	j.locObj = j.locationObject()
@@ -1377,10 +1386,21 @@ func (j *jsRuntime) SetPendingNav(v string)       { j.pendingNav = v }
 func (j *jsRuntime) PendingReplace() bool         { return j.pendingReplace }
 func (j *jsRuntime) PendingForm() *FormSubmission { return j.pendingForm }
 
-// StorageLocalData and StorageSessionData expose the in-memory stores.
-func (j *jsRuntime) StorageLocalData() map[string]string     { return j.storageLocalData }
-func (j *jsRuntime) StorageSessionData() map[string]string   { return j.storageSessionData }
-func (j *jsRuntime) SetStorageLocalData(m map[string]string) { j.storageLocalData = m }
+// StorageLocalData and StorageSessionData return snapshots of the frame's
+// shared or tab-scoped storage areas.
+func (j *jsRuntime) StorageLocalData() map[string]string {
+	if j.storageLocalView == nil {
+		return nil
+	}
+	return j.storageLocalView.Snapshot()
+}
+
+func (j *jsRuntime) StorageSessionData() map[string]string {
+	if j.storageSessionView == nil {
+		return nil
+	}
+	return j.storageSessionView.Snapshot()
+}
 
 // TimerCount reports scheduled timers.
 func (j *jsRuntime) TimerCount() int { return len(j.timers) }
@@ -1427,8 +1447,6 @@ func RemoveNoscript(root *Node) { removeNoscript(root) }
 func (j *jsRuntime) TemplateCount() int     { return len(j.templates) }
 func (j *jsRuntime) DatasetCount() int      { return len(j.datasetObjs) }
 func (j *jsRuntime) ModuleSourceBytes() int { return j.modules.sourceBytes() }
-
-func (j *jsRuntime) SetStorageSessionData(m map[string]string) { j.storageSessionData = m }
 
 func (j *jsRuntime) SetTimeout(d time.Duration) { j.timeout = d }
 

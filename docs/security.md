@@ -65,7 +65,11 @@ HTTPS. A cookie with no `SameSite` keeps the legacy send-everywhere behavior.
 Non-GET form submissions carry the submitting page's `Origin`, so a server can
 reject cross-site posts. A `Secure` cookie can still be planted over an HTTP
 response, because the standard cookie jar accepts it. `localStorage` and
-`sessionStorage` are in-memory maps and do not persist across restarts.
+`sessionStorage` are in-memory and do not persist across restarts:
+`localStorage` is shared per origin across tabs, while `sessionStorage` is per
+tab and origin. Each area is capped at 5 MiB and the whole browser context at
+32 MiB. Opaque origins get a private area that is not shared with any other
+document.
 
 ## Cross-origin requests
 

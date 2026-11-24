@@ -23,7 +23,10 @@ agreement, the non-negotiable constraints and the change protocol.
   overflow menu) is laid out inline; only the page's own CSS can hide it.
   Selector rules using `:defined` are dropped, so a page's SSR "not yet
   upgraded" hiding rules never apply. Storage
-  and cookies are in-memory only and do not persist. Cookies are session-only,
+  and cookies are in-memory only and do not persist. `localStorage` is shared
+  per origin across tabs and `sessionStorage` is per tab and origin; each area
+  is capped at 5 MiB and the context at 32 MiB, and opaque origins get a
+  private area. Cookies are session-only,
   `SameSite` is not enforced, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests,
   simple CORS cross-origin responses and opaque `no-cors` fetches, and lack

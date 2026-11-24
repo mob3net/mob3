@@ -59,6 +59,9 @@ type JSHost interface {
 	AbortGen() uint64
 	ImportCh() chan<- ImportTask
 
+	LocalStorage() *StorageView
+	SessionStorage() *StorageView
+
 	UserAgent() string
 	Interactive() bool
 	RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context
