@@ -1955,7 +1955,7 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 		return true
 	}
 	st := l.State.Page
-	if !st.FrontendChrome || st.KeysEngine || st.PromptActive || st.Width <= 0 || st.Height <= 0 {
+	if !st.FrontendChrome || st.PromptActive || st.Width <= 0 || st.Height <= 0 {
 		return false
 	}
 	x, y := ev.X-1, ev.Y-1
@@ -1963,6 +1963,11 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 		return false
 	}
 	if y >= st.HeaderRows && y != st.Height-1 {
+		// Content mouse reports still belong to the page while a form field
+		// has focus; only the chrome rows stay front-end-owned.
+		if st.KeysEngine {
+			return false
+		}
 		return l.handleScrollbarMouse(ev)
 	}
 	if ev.Wheel != 0 {
@@ -1972,6 +1977,11 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	if !ev.Press || ev.Motion {
 		// Header and footer motion must not reach page hover/selection.
 		return true
+	}
+	if st.KeysEngine {
+		// A chrome click acts like Esc for a focused page control, then performs
+		// the clicked action in the same event.
+		_ = l.Session.Send(protocol.Command{Body: protocol.Key{Token: "esc"}})
 	}
 	layout := LayoutChromeWithTabs(st, l.TabBar, l.TabOffset)
 	for _, hit := range layout.Hits {
@@ -1993,7 +2003,7 @@ func (l *Tab) handlePromptMouse(ev MouseEvent) bool {
 	}
 	st := l.State.Page
 	x, y := ev.X-1, ev.Y-1
-	for _, hit := range LayoutChrome(st).Hits {
+	for _, hit := range LayoutChromeWithTabs(st, l.TabBar, l.TabOffset).Hits {
 		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
 			continue
 		}
@@ -2006,6 +2016,12 @@ func (l *Tab) handlePromptMouse(ev MouseEvent) bool {
 		case ChromeHitZoom:
 			l.closePrompt()
 			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppOpenZoom}})
+			return true
+		default:
+			// A click on another chrome control closes the prompt and runs that
+			// control in the same event, like Esc followed by the click.
+			l.closePrompt()
+			l.activateChromeHit(hit)
 			return true
 		}
 	}
