@@ -20,10 +20,11 @@ type SessionLoop struct {
 	// switch; the old tab's overlay pointers and native placements are cleared.
 	Presenter *Presenter
 
-	// OpenTab creates and starts one tab with the supplied protocol session ID
-	// and content geometry. CloseTab releases the transport and per-tab engine
-	// resources. The app supplies both; tests may leave them nil.
-	OpenTab  func(id protocol.SessionID, w, h, contentTop, contentHeight int) (*Tab, error)
+	// OpenTab creates and starts one tab with the supplied protocol session ID,
+	// content geometry and target URL. An empty target opens the home page.
+	// CloseTab releases the transport and per-tab engine resources. The app
+	// supplies both; tests may leave them nil.
+	OpenTab  func(id protocol.SessionID, w, h, contentTop, contentHeight int, target string) (*Tab, error)
 	CloseTab func(*Tab)
 
 	Keys   <-chan string
@@ -276,6 +277,7 @@ func (l *SessionLoop) installTabActions(tab *Tab) {
 		Cycle:          l.cycleTab,
 		Close:          l.closeTab,
 		New:            l.newTab,
+		NewTabURL:      l.newTabURL,
 		Scroll:         l.scrollTabs,
 		ToggleGraphics: l.cycleGraphics,
 	}
@@ -392,13 +394,19 @@ func (l *SessionLoop) allocateSessionID() protocol.SessionID {
 
 // newTab opens the configured home page in a new tab and switches to it.
 func (l *SessionLoop) newTab() {
+	l.newTabURL("")
+}
+
+// newTabURL opens target in a new tab. An empty target opens the home page and
+// focuses its URL prompt; an explicit target (help or config) is shown directly.
+func (l *SessionLoop) newTabURL(target string) {
 	if l.OpenTab == nil {
 		return
 	}
 	w, h := l.currentSize()
 	top, contentH := ContentBounds(h)
 	id := l.allocateSessionID()
-	tab, err := l.OpenTab(id, w, h, top, contentH)
+	tab, err := l.OpenTab(id, w, h, top, contentH, target)
 	if err != nil {
 		l.showStatusError("New tab failed: " + err.Error())
 		return
@@ -410,7 +418,9 @@ func (l *SessionLoop) newTab() {
 	tab.SessionID = id
 	l.installTabActions(tab)
 	l.sendGraphics(tab)
-	tab.startPromptEmpty()
+	if target == "" {
+		tab.startPromptEmpty()
+	}
 	l.Tabs = append(l.Tabs, tab)
 	l.activateTab(len(l.Tabs) - 1)
 }

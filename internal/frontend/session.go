@@ -28,6 +28,7 @@ type TabActions struct {
 	Cycle          func(delta int)
 	Close          func(index int) (quit bool)
 	New            func()
+	NewTabURL      func(url string)
 	Scroll         func(delta int)
 	ToggleGraphics func()
 }
@@ -171,13 +172,21 @@ func (l *Tab) DetachPresenter() { l.Presenter = nil }
 // BarView is this tab's label in the tab bar.
 func (l *Tab) BarView(active bool) TabView {
 	title := l.State.Page.Title
-	if title == "" {
-		title = l.State.Page.URL
+	if title == "" || isNewTabPage(l.State.Page.URL) {
+		title = "New Tab"
 	}
 	if l.Dead {
 		title = "Crashed"
 	}
 	return TabView{Title: title, Active: active}
+}
+
+func isNewTabPage(rawURL string) bool {
+	switch rawURL {
+	case "about:home", "about:start", "about:blank":
+		return true
+	}
+	return false
 }
 
 // MarkDead records a contained session failure. The tab stays in the bar so
@@ -578,7 +587,7 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	case ":":
 		l.startPrompt(true)
 		return true, false
-	case "r":
+	case "r", "ctrl-r":
 		l.reload()
 		return true, false
 	case "R":
@@ -612,6 +621,10 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 		l.startMenu(protocol.MenuZoom)
 		return true, false
 	case "?":
+		if l.Actions.NewTabURL != nil {
+			l.Actions.NewTabURL("about:help")
+			return true, false
+		}
 		return send(protocol.Navigate{URL: "about:help", Push: true})
 	case "H":
 		l.openHistory()
@@ -2001,8 +2014,16 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 		l.openHistory()
 		return
 	case ChromeHitHelp:
+		if l.Actions.NewTabURL != nil {
+			l.Actions.NewTabURL("about:help")
+			return
+		}
 		body = protocol.Navigate{URL: "about:help", Push: true}
 	case ChromeHitConfig:
+		if l.Actions.NewTabURL != nil {
+			l.Actions.NewTabURL("about:config")
+			return
+		}
 		body = protocol.Navigate{URL: "about:config", Push: true}
 	case ChromeHitURL:
 		l.startPrompt(false)

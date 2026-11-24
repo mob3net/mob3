@@ -64,13 +64,17 @@ func (t *interactiveTabs) openWithLoader(id protocol.SessionID, w, h, contentTop
 	return tab, nil
 }
 
-// openHome creates a fresh loader for a new tab and opens the home target.
-func (t *interactiveTabs) openHome(id protocol.SessionID, w, h, contentTop, contentHeight int) (*frontend.Tab, error) {
+// open creates a fresh loader for a new tab and opens target, or the home page
+// when target is empty.
+func (t *interactiveTabs) open(id protocol.SessionID, w, h, contentTop, contentHeight int, target string) (*frontend.Tab, error) {
+	if strings.TrimSpace(target) == "" {
+		target = t.home
+	}
 	loader, err := engine.NewConfiguredLoader(t.hostSess, t.loaderConfig)
 	if err != nil {
 		return nil, err
 	}
-	return t.openWithLoader(id, w, h, contentTop, contentHeight, t.home, loader)
+	return t.openWithLoader(id, w, h, contentTop, contentHeight, target, loader)
 }
 
 // close releases a tab's transport and engine session.

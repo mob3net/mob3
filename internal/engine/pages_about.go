@@ -55,7 +55,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Enter</b></td><td>follow a link, submit a field, or insert a textarea newline</td></tr>
 <tr><td><b>Ctrl-O</b> / <b>[</b></td><td>back</td></tr>
 <tr><td><b>Ctrl-I</b> / <b>]</b></td><td>forward; Ctrl-I needs kitty key reporting, legacy terminals send Tab</td></tr>
-<tr><td><b>r</b></td><td>reload</td></tr>
+<tr><td><b>r</b> / <b>Ctrl-R</b></td><td>reload</td></tr>
 <tr><td><b>R</b></td><td>toggle reader mode</td></tr>
 <tr><td><b>D</b></td><td>toggle dark mode</td></tr>
 <tr><td><b>J</b></td><td>toggle JavaScript and reload without or with scripts</td></tr>
@@ -81,7 +81,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
 <tr><td><b>1</b>-<b>9</b> / <b>Alt-1</b>-<b>Alt-9</b></td><td>select a tab by its number in the tab bar</td></tr>
 <tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
-<tr><td><b>?</b></td><td>this help page</td></tr>
+<tr><td><b>?</b></td><td>open this help page in a new tab</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading or leave the current mode</td></tr>
 <tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit after confirmation</td></tr>
@@ -151,7 +151,7 @@ meta-refresh redirect chains stop after 20 hops with
 forever.</p>
 
 <h2>Config</h2>
-<p>The <b>⚙</b> icon opens <b>about:config</b>. Changes apply to this session
+<p>The <b>⚙</b> icon opens <b>about:config</b> in a new tab. Changes apply to this session
 only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 
 <h2>Mouse</h2>
@@ -169,7 +169,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click in the URL prompt</td><td>place the caret</td></tr>
 <tr><td>click the zoom badge in the URL bar</td><td>open the zoom window and choose a preset with the mouse; the current level is always shown</td></tr>
 <tr><td>Shift+drag over the URL</td><td>select it with the terminal</td></tr>
-<tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
+<tr><td>click &#8592; / &#8635; / ?</td><td>back / reload / help in a new tab; while a page loads, &#8635; becomes &#215; and clicking it cancels the load</td></tr>
 <tr><td>right click a link</td><td>copy its URL</td></tr>
 <tr><td>side back/forward button</td><td>go back / forward</td></tr>
 <tr><td>click the footer status message</td><td>open the full warning or error text, like <b>E</b></td></tr>
@@ -180,7 +180,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; <b>y</b> copies the active section</td></tr>
 <tr><td>click the console input row</td><td>focus the JavaScript or Tools input</td></tr>
-<tr><td>click the ⚙ icon</td><td>open the config page</td></tr>
+<tr><td>click the ⚙ icon</td><td>open the config page in a new tab</td></tr>
 <tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
