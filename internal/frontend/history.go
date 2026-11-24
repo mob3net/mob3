@@ -71,6 +71,7 @@ func (l *Tab) applyHistoryCommit(v protocol.HistoryCommit) {
 			e.url = u
 		}
 		e.scroll = v.Scroll
+		l.trackGlobalHistory(*e)
 		return
 	}
 	url, attested := l.attestedURL(v.EntryID)
@@ -96,6 +97,7 @@ func (l *Tab) attestedURL(entryID uint64) (string, bool) {
 // storeHistoryCommit applies the push/merge rule with the trusted URL.
 func (l *Tab) storeHistoryCommit(v protocol.HistoryCommit, url string) {
 	e := historyEntry{id: v.EntryID, url: url, scroll: v.Scroll}
+	l.trackGlobalHistory(e)
 	if v.Push {
 		if l.historyIndex >= 0 && l.historyIndex < len(l.history) &&
 			l.history[l.historyIndex].url == url {
@@ -127,6 +129,29 @@ func (l *Tab) entryByID(id uint64) *historyEntry {
 		}
 	}
 	return nil
+}
+
+func (l *Tab) currentHistoryID() uint64 {
+	if l.historyIndex < 0 || l.historyIndex >= len(l.history) {
+		return 0
+	}
+	return l.history[l.historyIndex].id
+}
+
+// trackGlobalHistory adds or updates the browser-wide visited list.
+func (l *Tab) trackGlobalHistory(entry historyEntry) {
+	if l.historyLog != nil {
+		l.historyLog.Upsert(entry)
+	}
+}
+
+// historyLogEntries returns the browser-wide list, or the tab's local list when
+// no shared log is attached (direct callers and tests).
+func (l *Tab) historyLogEntries() []historyEntry {
+	if l.historyLog != nil {
+		return l.historyLog.Entries()
+	}
+	return append([]historyEntry(nil), l.history...)
 }
 
 // allowUnattestedCommit permits built-in pages and same-document fragment
@@ -169,19 +194,22 @@ func (l *Tab) pageState(v protocol.State) protocol.State {
 }
 
 // sendHistorySnapshot sends the bounded display snapshot the engine renders
-// for about:history.
+// for about:history. The list is browser-wide; Current identifies this tab's
+// current entry.
 func (l *Tab) sendHistorySnapshot() {
+	all := l.historyLogEntries()
 	start := 0
-	if len(l.history) > historyLimit {
-		start = len(l.history) - historyLimit
+	if len(all) > historyLimit {
+		start = len(all) - historyLimit
 	}
-	entries := make([]protocol.HistoryEntry, 0, len(l.history)-start)
-	for _, e := range l.history[start:] {
-		entries = append(entries, protocol.HistoryEntry{URL: e.url})
-	}
+	entries := make([]protocol.HistoryEntry, 0, len(all)-start)
+	currentID := l.currentHistoryID()
 	current := -1
-	if l.historyIndex >= start && l.historyIndex < len(l.history) {
-		current = l.historyIndex - start
+	for _, e := range all[start:] {
+		if e.id == currentID {
+			current = len(entries)
+		}
+		entries = append(entries, protocol.HistoryEntry{URL: e.url})
 	}
 	_ = l.Session.Send(protocol.Command{Body: protocol.History{Entries: entries, Current: current}})
 }

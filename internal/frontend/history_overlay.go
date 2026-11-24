@@ -6,7 +6,6 @@ import "browser/internal/protocol"
 // indices map each row back to the session history slice.
 type historyView struct {
 	entries []historyEntry
-	indices []int
 	current int
 	index   int
 }
@@ -74,18 +73,19 @@ func (l *Tab) openHistory() {
 
 func (l *Tab) buildHistoryView() historyView {
 	view := historyView{current: -1}
+	all := l.historyLogEntries()
 	start := 0
-	if len(l.history) > historyLimit {
-		start = len(l.history) - historyLimit
+	if len(all) > historyLimit {
+		start = len(all) - historyLimit
 	}
-	for i := len(l.history) - 1; i >= start; i-- {
-		entry := l.history[i]
+	currentID := l.currentHistoryID()
+	for i := len(all) - 1; i >= start; i-- {
+		entry := all[i]
 		if entry.url == "" || isAboutHistory(entry.url) {
 			continue
 		}
-		view.indices = append(view.indices, i)
 		view.entries = append(view.entries, entry)
-		if i == l.historyIndex {
+		if entry.id == currentID {
 			view.current = len(view.entries) - 1
 			view.index = view.current
 		}
@@ -125,12 +125,12 @@ func (l *Tab) closeHistory() {
 }
 
 func (l *Tab) chooseHistory(index int) {
-	if !l.historyActive || index < 0 || index >= len(l.historyView.indices) {
+	if !l.historyActive || index < 0 || index >= len(l.historyView.entries) {
 		return
 	}
-	l.historyIndex = l.historyView.indices[index]
+	target := l.historyView.entries[index].url
 	l.closeHistory()
-	l.restoreCurrent()
+	l.navigate(target)
 }
 
 func (l *Tab) handleHistoryKey(k string) (handled, quit bool) {

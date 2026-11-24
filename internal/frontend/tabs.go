@@ -47,6 +47,7 @@ type SessionLoop struct {
 	nextSessionID protocol.SessionID
 	revealPending bool
 	zoomPercent   int
+	history       *historyLog
 }
 
 // Run processes keys, resizes and every tab's events until it quits or the
@@ -61,9 +62,13 @@ func (l *SessionLoop) Run() error {
 	if l.Presenter == nil {
 		l.Presenter = l.Active.Presenter
 	}
+	log := l.ensureHistory()
 	for _, tab := range l.Tabs {
 		if tab != nil && tab.Stderr == nil {
 			tab.Stderr = os.Stderr
+		}
+		if tab != nil {
+			tab.historyLog = log
 		}
 		l.installTabActions(tab)
 		l.sendGraphics(tab)
@@ -290,6 +295,13 @@ func (l *SessionLoop) sendGraphics(tab *Tab) {
 	_ = tab.Session.Send(protocol.Command{Body: protocol.Graphics{Mode: l.CurrentGraphics}})
 }
 
+func (l *SessionLoop) ensureHistory() *historyLog {
+	if l.history == nil {
+		l.history = newHistoryLog()
+	}
+	return l.history
+}
+
 func (l *SessionLoop) cycleGraphics() {
 	if len(l.GraphicsModes) == 0 {
 		return
@@ -416,6 +428,7 @@ func (l *SessionLoop) newTabURL(target string) {
 		return
 	}
 	tab.SessionID = id
+	tab.historyLog = l.ensureHistory()
 	l.installTabActions(tab)
 	l.sendGraphics(tab)
 	if target == "" {

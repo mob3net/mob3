@@ -99,7 +99,8 @@ site or OS isolation. No subprocess, sandbox, per-site renderer or
 OS-specific isolation mechanism is part of the model.
 
 - A tab is one protocol session (`SessionID`). The front end owns the tab list,
-  the active tab, per-tab history and one terminal presenter.
+  the active tab, one shared visited-page list and per-tab back/forward stacks
+  and one terminal presenter.
 - The tab manager creates one loader, engine `Session` and protocol session per
   tab. Tabs share the host, cookies, cache, TLS state, origin storage and
   `BudgetManager`; each tab owns its loader counters and page cache.
@@ -260,8 +261,8 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and per-tab state. It applies events, owns history and overlays, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
-| `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, current index, scroll tracking, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
-| `internal/frontend/history_overlay.go` | Front-end history overlay: builds the newest-first popup from the session ledger, renders it through the shared choice layout, and restores the selected entry without a page navigation. |
+| `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, each tab's own back/forward stack and scroll tracking, the shared visited-page log, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
+| `internal/frontend/history_overlay.go` | Front-end history overlay: builds the newest-first popup from the shared visited-page log, renders it through the shared choice layout, and opens the selected URL in the current tab. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
