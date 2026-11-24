@@ -541,7 +541,11 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 	}
 	g.text(x, y, lead, accentFG, protocol.AttrBold)
 	if titleW > 0 {
-		g.text(x+leadW, y, fitWidth(title, titleW), titleFG, 0)
+		titleAttrs := uint8(0)
+		if tab.Active {
+			titleAttrs = protocol.AttrBold
+		}
+		g.text(x+leadW, y, fitWidth(title, titleW), titleFG, titleAttrs)
 	}
 	if tailW > 0 {
 		closeX := x + w - tailW

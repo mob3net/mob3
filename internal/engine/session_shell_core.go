@@ -74,6 +74,7 @@ func newSessionWithBrowserContext(w, h int, bc *BrowserContext, resetZoom bool) 
 		b.Zoom = Zoom()
 	}
 	b.zoomGen = zoomGen()
+	b.usage.sample()
 	return b
 }
 

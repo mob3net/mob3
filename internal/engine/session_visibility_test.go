@@ -6,6 +6,19 @@ import (
 	"browser/internal/protocol"
 )
 
+func TestActivationResamplesProcessMemory(t *testing.T) {
+	b := NewSession(80, 24)
+	b.usage.rss = 0
+	b.SetActive(false)
+	b.SetActive(true)
+	if b.usage.rss == 0 {
+		t.Fatal("activation did not refresh the process-wide memory figure")
+	}
+	if footer := b.UsageFooter(); footer == "" || footer == "MEM 0MB" {
+		t.Fatalf("usage footer = %q", footer)
+	}
+}
+
 func TestActivationSyncsBackgroundTabZoom(t *testing.T) {
 	defer SetZoom(1)
 	b := newSessionWithBrowserContext(80, 24, nil, false)

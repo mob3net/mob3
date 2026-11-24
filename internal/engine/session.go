@@ -297,6 +297,7 @@ func NewEmptySession() *Session {
 	if s.budgets != nil {
 		s.budgets.Register(s)
 	}
+	s.usage.sample()
 	return s
 }
 

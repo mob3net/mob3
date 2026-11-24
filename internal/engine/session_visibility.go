@@ -17,6 +17,9 @@ func (b *Session) SetActive(active bool) {
 		b.hoverRebuildPending = false
 		return
 	}
+	// The footer figure is process-wide, so sample it as soon as this tab is
+	// presented instead of showing the value cached from its last active period.
+	b.usage.sample()
 	if b.zoomGen != zoomGen() {
 		b.Zoom = Zoom()
 		b.BigTextBlocked = false

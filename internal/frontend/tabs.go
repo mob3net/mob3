@@ -301,11 +301,17 @@ func (l *SessionLoop) cycleTab(delta int) {
 	if index < 0 {
 		return
 	}
-	index = (index + delta) % len(l.Tabs)
-	if index < 0 {
-		index += len(l.Tabs)
+	next := index + delta
+	if next < 0 {
+		next = 0
 	}
-	l.activateTab(index)
+	if next >= len(l.Tabs) {
+		next = len(l.Tabs) - 1
+	}
+	if next == index {
+		return
+	}
+	l.activateTab(next)
 }
 
 func (l *SessionLoop) activeIndex() int {
