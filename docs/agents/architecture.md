@@ -128,8 +128,9 @@ The frame router is a data boundary by design, so a future process transport
 could move behind it without changing the ownership or security model.
 
 Current state: one `Session` holds one page and one JS runtime, iframe elements
-have inert stub documents, and there are no tabs. This section records the
-target; it is not implemented yet.
+have inert stub documents, and there are no tabs. A shared `BrowserContext`
+now allocates history-entry IDs; shared storage and budgets remain per session.
+This section records the target; it is not implemented yet.
 
 ## Current layout
 
@@ -257,7 +258,8 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/output.go` | Injected terminal writer for the direct draw path; the app installs `os.Stdout`, tests install their own hook. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags and terminal setup. |
+| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It currently allocates the opaque history-entry ID sequence, so sessions in different tabs cannot collide in the host's URL-attestation record or the engine page cache; shared storage, budgets and settings join it with the tab and frame model. |
+| `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags, the shared `BrowserContext` and terminal setup. |
 | `internal/engine/version.go` | Injected build version and the help-page wrapper. |
 | `internal/engine/session_certs.go` | Config-page trust-store label. |
 | `internal/engine/dump.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding lives in the app. |

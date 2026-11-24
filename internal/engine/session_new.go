@@ -10,32 +10,33 @@ import (
 // SessionConfig is the engine-side configuration the app applies before the
 // interactive transport starts. Terminal setup stays in the app/front end.
 type SessionConfig struct {
-	Loader        *Loader
-	Width, Height int
-	Zoom          float64
-	Interactive   bool
-	Reader, Dark  bool
-	Home          string
-	CLIConfig     map[string]string
-	Color         bool
-	Output        io.Writer
-	NoJS, NoPDF   bool
-	JSMemLimit    int64
-	LayoutBudget  LayoutBudget
-	MemLimitBytes int64
-	NoBigText     bool
-	CellW, CellH  int
-	Graphics      GraphicsMode
-	GraphicsModes []GraphicsMode
-	GFX           Graphics
-	NewGraphics   func(GraphicsMode, int, int) Graphics
+	Loader         *Loader
+	BrowserContext *BrowserContext
+	Width, Height  int
+	Zoom           float64
+	Interactive    bool
+	Reader, Dark   bool
+	Home           string
+	CLIConfig      map[string]string
+	Color          bool
+	Output         io.Writer
+	NoJS, NoPDF    bool
+	JSMemLimit     int64
+	LayoutBudget   LayoutBudget
+	MemLimitBytes  int64
+	NoBigText      bool
+	CellW, CellH   int
+	Graphics       GraphicsMode
+	GraphicsModes  []GraphicsMode
+	GFX            Graphics
+	NewGraphics    func(GraphicsMode, int, int) Graphics
 }
 
 // NewSession creates and configures the page session used by the interactive
 // loop. It is the app's only construction entry point while the engine type is
 // still in transition.
 func NewConfiguredSession(c SessionConfig) *Session {
-	b := NewSession(c.Width, c.Height)
+	b := NewSessionWithBrowserContext(c.Width, c.Height, c.BrowserContext)
 	b.Zoom = c.Zoom
 	SetZoom(c.Zoom)
 	b.Interactive = c.Interactive
@@ -116,15 +117,16 @@ func ZoomPercentLabel(z float64) string { return zoomPercentLabel(z) }
 
 // AutomationConfig is the headless session configuration used by MCP.
 type AutomationConfig struct {
-	Loader        *Loader
-	Width, Height int
-	Zoom          float64
-	NoJS, NoPDF   bool
-	JSMemLimit    int64
-	MemLimitBytes int64
-	LayoutBudget  LayoutBudget
-	Home          string
-	Reader, Dark  bool
+	Loader         *Loader
+	BrowserContext *BrowserContext
+	Width, Height  int
+	Zoom           float64
+	NoJS, NoPDF    bool
+	JSMemLimit     int64
+	MemLimitBytes  int64
+	LayoutBudget   LayoutBudget
+	Home           string
+	Reader, Dark   bool
 }
 
 // NewAutomationWithConfig creates a configured headless session.
@@ -136,7 +138,7 @@ func NewAutomationWithConfig(c AutomationConfig) *Automation {
 	if h <= 0 {
 		h = 30
 	}
-	a := newAutomation(w, h)
+	a := newAutomation(w, h, c.BrowserContext)
 	a.b.Zoom = c.Zoom
 	SetZoom(c.Zoom)
 	if c.Loader != nil {

@@ -43,9 +43,9 @@ type ClickTarget struct {
 	HasCoords bool
 }
 
-// NewAutomation creates a headless browser with a virtual text viewport.
-func newAutomation(width, height int) *Automation {
-	b := NewSession(width, height)
+// newAutomation creates a headless browser with a virtual text viewport.
+func newAutomation(width, height int, bc *BrowserContext) *Automation {
+	b := NewSessionWithBrowserContext(width, height, bc)
 	b.NoDraw = true
 	if b.loader != nil {
 		// Automation exposes text; image downloads would only slow it down.

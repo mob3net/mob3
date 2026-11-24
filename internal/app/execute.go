@@ -97,6 +97,7 @@ func execute(o runOptions) int {
 		graphicsMode = frontend.DetectGraphics(frontend.GraphicsAuto)
 	}
 	hostSess := host.NewSession()
+	browserContext := engine.NewBrowserContext()
 	loader, err := engine.NewConfiguredLoader(hostSess, engine.LoaderConfig{
 		NoScripts:    o.NoJS,
 		NoPDF:        o.NoPDF,
@@ -127,7 +128,8 @@ func execute(o runOptions) int {
 
 	if o.MCP {
 		auto := engine.NewAutomationWithConfig(engine.AutomationConfig{
-			Loader: loader, Width: o.Width, Height: o.Height, Zoom: zoomFactor,
+			Loader: loader, BrowserContext: browserContext,
+			Width: o.Width, Height: o.Height, Zoom: zoomFactor,
 			NoJS: o.NoJS, NoPDF: o.NoPDF, JSMemLimit: jsMemLimit,
 			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
 			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
@@ -179,7 +181,8 @@ func execute(o runOptions) int {
 		noBigText = true
 	}
 	b := engine.NewConfiguredSession(engine.SessionConfig{
-		Loader: loader, Width: w, Height: h, Zoom: zoomFactor, Interactive: true,
+		Loader: loader, BrowserContext: browserContext,
+		Width: w, Height: h, Zoom: zoomFactor, Interactive: true,
 		Reader: o.Reader, Dark: o.Dark, Home: o.Home,
 		CLIConfig: map[string]string{
 			"-dump":          onOff(o.Dump),
