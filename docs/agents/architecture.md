@@ -277,8 +277,12 @@ step; it is not implemented yet and there is no engine child process.
 | `internal/engine/dump.go` | One-shot `-dump`/`-png` handler: load, layout, paint, split tall text frames and emit them through `protocol.InProc`. Terminal sizing/encoding lives in the app. |
 | `internal/app/automation_transport.go` | MCP protocol client and `automationHandler`; `engine.Automation` is the handler implementation. |
 | `internal/engine/session_loop.go` | `Serve`/`handleCommand` wrappers, the front-end hint/modal/select result appliers and pending-frame emission. The transport loop and command dispatch live in `serve.go`/`commands.go`. |
-| `internal/app/execute.go` | Mode dispatch and interactive session boot: `host.Session`/`engine.Loader` construction, session construction, terminal enter/leave, presenter/transport wiring and loop start. The build version is `internal/app.Version`. |
-| `internal/app/dump.go` | One-shot transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
+| `internal/app/execute.go` | Mode dispatch only: process memory limit, interactive detection, `host.Session`/`engine.Loader`/`BrowserContext` construction, budget and zoom validation, then MCP, dump or interactive. The build version is `internal/app.Version`. |
+| `internal/app/run_options.go` | The validated `runOptions` surface, `onOff` and `cleanError`. |
+| `internal/app/graphics.go` | Native graphics detection, engine capabilities and the `i`-key graphics-mode cycle. |
+| `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
+| `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
+| `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
 | `internal/engine/loader.go`, `loader_config.go` | Document loader: `Loader` over `protocol.Host`, fetch/response classification, charset decode, about/blocked/PDF dispatch, request accounting and the app-facing config constructor. |
 | `internal/engine/loader_images.go` | Image loading subsystem: task collection, request context, concurrent fetch/decode, fit, viewport ordering and the in-flight byte budget. |

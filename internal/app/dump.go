@@ -10,6 +10,13 @@ import (
 	"browser/internal/protocol"
 )
 
+// runDump renders one page and exits. The interactive path also uses it as a
+// fallback when the terminal cannot enter raw mode.
+func runDump(o runOptions, loader *engine.Loader, budget engine.LayoutBudget, zoomFactor float64) int {
+	return dumpPage(loader, o.Target, o.Width, o.Height, o.NoColor, o.Color,
+		o.NoJS, o.Reader, o.Dark, o.PNG, o.PDFPage, engine.JSMemLimit(), budget, zoomFactor)
+}
+
 // dumpPage runs a one-shot render through the in-process transport and writes
 // the frames to stdout. It preserves the byte-for-byte -dump and -png output.
 func dumpPage(loader *engine.Loader, target string, width, viewportH int, noColor, forceColor, noJS, reader, dark, pngOut bool, pdfPage int, jsMem int64, budget engine.LayoutBudget, zoom float64) int {
