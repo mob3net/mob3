@@ -77,8 +77,7 @@ type Session struct {
 	HintConfirmLink int
 	HintsFrontend   bool
 
-	// JavaScript runtime and page tracking.
-	JS        *JSRuntime
+	// Page tracking; the frame owns the JavaScript runtime.
 	PDFStarts []int
 
 	// Memory-only back/forward page cache.

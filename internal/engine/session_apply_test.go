@@ -16,7 +16,7 @@ type testSessionHooks struct {
 func (h *testSessionHooks) BeginPage()                                                       {}
 func (h *testSessionHooks) ResetUI()                                                         {}
 func (h *testSessionHooks) ResetConsole()                                                    {}
-func (h *testSessionHooks) StartJS(*Page)                                                    {}
+func (h *testSessionHooks) StartJS(*Frame)                                                   {}
 func (h *testSessionHooks) ApplyPendingJS(bool, uint64, bool) bool                           { return false }
 func (h *testSessionHooks) NavigateEntry(string, string, []byte, string, uint64, bool, bool) {}
 func (h *testSessionHooks) Rebuild()                                                         { h.rebuild++ }
@@ -33,7 +33,7 @@ func (h *testSessionHooks) OpenSelectMenu(*Node)                                
 func (h *testSessionHooks) ConsoleOpen() bool                                                { return false }
 func (h *testSessionHooks) HoverRebuild() (bool, time.Time)                                  { return false, time.Time{} }
 func (h *testSessionHooks) ClearHoverRebuild()                                               {}
-func (h *testSessionHooks) NewJSHost() JSHost                                                { return nil }
+func (h *testSessionHooks) NewJSHost(*Frame) JSHost                                          { return nil }
 func (h *testSessionHooks) SetModuleErr(bool)                                                {}
 func (h *testSessionHooks) TakePendingStatus() string                                        { return "" }
 func (h *testSessionHooks) ShowDownload(string, string)                                      {}

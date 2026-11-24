@@ -35,9 +35,13 @@ func (b *Session) OpenSelectMenu(n *Node)              { b.openSelectMenu(n) }
 func (b *Session) ConsoleOpen() bool                   { return b.consoleOpen }
 func (b *Session) HoverRebuild() (bool, time.Time)     { return b.hoverRebuildPending, b.hoverRebuildAt }
 func (b *Session) ClearHoverRebuild()                  { b.hoverRebuildPending = false }
-func (b *Session) NewJSHost() JSHost                   { return newJSHost(b) }
+func (b *Session) NewJSHost(f *Frame) JSHost           { return newFrameJSHost(b, f) }
 func (b *Session) SetModuleErr(v bool)                 { b.moduleErr = v }
-func (b *Session) StartJS(page *Page)                  { b.startJS(page) }
+func (b *Session) StartJS(f *Frame) {
+	if f != nil {
+		b.startJSFrame(f, f.Page, b)
+	}
+}
 func (b *Session) ApplyPendingJS(duringLoad bool, entryID uint64, historyPush bool) bool {
 	return b.applyPendingJS(duringLoad, entryID, historyPush)
 }
