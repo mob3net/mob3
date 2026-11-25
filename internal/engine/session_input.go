@@ -78,7 +78,10 @@ func (b *Session) clickContent(x, docY int) {
 			return
 		}
 		b.Focus = idx
-		b.followFocused()
+		// The click handlers already ran above; following must not dispatch the
+		// same click a second time (a link whose handler returns true would run
+		// twice, so dialogs would reopen).
+		b.followLink(li)
 		return
 	}
 	n := b.nodeAt(x, docY)

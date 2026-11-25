@@ -189,3 +189,28 @@ func TestShiftMouseTokenRoundTrip(t *testing.T) {
 		t.Fatalf("round trip = %+v, %v; want %+v", got, ok, want)
 	}
 }
+
+// TestLinkClickRunsHandlerOnce guards the mouse path: clickContent runs the
+// link's click handlers and then follows the link, which must not dispatch the
+// same click again.
+func TestLinkClickRunsHandlerOnce(t *testing.T) {
+	page := newJSPage(`<html><body><a href="javascript:void(0)" onclick="window.__clicks = (window.__clicks || 0) + 1">go</a></body></html>`, ``)
+	b := newTestSession(60, 10)
+	b.NoDraw = true
+	b.Page = page
+	b.URL = page.URL
+	withQuietStdout(t, func() { b.startJS(page) })
+	b.rebuild()
+	if len(b.Layout.Links) == 0 {
+		t.Fatal("link was not laid out")
+	}
+	rect := b.Layout.Links[0].Rects[0]
+	b.clickContent(rect.X, rect.Y)
+	v, err := b.JS.RunCode("clicks", "String(window.__clicks)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.String(); got != "1" {
+		t.Fatalf("click handler ran %s times, want 1", got)
+	}
+}
