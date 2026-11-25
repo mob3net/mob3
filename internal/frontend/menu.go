@@ -200,6 +200,21 @@ func choiceRowAt(layout MenuLayout, ev MouseEvent) (int, bool) {
 	return 0, false
 }
 
+// moveChoice shifts a selection by delta and clamps it to the list.
+func moveChoice(index, delta, count int) int {
+	if count < 1 {
+		return 0
+	}
+	index += delta
+	if index < 0 {
+		return 0
+	}
+	if index >= count {
+		return count - 1
+	}
+	return index
+}
+
 // DrawSelect paints the page select popup on a full-screen canvas.
 func DrawSelect(c *chromeCanvas, st protocol.State, view *SelectView) MenuLayout {
 	layout := LayoutSelect(st, view)

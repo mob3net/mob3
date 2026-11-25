@@ -1,4 +1,7 @@
-package engine
+// Package textedit is the shared single-line text editor used by page form
+// fields, the URL prompt, the JS dialogs and the console inputs. It has no
+// terminal or browser state: callers keep the value, caret and selection flag.
+package textedit
 
 import (
 	"unicode"
@@ -98,21 +101,21 @@ func forwardWordBoundary(s string, i int) int {
 	return i
 }
 
-// editConfig selects the per-control differences for editLineKey.
+// EditConfig selects the per-control differences for EditLineKey.
 type EditConfig struct {
 	// SelAll, when non-nil, enables Ctrl-A select-all: the next edit replaces
 	// the whole value and a caret move clears the selection. Controls without a
 	// selection model leave it nil.
 	SelAll *bool
-	// collapseSelection makes a caret move with a full selection jump to the
+	// CollapseSelection makes a caret move with a full selection jump to the
 	// edge of the value instead of moving from the caret.
 	CollapseSelection bool
-	// maxRunes refuses new input once the value already holds that many runes;
+	// MaxRunes refuses new input once the value already holds that many runes;
 	// 0 means unlimited.
 	MaxRunes int
 }
 
-// editLineKey applies one text-editing key to a value and its caret. handled is
+// EditLineKey applies one text-editing key to a value and its caret. Handled is
 // false for keys the control owns (Enter, Escape, Tab, Up/Down, history) and
 // for unprintable input, so the caller can run those itself. Visible-window and
 // event side effects stay with the caller.

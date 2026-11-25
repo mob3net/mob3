@@ -8,19 +8,6 @@ import (
 // linkAt returns the index of the link covering document cell (x, y), or -1.
 func (b *Session) linkAt(x, y int) int { return b.LinkAt(x, y) }
 
-// editConfig selects the per-control differences for editLineKey.
-type editConfig struct {
-	selAll            *bool
-	collapseSelection bool
-	maxRunes          int
-}
-
-func editLineKey(value string, caret int, k string, cfg editConfig) (string, int, bool) {
-	return EditLineKey(value, caret, k, EditConfig{
-		SelAll: cfg.selAll, CollapseSelection: cfg.collapseSelection, MaxRunes: cfg.maxRunes,
-	})
-}
-
 func (b *Session) submitInput() {
 	n := b.Forms.InputFocus
 	if n == nil {

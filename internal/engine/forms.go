@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"browser/internal/protocol"
+	"browser/internal/textedit"
 )
 
 // TabTargets returns links and form controls in document order.
@@ -528,7 +529,7 @@ func (s *Session) HandleInputKey(k string, h SessionHooks) bool {
 	if limit := MaxLength(n); limit > 0 && limit < maxRunes {
 		maxRunes = limit
 	}
-	newValue, newCur, handled := EditLineKey(value, cur, k, EditConfig{
+	newValue, newCur, handled := textedit.EditLineKey(value, cur, k, textedit.EditConfig{
 		SelAll:   &s.Forms.InputSelectAll,
 		MaxRunes: maxRunes,
 	})

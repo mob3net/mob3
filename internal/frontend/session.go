@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"browser/internal/protocol"
+	"browser/internal/textedit"
 )
 
 // LoopState is the presentation state the session loop updates as events
@@ -886,7 +887,7 @@ func (l *Tab) handleConsoleKey(k string) (handled, quit bool) {
 		if k == "ctrl-a" {
 			k = "home"
 		}
-		text, cur, _ := editLineKey(l.consoleText, l.consoleCursor, k, editConfig{maxRunes: 8192})
+		text, cur, _ := textedit.EditLineKey(l.consoleText, l.consoleCursor, k, textedit.EditConfig{MaxRunes: 8192})
 		l.consoleText = text
 		if cur > len(text) {
 			cur = len(text)
@@ -1009,7 +1010,7 @@ func (l *Tab) handleConsoleFindKey(k string) (handled, quit bool) {
 	if k == "ctrl-a" {
 		k = "home"
 	}
-	text, cur, _ := editLineKey(l.consoleFindText, l.consoleFindCursor, k, editConfig{maxRunes: 512})
+	text, cur, _ := textedit.EditLineKey(l.consoleFindText, l.consoleFindCursor, k, textedit.EditConfig{MaxRunes: 512})
 	changed := text != l.consoleFindText
 	l.consoleFindText = text
 	if cur > len(text) {
@@ -1385,13 +1386,9 @@ func (l *Tab) handleSelectKey(k string) (handled, quit bool) {
 		l.answerSelect(0, true)
 		return true, false
 	case "up", "k", "ctrl-p":
-		if l.selectView.Index > 0 {
-			l.selectView.Index--
-		}
+		l.selectView.Index = moveChoice(l.selectView.Index, -1, n)
 	case "down", "j", "ctrl-n":
-		if l.selectView.Index < n-1 {
-			l.selectView.Index++
-		}
+		l.selectView.Index = moveChoice(l.selectView.Index, 1, n)
 	case "home", "g":
 		l.selectView.Index = 0
 	case "end", "G":
@@ -1414,16 +1411,7 @@ func (l *Tab) handleSelectMouse(ev MouseEvent) bool {
 		if ev.Wheel < 0 {
 			delta = -1
 		}
-		l.selectView.Index += delta
-		if l.selectView.Index < 0 {
-			l.selectView.Index = 0
-		}
-		if n := len(l.selectView.Options); l.selectView.Index >= n {
-			l.selectView.Index = n - 1
-		}
-		if l.selectView.Index < 0 {
-			l.selectView.Index = 0
-		}
+		l.selectView.Index = moveChoice(l.selectView.Index, delta, len(l.selectView.Options))
 		l.syncSelect()
 		return true
 	}
@@ -1444,11 +1432,9 @@ func (l *Tab) handleSelectMouse(ev MouseEvent) bool {
 		l.answerSelect(0, true)
 		return true
 	}
-	for i, r := range layout.Rects {
-		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
-			l.answerSelect(layout.Top+i, false)
-			return true
-		}
+	if index, ok := choiceRowAt(layout, ev); ok {
+		l.answerSelect(index, false)
+		return true
 	}
 	l.answerSelect(0, true)
 	return true
@@ -1534,9 +1520,9 @@ func (l *Tab) handleDialogKey(k string) (handled, quit bool) {
 			l.answerDialog(false, "")
 			return true, false
 		}
-		value, cur, _ := editLineKey(l.dialogView.Value, l.dialogView.Cursor, k, editConfig{
-			selAll:            &l.dialogView.SelectAll,
-			collapseSelection: true,
+		value, cur, _ := textedit.EditLineKey(l.dialogView.Value, l.dialogView.Cursor, k, textedit.EditConfig{
+			SelAll:            &l.dialogView.SelectAll,
+			CollapseSelection: true,
 		})
 		l.dialogView.Value = value
 		if cur > len(value) {
@@ -1662,15 +1648,11 @@ func (l *Tab) handleMenuKey(k string) (handled, quit bool) {
 			return true, false
 		}
 	case "up", "k", "ctrl-p":
-		if l.menuIndex > 0 {
-			l.menuIndex--
-		}
+		l.menuIndex = moveChoice(l.menuIndex, -1, menuRowCount(l.menuKind))
 		l.syncMenu()
 		return true, false
 	case "down", "j", "ctrl-n":
-		if l.menuIndex < menuRowCount(l.menuKind)-1 {
-			l.menuIndex++
-		}
+		l.menuIndex = moveChoice(l.menuIndex, 1, menuRowCount(l.menuKind))
 		l.syncMenu()
 		return true, false
 	case "home", "g":
@@ -1720,13 +1702,7 @@ func (l *Tab) handleMenuMouse(ev MouseEvent) bool {
 		if ev.Wheel < 0 {
 			delta = -1
 		}
-		l.menuIndex += delta
-		if l.menuIndex < 0 {
-			l.menuIndex = 0
-		}
-		if n := menuRowCount(l.menuKind); l.menuIndex >= n {
-			l.menuIndex = n - 1
-		}
+		l.menuIndex = moveChoice(l.menuIndex, delta, menuRowCount(l.menuKind))
 		l.syncMenu()
 		return true
 	}
@@ -1747,12 +1723,10 @@ func (l *Tab) handleMenuMouse(ev MouseEvent) bool {
 		l.closeMenu()
 		return true
 	}
-	for i, r := range layout.Rects {
-		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
-			l.menuIndex = layout.Top + i
-			l.activateMenu()
-			return true
-		}
+	if index, ok := choiceRowAt(layout, ev); ok {
+		l.menuIndex = index
+		l.activateMenu()
+		return true
 	}
 	l.closeMenu()
 	return true
@@ -1839,7 +1813,7 @@ func (l *Tab) handleFindKey(k string) (handled, quit bool) {
 	if k == "ctrl-a" {
 		k = "home"
 	}
-	text, cur, _ := editLineKey(l.findText, l.findCursor, k, editConfig{maxRunes: 512})
+	text, cur, _ := textedit.EditLineKey(l.findText, l.findCursor, k, textedit.EditConfig{MaxRunes: 512})
 	changed := text != l.findText
 	l.findText = text
 	if cur > len(text) {
@@ -1945,9 +1919,9 @@ func (l *Tab) handlePromptKey(k string) (handled, quit bool) {
 		l.syncPrompt()
 		return true, false
 	}
-	text, cur, _ := editLineKey(l.promptText, l.promptCursor, k, editConfig{
-		selAll:            &l.promptSelectAll,
-		collapseSelection: true,
+	text, cur, _ := textedit.EditLineKey(l.promptText, l.promptCursor, k, textedit.EditConfig{
+		SelAll:            &l.promptSelectAll,
+		CollapseSelection: true,
 	})
 	l.promptText = text
 	if cur > len(text) {
