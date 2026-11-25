@@ -680,6 +680,29 @@ func TestDialogPromptMousePlacesCaret(t *testing.T) {
 	}
 }
 
+func TestOpeningOverlayClosesNotice(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Notice{Title: "Notice", Message: "Body"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.noticeActive {
+		t.Fatal("notice did not open")
+	}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Select{
+		ID: 4, Options: []string{"One", "Two"}, Selected: 0,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if loop.noticeActive {
+		t.Fatal("notice stayed open under the select popup")
+	}
+	if !loop.selectActive {
+		t.Fatal("select did not open")
+	}
+}
+
 func TestSelectEventKeysAndMouse(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}

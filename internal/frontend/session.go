@@ -1024,7 +1024,9 @@ func (l *Tab) handleConsoleFindKey(k string) (handled, quit bool) {
 	return true, false
 }
 
-func (l *Tab) startHints(v protocol.Hints) {
+// dismissOverlays clears the page overlays that compete with a new modal.
+// JS dialogs are answered explicitly and are intentionally left alone.
+func (l *Tab) dismissOverlays() {
 	l.cancelQuit()
 	l.closePrompt()
 	l.closeFind()
@@ -1034,6 +1036,10 @@ func (l *Tab) startHints(v protocol.Hints) {
 	l.closeLinkPreview()
 	l.closeDownload(false, 0)
 	l.closeNotice()
+}
+
+func (l *Tab) startHints(v protocol.Hints) {
+	l.dismissOverlays()
 	l.hintActive = true
 	l.hintView = HintView{Mode: v.Mode, Prefix: v.Prefix, Items: v.Items}
 	l.hintBase = l.State.Page
@@ -1181,14 +1187,7 @@ func (l *Tab) openHintInNewTab(href string) {
 }
 
 func (l *Tab) startDownload(v protocol.Download) {
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeHistory()
-	l.closeLinkPreview()
-	l.closeNotice()
+	l.dismissOverlays()
 	l.downloadActive = true
 	l.downloadView = DownloadView{Name: v.Name, Command: v.Command}
 	l.downloadBase = l.State.Page
@@ -1263,14 +1262,7 @@ func (l *Tab) handleDownloadMouse(ev MouseEvent) bool {
 }
 
 func (l *Tab) startNotice(v protocol.Notice) {
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeHistory()
-	l.closeLinkPreview()
-	l.closeDownload(false, 0)
+	l.dismissOverlays()
 	l.noticeActive = true
 	l.noticeView = NoticeView{Title: v.Title, Message: v.Message}
 	l.noticeBase = l.State.Page
@@ -1330,12 +1322,7 @@ func (l *Tab) handleNoticeMouse(ev MouseEvent) bool {
 }
 
 func (l *Tab) startSelect(v protocol.Select) {
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeHistory()
-	l.closeLinkPreview()
+	l.dismissOverlays()
 	l.selectActive = true
 	l.selectView = SelectView{ID: v.ID, Options: v.Options, Selected: v.Selected, Index: v.Selected}
 	if l.selectView.Index < 0 || l.selectView.Index >= len(l.selectView.Options) {
@@ -1441,15 +1428,7 @@ func (l *Tab) handleSelectMouse(ev MouseEvent) bool {
 }
 
 func (l *Tab) startDialog(v protocol.Dialog) {
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeHistory()
-	l.closeLinkPreview()
-	l.closeDownload(false, 0)
-	l.closeNotice()
+	l.dismissOverlays()
 	l.cancelHint()
 	l.dialogActive = true
 	l.dialog = v
