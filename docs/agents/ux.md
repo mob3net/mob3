@@ -22,7 +22,9 @@ agreement, the non-negotiable constraints and the change protocol.
   row uses a subtle horizontal gradient. The tab strip occupies the title slot
   between the left and right controls, including when only one tab is open; the
   surrounding controls keep their cells. Each tab shows its number,
-  title, a close `x` and an add-new `+` button. The active tab is solid blue and
+  title, a close `x` and an add-new `+` button. The `+` follows the last tab
+  while the strip has room and stays pinned at the far right when tabs overflow.
+  The active tab is solid blue and
   fully bold; inactive tabs use a gray gradient, a dimmed title and bold
   accents. In `-no-color` the active tab is still fully bold. Tabs never squeeze
   below their fixed width: when they cannot all fit, `<` / `>` scroll the strip.
@@ -37,9 +39,10 @@ agreement, the non-negotiable constraints and the change protocol.
   shared presenter. Closing releases the transport and budget share; a middle
   click on a tab closes it, and closing the last tab exits immediately without
   the quit prompt. A crashed
-  tab stays in the bar as `Crashed` and does not stop the others. New tabs open
-  after the active tab (or at the end when it is last) with an empty focused URL
-  prompt. Graphics mode, zoom, terminal cell size and
+  tab stays in the bar as `Crashed` and does not stop the others. New tabs from
+  `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
+  focused URL prompt when no target is given; a link opened in a background tab
+  is inserted directly after the active tab. Graphics mode, zoom, terminal cell size and
   the memory readout are browser-wide. Memory is the process total, not one
   tab's share.
 - **Config:** the `⚙` toolbar icon opens `about:config` in a new tab, a form listing every

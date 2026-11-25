@@ -68,7 +68,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
-<tr><td><b>F</b></td><td>same as <b>f</b>, but opens the chosen link in a background tab</td></tr>
+<tr><td><b>F</b></td><td>same as <b>f</b>, but opens the chosen link in a background tab after the current one</td></tr>
 <tr><td><b>p</b></td><td>preview the chosen link: <b>Enter</b> follows, <b>y</b> copies, <b>Esc</b> cancels</td></tr>
 <tr><td><b>Enter</b> / <b>n</b></td><td>close the find bar / next find match afterwards</td></tr>
 <tr><td><b>Down</b> / <b>N</b></td><td>next match in the find bar / previous match after closing it</td></tr>
@@ -77,7 +77,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>Ctrl-Y</b></td><td>copy only the page rows visible at the current scroll, with the same metadata line</td></tr>
 <tr><td><b>H</b></td><td>session history overlay; Enter restores an entry</td></tr>
-<tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab after the current one; the URL prompt is focused and empty</td></tr>
+<tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab at the end; the URL prompt is focused and empty</td></tr>
 <tr><td><b>W</b> / <b>Ctrl-W</b></td><td>close the active tab; closing the last tab exits without confirmation, and the URL prompt keeps Ctrl-W for word delete</td></tr>
 <tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
 <tr><td><b>1</b>-<b>9</b> / <b>Alt-1</b>-<b>Alt-9</b></td><td>select a tab by its number in the tab bar</td></tr>
@@ -90,8 +90,10 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <p class="muted">Kitty, WezTerm, Ghostty and foot get enhanced key reporting automatically.</p>
 
 <h2>Tabs</h2>
-<p><b>t</b>/<b>Ctrl-T</b> opens a tab and focuses an empty URL prompt. New tabs are
-inserted directly after the current one, or at the end when it is the last.
+<p><b>t</b>/<b>Ctrl-T</b> opens a tab and focuses an empty URL prompt. New tabs from
+<b>t</b>, the <b>+</b> button, help and config are added at the end; a link
+opened in a background tab (<b>F</b> or middle click) is inserted directly after
+the current tab.
 <b>W</b>/<b>Ctrl-W</b>
 closes the active tab; closing the last tab exits without the quit
 confirmation. <b>Ctrl-N</b>/<b>Ctrl-P</b> or
@@ -169,7 +171,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>hover a link</td><td>show its target in the footer</td></tr>
 <tr><td>drag over page text</td><td>select it; <b>y</b> copies and clears it</td></tr>
 <tr><td>click a link</td><td>follow it; a download link shows the curl popup, except a .pdf download, which opens in the viewer</td></tr>
-<tr><td>middle-click a link</td><td>open it in a background tab</td></tr>
+<tr><td>middle-click a link</td><td>open it in a background tab after the current one</td></tr>
 <tr><td>click a text field</td><td>focus and edit it</td></tr>
 <tr><td>click the URL bar</td><td>open the URL prompt</td></tr>
 <tr><td>click a tab</td><td>switch to it; middle-click closes it</td></tr>

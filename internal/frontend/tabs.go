@@ -407,21 +407,22 @@ func (l *SessionLoop) allocateSessionID() protocol.SessionID {
 
 // newTab opens the configured home page in a new tab and switches to it.
 func (l *SessionLoop) newTab() {
-	l.newTabAt("", true)
+	l.newTabAt("", true, false)
 }
 
 // newTabURL opens target in a new tab and switches to it. An empty target opens
 // the home page and focuses its URL prompt.
 func (l *SessionLoop) newTabURL(target string) {
-	l.newTabAt(target, true)
+	l.newTabAt(target, true, false)
 }
 
-// newTabBackground opens target without moving away from the current tab.
+// newTabBackground opens target without moving away from the current tab. Link
+// tabs go directly after the current tab; explicit new-tab actions use newTab.
 func (l *SessionLoop) newTabBackground(target string) {
-	l.newTabAt(target, false)
+	l.newTabAt(target, false, true)
 }
 
-func (l *SessionLoop) newTabAt(target string, activate bool) {
+func (l *SessionLoop) newTabAt(target string, activate, afterActive bool) {
 	if l.OpenTab == nil {
 		return
 	}
@@ -442,8 +443,10 @@ func (l *SessionLoop) newTabAt(target string, activate bool) {
 	l.installTabActions(tab)
 	l.sendGraphics(tab)
 	insert := len(l.Tabs)
-	if current := l.activeIndex(); current >= 0 {
-		insert = current + 1
+	if afterActive {
+		if current := l.activeIndex(); current >= 0 {
+			insert = current + 1
+		}
 	}
 	l.Tabs = append(l.Tabs, nil)
 	copy(l.Tabs[insert+1:], l.Tabs[insert:])

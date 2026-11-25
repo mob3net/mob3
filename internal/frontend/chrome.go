@@ -422,7 +422,9 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 	return out
 }
 
-// drawTabStrip paints tab labels in the toolbar title slot.
+// drawTabStrip paints tab labels in the toolbar title slot. The new-tab button
+// follows the last tab while the strip has room, then stays pinned at the far
+// right when the tabs need the scrolling fallback.
 func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []TabView, offset int, title string) {
 	if room < 1 {
 		return
@@ -460,7 +462,7 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 			cx += tabW
 		}
 		if newW > 0 {
-			drawNewTabButton(g, out, x+room-newW, y, newW)
+			drawNewTabButton(g, out, cx, y, newW)
 		}
 		return
 	}

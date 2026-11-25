@@ -28,7 +28,7 @@ key, mouse and form reference for the running build.
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
 | `f` | Highlight letters in the visible links and follow one by typing them |
-| `F` | Open the chosen link in a background tab |
+| `F` | Open the chosen link in a background tab after the current one |
 | `p` | Preview the destination (`Enter` follows, `y` copies, `Esc` cancels) |
 | `E` | Open the full warning or error message that the footer truncated (the `E` in `Error:` is underlined) |
 | `S` | Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere) |
@@ -36,7 +36,7 @@ key, mouse and form reference for the running build.
 | `Y` | Copy the whole rendered page as plain text (no colors or browser chrome) for pasting into a bug report; the first line is a `#` metadata line with URL, sizes, zoom and modes |
 | `Ctrl-Y` | Copy only the page rows visible at the current scroll, with the same metadata line |
 | `H` | Session history |
-| `t` / `Ctrl-T` | Open a new tab after the current one with an empty URL prompt |
+| `t` / `Ctrl-T` | Open a new tab at the end with an empty URL prompt |
 | `W` / `Ctrl-W` | Close the active tab; closing the last tab exits without confirmation |
 | `Ctrl-N` / `Ctrl-P` (or `Alt-Right` / `Alt-Left`) | Next / previous tab without wrapping |
 | `1`-`9` / `Alt-1`-`Alt-9` | Select a tab by its number in the tab strip |
@@ -182,6 +182,7 @@ uploads are unsupported.
 - Drag to select page text; `y` copies it through OSC 52. With no
   selection, `y` copies the current URL.
 - Click a link to follow it; a download link opens the `curl` popup without fetching, except a `.pdf` download, which opens in the viewer.
+- Middle-click a link to open it in a background tab after the current one.
 - Middle-click a tab to close it; closing the last tab exits without confirmation.
 - Click the URL bar to open the prompt; click outside to close it.
 - Click in the prompt to move the caret.

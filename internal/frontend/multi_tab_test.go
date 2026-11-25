@@ -776,16 +776,18 @@ func TestMiddleClickLastTabQuits(t *testing.T) {
 	}
 }
 
-func TestNewTabInsertsAfterActiveTab(t *testing.T) {
+func TestNewTabInsertionOrder(t *testing.T) {
 	cases := []struct {
 		name       string
 		active     int
-		background bool
+		kind       string
 		wantInsert int
 	}{
-		{name: "after middle", active: 1, wantInsert: 2},
-		{name: "after last", active: 2, wantInsert: 3},
-		{name: "background after middle", active: 1, background: true, wantInsert: 2},
+		{name: "t at end", active: 1, kind: "new", wantInsert: 3},
+		{name: "t at end from last", active: 2, kind: "new", wantInsert: 3},
+		{name: "url at end", active: 1, kind: "url", wantInsert: 3},
+		{name: "link after middle", active: 1, kind: "link", wantInsert: 2},
+		{name: "link after last", active: 2, kind: "link", wantInsert: 3},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -802,17 +804,20 @@ func TestNewTabInsertsAfterActiveTab(t *testing.T) {
 				},
 			}
 			loop.syncTabBar()
-			if tc.background {
+			switch tc.kind {
+			case "link":
 				loop.newTabBackground("https://example.test/next")
-			} else {
+			case "url":
+				loop.newTabURL("about:help")
+			default:
 				loop.newTab()
 			}
 			if len(loop.Tabs) != 4 || loop.Tabs[tc.wantInsert] != opened {
 				t.Fatalf("tab order = %v, want the new tab at %d", tabTitles(loop.Tabs), tc.wantInsert)
 			}
-			if tc.background {
+			if tc.kind == "link" {
 				if loop.Active != tabs[tc.active] {
-					t.Fatal("background tab changed the active tab")
+					t.Fatal("link tab changed the active tab")
 				}
 			} else if loop.Active != opened {
 				t.Fatal("new tab was not activated")

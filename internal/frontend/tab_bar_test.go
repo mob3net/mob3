@@ -129,6 +129,30 @@ func TestTabStripShowsOneTab(t *testing.T) {
 	}
 }
 
+func TestNewTabButtonFollowsLastTabWhenItFits(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	layout := LayoutChromeWithTabs(st, tabs, 0)
+	var firstTab, newTab ChromeHit
+	for _, hit := range layout.Hits {
+		switch hit.Kind {
+		case ChromeHitTab:
+			if hit.Index == 0 {
+				firstTab = hit
+			}
+		case ChromeHitNewTab:
+			newTab = hit
+		}
+	}
+	if firstTab.W == 0 || newTab.W == 0 {
+		t.Fatalf("missing hits: first=%+v new=%+v", firstTab, newTab)
+	}
+	if want := firstTab.X + len(tabs)*20; newTab.X != want {
+		t.Fatalf("new-tab button X = %d, want %d after the last tab", newTab.X, want)
+	}
+}
+
 func TestTabStripSurvivesNarrowToolbar(t *testing.T) {
 	st := chromeState()
 	st.Width = 30
