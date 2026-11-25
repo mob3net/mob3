@@ -25,22 +25,80 @@ func (w *historyOverlay) install(l *Tab) bool {
 	return false
 }
 
-func (w *historyOverlay) close(l *Tab) { l.closeHistory() }
+func (w *historyOverlay) close(l *Tab) {
+	if !w.historyActive {
+		return
+	}
+	w.historyActive = false
+	l.State.Page = w.historyBase
+	if l.Presenter != nil {
+		l.Presenter.SetHistory(nil)
+		l.Presenter.SetState(w.historyBase)
+		_ = l.Presenter.Refresh()
+	}
+}
 
 func (w *historyOverlay) applyState(l *Tab, st protocol.State) bool {
 	w.historyBase = st
 	if st.KeysEngine {
-		l.closeHistory()
+		w.close(l)
 		return true
 	}
 	nextPageState(l, st)
-	l.syncHistory()
+	w.sync(l)
 	return true
 }
 
-func (w *historyOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleHistoryKey(k) }
+func (w *historyOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	n := len(w.historyView.entries)
+	switch k {
+	case "esc", "q", "ctrl-c":
+		w.close(l)
+		return true, false
+	case "up", "k", "ctrl-p":
+		if w.historyView.index > 0 {
+			w.historyView.index--
+		}
+	case "down", "j", "ctrl-n":
+		if w.historyView.index < n-1 {
+			w.historyView.index++
+		}
+	case "home", "g":
+		w.historyView.index = 0
+	case "end", "G":
+		if n > 0 {
+			w.historyView.index = n - 1
+		}
+	case "enter", " ":
+		if n > 0 {
+			w.choose(l, w.historyView.index)
+		}
+		return true, false
+	}
+	w.sync(l)
+	return true, false
+}
 
-func (w *historyOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleHistoryMouse(ev) }
+func (w *historyOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	layout := LayoutHistory(l.State.Page, &w.historyView)
+	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+		w.close(l)
+		return true
+	}
+	for i, r := range layout.Rects {
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			w.choose(l, layout.Top+i)
+			return true
+		}
+	}
+	w.close(l)
+	return true
+}
 
 // historyView is one front-end history popup. Entries are newest first, and
 // indices map each row back to the session history slice.
@@ -89,23 +147,24 @@ func DrawHistory(c *chromeCanvas, st protocol.State, view *historyView) MenuLayo
 }
 
 // openHistory builds the popup from the current session history.
-func (l *Tab) openHistory() {
+// start builds the popup from the current session history.
+func (w *historyOverlay) start(l *Tab) {
 	l.recordHistoryScroll()
 	l.dismissOverlays()
-	l.cancelHint()
+	l.hintOverlay.cancel(l)
 
-	view := l.buildHistoryView()
+	view := w.build(l)
 	if len(view.entries) == 0 {
 		l.showStatus("No pages in this session yet")
 		return
 	}
-	l.historyActive = true
-	l.historyView = view
-	l.historyBase = l.State.Page
-	l.syncHistory()
+	w.historyActive = true
+	w.historyView = view
+	w.historyBase = l.State.Page
+	w.sync(l)
 }
 
-func (l *Tab) buildHistoryView() historyView {
+func (w *historyOverlay) build(l *Tab) historyView {
 	view := historyView{current: -1}
 	all := l.historyLogEntries()
 	start := 0
@@ -130,7 +189,7 @@ func (l *Tab) buildHistoryView() historyView {
 	return view
 }
 
-func (l *Tab) syncHistory() {
+func (w *historyOverlay) sync(l *Tab) {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
@@ -140,80 +199,16 @@ func (l *Tab) syncHistory() {
 	l.State.Page = st
 	if l.Presenter != nil {
 		l.Presenter.SetState(st)
-		l.Presenter.SetHistory(&l.historyView)
+		l.Presenter.SetHistory(&w.historyView)
 		_ = l.Presenter.Refresh()
 	}
 }
 
-func (l *Tab) closeHistory() {
-	if !l.historyActive {
+func (w *historyOverlay) choose(l *Tab, index int) {
+	if !w.historyActive || index < 0 || index >= len(w.historyView.entries) {
 		return
 	}
-	l.historyActive = false
-	l.State.Page = l.historyBase
-	if l.Presenter != nil {
-		l.Presenter.SetHistory(nil)
-		l.Presenter.SetState(l.historyBase)
-		_ = l.Presenter.Refresh()
-	}
-}
-
-func (l *Tab) chooseHistory(index int) {
-	if !l.historyActive || index < 0 || index >= len(l.historyView.entries) {
-		return
-	}
-	target := l.historyView.entries[index].url
-	l.closeHistory()
+	target := w.historyView.entries[index].url
+	w.close(l)
 	l.navigate(target)
-}
-
-func (l *Tab) handleHistoryKey(k string) (handled, quit bool) {
-	n := len(l.historyView.entries)
-	switch k {
-	case "esc", "q", "ctrl-c":
-		l.closeHistory()
-		return true, false
-	case "up", "k", "ctrl-p":
-		if l.historyView.index > 0 {
-			l.historyView.index--
-		}
-	case "down", "j", "ctrl-n":
-		if l.historyView.index < n-1 {
-			l.historyView.index++
-		}
-	case "home", "g":
-		l.historyView.index = 0
-	case "end", "G":
-		if n > 0 {
-			l.historyView.index = n - 1
-		}
-	case "enter", " ":
-		if n > 0 {
-			l.chooseHistory(l.historyView.index)
-		}
-		return true, false
-	}
-	l.syncHistory()
-	return true, false
-}
-
-func (l *Tab) handleHistoryMouse(ev MouseEvent) bool {
-	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
-		return true
-	}
-	x, y := ev.X-1, ev.Y-1
-	layout := LayoutHistory(l.State.Page, &l.historyView)
-	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
-		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
-		l.closeHistory()
-		return true
-	}
-	for i, r := range layout.Rects {
-		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
-			l.chooseHistory(layout.Top + i)
-			return true
-		}
-	}
-	l.closeHistory()
-	return true
 }

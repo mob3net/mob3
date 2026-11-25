@@ -20,22 +20,183 @@ func (w *menuOverlay) reset(l *Tab) { w.menuKind = protocol.MenuNone }
 // carries it after a tab switch.
 func (w *menuOverlay) install(l *Tab) bool { return false }
 
-func (w *menuOverlay) close(l *Tab) { l.closeMenu() }
+func (w *menuOverlay) start(l *Tab, kind protocol.MenuKind) {
+	if w.menuKind != protocol.MenuNone {
+		return
+	}
+	w.menuKind = kind
+	w.menuBase = l.State.Page
+	w.menuIndex = 0
+	if kind == protocol.MenuZoom {
+		w.menuIndex = zoomPresetIndex(l.State.Page.ZoomPercent)
+	}
+	w.sync(l)
+}
+
+// notify tells the engine whether a front-end window covers the page. The
+// engine then repaints native images as half-block art and scaled text at
+// normal size, so neither can composite above the window.
+func (w *menuOverlay) notify(l *Tab, open bool) {
+	if l.overlaySent == open {
+		return
+	}
+	l.overlaySent = open
+	arg := 0
+	if open {
+		arg = 1
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppFrontendOverlay, Arg: arg}})
+}
+
+func (w *menuOverlay) sync(l *Tab) {
+	w.notify(l, true)
+	st := l.State.Page
+	st.Menu = w.menuKind
+	st.MenuIndex = w.menuIndex
+	st.KeysEngine = true
+	st.FrontendChrome = true
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (w *menuOverlay) close(l *Tab) {
+	if w.menuKind == protocol.MenuNone {
+		return
+	}
+	w.menuKind = protocol.MenuNone
+	w.notify(l, false)
+	l.State.Page = w.menuBase
+	if l.Presenter != nil {
+		l.Presenter.SetState(w.menuBase)
+		_ = l.Presenter.Refresh()
+	}
+}
 
 func (w *menuOverlay) applyState(l *Tab, st protocol.State) bool {
 	w.menuBase = st
 	if st.KeysEngine {
-		l.closeMenu()
+		w.close(l)
 		return true
 	}
 	nextPageState(l, st)
-	l.syncMenu()
+	w.sync(l)
 	return true
 }
 
-func (w *menuOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleMenuKey(k) }
+func (w *menuOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	if k == "ctrl-c" {
+		l.Session.Abort()
+	}
+	switch k {
+	case "esc", "q", "ctrl-c":
+		w.close(l)
+		return true, false
+	case "X":
+		if w.menuKind == protocol.MenuView {
+			w.close(l)
+			return true, false
+		}
+	case "up", "k", "ctrl-p":
+		w.menuIndex = moveChoice(w.menuIndex, -1, menuRowCount(w.menuKind))
+		w.sync(l)
+		return true, false
+	case "down", "j", "ctrl-n":
+		w.menuIndex = moveChoice(w.menuIndex, 1, menuRowCount(w.menuKind))
+		w.sync(l)
+		return true, false
+	case "home", "g":
+		w.menuIndex = 0
+		w.sync(l)
+		return true, false
+	case "end", "G":
+		w.menuIndex = menuRowCount(w.menuKind) - 1
+		w.sync(l)
+		return true, false
+	case " ", "enter":
+		w.activate(l)
+		return true, false
+	}
+	return true, false
+}
 
-func (w *menuOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleMenuMouse(ev) }
+func (w *menuOverlay) activate(l *Tab) {
+	if w.menuKind == protocol.MenuView {
+		switch w.menuIndex {
+		case 0:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleFixed}})
+		case 1:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleSticky}})
+		case 2:
+			_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppToggleBackgrounds}})
+		}
+		return
+	}
+	if w.menuKind == protocol.MenuZoom && w.menuIndex >= 0 && w.menuIndex < len(zoomPresets) {
+		pct := zoomPresets[w.menuIndex]
+		w.close(l)
+		_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppZoomSet, Arg: pct}})
+	}
+}
+
+func (w *menuOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Wheel != 0 {
+		delta := 1
+		if ev.Wheel < 0 {
+			delta = -1
+		}
+		w.menuIndex = moveChoice(w.menuIndex, delta, menuRowCount(w.menuKind))
+		w.sync(l)
+		return true
+	}
+	layout := LayoutMenu(l.State.Page)
+	if ev.Motion {
+		if index, ok := choiceRowAt(layout, ev); ok && index != w.menuIndex {
+			w.menuIndex = index
+			w.sync(l)
+		}
+		return true
+	}
+	if !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+		w.close(l)
+		return true
+	}
+	if index, ok := choiceRowAt(layout, ev); ok {
+		w.menuIndex = index
+		w.activate(l)
+		return true
+	}
+	w.close(l)
+	return true
+}
+
+func menuRowCount(kind protocol.MenuKind) int {
+	if kind == protocol.MenuZoom {
+		return len(zoomPresets)
+	}
+	return 3
+}
+
+func zoomPresetIndex(percent int) int {
+	best, idx := 0, 0
+	for i, pct := range zoomPresets {
+		d := pct - percent
+		if d < 0 {
+			d = -d
+		}
+		if i == 0 || d < best {
+			best, idx = d, i
+		}
+	}
+	return idx
+}
 
 // MenuRow is one option in a front-end-owned choice window.
 type MenuRow struct {

@@ -25,22 +25,93 @@ func (w *downloadOverlay) install(l *Tab) bool {
 	return false
 }
 
-func (w *downloadOverlay) close(l *Tab) { l.closeDownload(false, 0) }
+func (w *downloadOverlay) start(l *Tab, v protocol.Download) {
+	l.dismissOverlays()
+	w.downloadActive = true
+	w.downloadView = DownloadView{Name: v.Name, Command: v.Command}
+	w.downloadBase = l.State.Page
+	w.sync(l)
+}
+
+func (w *downloadOverlay) sync(l *Tab) {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetDownload(&w.downloadView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (w *downloadOverlay) close(l *Tab) { w.closeWith(l, false, 0) }
+
+func (w *downloadOverlay) closeWith(l *Tab, copied bool, chars int) {
+	if !w.downloadActive {
+		return
+	}
+	w.downloadActive = false
+	l.State.Page = w.downloadBase
+	if l.Presenter != nil {
+		l.Presenter.SetDownload(nil)
+		l.Presenter.SetState(w.downloadBase)
+		_ = l.Presenter.Refresh()
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.ModalClose{
+		Kind: protocol.ModalDownload, Copied: copied, Chars: chars,
+	}})
+}
 
 func (w *downloadOverlay) applyState(l *Tab, st protocol.State) bool {
 	w.downloadBase = st
 	if !st.KeysEngine {
-		l.closeDownload(false, 0)
+		w.closeWith(l, false, 0)
 		return true
 	}
 	nextPageState(l, st)
-	l.syncDownload()
+	w.sync(l)
 	return true
 }
 
-func (w *downloadOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleDownloadKey(k) }
+func (w *downloadOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	switch k {
+	case "y", "Y":
+		chars := 0
+		copied := false
+		if l.State.Clipboard != nil {
+			chars = len([]rune(w.downloadView.Command))
+			if _, err := l.State.Clipboard.Write([]byte(OSC52(w.downloadView.Command))); err == nil {
+				copied = true
+			}
+		}
+		w.closeWith(l, copied, chars)
+		if !copied {
+			l.clipboardUnavailable()
+		}
+	case "esc", "enter", "q", "ctrl-c":
+		w.closeWith(l, false, 0)
+	}
+	return true, false
+}
 
-func (w *downloadOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleDownloadMouse(ev) }
+func (w *downloadOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := downloadLayout(l.State.Page, &w.downloadView)
+	if layout.BoxW <= 0 {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < layout.BoxX || x >= layout.BoxX+layout.BoxW || y < layout.BoxY || y >= layout.BoxY+layout.BoxH {
+		w.closeWith(l, false, 0)
+	}
+	return true
+}
 
 // DownloadView is the front-end state of the download curl hint.
 type DownloadView struct {

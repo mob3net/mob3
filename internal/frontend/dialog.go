@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"browser/internal/protocol"
+	"browser/internal/textedit"
 )
 
 // dialogOverlay is a JavaScript alert, confirm or prompt modal.
@@ -30,15 +31,126 @@ func (w *dialogOverlay) install(l *Tab) bool {
 	return false
 }
 
-func (w *dialogOverlay) close(l *Tab) { l.closeDialog() }
+func (w *dialogOverlay) start(l *Tab, v protocol.Dialog) {
+	l.dismissOverlays()
+	l.hintOverlay.cancel(l)
+	w.dialogActive = true
+	w.dialog = v
+	w.dialogBase = l.State.Page
+	w.dialogView = DialogView{
+		ID: v.ID, Kind: v.Kind, Text: v.Text,
+		Value: v.Default, Cursor: len(v.Default), SelectAll: v.Kind == protocol.DialogPrompt,
+	}
+	w.sync(l)
+}
+
+func (w *dialogOverlay) sync(l *Tab) {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetDialog(&w.dialogView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (w *dialogOverlay) close(l *Tab) {
+	if !w.dialogActive {
+		return
+	}
+	w.dialogActive = false
+	l.State.Page = w.dialogBase
+	if l.Presenter != nil {
+		l.Presenter.SetDialog(nil)
+		l.Presenter.SetState(w.dialogBase)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (w *dialogOverlay) answer(l *Tab, ok bool, text string) {
+	id := w.dialog.ID
+	w.close(l)
+	_ = l.Session.Send(protocol.Command{Body: protocol.DialogResult{ID: id, OK: ok, Text: text}})
+}
 
 // applyState reports false: a dialog is answered explicitly and lets page state
 // updates through so the page underneath keeps its geometry.
 func (w *dialogOverlay) applyState(l *Tab, st protocol.State) bool { return false }
 
-func (w *dialogOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleDialogKey(k) }
+func (w *dialogOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	switch w.dialog.Kind {
+	case protocol.DialogAlert:
+		switch k {
+		case "enter", " ", "esc":
+			w.answer(l, true, "")
+		}
+		return true, false
+	case protocol.DialogConfirm:
+		switch k {
+		case "enter", "y", "Y":
+			w.answer(l, true, "")
+		case "esc", "n", "N", "ctrl-c":
+			w.answer(l, false, "")
+		}
+		return true, false
+	case protocol.DialogPrompt:
+		switch k {
+		case "enter":
+			w.answer(l, true, w.dialogView.Value)
+			return true, false
+		case "esc", "ctrl-c":
+			w.answer(l, false, "")
+			return true, false
+		}
+		value, cur, _ := textedit.EditLineKey(w.dialogView.Value, w.dialogView.Cursor, k, textedit.EditConfig{
+			SelAll:            &w.dialogView.SelectAll,
+			CollapseSelection: true,
+		})
+		w.dialogView.Value = value
+		if cur > len(value) {
+			cur = len(value)
+		}
+		w.dialogView.Cursor = cur
+		w.sync(l)
+		return true, false
+	}
+	return true, false
+}
 
-func (w *dialogOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleDialogMouse(ev) }
+func (w *dialogOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := LayoutDialog(l.State.Page, &w.dialogView)
+	x, y := ev.X-1, ev.Y-1
+	if w.dialog.Kind == protocol.DialogPrompt &&
+		layout.PromptW > 0 &&
+		x >= layout.PromptX && x < layout.PromptX+layout.PromptW &&
+		y == layout.PromptY {
+		rel := x - layout.PromptX
+		w.dialogView.Cursor = textOffsetAt(w.dialogView.Value, w.dialogView.Cursor, w.dialogView.SelectAll, rel, layout.PromptW)
+		w.dialogView.SelectAll = false
+		w.sync(l)
+		return true
+	}
+	if layout.BoxW > 0 &&
+		x >= layout.BoxX && x < layout.BoxX+layout.BoxW &&
+		y >= layout.BoxY && y < layout.BoxY+layout.BoxH {
+		if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
+			y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
+			w.answer(l, w.dialog.Kind == protocol.DialogAlert, "")
+			return true
+		}
+		return true
+	}
+	w.answer(l, w.dialog.Kind == protocol.DialogAlert, "")
+	return true
+}
 
 // DialogView is the front-end state of one JavaScript alert, confirm or prompt.
 type DialogView struct {

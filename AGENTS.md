@@ -235,7 +235,7 @@ published by the Pages build.
   and session history (list, index, scroll and the `about:history` snapshot)
   are `frontend.Tab` (`frontend/session.go`, with the shared window list in
   `frontend/overlay.go`) plus `frontend/chrome.go`,
-  `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`,
+  `frontend/prompt.go`, `frontend/find.go`, `frontend/menu.go`, `frontend/dialog.go`,
   `frontend/select.go`, `frontend/download.go`, `frontend/notice.go`, `frontend/hints.go`,
   `frontend/console.go` and `frontend/history.go`. The front end validates the committed URL scheme and
   renders only committed history entries for chrome. The host records each

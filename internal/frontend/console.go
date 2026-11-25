@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"browser/internal/protocol"
+	"browser/internal/textedit"
 )
 
 // consoleOverlay is the full-screen JavaScript console and tools pane.
@@ -46,9 +47,251 @@ func (w *consoleOverlay) close(l *Tab) {
 // state updates keep flowing to the page underneath.
 func (w *consoleOverlay) applyState(l *Tab, st protocol.State) bool { return false }
 
-func (w *consoleOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleConsoleKey(k) }
+func (w *consoleOverlay) applyView(l *Tab, v protocol.ConsoleView) {
+	if !w.consoleActive {
+		w.consolePane = v.Pane
+		w.consoleEdit = false
+		w.consoleText = ""
+		w.consoleCursor = 0
+	}
+	w.consoleActive = true
+	w.consolePane = v.Pane
+	w.consoleView = v
+	if w.consoleFindActive {
+		w.consoleView.FindActive = true
+		w.consoleView.FindText = w.consoleFindText
+		w.consoleView.FindCursor = w.consoleFindCursor
+	}
+	if w.consoleEdit {
+		w.consoleView.Input = w.consoleText
+		w.consoleView.Cursor = w.consoleCursor
+		w.consoleView.Edit = true
+		w.consoleView.Hint = ""
+	}
+	w.present(l)
+}
 
-func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleConsoleMouse(ev) }
+func (w *consoleOverlay) present(l *Tab) {
+	if l.Presenter == nil {
+		return
+	}
+	w.consoleView.Input = w.consoleText
+	w.consoleView.Cursor = w.consoleCursor
+	w.consoleView.Edit = w.consoleEdit
+	if w.consoleEdit {
+		w.consoleView.Hint = ""
+	}
+	w.consoleView.Pane = w.consolePane
+	if w.consoleFindActive {
+		w.consoleView.FindActive = true
+		w.consoleView.FindText = w.consoleFindText
+		w.consoleView.FindCursor = w.consoleFindCursor
+	} else {
+		w.consoleView.FindActive = false
+	}
+	_ = l.Presenter.PresentConsole(&w.consoleView)
+}
+
+func (w *consoleOverlay) action(l *Tab, a protocol.ConsoleAction) {
+	_ = l.Session.Send(protocol.Command{Body: a})
+}
+
+func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	if w.consoleFindActive {
+		return w.handleFindKey(l, k)
+	}
+	if w.consoleView.Quit {
+		switch k {
+		case "y", "Y", "enter":
+			return true, true
+		default:
+			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCancelQuit})
+			return true, false
+		}
+	}
+	if w.consoleEdit {
+		switch k {
+		case "esc":
+			w.consoleEdit = false
+			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCancelEdit})
+			w.present(l)
+			return true, false
+		case "ctrl-c":
+			return true, false
+		case "tab":
+			w.consoleEdit = false
+			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
+			w.present(l)
+			return true, false
+		case "backtab":
+			w.consoleEdit = false
+			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
+			w.present(l)
+			return true, false
+		case "enter":
+			text := strings.TrimSpace(w.consoleText)
+			if text != "" {
+				w.consoleHist[w.consolePane].record(text)
+				w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: text})
+			}
+			w.consoleText = ""
+			w.consoleCursor = 0
+			w.present(l)
+			return true, false
+		case "up", "ctrl-p":
+			if prev, ok := w.consoleHist[w.consolePane].up(w.consoleText); ok {
+				w.consoleText = prev
+				w.consoleCursor = len(prev)
+			}
+			w.present(l)
+			return true, false
+		case "down", "ctrl-n":
+			if next, ok := w.consoleHist[w.consolePane].down(w.consoleText); ok {
+				w.consoleText = next
+				w.consoleCursor = len(next)
+			}
+			w.present(l)
+			return true, false
+		}
+		if k == "ctrl-a" {
+			k = "home"
+		}
+		text, cur, _ := textedit.EditLineKey(w.consoleText, w.consoleCursor, k, textedit.EditConfig{MaxRunes: 8192})
+		w.consoleText = text
+		if cur > len(text) {
+			cur = len(text)
+		}
+		w.consoleCursor = cur
+		w.present(l)
+		return true, false
+	}
+	switch k {
+	case "esc", "!":
+		w.consoleActive = false
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleClose})
+	case "q", "ctrl-c":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleQuit})
+	case "tab", "l", "right":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
+	case "backtab", "h", "left":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
+	case ":", "enter":
+		if w.consolePane != 4 {
+			w.consolePane = 0
+		}
+		w.consoleEdit = true
+		w.consoleText = ""
+		w.consoleCursor = 0
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+		w.present(l)
+	case "k", "up":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: 1})
+	case "j", "down":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+	case "g":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleTop})
+	case "G":
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleBottom})
+	case "y":
+		l.expectClipboard()
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCopy})
+	case "/":
+		if w.consolePane == 3 {
+			w.consoleFindActive = true
+			w.consoleFindText = ""
+			w.consoleFindCursor = 0
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: ""}})
+			w.present(l)
+		}
+	case "n":
+		if w.consoleView.FindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleView.FindText, Next: true}})
+		}
+	case "N":
+		if w.consoleView.FindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleView.FindText, Prev: true}})
+		}
+	}
+	return true, false
+}
+
+// handleMouse owns pointer reports on the console screen. Tabs switch sections,
+// the input row focuses the JS/Tools prompt, the footer >_ icon closes the
+// console, and the wheel scrolls the active section. Every report is consumed
+// so a click cannot reach the page underneath.
+func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	v := w.consoleView
+	if v.Width <= 0 || v.Height <= 0 || v.Quit || w.consoleFindActive {
+		return true
+	}
+	if ev.Wheel != 0 {
+		delta := 3
+		if ev.Wheel > 0 {
+			delta = -3
+		}
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: delta})
+		return true
+	}
+	if ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < 0 || y < 0 || x >= v.Width || y >= v.Height {
+		return true
+	}
+	layout := consoleLayoutFor(v.Height, w.consolePane)
+	switch {
+	case y == layout.tabsY:
+		if pane := consoleTabAt(v.Tabs, v.Width, x); pane >= 0 {
+			w.consolePane = pane
+			w.consoleEdit = false
+			w.action(l, protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: pane})
+			w.present(l)
+		}
+	case layout.inputY >= 0 && y == layout.inputY:
+		if w.consolePane != 4 {
+			w.consolePane = 0
+		}
+		w.consoleEdit = true
+		w.consoleCursor = len(w.consoleText)
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+		w.present(l)
+	case y == layout.footerY && v.Width >= 6 && x >= v.Width-stringWidth(">_"):
+		w.consoleActive = false
+		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleClose})
+	}
+	return true
+}
+
+func (w *consoleOverlay) handleFindKey(l *Tab, k string) (handled, quit bool) {
+	switch k {
+	case "esc", "enter", "tab", "backtab":
+		w.consoleFindActive = false
+		w.present(l)
+		return true, false
+	case "down":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Next: true}})
+		return true, false
+	case "up":
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Prev: true}})
+		return true, false
+	}
+	if k == "ctrl-a" {
+		k = "home"
+	}
+	text, cur, _ := textedit.EditLineKey(w.consoleFindText, w.consoleFindCursor, k, textedit.EditConfig{MaxRunes: 512})
+	changed := text != w.consoleFindText
+	w.consoleFindText = text
+	if cur > len(text) {
+		cur = len(text)
+	}
+	w.consoleFindCursor = cur
+	if changed {
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: text}})
+	}
+	w.present(l)
+	return true, false
+}
 
 type consoleLayout struct {
 	tabsY, bodyY, bodyRows, inputY, footerY int

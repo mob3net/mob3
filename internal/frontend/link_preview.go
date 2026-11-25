@@ -17,50 +17,24 @@ func (w *linkPreviewOverlay) reset(l *Tab)         { w.linkPreviewActive = false
 // install is a no-op: the preview lives in the footer of protocol.State.
 func (w *linkPreviewOverlay) install(l *Tab) bool { return false }
 
-func (w *linkPreviewOverlay) close(l *Tab) { l.closeLinkPreview() }
-
-func (w *linkPreviewOverlay) applyState(l *Tab, st protocol.State) bool {
-	w.linkPreviewBase = st
-	if st.KeysEngine {
-		l.closeLinkPreview()
-		return true
-	}
-	nextPageState(l, st)
-	l.syncLinkPreview()
-	return true
-}
-
-func (w *linkPreviewOverlay) handleKey(l *Tab, k string) (bool, bool) {
-	return l.handleLinkPreviewKey(k)
-}
-
-// handleMouse consumes every report while the preview is open and dismisses it
-// on a press, matching the link-preview strip's modal footer.
-func (w *linkPreviewOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
-	if ev.Press {
-		l.closeLinkPreview()
-	}
-	return true
-}
-
-func (l *Tab) startLinkPreview(url string, target int) {
+func (w *linkPreviewOverlay) start(l *Tab, url string, target int) {
 	l.dismissOverlays()
-	l.cancelHint()
-	l.linkPreviewActive = true
-	l.linkPreviewURL = url
-	l.linkPreviewTarget = target
-	l.linkPreviewBase = l.State.Page
-	l.syncLinkPreview()
+	l.hintOverlay.cancel(l)
+	w.linkPreviewActive = true
+	w.linkPreviewURL = url
+	w.linkPreviewTarget = target
+	w.linkPreviewBase = l.State.Page
+	w.sync(l)
 }
 
-func (l *Tab) syncLinkPreview() {
+func (w *linkPreviewOverlay) sync(l *Tab) {
 	st := l.State.Page
 	st.FrontendChrome = true
 	st.KeysEngine = true
 	st.Menu = protocol.MenuNone
 	st.PromptActive = false
 	st.FindActive = false
-	st.FooterLeft = " " + l.linkPreviewURL + "  (Enter follows · y copies · Esc cancels)"
+	st.FooterLeft = " " + w.linkPreviewURL + "  (Enter follows · y copies · Esc cancels)"
 	st.FooterLevel = protocol.FooterNormal
 	st.FooterStatusHit = false
 	l.State.Page = st
@@ -70,37 +44,57 @@ func (l *Tab) syncLinkPreview() {
 	}
 }
 
-func (l *Tab) closeLinkPreview() {
-	if !l.linkPreviewActive {
+func (w *linkPreviewOverlay) close(l *Tab) {
+	if !w.linkPreviewActive {
 		return
 	}
-	l.linkPreviewActive = false
-	l.State.Page = l.linkPreviewBase
+	w.linkPreviewActive = false
+	l.State.Page = w.linkPreviewBase
 	if l.Presenter != nil {
-		l.Presenter.SetState(l.linkPreviewBase)
+		l.Presenter.SetState(w.linkPreviewBase)
 		_ = l.Presenter.Refresh()
 	}
 }
 
-func (l *Tab) handleLinkPreviewKey(k string) (handled, quit bool) {
+func (w *linkPreviewOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.linkPreviewBase = st
+	if st.KeysEngine {
+		w.close(l)
+		return true
+	}
+	nextPageState(l, st)
+	w.sync(l)
+	return true
+}
+
+func (w *linkPreviewOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	switch k {
 	case "enter":
-		target := l.linkPreviewTarget
-		l.closeLinkPreview()
+		target := w.linkPreviewTarget
+		w.close(l)
 		if l.Session != nil {
 			_ = l.Session.Send(protocol.Command{Body: protocol.FollowLink{Target: target}})
 		}
 	case "y", "Y":
-		url := l.linkPreviewURL
-		l.closeLinkPreview()
+		url := w.linkPreviewURL
+		w.close(l)
 		l.copyURLToClipboard(url)
 	case "esc", "n", "N", "ctrl-c":
-		l.closeLinkPreview()
+		w.close(l)
 	default:
-		l.closeLinkPreview()
+		w.close(l)
 		return false, false
 	}
 	return true, false
+}
+
+// handleMouse consumes every report while the preview is open and dismisses it
+// on a press, matching the link-preview strip's modal footer.
+func (w *linkPreviewOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Press {
+		w.close(l)
+	}
+	return true
 }
 
 // copyURLToClipboard writes one user-selected URL through OSC 52.

@@ -21,7 +21,7 @@ func hintPreviewTab(t *testing.T, clipboard *strings.Builder) (*Tab, *recordSess
 	if _, err := tab.applyEvent(protocol.Event{Body: protocol.Hints{Mode: protocol.HintPreview, Items: items}}); err != nil {
 		t.Fatal(err)
 	}
-	tab.handleHintKey("d")
+	tab.handleShellKey("d")
 	return tab, s
 }
 
@@ -34,7 +34,7 @@ func TestHintPreviewShowsDestinationAndFollows(t *testing.T) {
 	if !strings.Contains(tab.State.Page.FooterLeft, "Enter follows") {
 		t.Fatalf("footer = %q", tab.State.Page.FooterLeft)
 	}
-	if handled, quit := tab.handleHintKey("enter"); !handled || quit {
+	if handled, quit := tab.handleShellKey("enter"); !handled || quit {
 		t.Fatalf("enter handled=%v quit=%v", handled, quit)
 	}
 	if tab.hintActive {
@@ -48,7 +48,7 @@ func TestHintPreviewShowsDestinationAndFollows(t *testing.T) {
 func TestHintPreviewCopiesDestination(t *testing.T) {
 	var clipboard strings.Builder
 	tab, s := hintPreviewTab(t, &clipboard)
-	if handled, quit := tab.handleHintKey("y"); !handled || quit {
+	if handled, quit := tab.handleShellKey("y"); !handled || quit {
 		t.Fatalf("y handled=%v quit=%v", handled, quit)
 	}
 	if got := decodeOSC52(t, clipboard.String()); got != "https://example.com/next" {
@@ -74,7 +74,7 @@ func TestLinkPreviewEventFollowsAndCopies(t *testing.T) {
 	if !tab.linkPreviewActive || !strings.Contains(tab.State.Page.FooterLeft, "Enter follows") {
 		t.Fatalf("preview active=%v footer=%q", tab.linkPreviewActive, tab.State.Page.FooterLeft)
 	}
-	if handled, quit := tab.handleLinkPreviewKey("enter"); !handled || quit {
+	if handled, quit := tab.handleShellKey("enter"); !handled || quit {
 		t.Fatalf("enter handled=%v quit=%v", handled, quit)
 	}
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.FollowLink{Target: 4}) {
@@ -84,7 +84,7 @@ func TestLinkPreviewEventFollowsAndCopies(t *testing.T) {
 	if _, err := tab.applyEvent(protocol.Event{Body: protocol.LinkPreview{URL: "https://example.com/copy", Target: 5}}); err != nil {
 		t.Fatal(err)
 	}
-	if handled, quit := tab.handleLinkPreviewKey("y"); !handled || quit {
+	if handled, quit := tab.handleShellKey("y"); !handled || quit {
 		t.Fatalf("y handled=%v quit=%v", handled, quit)
 	}
 	if got := decodeOSC52(t, clipboard.String()); got != "https://example.com/copy" {

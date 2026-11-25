@@ -75,7 +75,8 @@ func TestClipboardPendingPermissionExpires(t *testing.T) {
 
 func TestConsoleCopySetsClipboardPermission(t *testing.T) {
 	loop := &Tab{Session: &recordSession{}, Stderr: io.Discard}
-	loop.handleConsoleKey("y")
+	loop.consoleActive = true
+	loop.handleShellKey("y")
 	if loop.clipboardPendingUntil.IsZero() {
 		t.Fatal("console copy did not authorize a clipboard event")
 	}

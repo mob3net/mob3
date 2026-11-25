@@ -24,8 +24,8 @@ func TestHistoryListIsGlobalAcrossTabs(t *testing.T) {
 	first.applyHistoryCommit(protocol.HistoryCommit{EntryID: 1, Scroll: 2, Push: true})
 	second.applyHistoryCommit(protocol.HistoryCommit{EntryID: 2, Scroll: 4, Push: true})
 
-	firstView := first.buildHistoryView()
-	secondView := second.buildHistoryView()
+	firstView := first.historyOverlay.build(first)
+	secondView := second.historyOverlay.build(second)
 	if len(firstView.entries) != 2 || len(secondView.entries) != 2 {
 		t.Fatalf("global history rows = %d/%d", len(firstView.entries), len(secondView.entries))
 	}
@@ -43,9 +43,9 @@ func TestHistoryListIsGlobalAcrossTabs(t *testing.T) {
 	second.Session = &recordSession{}
 	second.Presenter = NewPresenter(io.Discard, true)
 	second.State.Page = protocol.State{Width: 80, Height: 24, HeaderRows: 2, FrontendChrome: true}
-	second.openHistory()
-	second.handleHistoryKey("end")
-	second.handleHistoryKey("enter")
+	second.historyOverlay.start(second)
+	second.handleShellKey("end")
+	second.handleShellKey("enter")
 	found := false
 	for _, cmd := range second.Session.(*recordSession).cmds {
 		if cmd.Body == (protocol.Navigate{URL: "https://example.test/a", Push: true}) {
@@ -69,7 +69,7 @@ func TestHistoryOverlayOpensAndChoosesEntry(t *testing.T) {
 		historyIndex: 2,
 	}
 	tab.State.Page = protocol.State{Width: 80, Height: 24, HeaderRows: 2, FrontendChrome: true}
-	tab.openHistory()
+	tab.historyOverlay.start(tab)
 	if !tab.historyActive {
 		t.Fatal("history overlay did not open")
 	}
@@ -82,10 +82,10 @@ func TestHistoryOverlayOpensAndChoosesEntry(t *testing.T) {
 	if !tab.State.Page.KeysEngine || tab.Presenter.history == nil {
 		t.Fatal("history overlay state was not presented")
 	}
-	if handled, quit := tab.handleHistoryKey("down"); !handled || quit || tab.historyView.index != 1 {
+	if handled, quit := tab.handleShellKey("down"); !handled || quit || tab.historyView.index != 1 {
 		t.Fatalf("down: handled=%v quit=%v index=%d", handled, quit, tab.historyView.index)
 	}
-	if handled, quit := tab.handleHistoryKey("enter"); !handled || quit {
+	if handled, quit := tab.handleShellKey("enter"); !handled || quit {
 		t.Fatalf("enter: handled=%v quit=%v", handled, quit)
 	}
 	if tab.historyActive || tab.Presenter.history != nil {

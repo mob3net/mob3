@@ -198,7 +198,7 @@ func TestShellKeyHistory(t *testing.T) {
 	if len(s.cmds) != 0 {
 		t.Fatalf("H sent commands = %#v", s.cmds)
 	}
-	if handled, quit := loop.handleHistoryKey("esc"); !handled || quit || loop.historyActive {
+	if handled, quit := loop.handleShellKey("esc"); !handled || quit || loop.historyActive {
 		t.Fatal("Esc did not close the history overlay")
 	}
 
@@ -392,16 +392,16 @@ func TestPromptEditsAndNavigates(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
-	loop.startPrompt(false)
+	loop.promptOverlay.start(loop, false)
 	if !loop.promptActive || !loop.promptSelectAll || loop.promptText != loop.State.Page.URL {
 		t.Fatalf("prompt = %v %q select=%v", loop.promptActive, loop.promptText, loop.promptSelectAll)
 	}
-	loop.handlePromptKey("h")
-	loop.handlePromptKey("i")
+	loop.handleShellKey("h")
+	loop.handleShellKey("i")
 	if loop.promptText != "hi" || loop.promptSelectAll {
 		t.Fatalf("text = %q select=%v", loop.promptText, loop.promptSelectAll)
 	}
-	if handled, quit := loop.handlePromptKey("enter"); !handled || quit {
+	if handled, quit := loop.handleShellKey("enter"); !handled || quit {
 		t.Fatalf("enter handled=%v quit=%v", handled, quit)
 	}
 	if loop.promptActive {
@@ -410,7 +410,7 @@ func TestPromptEditsAndNavigates(t *testing.T) {
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Navigate{URL: "hi", Push: true}) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
-	loop.startPrompt(false)
+	loop.promptOverlay.start(loop, false)
 	if _, ok := loop.promptHist.up(""); !ok {
 		t.Fatal("history did not record the URL")
 	}
@@ -420,13 +420,13 @@ func TestPromptEscapeAndVimQuit(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
-	loop.startPrompt(false)
-	if handled, quit := loop.handlePromptKey("esc"); !handled || quit || loop.promptActive {
+	loop.promptOverlay.start(loop, false)
+	if handled, quit := loop.handleShellKey("esc"); !handled || quit || loop.promptActive {
 		t.Fatalf("esc handled=%v quit=%v active=%v", handled, quit, loop.promptActive)
 	}
-	loop.startPrompt(true)
-	loop.handlePromptKey("q")
-	if handled, quit := loop.handlePromptKey("enter"); !handled || !quit {
+	loop.promptOverlay.start(loop, true)
+	loop.handleShellKey("q")
+	if handled, quit := loop.handleShellKey("enter"); !handled || !quit {
 		t.Fatalf("vim q handled=%v quit=%v", handled, quit)
 	}
 	if loop.promptActive {
@@ -438,7 +438,7 @@ func TestPromptMouseMovesCaret(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
-	loop.startPrompt(false)
+	loop.promptOverlay.start(loop, false)
 	var hit ChromeHit
 	for _, h := range LayoutChrome(loop.State.Page).Hits {
 		if h.Kind == ChromeHitURL {
@@ -449,7 +449,7 @@ func TestPromptMouseMovesCaret(t *testing.T) {
 	if hit.W == 0 {
 		t.Fatal("no URL hit")
 	}
-	if !loop.handlePromptMouse(MouseEvent{X: hit.X + 8, Y: hit.Y + 1, Press: true}) {
+	if !loop.handleChromeMouse(MouseEvent{X: hit.X + 8, Y: hit.Y + 1, Press: true}) {
 		t.Fatal("prompt click not consumed")
 	}
 	if loop.promptSelectAll {
@@ -471,8 +471,8 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 		t.Fatalf("open commands = %#v", s.cmds)
 	}
 	s.cmds = nil
-	loop.handleFindKey("a")
-	loop.handleFindKey("b")
+	loop.handleShellKey("a")
+	loop.handleShellKey("b")
 	if len(s.cmds) != 2 || s.cmds[0].Body != (protocol.Find{Query: "a"}) || s.cmds[1].Body != (protocol.Find{Query: "ab"}) {
 		t.Fatalf("query commands = %#v", s.cmds)
 	}
@@ -483,13 +483,13 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 		t.Fatalf("results = %d/%d", loop.findCurrent, loop.findTotal)
 	}
 	s.cmds = nil
-	if handled, quit := loop.handleFindKey("down"); !handled || quit {
+	if handled, quit := loop.handleShellKey("down"); !handled || quit {
 		t.Fatalf("down handled=%v quit=%v", handled, quit)
 	}
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Query: "ab", Next: true}) {
 		t.Fatalf("next command = %#v", s.cmds)
 	}
-	if handled, quit := loop.handleFindKey("enter"); !handled || quit || loop.findActive {
+	if handled, quit := loop.handleShellKey("enter"); !handled || quit || loop.findActive {
 		t.Fatalf("enter handled=%v quit=%v active=%v", handled, quit, loop.findActive)
 	}
 	if !strings.Contains(loop.State.Page.FooterLeft, "Find 1/2: ab") {
@@ -504,9 +504,9 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 	if handled, _ := loop.handleShellKey("X"); !handled || loop.menuKind != protocol.MenuView {
 		t.Fatalf("X handled=%v menu=%v", handled, loop.menuKind)
 	}
-	loop.handleMenuKey("down")
+	loop.handleShellKey("down")
 	s.cmds = nil
-	if handled, _ := loop.handleMenuKey(" "); !handled {
+	if handled, _ := loop.handleShellKey(" "); !handled {
 		t.Fatal("space not handled")
 	}
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.App{Action: protocol.AppToggleSticky}) {
@@ -515,17 +515,17 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 	if loop.menuKind != protocol.MenuView {
 		t.Fatal("view toggle closed the menu")
 	}
-	loop.handleMenuKey("esc")
+	loop.handleShellKey("esc")
 	if loop.menuKind != protocol.MenuNone {
 		t.Fatal("esc left the menu open")
 	}
-	loop.startMenu(protocol.MenuZoom)
+	loop.menuOverlay.start(loop, protocol.MenuZoom)
 	if loop.menuIndex != 4 {
 		t.Fatalf("zoom index = %d, want 4", loop.menuIndex)
 	}
 	before := len(s.cmds)
-	loop.handleMenuMouse(MouseEvent{Wheel: 1})
-	loop.handleMenuMouse(MouseEvent{Wheel: -1})
+	loop.handleChromeMouse(MouseEvent{Wheel: 1})
+	loop.handleChromeMouse(MouseEvent{Wheel: -1})
 	if loop.menuIndex != 4 {
 		t.Fatalf("wheel zoom index = %d, want 4", loop.menuIndex)
 	}
@@ -537,21 +537,21 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 		t.Fatal("no zoom rows to hover")
 	}
 	hover := layout.Rects[6]
-	loop.handleMenuMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	loop.handleChromeMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
 	if loop.menuIndex != layout.Top+6 {
 		t.Fatalf("hover zoom index = %d, want %d", loop.menuIndex, layout.Top+6)
 	}
 	hover = layout.Rects[4]
-	loop.handleMenuMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	loop.handleChromeMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
 	if loop.menuIndex != 4 {
 		t.Fatalf("second hover zoom index = %d, want 4", loop.menuIndex)
 	}
 	if len(s.cmds) != before {
 		t.Fatalf("hover changed the zoom: %#v", s.cmds[before:])
 	}
-	loop.handleMenuKey("down")
+	loop.handleShellKey("down")
 	s.cmds = nil
-	loop.handleMenuKey("enter")
+	loop.handleShellKey("enter")
 	if len(s.cmds) != 2 ||
 		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 0}) ||
 		s.cmds[1].Body != (protocol.App{Action: protocol.AppZoomSet, Arg: 125}) {
@@ -566,23 +566,23 @@ func TestMenuNotifiesEngineOverlay(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
-	loop.startMenu(protocol.MenuView)
+	loop.menuOverlay.start(loop, protocol.MenuView)
 	if len(s.cmds) != 1 ||
 		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 1}) {
 		t.Fatalf("open command = %#v", s.cmds)
 	}
 	s.cmds = nil
-	loop.syncMenu()
+	loop.menuOverlay.sync(loop)
 	if len(s.cmds) != 0 {
 		t.Fatalf("unchanged menu sent %#v", s.cmds)
 	}
-	loop.closeMenu()
+	loop.menuOverlay.close(loop)
 	if len(s.cmds) != 1 ||
 		s.cmds[0].Body != (protocol.App{Action: protocol.AppFrontendOverlay, Arg: 0}) {
 		t.Fatalf("close command = %#v", s.cmds)
 	}
 	s.cmds = nil
-	loop.closeMenu()
+	loop.menuOverlay.close(loop)
 	if len(s.cmds) != 0 {
 		t.Fatalf("closing twice sent %#v", s.cmds)
 	}
@@ -592,13 +592,13 @@ func TestMenuMouseRowAndBackdrop(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
-	loop.startMenu(protocol.MenuView)
+	loop.menuOverlay.start(loop, protocol.MenuView)
 	layout := LayoutMenu(loop.State.Page)
 	if len(layout.Rects) < 2 {
 		t.Fatal("no menu rows")
 	}
 	r := layout.Rects[1]
-	if !loop.handleMenuMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
+	if !loop.handleChromeMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
 		t.Fatal("row click not consumed")
 	}
 	if loop.menuIndex != layout.Top+1 || len(s.cmds) != 2 ||
@@ -606,7 +606,7 @@ func TestMenuMouseRowAndBackdrop(t *testing.T) {
 		s.cmds[1].Body != (protocol.App{Action: protocol.AppToggleSticky}) {
 		t.Fatalf("idx=%d cmds=%#v", loop.menuIndex, s.cmds)
 	}
-	loop.handleMenuMouse(MouseEvent{X: 1, Y: 1, Press: true})
+	loop.handleChromeMouse(MouseEvent{X: 1, Y: 1, Press: true})
 	if loop.menuKind != protocol.MenuNone {
 		t.Fatal("backdrop click did not close the menu")
 	}
@@ -624,11 +624,11 @@ func TestDialogEventAndAnswers(t *testing.T) {
 	if !loop.dialogActive || loop.dialogView.Value != "def" || !loop.dialogView.SelectAll {
 		t.Fatalf("dialog = %v %+v", loop.dialogActive, loop.dialogView)
 	}
-	loop.handleDialogKey("x")
+	loop.handleShellKey("x")
 	if loop.dialogView.Value != "x" {
 		t.Fatalf("prompt value = %q", loop.dialogView.Value)
 	}
-	loop.handleDialogKey("enter")
+	loop.handleShellKey("enter")
 	if loop.dialogActive {
 		t.Fatal("dialog stayed open")
 	}
@@ -638,14 +638,14 @@ func TestDialogEventAndAnswers(t *testing.T) {
 
 	s.cmds = nil
 	loop.applyEvent(protocol.Event{Body: protocol.Dialog{ID: 8, Kind: protocol.DialogConfirm, Text: "sure?"}})
-	loop.handleDialogKey("n")
+	loop.handleShellKey("n")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 8, OK: false}) {
 		t.Fatalf("confirm commands = %#v", s.cmds)
 	}
 
 	s.cmds = nil
 	loop.applyEvent(protocol.Event{Body: protocol.Dialog{ID: 9, Kind: protocol.DialogAlert, Text: "hi"}})
-	loop.handleDialogKey(" ")
+	loop.handleShellKey(" ")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 9, OK: true}) {
 		t.Fatalf("alert commands = %#v", s.cmds)
 	}
@@ -664,7 +664,7 @@ func TestDialogPromptMousePlacesCaret(t *testing.T) {
 	if layout.PromptW < 4 || layout.PromptY < 0 {
 		t.Fatalf("prompt layout = %+v", layout)
 	}
-	if !loop.handleDialogMouse(MouseEvent{
+	if !loop.handleChromeMouse(MouseEvent{
 		Button: MouseButtonLeft, X: layout.PromptX + 3 + 1, Y: layout.PromptY + 1, Press: true,
 	}) {
 		t.Fatal("prompt click was not consumed")
@@ -715,8 +715,8 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 	if !loop.selectActive || loop.selectView.Index != 0 {
 		t.Fatalf("select = %v %+v", loop.selectActive, loop.selectView)
 	}
-	loop.handleSelectKey("down")
-	loop.handleSelectKey("enter")
+	loop.handleShellKey("down")
+	loop.handleShellKey("enter")
 	if loop.selectActive {
 		t.Fatal("select stayed open")
 	}
@@ -731,7 +731,7 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 		t.Fatal("no select rows")
 	}
 	r := layout.Rects[1]
-	if !loop.handleSelectMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
+	if !loop.handleChromeMouse(MouseEvent{X: r.X + 1, Y: r.Y + 1, Press: true}) {
 		t.Fatal("select row click not consumed")
 	}
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 5, Index: 1}) {
@@ -742,12 +742,12 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 	loop.applyEvent(protocol.Event{Body: protocol.Select{
 		ID: 7, Options: []string{"A", "B", "C", "D", "E", "F"}, Selected: 0,
 	}})
-	loop.handleSelectMouse(MouseEvent{Wheel: 1})
-	loop.handleSelectMouse(MouseEvent{Wheel: 1})
+	loop.handleChromeMouse(MouseEvent{Wheel: 1})
+	loop.handleChromeMouse(MouseEvent{Wheel: 1})
 	if !loop.selectActive || loop.selectView.Index != 2 {
 		t.Fatalf("wheel down index = %d active=%v, want 2", loop.selectView.Index, loop.selectActive)
 	}
-	loop.handleSelectMouse(MouseEvent{Wheel: -1})
+	loop.handleChromeMouse(MouseEvent{Wheel: -1})
 	if loop.selectView.Index != 1 {
 		t.Fatalf("wheel up index = %d, want 1", loop.selectView.Index)
 	}
@@ -759,18 +759,18 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 		t.Fatal("no select rows to hover")
 	}
 	hover := layout.Rects[4]
-	loop.handleSelectMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	loop.handleChromeMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
 	if loop.selectView.Index != layout.Top+4 {
 		t.Fatalf("hover index = %d, want %d", loop.selectView.Index, layout.Top+4)
 	}
 	if len(s.cmds) != 0 {
 		t.Fatalf("hover answered the select: %#v", s.cmds)
 	}
-	loop.handleSelectKey("esc")
+	loop.handleShellKey("esc")
 
 	s.cmds = nil
 	loop.applyEvent(protocol.Event{Body: protocol.Select{ID: 6, Options: []string{"A"}, Selected: 0}})
-	loop.handleSelectKey("esc")
+	loop.handleShellKey("esc")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 6, Cancel: true}) {
 		t.Fatalf("cancel commands = %#v", s.cmds)
 	}
@@ -790,7 +790,7 @@ func TestDownloadCopyAndNoticeClose(t *testing.T) {
 	if !loop.downloadActive {
 		t.Fatal("download did not open")
 	}
-	loop.handleDownloadKey("y")
+	loop.handleShellKey("y")
 	if loop.downloadActive {
 		t.Fatal("download stayed open")
 	}
@@ -810,7 +810,7 @@ func TestDownloadCopyAndNoticeClose(t *testing.T) {
 	if !loop.noticeActive {
 		t.Fatal("notice did not open")
 	}
-	loop.handleNoticeKey("enter")
+	loop.handleShellKey("enter")
 	if loop.noticeActive {
 		t.Fatal("notice stayed open")
 	}
@@ -833,12 +833,12 @@ func TestHintEventKeys(t *testing.T) {
 	if !loop.hintActive || loop.hintView.Prefix != "" {
 		t.Fatalf("hint = %v %+v", loop.hintActive, loop.hintView)
 	}
-	loop.handleHintKey("d")
+	loop.handleShellKey("d")
 	if loop.hintView.Prefix != "d" {
 		t.Fatalf("prefix = %q", loop.hintView.Prefix)
 	}
 	// A unique match follows immediately.
-	loop.handleHintKey("e")
+	loop.handleShellKey("e")
 	if loop.hintActive {
 		t.Fatal("hint stayed active")
 	}
@@ -855,7 +855,7 @@ func TestHintAskOpensBackgroundTab(t *testing.T) {
 	loop.Actions = TabActions{OpenTabBackground: func(url string) { opened = url }}
 	items := []protocol.HintItem{{Target: 3, Label: "d", Link: true, Href: "https://example.com/next", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}}}
 	loop.applyEvent(protocol.Event{Body: protocol.Hints{Mode: protocol.HintNewTab, Items: items}})
-	loop.handleHintKey("d")
+	loop.handleShellKey("d")
 	if loop.hintActive {
 		t.Fatal("hint stayed active")
 	}
@@ -876,7 +876,7 @@ func TestPromptClickSwitchesTabInOneClick(t *testing.T) {
 	tab.TabBar = tabs
 	selected := -1
 	tab.Actions = TabActions{Select: func(index int) { selected = index }}
-	tab.startPrompt(false)
+	tab.promptOverlay.start(tab, false)
 	var hit ChromeHit
 	for _, h := range LayoutChromeWithTabs(tab.State.Page, tabs, 0).Hits {
 		if h.Kind == ChromeHitTab && h.Index == 1 {
@@ -955,18 +955,18 @@ func TestConsoleInputKeys(t *testing.T) {
 	if !loop.consoleActive {
 		t.Fatal("console did not activate")
 	}
-	loop.handleConsoleKey(":")
+	loop.handleShellKey(":")
 	if !loop.consoleEdit {
 		t.Fatal("console input did not focus")
 	}
 	s.cmds = nil
 	for _, r := range "1+1" {
-		loop.handleConsoleKey(string(r))
+		loop.handleShellKey(string(r))
 	}
 	if loop.consoleText != "1+1" || loop.consoleCursor != 3 {
 		t.Fatalf("input = %q cursor=%d", loop.consoleText, loop.consoleCursor)
 	}
-	loop.handleConsoleKey("enter")
+	loop.handleShellKey("enter")
 	if len(s.cmds) != 1 {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
@@ -977,9 +977,9 @@ func TestConsoleInputKeys(t *testing.T) {
 		t.Fatalf("input not cleared: %q", loop.consoleText)
 	}
 	s.cmds = nil
-	loop.handleConsoleKey("esc") // leave input
+	loop.handleShellKey("esc") // leave input
 	s.cmds = nil
-	loop.handleConsoleKey("tab")
+	loop.handleShellKey("tab")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1}) {
 		t.Fatalf("cycle action = %#v", s.cmds)
 	}
@@ -989,19 +989,19 @@ func TestConsoleQuitAndCloseKeys(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Tabs: []string{"a"}}})
-	loop.handleConsoleKey("q")
+	loop.handleShellKey("q")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleQuit}) {
 		t.Fatalf("quit action = %#v", s.cmds)
 	}
 	s.cmds = nil
 	loop.writeConsoleQuitForTest()
-	if handled, quit := loop.handleConsoleKey("y"); !handled || !quit {
+	if handled, quit := loop.handleShellKey("y"); !handled || !quit {
 		t.Fatalf("y handled=%v quit=%v", handled, quit)
 	}
 	s.cmds = nil
 	loop.consoleActive = true
 	loop.consoleView.Quit = false
-	loop.handleConsoleKey("esc")
+	loop.handleShellKey("esc")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
 		t.Fatalf("close action = %#v", s.cmds)
 	}
@@ -1087,7 +1087,7 @@ func TestConsoleFindKeys(t *testing.T) {
 		Width: 80, Height: 24, Pane: 3,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
 	}})
-	loop.handleConsoleKey("/")
+	loop.handleShellKey("/")
 	if !loop.consoleFindActive {
 		t.Fatal("console find did not open")
 	}
@@ -1099,14 +1099,14 @@ func TestConsoleFindKeys(t *testing.T) {
 	}
 	s.cmds = nil
 	for _, r := range "needle" {
-		loop.handleConsoleFindKey(string(r))
+		loop.handleShellKey(string(r))
 	}
 	if loop.consoleFindText != "needle" || len(s.cmds) != 6 {
 		t.Fatalf("text=%q commands=%d", loop.consoleFindText, len(s.cmds))
 	}
 	s.cmds = nil
-	loop.handleConsoleFindKey("down")
-	loop.handleConsoleFindKey("up")
+	loop.handleShellKey("down")
+	loop.handleShellKey("up")
 	if len(s.cmds) != 2 {
 		t.Fatalf("arrow commands = %#v", s.cmds)
 	}
@@ -1117,12 +1117,12 @@ func TestConsoleFindKeys(t *testing.T) {
 		t.Fatalf("up find = %#v", s.cmds[1].Body)
 	}
 	s.cmds = nil
-	loop.handleConsoleFindKey("enter")
+	loop.handleShellKey("enter")
 	if loop.consoleFindActive {
 		t.Fatal("console find stayed open")
 	}
 	loop.consoleView.FindText = "needle"
-	loop.handleConsoleKey("n")
+	loop.handleShellKey("n")
 	if len(s.cmds) != 1 {
 		t.Fatalf("next commands = %#v", s.cmds)
 	}
@@ -1130,7 +1130,7 @@ func TestConsoleFindKeys(t *testing.T) {
 		t.Fatalf("next find = %#v", s.cmds[0].Body)
 	}
 	s.cmds = nil
-	loop.handleConsoleKey("N")
+	loop.handleShellKey("N")
 	if len(s.cmds) != 1 {
 		t.Fatalf("prev commands = %#v", s.cmds)
 	}

@@ -32,22 +32,76 @@ func (w *noticeOverlay) install(l *Tab) bool {
 	return false
 }
 
-func (w *noticeOverlay) close(l *Tab) { l.closeNotice() }
+func (w *noticeOverlay) start(l *Tab, v protocol.Notice) {
+	l.dismissOverlays()
+	w.noticeActive = true
+	w.noticeView = NoticeView{Title: v.Title, Message: v.Message}
+	w.noticeBase = l.State.Page
+	w.sync(l)
+}
+
+func (w *noticeOverlay) sync(l *Tab) {
+	st := l.State.Page
+	st.FrontendChrome = true
+	st.KeysEngine = true
+	st.Menu = protocol.MenuNone
+	st.PromptActive = false
+	st.FindActive = false
+	l.State.Page = st
+	if l.Presenter != nil {
+		l.Presenter.SetState(st)
+		l.Presenter.SetNotice(&w.noticeView)
+		_ = l.Presenter.Refresh()
+	}
+}
+
+func (w *noticeOverlay) close(l *Tab) {
+	if !w.noticeActive {
+		return
+	}
+	w.noticeActive = false
+	l.State.Page = w.noticeBase
+	if l.Presenter != nil {
+		l.Presenter.SetNotice(nil)
+		l.Presenter.SetState(w.noticeBase)
+		_ = l.Presenter.Refresh()
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.ModalClose{Kind: protocol.ModalNotice}})
+}
 
 func (w *noticeOverlay) applyState(l *Tab, st protocol.State) bool {
 	w.noticeBase = st
 	if !st.KeysEngine {
-		l.closeNotice()
+		w.close(l)
 		return true
 	}
 	nextPageState(l, st)
-	l.syncNotice()
+	w.sync(l)
 	return true
 }
 
-func (w *noticeOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleNoticeKey(k) }
+func (w *noticeOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
+	switch k {
+	case "enter", "esc", "q", "ctrl-c":
+		w.close(l)
+	}
+	return true, false
+}
 
-func (w *noticeOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleNoticeMouse(ev) }
+func (w *noticeOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+		return true
+	}
+	layout := noticeLayout(l.State.Page, &w.noticeView)
+	if layout.BoxW <= 0 {
+		return true
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < layout.BoxX || x >= layout.BoxX+layout.BoxW || y < layout.BoxY || y >= layout.BoxY+layout.BoxH {
+		w.close(l)
+	}
+	return true
+}
 
 func noticeLayout(st protocol.State, v *NoticeView) MenuLayout {
 	if v == nil || st.Width < 8 {

@@ -504,7 +504,7 @@ func (l *SessionLoop) newTabAt(target string, activate, afterActive bool) {
 	l.Tabs[insert] = tab
 	if activate {
 		if target == "" {
-			tab.startPromptEmpty()
+			tab.promptOverlay.startEmpty(tab)
 		}
 		l.activateTab(insert)
 		return

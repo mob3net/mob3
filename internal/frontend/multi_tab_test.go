@@ -139,7 +139,7 @@ func TestBackgroundOverlayAppearsAfterSwitch(t *testing.T) {
 	loop := &SessionLoop{Tabs: []*Tab{active, background}, Active: active, Presenter: p}
 	loop.syncTabBar()
 
-	background.startDialog(protocol.Dialog{ID: 3, Kind: protocol.DialogAlert, Text: "background alert"})
+	background.dialogOverlay.start(background, protocol.Dialog{ID: 3, Kind: protocol.DialogAlert, Text: "background alert"})
 	if !background.dialogActive {
 		t.Fatal("background dialog was not recorded")
 	}
