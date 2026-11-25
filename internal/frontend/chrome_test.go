@@ -42,6 +42,9 @@ func TestLayoutChromeHeaderAndFooter(t *testing.T) {
 			t.Errorf("header %q does not contain %q", header.String(), want)
 		}
 	}
+	if strings.Contains(header.String(), "History") {
+		t.Errorf("header %q still shows a History button", header.String())
+	}
 	for _, want := range []string{"Ready", "Graphics:blocks", ">_"} {
 		if !strings.Contains(footer.String(), want) {
 			t.Errorf("footer %q does not contain %q", footer.String(), want)

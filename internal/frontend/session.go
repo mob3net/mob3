@@ -520,7 +520,7 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 			return true, false
 		}
 		return send(protocol.Navigate{URL: "about:help", Push: true})
-	case "H":
+	case "H", "ctrl-h":
 		l.historyOverlay.start(l)
 		return true, false
 	}
@@ -819,9 +819,6 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 		body = protocol.App{Action: protocol.AppStop}
 	case ChromeHitHome:
 		body = protocol.App{Action: protocol.AppHome}
-	case ChromeHitHistory:
-		l.historyOverlay.start(l)
-		return
 	case ChromeHitHelp:
 		if l.Actions.NewTabURL != nil {
 			l.Actions.NewTabURL("about:help")

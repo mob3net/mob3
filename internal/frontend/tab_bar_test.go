@@ -75,7 +75,7 @@ func TestTabStripSharesToolbarRow(t *testing.T) {
 		for _, control := range layout.Hits {
 			switch control.Kind {
 			case ChromeHitBack, ChromeHitForward, ChromeHitReload, ChromeHitHome,
-				ChromeHitHistory, ChromeHitHelp, ChromeHitConfig:
+				ChromeHitHelp, ChromeHitConfig:
 			default:
 				continue
 			}

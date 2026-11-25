@@ -5,9 +5,8 @@ agreement, the non-negotiable constraints and the change protocol.
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
   tall (one row on shorter terminals). The toolbar row holds `← Back`,
-  `→`, `⟳`, `⌂`, the page title, and `≡ History` /
-  `? Help` / `⚙` pinned to the far right; forward, reload, home and config are
-  icon-only. While a page is loading, the reload icon becomes `×` and clicking it
+  `→`, `⟳`, `⌂`, the page title, and `? Help` / `⚙` pinned to the far right;
+  forward, reload, home and config are icon-only. While a page is loading, the reload icon becomes `×` and clicking it
   cancels the in-flight load exactly like `Esc` (status `Stopped loading`),
   then the reload icon returns. The URL row is a full-width field that becomes the editable
   `Open: …` prompt with a cursor marker while the prompt is open. A clickable
@@ -93,8 +92,7 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Home:** `-home URL` sets the home target (default `about:home`); the
   toolbar `⌂ Home` button and startup with no URL argument open it. `about:home`
   renders the same built-in start page as `about:start`.
-- **History:** `H`, the toolbar History button and the footer shortcut open a
-  front-end history overlay. It lists every page visited across all tabs,
+- **History:** `H` or `Ctrl-H` opens a front-end history overlay. It lists every page visited across all tabs,
   newest first, marks the current tab's entry, scrolls the selected row, opens
   the chosen URL in the current tab on Enter/Space or a click, and closes on
   Esc/q/× or a click outside. Each tab keeps its own back/forward stack and
@@ -104,11 +102,9 @@ agreement, the non-negotiable constraints and the change protocol.
   500-entry log. Nothing is persisted.
 - **Toolbar responsiveness:** back uses a full label at 80+ columns; forward
   (`→`), reload (`⟳`), and home (`⌂`) are always icon-only.
-  History/help use full labels at 80+ columns and icons below; the
-  config gear (`⚙`) is always an icon. The full History label underlines its
-  `H` to advertise the keyboard shortcut. Below 24 columns hide
-  back/forward/reload so the URL field stays usable; home remains visible down
-  to 12 columns; below 12 hide history; below 6 hide
+  Help uses a full label at 80+ columns and an icon below; the config gear
+  (`⚙`) is always an icon. Below 24 columns hide back/forward/reload so the URL
+  field stays usable; home remains visible down to 12 columns; below 6 hide
   help and config. Every toolbar item is clickable via per-frame button hit
   regions including the row coordinate.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and

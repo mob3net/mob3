@@ -19,7 +19,6 @@ const (
 	ChromeHitReload
 	ChromeHitStop
 	ChromeHitHome
-	ChromeHitHistory
 	ChromeHitURL
 	ChromeHitHelp
 	ChromeHitConfig
@@ -144,11 +143,10 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		reloadLabel = " × "
 	}
 	homeLabel := " ⌂ "
-	historyLabel := " ≡ History "
 	configLabel := " ⚙ "
 	if w < 80 {
 		backLabel = " ← "
-		helpLabel, historyLabel = " ? ", " ≡ "
+		helpLabel = " ? "
 	}
 	fieldBG := colURLBG
 	if st.PromptActive {
@@ -195,11 +193,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 			return x
 		}
 		g.fill(x, y, bw, 1, bg)
-		if kind == ChromeHitHistory {
-			g.shortcut(x, y, label, fg, protocol.AttrBold)
-		} else {
-			g.text(x, y, label, fg, protocol.AttrBold)
-		}
+		g.text(x, y, label, fg, protocol.AttrBold)
 		out.Hits = append(out.Hits, ChromeHit{Kind: kind, X: x, Y: y, W: bw, H: 1})
 		return x + bw
 	}
@@ -218,32 +212,22 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		} else if w >= 12 {
 			x = drawButton(x, 0, homeLabel, ChromeHitHome, colButtonBG, colHeaderFG)
 		}
-		helpW, historyW, configW := 0, 0, 0
+		helpW, configW := 0, 0
 		if w >= 6 {
 			helpW = stringWidth(helpLabel)
 			configW = stringWidth(configLabel)
 		}
-		if w >= 12 {
-			historyW = stringWidth(historyLabel)
-		}
-		for x+helpW+historyW+configW > w {
-			switch {
-			case historyW > 0:
-				historyW = 0
-			case helpW > 0:
+		for x+helpW+configW > w {
+			if helpW > 0 {
 				helpW = 0
-			default:
+			} else {
 				configW = 0
 			}
 		}
 		configX := w - configW
 		helpX := configX - helpW
-		histX := helpX - historyW
-		if room := histX - x; room > 0 {
+		if room := helpX - x; room > 0 {
 			drawTabStrip(g, &out, x, 0, room, tabs, offset, title)
-		}
-		if historyW > 0 {
-			drawButton(histX, 0, historyLabel, ChromeHitHistory, colButtonBG, colHeaderFG)
 		}
 		if helpW > 0 {
 			drawButton(helpX, 0, helpLabel, ChromeHitHelp, colButtonBG, colHeaderFG)
@@ -277,29 +261,19 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		} else if w >= 12 {
 			x = drawButton(x, 0, homeLabel, ChromeHitHome, colButtonBG, colHeaderFG)
 		}
-		helpW, historyW, configW := 0, 0, 0
+		helpW, configW := 0, 0
 		if w >= 6 {
 			helpW = stringWidth(helpLabel)
 			configW = stringWidth(configLabel)
 		}
-		if w >= 12 {
-			historyW = stringWidth(historyLabel)
-		}
-		for x+helpW+historyW+configW > w {
-			switch {
-			case historyW > 0:
-				historyW = 0
-			case helpW > 0:
+		for x+helpW+configW > w {
+			if helpW > 0 {
 				helpW = 0
-			default:
+			} else {
 				configW = 0
 			}
 		}
-		urlW := w - x - helpW - historyW - configW
-		if urlW < 1 {
-			historyW = 0
-			urlW = w - x - helpW - configW
-		}
+		urlW := w - x - helpW - configW
 		if urlW < 1 {
 			helpW = 0
 			urlW = w - x - configW
@@ -318,9 +292,6 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		drawField(x, 0, urlW)
 		if zoom != "" {
 			drawButton(x+urlW, 0, zoom, ChromeHitZoom, colButtonBG, colHeaderFG)
-		}
-		if historyW > 0 {
-			drawButton(w-configW-helpW-historyW, 0, historyLabel, ChromeHitHistory, colButtonBG, colHeaderFG)
 		}
 		if helpW > 0 {
 			drawButton(w-configW-helpW, 0, helpLabel, ChromeHitHelp, colButtonBG, colHeaderFG)

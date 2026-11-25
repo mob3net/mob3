@@ -202,6 +202,14 @@ func TestShellKeyHistory(t *testing.T) {
 		t.Fatal("Esc did not close the history overlay")
 	}
 
+	// Ctrl-H is the same binding.
+	if handled, quit := loop.handleShellKey("ctrl-h"); !handled || quit || !loop.historyActive {
+		t.Fatal("Ctrl-H did not open the history overlay")
+	}
+	if handled, quit := loop.handleShellKey("esc"); !handled || quit || loop.historyActive {
+		t.Fatal("Esc did not close the history overlay opened by Ctrl-H")
+	}
+
 	// Back records the current scroll and restores the target entry.
 	s.cmds = nil
 	if handled, quit := loop.handleShellKey("ctrl-o"); !handled || quit {

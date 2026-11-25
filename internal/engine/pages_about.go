@@ -76,7 +76,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>y</b></td><td>copy selected text, the current URL when nothing is selected, the download curl command, or the active console section</td></tr>
 <tr><td><b>Y</b></td><td>copy the whole rendered page as plain text, without colors or browser chrome, for pasting into a bug report; the first line carries URL, sizes, zoom and modes</td></tr>
 <tr><td><b>Ctrl-Y</b></td><td>copy only the page rows visible at the current scroll, with the same metadata line</td></tr>
-<tr><td><b>H</b></td><td>session history overlay; Enter restores an entry</td></tr>
+<tr><td><b>H</b> / <b>Ctrl-H</b></td><td>session history overlay; Enter restores an entry</td></tr>
 <tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab at the end; the URL prompt is focused and empty</td></tr>
 <tr><td><b>W</b> / <b>Ctrl-W</b></td><td>close the active tab and return to the previously used tab; closing the last tab exits without confirmation, and the URL prompt keeps Ctrl-W for word delete</td></tr>
 <tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
@@ -153,7 +153,7 @@ reached. Press <b>Esc</b> or <b>Ctrl-C</b> to interrupt a script that is blockin
 the terminal.</p>
 
 <h2>History</h2>
-<p><b>H</b> or the <b>≡ History</b> button opens a browser-wide history overlay,
+<p><b>H</b> or <b>Ctrl-H</b> opens a browser-wide history overlay,
 newest first. Use <b>j</b>/<b>k</b> or <b>Up</b>/<b>Down</b> to move,
 <b>Enter</b> or <b>Space</b> to open the selected page in the current tab, and
 <b>Esc</b>/<b>q</b> to close; clicking a row works too. Each tab keeps its own
