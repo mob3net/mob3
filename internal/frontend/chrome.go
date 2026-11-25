@@ -97,8 +97,9 @@ func LayoutChrome(st protocol.State) ChromeLayout {
 }
 
 // LayoutChromeWithTabs is LayoutChrome with tab labels sharing the toolbar
-// row. One tab keeps the normal title and adds the new-tab button; several tabs
-// occupy the title slot, and offset selects the first visible tab.
+// row. Any non-empty tab list occupies the title slot, including a single tab;
+// offset selects the first visible tab. The centered page title is used only
+// while no tab views are available.
 func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeLayout {
 	w, h, rows := st.Width, st.Height, st.HeaderRows
 	if w <= 0 || h <= 0 || rows <= 0 || rows >= h {
@@ -433,7 +434,7 @@ func drawTabStrip(g *chromeCanvas, out *ChromeLayout, x, y, room int, tabs []Tab
 	}
 	titleRoom := room - newW
 
-	if len(tabs) <= 1 {
+	if len(tabs) == 0 {
 		if titleRoom > 0 {
 			tx, label := centeredLabel(x, titleRoom, title)
 			g.text(tx, y, label, colTitleFG, protocol.AttrBold)

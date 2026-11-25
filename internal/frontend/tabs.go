@@ -453,8 +453,9 @@ func (l *SessionLoop) newTabAt(target string, activate bool) {
 	l.syncTabBar()
 }
 
-// closeTab removes one tab. Closing the final tab asks for the normal quit
-// confirmation instead of exiting immediately. Index -1 means the active tab.
+// closeTab removes one tab. Closing the final tab exits the browser
+// immediately instead of asking for the normal quit confirmation. Index -1
+// means the active tab.
 func (l *SessionLoop) closeTab(index int) bool {
 	if index < 0 {
 		index = l.activeIndex()
@@ -464,10 +465,7 @@ func (l *SessionLoop) closeTab(index int) bool {
 	}
 	tab := l.Tabs[index]
 	if len(l.Tabs) == 1 {
-		if tab == l.Active {
-			l.Active.startQuit()
-		}
-		return false
+		return true
 	}
 	active := tab == l.Active
 	if active {

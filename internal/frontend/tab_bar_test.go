@@ -93,7 +93,7 @@ func TestTabStripSharesToolbarRow(t *testing.T) {
 	}
 }
 
-func TestTabStripKeepsTitleForOneTab(t *testing.T) {
+func TestTabStripShowsOneTab(t *testing.T) {
 	st := chromeState()
 	st.Width = 120
 	st.Title = "Page title"
@@ -104,17 +104,25 @@ func TestTabStripKeepsTitleForOneTab(t *testing.T) {
 			row.WriteRune(c.R)
 		}
 	}
-	if !strings.Contains(row.String(), "Page title") {
-		t.Fatalf("single-tab toolbar lost the title: %q", row.String())
+	if !strings.Contains(row.String(), "1:Only") {
+		t.Fatalf("single-tab toolbar lost the tab: %q", row.String())
 	}
-	hasNew := false
+	if strings.Contains(row.String(), "Page title") {
+		t.Fatalf("single-tab toolbar still shows the centered title: %q", row.String())
+	}
+	hasTab, hasClose, hasNew := false, false, false
 	for _, hit := range layout.Hits {
-		if hit.Kind == ChromeHitTab || hit.Kind == ChromeHitTabClose {
-			t.Fatalf("single-tab toolbar has a tab hit: %+v", hit)
-		}
-		if hit.Kind == ChromeHitNewTab {
+		switch hit.Kind {
+		case ChromeHitTab:
+			hasTab = true
+		case ChromeHitTabClose:
+			hasClose = true
+		case ChromeHitNewTab:
 			hasNew = true
 		}
+	}
+	if !hasTab || !hasClose {
+		t.Fatalf("single-tab toolbar hits: tab=%v close=%v", hasTab, hasClose)
 	}
 	if !hasNew {
 		t.Fatal("single-tab toolbar has no + button")

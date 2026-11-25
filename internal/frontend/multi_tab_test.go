@@ -683,7 +683,7 @@ func TestNewTabFactoryActivatesTheTab(t *testing.T) {
 	}
 }
 
-func TestCloseLastTabAsksToQuit(t *testing.T) {
+func TestCloseLastTabQuits(t *testing.T) {
 	tab := multiTab(1, "one")
 	tab.State.Page = chromeState()
 	closed := false
@@ -692,14 +692,87 @@ func TestCloseLastTabAsksToQuit(t *testing.T) {
 		CloseTab: func(*Tab) { closed = true },
 	}
 	loop.syncTabBar()
-	if loop.closeTab(-1) {
-		t.Fatal("closing the last tab returned quit immediately")
+	if !loop.closeTab(-1) {
+		t.Fatal("closing the last tab did not quit")
 	}
-	if len(loop.Tabs) != 1 || !tab.quitPending {
-		t.Fatalf("last-tab close did not ask to quit: tabs=%d pending=%v", len(loop.Tabs), tab.quitPending)
+	if len(loop.Tabs) != 1 || tab.quitPending {
+		t.Fatalf("last-tab close left tabs=%d pending=%v", len(loop.Tabs), tab.quitPending)
 	}
 	if closed {
-		t.Fatal("last tab was released before confirmation")
+		t.Fatal("last tab was released before the loop exited")
+	}
+	loop.CloseAll()
+	if !closed {
+		t.Fatal("last tab was not released on shutdown")
+	}
+}
+
+func TestMiddleClickTabClosesIt(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	for _, target := range []ChromeHitKind{ChromeHitTab, ChromeHitTabClose} {
+		tab := &Tab{State: LoopState{Page: st}, TabBar: tabs}
+		closed := -1
+		tab.Actions = TabActions{
+			Select: func(int) { t.Fatal("middle click selected a tab") },
+			Close: func(index int) bool {
+				closed = index
+				return false
+			},
+		}
+		layout := LayoutChromeWithTabs(st, tabs, 0)
+		var hit ChromeHit
+		for _, h := range layout.Hits {
+			if h.Kind == target && h.Index == 1 {
+				hit = h
+				break
+			}
+		}
+		if hit.W == 0 {
+			t.Fatalf("missing %v hit", target)
+		}
+		if !tab.handleChromeMouse(MouseEvent{
+			Button: MouseButtonMiddle, X: hit.X + 1, Y: hit.Y + 1, Press: true,
+		}) {
+			t.Fatalf("middle click on %v was not consumed", target)
+		}
+		if closed != 1 {
+			t.Fatalf("middle click on %v closed tab %d, want 1", target, closed)
+		}
+	}
+}
+
+func TestMiddleClickLastTabQuits(t *testing.T) {
+	tab := multiTab(1, "one")
+	tab.State.Page = chromeState()
+	tab.State.Page.Width = 120
+	loop := &SessionLoop{
+		Tabs: []*Tab{tab}, Active: tab, Presenter: NewPresenter(io.Discard, true),
+	}
+	loop.syncTabBar()
+	loop.installTabActions(tab)
+	var hit ChromeHit
+	for _, h := range LayoutChromeWithTabs(tab.State.Page, tab.TabBar, tab.TabOffset).Hits {
+		if h.Kind == ChromeHitTab {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("missing tab hit")
+	}
+	quit, err := tab.handleInput(MouseToken(MouseEvent{
+		Button: MouseButtonMiddle, X: hit.X + 1, Y: hit.Y + 1, Press: true,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !quit {
+		t.Fatal("middle click on the last tab did not quit")
+	}
+	if tab.quitPending {
+		t.Fatal("middle click on the last tab asked for confirmation")
 	}
 }
 

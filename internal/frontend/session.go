@@ -263,7 +263,11 @@ func (l *Tab) handleDeadInput(k string) (quit bool, err error) {
 		return true, nil
 	}
 	if ev, ok := ParseMouseToken(k); ok {
-		l.handleTabBarMouse(ev)
+		if l.handleTabBarMouse(ev) {
+			quit := l.tabCloseQuit
+			l.tabCloseQuit = false
+			return quit, nil
+		}
 		return false, nil
 	}
 	if l.quitPending {
@@ -288,7 +292,13 @@ func (l *Tab) handleDeadInput(k string) (quit bool, err error) {
 // handleTabBarMouse consumes clicks on the tab bar and its new-tab button. It
 // is safe without a session because those actions are owned by the loop.
 func (l *Tab) handleTabBarMouse(ev MouseEvent) bool {
-	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+	if ev.Wheel != 0 || ev.Motion || !ev.Press {
+		return false
+	}
+	if ev.Button == MouseButtonMiddle {
+		return l.handleMiddleTabClick(ev)
+	}
+	if ev.Button != MouseButtonLeft {
 		return false
 	}
 	st := l.State.Page
@@ -305,6 +315,34 @@ func (l *Tab) handleTabBarMouse(ev MouseEvent) bool {
 		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
 			continue
 		}
+		l.activateChromeHit(hit)
+		return true
+	}
+	return false
+}
+
+// handleMiddleTabClick closes the tab under a middle-button press. It works
+// even when an overlay owns input, because the tab strip is always visible.
+func (l *Tab) handleMiddleTabClick(ev MouseEvent) bool {
+	if ev.Button != MouseButtonMiddle || ev.Wheel != 0 || ev.Motion || !ev.Press {
+		return false
+	}
+	st := l.State.Page
+	if !st.FrontendChrome || st.Width <= 0 || st.Height <= 0 {
+		return false
+	}
+	x, y := ev.X-1, ev.Y-1
+	if x < 0 || x >= st.Width || y < 0 || y >= st.Height {
+		return false
+	}
+	for _, hit := range LayoutChromeWithTabs(st, l.TabBar, l.TabOffset).Hits {
+		if hit.Kind != ChromeHitTab && hit.Kind != ChromeHitTabClose {
+			continue
+		}
+		if x < hit.X || x >= hit.X+hit.W || y < hit.Y || y >= hit.Y+hit.H {
+			continue
+		}
+		hit.Kind = ChromeHitTabClose
 		l.activateChromeHit(hit)
 		return true
 	}
@@ -1918,6 +1956,9 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 			}
 			l.scrollDrag = false
 		}
+	}
+	if l.handleMiddleTabClick(ev) {
+		return true
 	}
 	if l.hintActive {
 		l.cancelHint()

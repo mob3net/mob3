@@ -19,10 +19,9 @@ agreement, the non-negotiable constraints and the change protocol.
   90%, completes on finish and lingers briefly before clearing; it is driven by
   an event-loop timer only while progress is active, so idle pages stay asleep.
   The toolbar
-  row uses a subtle horizontal gradient. The page title is centered in the
-  space between the left and right buttons and uses a bold amber color for
-  prominence. With more than one tab, the centered title slot becomes the tab
-  strip; the surrounding controls keep their cells. Each tab shows its number,
+  row uses a subtle horizontal gradient. The tab strip occupies the title slot
+  between the left and right controls, including when only one tab is open; the
+  surrounding controls keep their cells. Each tab shows its number,
   title, a close `x` and an add-new `+` button. The active tab is solid blue and
   fully bold; inactive tabs use a gray gradient, a dimmed title and bold
   accents. In `-no-color` the active tab is still fully bold. Tabs never squeeze
@@ -35,7 +34,9 @@ agreement, the non-negotiable constraints and the change protocol.
   its title, history and overlays, but its frames are discarded, timers are
   paused, deferred image work is canceled and progress/usage wakeups are off.
   Switching resizes the new active tab, restores its overlays and moves the
-  shared presenter. Closing releases the transport and budget share. A crashed
+  shared presenter. Closing releases the transport and budget share; a middle
+  click on a tab closes it, and closing the last tab exits immediately without
+  the quit prompt. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs open
   with an empty focused URL prompt. Graphics mode, zoom, terminal cell size and
   the memory readout are browser-wide. Memory is the process total, not one
