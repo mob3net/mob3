@@ -57,6 +57,10 @@ type Tab struct {
 	scrollDrag  bool
 	scrollGrab  int // rows between the thumb top and the grabbed row
 
+	// overlaySent records whether the engine was told a front-end window covers
+	// the page, so native images are drawn as half-block art underneath it.
+	overlaySent bool
+
 	// History is front-end-owned. AttestedURL reports the host's final URL for
 	// a document navigation; the engine's HistoryCommit supplies the title,
 	// scroll and push flag but never the trusted URL.
@@ -65,67 +69,19 @@ type Tab struct {
 	historyLog   *historyLog
 	AttestedURL  func(entryID uint64) (string, bool)
 
-	findActive  bool
-	findText    string
-	findCursor  int
-	findCurrent int
-	findTotal   int
-	findBase    protocol.State
-
-	menuKind    protocol.MenuKind
-	menuIndex   int
-	menuBase    protocol.State
-	overlaySent bool
-
-	dialogActive bool
-	dialog       protocol.Dialog
-	dialogView   DialogView
-	dialogBase   protocol.State
-
-	selectActive bool
-	selectView   SelectView
-	selectBase   protocol.State
-
-	historyActive bool
-	historyView   historyView
-	historyBase   protocol.State
-
-	linkPreviewActive bool
-	linkPreviewURL    string
-	linkPreviewTarget int
-	linkPreviewBase   protocol.State
-
-	downloadActive bool
-	downloadView   DownloadView
-	downloadBase   protocol.State
-
-	noticeActive bool
-	noticeView   NoticeView
-	noticeBase   protocol.State
-
-	hintActive bool
-	hintView   HintView
-	hintBase   protocol.State
-
-	consoleActive bool
-	consoleView   protocol.ConsoleView
-	consolePane   int
-	consoleEdit   bool
-	consoleText   string
-	consoleCursor int
-	consoleHist   [5]promptHistory
-
-	consoleFindActive bool
-	consoleFindText   string
-	consoleFindCursor int
-
-	promptActive    bool
-	promptVim       bool
-	promptText      string
-	promptCursor    int
-	promptSelectAll bool
-	promptBase      protocol.State
-	promptHist      promptHistory
+	// Each window owns its state in the file for its subsystem. overlayList
+	// sets their shared dispatch order.
+	linkPreviewOverlay
+	consoleOverlay
+	hintOverlay
+	downloadOverlay
+	noticeOverlay
+	selectOverlay
+	historyOverlay
+	dialogOverlay
+	promptOverlay
+	findOverlay
+	menuOverlay
 
 	// clipboardPendingUntil authorizes one Clipboard event after a copy action.
 	// It keeps a compromised engine from overwriting the clipboard at will.
@@ -155,25 +111,13 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 	}
 	p.ResetForTab()
 	p.SetState(l.State.Page)
-	if l.dialogActive {
-		p.SetDialog(&l.dialogView)
+	full := false
+	for _, o := range l.overlayList() {
+		if o.isOpen() && o.install(l) {
+			full = true
+		}
 	}
-	if l.selectActive {
-		p.SetSelect(&l.selectView)
-	}
-	if l.historyActive {
-		p.SetHistory(&l.historyView)
-	}
-	if l.downloadActive {
-		p.SetDownload(&l.downloadView)
-	}
-	if l.noticeActive {
-		p.SetNotice(&l.noticeView)
-	}
-	if l.hintActive {
-		p.SetHint(&l.hintView)
-	}
-	if l.consoleActive {
+	if full {
 		l.presentConsole()
 		return
 	}
@@ -234,27 +178,10 @@ func (l *Tab) MarkDead(message string) {
 }
 
 func (l *Tab) clearOverlaysAfterCrash() {
-	l.hintActive = false
-	l.dialogActive = false
-	l.selectActive = false
-	l.historyActive = false
-	l.linkPreviewActive = false
-	l.downloadActive = false
-	l.noticeActive = false
-	l.consoleActive = false
-	l.consoleFindActive = false
-	l.promptActive = false
-	l.findActive = false
-	l.menuKind = protocol.MenuNone
-	l.quitPending = false
-	if l.Presenter != nil {
-		l.Presenter.SetHint(nil)
-		l.Presenter.SetDialog(nil)
-		l.Presenter.SetSelect(nil)
-		l.Presenter.SetHistory(nil)
-		l.Presenter.SetDownload(nil)
-		l.Presenter.SetNotice(nil)
+	for _, o := range l.overlayList() {
+		o.reset(l)
 	}
+	l.quitPending = false
 }
 
 // handleDeadInput keeps tab management and quit usable after the engine has
@@ -431,113 +358,10 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		}
 	case protocol.State:
 		v = l.pageState(v)
-		if l.hintActive {
-			l.hintBase = v
-			if !v.KeysEngine {
-				l.closeHint()
+		for _, o := range l.overlayList() {
+			if o.isOpen() && o.applyState(l, v) {
 				return false, nil
 			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncHint()
-			return false, nil
-		}
-		if l.downloadActive {
-			l.downloadBase = v
-			if !v.KeysEngine {
-				l.closeDownload(false, 0)
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncDownload()
-			return false, nil
-		}
-		if l.noticeActive {
-			l.noticeBase = v
-			if !v.KeysEngine {
-				l.closeNotice()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncNotice()
-			return false, nil
-		}
-		if l.selectActive {
-			l.selectBase = v
-			if !v.KeysEngine {
-				l.closeSelect()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncSelect()
-			return false, nil
-		}
-		if l.historyActive {
-			l.historyBase = v
-			if v.KeysEngine {
-				l.closeHistory()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncHistory()
-			return false, nil
-		}
-		if l.linkPreviewActive {
-			l.linkPreviewBase = v
-			if v.KeysEngine {
-				l.closeLinkPreview()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncLinkPreview()
-			return false, nil
-		}
-		if l.menuKind != protocol.MenuNone {
-			l.menuBase = v
-			if v.KeysEngine {
-				l.closeMenu()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncMenu()
-			return false, nil
-		}
-		if l.findActive {
-			l.findBase = v
-			if v.KeysEngine {
-				l.closeFind()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncFind()
-			return false, nil
-		}
-		if l.promptActive {
-			l.promptBase = v
-			if v.KeysEngine {
-				l.closePrompt()
-				return false, nil
-			}
-			l.State.Page = v
-			l.State.Scroll = v.Scroll
-			l.State.Native = v.Flags&protocol.StateNativeImages != 0
-			l.syncPrompt()
-			return false, nil
 		}
 		if l.quitPending {
 			l.quitBase = v
@@ -592,8 +416,7 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			l.clipboardUnavailable()
 		}
 	case protocol.Frame:
-		l.consoleActive = false
-		l.consoleFindActive = false
+		l.consoleOverlay.reset(l)
 		if l.Presenter != nil {
 			if err := l.Presenter.Present(v, l.State.Scroll, l.State.Native); err != nil {
 				return false, err
@@ -610,38 +433,13 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *Tab) handleShellKey(k string) (handled, quit bool) {
-	if l.linkPreviewActive {
-		return l.handleLinkPreviewKey(k)
-	}
-	if l.consoleActive {
-		return l.handleConsoleKey(k)
-	}
-	if l.hintActive {
-		return l.handleHintKey(k)
-	}
-	if l.downloadActive {
-		return l.handleDownloadKey(k)
-	}
-	if l.noticeActive {
-		return l.handleNoticeKey(k)
-	}
-	if l.selectActive {
-		return l.handleSelectKey(k)
-	}
-	if l.historyActive {
-		return l.handleHistoryKey(k)
-	}
-	if l.dialogActive {
-		return l.handleDialogKey(k)
-	}
-	if l.promptActive {
-		return l.handlePromptKey(k)
-	}
-	if l.findActive {
-		return l.handleFindKey(k)
-	}
-	if l.menuKind != protocol.MenuNone {
-		return l.handleMenuKey(k)
+	for _, o := range l.overlayList() {
+		if !o.isOpen() {
+			continue
+		}
+		if handled, quit := o.handleKey(l, k); handled {
+			return handled, quit
+		}
 	}
 	if l.quitPending {
 		switch k {
@@ -1028,14 +826,11 @@ func (l *Tab) handleConsoleFindKey(k string) (handled, quit bool) {
 // JS dialogs are answered explicitly and are intentionally left alone.
 func (l *Tab) dismissOverlays() {
 	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeHistory()
-	l.closeLinkPreview()
-	l.closeDownload(false, 0)
-	l.closeNotice()
+	for _, o := range l.overlayList() {
+		if o.dismissOnModal() && o.isOpen() {
+			o.close(l)
+		}
+	}
 }
 
 func (l *Tab) startHints(v protocol.Hints) {
@@ -1962,11 +1757,8 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	if l.dismissQuitOnClick(ev) {
 		return true
 	}
-	if l.linkPreviewActive {
-		if ev.Press {
-			l.closeLinkPreview()
-		}
-		return true
+	if l.linkPreviewOverlay.isOpen() {
+		return l.linkPreviewOverlay.handleMouse(l, ev)
 	}
 	// A scrollbar drag owns the pointer until release: it keeps tracking when
 	// the pointer leaves the track or the content rows, and a release anywhere
@@ -1988,35 +1780,18 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	if l.handleMiddleTabClick(ev) {
 		return true
 	}
-	if l.hintActive {
-		l.cancelHint()
-		return false
+	// The first open window owns the pointer. The find bar is a footer strip,
+	// not a modal, so it only claims its own row and every other open window
+	// still outranks it.
+	for _, o := range l.overlayList() {
+		if o == &l.findOverlay {
+			continue
+		}
+		if o.isOpen() {
+			return o.handleMouse(l, ev)
+		}
 	}
-	if l.downloadActive {
-		return l.handleDownloadMouse(ev)
-	}
-	if l.noticeActive {
-		return l.handleNoticeMouse(ev)
-	}
-	if l.selectActive {
-		return l.handleSelectMouse(ev)
-	}
-	if l.historyActive {
-		return l.handleHistoryMouse(ev)
-	}
-	if l.dialogActive {
-		return l.handleDialogMouse(ev)
-	}
-	if l.menuKind != protocol.MenuNone {
-		return l.handleMenuMouse(ev)
-	}
-	if l.promptActive {
-		return l.handlePromptMouse(ev)
-	}
-	if l.consoleActive {
-		return l.handleConsoleMouse(ev)
-	}
-	if l.findActive && ev.Y == l.State.Page.Height {
+	if l.findOverlay.isOpen() && l.findOverlay.handleMouse(l, ev) {
 		// The find bar replaces the footer; it has no clickable labels.
 		return true
 	}

@@ -2,6 +2,46 @@ package frontend
 
 import "browser/internal/protocol"
 
+// selectOverlay is the page select popup.
+type selectOverlay struct {
+	selectActive bool
+	selectView   SelectView
+	selectBase   protocol.State
+}
+
+func (w *selectOverlay) isOpen() bool         { return w.selectActive }
+func (w *selectOverlay) dismissOnModal() bool { return true }
+func (w *selectOverlay) reset(l *Tab) {
+	w.selectActive = false
+	if l.Presenter != nil {
+		l.Presenter.SetSelect(nil)
+	}
+}
+
+func (w *selectOverlay) install(l *Tab) bool {
+	if l.Presenter != nil {
+		l.Presenter.SetSelect(&w.selectView)
+	}
+	return false
+}
+
+func (w *selectOverlay) close(l *Tab) { l.closeSelect() }
+
+func (w *selectOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.selectBase = st
+	if !st.KeysEngine {
+		l.closeSelect()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncSelect()
+	return true
+}
+
+func (w *selectOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleSelectKey(k) }
+
+func (w *selectOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleSelectMouse(ev) }
+
 // SelectView is the front-end state of one page select popup.
 type SelectView struct {
 	ID       uint32

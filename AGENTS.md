@@ -233,9 +233,10 @@ published by the Pages build.
   prompt, page find, view/zoom windows, JS dialogs, the select popup,
   download/notice modals, link hints, the console (composition, input and find)
   and session history (list, index, scroll and the `about:history` snapshot)
-  are `frontend.Tab` (`frontend/session.go`) plus `frontend/chrome.go`,
+  are `frontend.Tab` (`frontend/session.go`, with the shared window list in
+  `frontend/overlay.go`) plus `frontend/chrome.go`,
   `frontend/prompt.go`, `frontend/menu.go`, `frontend/dialog.go`,
-  `frontend/select.go`, `frontend/download.go`, `frontend/hints.go`,
+  `frontend/select.go`, `frontend/download.go`, `frontend/notice.go`, `frontend/hints.go`,
   `frontend/console.go` and `frontend/history.go`. The front end validates the committed URL scheme and
   renders only committed history entries for chrome. The host records each
   document fetch's final URL and exposes it to the front end by entry ID; the

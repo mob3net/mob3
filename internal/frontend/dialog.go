@@ -6,6 +6,40 @@ import (
 	"browser/internal/protocol"
 )
 
+// dialogOverlay is a JavaScript alert, confirm or prompt modal.
+type dialogOverlay struct {
+	dialogActive bool
+	dialog       protocol.Dialog
+	dialogView   DialogView
+	dialogBase   protocol.State
+}
+
+func (w *dialogOverlay) isOpen() bool         { return w.dialogActive }
+func (w *dialogOverlay) dismissOnModal() bool { return false }
+func (w *dialogOverlay) reset(l *Tab) {
+	w.dialogActive = false
+	if l.Presenter != nil {
+		l.Presenter.SetDialog(nil)
+	}
+}
+
+func (w *dialogOverlay) install(l *Tab) bool {
+	if l.Presenter != nil {
+		l.Presenter.SetDialog(&w.dialogView)
+	}
+	return false
+}
+
+func (w *dialogOverlay) close(l *Tab) { l.closeDialog() }
+
+// applyState reports false: a dialog is answered explicitly and lets page state
+// updates through so the page underneath keeps its geometry.
+func (w *dialogOverlay) applyState(l *Tab, st protocol.State) bool { return false }
+
+func (w *dialogOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleDialogKey(k) }
+
+func (w *dialogOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleDialogMouse(ev) }
+
 // DialogView is the front-end state of one JavaScript alert, confirm or prompt.
 type DialogView struct {
 	ID        uint32

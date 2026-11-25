@@ -4,6 +4,39 @@ import (
 	"browser/internal/protocol"
 )
 
+// menuOverlay is the view/zoom choice window over the page.
+type menuOverlay struct {
+	menuKind  protocol.MenuKind
+	menuIndex int
+	menuBase  protocol.State
+}
+
+func (w *menuOverlay) isOpen() bool         { return w.menuKind != protocol.MenuNone }
+func (w *menuOverlay) dismissOnModal() bool { return true }
+
+func (w *menuOverlay) reset(l *Tab) { w.menuKind = protocol.MenuNone }
+
+// install is a no-op: the menu travels in protocol.State, so SetState already
+// carries it after a tab switch.
+func (w *menuOverlay) install(l *Tab) bool { return false }
+
+func (w *menuOverlay) close(l *Tab) { l.closeMenu() }
+
+func (w *menuOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.menuBase = st
+	if st.KeysEngine {
+		l.closeMenu()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncMenu()
+	return true
+}
+
+func (w *menuOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleMenuKey(k) }
+
+func (w *menuOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleMenuMouse(ev) }
+
 // MenuRow is one option in a front-end-owned choice window.
 type MenuRow struct {
 	Label  string

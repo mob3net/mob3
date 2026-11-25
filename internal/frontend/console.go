@@ -8,6 +8,48 @@ import (
 	"browser/internal/protocol"
 )
 
+// consoleOverlay is the full-screen JavaScript console and tools pane.
+type consoleOverlay struct {
+	consoleActive     bool
+	consoleView       protocol.ConsoleView
+	consolePane       int
+	consoleEdit       bool
+	consoleText       string
+	consoleCursor     int
+	consoleHist       [5]promptHistory
+	consoleFindActive bool
+	consoleFindText   string
+	consoleFindCursor int
+}
+
+func (w *consoleOverlay) isOpen() bool { return w.consoleActive }
+
+// dismissOnModal is false: the console owns the whole screen and a page modal
+// is drawn over it instead of replacing it.
+func (w *consoleOverlay) dismissOnModal() bool { return false }
+
+func (w *consoleOverlay) reset(l *Tab) {
+	w.consoleActive = false
+	w.consoleFindActive = false
+}
+
+// install reports that the console owns the whole screen; the caller presents
+// it after every other window has republished its view.
+func (w *consoleOverlay) install(l *Tab) bool { return true }
+
+func (w *consoleOverlay) close(l *Tab) {
+	w.consoleActive = false
+	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleClose}})
+}
+
+// applyState reports false: console state arrives as its own event, so page
+// state updates keep flowing to the page underneath.
+func (w *consoleOverlay) applyState(l *Tab, st protocol.State) bool { return false }
+
+func (w *consoleOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleConsoleKey(k) }
+
+func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleConsoleMouse(ev) }
+
 type consoleLayout struct {
 	tabsY, bodyY, bodyRows, inputY, footerY int
 }

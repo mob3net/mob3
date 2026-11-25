@@ -261,7 +261,8 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by tests and available for a future process transport; the target keeps one process. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
-| `internal/frontend/session.go` | `Tab`: one tab's protocol session and per-tab state. It applies events, owns history and overlays, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
+| `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
+| `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
 | `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. |
 | `internal/frontend/prompt.go` | Prompt line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, each tab's own back/forward stack and scroll tracking, the shared visited-page log, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
@@ -270,7 +271,8 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/menu.go` | View/zoom menu model, full-screen dimmed choice box, row/close hit regions. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt view, modal layout, prompt editing and answer routing. |
 | `internal/frontend/select.go` | Page select popup model, layout and `SelectResult` answer. |
-| `internal/frontend/download.go` | Download curl hint and notice modal layout/drawing. |
+| `internal/frontend/download.go` | Download curl hint view, layout and drawing. |
+| `internal/frontend/notice.go` | Informational notice view, layout and drawing. |
 | `internal/frontend/hints.go` | Link-hint overlay painting and prefix matching data. |
 | `internal/frontend/console.go` | Console snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
 | `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |

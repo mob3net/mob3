@@ -2,7 +2,51 @@ package frontend
 
 import (
 	"unicode/utf8"
+
+	"browser/internal/protocol"
 )
+
+// promptOverlay is the URL and command line.
+type promptOverlay struct {
+	promptActive    bool
+	promptVim       bool
+	promptText      string
+	promptCursor    int
+	promptSelectAll bool
+	promptBase      protocol.State
+	promptHist      promptHistory
+}
+
+func (w *promptOverlay) isOpen() bool         { return w.promptActive }
+func (w *promptOverlay) dismissOnModal() bool { return true }
+
+func (w *promptOverlay) reset(l *Tab) {
+	w.promptActive = false
+	w.promptVim = false
+	w.promptText = ""
+	w.promptCursor = 0
+	w.promptSelectAll = false
+}
+
+// install is a no-op: the prompt travels in protocol.State.
+func (w *promptOverlay) install(l *Tab) bool { return false }
+
+func (w *promptOverlay) close(l *Tab) { l.closePrompt() }
+
+func (w *promptOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.promptBase = st
+	if st.KeysEngine {
+		l.closePrompt()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncPrompt()
+	return true
+}
+
+func (w *promptOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handlePromptKey(k) }
+
+func (w *promptOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handlePromptMouse(ev) }
 
 // promptHistory is the URL/command prompt's recall list.
 type promptHistory struct {

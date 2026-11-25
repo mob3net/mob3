@@ -6,6 +6,53 @@ import (
 	"browser/internal/protocol"
 )
 
+// hintOverlay is the link-hint session layered over the page.
+type hintOverlay struct {
+	hintActive bool
+	hintView   HintView
+	hintBase   protocol.State
+}
+
+func (w *hintOverlay) isOpen() bool { return w.hintActive }
+
+// dismissOnModal is false: hints are cancelled explicitly by the callers that
+// need it, so a page modal cannot silently drop a pending hint.
+func (w *hintOverlay) dismissOnModal() bool { return false }
+
+func (w *hintOverlay) reset(l *Tab) {
+	w.hintActive = false
+	if l.Presenter != nil {
+		l.Presenter.SetHint(nil)
+	}
+}
+
+func (w *hintOverlay) install(l *Tab) bool {
+	if l.Presenter != nil {
+		l.Presenter.SetHint(&w.hintView)
+	}
+	return false
+}
+
+func (w *hintOverlay) close(l *Tab) { l.closeHint() }
+
+func (w *hintOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.hintBase = st
+	if !st.KeysEngine {
+		l.closeHint()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncHint()
+	return true
+}
+
+func (w *hintOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleHintKey(k) }
+
+func (w *hintOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	l.cancelHint()
+	return false
+}
+
 // HintView is the front-end state of one link-hint session.
 type HintView struct {
 	Mode          protocol.HintMode

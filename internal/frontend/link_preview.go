@@ -2,18 +2,49 @@ package frontend
 
 import "browser/internal/protocol"
 
-func (l *Tab) startLinkPreview(url string, target int) {
-	if l.linkPreviewActive {
+// linkPreviewOverlay is the footer strip previewing a link destination.
+type linkPreviewOverlay struct {
+	linkPreviewActive bool
+	linkPreviewURL    string
+	linkPreviewTarget int
+	linkPreviewBase   protocol.State
+}
+
+func (w *linkPreviewOverlay) isOpen() bool         { return w.linkPreviewActive }
+func (w *linkPreviewOverlay) dismissOnModal() bool { return true }
+func (w *linkPreviewOverlay) reset(l *Tab)         { w.linkPreviewActive = false }
+
+// install is a no-op: the preview lives in the footer of protocol.State.
+func (w *linkPreviewOverlay) install(l *Tab) bool { return false }
+
+func (w *linkPreviewOverlay) close(l *Tab) { l.closeLinkPreview() }
+
+func (w *linkPreviewOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.linkPreviewBase = st
+	if st.KeysEngine {
+		l.closeLinkPreview()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncLinkPreview()
+	return true
+}
+
+func (w *linkPreviewOverlay) handleKey(l *Tab, k string) (bool, bool) {
+	return l.handleLinkPreviewKey(k)
+}
+
+// handleMouse consumes every report while the preview is open and dismisses it
+// on a press, matching the link-preview strip's modal footer.
+func (w *linkPreviewOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
+	if ev.Press {
 		l.closeLinkPreview()
 	}
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeHistory()
-	l.closeDownload(false, 0)
-	l.closeNotice()
+	return true
+}
+
+func (l *Tab) startLinkPreview(url string, target int) {
+	l.dismissOverlays()
 	l.cancelHint()
 	l.linkPreviewActive = true
 	l.linkPreviewURL = url

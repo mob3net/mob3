@@ -2,6 +2,46 @@ package frontend
 
 import "browser/internal/protocol"
 
+// historyOverlay is the front-end session-history popup.
+type historyOverlay struct {
+	historyActive bool
+	historyView   historyView
+	historyBase   protocol.State
+}
+
+func (w *historyOverlay) isOpen() bool         { return w.historyActive }
+func (w *historyOverlay) dismissOnModal() bool { return true }
+func (w *historyOverlay) reset(l *Tab) {
+	w.historyActive = false
+	if l.Presenter != nil {
+		l.Presenter.SetHistory(nil)
+	}
+}
+
+func (w *historyOverlay) install(l *Tab) bool {
+	if l.Presenter != nil {
+		l.Presenter.SetHistory(&w.historyView)
+	}
+	return false
+}
+
+func (w *historyOverlay) close(l *Tab) { l.closeHistory() }
+
+func (w *historyOverlay) applyState(l *Tab, st protocol.State) bool {
+	w.historyBase = st
+	if st.KeysEngine {
+		l.closeHistory()
+		return true
+	}
+	nextPageState(l, st)
+	l.syncHistory()
+	return true
+}
+
+func (w *historyOverlay) handleKey(l *Tab, k string) (bool, bool) { return l.handleHistoryKey(k) }
+
+func (w *historyOverlay) handleMouse(l *Tab, ev MouseEvent) bool { return l.handleHistoryMouse(ev) }
+
 // historyView is one front-end history popup. Entries are newest first, and
 // indices map each row back to the session history slice.
 type historyView struct {
@@ -51,14 +91,7 @@ func DrawHistory(c *chromeCanvas, st protocol.State, view *historyView) MenuLayo
 // openHistory builds the popup from the current session history.
 func (l *Tab) openHistory() {
 	l.recordHistoryScroll()
-	l.cancelQuit()
-	l.closePrompt()
-	l.closeFind()
-	l.closeMenu()
-	l.closeSelect()
-	l.closeLinkPreview()
-	l.closeDownload(false, 0)
-	l.closeNotice()
+	l.dismissOverlays()
 	l.cancelHint()
 
 	view := l.buildHistoryView()
