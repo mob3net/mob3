@@ -288,8 +288,36 @@ func NewJSRuntime(host JSHost, page *Page) *jsRuntime {
 			return __mob3USPImpl(init === undefined ? null : init);
 		}
 		function XMLHttpRequest() {
-			return __mob3XHRImpl();
+			var x = __mob3XHRImpl();
+			Object.setPrototypeOf(x, XMLHttpRequest.prototype);
+			return x;
 		}
+		// XMLHttpRequest is an EventTarget. DOM shims feature-detect these
+		// methods on the prototype; without them an old shim wraps the
+		// constructor and copies window event methods onto every XHR, so XHR
+		// events fire on window and can recurse back into the page's own load
+		// handlers.
+		function defineXhrMethod(name, fn) {
+			Object.defineProperty(XMLHttpRequest.prototype, name, {
+				value: fn, writable: true, configurable: true
+			});
+		}
+		defineXhrMethod("addEventListener", function (t, f, o) {
+			if (Object.prototype.hasOwnProperty.call(this, "addEventListener")) {
+				return this["addEventListener"](t, f, o);
+			}
+		});
+		defineXhrMethod("removeEventListener", function (t, f) {
+			if (Object.prototype.hasOwnProperty.call(this, "removeEventListener")) {
+				return this["removeEventListener"](t, f);
+			}
+		});
+		defineXhrMethod("dispatchEvent", function (ev) {
+			if (Object.prototype.hasOwnProperty.call(this, "dispatchEvent")) {
+				return this["dispatchEvent"](ev);
+			}
+			return true;
+		});
 	`); err != nil {
 		j.ReportError(err)
 	}

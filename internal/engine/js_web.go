@@ -897,6 +897,14 @@ func (j *jsRuntime) xmlHTTPRequestObject() *sobek.Object {
 		st.listeners[typ] = out
 		return sobek.Undefined()
 	})
+	j.method(o, "dispatchEvent", func(call sobek.FunctionCall) sobek.Value {
+		ev, ok := call.Argument(0).(*sobek.Object)
+		if !ok {
+			return j.vm.ToValue(true)
+		}
+		j.dispatchXHR(st, ev)
+		return j.vm.ToValue(true)
+	})
 	j.method(o, "send", func(call sobek.FunctionCall) sobek.Value {
 		if st.url == nil || st.blocked {
 			j.host.LogJS("error", "XMLHttpRequest blocked: invalid URL")
@@ -954,6 +962,20 @@ func sameOrigin(a, b *url.URL) bool {
 func (j *jsRuntime) fireXHR(st *xhrState, typ string) {
 	ev := j.vm.NewObject()
 	_ = ev.Set("type", typ)
+	j.dispatchXHR(st, ev)
+}
+
+// dispatchXHR delivers an event object to an XHR's handler property and
+// listeners, with the XHR as the target.
+func (j *jsRuntime) dispatchXHR(st *xhrState, ev *sobek.Object) {
+	typVal := ev.Get("type")
+	if typVal == nil || sobek.IsNull(typVal) || sobek.IsUndefined(typVal) {
+		return
+	}
+	typ := typVal.String()
+	if typ == "" {
+		return
+	}
 	_ = ev.Set("target", st.obj)
 	_ = ev.Set("currentTarget", st.obj)
 	handler := st.obj.Get("on" + typ)

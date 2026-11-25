@@ -21,7 +21,10 @@ Works well:
   `element.click()`.
 - Network: `fetch`, `Headers`/`Request`/`Response`, `XMLHttpRequest`, cookies,
   same-origin, simple CORS cross-origin requests and `fetch` with
-  `mode: "no-cors"` (opaque response), `URL`/`URLSearchParams`.
+  `mode: "no-cors"` (opaque response), `URL`/`URLSearchParams`. An
+  `XMLHttpRequest` is an `EventTarget` (`instanceof` and `addEventListener`/
+  `removeEventListener`/`dispatchEvent` on its prototype), so DOM shims leave
+  the native constructor alone.
 - Storage: in-memory `localStorage`/`sessionStorage` (`getItem`/`setItem`/
   `removeItem`/`clear`, `length`, and named property get/set/delete) and
   `document.cookie`.

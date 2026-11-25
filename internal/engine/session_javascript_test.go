@@ -685,6 +685,34 @@ func TestJSXMLHTTPRequest(t *testing.T) {
 	}
 }
 
+func TestJSXMLHttpRequestEventTarget(t *testing.T) {
+	// DOM shims feature-detect these methods on XMLHttpRequest.prototype.
+	// When they are missing the shim wraps the constructor and copies
+	// window's event methods onto every XHR, so XHR events are dispatched on
+	// window and can feed recursive load handlers.
+	page := newJSPage(`<html><body></body></html>`, `
+		var x = new XMLHttpRequest();
+		var seen = "";
+		x.addEventListener("custom", function (e) {
+			seen = e.type + ":" + e.detail + ":" + (e.target === x);
+		});
+		x.dispatchEvent(new CustomEvent("custom", { detail: 3 }));
+		document.title = [
+			x instanceof XMLHttpRequest,
+			typeof XMLHttpRequest.prototype.addEventListener,
+			typeof XMLHttpRequest.prototype.removeEventListener,
+			typeof XMLHttpRequest.prototype.dispatchEvent,
+			seen
+		].join("|");
+	`)
+	b := newTestSession(40, 10)
+	b.startJS(page)
+	want := "true|function|function|function|custom:3:true"
+	if page.Title != want {
+		t.Fatalf("title = %q, want %q (logs %v)", page.Title, want, b.jsLog)
+	}
+}
+
 func TestJSXHRCrossOriginBlocked(t *testing.T) {
 	loader := newTestLoader()
 	calls := 0
