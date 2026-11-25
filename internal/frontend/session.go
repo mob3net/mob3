@@ -1555,6 +1555,16 @@ func (l *Tab) handleDialogMouse(ev MouseEvent) bool {
 	}
 	layout := LayoutDialog(l.State.Page, &l.dialogView)
 	x, y := ev.X-1, ev.Y-1
+	if l.dialog.Kind == protocol.DialogPrompt &&
+		layout.PromptW > 0 &&
+		x >= layout.PromptX && x < layout.PromptX+layout.PromptW &&
+		y == layout.PromptY {
+		rel := x - layout.PromptX
+		l.dialogView.Cursor = textOffsetAt(l.dialogView.Value, l.dialogView.Cursor, l.dialogView.SelectAll, rel, layout.PromptW)
+		l.dialogView.SelectAll = false
+		l.syncDialog()
+		return true
+	}
 	if layout.BoxW > 0 &&
 		x >= layout.BoxX && x < layout.BoxX+layout.BoxW &&
 		y >= layout.BoxY && y < layout.BoxY+layout.BoxH {

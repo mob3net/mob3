@@ -323,12 +323,13 @@ func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []ru
 
 func promptOffsetAt(text string, cursor int, selectAll bool, x, width int) int {
 	prefixW := stringWidth(" Open: ")
-	contentW := width - prefixW
-	if contentW < 1 {
-		return 0
-	}
-	rel := x - prefixW
-	if rel <= 0 {
+	return textOffsetAt(text, cursor, selectAll, x-prefixW, width-prefixW)
+}
+
+// textOffsetAt maps a click at cell rel in a text field of contentW cells to a
+// byte offset, using the same visible window as the field painter.
+func textOffsetAt(text string, cursor int, selectAll bool, rel, contentW int) int {
+	if contentW < 1 || rel <= 0 {
 		return 0
 	}
 	runes, start, end, cur := promptWindow(text, cursor, contentW, selectAll)

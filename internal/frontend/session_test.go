@@ -651,6 +651,35 @@ func TestDialogEventAndAnswers(t *testing.T) {
 	}
 }
 
+func TestDialogPromptMousePlacesCaret(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.Dialog{
+		ID: 7, Kind: protocol.DialogPrompt, Text: "name?", Default: "abcdef",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	layout := LayoutDialog(loop.State.Page, &loop.dialogView)
+	if layout.PromptW < 4 || layout.PromptY < 0 {
+		t.Fatalf("prompt layout = %+v", layout)
+	}
+	if !loop.handleDialogMouse(MouseEvent{
+		Button: MouseButtonLeft, X: layout.PromptX + 3 + 1, Y: layout.PromptY + 1, Press: true,
+	}) {
+		t.Fatal("prompt click was not consumed")
+	}
+	if !loop.dialogActive {
+		t.Fatal("prompt click closed the dialog")
+	}
+	if loop.dialogView.Cursor != 3 || loop.dialogView.SelectAll {
+		t.Fatalf("cursor=%d selectAll=%v, want 3/false", loop.dialogView.Cursor, loop.dialogView.SelectAll)
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("prompt click answered the dialog: %#v", s.cmds)
+	}
+}
+
 func TestSelectEventKeysAndMouse(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}

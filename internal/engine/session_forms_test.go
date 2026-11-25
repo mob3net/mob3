@@ -662,6 +662,66 @@ func TestRangeKeyboardControl(t *testing.T) {
 	}
 }
 
+func TestMousePlacesFormCaret(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+		<input id="q" name="q" value="abcdef">
+		<textarea id="t" name="t" rows="2">hello
+world</textarea>
+	</body></html>`)
+	u := mustParse(t, "https://example.com/")
+	b := newTestSession(40, 20)
+	b.Page = &Page{URL: u, Base: u, Root: doc}
+	b.URL = u
+	b.rebuild()
+	top, _ := b.viewport()
+	frags := func(n *Node) []*Frag {
+		var out []*Frag
+		for i := range b.Layout.Frags {
+			f := &b.Layout.Frags[i]
+			if f.Kind == FragText && f.Node == n {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	click := func(f *Frag, col int) {
+		b.HandleMouse(MouseEvent{
+			Button: MouseButtonLeft,
+			X:      f.X + 2 + col + 1,
+			Y:      f.Y - b.Scroll + top + 1,
+			Press:  true,
+		})
+	}
+
+	q := inputByName(doc, "q")
+	if got := frags(q); len(got) != 1 {
+		t.Fatalf("input fragments = %d", len(got))
+	} else {
+		click(got[0], 3)
+	}
+	if b.Forms.InputFocus != q || q.InputCursor != 3 {
+		t.Fatalf("input cursor = %d focus=%v, want 3", q.InputCursor, b.Forms.InputFocus == q)
+	}
+	click(frags(q)[0], 1)
+	if q.InputCursor != 1 {
+		t.Fatalf("second input cursor = %d, want 1", q.InputCursor)
+	}
+
+	area := doc.FindFirst("textarea")
+	rows := frags(area)
+	if len(rows) < 2 {
+		t.Fatalf("textarea rows = %d", len(rows))
+	}
+	click(rows[0], 2)
+	if b.Forms.InputFocus != area || area.InputCursor != 2 {
+		t.Fatalf("textarea row 1 cursor = %d focus=%v, want 2", area.InputCursor, b.Forms.InputFocus == area)
+	}
+	click(rows[1], 2)
+	if want := len("hello\n") + 2; area.InputCursor != want {
+		t.Fatalf("textarea row 2 cursor = %d, want %d", area.InputCursor, want)
+	}
+}
+
 func TestLabelAssociations(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/go">
 		<label for="query">Query label</label>

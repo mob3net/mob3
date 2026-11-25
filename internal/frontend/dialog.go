@@ -20,6 +20,8 @@ type DialogView struct {
 type DialogLayout struct {
 	BoxX, BoxY, BoxW, BoxH int
 	Close                  protocol.Rect
+	PromptX, PromptY       int
+	PromptW                int
 }
 
 // LayoutDialog computes the modal geometry from the state and view.
@@ -53,9 +55,16 @@ func LayoutDialog(st protocol.State, d *DialogView) DialogLayout {
 	}
 	x := (st.Width - boxW) / 2
 	y := (st.Height - boxH) / 2
+	promptX, promptY, promptW := 0, 0, 0
+	if d.Kind == protocol.DialogPrompt {
+		promptX = x + 2
+		promptY = y + 3 + len(msg)
+		promptW = boxW - 4
+	}
 	return DialogLayout{
 		BoxX: x, BoxY: y, BoxW: boxW, BoxH: boxH,
-		Close: protocol.Rect{X: x + boxW - 3, Y: y, W: 3, H: 1},
+		Close:   protocol.Rect{X: x + boxW - 3, Y: y, W: 3, H: 1},
+		PromptX: promptX, PromptY: promptY, PromptW: promptW,
 	}
 }
 

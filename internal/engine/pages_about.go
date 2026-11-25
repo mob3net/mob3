@@ -220,7 +220,9 @@ and encrypted PDFs are refused. <b>-no-pdf</b> disables the viewer and shows
 the download popup instead.</p>
 
 <h2>Forms</h2>
-<p>Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through
+<p>Click inside a text field or textarea to focus it and place the caret at the
+clicked character; click the input row of a JavaScript prompt dialog the same
+way. Click a field to edit, or use <b>Tab</b>/<b>Shift-Tab</b> to move through
 links and form controls. <b>Ctrl-A</b> selects the whole value; typing,
 <b>Backspace</b> or <b>Delete</b> replaces it, and moving the caret cancels the
 selection. <b>Ctrl-U</b> clears the field, <b>Ctrl-K</b> deletes to the end,

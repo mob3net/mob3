@@ -148,8 +148,9 @@ arrows change radio groups, single selects and ranges, and move the active
 option in a multi-select, where `Space` toggles it. On radios, selects and
 ranges, `h`/`l` work like Left/Right and `j`/`k` like Down/Up.
 
-Click a text input or textarea to focus it. The focused field shows a block
-caret.
+Click a text input or textarea to focus it and place the caret at the clicked
+character, then type; click the input row of a JavaScript prompt dialog the same
+way. The focused field shows a block caret.
 
 | Key | Action |
 | --- | --- |

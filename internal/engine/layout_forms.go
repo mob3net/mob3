@@ -619,6 +619,13 @@ const inputDisplayCells = 40
 // cell column of the caret within that text. A focused value scrolls so the
 // caret stays visible; unfocused values simply truncate at the right edge.
 func inputTextDisplay(n *Node, typ string) (string, int, bool) {
+	display, _, cursorCol, hasCursor := inputTextWindow(n, typ)
+	return display, cursorCol, hasCursor
+}
+
+// inputTextWindow is inputTextDisplay with the rune index where the visible
+// value starts, so a click can be mapped back into the value.
+func inputTextWindow(n *Node, typ string) (display string, start, cursorCol int, hasCursor bool) {
 	val := InputValue(n)
 	if !n.InputFocused {
 		if val == "" {
@@ -633,7 +640,7 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 		if w := StringWidth(val); w > inputDisplayCells {
 			val = TruncateWidth(val, inputDisplayCells)
 		}
-		return val, 0, false
+		return val, 0, 0, false
 	}
 	cur := n.InputCursor
 	if cur < 0 {
@@ -654,7 +661,7 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 	}
 	// Leave one cell for the caret itself and one for a leading ellipsis.
 	limit := inputDisplayCells - 1
-	start := curRune
+	start = curRune
 	used := 0
 	for start > 0 {
 		rw := RuneWidth(runes[start-1])
@@ -677,13 +684,170 @@ func inputTextDisplay(n *Node, typ string) (string, int, bool) {
 		used += rw
 		end++
 	}
-	display := string(runes[start:end])
-	cursorCol := StringWidth(string(runes[start:curRune]))
+	display = string(runes[start:end])
+	cursorCol = StringWidth(string(runes[start:curRune]))
 	if start > 0 {
 		display = "…" + display
 		cursorCol++
 	}
-	return display, cursorCol, true
+	return display, start, cursorCol, true
+}
+
+// inputClickOffset maps a click at one content cell of an input to a byte
+// offset in its value, using the same visible window as inputTextDisplay.
+func inputClickOffset(n *Node, typ string, rel int) int {
+	if !n.InputFocused && InputValue(n) == "" {
+		return 0 // placeholder only
+	}
+	display, start, _, hasCursor := inputTextWindow(n, typ)
+	runes := []rune(display)
+	prefix := 0
+	if hasCursor && start > 0 {
+		prefix = 1
+	}
+	idx, cell := 0, 0
+	for idx < len(runes) {
+		rw := RuneWidth(runes[idx])
+		if rw == 0 {
+			idx++
+			continue
+		}
+		if cell >= rel || cell+rw > rel {
+			break
+		}
+		cell += rw
+		idx++
+	}
+	if idx < prefix {
+		idx = prefix
+	}
+	value := []rune(InputValue(n))
+	valueIdx := start + idx - prefix
+	if valueIdx < 0 {
+		valueIdx = 0
+	}
+	if valueIdx > len(value) {
+		valueIdx = len(value)
+	}
+	return len(string(value[:valueIdx]))
+}
+
+// textareaClickOffset maps a click in a visible textarea row and content cell
+// to a byte offset in its value.
+func textareaClickOffset(n *Node, width, row, col int) int {
+	txt := InputValue(n)
+	if txt == "" && !n.InputFocused {
+		return 0 // placeholder only
+	}
+	txt, _ = normalizeTextCursor(txt, 0)
+	line, cell := 0, 0
+	for i, r := range txt {
+		switch r {
+		case '\n':
+			if line == row {
+				return i
+			}
+			line++
+			cell = 0
+			continue
+		case '\t':
+			spaces := 4 - cell%4
+			for k := 0; k < spaces; k++ {
+				if cell+1 > width && cell > 0 {
+					line++
+					cell = 0
+				}
+				if line == row && cell >= col {
+					return i
+				}
+				cell++
+			}
+			continue
+		}
+		rw := RuneWidth(r)
+		if rw == 0 {
+			continue
+		}
+		if cell+rw > width && cell > 0 {
+			line++
+			cell = 0
+		}
+		if line == row && cell >= col {
+			return i
+		}
+		cell += rw
+	}
+	return len(txt)
+}
+
+// formClickOffset maps a document-cell click to a caret byte offset for a text
+// input or textarea.
+func formClickOffset(layout *Layout, n *Node, x, docY int) (int, bool) {
+	if layout == nil || n == nil || !IsTextInput(n) {
+		return 0, false
+	}
+	var frags []*Frag
+	for i := range layout.Frags {
+		f := &layout.Frags[i]
+		if f.Kind == FragText && f.Node == n {
+			frags = append(frags, f)
+		}
+	}
+	if len(frags) == 0 {
+		return 0, false
+	}
+	if n.Tag == "textarea" {
+		baseY := frags[0].Y
+		for _, f := range frags[1:] {
+			if f.Y < baseY {
+				baseY = f.Y
+			}
+		}
+		var target *Frag
+		for _, f := range frags {
+			if f.Y == docY {
+				target = f
+				break
+			}
+		}
+		if target == nil {
+			return 0, false
+		}
+		if x < target.X || x >= target.X+target.W {
+			return 0, false
+		}
+		row := docY - baseY
+		if row < 0 {
+			return 0, false
+		}
+		inner := target.W - 3
+		if inner < 1 {
+			inner = 1
+		}
+		rel := x - (target.X + 2)
+		if rel < 0 {
+			rel = 0
+		}
+		return textareaClickOffset(n, inner, row, rel), true
+	}
+	var target *Frag
+	for _, f := range frags {
+		if docY >= f.Y && docY < f.Y+f.H {
+			target = f
+			break
+		}
+	}
+	if target == nil {
+		return 0, false
+	}
+	if x < target.X || x >= target.X+target.W {
+		return 0, false
+	}
+	rel := x - (target.X + 2)
+	if rel < 0 {
+		rel = 0
+	}
+	return inputClickOffset(n, strings.ToLower(n.Attr("type")), rel), true
 }
 
 // InputCursorOffset returns the caret column within a formatted input label.

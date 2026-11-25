@@ -366,7 +366,9 @@ agreement, the non-negotiable constraints and the change protocol.
   disabled and hidden elements are skipped, read-only fields are focusable,
   and a radio group takes one stop with arrows moving within it. `Space` or
   `Enter` activates the focused control: checkboxes and radios toggle/select,
-  buttons click, links navigate, and single selects open their popup. Arrows
+  buttons click, links navigate, and single selects open their popup. Clicking a
+  text input or textarea focuses it and places the caret at the clicked
+  character. Arrows
   change a focused single select or range slider; in a multi-select they move
   the active option and `Space` toggles it. `h`/`j`/`k`/`l` act as left/down/up/right
   alternatives on focused radios, selects and range sliders, while arrows keep
@@ -741,7 +743,7 @@ agreement, the non-negotiable constraints and the change protocol.
   editing keys as the URL bar. In non-interactive/dump runs, alert returns,
   confirm returns false and prompt returns null. Modals use keyboard input;
   clicking the `×` or the dimmed backdrop closes them with the mouse
-  (cancelling confirm/prompt).
+  (cancelling confirm/prompt); clicking the prompt row places its caret.
 - **JS console view:** `!` opens a plain-text console in the viewport. A
   one-row menu at the top has five tabs: JavaScript logs, Requests, Storage,
   HTML and Tools. The active tab is highlighted blue; only its section body is

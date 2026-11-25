@@ -223,7 +223,13 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 				}
 				if IsTextInput(n) {
 					b.Selecting = false
+					cursor, ok := formClickOffset(b.Layout, n, x, docY)
 					b.setInputFocus(n)
+					if ok {
+						n.InputCursor = cursor
+						b.Forms.InputSelectAll = false
+						b.refreshInputCursor(n)
+					}
 					return false
 				}
 				if IsRangeInput(n) {
