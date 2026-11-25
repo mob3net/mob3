@@ -30,6 +30,30 @@ func testRowFrame(rows ...string) protocol.Frame {
 	return f
 }
 
+func TestHintOverlayDoesNotMutateStoredFrame(t *testing.T) {
+	p := NewPresenter(io.Discard, false)
+	f := testRowFrame("..........", "..........", "..........")
+	hint := &HintView{Items: []protocol.HintItem{
+		{Label: "d", Chars: []protocol.HintChar{{R: 'D', X: 2, Y: 1}}},
+		{Label: "de", Chars: []protocol.HintChar{{R: 'D', X: 4, Y: 1}, {R: 'E', X: 5, Y: 1}}},
+		{Label: "x", Chars: []protocol.HintChar{{R: 'X', X: 8, Y: 1}}},
+	}}
+	p.SetHint(hint)
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.lastFrame.Cells[1*p.lastFrame.W+8].R; got != '.' {
+		t.Fatalf("stored frame kept hint %q; filtered hints would remain on screen", got)
+	}
+	hint.Prefix = "d"
+	if err := p.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.lastFrame.Cells[1*p.lastFrame.W+8].R; got != '.' {
+		t.Fatalf("refresh base kept hint %q", got)
+	}
+}
+
 func TestPresenterDiffsChangedRows(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)

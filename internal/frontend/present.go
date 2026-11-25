@@ -221,6 +221,15 @@ func (p *Presenter) Refresh() error {
 	return p.Present(f, p.state.Scroll, p.state.Flags&protocol.StateNativeImages != 0)
 }
 
+// cloneFrameCells copies the cell buffer so front-end overlays can paint
+// without mutating the base frame retained for the next Refresh.
+func cloneFrameCells(f protocol.Frame) protocol.Frame {
+	cells := make([]protocol.Cell, len(f.Cells))
+	copy(cells, f.Cells)
+	f.Cells = cells
+	return f
+}
+
 // Present writes one frame. scroll is the page scroll offset; native reports
 // that the engine is writing terminal-native image placements itself, so the
 // presenter must leave the screen alone. A scroll, native-mode or size change
@@ -265,6 +274,9 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		DrawScrollBarFrame(&f, p.state)
 	}
 	if p.hint != nil {
+		// Apply hints to a copy: lastFrame is the clean base for the next
+		// Refresh, which must not repaint a stale hint from the previous prefix.
+		f = cloneFrameCells(f)
 		ApplyHints(&f, p.hint, p.color)
 	}
 	lines := EncodeFrame(f, p.color, !p.color)
