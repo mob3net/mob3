@@ -190,6 +190,7 @@ uploads are unsupported.
   and choose a preset.
 - Click `←`, `→`, `⟳`, `⌂`, History, Help or `⚙` in the toolbar.
 - Right click a link to copy its URL (OSC 52); elsewhere it does nothing.
+- Any click dismisses the quit confirmation, like `Esc`.
 - The mouse back/forward buttons navigate.
 - Click `Dark:on`/`Dark:off`, `Reader:on`/`Reader:off`,
   `JavaScript:on`/`JavaScript:off` or the `>_` icon in the footer.

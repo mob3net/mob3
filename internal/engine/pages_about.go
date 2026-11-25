@@ -85,7 +85,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>?</b></td><td>open this help page in a new tab</td></tr>
 <tr><td><b>!</b></td><td>JavaScript console / errors</td></tr>
 <tr><td><b>Esc</b></td><td>stop loading or leave the current mode</td></tr>
-<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit after confirmation</td></tr>
+<tr><td><b>q</b> / <b>Ctrl-C</b></td><td>quit after confirmation; <b>Esc</b> or any click cancels</td></tr>
 </table>
 <p class="muted">Kitty, WezTerm, Ghostty and foot get enhanced key reporting automatically.</p>
 

@@ -129,6 +129,24 @@ func TestShellKeysQuitAndActions(t *testing.T) {
 	}
 }
 
+func TestQuitPromptDismissesOnAnyClick(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s, Presenter: NewPresenter(io.Discard, false)}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	for _, button := range []int{MouseButtonLeft, MouseButtonMiddle, MouseButtonRight} {
+		loop.startQuit()
+		if !loop.quitPending {
+			t.Fatal("quit prompt did not open")
+		}
+		if !loop.handleChromeMouse(MouseEvent{Button: button, X: 40, Y: 12, Press: true}) {
+			t.Fatalf("button %d click was not consumed", button)
+		}
+		if loop.quitPending {
+			t.Fatalf("button %d click did not dismiss the quit prompt", button)
+		}
+	}
+}
+
 func TestShellKeysSendAppActions(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}

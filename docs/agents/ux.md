@@ -150,7 +150,7 @@ agreement, the non-negotiable constraints and the change protocol.
   `H` session history, `?` help page in a new tab, `!` JS console, `q`/`Ctrl-C` ask for
   `y`/Enter confirmation before quitting, while `:q` plus Enter exits
   immediately. The quit confirmation takes priority over a hovered link in the
-  footer and keeps its warning color. Do
+  footer and keeps its warning color; any click dismisses it like `Esc`. Do
   not move `g`/`G` or the `o` prompt to browser-style keys. `Esc` clears
   focus/selection and shows `q Quit / ? Help` in the footer; the same hint
   appears after closing the URL prompt, an input field or the JS console.

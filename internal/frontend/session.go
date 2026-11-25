@@ -263,6 +263,9 @@ func (l *Tab) handleDeadInput(k string) (quit bool, err error) {
 		return true, nil
 	}
 	if ev, ok := ParseMouseToken(k); ok {
+		if l.dismissQuitOnClick(ev) {
+			return false, nil
+		}
 		if l.handleTabBarMouse(ev) {
 			quit := l.tabCloseQuit
 			l.tabCloseQuit = false
@@ -1930,10 +1933,25 @@ func (l *Tab) cancelQuit() {
 	}
 }
 
+// dismissQuitOnClick cancels the quit question on any click press, matching Esc.
+// It consumes every pointer report while the question is visible.
+func (l *Tab) dismissQuitOnClick(ev MouseEvent) bool {
+	if !l.quitPending {
+		return false
+	}
+	if ev.Press && !ev.Motion && ev.Wheel == 0 {
+		l.cancelQuit()
+	}
+	return true
+}
+
 // handleChromeMouse consumes a pointer report on the front-end-owned header or
 // footer and sends the corresponding action. It reports whether the report was
 // consumed; content-area mouse events still go to the engine as key tokens.
 func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
+	if l.dismissQuitOnClick(ev) {
+		return true
+	}
 	if l.linkPreviewActive {
 		if ev.Press {
 			l.closeLinkPreview()
@@ -1978,9 +1996,6 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	}
 	if l.dialogActive {
 		return l.handleDialogMouse(ev)
-	}
-	if l.quitPending {
-		return true
 	}
 	if l.menuKind != protocol.MenuNone {
 		return l.handleMenuMouse(ev)
