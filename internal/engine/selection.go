@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"browser/internal/textwidth"
 )
 
 // CellPos is a cell in document coordinates: row 0 is the top of the page.
@@ -67,7 +69,7 @@ func (s Selection) Text(layout *Layout) string {
 		lastY = f.Y
 		cx := f.X
 		for _, r := range f.Text {
-			rw := RuneWidth(r)
+			rw := textwidth.RuneWidth(r)
 			if rw == 0 {
 				continue
 			}

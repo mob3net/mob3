@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/sobek"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 const (
@@ -303,7 +304,7 @@ func NewJSRuntime(host JSHost, page *Page) *jsRuntime {
 	_ = j.vm.Set("alert", j.vm.ToValue(func(call sobek.FunctionCall) sobek.Value {
 		msg := call.Argument(0).String()
 		j.host.LogJS("alert", msg)
-		j.host.SetStatus("JS alert: " + TruncateWidth(msg, 120) + "  (! console)")
+		j.host.SetStatus("JS alert: " + textwidth.Truncate(msg, 120) + "  (! console)")
 		j.dialogActive.Store(true)
 		j.host.ShowAlert(msg)
 		j.dialogActive.Store(false)

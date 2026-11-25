@@ -2,6 +2,8 @@ package engine
 
 import (
 	"testing"
+
+	"browser/internal/textwidth"
 )
 
 func TestWideRunesPaint(t *testing.T) {
@@ -26,20 +28,20 @@ func TestRuneWidths(t *testing.T) {
 		{"abc", 3}, {"日本", 4}, {"é", 1}, {"a\u0301", 1}, {"★", 1},
 	}
 	for _, c := range cases {
-		if got := StringWidth(c.s); got != c.w {
+		if got := textwidth.StringWidth(c.s); got != c.w {
 			t.Errorf("width(%q) = %d, want %d", c.s, got, c.w)
 		}
 	}
-	if got := TruncateWidth("abcdef", 3); got != "abc" {
+	if got := textwidth.Truncate("abcdef", 3); got != "abc" {
 		t.Errorf("truncate = %q", got)
 	}
-	if got := PadWidth("ab", 5); got != "ab   " {
+	if got := textwidth.Pad("ab", 5); got != "ab   " {
 		t.Errorf("pad = %q", got)
 	}
-	if got := FitWidth("abc", 5); got != "abc  " {
+	if got := textwidth.Fit("abc", 5); got != "abc  " {
 		t.Errorf("fit short = %q", got)
 	}
-	if got := FitWidth("abcdef", 5); got != "abcd…" {
+	if got := textwidth.Fit("abcdef", 5); got != "abcd…" {
 		t.Errorf("fit long = %q", got)
 	}
 }

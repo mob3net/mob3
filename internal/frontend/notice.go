@@ -1,6 +1,10 @@
 package frontend
 
-import "browser/internal/protocol"
+import (
+	"browser/internal/protocol"
+
+	"browser/internal/textwidth"
+)
 
 // NoticeView is the front-end state of a small informational modal.
 type NoticeView struct {
@@ -115,7 +119,7 @@ func noticeLayout(st protocol.State, v *NoticeView) MenuLayout {
 		return MenuLayout{}
 	}
 	inner := boxW - 4
-	lines := wrapCells(protocol.StripControls(v.Message), inner)
+	lines := textwidth.Wrap(protocol.StripControls(v.Message), inner)
 	maxLines := st.Height - 6
 	if maxLines < 1 {
 		maxLines = 1
@@ -148,7 +152,7 @@ func DrawNotice(c *chromeCanvas, st protocol.State, v *NoticeView) MenuLayout {
 		return layout
 	}
 	inner := layout.BoxW - 4
-	lines := wrapCells(protocol.StripControls(v.Message), inner)
+	lines := textwidth.Wrap(protocol.StripControls(v.Message), inner)
 	maxLines := st.Height - 6
 	if maxLines < 1 {
 		maxLines = 1
@@ -160,10 +164,10 @@ func DrawNotice(c *chromeCanvas, st protocol.State, v *NoticeView) MenuLayout {
 	fg := rgb(0x1f, 0x23, 0x28)
 	for i, line := range lines {
 		c.text(layout.BoxX+2, layout.BoxY+3+i,
-			padWidth(truncateWidth(line, inner), inner), fg, protocol.AttrBold)
+			textwidth.Pad(textwidth.Truncate(line, inner), inner), fg, protocol.AttrBold)
 	}
 	c.text(layout.BoxX+2, layout.BoxY+layout.BoxH-2,
-		padWidth(truncateWidth(" Enter / Esc: close ", layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
+		textwidth.Pad(textwidth.Truncate(" Enter / Esc: close ", layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
 	modalDim(c, layout)
 	return layout
 }

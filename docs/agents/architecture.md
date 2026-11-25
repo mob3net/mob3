@@ -13,6 +13,7 @@ in `internal/protocol`; this section records ownership.
 | --- | --- |
 | `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/textedit` | Shared single-line text editing for form fields, the URL prompt, JS dialogs, find and console inputs. Standard library only. |
+| `internal/textwidth` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows and wrapping. Standard library only. |
 | `internal/engine` | HTML/CSS parsing and style, document loading through `protocol.Host`, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings and the request log. Session back/forward history lives in the front end, the download/curl hint is presentation, and the engine keeps only a memory-only page cache. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, session history, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
@@ -21,12 +22,13 @@ in `internal/protocol`; this section records ownership.
 Allowed imports:
 
 ```
-app      -> engine, host, frontend, protocol
-frontend -> protocol, textedit
-engine   -> protocol, textedit
-host     -> protocol
-protocol -> standard library only
-textedit -> standard library only
+app       -> engine, host, frontend, protocol
+frontend  -> protocol, textedit, textwidth
+engine    -> protocol, textedit, textwidth
+host      -> protocol
+protocol  -> standard library only
+textedit  -> standard library only
+textwidth -> standard library only
 ```
 
 The split is a value boundary. Nothing in `protocol` holds a pointer to engine
@@ -74,7 +76,8 @@ in-process frame model; the engine child process is not part of the target.
 - `-dump` and `-png` are byte-identical to the baseline over the synthetic
   page corpus.
 - `frontend` and `host` do not import `engine`; `engine` imports only
-  `protocol`, `textedit`, approved modules and the standard library, with no
+  `protocol`, `textedit`, `textwidth`, approved modules and the standard library,
+  with no
   `net/http`, `syscall` or `os` left. `net/url` is a pure value package and
   remains.
   The dependency test rejects `net/http` and its subpackages on the engine
@@ -178,8 +181,8 @@ contexts are the remaining architecture step. There is no engine child process.
   promoted and call sites keep using `b.Field`. It draws only the page content
   rectangle; chrome, console, dialogs, the find bar and the hint overlay are
   front-end-owned. MCP transport lives in `internal/app`. Production code
-  imports only `internal/protocol` and `internal/textedit` (plus approved
-  vendored modules).
+  imports only `internal/protocol`, `internal/textedit` and
+  `internal/textwidth` (plus approved vendored modules).
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the terminal loop and active-tab routing
@@ -197,8 +200,9 @@ contexts are the remaining architecture step. There is no engine child process.
   reads it by entry ID, so the engine's `HistoryCommit` URL is not trusted. While a page form field holds the key
   path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
   stays true and the front end composes the header, footer and scrollbar.
-- The engine imports only `internal/protocol` and `internal/textedit` (plus
-  approved vendored modules), and the dependency test enforces that. It does
+- The engine imports only `internal/protocol`, `internal/textedit` and
+  `internal/textwidth` (plus approved vendored modules), and the dependency
+  test enforces that. It does
   not import
   `internal/frontend`, `internal/host`, `net/http` or `os`: encoders and the
   graphics renderer are injected by the app, and host state arrives through
@@ -363,6 +367,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/form_state.go` | Focused text control, select/checkbox/radio/button control, active option, focus transitions and clear helpers. |
 | `internal/engine/form_edit.go` | Form control predicates, Tab-status text, radio/select grouping, label lookup, form request encoding, input-fragment updates, range hit testing and input-line/caret helpers. |
 | `internal/textedit/textedit.go` | Shared single-line editor: caret and word motion, deletion, selection replacement, insertion and length caps, used by page form fields and the front-end URL, dialog, find and console inputs. |
+| `internal/textwidth/textwidth.go` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows, wrapping and hanging indent, used by engine layout/paint and front-end chrome, dialogs and console. |
 | `internal/engine/tab_order.go` | Standard Tab-order target discovery: links, controls and one stop per radio group. |
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |

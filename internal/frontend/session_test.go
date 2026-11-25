@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
@@ -1029,7 +1030,7 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	// Click the Storage tab: walk the same widths the menu draws.
 	x := 0
 	for _, title := range tabs[:2] {
-		x += stringWidth(title)
+		x += textwidth.StringWidth(title)
 	}
 	if !loop.handleChromeMouse(MouseEvent{X: x + 1, Y: 1, Press: true}) {
 		t.Fatal("tab click not consumed")

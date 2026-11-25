@@ -2,6 +2,8 @@ package engine
 
 import (
 	"strings"
+
+	"browser/internal/textwidth"
 )
 
 // measure estimates the max-content and min-content widths (in cells) of a
@@ -23,7 +25,7 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 					lineMax += sc
 					continue
 				}
-				rw := RuneWidth(r) * sc
+				rw := textwidth.RuneWidth(r) * sc
 				lineMax += rw
 				word += rw
 			}
@@ -54,7 +56,7 @@ func measureInlineText(s, whiteSpace string, sc int) (maxW, minW int) {
 			lineMax += sc
 			pendingSpace = false
 		}
-		rw := RuneWidth(r) * sc
+		rw := textwidth.RuneWidth(r) * sc
 		lineMax += rw
 		word += rw
 		content = true
@@ -139,7 +141,7 @@ func (l *Layouter) measure(n *Node) (maxW, minW int) {
 		if !visible || label == "" {
 			return 0, 0
 		}
-		w := StringWidth(label)
+		w := textwidth.StringWidth(label)
 		return w, w
 	}
 	if n.Tag == "img" || n.Tag == "svg" {
@@ -175,7 +177,7 @@ func (l *Layouter) measure(n *Node) (maxW, minW int) {
 			if opt.HasAttr("selected") {
 				mark = GlyphCheckboxOn + " "
 			}
-			if ow := StringWidth(mark + OptionLabel(opt)); ow > w {
+			if ow := textwidth.StringWidth(mark + OptionLabel(opt)); ow > w {
 				w = ow
 			}
 		}
@@ -185,7 +187,7 @@ func (l *Layouter) measure(n *Node) (maxW, minW int) {
 		if n.Tag == "input" && strings.EqualFold(n.Attr("type"), "hidden") {
 			return 0, 0
 		}
-		w := StringWidth(FormLabel(n))
+		w := textwidth.StringWidth(FormLabel(n))
 		if w < 1 {
 			w = 1
 		}

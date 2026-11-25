@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+
+	"browser/internal/textwidth"
 )
 
 // IsTabControl reports whether n participates in the standard Tab order.
@@ -298,7 +300,7 @@ func UpdateInputFragments(layout *Layout, n *Node) bool {
 			return false
 		}
 		for i := range rows {
-			if StringWidth(rows[i]) != frags[i].W {
+			if textwidth.StringWidth(rows[i]) != frags[i].W {
 				return false
 			}
 			frags[i].Text = rows[i]
@@ -315,7 +317,7 @@ func UpdateInputFragments(layout *Layout, n *Node) bool {
 	if label == "" || len(frags) != 1 {
 		return false
 	}
-	w := StringWidth(label)
+	w := textwidth.StringWidth(label)
 	boxW := frags[0].W
 	if w != boxW {
 		// A fixed-width or flex-stretched control keeps the same box while the
@@ -330,7 +332,7 @@ func UpdateInputFragments(layout *Layout, n *Node) bool {
 			return false
 		}
 		if w > boxW {
-			label = TruncateWidth(label, boxW)
+			label = textwidth.Truncate(label, boxW)
 		} else if pad := boxW - w; pad > 0 {
 			if strings.HasSuffix(label, "]") {
 				label = strings.TrimSuffix(label, "]") + strings.Repeat(" ", pad) + "]"
@@ -359,10 +361,10 @@ func RangeSideAt(layout *Layout, n *Node, x, y int) int {
 			continue
 		}
 		rel := x - f.X
-		if i := strings.Index(f.Text, "-"); i >= 0 && rel == StringWidth(f.Text[:i]) {
+		if i := strings.Index(f.Text, "-"); i >= 0 && rel == textwidth.StringWidth(f.Text[:i]) {
 			return -1
 		}
-		if i := strings.LastIndex(f.Text, "+"); i >= 0 && rel == StringWidth(f.Text[:i]) {
+		if i := strings.LastIndex(f.Text, "+"); i >= 0 && rel == textwidth.StringWidth(f.Text[:i]) {
 			return 1
 		}
 	}

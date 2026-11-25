@@ -3,6 +3,8 @@ package engine
 import (
 	"strings"
 	"testing"
+
+	"browser/internal/textwidth"
 )
 
 func TestSearchFieldMinimumWidth(t *testing.T) {
@@ -10,12 +12,12 @@ func TestSearchFieldMinimumWidth(t *testing.T) {
 		{Key: "type", Value: "search"}, {Key: "placeholder", Value: "Search"},
 	}}
 	input.Style = &Style{Display: "inline", FontSize: 16, LineHeight: 1}
-	if w := StringWidth(FormLabel(input)); w < 34 {
+	if w := textwidth.StringWidth(FormLabel(input)); w < 34 {
 		t.Fatalf("search field width = %d, want at least 34", w)
 	}
 	area := &Node{Type: ElementNode, Tag: "textarea", Attrs: []Attr{{Key: "placeholder", Value: "Search"}}}
 	area.Style = &Style{Display: "inline", FontSize: 16, LineHeight: 1}
-	if w := StringWidth(FormLabel(area)); w < 34 {
+	if w := textwidth.StringWidth(FormLabel(area)); w < 34 {
 		t.Fatalf("textarea width = %d, want at least 34", w)
 	}
 }
@@ -160,7 +162,7 @@ func TestFormControlGlyphs(t *testing.T) {
 		if got := FormLabel(c.node); got != c.want {
 			t.Errorf("FormLabel(%s) = %q, want %q", c.node.Attr("type"), got, c.want)
 		}
-		if w := StringWidth(c.want); w != 1 {
+		if w := textwidth.StringWidth(c.want); w != 1 {
 			t.Errorf("glyph %q width = %d, want 1 cell", c.want, w)
 		}
 	}

@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 // menuOverlay is the view/zoom choice window over the page.
@@ -270,12 +271,12 @@ func layoutChoice(st protocol.State, view ChoiceView) MenuLayout {
 	}
 	maxLabel := 0
 	for _, row := range view.Rows {
-		if n := stringWidth(row.Marker + row.Label); n > maxLabel {
+		if n := textwidth.StringWidth(row.Marker + row.Label); n > maxLabel {
 			maxLabel = n
 		}
 	}
 	boxW := maxLabel + 6
-	if n := stringWidth(view.Hint) + 4; n > boxW {
+	if n := textwidth.StringWidth(view.Hint) + 4; n > boxW {
 		boxW = n
 	}
 	if boxW < view.MinW {
@@ -440,10 +441,10 @@ func drawChoiceLayout(c *chromeCanvas, layout MenuLayout) {
 		}
 		y := layout.BoxY + 2 + i
 		c.fill(layout.BoxX+1, y, layout.BoxW-2, 1, rowBG)
-		c.text(layout.BoxX+2, y, padWidth(truncateWidth(row.Marker+row.Label, inner), inner), rowFG, protocol.AttrBold)
+		c.text(layout.BoxX+2, y, textwidth.Pad(textwidth.Truncate(row.Marker+row.Label, inner), inner), rowFG, protocol.AttrBold)
 	}
 	c.text(layout.BoxX+2, layout.BoxY+layout.BoxH-2,
-		padWidth(truncateWidth(layout.Hint, layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
+		textwidth.Pad(textwidth.Truncate(layout.Hint, layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
 	modalDim(c, layout)
 }
 
@@ -475,7 +476,7 @@ func modalFrame(c *chromeCanvas, l MenuLayout) {
 	c.fill(l.BoxX, l.BoxY, 1, l.BoxH, border)
 	c.fill(l.BoxX+l.BoxW-1, l.BoxY, 1, l.BoxH, border)
 	c.fill(l.BoxX+1, l.BoxY+1, l.BoxW-2, 1, border)
-	c.text(l.BoxX+2, l.BoxY+1, truncateWidth(" "+l.Title+" ", l.BoxW-8), titleFG, protocol.AttrBold)
+	c.text(l.BoxX+2, l.BoxY+1, textwidth.Truncate(" "+l.Title+" ", l.BoxW-8), titleFG, protocol.AttrBold)
 	c.put(l.BoxX+l.BoxW-2, l.BoxY, '×', titleFG, protocol.AttrBold)
 }
 

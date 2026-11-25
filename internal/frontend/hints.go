@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 // hintOverlay is the link-hint session layered over the page.
@@ -253,13 +254,13 @@ func ApplyHints(f *protocol.Frame, v *HintView, color bool) {
 		}
 		for _, r := range label {
 			paintHintCell(f, x, y, r, fg, bg, attrs)
-			x += runeWidth(r)
+			x += textwidth.RuneWidth(r)
 		}
 	}
 }
 
 func paintHintCell(f *protocol.Frame, x, y int, r rune, fg, bg protocol.Color, attrs uint8) {
-	if x < 0 || x >= f.W || y < 0 || y >= f.H || runeWidth(r) == 0 {
+	if x < 0 || x >= f.W || y < 0 || y >= f.H || textwidth.RuneWidth(r) == 0 {
 		return
 	}
 	c := &f.Cells[y*f.W+x]

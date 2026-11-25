@@ -16,6 +16,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"browser/internal/textwidth"
 )
 
 // PDFDocument is the extracted text of one PDF response.
@@ -391,10 +393,10 @@ func PDFPageBox(pages []PDFPageText) (rows, cells int) {
 			for {
 				i := strings.IndexByte(text, '\n')
 				if i < 0 {
-					cur += StringWidth(text)
+					cur += textwidth.StringWidth(text)
 					break
 				}
-				cur += StringWidth(text[:i])
+				cur += textwidth.StringWidth(text[:i])
 				if cur > width {
 					width = cur
 				}

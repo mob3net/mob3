@@ -1,10 +1,9 @@
 package frontend
 
 import (
-	"strings"
-
 	"browser/internal/protocol"
 	"browser/internal/textedit"
+	"browser/internal/textwidth"
 )
 
 // dialogOverlay is a JavaScript alert, confirm or prompt modal.
@@ -187,7 +186,7 @@ func LayoutDialog(st protocol.State, d *DialogView) DialogLayout {
 	if d.Kind == protocol.DialogPrompt {
 		promptRow = 1
 	}
-	msg := wrapCells(protocol.StripControls(d.Text), inner)
+	msg := textwidth.Wrap(protocol.StripControls(d.Text), inner)
 	maxLines := st.Height - 6 - promptRow
 	if maxLines < 1 {
 		maxLines = 1
@@ -233,7 +232,7 @@ func DrawDialog(c *chromeCanvas, st protocol.State, d *DialogView) DialogLayout 
 	if d.Kind == protocol.DialogPrompt {
 		promptRow = 1
 	}
-	msg := wrapCells(protocol.StripControls(d.Text), inner)
+	msg := textwidth.Wrap(protocol.StripControls(d.Text), inner)
 	maxLines := st.Height - 6 - promptRow
 	if maxLines < 1 {
 		maxLines = 1
@@ -249,14 +248,14 @@ func DrawDialog(c *chromeCanvas, st protocol.State, d *DialogView) DialogLayout 
 	fg := rgb(0x1f, 0x23, 0x28)
 	for i, line := range msg {
 		c.text(layout.BoxX+2, layout.BoxY+3+i,
-			padWidth(truncateWidth(line, inner), inner), fg, protocol.AttrBold)
+			textwidth.Pad(textwidth.Truncate(line, inner), inner), fg, protocol.AttrBold)
 	}
 	row := layout.BoxY + 3 + len(msg)
 	if d.Kind == protocol.DialogPrompt {
 		c.fill(layout.BoxX+2, row, inner, 1, rgb(0xe8, 0xf0, 0xfe))
 		head, at, tail, show := promptParts("", d.Value, d.Cursor, d.SelectAll, inner)
 		c.text(layout.BoxX+2, row, head, fg, protocol.AttrBold)
-		cx := layout.BoxX + 2 + stringWidth(head)
+		cx := layout.BoxX + 2 + textwidth.StringWidth(head)
 		if show {
 			c.put(cx, row, at, rgb(0xff, 0xff, 0xff), protocol.AttrBold)
 			if cx < c.w {
@@ -274,7 +273,7 @@ func DrawDialog(c *chromeCanvas, st protocol.State, d *DialogView) DialogLayout 
 		hint = " Enter/Y: Yes · N/Esc: No "
 	}
 	c.text(layout.BoxX+2, layout.BoxY+layout.BoxH-2,
-		padWidth(truncateWidth(hint, layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
+		textwidth.Pad(textwidth.Truncate(hint, layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
 	modalDim(c, MenuLayout{
 		BoxX: layout.BoxX, BoxY: layout.BoxY, BoxW: layout.BoxW, BoxH: layout.BoxH,
 	})
@@ -290,31 +289,4 @@ func dialogTitle(k protocol.DialogKind) string {
 	default:
 		return "JavaScript alert"
 	}
-}
-
-func wrapCells(s string, width int) []string {
-	var out []string
-	var line strings.Builder
-	col := 0
-	for _, r := range s {
-		rw := runeWidth(r)
-		if rw == 0 {
-			line.WriteRune(r)
-			continue
-		}
-		if col+rw > width {
-			out = append(out, line.String())
-			line.Reset()
-			col = 0
-		}
-		line.WriteRune(r)
-		col += rw
-	}
-	if line.Len() > 0 {
-		out = append(out, line.String())
-	}
-	if len(out) == 0 {
-		out = append(out, "")
-	}
-	return out
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 func TestToggleCheckbox(t *testing.T) {
@@ -182,7 +183,7 @@ func TestFixedWidthInputPatchesFragments(t *testing.T) {
 	if !strings.Contains(frag.Text, "wikipedia search") {
 		t.Fatalf("fragment not updated in place: %q", frag.Text)
 	}
-	if StringWidth(frag.Text) != frag.W {
+	if textwidth.StringWidth(frag.Text) != frag.W {
 		t.Fatalf("fragment width changed: %d cells for %q", frag.W, frag.Text)
 	}
 }
@@ -644,7 +645,7 @@ func TestRangeKeyboardControl(t *testing.T) {
 		b.HandleMouse(MouseEvent{Button: MouseButtonLeft, X: frag.X + rel + 1, Y: frag.Y - b.Scroll + top + 1, Press: true})
 	}
 	minus := strings.Index(frag.Text, "-")
-	clickAt(StringWidth(frag.Text[:minus]))
+	clickAt(textwidth.StringWidth(frag.Text[:minus]))
 	if got := InputValue(r); got != "8" {
 		t.Fatalf("range after minus click = %q", got)
 	}
@@ -656,7 +657,7 @@ func TestRangeKeyboardControl(t *testing.T) {
 		}
 	}
 	plus := strings.LastIndex(frag.Text, "+")
-	clickAt(StringWidth(frag.Text[:plus]))
+	clickAt(textwidth.StringWidth(frag.Text[:plus]))
 	if got := InputValue(r); got != "10" {
 		t.Fatalf("range after plus click = %q", got)
 	}

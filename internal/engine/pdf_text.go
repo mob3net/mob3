@@ -17,6 +17,8 @@ import (
 	"unicode/utf16"
 
 	"golang.org/x/text/encoding/charmap"
+
+	"browser/internal/textwidth"
 )
 
 // pdfCellPoints is one terminal cell in PDF points: 8 CSS px at 96 dpi.
@@ -1050,10 +1052,10 @@ func pdfLineSpans(runs []PDFRun, bodySize float64) []PDFSpan {
 		}
 		add(r.Text, r.Bold, r.Italic, PDFSpanSize(r.Size, bodySize))
 		prevSpace = strings.HasSuffix(r.Text, " ")
-		col += StringWidth(r.Text)
+		col += textwidth.StringWidth(r.Text)
 		width := r.W
 		if width <= 0 {
-			width = float64(StringWidth(r.Text)) * pdfCellPoints
+			width = float64(textwidth.StringWidth(r.Text)) * pdfCellPoints
 		}
 		endX = r.X + width
 		if col > 400 {

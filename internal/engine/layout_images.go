@@ -4,6 +4,8 @@ import (
 	"image"
 	"math"
 	"strings"
+
+	"browser/internal/textwidth"
 )
 
 // svgLabel returns the text that represents an inline SVG that was not
@@ -52,7 +54,7 @@ func (l *Layouter) blockSVG(n *Node, x, y, w int) int {
 		return 0
 	}
 	if w > 0 {
-		label = TruncateWidth(label, w)
+		label = textwidth.Truncate(label, w)
 	}
 	l.addText(x, y, label, n.Style, n)
 	return 1
@@ -252,7 +254,7 @@ func imageAltLabel(alt string, max int) string {
 	if max < 8 {
 		return "▣"
 	}
-	return TruncateWidth("[image: "+alt+"]", max)
+	return textwidth.Truncate("[image: "+alt+"]", max)
 }
 
 // imageSize returns the terminal-cell size of an image, from its intrinsic

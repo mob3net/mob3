@@ -7,6 +7,7 @@ import (
 
 	"browser/internal/protocol"
 	"browser/internal/textedit"
+	"browser/internal/textwidth"
 )
 
 // consoleOverlay is the full-screen JavaScript console and tools pane.
@@ -256,7 +257,7 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 		w.consoleCursor = len(w.consoleText)
 		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleFocus})
 		w.present(l)
-	case y == layout.footerY && v.Width >= 6 && x >= v.Width-stringWidth(">_"):
+	case y == layout.footerY && v.Width >= 6 && x >= v.Width-textwidth.StringWidth(">_"):
 		w.consoleActive = false
 		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleClose})
 	}
@@ -336,7 +337,7 @@ func consoleTabAt(tabs []string, w, x int) int {
 			break
 		}
 		title = protocol.StripControls(title)
-		tw := stringWidth(title)
+		tw := textwidth.StringWidth(title)
 		if tw > w-pos {
 			tw = w - pos
 		}
@@ -375,7 +376,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 				break
 			}
 			title = protocol.StripControls(title)
-			tw := stringWidth(title)
+			tw := textwidth.StringWidth(title)
 			if tw > w-x {
 				tw = w - x
 			}
@@ -384,7 +385,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 				tabBG = activeBG
 			}
 			c.fill(x, l.tabsY, tw, 1, tabBG)
-			c.text(x, l.tabsY, truncateWidth(title, tw), fg, protocol.AttrBold)
+			c.text(x, l.tabsY, textwidth.Truncate(title, tw), fg, protocol.AttrBold)
 			x += tw
 		}
 		if x < w {
@@ -396,7 +397,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 			if i >= l.bodyRows {
 				break
 			}
-			c.text(1, l.bodyY+i, truncateWidth(protocol.StripControls(line), w-2), fg, 0)
+			c.text(1, l.bodyY+i, textwidth.Truncate(protocol.StripControls(line), w-2), fg, 0)
 		}
 		matchBG, currentBG := rgb(0xff, 0xe0, 0x66), rgb(0xff, 0x9d, 0x2a)
 		matchFG := rgb(0x1f, 0x23, 0x28)
@@ -421,7 +422,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 		if v.Summary != "" {
 			y := l.bodyY + l.bodyRows - 1
 			c.fill(1, y, maxInt(0, w-2), 1, ftrBG)
-			c.text(1, y, truncateWidth(protocol.StripControls(v.Summary), w-2), rgb(0x8a, 0x9a, 0xaa), 0)
+			c.text(1, y, textwidth.Truncate(protocol.StripControls(v.Summary), w-2), rgb(0x8a, 0x9a, 0xaa), 0)
 		}
 		if l.inputY >= 0 {
 			y := l.inputY
@@ -444,16 +445,16 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 							continue
 						}
 						c.put(xx, y, runes[i], fg, 0)
-						xx += runeWidth(runes[i])
+						xx += textwidth.RuneWidth(runes[i])
 					}
 					if cur == len(runes) && cur >= start && xx < w {
 						c.put(xx, y, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
 						c.cells[y*w+xx].BG = rgb(0xf8, 0xfa, 0xfc)
 					}
 				} else if input == "" {
-					c.text(2, y, truncateWidth(hint, contentW), rgb(0x8a, 0x9a, 0xaa), 0)
+					c.text(2, y, textwidth.Truncate(hint, contentW), rgb(0x8a, 0x9a, 0xaa), 0)
 				} else {
-					c.text(2, y, truncateWidth(input, contentW), fg, 0)
+					c.text(2, y, textwidth.Truncate(input, contentW), fg, 0)
 				}
 			}
 		}
@@ -467,7 +468,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 			return f
 		}
 		icon := ">_"
-		iconW := stringWidth(icon)
+		iconW := textwidth.StringWidth(icon)
 		reserve := 0
 		if w >= 6 {
 			reserve = iconW + 2
@@ -481,7 +482,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 		if v.Quit {
 			footerFG = rgb(0x9a, 0x5b, 0x00)
 		}
-		c.text(0, l.footerY, padWidth(truncateWidth(footer, hintW), hintW), footerFG, 0)
+		c.text(0, l.footerY, textwidth.Pad(textwidth.Truncate(footer, hintW), hintW), footerFG, 0)
 		if reserve > 0 {
 			c.text(w-iconW, l.footerY, icon, rgb(0x8a, 0xc4, 0xff), protocol.AttrBold)
 		}

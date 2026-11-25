@@ -6,6 +6,7 @@ import (
 
 	"browser/internal/protocol"
 	"browser/internal/textedit"
+	"browser/internal/textwidth"
 )
 
 // promptOverlay is the URL and command line.
@@ -256,8 +257,8 @@ func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []ru
 	}
 	if selectAll {
 		visible := text
-		if stringWidth(visible) > contentW {
-			visible = tailWidth(visible, contentW)
+		if textwidth.StringWidth(visible) > contentW {
+			visible = textwidth.Tail(visible, contentW)
 		}
 		start = len(runes) - utf8.RuneCountInString(visible)
 		return runes, start, len(runes), -1
@@ -278,7 +279,7 @@ func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []ru
 	start = cur
 	used := 0
 	for start > 0 {
-		rw := runeWidth(runes[start-1])
+		rw := textwidth.RuneWidth(runes[start-1])
 		if used+rw > contentW-1 {
 			break
 		}
@@ -292,7 +293,7 @@ func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []ru
 	used++
 	end = after
 	for end < len(runes) {
-		rw := runeWidth(runes[end])
+		rw := textwidth.RuneWidth(runes[end])
 		if used+rw > contentW {
 			break
 		}
@@ -303,7 +304,7 @@ func promptWindow(text string, cursor, contentW int, selectAll bool) (runes []ru
 }
 
 func promptOffsetAt(text string, cursor int, selectAll bool, x, width int) int {
-	prefixW := stringWidth(" Open: ")
+	prefixW := textwidth.StringWidth(" Open: ")
 	return textOffsetAt(text, cursor, selectAll, x-prefixW, width-prefixW)
 }
 
@@ -323,7 +324,7 @@ func textOffsetAt(text string, cursor int, selectAll bool, rel, contentW int) in
 			used++
 			continue
 		}
-		rw := runeWidth(runes[i])
+		rw := textwidth.RuneWidth(runes[i])
 		if rel < used+rw {
 			return runeIndexToByte(runes, i)
 		}

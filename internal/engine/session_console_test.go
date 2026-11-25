@@ -2,6 +2,7 @@ package engine
 
 import (
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 	"errors"
 	"net/http"
 	"strings"
@@ -84,7 +85,7 @@ func TestConsoleRequestLinesWrap(t *testing.T) {
 		t.Fatalf("long request did not wrap: %q", lines)
 	}
 	for _, line := range lines {
-		if w := StringWidth(line); w > width {
+		if w := textwidth.StringWidth(line); w > width {
 			t.Fatalf("request line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -102,7 +103,7 @@ func TestConsoleToolLinesWrap(t *testing.T) {
 		t.Fatalf("long tool output did not wrap: %q", lines)
 	}
 	for _, line := range lines {
-		if w := StringWidth(line); w > width {
+		if w := textwidth.StringWidth(line); w > width {
 			t.Fatalf("tool line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -124,7 +125,7 @@ func TestConsoleStorageWrapsLongValues(t *testing.T) {
 	const width = 40
 	lines := b.storageLinesWidth(width)
 	for _, line := range lines {
-		if w := StringWidth(line); w > width {
+		if w := textwidth.StringWidth(line); w > width {
 			t.Fatalf("storage line is %d cells, want <= %d: %q", w, width, line)
 		}
 	}
@@ -156,7 +157,7 @@ func TestConsoleHTMLShowsRawHTML(t *testing.T) {
 	// Long source lines wrap to the console width.
 	b.Page = &Page{RawHTML: strings.Repeat("x", 45)}
 	for _, line := range b.htmlLines(20) {
-		if StringWidth(line) > 20 {
+		if textwidth.StringWidth(line) > 20 {
 			t.Fatalf("HTML line wider than requested: %q", line)
 		}
 	}

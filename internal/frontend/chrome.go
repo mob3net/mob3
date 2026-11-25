@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 // ChromeHitKind identifies a clickable header or footer region. Coordinates
@@ -174,7 +175,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		if st.PromptActive {
 			head, at, tail, show := promptParts(" Open: ", prompt, st.PromptCursor, st.PromptSelectAll, width)
 			g.text(x, y, head, colHeaderFG, protocol.AttrBold)
-			cx := x + stringWidth(head)
+			cx := x + textwidth.StringWidth(head)
 			if show {
 				g.put(cx, y, at, colWhite, protocol.AttrBold)
 				g.cells[y*w+cx].BG = colSelectedBG
@@ -182,13 +183,13 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 			}
 			g.text(cx, y, tail, colHeaderFG, protocol.AttrBold)
 		} else {
-			g.text(x, y, fitWidth(" "+url+" ", width), colHeaderFG, 0)
+			g.text(x, y, textwidth.Fit(" "+url+" ", width), colHeaderFG, 0)
 		}
 		out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitURL, X: x, Y: y, W: width, H: 1})
 	}
 
 	drawButton := func(x, y int, label string, kind ChromeHitKind, bg, fg protocol.Color) int {
-		bw := stringWidth(label)
+		bw := textwidth.StringWidth(label)
 		if bw < 1 || x+bw > w || y < 0 || y >= rows {
 			return x
 		}
@@ -214,8 +215,8 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		}
 		helpW, configW := 0, 0
 		if w >= 6 {
-			helpW = stringWidth(helpLabel)
-			configW = stringWidth(configLabel)
+			helpW = textwidth.StringWidth(helpLabel)
+			configW = textwidth.StringWidth(configLabel)
 		}
 		for x+helpW+configW > w {
 			if helpW > 0 {
@@ -237,7 +238,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		}
 		fieldW := w
 		if zoom != "" {
-			if zw := stringWidth(zoom); zw < w {
+			if zw := textwidth.StringWidth(zoom); zw < w {
 				fieldW = w - zw
 			} else {
 				zoom = ""
@@ -263,8 +264,8 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		}
 		helpW, configW := 0, 0
 		if w >= 6 {
-			helpW = stringWidth(helpLabel)
-			configW = stringWidth(configLabel)
+			helpW = textwidth.StringWidth(helpLabel)
+			configW = textwidth.StringWidth(configLabel)
 		}
 		for x+helpW+configW > w {
 			if helpW > 0 {
@@ -283,7 +284,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 			urlW = w - x
 		}
 		if zoom != "" {
-			if zw := stringWidth(zoom); zw < urlW {
+			if zw := textwidth.StringWidth(zoom); zw < urlW {
 				urlW -= zw
 			} else {
 				zoom = ""
@@ -310,7 +311,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		return out
 	}
 	consoleIcon := ">_"
-	consoleW := stringWidth(consoleIcon)
+	consoleW := textwidth.StringWidth(consoleIcon)
 	showConsole := w >= 6
 	reserve := 0
 	consoleX := w - consoleW
@@ -318,15 +319,15 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 		reserve = consoleW + 2
 	}
 	rightText := footerRight
-	avail := w - stringWidth(rightText) - reserve - footerGap
+	avail := w - textwidth.StringWidth(rightText) - reserve - footerGap
 	if avail < 0 {
 		avail = 0
 	}
 	leftText := footerLeft
 	leftFG, leftAttrs := footerStyle(st.FooterLevel)
-	f.text(0, 0, padWidth(truncateWidth(leftText, avail), avail), leftFG, leftAttrs)
+	f.text(0, 0, textwidth.Pad(textwidth.Truncate(leftText, avail), avail), leftFG, leftAttrs)
 	if st.FooterStatusHit {
-		sw := stringWidth(leftText)
+		sw := textwidth.StringWidth(leftText)
 		if sw > avail {
 			sw = avail
 		}
@@ -340,10 +341,10 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 	}
 	if pdfHint != "" && st.PDFHintX >= 0 && st.PDFHintX < w {
 		f.text(st.PDFHintX, 0, pdfHint, colLinkFG, protocol.AttrBold)
-		out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitDownload, X: st.PDFHintX, Y: h - 1, W: stringWidth(pdfHint), H: 1})
+		out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitDownload, X: st.PDFHintX, Y: h - 1, W: textwidth.StringWidth(pdfHint), H: 1})
 	}
 	if rightText != "" {
-		rightX := w - reserve - stringWidth(rightText)
+		rightX := w - reserve - textwidth.StringWidth(rightText)
 		f.text(rightX, 0, rightText, colFooterFG, 0)
 		parts := strings.Split(rightText, "   ")
 		offset := 0
@@ -354,11 +355,11 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 			}
 			start := offset + idx
 			offset = start + len(part)
-			x := rightX + stringWidth(rightText[:start])
+			x := rightX + textwidth.StringWidth(rightText[:start])
 			switch {
 			case strings.HasPrefix(part, "Graphics:"):
 				f.underlinedRune(x, 0, part, 'i', colFooterFG, 0)
-				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitGraphics, X: x, Y: h - 1, W: stringWidth(part), H: 1})
+				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitGraphics, X: x, Y: h - 1, W: textwidth.StringWidth(part), H: 1})
 			case strings.HasPrefix(part, "JavaScript:"):
 				fg, attrs := colFooterFG, uint8(0)
 				if part == "JavaScript:Error" {
@@ -367,21 +368,21 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 					fg, attrs = colLinkFG, protocol.AttrBold
 				}
 				f.shortcut(x, 0, part, fg, attrs)
-				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitJS, X: x, Y: h - 1, W: stringWidth(part), H: 1})
+				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitJS, X: x, Y: h - 1, W: textwidth.StringWidth(part), H: 1})
 			case strings.HasPrefix(part, "Dark:"):
 				fg, attrs := colFooterFG, uint8(0)
 				if part == "Dark:on" {
 					fg, attrs = colLinkFG, protocol.AttrBold
 				}
 				f.shortcut(x, 0, part, fg, attrs)
-				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitDark, X: x, Y: h - 1, W: stringWidth(part), H: 1})
+				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitDark, X: x, Y: h - 1, W: textwidth.StringWidth(part), H: 1})
 			case strings.HasPrefix(part, "Reader:"):
 				fg, attrs := colFooterFG, uint8(0)
 				if part == "Reader:on" {
 					fg, attrs = colLinkFG, protocol.AttrBold
 				}
 				f.shortcut(x, 0, part, fg, attrs)
-				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitReader, X: x, Y: h - 1, W: stringWidth(part), H: 1})
+				out.Hits = append(out.Hits, ChromeHit{Kind: ChromeHitReader, X: x, Y: h - 1, W: textwidth.StringWidth(part), H: 1})
 			}
 		}
 	}
@@ -500,14 +501,14 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 
 	lead := fmt.Sprintf(" %d:", index+1)
 	tail := " x "
-	tailW := stringWidth(tail)
+	tailW := textwidth.StringWidth(tail)
 	if tailW > w-1 {
 		tail, tailW = "", 0
 	}
-	leadW := stringWidth(lead)
+	leadW := textwidth.StringWidth(lead)
 	if leadW+tailW > w {
-		lead = truncateWidth(lead, w-tailW)
-		leadW = stringWidth(lead)
+		lead = textwidth.Truncate(lead, w-tailW)
+		leadW = textwidth.StringWidth(lead)
 	}
 	titleW := w - leadW - tailW
 	if titleW < 0 {
@@ -519,7 +520,7 @@ func drawTab(g *chromeCanvas, out *ChromeLayout, x, y, w, index int, tab TabView
 		if tab.Active {
 			titleAttrs = protocol.AttrBold
 		}
-		g.text(x+leadW, y, fitWidth(title, titleW), titleFG, titleAttrs)
+		g.text(x+leadW, y, textwidth.Fit(title, titleW), titleFG, titleAttrs)
 	}
 	if tailW > 0 {
 		closeX := x + w - tailW
@@ -554,7 +555,7 @@ func drawFindBarAt(f *chromeCanvas, y int, st protocol.State) {
 	f.fill(0, y, f.w, 1, bg)
 	prefix := " Find: "
 	f.text(0, y, prefix, fg, protocol.AttrBold)
-	x := stringWidth(prefix)
+	x := textwidth.StringWidth(prefix)
 	count := " 0/0 "
 	if st.FindText != "" && st.FindTotal > 0 {
 		cur := st.FindCurrent
@@ -563,7 +564,7 @@ func drawFindBarAt(f *chromeCanvas, y int, st protocol.State) {
 		}
 		count = fmt.Sprintf(" %d/%d ", cur, st.FindTotal)
 	}
-	countW := stringWidth(count)
+	countW := textwidth.StringWidth(count)
 	contentW := f.w - x - countW
 	if contentW < 1 {
 		count = ""
@@ -585,7 +586,7 @@ func drawFindBarAt(f *chromeCanvas, y int, st protocol.State) {
 			continue
 		}
 		f.put(xx, y, runes[i], fg, protocol.AttrBold)
-		xx += runeWidth(runes[i])
+		xx += textwidth.RuneWidth(runes[i])
 	}
 	if cur == len(runes) && cur >= start && xx < f.w {
 		f.put(xx, y, ' ', rgb(0x0f, 0x14, 0x1a), protocol.AttrBold)
@@ -672,7 +673,7 @@ func (c *chromeCanvas) put(x, y int, r rune, fg protocol.Color, attrs uint8) {
 	if y < 0 || y >= c.h {
 		return
 	}
-	rw := runeWidth(r)
+	rw := textwidth.RuneWidth(r)
 	if rw == 0 || x < 0 || x >= c.w || x+rw > c.w {
 		return
 	}
@@ -692,7 +693,7 @@ func (c *chromeCanvas) put(x, y int, r rune, fg protocol.Color, attrs uint8) {
 
 func (c *chromeCanvas) text(x, y int, s string, fg protocol.Color, attrs uint8) {
 	for _, r := range s {
-		rw := runeWidth(r)
+		rw := textwidth.RuneWidth(r)
 		if rw == 0 {
 			continue
 		}
@@ -709,19 +710,19 @@ func (c *chromeCanvas) text(x, y int, s string, fg protocol.Color, attrs uint8) 
 // shortcut draws label with its first letter underlined.
 func (c *chromeCanvas) shortcut(x, y int, label string, fg protocol.Color, attrs uint8) {
 	for i, r := range label {
-		if runeWidth(r) == 0 {
+		if textwidth.RuneWidth(r) == 0 {
 			continue
 		}
 		a := attrs
 		if isLetter(r) {
 			a |= protocol.AttrUnderline
 			c.put(x, y, r, fg, a)
-			x += runeWidth(r)
+			x += textwidth.RuneWidth(r)
 			c.text(x, y, label[i+len(string(r)):], fg, attrs)
 			return
 		}
 		c.put(x, y, r, fg, a)
-		x += runeWidth(r)
+		x += textwidth.RuneWidth(r)
 	}
 }
 
@@ -732,10 +733,10 @@ func (c *chromeCanvas) underlinedRune(x, y int, label string, target rune, fg pr
 		return
 	}
 	c.text(x, y, label[:idx], fg, attrs)
-	x += stringWidth(label[:idx])
+	x += textwidth.StringWidth(label[:idx])
 	a := attrs | protocol.AttrUnderline
 	c.put(x, y, target, fg, a)
-	x += runeWidth(target)
+	x += textwidth.RuneWidth(target)
 	c.text(x, y, label[idx+len(string(target)):], fg, attrs)
 }
 
@@ -744,9 +745,9 @@ func isLetter(r rune) bool {
 }
 
 func promptParts(prefix, text string, cursor int, selectAll bool, width int) (head string, at rune, tail string, show bool) {
-	prefixW := stringWidth(prefix)
+	prefixW := textwidth.StringWidth(prefix)
 	if width <= prefixW {
-		return truncateWidth(prefix, width), 0, "", false
+		return textwidth.Truncate(prefix, width), 0, "", false
 	}
 	contentW := width - prefixW
 	runes := []rune(text)
@@ -765,15 +766,15 @@ func promptParts(prefix, text string, cursor int, selectAll bool, width int) (he
 	}
 	if selectAll {
 		visible := text
-		if stringWidth(visible) > contentW {
-			visible = tailWidth(visible, contentW)
+		if textwidth.StringWidth(visible) > contentW {
+			visible = textwidth.Tail(visible, contentW)
 		}
 		return prefix + visible, 0, "", false
 	}
 	start := cur
 	used := 0
 	for start > 0 {
-		rw := runeWidth(runes[start-1])
+		rw := textwidth.RuneWidth(runes[start-1])
 		if used+rw > contentW-1 {
 			break
 		}
@@ -784,7 +785,7 @@ func promptParts(prefix, text string, cursor int, selectAll bool, width int) (he
 	after := cur
 	if cur < len(runes) {
 		at = runes[cur]
-		if runeWidth(at) != 1 {
+		if textwidth.RuneWidth(at) != 1 {
 			at = ' '
 		}
 		after = cur + 1
@@ -792,7 +793,7 @@ func promptParts(prefix, text string, cursor int, selectAll bool, width int) (he
 	used++
 	end := after
 	for end < len(runes) {
-		rw := runeWidth(runes[end])
+		rw := textwidth.RuneWidth(runes[end])
 		if used+rw > contentW {
 			break
 		}
@@ -806,8 +807,8 @@ func centeredLabel(x, room int, label string) (int, string) {
 	if room < 1 {
 		return x, ""
 	}
-	label = truncateWidth(label, room)
-	pad := (room - stringWidth(label)) / 2
+	label = textwidth.Truncate(label, room)
+	pad := (room - textwidth.StringWidth(label)) / 2
 	return x + pad, label
 }
 

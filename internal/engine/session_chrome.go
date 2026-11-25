@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+
+	"browser/internal/textwidth"
 )
 
 // displayState is the focus, hover, reader and palette view state.
@@ -72,7 +74,7 @@ func (b *Session) paintInputCursor(g *Grid, top, bottom int) {
 		return
 	}
 	ch := g.Cells[y*g.W+x].R
-	if ch == 0 || RuneWidth(ch) != 1 {
+	if ch == 0 || textwidth.RuneWidth(ch) != 1 {
 		ch = ' '
 	}
 	g.Put(x, y, ch, &Style{Bold: true}, RGB(0x2f, 0x6f, 0xbf), RGB(0xff, 0xff, 0xff))
@@ -163,7 +165,7 @@ func (b *Session) footerModel() footerModel {
 		rightBudget = 1
 	}
 	rightText := b.footerRight(rightBudget)
-	avail := w - StringWidth(rightText) - reserve - footerGap
+	avail := w - textwidth.StringWidth(rightText) - reserve - footerGap
 	if avail < 0 {
 		avail = 0
 	}
@@ -190,25 +192,6 @@ func (b *Session) footerModel() footerModel {
 		left: leftText, right: rightText, pdfHint: pdfHint, pdfHintX: pdfHintX,
 		avail: avail, level: level, statusHit: statusHit,
 	}
-}
-
-// tailWidth returns the trailing part of s that fits in max cells.
-func tailWidth(s string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	runes := []rune(s)
-	w := 0
-	start := len(runes)
-	for start > 0 {
-		rw := RuneWidth(runes[start-1])
-		if w+rw > max {
-			break
-		}
-		w += rw
-		start--
-	}
-	return string(runes[start:])
 }
 
 func (b *Session) scrollPercent() int { return b.ScrollPercent(b.viewportHeight()) }
@@ -387,7 +370,7 @@ func (b *Session) footerRight(width int) string {
 	var base string
 	for drop := 0; drop < len(parts); drop++ {
 		candidate := strings.Join(parts[drop:], "   ")
-		if StringWidth(candidate) <= width {
+		if textwidth.StringWidth(candidate) <= width {
 			base = candidate
 			break
 		}

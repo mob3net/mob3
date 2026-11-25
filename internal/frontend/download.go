@@ -1,6 +1,10 @@
 package frontend
 
-import "browser/internal/protocol"
+import (
+	"browser/internal/protocol"
+
+	"browser/internal/textwidth"
+)
 
 // downloadOverlay is the download curl hint modal over the page.
 type downloadOverlay struct {
@@ -131,7 +135,7 @@ func downloadLayout(st protocol.State, v *DownloadView) MenuLayout {
 		return MenuLayout{}
 	}
 	inner := boxW - 4
-	lines := wrapCells(protocol.StripControls(v.Command), inner)
+	lines := textwidth.Wrap(protocol.StripControls(v.Command), inner)
 	maxLines := st.Height - 6
 	if maxLines < 1 {
 		maxLines = 1
@@ -164,7 +168,7 @@ func DrawDownload(c *chromeCanvas, st protocol.State, v *DownloadView) MenuLayou
 		return layout
 	}
 	inner := layout.BoxW - 4
-	lines := wrapCells(protocol.StripControls(v.Command), inner)
+	lines := textwidth.Wrap(protocol.StripControls(v.Command), inner)
 	maxLines := st.Height - 6
 	if maxLines < 1 {
 		maxLines = 1
@@ -176,10 +180,10 @@ func DrawDownload(c *chromeCanvas, st protocol.State, v *DownloadView) MenuLayou
 	fg := rgb(0x1f, 0x23, 0x28)
 	for i, line := range lines {
 		c.text(layout.BoxX+2, layout.BoxY+3+i,
-			padWidth(truncateWidth(line, inner), inner), fg, protocol.AttrBold)
+			textwidth.Pad(textwidth.Truncate(line, inner), inner), fg, protocol.AttrBold)
 	}
 	c.text(layout.BoxX+2, layout.BoxY+layout.BoxH-2,
-		padWidth(truncateWidth(" y: copy curl command · Esc: close ", layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
+		textwidth.Pad(textwidth.Truncate(" y: copy curl command · Esc: close ", layout.BoxW-4), layout.BoxW-4), fg, protocol.AttrBold)
 	modalDim(c, layout)
 	return layout
 }

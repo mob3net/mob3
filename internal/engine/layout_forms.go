@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"browser/internal/textwidth"
 )
 
 // Form controls use single-cell Unicode glyphs so a checkbox plus its label
@@ -83,10 +85,10 @@ func (c *inlineCtx) addLabel(label string, st *Style, node *Node) {
 		return
 	}
 	maxW := c.lineMaxW()
-	if w := StringWidth(label); w > maxW && maxW > 0 {
-		label = TruncateWidth(label, maxW)
+	if w := textwidth.StringWidth(label); w > maxW && maxW > 0 {
+		label = textwidth.Truncate(label, maxW)
 	}
-	w := StringWidth(label)
+	w := textwidth.StringWidth(label)
 	if w < 1 {
 		w = 1
 	}
@@ -129,10 +131,10 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		return
 	}
 	maxW := c.lineMaxW()
-	if w := StringWidth(label); w > maxW && maxW > 0 {
-		label = TruncateWidth(label, maxW)
+	if w := textwidth.StringWidth(label); w > maxW && maxW > 0 {
+		label = textwidth.Truncate(label, maxW)
 	}
-	w := StringWidth(label)
+	w := textwidth.StringWidth(label)
 	if w < 1 {
 		w = 1
 	}
@@ -150,7 +152,7 @@ func (c *inlineCtx) addForm(n *Node, st *Style) {
 		if target > w {
 			w = MinInt(target, maxW)
 			if strings.HasSuffix(label, "]") {
-				pad := w - StringWidth(label)
+				pad := w - textwidth.StringWidth(label)
 				label = label[:len(label)-1] + strings.Repeat(" ", pad) + "]"
 			}
 		}
@@ -222,7 +224,7 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 			mark = GlyphCheckboxOn + " "
 		}
 		labels[i] = mark + OptionLabel(opt)
-		if w := StringWidth(labels[i]); w > boxW {
+		if w := textwidth.StringWidth(labels[i]); w > boxW {
 			boxW = w
 		}
 	}
@@ -239,7 +241,7 @@ func (c *inlineCtx) addMultiSelect(n *Node, st *Style) {
 		boxW = 1
 	}
 	for i := range labels {
-		labels[i] = TruncateWidth(labels[i], boxW)
+		labels[i] = textwidth.Truncate(labels[i], boxW)
 	}
 	c.addAtomicBox(inlineItem{
 		kind: itemAtomic, w: boxW, h: len(opts), style: st, node: n,
@@ -269,7 +271,7 @@ func (c *inlineCtx) addTextarea(n *Node, st *Style) {
 	if label == "" {
 		return
 	}
-	boxW := StringWidth(label)
+	boxW := textwidth.StringWidth(label)
 	if c.maxW > 0 && boxW > c.maxW {
 		boxW = c.maxW
 	}
@@ -336,7 +338,7 @@ func TextareaLayoutFor(n *Node, boxW int) (rows []string, cursorRow, cursorCol i
 	}
 	out := make([]string, h)
 	for i, line := range lines {
-		out[i] = "[ " + PadWidth(TruncateWidth(line, inner), inner) + "]"
+		out[i] = "[ " + textwidth.Pad(textwidth.Truncate(line, inner), inner) + "]"
 	}
 	if cursorCol >= inner {
 		cursorCol = inner - 1
@@ -369,7 +371,7 @@ func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol
 		width = 1
 	}
 	// The widget never shows more than 12 rows; stop scanning beyond that.
-	txt = TruncateWidth(txt, width*12+12)
+	txt = textwidth.Truncate(txt, width*12+12)
 	if hasCursor {
 		if cur > len(txt) {
 			hasCursor = false
@@ -401,7 +403,7 @@ func textareaLinesCursor(n *Node, width int) (out []string, cursorRow, cursorCol
 			flush()
 			continue
 		}
-		rw := RuneWidth(r)
+		rw := textwidth.RuneWidth(r)
 		if rw == 0 {
 			b.WriteRune(r)
 			continue
@@ -637,8 +639,8 @@ func inputTextWindow(n *Node, typ string) (display string, start, cursorCol int,
 		if val == "" {
 			val = strings.Repeat(" ", 10)
 		}
-		if w := StringWidth(val); w > inputDisplayCells {
-			val = TruncateWidth(val, inputDisplayCells)
+		if w := textwidth.StringWidth(val); w > inputDisplayCells {
+			val = textwidth.Truncate(val, inputDisplayCells)
 		}
 		return val, 0, 0, false
 	}
@@ -664,7 +666,7 @@ func inputTextWindow(n *Node, typ string) (display string, start, cursorCol int,
 	start = curRune
 	used := 0
 	for start > 0 {
-		rw := RuneWidth(runes[start-1])
+		rw := textwidth.RuneWidth(runes[start-1])
 		if used+rw > limit {
 			break
 		}
@@ -673,11 +675,11 @@ func inputTextWindow(n *Node, typ string) (display string, start, cursorCol int,
 	}
 	used = 0
 	for i := start; i < curRune; i++ {
-		used += RuneWidth(runes[i])
+		used += textwidth.RuneWidth(runes[i])
 	}
 	end := curRune
 	for end < len(runes) {
-		rw := RuneWidth(runes[end])
+		rw := textwidth.RuneWidth(runes[end])
 		if used+rw > limit {
 			break
 		}
@@ -685,7 +687,7 @@ func inputTextWindow(n *Node, typ string) (display string, start, cursorCol int,
 		end++
 	}
 	display = string(runes[start:end])
-	cursorCol = StringWidth(string(runes[start:curRune]))
+	cursorCol = textwidth.StringWidth(string(runes[start:curRune]))
 	if start > 0 {
 		display = "…" + display
 		cursorCol++
@@ -707,7 +709,7 @@ func inputClickOffset(n *Node, typ string, rel int) int {
 	}
 	idx, cell := 0, 0
 	for idx < len(runes) {
-		rw := RuneWidth(runes[idx])
+		rw := textwidth.RuneWidth(runes[idx])
 		if rw == 0 {
 			idx++
 			continue
@@ -764,7 +766,7 @@ func textareaClickOffset(n *Node, width, row, col int) int {
 			}
 			continue
 		}
-		rw := RuneWidth(r)
+		rw := textwidth.RuneWidth(r)
 		if rw == 0 {
 			continue
 		}
@@ -864,7 +866,7 @@ func InputCursorOffset(n *Node, label string) (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	if max := StringWidth(label) - 4; col > max {
+	if max := textwidth.StringWidth(label) - 4; col > max {
 		col = max
 	}
 	if col < 0 {
@@ -909,7 +911,7 @@ func FormLabel(n *Node) string {
 		case "password":
 			display, _, _ := inputTextDisplay(n, typ)
 			minW := 16
-			if w := StringWidth(display); w < minW {
+			if w := textwidth.StringWidth(display); w < minW {
 				display += strings.Repeat(" ", minW-w)
 			}
 			return "[ " + display + " ]"
@@ -919,7 +921,7 @@ func FormLabel(n *Node) string {
 			if typ == "search" {
 				minW = 30
 			}
-			if w := StringWidth(display); w < minW {
+			if w := textwidth.StringWidth(display); w < minW {
 				display += strings.Repeat(" ", minW-w)
 			}
 			return "[ " + display + " ]"
@@ -943,7 +945,7 @@ func FormLabel(n *Node) string {
 		}
 		return "[ " + chosen + " ▾ ]"
 	case "textarea":
-		txt := TruncateWidth(InputValue(n), 80)
+		txt := textwidth.Truncate(InputValue(n), 80)
 		if txt == "" && !n.InputFocused {
 			txt = n.Attr("placeholder")
 		}
@@ -953,11 +955,11 @@ func FormLabel(n *Node) string {
 		if txt == "" {
 			txt = strings.Repeat(" ", 10)
 		}
-		if w := StringWidth(txt); w < 30 {
+		if w := textwidth.StringWidth(txt); w < 30 {
 			txt += strings.Repeat(" ", 30-w)
 		}
-		if w := StringWidth(txt); w > 40 {
-			txt = TruncateWidth(txt, 40)
+		if w := textwidth.StringWidth(txt); w > 40 {
+			txt = textwidth.Truncate(txt, 40)
 		}
 		return "[ " + txt + " ]"
 	case "button":

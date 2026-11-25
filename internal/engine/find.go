@@ -1,6 +1,10 @@
 package engine
 
-import "unicode"
+import (
+	"unicode"
+
+	"browser/internal/textwidth"
+)
 
 // FindRect is one rectangle covered by a find match.
 type FindRect struct {
@@ -133,7 +137,7 @@ func findPageStream(layout *Layout, bigText bool) ([]rune, []findUnit) {
 		}
 		x := f.X
 		for _, r := range runes {
-			w := RuneWidth(r) * scale
+			w := textwidth.RuneWidth(r) * scale
 			u := findUnit{frag: fi, line: -1, x: x, y: f.Y, w: w, h: scale, real: true}
 			appendFindRune(&text, &units, r, u)
 			x += w
@@ -160,7 +164,7 @@ func htmlFindStream(lines []string) ([]rune, []findUnit) {
 		}
 		x := 0
 		for _, r := range runes {
-			w := RuneWidth(r)
+			w := textwidth.RuneWidth(r)
 			u := findUnit{frag: -1, line: li, x: x, w: w, h: 1, real: true}
 			appendFindRune(&text, &units, r, u)
 			x += w
@@ -280,7 +284,7 @@ func cellsForRunes(runes []rune, scale int) int {
 	}
 	w := 0
 	for _, r := range runes {
-		w += RuneWidth(r) * scale
+		w += textwidth.RuneWidth(r) * scale
 	}
 	return w
 }

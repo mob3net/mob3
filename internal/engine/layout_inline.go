@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"browser/internal/textwidth"
 )
 
 func (l *Layouter) addText(x, y int, s string, st *Style, n *Node) {
@@ -63,7 +65,7 @@ func LayoutTextOverlaps(ly *Layout) bool {
 func trimTextLeft(s string, cells int) string {
 	for cells > 0 && s != "" {
 		r, size := utf8.DecodeRuneInString(s)
-		cells -= RuneWidth(r)
+		cells -= textwidth.RuneWidth(r)
 		s = s[size:]
 	}
 	return s
@@ -347,7 +349,7 @@ func (l *Layouter) scale(st *Style) int {
 
 // textWidth measures s in layout cells, honouring glyph scaling.
 func (l *Layouter) textWidth(s string, st *Style) int {
-	return StringWidth(s) * l.scale(st)
+	return textwidth.StringWidth(s) * l.scale(st)
 }
 
 func (c *inlineCtx) addText(s string, st *Style, node *Node) {
@@ -382,7 +384,7 @@ func (c *inlineCtx) addText(s string, st *Style, node *Node) {
 }
 
 func (c *inlineCtx) charW(r rune, st *Style) int {
-	return RuneWidth(r) * c.l.scale(st)
+	return textwidth.RuneWidth(r) * c.l.scale(st)
 }
 
 func (c *inlineCtx) addPre(s string, st *Style, node *Node) {

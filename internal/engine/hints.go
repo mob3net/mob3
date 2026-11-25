@@ -1,6 +1,10 @@
 package engine
 
-import "strings"
+import (
+	"strings"
+
+	"browser/internal/textwidth"
+)
 
 // HintGlyph is one letter of a target's visible text, with the terminal cell
 // it occupies.
@@ -347,7 +351,7 @@ func CollectHintGlyphs(layout *Layout, targets []HintTarget, scroll, top, bottom
 			if ch, ok := HintLetter(r); ok {
 				out[id] = append(out[id], HintGlyph{Ch: ch, R: r, X: x, Y: f.Y})
 			}
-			x += RuneWidth(r)
+			x += textwidth.RuneWidth(r)
 		}
 	}
 	return out

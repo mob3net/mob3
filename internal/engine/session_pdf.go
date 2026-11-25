@@ -6,6 +6,8 @@ package engine
 
 import (
 	"fmt"
+
+	"browser/internal/textwidth"
 )
 
 // updatePDFPageStarts records the layout row where each PDF page begins. The
@@ -62,24 +64,24 @@ func (b *Session) pdfFooterLine(avail int) (text, hint string, hintCell int, ok 
 	}
 	base := fmt.Sprintf(" Page %d/%d", b.PDFPageNumber(), len(b.Page.PDF.Pages))
 	full := base + " (S -> Download " + name + ")"
-	if StringWidth(full) <= avail {
-		return full, "(S -> Download " + name + ")", StringWidth(base) + 1, true
+	if textwidth.StringWidth(full) <= avail {
+		return full, "(S -> Download " + name + ")", textwidth.StringWidth(base) + 1, true
 	}
 	// Shorten the file name inside the hint before giving the hint up.
 	const prefix, suffix = "(S -> Download ", ")"
-	room := avail - StringWidth(base) - 1 - StringWidth(prefix) - StringWidth(suffix)
+	room := avail - textwidth.StringWidth(base) - 1 - textwidth.StringWidth(prefix) - textwidth.StringWidth(suffix)
 	if room >= 6 {
-		short := TruncateWidth(name, room-1) + "…"
+		short := textwidth.Truncate(name, room-1) + "…"
 		hint := prefix + short + suffix
-		if StringWidth(base+" "+hint) <= avail {
-			return base + " " + hint, hint, StringWidth(base) + 1, true
+		if textwidth.StringWidth(base+" "+hint) <= avail {
+			return base + " " + hint, hint, textwidth.StringWidth(base) + 1, true
 		}
 	}
-	if hint := "(S)"; StringWidth(base+" "+hint) <= avail {
-		return base + " " + hint, hint, StringWidth(base) + 1, true
+	if hint := "(S)"; textwidth.StringWidth(base+" "+hint) <= avail {
+		return base + " " + hint, hint, textwidth.StringWidth(base) + 1, true
 	}
-	if StringWidth(base) <= avail {
+	if textwidth.StringWidth(base) <= avail {
 		return base, "", 0, true
 	}
-	return TruncateWidth(base, avail), "", 0, true
+	return textwidth.Truncate(base, avail), "", 0, true
 }

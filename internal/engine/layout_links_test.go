@@ -3,6 +3,8 @@ package engine
 import (
 	"strings"
 	"testing"
+
+	"browser/internal/textwidth"
 )
 
 func TestLinkRects(t *testing.T) {
@@ -37,8 +39,8 @@ func TestLinkSpaceStaysOutsideLink(t *testing.T) {
 		if f.Link != ly.Links[0] {
 			t.Fatal("GNOME fragment is not part of the link")
 		}
-		if got := ly.Links[0].Rects[0].W; got != StringWidth("GNOME") {
-			t.Fatalf("link rect width = %d, want %d", got, StringWidth("GNOME"))
+		if got := ly.Links[0].Rects[0].W; got != textwidth.StringWidth("GNOME") {
+			t.Fatalf("link rect width = %d, want %d", got, textwidth.StringWidth("GNOME"))
 		}
 		if i == 0 {
 			t.Fatal("no space before the link fragment")

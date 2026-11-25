@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/sobek"
 
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 )
 
 // consoleState is the JavaScript console and its per-pane scroll positions.
@@ -417,77 +418,11 @@ func (b *Session) consoleLines(width int) []string {
 				out = append(out, "")
 				continue
 			}
-			out = append(out, wrapCells(raw, width)...)
+			out = append(out, textwidth.Wrap(raw, width)...)
 		}
 	}
 	if len(out) == 0 {
 		out = append(out, "(no JavaScript messages)")
-	}
-	return out
-}
-
-// wrapCells hard-wraps a string to width cells.
-func wrapCells(s string, width int) []string {
-	var out []string
-	var line strings.Builder
-	col := 0
-	for _, r := range s {
-		rw := RuneWidth(r)
-		if rw == 0 {
-			line.WriteRune(r)
-			continue
-		}
-		if col+rw > width {
-			out = append(out, line.String())
-			line.Reset()
-			col = 0
-		}
-		line.WriteRune(r)
-		col += rw
-	}
-	if line.Len() > 0 {
-		out = append(out, line.String())
-	}
-	if len(out) == 0 {
-		out = append(out, "")
-	}
-	return out
-}
-
-// wrapCellsHanging is wrapCells with an indent for continuation lines, so a
-// wrapped request or storage entry stays visually attached to its prefix.
-func wrapCellsHanging(s string, width, indent int) []string {
-	if width <= 0 {
-		return []string{s}
-	}
-	if indent < 0 || indent+2 > width {
-		indent = 0
-	}
-	var out []string
-	var line strings.Builder
-	col := 0
-	for _, r := range s {
-		rw := RuneWidth(r)
-		if rw == 0 {
-			line.WriteRune(r)
-			continue
-		}
-		if col+rw > width {
-			out = append(out, line.String())
-			line.Reset()
-			for i := 0; i < indent; i++ {
-				line.WriteByte(' ')
-			}
-			col = indent
-		}
-		line.WriteRune(r)
-		col += rw
-	}
-	if line.Len() > 0 {
-		out = append(out, line.String())
-	}
-	if len(out) == 0 {
-		out = append(out, "")
 	}
 	return out
 }
@@ -583,7 +518,7 @@ func (b *Session) toolLines(width int) []string {
 			out = append(out, "")
 			continue
 		}
-		out = append(out, wrapCellsHanging(entry, width, 4)...)
+		out = append(out, textwidth.WrapHanging(entry, width, 4)...)
 	}
 	return out
 }
@@ -829,7 +764,7 @@ func appendWrappedHanging(out []string, line string, width int) []string {
 	if width <= 0 {
 		return append(out, line)
 	}
-	return append(out, wrapCellsHanging(line, width, 4)...)
+	return append(out, textwidth.WrapHanging(line, width, 4)...)
 }
 
 // htmlLines returns the raw HTML source of the current page, wrapped to
@@ -853,7 +788,7 @@ func (b *Session) htmlLines(width int) []string {
 			out = append(out, "")
 			continue
 		}
-		out = append(out, wrapCells(raw, width)...)
+		out = append(out, textwidth.Wrap(raw, width)...)
 	}
 	if len(out) == 0 {
 		out = append(out, "(no HTML source)")
@@ -984,7 +919,7 @@ func visibleConsoleLines(items []string, scroll, rows, width int) []string {
 	start := paneStart(len(items), scroll, rows)
 	out := make([]string, 0, rows)
 	for i := 0; i < rows && start+i < len(items); i++ {
-		out = append(out, TruncateWidth(items[start+i], width))
+		out = append(out, textwidth.Truncate(items[start+i], width))
 	}
 	return out
 }
@@ -1012,7 +947,7 @@ func (b *Session) emitConsoleView() {
 				reqRows--
 			}
 			v.Lines = visibleConsoleLines(b.requestLinesWidth(w-2), b.reqScroll, reqRows, w-2)
-			v.Summary = TruncateWidth(b.requestCacheSummary(), w-2)
+			v.Summary = textwidth.Truncate(b.requestCacheSummary(), w-2)
 		case consoleStorage:
 			v.Lines = visibleConsoleLines(b.storageLinesWidth(w-2), b.storageScroll, l.bodyRows, w-2)
 		case consoleHTML:

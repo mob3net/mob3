@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"browser/internal/textwidth"
 )
 
 func listMarker(st *Style, n *Node) string {
@@ -430,7 +432,7 @@ func (l *Layouter) clipFragments(start int, r Rect) {
 					continue
 				}
 				f.W = right - f.X
-				f.Text = TruncateWidth(f.Text, f.W)
+				f.Text = textwidth.Truncate(f.Text, f.W)
 			}
 		} else {
 			if f.Y < r.Y {

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"browser/internal/protocol"
+	"browser/internal/textwidth"
 	"bytes"
 	"errors"
 	"fmt"
@@ -218,7 +219,7 @@ func (g *Grid) Put(x, y int, r rune, st *Style, fg, bg Color) {
 	if y < 0 || y >= g.H {
 		return
 	}
-	rw := RuneWidth(r)
+	rw := textwidth.RuneWidth(r)
 	if rw == 0 {
 		return
 	}
@@ -269,7 +270,7 @@ func (g *Grid) Text(x, y int, s string, st *Style, fg Color) {
 		st = defaultStyle()
 	}
 	for _, r := range s {
-		rw := RuneWidth(r)
+		rw := textwidth.RuneWidth(r)
 		if rw == 0 {
 			continue
 		}
@@ -284,7 +285,7 @@ func (g *Grid) Text(x, y int, s string, st *Style, fg Color) {
 }
 
 // TextBig writes s with kitty's text-sizing protocol, scaled by scale. The
-// text consumes scale*StringWidth(s) columns and scale rows; covered cells are
+// text consumes scale*textwidth.StringWidth(s) columns and scale rows; covered cells are
 // marked so Lines does not paint over the multicell.
 func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 	s = StripTerminalControls(s)
@@ -295,13 +296,13 @@ func (g *Grid) TextBig(x, y int, s string, st *Style, fg, bg Color, scale int) {
 		g.Text(x, y, s, st, fg)
 		return
 	}
-	base := StringWidth(s)
+	base := textwidth.StringWidth(s)
 	if base <= 0 {
 		return
 	}
 	if room := (g.W - x) / scale; base > room {
-		s = TruncateWidth(s, room)
-		base = StringWidth(s)
+		s = textwidth.Truncate(s, room)
+		base = textwidth.StringWidth(s)
 	}
 	total := base * scale
 	if base <= 0 || total <= 0 {

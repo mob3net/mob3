@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"browser/internal/textwidth"
 )
 
 // pdfBuild assembles a PDF with a classic cross-reference table. Objects are
@@ -466,7 +468,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 	if hint != "(S -> Download file-example_PDF_500_kB.pdf)" {
 		t.Fatalf("hint = %q", hint)
 	}
-	if cell != StringWidth(" Page 1/5")+1 {
+	if cell != textwidth.StringWidth(" Page 1/5")+1 {
 		t.Fatalf("hint cell = %d", cell)
 	}
 

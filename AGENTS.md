@@ -201,13 +201,17 @@ published by the Pages build.
   drawing, console/dialog state, the document loader, headless automation and
   the one-shot dump handler. It reaches the network only through
   `protocol.Host` and has no terminal or chrome output of its own. Production
-  imports only `internal/protocol` and `internal/textedit` (plus approved
-  vendored modules). The engine
+  imports only `internal/protocol`, `internal/textedit` and
+  `internal/textwidth` (plus approved vendored modules). The engine
   has no fallback chrome, console, dialog, find-bar or hint-overlay rendering
   and no fallback shell/prompt input; the front end owns those. Nothing under
   `internal` is imported from outside this module.
 - `internal/textedit/` — pure single-line editing shared by the engine's form
   controls and the front end's URL, dialog, find and console inputs.
+- `internal/textwidth/` — pure terminal-cell text arithmetic shared by the
+  engine's layout/paint and the front end's chrome, dialogs and console:
+  rune/string widths, truncation, padding, tail windows and wrapping. Standard
+  library only.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/textedit` (pure
   line editing; standard library only), `internal/engine` (HTML,
@@ -220,7 +224,8 @@ published by the Pages build.
   engine keeps only a memory-only page cache. MOB³ keeps no global visited list
   or download history. The allowed
   imports are `app` → `engine`, `host`, `frontend`, `protocol`, and each of
-  `engine`, `frontend` → `protocol`, `textedit`, plus `host` → `protocol`; the
+  `engine`, `frontend` → `protocol`, `textedit`, `textwidth`, plus `host` →
+  `protocol`; the
   front end and the host never
   import `engine`, and `engine` never imports `frontend`, `host`, `net` or
   `syscall`. A dependency test enforces the graph. The front end never names an
