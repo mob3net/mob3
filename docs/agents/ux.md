@@ -37,8 +37,9 @@ agreement, the non-negotiable constraints and the change protocol.
   paused, deferred image work is canceled and progress/usage wakeups are off.
   Switching resizes the new active tab, restores its overlays and moves the
   shared presenter. Closing releases the transport and budget share; a middle
-  click on a tab closes it, and closing the last tab exits immediately without
-  the quit prompt. A crashed
+  click on a tab closes it, closing the active tab returns to the most recently
+  used remaining tab, and closing the last tab exits immediately without the
+  quit prompt. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs from
   `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
   focused URL prompt when no target is given; a link opened in a background tab

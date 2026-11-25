@@ -852,6 +852,55 @@ func TestCloseTabReleasesAndActivatesNeighbor(t *testing.T) {
 	}
 }
 
+func TestCloseActiveTabReturnsToPreviousTab(t *testing.T) {
+	p := NewPresenter(io.Discard, true)
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	third := multiTab(3, "three")
+	first.Presenter = p
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second, third}, Active: first, Presenter: p,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+	}
+	loop.syncTabBar()
+	loop.activateTab(1)
+	loop.activateTab(2)
+	if loop.Active != third {
+		t.Fatal("did not switch to the third tab")
+	}
+	loop.closeTab(-1)
+	if loop.Active != second {
+		t.Fatalf("closing the third tab returned to %v, want the second", loop.Active.BarView(false).Title)
+	}
+	loop.closeTab(-1)
+	if loop.Active != first {
+		t.Fatalf("closing the second tab returned to %v, want the first", loop.Active.BarView(false).Title)
+	}
+}
+
+func TestCloseBackgroundTabIsForgotten(t *testing.T) {
+	p := NewPresenter(io.Discard, true)
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	third := multiTab(3, "three")
+	first.Presenter = p
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second, third}, Active: first, Presenter: p,
+		TerminalSize: func() (int, int, bool) { return 80, 24, true },
+	}
+	loop.syncTabBar()
+	loop.activateTab(1)
+	loop.activateTab(2)
+	loop.closeTab(1) // close the background tab that was used before
+	if loop.Active != third {
+		t.Fatal("closing a background tab changed the active tab")
+	}
+	loop.closeTab(-1)
+	if loop.Active != first {
+		t.Fatalf("closing the active tab returned to a closed tab: %v", loop.Active.BarView(false).Title)
+	}
+}
+
 func TestScrollTabsClampsTheWindow(t *testing.T) {
 	st := chromeState()
 	st.Width = 120

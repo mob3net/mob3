@@ -48,6 +48,7 @@ type SessionLoop struct {
 	revealPending bool
 	zoomPercent   int
 	history       *historyLog
+	tabHistory    []*Tab // previously active tabs, most recent first
 }
 
 // Run processes keys, resizes and every tab's events until it quits or the
@@ -240,13 +241,18 @@ func (l *SessionLoop) removeTab(tab *Tab) {
 		l.Active = nil
 	}
 	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
+	l.forgetTabHistory(tab)
 	l.releaseTab(tab)
 	if active && len(l.Tabs) > 0 {
-		next := index
-		if next >= len(l.Tabs) {
-			next = len(l.Tabs) - 1
+		if next := l.previousTab(); next != nil {
+			l.activateTab(l.tabIndex(next))
+		} else {
+			next := index
+			if next >= len(l.Tabs) {
+				next = len(l.Tabs) - 1
+			}
+			l.activateTab(next)
 		}
-		l.activateTab(next)
 		return
 	}
 	l.syncTabBar()
@@ -358,6 +364,51 @@ func (l *SessionLoop) activeIndex() int {
 		}
 	}
 	return -1
+}
+
+func (l *SessionLoop) tabIndex(tab *Tab) int {
+	for i, candidate := range l.Tabs {
+		if candidate == tab {
+			return i
+		}
+	}
+	return -1
+}
+
+// rememberPreviousTab records the tab that was active before a switch. The most
+// recently used tab stays at the front, so closing the active tab can return to
+// it.
+func (l *SessionLoop) rememberPreviousTab(tab *Tab) {
+	if tab == nil {
+		return
+	}
+	l.forgetTabHistory(tab)
+	l.tabHistory = append(l.tabHistory, nil)
+	copy(l.tabHistory[1:], l.tabHistory)
+	l.tabHistory[0] = tab
+}
+
+func (l *SessionLoop) forgetTabHistory(tab *Tab) {
+	out := l.tabHistory[:0]
+	for _, candidate := range l.tabHistory {
+		if candidate != tab {
+			out = append(out, candidate)
+		}
+	}
+	l.tabHistory = out
+}
+
+// previousTab returns the most recently used tab that is still open and removes
+// it from the history stack.
+func (l *SessionLoop) previousTab() *Tab {
+	for len(l.tabHistory) > 0 {
+		tab := l.tabHistory[0]
+		l.tabHistory = l.tabHistory[1:]
+		if tab != nil && l.tabIndex(tab) >= 0 {
+			return tab
+		}
+	}
+	return nil
 }
 
 func (l *SessionLoop) currentSize() (int, int) {
@@ -479,16 +530,21 @@ func (l *SessionLoop) closeTab(index int) bool {
 	active := tab == l.Active
 	if active {
 		tab.DetachPresenter()
+		l.Active = nil
 	}
 	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
+	l.forgetTabHistory(tab)
 	l.releaseTab(tab)
 	if active {
-		l.Active = nil
-		next := index
-		if next >= len(l.Tabs) {
-			next = len(l.Tabs) - 1
+		if next := l.previousTab(); next != nil {
+			l.activateTab(l.tabIndex(next))
+		} else {
+			next := index
+			if next >= len(l.Tabs) {
+				next = len(l.Tabs) - 1
+			}
+			l.activateTab(next)
 		}
-		l.activateTab(next)
 		return false
 	}
 	l.syncTabBar()
@@ -590,9 +646,11 @@ func (l *SessionLoop) activateTab(index int) {
 		return
 	}
 	if l.Active != nil {
+		l.rememberPreviousTab(l.Active)
 		l.Active.DetachPresenter()
 		l.setVisible(l.Active, false)
 	}
+	l.forgetTabHistory(target)
 	l.Active = target
 	l.patchZoom(target)
 	_ = l.resizeTab(target)
