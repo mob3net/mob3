@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textedit"
 	"browser/internal/textwidth"
@@ -17,7 +18,7 @@ type promptOverlay struct {
 	promptCursor    int
 	promptSelectAll bool
 	promptBase      protocol.State
-	promptHist      promptHistory
+	promptHist      linehistory.History
 }
 
 func (w *promptOverlay) isOpen() bool         { return w.promptActive }
@@ -54,7 +55,7 @@ func (w *promptOverlay) startValue(l *Tab, text string, vim, selectAll bool) {
 	w.promptText = text
 	w.promptCursor = len(w.promptText)
 	w.promptSelectAll = selectAll
-	w.promptHist.reset()
+	w.promptHist.Reset()
 	w.sync(l)
 }
 
@@ -109,7 +110,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 			return true, true
 		}
 		if text != "" {
-			w.promptHist.record(text)
+			w.promptHist.Record(text)
 			l.navigate(text)
 		}
 		return true, false
@@ -121,7 +122,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.close(l)
 		return true, false
 	case "up", "ctrl-p":
-		if prev, ok := w.promptHist.up(w.promptText); ok {
+		if prev, ok := w.promptHist.Up(w.promptText); ok {
 			w.promptText = prev
 			w.promptCursor = len(prev)
 		}
@@ -129,7 +130,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.sync(l)
 		return true, false
 	case "down", "ctrl-n":
-		if next, ok := w.promptHist.down(w.promptText); ok {
+		if next, ok := w.promptHist.Down(w.promptText); ok {
 			w.promptText = next
 			w.promptCursor = len(next)
 		}
@@ -183,61 +184,6 @@ func (w *promptOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 	}
 	w.close(l)
 	return true
-}
-
-// promptHistory is the URL/command prompt's recall list.
-type promptHistory struct {
-	entries []string
-	at      int
-	draft   string
-}
-
-func (h *promptHistory) reset() {
-	h.at = len(h.entries)
-	h.draft = ""
-}
-
-func (h *promptHistory) record(src string) {
-	if len(h.entries) == 0 || h.entries[len(h.entries)-1] != src {
-		h.entries = append(h.entries, src)
-		if len(h.entries) > 200 {
-			h.entries = append([]string(nil), h.entries[len(h.entries)-200:]...)
-		}
-	}
-	h.reset()
-}
-
-func (h *promptHistory) saveDraft(text string) {
-	if h.at >= len(h.entries) || text != h.entries[h.at] {
-		h.draft = text
-	}
-}
-
-func (h *promptHistory) up(text string) (string, bool) {
-	if h.at > len(h.entries) {
-		h.at = len(h.entries)
-	}
-	h.saveDraft(text)
-	if h.at == 0 {
-		return text, false
-	}
-	h.at--
-	return h.entries[h.at], true
-}
-
-func (h *promptHistory) down(text string) (string, bool) {
-	if h.at > len(h.entries) {
-		h.at = len(h.entries)
-	}
-	h.saveDraft(text)
-	if h.at >= len(h.entries) {
-		return text, false
-	}
-	h.at++
-	if h.at == len(h.entries) {
-		return h.draft, true
-	}
-	return h.entries[h.at], true
 }
 
 func runeIndexToByte(runes []rune, i int) int {

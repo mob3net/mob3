@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/sobek"
 
+	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textwidth"
 )
@@ -26,8 +27,8 @@ type consoleState struct {
 	consoleText   string
 	consoleCursor int
 	consoleEdit   bool // the input row inside the logs or tools section has focus
-	consoleHist   consoleHistory
-	toolHist      consoleHistory
+	consoleHist   linehistory.History
+	toolHist      linehistory.History
 
 	htmlPage  *Page
 	htmlWidth int
@@ -68,69 +69,8 @@ const (
 // toolLogCap bounds the Tools tab scrollback; the newest lines are kept.
 const toolLogCap = 500
 
-// consoleHistory is one input history with the shell-style cursor used by
-// Up/Down and Ctrl-P/Ctrl-N. at == len(entries) means the draft line is shown.
-type consoleHistory struct {
-	entries []string
-	at      int
-	draft   string
-}
-
-// reset returns to the draft line without discarding recorded entries.
-func (h *consoleHistory) reset() {
-	h.at = len(h.entries)
-	h.draft = ""
-}
-
-// record appends src (dropping consecutive duplicates), caps the list and
-// returns to the draft line.
-func (h *consoleHistory) record(src string) {
-	if len(h.entries) == 0 || h.entries[len(h.entries)-1] != src {
-		h.entries = append(h.entries, src)
-		if len(h.entries) > 200 {
-			h.entries = append([]string(nil), h.entries[len(h.entries)-200:]...)
-		}
-	}
-	h.reset()
-}
-
-// saveDraft keeps the line the user is editing, including edits made to a
-// recalled entry, so moving away and back does not discard it.
-func (h *consoleHistory) saveDraft(text string) {
-	if h.at >= len(h.entries) || text != h.entries[h.at] {
-		h.draft = text
-	}
-}
-
-func (h *consoleHistory) up(text string) (string, bool) {
-	if h.at > len(h.entries) {
-		h.at = len(h.entries)
-	}
-	h.saveDraft(text)
-	if h.at == 0 {
-		return text, false
-	}
-	h.at--
-	return h.entries[h.at], true
-}
-
-func (h *consoleHistory) down(text string) (string, bool) {
-	if h.at > len(h.entries) {
-		h.at = len(h.entries)
-	}
-	h.saveDraft(text)
-	if h.at >= len(h.entries) {
-		return text, false
-	}
-	h.at++
-	if h.at == len(h.entries) {
-		return h.draft, true
-	}
-	return h.entries[h.at], true
-}
-
 // consoleHistoryFor selects the per-tab history used by the active input row.
-func (b *Session) consoleHistoryFor(pane int) *consoleHistory {
+func (b *Session) consoleHistoryFor(pane int) *linehistory.History {
 	if pane == consoleTools {
 		return &b.toolHist
 	}
@@ -183,8 +123,8 @@ func (b *Session) toggleConsole() {
 	b.toolScroll = 0
 	b.consolePane = consoleLogs
 	b.consoleEdit = false
-	b.consoleHist.reset()
-	b.toolHist.reset()
+	b.consoleHist.Reset()
+	b.toolHist.Reset()
 	if b.consoleOpen {
 		b.jsErr = false
 	}
@@ -350,7 +290,7 @@ func (b *Session) runConsoleInput() {
 	if src == "" {
 		return
 	}
-	b.consoleHistoryFor(b.consolePane).record(src)
+	b.consoleHistoryFor(b.consolePane).Record(src)
 	b.consoleText = ""
 	b.consoleCursor = 0
 	if b.consolePane == consoleTools {
@@ -401,8 +341,8 @@ func (b *Session) resetConsole() {
 	b.htmlScroll = 0
 	b.consolePane = consoleLogs
 	b.consoleEdit = false
-	b.consoleHist.reset()
-	b.toolHist.reset()
+	b.consoleHist.Reset()
+	b.toolHist.Reset()
 	b.clearFind()
 }
 

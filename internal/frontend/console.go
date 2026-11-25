@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textedit"
 	"browser/internal/textwidth"
@@ -18,7 +19,7 @@ type consoleOverlay struct {
 	consoleEdit       bool
 	consoleText       string
 	consoleCursor     int
-	consoleHist       [5]promptHistory
+	consoleHist       [5]linehistory.History
 	consoleFindActive bool
 	consoleFindText   string
 	consoleFindCursor int
@@ -132,7 +133,7 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		case "enter":
 			text := strings.TrimSpace(w.consoleText)
 			if text != "" {
-				w.consoleHist[w.consolePane].record(text)
+				w.consoleHist[w.consolePane].Record(text)
 				w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: text})
 			}
 			w.consoleText = ""
@@ -140,14 +141,14 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 			w.present(l)
 			return true, false
 		case "up", "ctrl-p":
-			if prev, ok := w.consoleHist[w.consolePane].up(w.consoleText); ok {
+			if prev, ok := w.consoleHist[w.consolePane].Up(w.consoleText); ok {
 				w.consoleText = prev
 				w.consoleCursor = len(prev)
 			}
 			w.present(l)
 			return true, false
 		case "down", "ctrl-n":
-			if next, ok := w.consoleHist[w.consolePane].down(w.consoleText); ok {
+			if next, ok := w.consoleHist[w.consolePane].Down(w.consoleText); ok {
 				w.consoleText = next
 				w.consoleCursor = len(next)
 			}

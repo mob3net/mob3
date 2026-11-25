@@ -39,8 +39,11 @@ var importBoundary = map[string]importRule{
 	"internal/textwidth": {
 		stdlibOnly: true,
 	},
+	"internal/linehistory": {
+		stdlibOnly: true,
+	},
 	"internal/engine": {
-		allowProject: map[string]bool{"internal/protocol": true, "internal/textedit": true, "internal/textwidth": true},
+		allowProject: map[string]bool{"internal/protocol": true, "internal/textedit": true, "internal/textwidth": true, "internal/linehistory": true},
 		forbidStd:    map[string]bool{"net": true, "net/http": true, "syscall": true},
 		forbidOS:     true,
 	},
@@ -48,7 +51,7 @@ var importBoundary = map[string]importRule{
 		allowProject: map[string]bool{"internal/protocol": true},
 	},
 	"internal/frontend": {
-		allowProject: map[string]bool{"internal/protocol": true, "internal/textedit": true, "internal/textwidth": true},
+		allowProject: map[string]bool{"internal/protocol": true, "internal/textedit": true, "internal/textwidth": true, "internal/linehistory": true},
 	},
 	"internal/app": {
 		allowProject: map[string]bool{

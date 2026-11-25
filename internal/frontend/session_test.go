@@ -420,7 +420,7 @@ func TestPromptEditsAndNavigates(t *testing.T) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
 	loop.promptOverlay.start(loop, false)
-	if _, ok := loop.promptHist.up(""); !ok {
+	if _, ok := loop.promptHist.Up(""); !ok {
 		t.Fatal("history did not record the URL")
 	}
 }
