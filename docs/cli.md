@@ -192,7 +192,8 @@ flag and no way to disable the memory check while keeping JavaScript on. Each
 page's load-time scripts share an 8-second wall-clock budget and run at most
 2,000 scripts; on either limit the running script is interrupted and the
 remaining ones are skipped with a console notice. Esc or Ctrl-C interrupts the
-script currently blocking the terminal. Decoded image bytes in flight and
+script currently blocking the terminal and cancels its in-flight requests;
+closing the tab does the same. Decoded image bytes in flight and
 inline-SVG rasters are bounded by percentages of the same memory limit and by
 absolute fallbacks. `-no-js` disables both script fetching and execution;
 `<noscript>` content is then shown. Press `J` (or click the footer JavaScript

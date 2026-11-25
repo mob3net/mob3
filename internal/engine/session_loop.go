@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"browser/internal/protocol"
@@ -29,6 +30,18 @@ type transportState struct {
 	// compares it with the value captured at entry, so a press interrupts the
 	// call in flight without leaking into later timer callbacks.
 	abortGen atomic.Uint64
+	// jsRun is the top-level runtime currently executing. AbortSession
+	// interrupts it directly, so a busy script stops without waiting for the
+	// watchdog tick.
+	jsRun atomic.Pointer[jsRuntime]
+	// jsIOMu guards the parent context for synchronous script network calls.
+	// An abort cancels the calls in flight; jsIOAborted makes the next
+	// top-level script call start with a fresh context instead of inheriting
+	// the cancelled one.
+	jsIOMu      sync.Mutex
+	jsIOCtx     context.Context
+	jsIOCancel  context.CancelFunc
+	jsIOAborted bool
 }
 
 // Serve runs the interactive session on its own goroutine. Commands arrive from
@@ -191,10 +204,58 @@ func (b *Session) protocolMouse(v protocol.Mouse) MouseEvent {
 	}
 }
 
-// AbortSession counts an out-of-band abort from the front end. The JS runtime
-// reads this atomic from inside a script, so a busy page stops even though the
-// session loop has not run yet.
-func (b *Session) AbortSession() { b.abortGen.Add(1) }
+// AbortSession stops the script running in this tab. It cancels synchronous
+// script network calls in flight and interrupts the runtime directly, so the
+// session loop can process the close or stop immediately instead of waiting
+// for a busy page to return on its own.
+func (b *Session) AbortSession() {
+	gen := b.abortGen.Add(1)
+	b.abortJSIO()
+	// A call that started after the abort already sees the new generation and
+	// must not be killed by a stale press. The snapshot is stored before
+	// inFlight is incremented, so a racing abort either sees no call or the
+	// matching generation.
+	if j := b.jsRun.Load(); j != nil && j.inFlight.Load() > 0 && j.callAbortGen.Load() < gen {
+		j.vm.Interrupt("JavaScript stopped by user")
+	}
+}
+
+// beginJSCall gives the next top-level script call a fresh network context
+// after an abort. Requests started inside the aborted call keep the cancelled
+// context, so a loop cannot block again before the runtime notices the abort.
+func (b *Session) beginJSCall() {
+	b.jsIOMu.Lock()
+	defer b.jsIOMu.Unlock()
+	if !b.jsIOAborted {
+		return
+	}
+	if b.jsIOCancel != nil {
+		b.jsIOCancel()
+	}
+	b.jsIOCtx, b.jsIOCancel = context.WithCancel(context.Background())
+	b.jsIOAborted = false
+}
+
+// jsRequestContext returns the parent for synchronous script requests.
+func (b *Session) jsRequestContext() context.Context {
+	b.jsIOMu.Lock()
+	defer b.jsIOMu.Unlock()
+	if b.jsIOCtx == nil {
+		b.jsIOCtx, b.jsIOCancel = context.WithCancel(context.Background())
+	}
+	return b.jsIOCtx
+}
+
+// abortJSIO cancels script network calls in flight without poisoning a later
+// top-level call, which beginJSCall gives a fresh context.
+func (b *Session) abortJSIO() {
+	b.jsIOMu.Lock()
+	defer b.jsIOMu.Unlock()
+	if b.jsIOCancel != nil {
+		b.jsIOCancel()
+	}
+	b.jsIOAborted = true
+}
 
 // emitPendingFrame sends the frame the last draw stashed. The transport copies
 // it before returning, so the frame buffer can be reused immediately.

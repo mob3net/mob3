@@ -12,8 +12,14 @@ func (s *Session) StartJSWithHooks(page *Page, h SessionHooks) {
 
 // startJSFrame creates the runtime owned by f and runs page's scripts in order.
 func (s *Session) startJSFrame(f *Frame, page *Page, h SessionHooks) {
+	if f == nil {
+		return
+	}
+	if f == s.Frame {
+		s.jsRun.Store(nil)
+	}
 	f.stopJS()
-	if f == nil || s.NoJS || page == nil {
+	if s.NoJS || page == nil {
 		return
 	}
 	j := NewJSRuntime(h.NewJSHost(f), page)
@@ -21,6 +27,9 @@ func (s *Session) startJSFrame(f *Frame, page *Page, h SessionHooks) {
 		j.SetPageBudget(s.JSPageBudget)
 	}
 	f.JS = j
+	if f == s.Frame {
+		s.jsRun.Store(j)
+	}
 	j.StartPage(page)
 	h.SetModuleErr(j.ModuleErr())
 }
@@ -28,6 +37,9 @@ func (s *Session) startJSFrame(f *Frame, page *Page, h SessionHooks) {
 // StopJS tears down the top-level frame's runtime.
 func (s *Session) StopJS() {
 	if s.Frame != nil {
+		if s.jsRun.Load() == s.Frame.JS {
+			s.jsRun.Store(nil)
+		}
 		s.Frame.stopJS()
 	}
 }

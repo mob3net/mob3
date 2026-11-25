@@ -84,6 +84,10 @@ type jsRuntime struct {
 	// inFlight counts guarded calls. The memory sampler only interrupts while
 	// one is running, so an idle tick cannot poison the next invocation.
 	inFlight atomic.Int32
+	// callAbortGen is the abort generation captured at the start of the
+	// current guarded call. An out-of-band abort only interrupts a call that
+	// started before it, so a stale press does not kill the next callback.
+	callAbortGen atomic.Uint64
 	// memBase is the heap size when the runtime was created, and memLimit the
 	// absolute ceiling above it. memMu guards the sampler lifecycle; one
 	// sampler serves the whole runtime instead of one goroutine per call.
@@ -736,19 +740,32 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 	if j == nil || j.stopped {
 		return nil
 	}
-	// A sampler or a previous aborted call may have left an interrupt behind;
-	// the next call must start clean.
-	j.vm.ClearInterrupt()
+	// Only the outermost guarded call owns the interrupt flag and the network
+	// context. A nested call fires an event from inside a fetch callback;
+	// clearing the interrupt there would discard an abort aimed at the outer
+	// call, and replacing the context would cancel its request.
+	outer := j.inFlight.Load() == 0
+	if outer {
+		// A sampler or a previous aborted call may have left an interrupt
+		// behind; the next call must start clean.
+		j.vm.ClearInterrupt()
+		j.host.BeginJSCall()
+	}
+	// abortGen snapshots the user's escape request at entry. Esc or Ctrl-C
+	// pressed from now on interrupts this call; a press from before it started
+	// does not leak into the next timer callback or page. Store the snapshot
+	// before inFlight so a concurrent AbortSession interrupts only a call that
+	// is already running.
+	abortGen := j.host.AbortGen()
+	if outer {
+		j.callAbortGen.Store(abortGen)
+	}
 	j.inFlight.Add(1)
 	j.wakeMemSampler()
 	timeout := j.timeout
 	if timeout <= 0 {
 		timeout = jsTimeout
 	}
-	// abortGen snapshots the user's escape request at entry. Esc or Ctrl-C
-	// pressed from now on interrupts this call; a press from before it started
-	// does not leak into the next timer callback or page.
-	abortGen := j.host.AbortGen()
 	done := make(chan struct{})
 	// The watchdog re-arms itself while the host is blocked in a modal dialog
 	// or a synchronous fetch. Network and user time are not script CPU time,
@@ -761,7 +778,24 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 			return
 		default:
 		}
-		if j.dialogActive.Load() || j.ioActive.Load() {
+		if j.ioActive.Load() {
+			// Network time is not script CPU time, but an abort must still
+			// take effect while a synchronous request is running. The request
+			// context is already cancelled by AbortSession; interrupt here as
+			// well so a page looping on failing requests stops.
+			if j.host.AbortGen() != abortGen {
+				if j.loadDeadline.Load() != 0 {
+					j.stopScripts.Store(true)
+					j.stopReason.Store(jsStopUser)
+				}
+				j.vm.Interrupt("JavaScript stopped by user")
+				return
+			}
+			j.pauseDeadline(timeout)
+			timer.Store(time.AfterFunc(timeout, check))
+			return
+		}
+		if j.dialogActive.Load() {
 			j.pauseDeadline(timeout)
 			timer.Store(time.AfterFunc(timeout, check))
 			return
@@ -788,7 +822,9 @@ func (j *jsRuntime) guard(fn func() error) (err error) {
 		if t := timer.Load(); t != nil {
 			t.Stop()
 		}
-		j.vm.ClearInterrupt()
+		if outer {
+			j.vm.ClearInterrupt()
+		}
 		if r := recover(); r != nil {
 			j.host.LogJS("debug", "panic: "+fmt.Sprintf("%v", r)+"\n"+string(debug.Stack()))
 			err = fmt.Errorf("%v", r)

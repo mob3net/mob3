@@ -55,7 +55,9 @@ Intentional limits of the shims:
 - `structuredClone` covers primitives, plain objects, arrays, Date, Map, Set
   and ArrayBuffer; typed arrays become plain arrays. Functions throw.
 - `AbortController` only rejects a `fetch` that has not started yet; requests
-  are synchronous under the hood and cannot be cancelled mid-flight.
+  are synchronous under the hood and its signal cannot cancel one mid-flight.
+  The browser's own Esc/Ctrl-C abort and tab close do cancel the tab's
+  in-flight script requests, so a page looping on fetches cannot hold the loop.
 - `FormData` and Blob object URLs are in-memory only. Multipart uploads, Blob
   image loading and request-body streaming are not implemented.
 - `MutationObserver` is a no-op, `MessageChannel` is timer-backed,

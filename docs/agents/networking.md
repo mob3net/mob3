@@ -31,7 +31,10 @@ agreement, the non-negotiable constraints and the change protocol.
   Load-time scripts also share an 8-second page budget and a cap of 2,000
   executed scripts: when either is reached, the running script is interrupted
   and the remaining ones are skipped with a console notice. A bare Esc or Ctrl-C
-  interrupts the script currently blocking the main loop.
+  interrupts the script currently blocking the main loop and cancels its
+  in-flight script requests, so a page that loops on failing fetches cannot
+  hold the loop. Closing a tab does the same before waiting for its session to
+  exit.
 - **Process memory limit:** `-mem-limit` is off by default (`0`), which leaves
   memory unlimited and honors any `GOMEMLIMIT` from the environment. A positive
   value applies a soft heap limit with `debug.SetMemoryLimit`, so the runtime

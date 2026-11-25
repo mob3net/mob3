@@ -57,6 +57,7 @@ type JSHost interface {
 	QueueFormSubmit(form *Node)
 
 	AbortGen() uint64
+	BeginJSCall()
 	ImportCh() chan<- ImportTask
 
 	LocalStorage() *StorageView

@@ -900,6 +900,69 @@ func TestStorageNamedProperties(t *testing.T) {
 	}
 }
 
+func TestJSAbortCancelsBusyFetchLoop(t *testing.T) {
+	loader := newTestLoader()
+	started := make(chan struct{}, 1)
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})})
+	// The ready-state callback runs nested guarded calls from inside send().
+	// They must not clear the outer call's abort or replace its request
+	// context.
+	page := newJSPage(`<html><body></body></html>`, `
+		while (true) {
+			var x = new XMLHttpRequest();
+			x.onreadystatechange = function () {};
+			x.open("GET", "/slow");
+			x.send();
+		}
+	`)
+	b := newTestSession(40, 10)
+	b.loader = loader
+	done := make(chan struct{})
+	go func() {
+		b.startJS(page)
+		close(done)
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("script did not start its request")
+	}
+	b.AbortSession()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("abort did not stop the busy script")
+	}
+
+	// The aborted request must not poison later script calls.
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})})
+	if _, err := b.JS.RunCode("after abort", `
+		var x = new XMLHttpRequest();
+		x.open("GET", "/ok");
+		x.send();
+		document.title = x.status;
+	`); err != nil {
+		t.Fatalf("script after abort failed: %v", err)
+	}
+	if page.Title != "200" {
+		t.Fatalf("title after abort = %q, want 200", page.Title)
+	}
+}
+
 func TestJSConsoleLogAndView(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`, `console.error("navigator is not defined");`)
 	b := newTestSession(40, 10)

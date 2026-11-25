@@ -62,6 +62,7 @@ func (h frameJSHost) ShowUploadNotice()             { h.b.showUploadNotice() }
 func (h frameJSHost) QueueFormSubmit(form *Node)    { h.b.queueFormSubmit(form) }
 func (h frameJSHost) Interactive() bool             { return h.b.Interactive }
 func (h frameJSHost) AbortGen() uint64              { return h.b.abortGen.Load() }
+func (h frameJSHost) BeginJSCall()                  { h.b.beginJSCall() }
 func (h frameJSHost) ImportCh() chan<- jsImportTask { return h.b.ImportCh }
 
 func (h frameJSHost) UserAgent() string {
@@ -101,7 +102,7 @@ func (h frameJSHost) JSFetch(ctx context.Context, req protocol.FetchRequest) (pr
 }
 
 func (h frameJSHost) RequestContext(kind string, page *url.URL, pageLocal bool, target *url.URL) context.Context {
-	ctx := protocol.WithRequestKind(context.Background(), kind)
+	ctx := protocol.WithRequestKind(h.b.jsRequestContext(), kind)
 	ctx = protocol.WithRequestPage(ctx, page, pageLocal)
 	if target != nil {
 		ctx = protocol.WithRequestTarget(ctx, target)

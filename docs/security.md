@@ -193,5 +193,6 @@ One sampler per active runtime checks the ceiling every 75 ms and interrupts onl
 a call that is running, so a page cannot reset its budget on every timer
 callback. A page's load-time scripts also share an 8-second budget and a
 2,000-script cap, and Esc or Ctrl-C interrupts the script currently blocking the
-loop. Timer counts and per-tick callbacks are capped. These limits protect
+loop and cancels its in-flight requests; closing the tab does the same before
+releasing it. Timer counts and per-tick callbacks are capped. These limits protect
 against runaway scripts, not against malicious pages in general.

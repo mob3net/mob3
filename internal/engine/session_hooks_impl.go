@@ -118,7 +118,7 @@ func (b *Session) ApplyModal(v protocol.ModalClose)      { b.applyModalClose(v) 
 func (b *Session) ApplyHint(v protocol.HintResult)       { b.applyHintResult(v) }
 func (b *Session) ApplyConsole(v protocol.ConsoleAction) { b.applyConsoleAction(v) }
 func (b *Session) LogClientError(msg string)             { b.logEngineError(msg) }
-func (b *Session) Abort()                                { b.abortGen.Add(1) }
+func (b *Session) Abort()                                { b.AbortSession() }
 
 func (b *Session) BeginSession(ctx context.Context, abort <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) {
 	b.sessionCtx, b.sessionIn, b.sessionAbort = ctx, in, abort

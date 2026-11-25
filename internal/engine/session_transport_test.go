@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"image"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -150,6 +152,57 @@ func TestSessionAbortIsOutOfBand(t *testing.T) {
 	}
 	if got := b.abortGen.Load(); got == 0 {
 		t.Fatal("out-of-band abort was not counted")
+	}
+}
+
+func TestSessionCloseStopsBusyJSFetchLoop(t *testing.T) {
+	loader := newTestLoader()
+	started := make(chan struct{}, 1)
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/slow" {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		}
+		h := make(http.Header)
+		h.Set("Content-Type", "text/html")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader(`<html><body><script>
+				while (true) {
+					var x = new XMLHttpRequest();
+					x.open("GET", "/slow");
+					x.send();
+				}
+			</script></body></html>`)),
+			Request: req,
+		}, nil
+	})})
+	b := newTestSession(60, 10)
+	b.loader = loader
+	restore := quietStdout(t)
+	defer restore()
+	s := openTestSession(t, b)
+	if err := s.Send(protocol.Command{Body: protocol.Navigate{URL: "https://example.com/", Push: true}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("page script did not start its request")
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- s.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("closing the tab blocked on a busy script")
 	}
 }
 
