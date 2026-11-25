@@ -13,8 +13,8 @@ agreement, the non-negotiable constraints and the change protocol.
   `Open: …` prompt with a cursor marker while the prompt is open. A clickable
   ` 100% ` zoom badge always keeps the far-right cells of that row (one space
   on each side), and the URL or prompt text truncates before it; clicking the
-  badge opens the centered Zoom window for choosing a preset with the mouse or
-  arrow keys. While loading,
+  badge opens the centered Zoom window for choosing a preset with the mouse,
+  arrow keys, mouse wheel or pointer hover. While loading,
   the URL row fills from the left with a blue progress tint that eases toward
   90%, completes on finish and lingers briefly before clearing; it is driven by
   an event-loop timer only while progress is active, so idle pages stay asleep.
@@ -122,7 +122,8 @@ agreement, the non-negotiable constraints and the change protocol.
   `i` cycle graphics modes, `+`/`-` zoom the page in/out (25% to 200%, `0`
   resets to 100%), `Z` opens the zoom window (also via the URL row's clickable
   zoom badge), `X` open the page view options window (a switch
-  list navigated with Up/Down or `j`/`k` and toggled with Space/Enter, closing
+  list navigated with Up/Down, `j`/`k`, the mouse wheel or pointer hover and
+  toggled with Space/Enter, closing
   on Esc, `q`, `Ctrl-C` or `X`; the switches are Fixed elements, Sticky
   elements (off keeps sticky boxes in normal flow so they scroll with the page)
   and Background images (hiding the bitmaps but keeping neutral placeholders),
@@ -380,9 +381,9 @@ agreement, the non-negotiable constraints and the change protocol.
   input opens a modal explaining that uploads are unsupported. Checkboxes
   render as `☑`/`☐` and radios as `◉`/`○` (one cell each); clicking one toggles
   it (radios uncheck same-name siblings); clicking a
-  select opens a centered popup listing every option, navigated with Up/Down
-  and chosen with Enter or a click, with Esc/backdrop/`×` closing it without a
-  change. `<select multiple>` renders as an always-visible list box with every
+  select opens a centered popup listing every option, navigated with Up/Down,
+  the mouse wheel or pointer hover and chosen with Enter or a click, with
+  Esc/backdrop/`×` closing it without a change. `<select multiple>` renders as an always-visible list box with every
   option on its own row; clicking an option toggles it. Submit
   buttons run their `click` handler and then submit their form on release
   unless the handler prevents default; `type=button`/`type=reset` buttons and

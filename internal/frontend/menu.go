@@ -189,6 +189,17 @@ func DrawMenu(c *chromeCanvas, st protocol.State) MenuLayout {
 	return layout
 }
 
+// choiceRowAt maps a pointer report to the visible choice row under it.
+func choiceRowAt(layout MenuLayout, ev MouseEvent) (int, bool) {
+	x, y := ev.X-1, ev.Y-1
+	for i, r := range layout.Rects {
+		if x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H {
+			return layout.Top + i, true
+		}
+	}
+	return 0, false
+}
+
 // DrawSelect paints the page select popup on a full-screen canvas.
 func DrawSelect(c *chromeCanvas, st protocol.State, view *SelectView) MenuLayout {
 	layout := LayoutSelect(st, view)

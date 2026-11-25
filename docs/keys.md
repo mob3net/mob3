@@ -22,8 +22,8 @@ key, mouse and form reference for the running build.
 | `i` | Cycle graphics modes in place: full graphics, blocks, none (no reload) |
 | `+` / `-` | Zoom the page in / out (25% to 200%). Fixed pixel layout, spacing, images and large kitty headings grow; body text keeps its size and line height |
 | `0` | Reset zoom to 100% |
-| `Z` | Open the zoom window to choose a preset with the mouse or arrow keys |
-| `X` | Open the view options window (Fixed elements, Sticky elements, Background images); `Space`/`Enter` toggles the selected switch |
+| `Z` | Open the zoom window to choose a preset with the mouse, arrow keys, mouse wheel or pointer hover |
+| `X` | Open the view options window (Fixed elements, Sticky elements, Background images); `Space`/`Enter` toggles the selected switch, and the mouse wheel or pointer hover moves the highlight |
 | `o` / `Ctrl-L` | Open the URL prompt |
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
@@ -60,7 +60,7 @@ pages reflow and percentage columns keep filling the terminal. Zoom lasts for
 the session and applies to every page, including pages restored from the
 back/forward cache. The URL row always shows the current level as a clickable
 badge at its far right; clicking it opens a window where a preset can be chosen
-with the mouse or the arrow keys and `Enter`.
+with the mouse, the arrow keys or the mouse wheel, then `Enter`.
 
 ## Console
 
@@ -168,7 +168,8 @@ caret.
 | `Esc` | Leave the field |
 
 Checkboxes and radios toggle on click. A `<select>` opens a popup; use
-`Up`/`Down` and `Enter`, or click an option. `<select multiple>` renders as a
+`Up`/`Down` and `Enter`, the mouse wheel or pointer hover to move the highlight,
+or click an option. `<select multiple>` renders as a
 list box; clicking an option toggles it. A file input opens a notice that
 uploads are unsupported.
 

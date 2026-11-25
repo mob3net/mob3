@@ -523,6 +523,32 @@ func TestMenuKeysToggleAndZoom(t *testing.T) {
 	if loop.menuIndex != 4 {
 		t.Fatalf("zoom index = %d, want 4", loop.menuIndex)
 	}
+	before := len(s.cmds)
+	loop.handleMenuMouse(MouseEvent{Wheel: 1})
+	loop.handleMenuMouse(MouseEvent{Wheel: -1})
+	if loop.menuIndex != 4 {
+		t.Fatalf("wheel zoom index = %d, want 4", loop.menuIndex)
+	}
+	if len(s.cmds) != before {
+		t.Fatalf("wheel changed the zoom: %#v", s.cmds[before:])
+	}
+	layout := LayoutMenu(loop.State.Page)
+	if len(layout.Rects) < 7 {
+		t.Fatal("no zoom rows to hover")
+	}
+	hover := layout.Rects[6]
+	loop.handleMenuMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	if loop.menuIndex != layout.Top+6 {
+		t.Fatalf("hover zoom index = %d, want %d", loop.menuIndex, layout.Top+6)
+	}
+	hover = layout.Rects[4]
+	loop.handleMenuMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	if loop.menuIndex != 4 {
+		t.Fatalf("second hover zoom index = %d, want 4", loop.menuIndex)
+	}
+	if len(s.cmds) != before {
+		t.Fatalf("hover changed the zoom: %#v", s.cmds[before:])
+	}
 	loop.handleMenuKey("down")
 	s.cmds = nil
 	loop.handleMenuKey("enter")
@@ -659,6 +685,36 @@ func TestSelectEventKeysAndMouse(t *testing.T) {
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.SelectResult{ID: 5, Index: 1}) {
 		t.Fatalf("mouse commands = %#v", s.cmds)
 	}
+
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.Select{
+		ID: 7, Options: []string{"A", "B", "C", "D", "E", "F"}, Selected: 0,
+	}})
+	loop.handleSelectMouse(MouseEvent{Wheel: 1})
+	loop.handleSelectMouse(MouseEvent{Wheel: 1})
+	if !loop.selectActive || loop.selectView.Index != 2 {
+		t.Fatalf("wheel down index = %d active=%v, want 2", loop.selectView.Index, loop.selectActive)
+	}
+	loop.handleSelectMouse(MouseEvent{Wheel: -1})
+	if loop.selectView.Index != 1 {
+		t.Fatalf("wheel up index = %d, want 1", loop.selectView.Index)
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("wheel answered the select: %#v", s.cmds)
+	}
+	layout = LayoutSelect(loop.State.Page, &loop.selectView)
+	if len(layout.Rects) < 5 {
+		t.Fatal("no select rows to hover")
+	}
+	hover := layout.Rects[4]
+	loop.handleSelectMouse(MouseEvent{X: hover.X + 1, Y: hover.Y + 1, Motion: true})
+	if loop.selectView.Index != layout.Top+4 {
+		t.Fatalf("hover index = %d, want %d", loop.selectView.Index, layout.Top+4)
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("hover answered the select: %#v", s.cmds)
+	}
+	loop.handleSelectKey("esc")
 
 	s.cmds = nil
 	loop.applyEvent(protocol.Event{Body: protocol.Select{ID: 6, Options: []string{"A"}, Selected: 0}})

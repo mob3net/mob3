@@ -63,8 +63,8 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>i</b></td><td>cycle graphics: full graphics, blocks, none</td></tr>
 <tr><td><b>+</b> / <b>-</b></td><td>zoom the page in / out (25% to 200%); fixed pixel layout, spacing, images and large kitty headings grow, body text keeps its size</td></tr>
 <tr><td><b>0</b></td><td>reset zoom to 100%</td></tr>
-<tr><td><b>Z</b></td><td>open the zoom window to choose a preset with the mouse or arrow keys (the badge at the right end of the URL row does the same with the mouse)</td></tr>
-<tr><td><b>X</b></td><td>open the view options window (Fixed elements, Sticky elements, Background images) and toggle the selected switch</td></tr>
+<tr><td><b>Z</b></td><td>open the zoom window to choose a preset with the mouse, arrow keys, mouse wheel or pointer hover (the badge at the right end of the URL row does the same with the mouse)</td></tr>
+<tr><td><b>X</b></td><td>open the view options window (Fixed elements, Sticky elements, Background images); the mouse wheel, pointer hover or arrow keys move the highlight, and <b>Space</b>/<b>Enter</b> toggles the selected switch</td></tr>
 <tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
 <tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
@@ -195,6 +195,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the console input row</td><td>focus the JavaScript or Tools input</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the config page in a new tab</td></tr>
 <tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
+<tr><td>wheel or hover over a select, zoom or view window</td><td>move the highlighted option or row</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>
 <tr><td>click/drag the right-edge scrollbar</td><td>jump through a long page</td></tr>
 </table>

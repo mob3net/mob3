@@ -1409,11 +1409,36 @@ func (l *Tab) handleSelectKey(k string) (handled, quit bool) {
 }
 
 func (l *Tab) handleSelectMouse(ev MouseEvent) bool {
-	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+	if ev.Wheel != 0 {
+		delta := 1
+		if ev.Wheel < 0 {
+			delta = -1
+		}
+		l.selectView.Index += delta
+		if l.selectView.Index < 0 {
+			l.selectView.Index = 0
+		}
+		if n := len(l.selectView.Options); l.selectView.Index >= n {
+			l.selectView.Index = n - 1
+		}
+		if l.selectView.Index < 0 {
+			l.selectView.Index = 0
+		}
+		l.syncSelect()
+		return true
+	}
+	layout := LayoutSelect(l.State.Page, &l.selectView)
+	if ev.Motion {
+		if index, ok := choiceRowAt(layout, ev); ok && index != l.selectView.Index {
+			l.selectView.Index = index
+			l.syncSelect()
+		}
+		return true
+	}
+	if !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
 	x, y := ev.X-1, ev.Y-1
-	layout := LayoutSelect(l.State.Page, &l.selectView)
 	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
 		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
 		l.answerSelect(0, true)
@@ -1680,11 +1705,33 @@ func (l *Tab) activateMenu() {
 }
 
 func (l *Tab) handleMenuMouse(ev MouseEvent) bool {
-	if ev.Wheel != 0 || ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
+	if ev.Wheel != 0 {
+		delta := 1
+		if ev.Wheel < 0 {
+			delta = -1
+		}
+		l.menuIndex += delta
+		if l.menuIndex < 0 {
+			l.menuIndex = 0
+		}
+		if n := menuRowCount(l.menuKind); l.menuIndex >= n {
+			l.menuIndex = n - 1
+		}
+		l.syncMenu()
+		return true
+	}
+	layout := LayoutMenu(l.State.Page)
+	if ev.Motion {
+		if index, ok := choiceRowAt(layout, ev); ok && index != l.menuIndex {
+			l.menuIndex = index
+			l.syncMenu()
+		}
+		return true
+	}
+	if !ev.Press || ev.Button != MouseButtonLeft {
 		return true
 	}
 	x, y := ev.X-1, ev.Y-1
-	layout := LayoutMenu(l.State.Page)
 	if x >= layout.Close.X && x < layout.Close.X+layout.Close.W &&
 		y >= layout.Close.Y && y < layout.Close.Y+layout.Close.H {
 		l.closeMenu()
