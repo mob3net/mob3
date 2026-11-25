@@ -776,6 +776,59 @@ func TestMiddleClickLastTabQuits(t *testing.T) {
 	}
 }
 
+func TestNewTabInsertsAfterActiveTab(t *testing.T) {
+	cases := []struct {
+		name       string
+		active     int
+		background bool
+		wantInsert int
+	}{
+		{name: "after middle", active: 1, wantInsert: 2},
+		{name: "after last", active: 2, wantInsert: 3},
+		{name: "background after middle", active: 1, background: true, wantInsert: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewPresenter(io.Discard, true)
+			tabs := []*Tab{multiTab(1, "one"), multiTab(2, "two"), multiTab(3, "three")}
+			tabs[0].Presenter = p
+			var opened *Tab
+			loop := &SessionLoop{
+				Tabs: tabs, Active: tabs[tc.active], Presenter: p,
+				TerminalSize: func() (int, int, bool) { return 80, 24, true },
+				OpenTab: func(id protocol.SessionID, w, h, top, contentH int, target string) (*Tab, error) {
+					opened = multiTab(int(id), "New")
+					return opened, nil
+				},
+			}
+			loop.syncTabBar()
+			if tc.background {
+				loop.newTabBackground("https://example.test/next")
+			} else {
+				loop.newTab()
+			}
+			if len(loop.Tabs) != 4 || loop.Tabs[tc.wantInsert] != opened {
+				t.Fatalf("tab order = %v, want the new tab at %d", tabTitles(loop.Tabs), tc.wantInsert)
+			}
+			if tc.background {
+				if loop.Active != tabs[tc.active] {
+					t.Fatal("background tab changed the active tab")
+				}
+			} else if loop.Active != opened {
+				t.Fatal("new tab was not activated")
+			}
+		})
+	}
+}
+
+func tabTitles(tabs []*Tab) []string {
+	titles := make([]string, len(tabs))
+	for i, tab := range tabs {
+		titles[i] = tab.BarView(false).Title
+	}
+	return titles
+}
+
 func TestCloseTabReleasesAndActivatesNeighbor(t *testing.T) {
 	first := multiTab(1, "one")
 	second := multiTab(2, "two")

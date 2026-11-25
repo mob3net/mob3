@@ -36,7 +36,7 @@ key, mouse and form reference for the running build.
 | `Y` | Copy the whole rendered page as plain text (no colors or browser chrome) for pasting into a bug report; the first line is a `#` metadata line with URL, sizes, zoom and modes |
 | `Ctrl-Y` | Copy only the page rows visible at the current scroll, with the same metadata line |
 | `H` | Session history |
-| `t` / `Ctrl-T` | Open a new tab with an empty URL prompt |
+| `t` / `Ctrl-T` | Open a new tab after the current one with an empty URL prompt |
 | `W` / `Ctrl-W` | Close the active tab; closing the last tab exits without confirmation |
 | `Ctrl-N` / `Ctrl-P` (or `Alt-Right` / `Alt-Left`) | Next / previous tab without wrapping |
 | `1`-`9` / `Alt-1`-`Alt-9` | Select a tab by its number in the tab strip |

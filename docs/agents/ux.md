@@ -38,7 +38,8 @@ agreement, the non-negotiable constraints and the change protocol.
   click on a tab closes it, and closing the last tab exits immediately without
   the quit prompt. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs open
-  with an empty focused URL prompt. Graphics mode, zoom, terminal cell size and
+  after the active tab (or at the end when it is last) with an empty focused URL
+  prompt. Graphics mode, zoom, terminal cell size and
   the memory readout are browser-wide. Memory is the process total, not one
   tab's share.
 - **Config:** the `⚙` toolbar icon opens `about:config` in a new tab, a form listing every

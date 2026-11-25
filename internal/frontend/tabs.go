@@ -441,12 +441,18 @@ func (l *SessionLoop) newTabAt(target string, activate bool) {
 	tab.historyLog = l.ensureHistory()
 	l.installTabActions(tab)
 	l.sendGraphics(tab)
-	l.Tabs = append(l.Tabs, tab)
+	insert := len(l.Tabs)
+	if current := l.activeIndex(); current >= 0 {
+		insert = current + 1
+	}
+	l.Tabs = append(l.Tabs, nil)
+	copy(l.Tabs[insert+1:], l.Tabs[insert:])
+	l.Tabs[insert] = tab
 	if activate {
 		if target == "" {
 			tab.startPromptEmpty()
 		}
-		l.activateTab(len(l.Tabs) - 1)
+		l.activateTab(insert)
 		return
 	}
 	l.setVisible(tab, false)
