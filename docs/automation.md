@@ -465,11 +465,15 @@ Lists session history, most recent first; `*` marks the current entry.
 
 ## Limitations
 
-- **Text only.** There is no pixel screenshot: MOB³ renders to terminal cells
-  and has no font rasterizer.
-- **One browsing context.** No tabs or iframes.
-- **Fixed height** of 30 rows; only `-width` is configurable.
-- **JavaScript is a subset.** Module scripts, workers, service workers and
+- **Terminal-cell rasters.** `screenshot` returns a PNG of the terminal-cell
+  raster, not a browser pixel capture: MOB³ has no font rasterizer, so glyphs
+  are monospaced and some CJK/emoji glyphs may be missing.
+- **One page per server.** The headless session has a single page and no tab
+  UI; tabs are an interactive-mode feature. Iframes are inert stubs, so there is
+  no child browsing context.
+- **Sized viewport.** The virtual viewport is 30 rows by default; `-width` and
+  `-height` set it.
+- **JavaScript is a subset.** ES modules run, but workers, service workers and
   many modern APIs are unavailable.
 - **Forms.** `fill`, `select`, `toggle` and `submit` handle text fields,
   textareas, checkboxes, radios and selects. File uploads and multipart forms

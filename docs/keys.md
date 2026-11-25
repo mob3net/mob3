@@ -9,13 +9,13 @@ key, mouse and form reference for the running build.
 | --- | --- |
 | `j` / `k` | Scroll one line down / up |
 | `Space` / `b` | Scroll one screen down / up |
-| `Ctrl-D` / `Ctrl-U` | Scroll half a screen |
+| `d` / `u` (or `Ctrl-D` / `Ctrl-U`) | Scroll half a screen down / up |
 | `g` / `G` | Top / bottom of the page |
 | `Tab` / `Shift-Tab` | Next / previous link or form control |
 | `Enter` | Follow the focused link, submit the focused field, or insert a newline in a textarea |
 | `Ctrl-O` / `[` | Back |
 | `Ctrl-I` / `]` | Forward (Ctrl-I needs kitty key reporting; legacy terminals send Tab, so `]` is the portable key) |
-| `r` | Reload |
+| `r` / `Ctrl-R` | Reload |
 | `R` | Toggle reader mode |
 | `D` | Toggle dark mode |
 | `J` | Toggle JavaScript and reload the page without or with scripts |
@@ -28,10 +28,10 @@ key, mouse and form reference for the running build.
 | `/` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
 | `f` | Highlight letters in the visible links and follow one by typing them |
-| `F` | Same as `f`, but show the destination and wait for `Enter`/`y` confirmation |
-| `u` | Show the current URL in the footer |
+| `F` | Open the chosen link in a background tab |
+| `p` | Preview the destination (`Enter` follows, `y` copies, `Esc` cancels) |
 | `E` | Open the full warning or error message that the footer truncated (the `E` in `Error:` is underlined) |
-| `d` | Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere) |
+| `S` | Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere) |
 | `y` | Copy selected text, the current URL when nothing is selected, the download curl command, or the whole active console section |
 | `Y` | Copy the whole rendered page as plain text (no colors or browser chrome) for pasting into a bug report; the first line is a `#` metadata line with URL, sizes, zoom and modes |
 | `Ctrl-Y` | Copy only the page rows visible at the current scroll, with the same metadata line |
@@ -125,9 +125,9 @@ another link is highlighted (case-insensitive), so `Documentation` uses `D` and
 a later `Dog` uses `o` if `d` is taken. On link-heavy pages a hint whose first
 letter is unique still shows only that one letter; hints sharing a first letter
 use two adjacent letters, with no gap between them. Type the highlighted letters to follow the link; either case works. Press `F`
-instead of `f` to see the resolved destination highlighted in yellow in the
-footer and confirm with `Enter` or `y` before navigating; `Esc` or `n`
-cancels.
+instead of `f` to open the chosen link in a background tab, or `p` to see the
+resolved destination highlighted in yellow in the footer and confirm with
+`Enter` or `y` before navigating; `Esc` or `n` cancels.
 If several labels share a first letter, the others disappear, the typed letter
 is no longer highlighted, and only the remaining letters stay marked. Unknown letters are ignored. `Esc`
 cancels hint mode, and scrolling with the wheel or scrollbar also dismisses the

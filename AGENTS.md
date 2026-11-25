@@ -195,7 +195,7 @@ published by the Pages build.
   `engine.NewConfiguredLoader`, then `engine.NewConfiguredSession`,
   `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`. MCP transport
   and the dump/PNG output loop live in `internal/app`.
-- `internal/engine/` — the 383-method `Session`: page/layout/URL/scroll, the
+- `internal/engine/` — the 393-method `Session`: page/layout/URL/scroll, the
   load lifecycle and application, forms, JS lifecycle, hit testing,
   find/hint/selection/reader state, text scaling, dark mode, content input and
   drawing, console/dialog state, the document loader, headless automation and
@@ -244,17 +244,13 @@ published by the Pages build.
   and one subsystem. Large subsystems get their own file; moving code between
   files is a pure declaration move (keep doc comments, give each file only the
   imports it uses). Files carved out of a base file share its prefix
-  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `browser.go` →
-  `browser_chrome.go`, `browser_forms.go`), which matters when a bare name
+  (`layout.go` → `layout_grid.go`, `layout_flex.go`; `session.go` →
+  `session_pdf.go`, `session_forms.go`), which matters when a bare name
   would be ambiguous (`forms`, `images`). Standalone subsystems keep their own
-  name (`ui.go`, `config.go`, `find.go`, `reader.go`, `hints.go`).
-- **During the migration** the old `browser` package may import a moved
-  package and alias its exported types (`type Page = engine.Page`) so each
-  batch lands with tests green. Do not add new reach-through between the two
-  sides: put new code on its final side.
+  name (`config_page.go`, `find.go`, `reader.go`, `hints.go`).
 - Test files mirror their source names (`layout_grid_test.go`,
-  `browser_input_test.go`, …), with shared helpers in the base file
-  (`browser_test.go`, `layout_test.go`).
+  `session_find_test.go`, …), with shared helpers in the base file
+  (`session_test.go`, `layout_test.go`).
 
 The ownership table for every file is in
 [docs/agents/architecture.md](docs/agents/architecture.md); check it before

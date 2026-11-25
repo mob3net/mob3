@@ -62,7 +62,7 @@ func testEvents() []Event {
 			Width: 100, Height: 30, HeaderRows: 2, FrontendChrome: true,
 			FooterLeft: " Ready", FooterRight: "Graphics:blocks   MEM 42MB",
 			FooterLevel: FooterWarning, FooterStatusHit: true,
-			PDFHint: "(d -> Download f.pdf)", PDFHintX: 3,
+			PDFHint: "(S -> Download f.pdf)", PDFHintX: 3,
 			PromptActive: true, PromptText: "example.com", PromptCursor: 4, PromptSelectAll: true,
 			ZoomLabel: " 150% ", FindActive: true, QuitPending: true,
 		}},

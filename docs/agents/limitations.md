@@ -26,8 +26,10 @@ agreement, the non-negotiable constraints and the change protocol.
   and cookies are in-memory only and do not persist. `localStorage` is shared
   per origin across tabs and `sessionStorage` is per tab and origin; each area
   is capped at 5 MiB and the context at 32 MiB, and opaque origins get a
-  private area. Cookies are session-only,
-  `SameSite` is not enforced, and there is no `CookieStore` API.
+  private area. Cookies are session-only; an explicit `SameSite` is enforced
+  (`Strict` same-site only, `Lax` also on top-level GET/HEAD, `None` only when
+  Secure over HTTPS), a cookie without one keeps the legacy send-everywhere
+  behavior, and there is no `CookieStore` API.
   `XMLHttpRequest` and `fetch` are synchronous, support same-origin requests,
   simple CORS cross-origin responses and opaque `no-cors` fetches, and lack
   streaming/upload progress; CORS preflight and credentialed cross-origin
@@ -39,8 +41,8 @@ agreement, the non-negotiable constraints and the change protocol.
   same-origin `location` redirects and meta refresh work; local files are not
   supported, so `file:` URLs are rejected. Canvas is a feature-detection stub
   with no pixels or
-  WebGL, `MutationObserver` never reports mutations, `TreeWalker` and the custom
-  elements registry are absent, and `MessageChannel` delivery is timer-based.
+  WebGL, `MutationObserver` never reports mutations, and `MessageChannel`
+  delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
 - Dynamic `import()` loads a real module namespace and rejects on failure.

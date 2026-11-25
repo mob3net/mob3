@@ -178,9 +178,9 @@ pipe through `head`/`grep`. Delete the `zz_*` file afterwards.
   dropped when a run starts more than 3 pt before the previous run's end.
   Right-aligned values can legitimately overlap by about 2.5 pt, so do not
   lower that tolerance without checking the sample corpus.
-- The footer page number comes from `browser_pdf.go`: `updatePDFPageStarts`
+- The footer page number comes from `session_pdf.go`: `updatePDFPageStarts`
   maps each `.pdf-page` node to its first fragment row after layout, and
-  `pdfPageNumber` compares those rows with `b.scroll`. If the number is wrong,
+  `pdfPageNumber` compares those rows with `b.Scroll`. If the number is wrong,
   check that `PDFDocument.PageNodes` was filled by `loadPDFPage` and that the
   starts are monotonic.
 

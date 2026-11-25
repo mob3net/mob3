@@ -487,7 +487,7 @@ func TestPDFFooterLineAndPageTracking(t *testing.T) {
 		t.Fatalf("narrow footer = %q", text)
 	}
 	text, hint, _, _ = b.pdfFooterLine(20)
-	if hint != "(d)" || text != " Page 1/5 (d)" {
+	if hint != "(S)" || text != " Page 1/5 (S)" {
 		t.Fatalf("compact footer = %q (hint %q)", text, hint)
 	}
 	text, hint, _, _ = b.pdfFooterLine(10)

@@ -90,7 +90,7 @@ MOB³ is a content browser, not a full browser engine. It is happiest with text-
 - Modern JavaScript apps (SPAs, dashboards, Google search and similar) may show a partial page, a blank page or their no-JavaScript fallback. ES module scripts run, including relative imports, dynamic `import()`, `import.meta.url` and bare specifiers resolved by the page's import map, and custom elements are constructed, but the rest of the JavaScript API surface is still a small subset.
 - Reader mode is heuristic: it can pick too little or too much content on unusual layouts, shows a snapshot rather than live updates, and removes images, forms and other interactive controls. Dark mode keeps images in their original colors and approximates some author color schemes.
 - Anti-bot and firewall checks (Cloudflare, CAPTCHA, DataDome/PerimeterX, Imperva/Sucuri, access-denied pages) are generally not usable. A “Site blocked” page is shown instead.
-- No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes, Shadow DOM, custom elements, real observers or full History API.
+- No video/audio playback, WebGL, WebAssembly, workers, WebSockets, iframes, Shadow DOM, custom element lifecycle callbacks, real observers or full History API.
 - Basic CSS grid rows and horizontal grid-item alignment are supported, along with `position:relative`, `position:absolute` and `position:fixed`, left/right floats with line wrapping and `clear`, and `overflow` clipping for bounded boxes. `position:sticky` with `bottom`/`left`/`right`, CSS variables, animations, transitions, non-text generated content, background gradients and repeating background tiles are unsupported or approximated.
 - SVG support is partial: paths, shapes, gradients, transforms, `clipPath`, `fill-rule` and `<use>` of paths/groups work, but text inside SVG, `<use>` resolving to `<symbol>` sprites, filters, masks, CSS-in-SVG and animation are not rendered. Animated WebP is not supported.
 - Oversized images are capped at 40% of the viewport width and 16 rows, preserving their aspect ratio. Images with a definite CSS box (both width and height) use `object-fit`/`object-position` and fill or crop into that box instead of hitting those caps.
@@ -126,7 +126,7 @@ mob3 -png -width 120 bbc.com/news > bbc.png
 }
 ```
 
-Tools: `navigate`, `snapshot`, `screenshot`, `click` (link number, CSS selector or `x`/`y`), `type`, `press`, `scroll`, `back`, `forward`, `reload`, `evaluate` and `history`. `snapshot` returns the current page viewport as text, visible links as `[n]` and form controls with coordinates. Results are text only: there is no pixel screenshot because MOB3 renders to terminal cells.
+Tools: `navigate`, `snapshot`, `links`, `form`, `fill`, `select`, `toggle`, `submit`, `click` (link number, CSS selector or `x`/`y`), `type`, `press`, `wait`, `wait_for`, `scroll`, `back`, `forward`, `reload`, `evaluate`, `history`, `screenshot`, `requests`, `logs` and `source`. `snapshot` returns the current page viewport as text, visible links as `[n]` and form controls with coordinates. `screenshot` returns a PNG of the terminal-cell raster, not a browser pixel capture.
 
 The server is local and unauthenticated, sessions and storage are memory-only, and nothing is written to disk. Do not expose it as a network service. See the [full MCP reference](docs/automation.md) for the protocol, snapshot format, tool details, and setup instructions for OpenCode, Claude Code, Cursor and Claude Desktop.
 

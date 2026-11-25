@@ -75,7 +75,7 @@ func (b *Session) pdfFooterLine(avail int) (text, hint string, hintCell int, ok 
 			return base + " " + hint, hint, StringWidth(base) + 1, true
 		}
 	}
-	if hint := "(d)"; StringWidth(base+" "+hint) <= avail {
+	if hint := "(S)"; StringWidth(base+" "+hint) <= avail {
 		return base + " " + hint, hint, StringWidth(base) + 1, true
 	}
 	if StringWidth(base) <= avail {

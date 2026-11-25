@@ -19,7 +19,7 @@ falls back to dump mode and prints the rendered page.
 | `-dump` | off | Render the page to stdout and exit |
 | `-png` | off | Write a PNG screenshot of the dump to stdout; implies `-dump`. PDFs render one page (page 1 unless `-pdf-page` chooses another) |
 | `-width int` | terminal width or 100 | Layout width in columns |
-| `-height int` | 0 | Layout viewport height and output limit; 0 uses the full page (dump/PNG/MCP) |
+| `-height int` | 0 | Layout viewport height and output limit; 0 uses the full page for dump/PNG and 30 rows for MCP |
 | `-pdf-page string` | `auto` | PDF page for dump/PNG: `auto`, `all`, or a page number. `-png` defaults to page 1; a dump defaults to all pages |
 | `-graphics string` | `none` | Image mode: `none`, `auto`, `kitty`, `iterm`, `blocks` |
 | `-g string` | `none` | Alias for `-graphics` |
@@ -87,8 +87,9 @@ mob3 -dump -color https://example.com
 
 `-height N` sets the layout viewport to `N` rows and limits dump/PNG output to
 `N` document rows. This affects `position:fixed` boxes and other
-height-dependent layout. `-height 0` keeps the full document height. The
-interactive UI always uses the real terminal height.
+height-dependent layout. `-height 0` keeps the full document height in dump and
+PNG output, while `-mcp` uses 30 rows when no height is given. The interactive UI
+always uses the real terminal height.
 
 ```sh
 mob3 -dump -height 40 -width 120 page.html

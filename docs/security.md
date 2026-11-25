@@ -8,35 +8,39 @@
 ## What it does not do
 
 - No sandbox, process isolation, site isolation or permission prompts.
-- No memory, site or OS isolation. The recorded target adds in-process tabs and
-  frames with one sobek VM per frame, origin checks and postMessage-only
-  cross-frame access. That is logical origin isolation inside one process; an
-  engine bug or a sobek escape can still cross tab and frame boundaries.
+- No memory, site or OS isolation. Tabs are separate in-process protocol
+  sessions with their own JavaScript runtime and history, over shared
+  origin-scoped storage, but they share one address space; iframes remain inert
+  stubs. An engine bug or a sobek escape can still cross tab boundaries.
 - No CSP enforcement, certificate warnings or certificate management UI.
   `-certs` changes which root bundle is trusted; it is not certificate
   inspection, revocation checking or pinning.
 - No phishing, malware, tracker or fingerprinting protection.
 - No proxy configuration UI.
 - No private/incognito concept: every session is ephemeral. Pages share one
-  process; planned tab and frame separation is logical only.
+  process; tab separation is logical only, not memory or site isolation.
 
-## In-process tab and frame isolation (target)
+## In-process tab isolation (real iframes remain the target)
 
-The recorded target keeps one Go process and adds tabs and real iframes:
+Tabs are implemented inside the one Go process:
 
-- A tab is one protocol session. A tab owns a frame tree, and each frame has
-  its own document, layout, timers and sobek VM.
-- Cross-frame access is postMessage-only. `contentWindow` is a WindowProxy;
-  `contentDocument` is null even for a same-origin frame, `frameElement` is
-  null, and no DOM object crosses a frame boundary.
+- A tab is one protocol session with its own engine session, page, layout,
+  JavaScript runtime and back/forward history.
 - `localStorage` is shared per origin across tabs; `sessionStorage` is per tab
-  and origin; cookies remain host-owned and origin-scoped.
+  and origin; cookies remain host-owned and domain-scoped.
 - One shared budget covers all JS runtimes, page caches and image/SVG work.
   Zoom stays browser-global.
+- Only the active tab draws. A background tab keeps loading and updates its own
+  state, history and title, but its timers and deferred image work pause.
 
-This is logical origin isolation, not memory or site isolation. A compromised
-engine or a JavaScript-engine escape can read across tabs and frames, and there
-is no OS sandbox or Spectre mitigation. It is not implemented yet.
+No DOM or sobek value crosses a tab boundary. This is logical isolation, not
+memory or site isolation. A compromised engine or a JavaScript-engine escape
+can read across tabs, and there is no OS sandbox or Spectre mitigation.
+
+Real iframes remain the target and are not implemented: iframe elements have
+inert stub documents, `contentDocument` is null even for a same-origin frame,
+`frameElement` is null, and there is no DOM bridge. The planned frame tree would
+give each frame its own runtime and postMessage-only cross-frame access.
 
 ## No persistence
 

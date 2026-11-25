@@ -86,7 +86,8 @@ Known unsupported families (do not present these as available):
   `form.elements` (HTMLFormControlsCollection) and `form.requestSubmit()`.
 - Network/browser: streaming fetch, upload progress, CORS preflight,
   credentialed cross-origin requests, readable `no-cors` responses (they are
-  opaque: status 0, empty body and headers), `sendBeacon`,
+  opaque: status 0, empty body and headers), `sendBeacon` (the call is accepted
+  but delivers nothing),
   full History API (`pushState`/`replaceState` are no-ops, `back`/`forward`
   are stubs), multipart forms.
 - CSS/layout: named grid rows fall back to block flow; full grid row spans,

@@ -197,7 +197,7 @@ agreement, the non-negotiable constraints and the change protocol.
   case-insensitive. Unknown letters are ignored, `Esc`
   cancels, and scrolling (wheel or scrollbar) dismisses the hints. Timer-driven
   page rebuilds recompute the hints and keep the session, typed prefix and any
-  pending F confirmation instead of dismissing them. Only targets intersecting
+  pending preview confirmation instead of dismissing them. Only targets intersecting
   the viewport are
   labelled; a target with no text
   letters (such as an image link or an empty field) gets free label letters drawn inside its box.
@@ -564,9 +564,9 @@ agreement, the non-negotiable constraints and the change protocol.
   `Page n/N (S -> Download name)`, where `n` is the page under the viewport as
   the user scrolls; the `(S -> Download name)` part is a clickable label and
   `S` does the same, both opening the curl download popup. Outside the PDF
-  viewer `d` does nothing. On narrow terminals
+  viewer `S` does nothing. On narrow terminals
   the file name inside the hint is shortened first, then the hint becomes
-  `(d)`, and finally only `Page n/N` remains. `-pdf-page auto|all|N` selects the
+  `(S)`, and finally only `Page n/N` remains. `-pdf-page auto|all|N` selects the
   page for `-dump`/`-png`: a dump keeps every page, `-png` renders page 1 by
   default, and `-pdf-page=all` restores the whole-document image. Both caps
   report truncation on stderr (2,000 PNG rows, 20,000 dump rows).

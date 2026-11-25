@@ -45,7 +45,7 @@ caption above an underscore rule. The reading column is centered and every page 
 height, so the document scrolls like a printed book. Text keeps its column alignment, so
 tables and multi-column pages stay readable, and the result supports find,
 selection, `-dump` and `-png` like any other page.
-The footer shows `Page n/N` and a clickable `(d -> Download name)` hint; `d`
+The footer shows `Page n/N` and a clickable `(S -> Download name)` hint; `S`
 opens the same curl popup.
 
 The viewer never rasterizes a page. Figures, images, charts, annotations and
@@ -73,7 +73,8 @@ curl command.
 - Async generator syntax (`async function*`) and `for await`: the script
   containing them does not parse, so it is skipped.
 - CSP enforcement, certificate UI and proxy configuration UI.
-- Pixel screenshots for automation. MOB³ has no font rasterizer.
+- Browser pixel screenshots for automation; the MCP `screenshot` tool exports
+  the terminal-cell raster instead.
 
 ## Tips
 

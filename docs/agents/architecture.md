@@ -44,8 +44,7 @@ router, not change the ownership model.
 All steps are landed. The temporary aliases, test-only host factory and the
 migration tracker are gone. The host records each document's final URL and the
 front end reads it by entry ID. The remaining architecture work is the
-in-process tab and frame model; the engine child process is not part of the
-target.
+in-process frame model; the engine child process is not part of the target.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
@@ -165,7 +164,7 @@ contexts are the remaining architecture step. There is no engine child process.
   interactive terminal/session boot; it constructs `host.Session` and
   `engine.NewConfiguredLoader`, then `engine.NewConfiguredSession`,
   `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`.
-- `internal/engine/` holds the single 383-method `Session`: page, layout, URL,
+- `internal/engine/` holds the single 393-method `Session`: page, layout, URL,
   scroll, load lifecycle and application, forms, JS lifecycle, hit testing,
   find/hint/selection/reader state, text scaling, dark mode, content input and
   drawing, console/dialog state, the document loader, headless automation and
@@ -333,7 +332,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `internal/engine/session_console.go` | Console state, actions and `ConsoleView` snapshots; JS dialog request/response state; download/notice state. All console, dialog, download and notice rendering and input are front-end-owned. |
 | `internal/engine/session_find.go` | Find state, navigation, scrolling, result messages and page highlight painting; match computation calls `FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find are front-end-owned. |
-| `internal/engine/session_hints.go` | Hint-mode state, key handling, following and the F destination-confirmation step; target discovery, glyph collection and label assignment call `BuildHintTargets`, `CollectHintGlyphs` and `AssignLinkHints`. Overlay painting and input are front-end-owned (`frontend/hints.go`). |
+| `internal/engine/session_hints.go` | Hint-mode state, key handling, following, background-tab opening and the destination-preview step; target discovery, glyph collection and label assignment call `BuildHintTargets`, `CollectHintGlyphs` and `AssignLinkHints`. Overlay painting and input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
 | `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
 | `internal/engine/hints.go` | Link-hint target discovery, glyph collection, label assignment, unique-pair shortening, base-26 encoding and label painting. |
