@@ -144,6 +144,26 @@ func (l *Layouter) measure(n *Node) (maxW, minW int) {
 		w := textwidth.StringWidth(label)
 		return w, w
 	}
+	if n.Tag == "iframe" {
+		// The replaced box contributes its intrinsic width to sizing; a
+		// percentage width is container-relative and must not inflate a flex
+		// or grid slot, so it measures as the default box with a one-cell
+		// minimum, exactly like an image.
+		if st.Width.Set && !st.Width.IsAuto() && lengthHasPercent(st.Width) {
+			copied := *st
+			copied.Width = Length{}
+			w, _ := iframeSize(&copied, l.Width)
+			if w < 1 {
+				w = 1
+			}
+			return w, 1
+		}
+		w, _ := iframeSize(st, l.Width)
+		if w < 1 {
+			w = 1
+		}
+		return w, w
+	}
 	if n.Tag == "img" || n.Tag == "svg" {
 		// Percentage widths depend on the container, not on the content, so
 		// they must not feed intrinsic sizing. Resolving `width:100%` against a

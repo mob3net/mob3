@@ -52,8 +52,15 @@ agreement, the non-negotiable constraints and the change protocol.
   reader, not a streaming fetch body; `Worker` never executes.
 - Tabs are implemented, but real iframes are still the recorded target. The
   model is one Go process with one sobek VM per tab; iframe elements have inert
-  stub documents and are postMessage-only (`contentDocument` is null even for a
-  same-origin frame, `frameElement` is null and there is no DOM bridge).
+  stub documents and are postMessage-only (`contentDocument`/`contentWindow`
+  return one shared inert stub, no message is delivered, `frameElement` is null
+  and there is no DOM bridge). Layout still reserves the iframe's replaced box:
+  CSS `width`/`height` (with the legacy `width`/`height` attributes mapped
+  before author CSS), `aspect-ratio`, or the 300×150 CSS px default. The box is
+  painted black with a gray `iframe` label, or `i` when narrower than six
+  cells, and the frame's fallback children are not laid out. The document and
+  its scripts are never loaded, so content-driven sizing (a child reporting its
+  height back to the parent) does not happen.
   Cross-frame access is origin-checked. This is logical origin isolation only,
   not memory, site or OS isolation.
 - The console request pane is process-wide, not per tab: any tab starting a

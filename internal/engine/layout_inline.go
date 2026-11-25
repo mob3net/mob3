@@ -198,7 +198,10 @@ func (c *inlineCtx) collect(n *Node) {
 		}
 		c.addLabel(label, st, n)
 		return
-	case "canvas", "video", "audio", "iframe", "object", "embed":
+	case "iframe":
+		c.addIFrame(n, st)
+		return
+	case "canvas", "video", "audio", "object", "embed":
 		c.addLabel("["+n.Tag+"]", st, n)
 		return
 	case "hr":

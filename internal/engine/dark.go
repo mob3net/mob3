@@ -29,7 +29,7 @@ func ApplyDarkLayout(ly *Layout) {
 		switch f.Kind {
 		case FragText:
 			darkStyle(f.Style)
-		case FragFill:
+		case FragFill, FragFrame:
 			f.Color = darkBackground(f.Color, bgCache)
 		}
 	}

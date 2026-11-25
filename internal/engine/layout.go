@@ -17,6 +17,9 @@ const (
 	// FragLink is an invisible box for an empty anchor, so overlay links that
 	// cover a whole card remain clickable and focusable.
 	FragLink
+	// FragFrame is the reserved, never-loaded box of an iframe. It paints like
+	// a fill but is excluded from page-background inference.
+	FragFrame
 )
 
 // Rect is a terminal-cell rectangle.
@@ -758,6 +761,11 @@ func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		contentH = l.blockImage(n, contentX, contentY, contentW)
 	case n.Tag == "svg":
 		contentH = l.blockSVG(n, contentX, contentY, contentW)
+	case n.Tag == "iframe":
+		// The browsing context is never loaded, so the fallback children are
+		// not laid out. The placeholder box is painted after the block's
+		// width, height and min/max constraints are final.
+		contentH = 0
 	case st.Display == "table":
 		contentH = l.table(n, contentX, contentY, contentW)
 	case st.Display == "flex" && st.FlexDir == "column":
@@ -823,6 +831,9 @@ func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	}
 	if forceContentH > contentH {
 		contentH = forceContentH
+	}
+	if n.Tag == "iframe" {
+		contentH = l.blockIFrame(n, st, contentX, contentY, contentW, contentH)
 	}
 	// An overflow container clips its descendants to its content box. This
 	// matters for scrollable panels: a child's max-height must not let its

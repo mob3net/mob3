@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 8px; font-size: 16px; }
+p { margin: 4px 0; }
+.block { display: block; }
+.attrs { width: 160px; height: 64px; }
+.pct { display: block; width: 50%; height: 48px; }
+</style>
+</head>
+<body>
+<p>Inline attributes: <iframe title="a" width="120" height="48"></iframe> after.</p>
+<p>CSS size: <iframe title="b" style="width:80px;height:32px"></iframe> after.</p>
+<p>Narrow: <iframe title="c" style="width:24px;height:16px"></iframe> end.</p>
+<iframe class="block attrs" title="d">hidden fallback</iframe>
+<p>After the sized block.</p>
+<iframe class="block pct" title="e"></iframe>
+<p>End.</p>
+</body>
+</html>

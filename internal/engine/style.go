@@ -1101,7 +1101,7 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 	}
 	if v := n.Attr("width"); v != "" {
 		switch n.Tag {
-		case "img", "table", "td", "th", "hr":
+		case "img", "table", "td", "th", "hr", "iframe":
 			if l := ParseLength(v, st.FontSize); l.Set {
 				st.Width = l
 			}
@@ -1109,7 +1109,7 @@ func ApplyPresentationAttrs(n *Node, st *Style) {
 	}
 	if v := n.Attr("height"); v != "" {
 		switch n.Tag {
-		case "img", "table", "td", "th":
+		case "img", "table", "td", "th", "iframe":
 			if l := ParseLength(v, st.FontSize); l.Set {
 				st.Height = l
 			}

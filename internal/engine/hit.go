@@ -47,7 +47,7 @@ func (f *Frame) NodeAt(x, y int) *Node {
 	}
 	for i := len(f.Layout.Frags) - 1; i >= 0; i-- {
 		frag := &f.Layout.Frags[i]
-		if frag.Node == nil || (frag.Kind != FragText && frag.Kind != FragImage) {
+		if frag.Node == nil || (frag.Kind != FragText && frag.Kind != FragImage && frag.Kind != FragFrame) {
 			continue
 		}
 		if x < frag.X || x >= frag.X+frag.W || y < frag.Y || y >= frag.Y+frag.H {

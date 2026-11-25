@@ -489,7 +489,7 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 			return
 		}
 		switch f.Kind {
-		case FragFill:
+		case FragFill, FragFrame:
 			clippedTop := MaxInt(y, topRow)
 			clippedBot := MinInt(y+f.H, bottomRow)
 			if f.Fixed || f.Sticky != 0 {

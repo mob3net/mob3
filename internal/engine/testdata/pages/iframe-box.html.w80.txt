@@ -1,0 +1,16 @@
+
+                    iframe
+ Inline attributes:                 after.
+
+ CSS size: iframe     after.
+
+ Narrow: i   end.
+ iframe
+
+
+
+ After the sized block.
+ iframe
+
+
+ End.

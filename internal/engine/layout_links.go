@@ -147,7 +147,7 @@ func (ly *Layout) buildLinks() {
 			ly.Links = append(ly.Links, li)
 		}
 		f.Link = li
-		if f.Kind == FragFill {
+		if f.Kind == FragFill || f.Kind == FragFrame {
 			continue
 		}
 		li.Rects = append(li.Rects, Rect{X: f.X, Y: f.Y, W: f.W, H: MaxInt(1, f.H)})

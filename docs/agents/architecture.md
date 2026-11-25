@@ -154,7 +154,8 @@ protocol session with its own engine `Session` and loader over the shared
 A background tab keeps loading and updates its own state, history, title and
 overlays but receives no frames, runs no JavaScript timers and does not stream
 deferred images. Closing a tab closes its transport and unregisters its budget
-share. Iframes remain inert stub documents: the frame tree is the remaining
+share. Iframes remain inert stub documents and reserve only a labeled black
+placeholder box for their declared size: the frame tree is the remaining
 architecture work. The `Session` embeds a top-level `Frame` that owns the page,
 layout, URL, scroll and JS runtime; the tab loop asks the frame for its timers.
 `localStorage` and `sessionStorage` use the shared `StorageBroker`, and the
@@ -245,6 +246,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `internal/engine/layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |
 | `internal/engine/layout_images.go` | Image layout: intrinsic sizing, display caps, inline percentage widths resolved against sized inline ancestors, fitted/`object-fit` placement, alt labels, block-level inline SVG (image or accessibility fallback), and CSS background painting (block boxes only, cover crop, never native placements so text stays above). |
+| `internal/engine/layout_iframe.go` | Iframe boxes: the replaced size from CSS/legacy attributes/`aspect-ratio` or the 300×150 CSS px default, inline and block reservation, and the black placeholder with its gray `iframe`/`i` label. The browsing context is never loaded. |
 | `internal/engine/layout_table.go` | Table layout: column sizing, spans, collapsed borders and cell alignment. |
 | `internal/engine/layout_grid.go` | CSS grid: template/track parsing (including track values joined by `var()` substitution such as `389pxminmax(0,1fr)`, and `max()`/`min()` rail sizes), numeric row/column placement from `grid-column`/`grid-row` and the `grid-area` shorthand, named areas, horizontal `justify-items`/`justify-self` (including an implicit single-column grid) and cell layout. `auto` tracks are sized to their items' max-content width, shrinking toward min-content before the `fr` tracks take the remainder. |
 | `internal/engine/layout_flex.go` | Flex rows: basis, growing, shrinking honouring `flex-shrink` (an item with `flex-shrink:0` keeps its size and overflows instead of collapsing), wrapping and line placement. Column flex stacks blockified children with a vertical gap, so a `<picture>` media box gets its `aspect-ratio` height instead of staying an empty inline. |

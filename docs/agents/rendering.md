@@ -447,6 +447,16 @@ agreement, the non-negotiable constraints and the change protocol.
   The same fallback applies to an image with page text painted over it (a
   caption, a tab strip over a hero photo), since a placement would hide that
   text.
+- **Iframes:** an iframe has no browsing context and its document is never
+  fetched. It still behaves as a replaced box: CSS `width`/`height` (legacy
+  `width`/`height` attributes are mapped before author CSS), `aspect-ratio` for
+  the missing side, or the browser's 300×150 CSS px default, converted to
+  terminal cells. The reserved area is painted black with a gray `iframe`
+  label, or a single `i` when narrower than six cells. An inline box caps its
+  width to the line band while keeping its declared height; a block iframe uses
+  the block width and falls back to the default height when auto. Children
+  (the frame's fallback content) are not laid out, and content-driven resizing
+  never reaches the parent page.
 - **Background images:** `background-image:url(...)` is fetched through the
   same image cache and painted behind the box's content, so text, links and
   form controls stay above it. Only block-level boxes are painted (`block`,
