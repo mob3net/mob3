@@ -260,3 +260,38 @@ func TestPresenterReplacesImagesAfterNativeDowngrade(t *testing.T) {
 		t.Fatalf("image data was not re-transmitted after re-enabling native mode: %q", out.String())
 	}
 }
+
+// TestConsoleKeepsKittyImageDataForReturn guards the console round trip: ED 2
+// frees kitty image data while the client keeps its id cache, so a bare 2J on
+// the console screen would leave the page images missing when the console
+// closes.
+func TestConsoleKeepsKittyImageDataForReturn(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 16, 16))
+	cells := make([]protocol.Cell, 8*3)
+	for i := range cells {
+		cells[i] = protocol.Cell{R: 'x', FG: protocol.Color{Set: true}, BG: protocol.Color{Set: true}}
+	}
+	f := protocol.Frame{W: 8, H: 3, Cells: cells, Placements: []protocol.Placement{
+		testPlacement("p", img, 0, 0, 2, 1, 0, 1),
+	}}
+	var out strings.Builder
+	p := NewPresenter(&out, true)
+	p.SetGraphics(GraphicsKitty, 8, 16)
+	if err := p.Present(f, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := p.PresentConsole(&protocol.ConsoleView{Width: 8, Height: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "\x1b[2J") {
+		t.Fatalf("console used ED 2, which frees kitty image data: %q", out.String())
+	}
+	out.Reset()
+	if err := p.Present(f, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "a=p") {
+		t.Fatalf("image was not re-placed after the console: %q", out.String())
+	}
+}

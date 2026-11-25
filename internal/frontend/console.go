@@ -534,8 +534,19 @@ func (p *Presenter) presentFull(f protocol.Frame) error {
 		p.prev = make([]string, len(lines))
 	}
 	var sb strings.Builder
+	if p.gfx != nil {
+		// Delete visible page images so they cannot composite above the console.
+		// This keeps the transmitted kitty data, and ClearScreen below also
+		// preserves it; ED 2 would free it and leave the page images missing
+		// when the console closes.
+		p.gfx.BeginFrame(&sb)
+	}
 	if needClear {
-		sb.WriteString("\x1b[2J")
+		if p.gfx != nil {
+			p.gfx.ClearScreen(&sb)
+		} else {
+			sb.WriteString("\x1b[2J")
+		}
 	}
 	for i := range lines {
 		if p.prev[i] == lines[i] {
