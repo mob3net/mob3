@@ -251,8 +251,9 @@ func (l *Tab) handleTabBarMouse(ev MouseEvent) bool {
 	return false
 }
 
-// handleMiddleTabClick closes the tab under a middle-button press. It works
-// even when an overlay owns input, because the tab strip is always visible.
+// handleMiddleTabClick closes the tab under a middle-button press. An open
+// front-end window owns the pointer first, so the tab strip is out of reach
+// until the window is dismissed.
 func (l *Tab) handleMiddleTabClick(ev MouseEvent) bool {
 	if ev.Button != MouseButtonMiddle || ev.Wheel != 0 || ev.Motion || !ev.Press {
 		return false
@@ -656,9 +657,6 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 			l.scrollDrag = false
 		}
 	}
-	if l.handleMiddleTabClick(ev) {
-		return true
-	}
 	// The first open window owns the pointer. The find bar is a footer strip,
 	// not a modal, so it only claims its own row and every other open window
 	// still outranks it.
@@ -672,6 +670,9 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 	}
 	if l.findOverlay.isOpen() && l.findOverlay.handleMouse(l, ev) {
 		// The find bar replaces the footer; it has no clickable labels.
+		return true
+	}
+	if l.handleMiddleTabClick(ev) {
 		return true
 	}
 	st := l.State.Page

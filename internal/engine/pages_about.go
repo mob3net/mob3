@@ -100,6 +100,10 @@ tab exits without the quit
 confirmation. <b>Ctrl-N</b>/<b>Ctrl-P</b> or
 <b>Alt-Right</b>/<b>Alt-Left</b> move next and previous without wrapping, and
 <b>1</b>-<b>9</b> or <b>Alt-1</b>-<b>Alt-9</b> select a number from the bar.
+While an overlay, dialog, hint or the console is open it owns
+the keyboard and pointer; close it before switching or closing tabs. The URL
+prompt or the find bar hands a click on another chrome control to that control
+in the same click.
 Each tab keeps its own history, scroll, focus and overlays, while cookies follow
 normal domain rules across tabs, <b>localStorage</b> is shared by tabs on the
 same origin, and <b>sessionStorage</b> is per tab and origin. Graphics

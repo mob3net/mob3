@@ -39,7 +39,11 @@ agreement, the non-negotiable constraints and the change protocol.
   shared presenter. Closing releases the transport and budget share; a middle
   click on a tab closes it, closing the active tab returns to the most recently
   used remaining tab, and closing the last tab exits immediately without the
-  quit prompt. A crashed
+  quit prompt. While an overlay, dialog, hint or the console is open it owns the
+  keyboard and pointer, so tab switching (bar clicks, keyboard cycling, number
+  keys) and middle-click closing wait until it is dismissed; the URL prompt and
+  find bar hand a click on another chrome control to that control in the same
+  click. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs from
   `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
   focused URL prompt when no target is given; a link opened in a background tab

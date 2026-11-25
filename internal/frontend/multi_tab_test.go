@@ -743,6 +743,40 @@ func TestMiddleClickTabClosesIt(t *testing.T) {
 	}
 }
 
+// TestMiddleClickTabWaitsForOpenOverlay checks that an open window owns the
+// pointer: the tab under a middle click must stay open until it is dismissed.
+func TestMiddleClickTabWaitsForOpenOverlay(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	tab := &Tab{State: LoopState{Page: st}, TabBar: tabs}
+	closed := -1
+	tab.Actions = TabActions{Close: func(index int) bool {
+		closed = index
+		return false
+	}}
+	tab.menuKind = protocol.MenuView
+	layout := LayoutChromeWithTabs(st, tabs, 0)
+	var hit ChromeHit
+	for _, h := range layout.Hits {
+		if h.Kind == ChromeHitTab && h.Index == 1 {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("missing tab hit")
+	}
+	if !tab.handleChromeMouse(MouseEvent{
+		Button: MouseButtonMiddle, X: hit.X + 1, Y: hit.Y + 1, Press: true,
+	}) {
+		t.Fatal("middle click was not consumed by the open window")
+	}
+	if closed != -1 {
+		t.Fatalf("open window let the middle click close tab %d", closed)
+	}
+}
+
 func TestMiddleClickLastTabQuits(t *testing.T) {
 	tab := multiTab(1, "one")
 	tab.State.Page = chromeState()
