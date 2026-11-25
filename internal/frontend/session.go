@@ -935,11 +935,11 @@ func (l *Tab) handleConsoleKey(k string) (handled, quit bool) {
 		}
 	case "n":
 		if l.consoleView.FindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Next: true}})
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: l.consoleView.FindText, Next: true}})
 		}
 	case "N":
 		if l.consoleView.FindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Prev: true}})
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: l.consoleView.FindText, Prev: true}})
 		}
 	}
 	return true, false
@@ -1000,10 +1000,10 @@ func (l *Tab) handleConsoleFindKey(k string) (handled, quit bool) {
 		l.presentConsole()
 		return true, false
 	case "down":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Next: true}})
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: l.consoleFindText, Next: true}})
 		return true, false
 	case "up":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Prev: true}})
+		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: l.consoleFindText, Prev: true}})
 		return true, false
 	}
 	if k == "ctrl-a" {

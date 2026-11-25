@@ -511,6 +511,15 @@ func TestConsoleHTMLFindCommand(t *testing.T) {
 	if !sink.got || sink.view.FindText != "needle" || sink.view.FindTotal != 2 || len(sink.view.Highlights) == 0 {
 		t.Fatalf("console view = %+v", sink.view)
 	}
+	first := b.FindIdx
+	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Next: true})
+	if b.FindText != "needle" || len(b.FindMatches) != 2 || b.FindIdx == first {
+		t.Fatalf("next: text=%q matches=%d idx=%d first=%d", b.FindText, len(b.FindMatches), b.FindIdx, first)
+	}
+	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Prev: true})
+	if b.FindIdx != first {
+		t.Fatalf("prev: idx=%d want %d", b.FindIdx, first)
+	}
 }
 
 func TestInitAndResizeUseContentGeometry(t *testing.T) {

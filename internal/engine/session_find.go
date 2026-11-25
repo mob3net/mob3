@@ -231,11 +231,17 @@ func (b *Session) applyFindCommand(v protocol.Find) {
 	}
 	changed := scope != b.FindScope
 	b.FindScope = scope
-	if changed || v.Query != b.FindText {
-		b.FindText = v.Query
-		b.FindCursor = len(v.Query)
-		b.FindMatches = nil
-		b.FindIdx = -1
+	// Next/Prev commands may omit the query to keep the current search. A plain
+	// empty query still clears it, so only an explicit query updates the text.
+	if v.Query != "" || (!v.Next && !v.Prev) {
+		if changed || v.Query != b.FindText {
+			b.FindText = v.Query
+			b.FindCursor = len(v.Query)
+			b.FindMatches = nil
+			b.FindIdx = -1
+			b.refreshFind()
+		}
+	} else if changed && b.FindText != "" {
 		b.refreshFind()
 	}
 	if v.Next {

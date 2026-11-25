@@ -1082,6 +1082,18 @@ func TestConsoleFindKeys(t *testing.T) {
 		t.Fatalf("text=%q commands=%d", loop.consoleFindText, len(s.cmds))
 	}
 	s.cmds = nil
+	loop.handleConsoleFindKey("down")
+	loop.handleConsoleFindKey("up")
+	if len(s.cmds) != 2 {
+		t.Fatalf("arrow commands = %#v", s.cmds)
+	}
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "needle" || !f.Next {
+		t.Fatalf("down find = %#v", s.cmds[0].Body)
+	}
+	if f, ok := s.cmds[1].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "needle" || !f.Prev {
+		t.Fatalf("up find = %#v", s.cmds[1].Body)
+	}
+	s.cmds = nil
 	loop.handleConsoleFindKey("enter")
 	if loop.consoleFindActive {
 		t.Fatal("console find stayed open")
@@ -1091,7 +1103,15 @@ func TestConsoleFindKeys(t *testing.T) {
 	if len(s.cmds) != 1 {
 		t.Fatalf("next commands = %#v", s.cmds)
 	}
-	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || !f.Next {
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "needle" || !f.Next {
 		t.Fatalf("next find = %#v", s.cmds[0].Body)
+	}
+	s.cmds = nil
+	loop.handleConsoleKey("N")
+	if len(s.cmds) != 1 {
+		t.Fatalf("prev commands = %#v", s.cmds)
+	}
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "needle" || !f.Prev {
+		t.Fatalf("prev find = %#v", s.cmds[0].Body)
 	}
 }
