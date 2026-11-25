@@ -6,6 +6,22 @@ import (
 	"strings"
 )
 
+// displayState is the focus, hover, reader and palette view state.
+type displayState struct {
+	Focus        int
+	Hover        int
+	HoverNode    *Node
+	PageHasHover bool
+	// Reader mode renders an extracted article document instead of the page.
+	Reader            bool
+	ReaderRoot        *Node
+	ReaderSavedScroll int
+	BigText           bool
+	BigTextBlocked    bool
+	// Dark mode remaps the rendered page palette.
+	Dark bool
+}
+
 func (b *Session) zoomBadge() string {
 	return " " + zoomPercentLabel(Zoom()) + " "
 }

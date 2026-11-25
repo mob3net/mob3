@@ -171,10 +171,15 @@ contexts are the remaining architecture step. There is no engine child process.
   scroll, load lifecycle and application, forms, JS lifecycle, hit testing,
   find/hint/selection/reader state, text scaling, dark mode, content input and
   drawing, console/dialog state, the document loader, headless automation and
-  the one-shot dump handler. It draws only the page content rectangle; chrome,
-  console, dialogs, the find bar and the hint overlay are front-end-owned. MCP
-  transport lives in `internal/app`. Production code imports only
-  `internal/protocol` and `internal/textedit` (plus approved vendored modules).
+  the one-shot dump handler. Its state is grouped into unexported value structs
+  declared in the file that owns each subsystem (viewport, options, render,
+  display, load, images, placements, find, hints, console, modal, history,
+  transport, status, config); the structs are embedded, so the fields stay
+  promoted and call sites keep using `b.Field`. It draws only the page content
+  rectangle; chrome, console, dialogs, the find bar and the hint overlay are
+  front-end-owned. MCP transport lives in `internal/app`. Production code
+  imports only `internal/protocol` and `internal/textedit` (plus approved
+  vendored modules).
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the terminal loop and active-tab routing
@@ -372,7 +377,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/js_life.go` | Frame-owned JS runtime lifecycle: start/stop, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. The tab loop asks the top-level frame for its next timer; child frames will do the same. |
 | `internal/engine/commands.go` | Front-end command dispatch: navigation, history, resize, keys, mouse, scroll, app, find, select, modal, hint, console and error commands, with shell effects supplied by `CommandHooks`. |
 | `internal/engine/serve.go` | Transport event loop: load/image/import/timer/progress/usage events, draw/state/frame emission and shutdown, with terminal effects supplied by `RuntimeHooks`. |
-| `internal/engine/session.go` | The engine-side tab state: the embedded top-level `Frame` (`Page`, `Layout`, `URL`, `Scroll`, JS runtime) plus terminal/content geometry, rendering configuration, PDF page starts, page cache, load lifecycle, deferred-image counters, focus/hover, reader state, text scaling, dark mode, form/selection state, find state and hint state, plus scroll/page/find/hint/PDF helpers. |
+| `internal/engine/session.go` | The engine-side tab state: the embedded top-level `Frame`, form/selection state and session dependencies, plus the unexported state groups embedded in place (viewport, options, render, display, load, images, placements, find, hints, console, modal, history, transport, status, config) declared in the file that owns each subsystem. Promoted fields keep the existing `b.Field` call sites; scroll/page/find/hint/PDF helpers stay here. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
 | `internal/engine/js_host.go` | Per-frame `JSHost` contract and `ImportTask`: layout, scroll and hit testing from the frame, with viewport, focus, dialogs, status, form/upload, cookie/fetch brokering and the import queue from the tab until child frames have their own viewport and input state. |

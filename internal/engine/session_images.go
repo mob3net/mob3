@@ -1,6 +1,23 @@
 package engine
 
-import ()
+import "context"
+
+// imageState is one deferred image batch and its progress.
+type imageState struct {
+	DeferredImages bool
+	ImagesPaused   bool
+	ImageTotal     int
+	ImageDone      int
+	// PendingImageRow is the topmost laid-out row of images whose decoded data
+	// arrived while they sat below the viewport. Their layout is deferred until
+	// the viewport approaches that row or the end of the document, so a batch
+	// far down the page cannot reflow and repaint the visible frame. Zero means
+	// nothing is pending.
+	PendingImageRow int
+	Images          ImageLoader
+	ImageCh         chan ImageBatch
+	ImageCancel     context.CancelFunc
+}
 
 // Deferred-image types live in the engine; the aliases keep the browser
 // tests and the event loop on the same values during the migration.

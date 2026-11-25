@@ -11,6 +11,34 @@ import (
 	"time"
 )
 
+// loadState is the in-flight load, its progress and the values carried into the
+// next navigation.
+type loadState struct {
+	Loading         bool
+	Progress        float64
+	ProgressHold    int
+	AutoNavigations int
+	LoopStopped     bool
+	LastMethod      string
+	LastBody        []byte
+	LastContentType string
+	LoadSeq         int
+	LoadCh          chan LoadResult
+	CancelLoad      context.CancelFunc
+	LoadFn          LoadFunc
+	ImportCh        chan ImportTask
+	EntryID         uint64
+	// NextScroll is consumed by the next navigation started from history.
+	NextScroll    int
+	NextScrollSet bool
+	// pendingStatus replaces the computed load status once, so a JavaScript
+	// toggle can report its new state instead of clearing the footer.
+	pendingStatus string
+	// pendingDownloadName carries a download attribute from the clicked link
+	// into the next load, so a non-renderable response keeps that filename.
+	PendingDownloadName string
+}
+
 const (
 	layoutTruncatedStatus = "Page truncated (layout limit)"
 	moduleFailedStatus    = "Module script failed — see ! console"
@@ -45,20 +73,25 @@ func newSessionWithBrowserContext(w, h int, bc *BrowserContext, resetZoom bool) 
 	loader := NewLoader(nil)
 	b := &Session{
 		Frame: NewFrame(),
-		Focus: -1, Hover: -1, Width: w, Height: h, ContentTop: -1,
-		CellW: 8, CellH: 16, Zoom: 1, LayoutBudget: DefaultLayoutBudget,
-		JSMemLimit: jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
-		Cache:          NewPageCache(historyCacheBudget(effectiveMemoryLimit())),
-		ImageCh:        make(chan ImageBatch, 1),
-		LoadCh:         make(chan LoadResult, 1),
-		ImportCh:       make(chan ImportTask, 16),
-		loader:         loader,
-		browser:        bc,
-		tabID:          tabID,
-		historyViewCur: -1,
-		home:           "about:home",
-		configToken:    loader.ConfigToken(),
-		active:         true,
+		viewportState: viewportState{
+			Width: w, Height: h, ContentTop: -1, CellW: 8, CellH: 16, Zoom: 1, active: true,
+		},
+		optionState: optionState{
+			LayoutBudget: DefaultLayoutBudget,
+			JSMemLimit:   jsHeapBudget(effectiveMemoryLimit()), JSPageBudget: jsPageBudget,
+		},
+		displayState: displayState{Focus: -1, Hover: -1},
+		imageState:   imageState{ImageCh: make(chan ImageBatch, 1)},
+		loadState: loadState{
+			LoadCh: make(chan LoadResult, 1), ImportCh: make(chan ImportTask, 16),
+		},
+		historyState: historyState{
+			Cache: NewPageCache(historyCacheBudget(effectiveMemoryLimit())), historyViewCur: -1,
+		},
+		configState: configState{home: "about:home", configToken: loader.ConfigToken()},
+		loader:      loader,
+		browser:     bc,
+		tabID:       tabID,
 	}
 	b.router = newFrameRouter()
 	b.router.Register(b.Frame)

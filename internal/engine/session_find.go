@@ -6,6 +6,16 @@ import (
 	"browser/internal/protocol"
 )
 
+// findState is the in-page find session.
+type findState struct {
+	FindActive  bool
+	FindText    string
+	FindCursor  int
+	FindScope   int
+	FindMatches []FindMatch
+	FindIdx     int
+}
+
 const (
 	findScopePage = FindScopePage
 	findScopeHTML = FindScopeHTML

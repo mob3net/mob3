@@ -3,9 +3,33 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"browser/internal/protocol"
 )
+
+// transportState is the Serve-owned command stream and frame emission state.
+type transportState struct {
+	// sessionCtx, sessionIn and sessionAbort are set while Serve owns the
+	// event loop. A modal dialog then reads keys from the command stream
+	// instead of a direct terminal channel.
+	sessionCtx   context.Context
+	sessionIn    <-chan protocol.Command
+	sessionAbort <-chan struct{}
+	sessionQuit  bool
+	// emitFrames switches presentation to the front end: draw stashes the
+	// screen frame and sends it over the transport instead of writing stdout.
+	emitFrames bool
+	frameReady bool
+	sessionOut protocol.EventSink
+	// frontendChrome lets the normal path emit a content-only frame and a
+	// State snapshot; the front end draws the header/footer from it.
+	frontendChrome bool
+	// abortGen counts user escape requests (Esc or Ctrl-C). A guarded script
+	// compares it with the value captured at entry, so a press interrupts the
+	// call in flight without leaking into later timer callbacks.
+	abortGen atomic.Uint64
+}
 
 // Serve runs the interactive session on its own goroutine. Commands arrive from
 // the trusted front end through the transport; page loads, JavaScript timers,

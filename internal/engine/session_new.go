@@ -2,9 +2,76 @@ package engine
 
 import (
 	"strings"
+	"time"
 
 	"browser/internal/protocol"
 )
+
+// viewportState is the terminal and page geometry a tab presents at.
+type viewportState struct {
+	Width, Height int
+	// contentTop/contentHeight are the front-end-owned page rectangle. A
+	// negative top means direct callers/tests use the legacy derivation.
+	ContentTop    int
+	ContentHeight int
+	CellW, CellH  int
+	// Zoom is the layout zoom factor: 1 is normal. It changes the CSS pixels
+	// per terminal cell for everything except text metrics.
+	Zoom float64
+	// scaledLayout records whether the current layout was built with kitty
+	// scaled text, so draw can rebuild when an overlay toggles it.
+	ScaledLayout bool
+	zoomGen      uint64
+	// active marks the tab the front end is presenting. Direct callers and
+	// tests start active; the tab manager sends Visibility when it switches.
+	active bool
+}
+
+// optionState is session configuration that stays fixed for a tab's lifetime.
+type optionState struct {
+	NoJS bool
+	// noPDF disables the built-in PDF text viewer, restoring the download
+	// prompt for PDF responses.
+	NoPDF     bool
+	NoBigText bool
+	// JSMemLimit caps the JS heap; JSPageBudget caps one page's load-time
+	// script phase.
+	JSMemLimit   int64
+	JSPageBudget time.Duration
+	LayoutBudget LayoutBudget
+	// hideFixed suppresses position:fixed boxes for the current page.
+	// noSticky lays position:sticky boxes out as normal flow, so they scroll
+	// with the page instead of following a top offset.
+	// hideBackgrounds paints CSS background images as a neutral placeholder
+	// instead of their pixels; the images stay loaded and laid out.
+	HideFixed       bool
+	NoSticky        bool
+	HideBackgrounds bool
+	// Interactive marks the terminal UI, where a background dynamic import can
+	// wait for the event loop instead of blocking it.
+	Interactive bool
+	NoDraw      bool
+}
+
+// renderState is the palette, terminal capabilities and reusable paint scratch.
+type renderState struct {
+	color      bool
+	caps       protocol.Capabilities
+	pngEncoder func(protocol.Frame, int) ([]byte, error)
+	// contentGrid is reused between frames and is exactly the page viewport.
+	contentGrid *Grid
+	frameBuf    frameScratch
+	// memLimitBytes is the process soft heap limit in bytes; zero leaves the
+	// runtime default in place.
+	memLimitBytes int64
+	LastBuild     time.Duration
+	LastRebuild   time.Time
+	LastState     protocol.State
+	// graphicsModes lists the image modes available to the i key in cycle
+	// order; graphicsMode is the current one.
+	graphicsModes []GraphicsMode
+	graphicsMode  GraphicsMode
+}
 
 // SessionConfig is the engine-side configuration the app applies before the
 // interactive transport starts. Terminal setup stays in the app/front end.

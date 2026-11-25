@@ -2,9 +2,28 @@ package engine
 
 import (
 	"image"
+	"sync/atomic"
 
 	"browser/internal/protocol"
 )
+
+// historyState is the front end's view list plus the memory-only page cache.
+type historyState struct {
+	// historyView is the front end's ordered entry list; historyViewCur marks
+	// the current entry.
+	historyView     []string
+	historyViewCur  int
+	historyObserver func(protocol.HistoryCommit)
+	// Cache is the memory-only back/forward page cache.
+	Cache *PageCache
+	// scavengePending asks the event loop for one debug.FreeOSMemory call.
+	scavengePending atomic.Bool
+	// PDFStarts tracks the layout row where each PDF page begins.
+	PDFStarts []int
+	// pdfStarts holds the layout row where each PDF page begins, so the footer
+	// can name the page under the viewport.
+	pdfStarts []int
+}
 
 // maxCachedPages and cachedPage are engine-owned now.
 const maxCachedPages = MaxCachedPages

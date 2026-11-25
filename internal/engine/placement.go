@@ -11,6 +11,14 @@ import (
 	"browser/internal/protocol"
 )
 
+// placementState caches native-image placements between frames. Encoded blobs
+// stay stable so a repaint does not re-encode every picture.
+type placementState struct {
+	placementCache  map[placementKey]*placementEntry
+	placementBytes  int
+	nextPlacementID int
+}
+
 // placementKey and placementEntry are the bounded encode cache used by native
 // image placement.
 type placementKey struct {

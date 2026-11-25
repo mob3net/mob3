@@ -12,6 +12,48 @@ import (
 	"browser/internal/protocol"
 )
 
+// consoleState is the JavaScript console and its per-pane scroll positions.
+type consoleState struct {
+	consoleOpen   bool
+	consoleScroll int
+	reqScroll     int
+	storageScroll int
+	htmlScroll    int
+	toolScroll    int
+	toolLog       []string
+	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
+	consoleText   string
+	consoleCursor int
+	consoleEdit   bool // the input row inside the logs or tools section has focus
+	consoleHist   consoleHistory
+	toolHist      consoleHistory
+
+	htmlPage  *Page
+	htmlWidth int
+	htmlCache []string
+	jsLog     []string
+}
+
+// modalState is the JS dialog, select popup and download/notice state.
+type modalState struct {
+	dialog           *jsDialog
+	nextDialogID     uint32
+	nextSelectID     uint32
+	selectFrontend   bool
+	selectID         uint32
+	downloadFrontend bool
+	noticeFrontend   bool
+	hintsFrontend    bool
+	// download holds the modal curl hint shown for download links and
+	// non-renderable responses.
+	download *downloadDialog
+	// notice holds a small informational modal, such as the unsupported
+	// file-upload message.
+	notice *noticeDialog
+	// selectMenu is the pending single-select choice awaiting the front end.
+	selectMenu *selectMenuDialog
+}
+
 // Console sections, ordered as they are stacked in the console view.
 const (
 	consoleLogs = iota

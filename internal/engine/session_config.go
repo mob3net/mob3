@@ -9,6 +9,20 @@ import (
 	"browser/internal/protocol"
 )
 
+// configState is the home target and about:config token state.
+type configState struct {
+	home      string
+	cliConfig map[string]string
+	// configNotice shows why an edited about:config value was rejected, such
+	// as an unreadable -certs bundle.
+	configNotice string
+	// configToken is the one-shot token embedded in the current about:config
+	// form. A config submission applies only when it presents this token, so
+	// page content cannot rewrite session settings by navigating to
+	// about:config with a query.
+	configToken protocol.ConfigToken
+}
+
 // configTokenParam carries the one-shot form token. It is a hidden input, so a
 // config submission puts it in the POST body rather than the URL.
 const configTokenParam = ConfigTokenParam

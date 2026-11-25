@@ -17,8 +17,7 @@ func TestSessionPageState(t *testing.T) {
 			URL:    u,
 			Layout: &Layout{Links: []*LinkInfo{{Node: link}}},
 		},
-		Focus: 0,
-		Hover: -1,
+		displayState: displayState{Focus: 0, Hover: -1},
 	}
 	if s.PageKind() != protocol.PageHTML {
 		t.Fatalf("kind = %v", s.PageKind())

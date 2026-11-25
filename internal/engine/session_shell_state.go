@@ -1,6 +1,29 @@
 package engine
 
-import "browser/internal/protocol"
+import (
+	"time"
+
+	"browser/internal/protocol"
+)
+
+// statusState is the current status line and the one-shot error/hover flags.
+type statusState struct {
+	// hoverRebuildPending coalesces the style pass for pointer hover changes so
+	// moving across a large page cannot rebuild the whole document per cell.
+	hoverRebuildPending bool
+	hoverRebuildAt      time.Time
+	jsErr               bool
+	// moduleErr records that an ES module script failed to load, link or
+	// evaluate, so the footer can point at the console.
+	moduleErr bool
+	status    string
+	// frontendOverlay is true while a front-end-owned window (the view or zoom
+	// menu) covers the page. Native images and scaled text are disabled so
+	// neither can composite above the window.
+	frontendOverlay bool
+	usage           procUsage
+	quitPending     bool
+}
 
 // Shell geometry and state. The front end owns the terminal rows and the
 // chrome reservation; moving this content-rectangle geometry to the front end

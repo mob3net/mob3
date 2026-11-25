@@ -7,6 +7,19 @@ import (
 	"browser/internal/protocol"
 )
 
+// hintState is the link-hint session.
+type hintState struct {
+	LinkHints       bool
+	HintItems       []LinkHint
+	HintTargets     []HintTarget
+	HintPrefix      string
+	HintAsk         bool
+	HintMode        protocol.HintMode
+	HintConfirm     bool
+	HintConfirmLink int
+	HintsFrontend   bool
+}
+
 // Hint assignment lives in the engine; these aliases keep the session-side
 // target collection, painting and activation readable during the migration.
 type hintGlyph = HintGlyph
