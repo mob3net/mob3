@@ -112,7 +112,8 @@ agreement, the non-negotiable constraints and the change protocol.
   header, so a PDF served as `application/octet-stream` or a local `.pdf` still
   opens. Every other binary type keeps the download popup. The parser is
   bounded by the 12 MB page cap plus its own object, stream, page, text and
-  time limits (500 pages, 4 s, 4 MiB of extracted text).
+  time limits (500 pages, 4 s, 4 MiB of extracted text, 64 MiB of retained
+  page content). Cancelling the requesting load cancels the parser.
 - **ES modules:** module scripts and their static dependencies are fetched with
   the same 12 MB per-resource cap, JavaScript MIME rule, request log and
   session cache as classic scripts, and resolve against the importing module's

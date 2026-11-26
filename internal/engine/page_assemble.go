@@ -75,7 +75,7 @@ func AssembleBlockedPage(ctx context.Context, fetcher PageFetcher, finalURL *url
 // AssemblePDFPage parses a PDF response, applies the optional one-page export
 // limit and builds the extracted-text page model.
 func AssemblePDFPage(ctx context.Context, fetcher PageFetcher, data []byte, finalURL *url.URL, status, pdfPage int, local bool) *Page {
-	doc := BuildPDFDocument(data)
+	doc := BuildPDFDocumentContext(ctx, data)
 	doc.TotalPages = len(doc.Pages)
 	if pdfPage > 0 && len(doc.Pages) > 0 {
 		if pdfPage > len(doc.Pages) {

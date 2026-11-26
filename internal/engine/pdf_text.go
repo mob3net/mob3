@@ -144,6 +144,10 @@ func (d *PDFDoc) Pages() ([]*PDFPage, error) {
 			p := &PDFPage{Number: len(out) + 1, Resources: inh.Resources}
 			p.Content = d.pageContent(node)
 			out = append(out, p)
+			if d.contentBytes >= maxPDFContentTotal {
+				d.truncated = true
+				d.contentLimit = true
+			}
 			return
 		}
 		for _, kid := range kids {
@@ -170,13 +174,15 @@ func (d *PDFDoc) numberArray(v any) []float64 {
 	return out
 }
 
-// pageContent concatenates the page's content streams.
+// pageContent concatenates the page's content streams. The document-wide
+// content budget is separate from the per-stream cap so hundreds of pages
+// cannot retain gigabytes before extraction starts.
 func (d *PDFDoc) pageContent(node pdfDict) []byte {
 	var parts [][]byte
 	total := 0
 	add := func(v any) {
 		st := d.streamOf(v)
-		if st == nil || total >= maxPDFDecoded {
+		if st == nil || total >= maxPDFDecoded || d.contentBytes >= maxPDFContentTotal {
 			return
 		}
 		data, err := d.decodeStream(st)
@@ -186,8 +192,18 @@ func (d *PDFDoc) pageContent(node pdfDict) []byte {
 		if len(data) > maxPDFDecoded-total {
 			data = data[:maxPDFDecoded-total]
 		}
+		remaining := maxPDFContentTotal - d.contentBytes
+		if int64(len(data)) > remaining {
+			data = data[:remaining]
+			d.truncated = true
+			d.contentLimit = true
+		}
+		if len(data) == 0 {
+			return
+		}
 		parts = append(parts, data)
 		total += len(data)
+		d.contentBytes += int64(len(data))
 	}
 	if arr, ok := d.resolve(node["Contents"]).([]any); ok {
 		for _, e := range arr {

@@ -3,12 +3,15 @@ package engine
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"browser/internal/textwidth"
 )
@@ -853,5 +856,36 @@ func TestPDFPageSelection(t *testing.T) {
 	missing := load(9)
 	if missing.PDF == nil || len(missing.PDF.Pages) != 0 || !strings.Contains(missing.PDF.Note, "does not exist") {
 		t.Fatalf("out-of-range note = %q pages=%d", missing.PDF.Note, len(missing.PDF.Pages))
+	}
+}
+
+func TestPDFContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := &PDFDoc{ctx: ctx, deadline: time.Now().Add(time.Hour)}
+	if !d.expired() {
+		t.Fatal("cancelled context did not expire the parser")
+	}
+	doc := BuildPDFDocumentContext(ctx, pdfSimpleDoc("BT /F1 12 Tf 20 180 Td (text) Tj ET", ""))
+	if doc == nil {
+		t.Fatal("cancelled parse returned nil document")
+	}
+	if doc.Note == "" {
+		t.Fatalf("cancelled parse note = %q", doc.Note)
+	}
+}
+
+func TestPDFPredictorHonoursAbort(t *testing.T) {
+	parms := pdfDict{"Predictor": float64(2), "Columns": float64(8)}
+	_, err := pdfPredictor([]byte{1, 2, 3, 4, 5, 6, 7, 8}, parms, func() bool { return true })
+	if !errors.Is(err, errPDFTimeout) {
+		t.Fatalf("predictor error = %v, want errPDFTimeout", err)
+	}
+}
+
+func TestPDFContentBudgetStopsPages(t *testing.T) {
+	d := &PDFDoc{contentBytes: maxPDFContentTotal}
+	if data := d.pageContent(pdfDict{}); len(data) != 0 {
+		t.Fatalf("content beyond budget = %d bytes", len(data))
 	}
 }
