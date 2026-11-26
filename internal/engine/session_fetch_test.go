@@ -303,7 +303,7 @@ func TestJavaScriptMIME(t *testing.T) {
 		{"text/javascript; charset=utf-8", true},
 		{"Application/JavaScript", true},
 		{"text/x-javascript", true},
-		{"", true},
+		{"", false},
 		{"text/html", false},
 		{"text/plain", false},
 		{"application/json", false},
@@ -371,7 +371,7 @@ func TestScriptMIMEGate(t *testing.T) {
 	}
 	for _, want := range []string{
 		"https://example.com/ok.js", "https://example.com/upper.js",
-		"https://example.com/legacy.js", "https://example.com/missing.js",
+		"https://example.com/legacy.js",
 		"inline script",
 	} {
 		if !got[want] {
@@ -381,7 +381,7 @@ func TestScriptMIMEGate(t *testing.T) {
 	for _, bad := range []string{
 		"https://example.com/html.js", "https://example.com/plain.js",
 		"https://example.com/json.js", "https://example.com/image.js",
-		"https://example.com/csv.js",
+		"https://example.com/csv.js", "https://example.com/missing.js",
 	} {
 		if got[bad] {
 			t.Errorf("blocked script %q executed", bad)

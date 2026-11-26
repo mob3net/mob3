@@ -8,8 +8,8 @@ import (
 )
 
 // jsMIMEEssences lists the response types a classic script may execute as.
-// Missing Content-Type is handled separately and stays lenient, matching the
-// way file and data resources without metadata are treated.
+// An external script or module must declare one of these; a missing or
+// unknown Content-Type is rejected rather than treated as JavaScript.
 var jsMIMEEssences = map[string]bool{
 	"application/ecmascript":   true,
 	"application/javascript":   true,
@@ -45,12 +45,11 @@ func mimeEssence(contentType string) string {
 	return essence
 }
 
-// isJavaScriptMIME reports whether a script response may execute. An empty
-// (missing) type is allowed so data resources without metadata keep working;
-// any explicit non-JavaScript type is rejected.
+// isJavaScriptMIME reports whether a script response may execute. Only an
+// explicit JavaScript type is accepted; a missing or unknown type is rejected.
 func isJavaScriptMIME(contentType string) bool {
 	essence := mimeEssence(contentType)
-	return essence == "" || jsMIMEEssences[essence]
+	return essence != "" && jsMIMEEssences[essence]
 }
 
 func decodeBody(data []byte, ctype string) string {
