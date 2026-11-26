@@ -27,6 +27,7 @@ type ProbeSession struct {
 
 	mu       sync.Mutex
 	awaiting bool
+	busy     bool
 	lastSend time.Time
 	probing  uint64
 	probeAt  time.Time
@@ -103,11 +104,15 @@ func (p *ProbeSession) forward() {
 		return
 	}
 	for ev := range events {
-		if _, ok := ev.Body.(protocol.Pong); ok {
-			p.noteEvent()
+		switch body := ev.Body.(type) {
+		case protocol.Pong:
+			p.notePong()
 			continue
+		case protocol.State:
+			p.noteState(body.Loading || body.Flags&protocol.StateBusy != 0)
+		default:
+			p.noteActivity()
 		}
-		p.noteEvent()
 		select {
 		case p.events <- ev:
 		case <-p.done:
@@ -231,10 +236,36 @@ func (p *ProbeSession) markSend() {
 	p.wakeup()
 }
 
-func (p *ProbeSession) noteEvent() {
+func (p *ProbeSession) noteState(busy bool) {
 	p.mu.Lock()
-	p.awaiting = false
+	p.busy = busy
+	p.awaiting = busy
 	p.probing = 0
+	if busy {
+		p.lastSend = time.Now()
+	}
+	p.mu.Unlock()
+	p.wakeup()
+}
+
+func (p *ProbeSession) noteActivity() {
+	p.mu.Lock()
+	p.awaiting = p.busy
+	p.probing = 0
+	if p.busy {
+		p.lastSend = time.Now()
+	}
+	p.mu.Unlock()
+	p.wakeup()
+}
+
+func (p *ProbeSession) notePong() {
+	p.mu.Lock()
+	p.awaiting = p.busy
+	p.probing = 0
+	if p.busy {
+		p.lastSend = time.Now()
+	}
 	p.mu.Unlock()
 	p.wakeup()
 }

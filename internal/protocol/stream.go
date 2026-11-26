@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 )
 
 // ServeStream runs a handler over a dedicated stream connection.
@@ -117,6 +118,9 @@ func servePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim 
 	// final State/Quit on the floor.
 	out.finish()
 	<-writerDone
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_ = peer.Flush(flushCtx)
+	flushCancel()
 	cancel()
 	_ = peer.Close()
 	<-readerDone
@@ -211,6 +215,9 @@ func (s *streamSession) Abandon() {
 
 // Done is closed when the peer read loop returns.
 func (s *streamSession) Done() <-chan struct{} { return s.done }
+
+// Flush waits for queued commands to reach the peer.
+func (s *streamSession) Flush(ctx context.Context) error { return s.peer.Flush(ctx) }
 
 func (s *streamSession) handleFrame(f MuxFrame) error {
 	ev, rest, err := DecodeEvent(f.Body, s.lim)

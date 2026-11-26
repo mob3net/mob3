@@ -12,6 +12,11 @@ import (
 // already closed.
 var ErrSessionClosed = errors.New("protocol: session closed")
 
+// ErrSessionBusy means the peer's bounded write queue is full, usually because
+// the other process has stopped reading. The tab should be discarded rather
+// than blocking the front end.
+var ErrSessionBusy = errors.New("protocol: session busy")
+
 // EventSink accepts engine events. Send encodes and validates the event before
 // returning, so the handler may immediately reuse the cells, runs and blobs
 // referenced by ev on its next frame.

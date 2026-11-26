@@ -170,6 +170,9 @@ func (b *Session) stateMessage() protocol.State {
 	if b.nativeGraphicsEnabled() {
 		st.Flags |= protocol.StateNativeImages
 	}
+	if d, ok := b.NextJSTimerDelay(b); ok && d <= time.Minute {
+		st.Flags |= protocol.StateBusy
+	}
 
 	// Chrome state. The front end draws the normal header and footer from this
 	// snapshot; overlays, the console and the find bar keep the full-frame or

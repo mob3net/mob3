@@ -135,8 +135,10 @@ published by the Pages build.
   state is memory-only; closing MOB³ saves nothing. The
   download popup only copies a `curl` command. The memory footer uses Go's
   runtime statistics, not `/proc`. OS-level reads by Go's TLS, DNS and timezone
-  libraries are the only filesystem access and are not application storage. Do
-  not add automatic disk caching or restore-on-start behavior.
+  libraries, `os.Executable`/self-exec for the per-tab process transport, and
+  anonymous pipes between those processes are the only filesystem access and
+  are not application storage. Do not add automatic disk caching or
+  restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/grafana/sobek` JavaScript engine (maintained `goja` fork adding ES
   module records and dynamic imports), the pure-Go SVG renderer

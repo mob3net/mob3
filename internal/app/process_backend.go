@@ -85,6 +85,11 @@ func (b *processTabBackend) Close() {
 	b.userClosed.Store(true)
 	b.once.Do(func() {
 		_ = b.session.Send(protocol.Command{Body: protocol.Shutdown{}})
+		if flusher, ok := b.session.(protocol.Flusher); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			_ = flusher.Flush(ctx)
+			cancel()
+		}
 		_ = b.pipes.w.Close()
 		select {
 		case <-b.done:
