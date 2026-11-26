@@ -3,6 +3,7 @@ package frontend
 import (
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"browser/internal/protocol"
 )
@@ -44,6 +45,54 @@ func validDisplayURL(raw string) bool {
 	return false
 }
 
+// displayURL returns a bounded, display-safe form of a host-attested URL.
+// Unlike validDisplayURL it does not reject an over-long or control-carrying
+// URL: it cleans and truncates it instead, so a commit is never dropped and
+// the address bar can never keep showing the previous page. ok is false when
+// no safe representation can be built.
+func displayURL(raw string) (string, bool) {
+	if validDisplayURL(raw) {
+		return raw, true
+	}
+	if raw == "" {
+		return "", false
+	}
+	clean := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, raw)
+	if validDisplayURL(clean) {
+		return clean, true
+	}
+	limit := maxDisplayURL - len("…")
+	if len(clean) <= limit {
+		return "", false
+	}
+	// Trim on rune boundaries until the prefix plus the marker parses, so a
+	// cut cannot leave a dangling percent escape or half a character.
+	for cut := limit; cut > 0; cut-- {
+		if cut < len(clean) && !utf8.RuneStart(clean[cut]) {
+			continue
+		}
+		candidate := clean[:cut] + "…"
+		if validDisplayURL(candidate) {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+// safeHistoryURL is displayURL with a placeholder fallback, guaranteeing an
+// attested commit always has a non-empty value to show.
+func safeHistoryURL(raw string) string {
+	if shown, ok := displayURL(raw); ok {
+		return shown
+	}
+	return "about:blank"
+}
+
 // isAboutHistory reports whether input names the built-in history page.
 func isAboutHistory(input string) bool {
 	return strings.EqualFold(strings.TrimSpace(input), "about:history")
@@ -66,23 +115,28 @@ func (l *Tab) applyHistoryCommit(v protocol.HistoryCommit) {
 	}
 	if e := l.entryByID(v.EntryID); e != nil {
 		// Reload, restore or title update: keep the host-attested URL, but let
-		// a redirect on reload replace it.
+		// a redirect on reload replace it. The same display cap applies here
+		// so a reload cannot grow the trusted ledger.
 		if u, ok := l.attestedURL(v.EntryID); ok {
-			e.url = u
+			e.url = safeHistoryURL(u)
 		}
 		e.scroll = v.Scroll
 		l.trackGlobalHistory(*e)
 		return
 	}
 	url, attested := l.attestedURL(v.EntryID)
-	if !attested {
+	if attested {
+		// The host attested this URL, so a display problem must not drop the
+		// commit: truncate it instead of leaving the previous page's URL.
+		url = safeHistoryURL(url)
+	} else {
 		if !l.allowUnattestedCommit(v) {
 			return
 		}
 		url = v.URL
-	}
-	if !validDisplayURL(url) {
-		return
+		if !validDisplayURL(url) {
+			return
+		}
 	}
 	l.storeHistoryCommit(v, url)
 }

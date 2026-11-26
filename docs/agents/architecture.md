@@ -95,7 +95,10 @@ in-process frame model; the engine child process is not part of the target.
   front end. The engine keeps only a page cache keyed by entry ID.
 - A new history entry's URL comes only from the host via `AttestedURL(entryID)`.
   The engine supplies the title, scroll and push flag; a forged
-  `HistoryCommit` URL never reaches the address bar.
+  `HistoryCommit` URL never reaches the address bar. An attested URL that is
+  too long or carries control bytes is cleaned and truncated inside the
+  display cap instead of being dropped, so a commit never leaves the previous
+  page's URL in the bar.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 

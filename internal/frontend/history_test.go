@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"io"
+	"strings"
 	"testing"
 
 	"browser/internal/protocol"
@@ -167,6 +168,42 @@ func TestAboutAndFragmentCommitsNeedNoAttestation(t *testing.T) {
 	l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 3, URL: "https://example.com/a#section", Push: true})
 	if len(l.history) != 3 || l.history[2].url != "https://example.com/a#section" {
 		t.Fatalf("fragment commit = %+v", l.history)
+	}
+}
+
+// An attested URL that cannot be displayed in full must still be committed in
+// bounded form; dropping it left the address bar on the previous page.
+func TestAttestedLongURLIsTruncatedNotDropped(t *testing.T) {
+	long := "https://evil.example/" + strings.Repeat("a", maxDisplayURL+100)
+	l := attestedLoop(map[uint64]string{1: long})
+	l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 1, URL: "https://bank.example/", Push: true})
+	if len(l.history) != 1 {
+		t.Fatalf("commit was dropped: %+v", l.history)
+	}
+	got := l.history[0].url
+	if len(got) > maxDisplayURL {
+		t.Fatalf("stored URL is %d bytes, want at most %d", len(got), maxDisplayURL)
+	}
+	if !strings.HasPrefix(got, "https://evil.example/") || !strings.HasSuffix(got, "…") {
+		t.Fatalf("truncated URL = %q", got)
+	}
+	state := l.pageState(protocol.State{URL: "https://bank.example/"})
+	if state.URL != got {
+		t.Fatalf("address bar = %q, want %q", state.URL, got)
+	}
+}
+
+func TestExistingEntryLongURLIsBounded(t *testing.T) {
+	urls := map[uint64]string{2: "https://real.example/"}
+	l := attestedLoop(urls)
+	l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 2, URL: "https://real.example/", Push: true})
+	urls[2] = "https://real.example/" + strings.Repeat("b", maxDisplayURL+200)
+	l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 2, URL: "https://spoofed.example/", Scroll: 5})
+	if len(l.history) != 1 || len(l.history[0].url) > maxDisplayURL {
+		t.Fatalf("existing entry was not bounded: %+v", l.history)
+	}
+	if l.history[0].scroll != 5 {
+		t.Fatalf("scroll = %d, want 5", l.history[0].scroll)
 	}
 }
 
