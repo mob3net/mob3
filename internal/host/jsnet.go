@@ -208,6 +208,12 @@ func responseHeaders(h http.Header, crossOrigin bool) []protocol.Header {
 	}
 	out := make([]protocol.Header, 0, len(h))
 	for name, values := range h {
+		// Set-Cookie is never visible to page script, same-origin or not.
+		// Exposing it would hand HttpOnly cookie values to any script through
+		// fetch or XHR and defeat the HttpOnly guarantee.
+		if strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "Set-Cookie2") {
+			continue
+		}
 		if crossOrigin && !simple[strings.ToLower(name)] &&
 			!strings.EqualFold(name, "Access-Control-Allow-Origin") {
 			continue

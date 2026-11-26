@@ -543,6 +543,42 @@ func TestJSFetch(t *testing.T) {
 	}
 }
 
+// Set-Cookie must stay invisible to script even on a same-origin response, so
+// fetch/XHR cannot defeat HttpOnly.
+func TestJSFetchSameOriginHidesSetCookie(t *testing.T) {
+	loader := newTestLoader()
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		h := make(http.Header)
+		h.Set("Content-Type", "text/plain")
+		h.Add("Set-Cookie", "sid=SECRET; Path=/; HttpOnly")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("ok")), Request: req,
+		}, nil
+	})})
+	page := newJSPage(`<html><body></body></html>`, `
+		fetch("/api").then(function (r) {
+			var x = new XMLHttpRequest();
+			x.open("GET", "/api");
+			x.onload = function () {
+				document.title = [
+					r.headers.get("set-cookie") || "none",
+					(r.headers.getSetCookie() || []).length,
+					x.getResponseHeader("Set-Cookie") || "none",
+					x.getAllResponseHeaders().toLowerCase().indexOf("set-cookie") >= 0
+				].join("|");
+			};
+			x.send();
+		}).catch(function (e) { document.title = "error:" + e; });
+	`)
+	b := newTestSession(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if want := "none|0|none|false"; page.Title != want {
+		t.Fatalf("title = %q, want %q (logs %v, status %q)", page.Title, want, b.jsLog, b.status)
+	}
+}
+
 func TestJSFetchCrossOriginBlocked(t *testing.T) {
 	loader := newTestLoader()
 	calls := 0

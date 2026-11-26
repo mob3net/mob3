@@ -191,6 +191,37 @@ func TestJSFetchCrossOriginDropsCookieAndFiltersHeaders(t *testing.T) {
 	}
 }
 
+// A same-origin response must not expose Set-Cookie to script; otherwise an
+// XSS can read HttpOnly cookie values the server just refreshed.
+func TestJSFetchSameOriginHidesSetCookie(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "SECRET", Path: "/", HttpOnly: true})
+		w.Header().Set("X-Visible", "yes")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	f := testJSFetcher(t, NewCookieJar())
+	resp, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: srv.URL, Method: "GET", Origin: srv.URL,
+		Purpose: protocol.FetchFetch, Kind: "fetch", Credentials: true, PageLocal: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	visible := false
+	for _, h := range resp.Headers {
+		switch h.Name {
+		case "Set-Cookie", "Set-Cookie2":
+			t.Fatalf("script-visible header %s = %q", h.Name, h.Value)
+		case "X-Visible":
+			visible = true
+		}
+	}
+	if !visible {
+		t.Fatalf("ordinary same-origin header was dropped: %+v", resp.Headers)
+	}
+}
+
 func TestJSFetchRejectsPreflightAndCORS(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("no cors header"))
