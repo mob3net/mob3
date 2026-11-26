@@ -44,9 +44,9 @@ a process transport can omit.
 
 **Non-goals of this step:** the package split itself added no subprocess, OS
 sandbox, tabs or per-site renderer, and no behavior or visual change. The
-target in [Tabs, frames and in-process isolation](#tabs-frames-and-in-process-isolation)
-also keeps one process: a future process transport would sit behind the frame
-router, not change the ownership model.
+default target in [Tabs, frames and isolation](#tabs-frames-and-isolation)
+keeps one process; `-engine=process` is an optional fault-isolation transport
+behind the same frame router and ownership model.
 
 ### Migration order
 
@@ -106,18 +106,21 @@ process is not part of the target.
 - Startup, RSS and frame benchmarks stay inside the recorded budget and idle
   produces no frames.
 
-## Tabs, frames and in-process isolation
+## Tabs, frames and isolation
 
-The target keeps one Go process. It is logical origin isolation, not memory,
-site or OS isolation. No subprocess, sandbox, per-site renderer or
-OS-specific isolation mechanism is part of the model.
+The default target keeps one Go process. `-engine=process` can put each
+interactive tab's engine in a child process for fault isolation. Neither mode is
+a security boundary: tab separation is logical origin isolation, not memory,
+site or OS isolation, and no sandbox or per-site renderer is part of the model.
 
 - A tab is one protocol session (`SessionID`). The front end owns the tab list,
   the active tab, one shared visited-page list and per-tab back/forward stacks
   and one terminal presenter.
 - The tab manager creates one loader, engine `Session` and protocol session per
-  tab. Tabs share the host, cookies, cache, TLS state, origin storage and
-  `BudgetManager`; each tab owns its loader counters and page cache.
+  tab. Tabs share the host, cookies, cache, TLS state and origin storage; each
+  tab owns its loader counters and page cache. In-process tabs also share
+  `BudgetManager`; `-engine=process` children currently compute budgets locally
+  until shared budget RPC lands.
 - The session loop drains every tab's event stream. Only the active tab's frames
   are presented; a background tab's state, history and overlay events still
   update its own model. `protocol.Visibility` tells the engine which tab is
@@ -177,8 +180,8 @@ sessions.
 ## Current layout
 
 This is the **actual** state. Tabs are implemented. Real iframe browsing
-contexts are a permanent non-goal; iframes stay inert stubs. There is no engine
-child process.
+contexts are a permanent non-goal; iframes stay inert stubs. An optional engine
+child process exists behind `-engine=process`; the default remains in-process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -293,7 +296,7 @@ child process.
 | `internal/protocol/hostrpc.go` | Serializable host-broker call/result types, request metadata, error identity codes and the bounded codec. Flat payloads cover every `protocol.Host` method; no `image.Image`, certificate pool or context value crosses the boundary. |
 | `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. `ConfigToken` calls are forwarded. It can own a dedicated peer or mount on the session peer. |
 | `internal/protocol/hostrpc_server.go` | `HostServer` dispatches calls concurrently to the trusted host, cancels in-flight work on a cancel frame or shutdown, maps errors to sentinel kinds and contains panics as host errors. It can own a dedicated peer or mount on the session peer. |
-| `internal/protocol/storage.go` | `Storage`/`StorageProvider` ports and storage kinds/errors. A process-backed engine resolves `localStorage`/`sessionStorage` through the parent without changing the JS storage surface. |
+| `internal/protocol/storage.go`, `storage_rpc.go` | `Storage`/`StorageProvider` ports and the storage RPC client/server. A process-backed engine resolves `localStorage`/`sessionStorage` through the parent without changing the JS storage surface. |
 | `internal/protocol/ports.go` | Shared `EntryIDSource`, `BudgetShare`, `Abandoner` and `Waiter`. The parent can own the history-entry sequence and divide memory pools, and a discarded tab can drop a session without waiting for its handler. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
@@ -329,7 +332,7 @@ child process.
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, owns the shared `StorageBroker` and `BudgetManager`, and accepts injectable `protocol.StorageProvider` and `protocol.EntryIDSource` ports for a process-backed engine. |
+| `internal/engine/context.go` | `BrowserContext`: state shared by tab sessions inside one process. It allocates the opaque history-entry ID sequence and tab IDs, owns the local `StorageBroker` and `BudgetManager`, accepts injectable `protocol.StorageProvider`/`protocol.EntryIDSource` ports, and can reserve a tab-scoped entry-ID prefix for a child engine. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
 | `internal/engine/frame.go` | `Frame`: the tab's top-level browsing context. It holds the tab's `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID. Iframes are inert stubs with no child frame, so no frame tree exists. `Session` embeds the top-level frame and remains the tab-level façade. |
 | `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses an iframe boundary. It holds the top-level frame; iframes are inert stubs. |
@@ -344,7 +347,9 @@ child process.
 | `internal/app/graphics.go` | Native graphics detection, engine capabilities and the `i`-key graphics-mode cycle. |
 | `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
 | `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. A close that exceeds the grace period is force-discarded. |
-| `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. The interface is the seam a process-backed tab will implement without changing the front end or tab registry; `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
+| `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
+| `internal/app/engine_worker.go` | Hidden child mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
+| `internal/app/process_backend.go` | Process-backed `tabBackend`: self-exec, stdin/stdout pipes, shared host and storage RPC peers, worker-ready handshake, graceful close and process kill. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |

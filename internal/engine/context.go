@@ -55,6 +55,25 @@ func (c *BrowserContext) SetEntryIDSource(source protocol.EntryIDSource) {
 	c.entryIDs = source
 }
 
+// SetEntryIDPrefix reserves a high-bit range for one tab's history entries, so
+// separate engine processes cannot return the same ID to the shared host.
+func (c *BrowserContext) SetEntryIDPrefix(prefix uint64) {
+	if c == nil {
+		return
+	}
+	c.nextEntryID.Store(prefix)
+}
+
+// View implements protocol.StorageProvider over the context's local broker.
+// A process-backed engine replaces it with a remote provider, while the parent
+// uses this method to serve child storage calls.
+func (c *BrowserContext) View(kind protocol.StorageKind, tabID uint64, origin protocol.Origin) protocol.Storage {
+	if c == nil {
+		return nil
+	}
+	return c.Storage().View(kind, tabID, origin)
+}
+
 // Storage returns the context's shared storage pools.
 func (c *BrowserContext) Storage() *StorageBroker {
 	if c == nil {
@@ -84,6 +103,15 @@ func (c *BrowserContext) Budgets() *BudgetManager {
 // NextTabID returns a process-unique tab ID for sessionStorage scoping.
 func (c *BrowserContext) NextTabID() uint64 {
 	return c.nextTabID.Add(1)
+}
+
+// SetTabIDPrefix reserves a high-bit range for one child tab's sessionStorage
+// scope, so separate engine processes cannot collide in the parent's broker.
+func (c *BrowserContext) SetTabIDPrefix(prefix uint64) {
+	if c == nil {
+		return
+	}
+	c.nextTabID.Store(prefix)
 }
 
 // NextEntryID returns a process-unique opaque history-entry ID.

@@ -59,6 +59,7 @@ const (
 	HostErrLocalNetwork
 	HostErrMixedContent
 	HostErrResourceTooLarge
+	HostErrStorageQuota
 )
 
 const maxHostList = 4096
@@ -168,7 +169,7 @@ func DecodeHostCall(src []byte, lim Limits) (HostCall, error) {
 	c.Size = d.i32()
 	c.Elapsed = time.Duration(d.u64())
 	c.ErrKind = HostErrorKind(d.u8())
-	if c.ErrKind > HostErrResourceTooLarge {
+	if c.ErrKind > HostErrStorageQuota {
 		return HostCall{}, fmt.Errorf("%w: host error kind %d", ErrInvalid, c.ErrKind)
 	}
 	c.ErrText = d.str()
@@ -231,7 +232,7 @@ func DecodeHostResult(src []byte, lim Limits) (HostResult, error) {
 	r.Cookies = d.cookieViews()
 	r.Text = d.str()
 	r.ErrKind = HostErrorKind(d.u8())
-	if r.ErrKind > HostErrResourceTooLarge {
+	if r.ErrKind > HostErrStorageQuota {
 		return HostResult{}, fmt.Errorf("%w: host error kind %d", ErrInvalid, r.ErrKind)
 	}
 	r.ErrText = d.str()
@@ -254,6 +255,8 @@ func hostErrorKind(err error) HostErrorKind {
 		return HostErrMixedContent
 	case errors.Is(err, ErrResourceTooLarge):
 		return HostErrResourceTooLarge
+	case errors.Is(err, ErrStorageQuota):
+		return HostErrStorageQuota
 	case errors.Is(err, ErrInvalid):
 		return HostErrInvalid
 	case errors.Is(err, ErrLimit):
@@ -277,6 +280,8 @@ func hostError(kind HostErrorKind, text string) error {
 		return ErrMixedContentBlocked
 	case HostErrResourceTooLarge:
 		return ErrResourceTooLarge
+	case HostErrStorageQuota:
+		return ErrStorageQuota
 	default:
 		if text == "" {
 			return errors.New("host error")

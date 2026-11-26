@@ -17,8 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-// 6: liveness Ping/Pong.
-const Version = 6
+// 8: shared-storage RPC frames.
+const Version = 8
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
@@ -83,6 +83,7 @@ const (
 	EvOpenTab
 	EvLinkPreview
 	EvPong
+	EvReady
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

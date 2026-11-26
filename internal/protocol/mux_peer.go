@@ -21,6 +21,8 @@ type MuxPeer struct {
 	handlers map[MuxKind]func(MuxFrame) error
 
 	done      chan struct{}
+	startOnce sync.Once
+	startErr  chan error
 	closeOnce sync.Once
 	errMu     sync.Mutex
 	err       error
@@ -62,6 +64,16 @@ func (p *MuxPeer) Handle(kind MuxKind, handler func(MuxFrame) error) error {
 	}
 	p.handlers[kind] = handler
 	return nil
+}
+
+// Start runs the peer in the background exactly once. It is idempotent, so a
+// worker can start host RPC early and the page loop can attach later.
+func (p *MuxPeer) Start(ctx context.Context) <-chan error {
+	p.startOnce.Do(func() {
+		p.startErr = make(chan error, 1)
+		go func() { p.startErr <- p.Run(ctx) }()
+	})
+	return p.startErr
 }
 
 // Run reads and dispatches frames until the stream closes or ctx is cancelled.

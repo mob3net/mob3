@@ -14,10 +14,21 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 	return ServePeer(ctx, peer, id, h, lim, queue)
 }
 
-// ServePeer runs a handler over an existing peer. Host RPC handlers can be
-// mounted on the same peer before this call, so one stream carries page and
-// host traffic.
+// ServePeer runs a handler over an existing peer, starting the peer's read
+// loop. Host RPC handlers can be mounted before this call, so one stream
+// carries page and host traffic.
 func ServePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim Limits, queue int) error {
+	return servePeer(ctx, peer, id, h, lim, queue, true, false)
+}
+
+// ServePeerReady runs a handler over a peer that is already running. It
+// announces Ready after registering the command handler, so a parent can wait
+// before sending Init/Navigate.
+func ServePeerReady(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim Limits, queue int) error {
+	return servePeer(ctx, peer, id, h, lim, queue, false, true)
+}
+
+func servePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim Limits, queue int, startPeer, ready bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -66,9 +77,12 @@ func ServePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim 
 	}); err != nil {
 		return err
 	}
+	if startPeer {
+		peer.Start(ctx)
+	}
 	go func() {
 		defer close(readerDone)
-		_ = peer.Run(ctx)
+		<-peer.Done()
 		cancel()
 	}()
 
@@ -91,6 +105,9 @@ func ServePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim 
 		}
 	}()
 
+	if ready {
+		_ = sink.Send(Event{Body: Ready{}})
+	}
 	err := runHandler(ctx, abortCh, in, sink, h)
 	if err != nil && ctx.Err() == nil {
 		_ = sink.Send(Event{Body: Crash{Message: err.Error()}})

@@ -246,6 +246,12 @@ type Pong struct {
 
 func (Pong) eventKind() Kind { return EvPong }
 
+// Ready reports that a worker has registered its page command handler and can
+// accept Init/Navigate.
+type Ready struct{}
+
+func (Ready) eventKind() Kind { return EvReady }
+
 // Select asks the front end to display a page select popup. The engine blocks
 // no timers; the front end answers with SelectResult.
 type Select struct {

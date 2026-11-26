@@ -78,6 +78,17 @@ func TestSessionApplyBudgetShare(t *testing.T) {
 	}
 }
 
+func TestBrowserContextTabIDPrefix(t *testing.T) {
+	bc := NewBrowserContext()
+	bc.SetTabIDPrefix(10 << 32)
+	if got := bc.NextTabID(); got != (10<<32)+1 {
+		t.Fatalf("first tab ID = %d", got)
+	}
+	if got := bc.NextTabID(); got != (10<<32)+2 {
+		t.Fatalf("second tab ID = %d", got)
+	}
+}
+
 func TestBrowserContextEntryIDSource(t *testing.T) {
 	ids := &testEntryIDs{}
 	bc := NewBrowserContext()

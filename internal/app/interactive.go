@@ -37,6 +37,13 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 
 	sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cellW, cellH, graphicsMode)
 	tabs := newInteractiveTabs(hostSess, loaderConfig, o.Home, cellW, cellH, sessions.newSession)
+	if o.Engine == "process" {
+		tabs.newBackend = newProcessBackendFactory(
+			hostSess, browserContext, os.Args[1:],
+			capabilitiesFor(nativeGraphicsMode(graphicsMode), cellW, cellH),
+			zoomFactor, int(graphicsMode),
+		)
+	}
 
 	presenter := frontend.NewPresenter(os.Stdout, !o.NoColor)
 	presenterMode := graphicsMode
