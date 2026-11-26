@@ -372,17 +372,14 @@ func (h Hints) Validate(lim Limits) error {
 		if len(item.Href) > lim.MaxTextBytes || !SafeText(item.Href) {
 			return fmt.Errorf("protocol: hint %d has an invalid href", i)
 		}
-		if item.X < 0 || item.Y < 0 || item.W < 0 || item.H < 0 ||
-			item.X > lim.MaxFrameWidth || item.Y > lim.MaxFrameHeight ||
-			item.W > lim.MaxFrameWidth || item.H > lim.MaxFrameHeight {
-			return fmt.Errorf("protocol: hint %d is outside the frame", i)
-		}
+		// Coordinates are not bounded here: a page can place a real link far
+		// off-screen (a skip link at left:-9999px is common), and the front end
+		// already skips cells that fall outside the frame.
 		if len(item.Chars) > lim.MaxCells {
 			return fmt.Errorf("protocol: hint %d has too many characters", i)
 		}
 		for j, c := range item.Chars {
-			if !SafeRune(c.R) || c.X < 0 || c.Y < 0 ||
-				c.X > lim.MaxFrameWidth || c.Y > lim.MaxFrameHeight {
+			if !SafeRune(c.R) {
 				return fmt.Errorf("protocol: hint %d character %d is invalid", i, j)
 			}
 		}

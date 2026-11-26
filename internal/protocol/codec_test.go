@@ -274,12 +274,20 @@ func TestHintsValidate(t *testing.T) {
 	if err := good.Validate(DefaultLimits); err != nil {
 		t.Fatalf("valid hints rejected: %v", err)
 	}
+	// A link that begins above or left of the viewport, including an
+	// off-screen accessibility skip link, is still a valid target.
+	edge := Hints{Mode: HintFollow, Items: []HintItem{{
+		Target: 1, Label: "a", X: -9999, Y: -1, W: 4, H: 10,
+		Chars: []HintChar{{R: 'A', X: -9999, Y: -1}},
+	}}}
+	if err := edge.Validate(DefaultLimits); err != nil {
+		t.Fatalf("edge hint rejected: %v", err)
+	}
 	bad := []Hints{
 		{Mode: HintFollow, Items: []HintItem{{Target: -1}}},
 		{Mode: HintFollow, Prefix: "\x1b", Items: nil},
 		{Mode: HintFollow, Items: []HintItem{{Target: 0, Label: "\x1b"}}},
 		{Mode: HintFollow, Items: []HintItem{{Target: 0, Href: "x\x1b"}}},
-		{Mode: HintFollow, Items: []HintItem{{Target: 0, X: -1}}},
 		{Mode: HintFollow, Items: []HintItem{{Target: 0, Chars: []HintChar{{R: '\x1b'}}}}},
 	}
 	for i, h := range bad {

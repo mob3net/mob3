@@ -18,6 +18,25 @@ func hintTestSession(t *testing.T, html string, width, height int) *Session {
 	return b
 }
 
+// A real page can put an accessibility skip link far off to the left with
+// position:absolute. It must not make the whole hint event fail validation.
+func TestLinkHintsAllowOffscreenSkipLink(t *testing.T) {
+	b := hintTestSession(t, `<html><body>
+<a href="#content" style="position:absolute;left:-9999px;top:0">Skip to content</a>
+<p><a href="/help">Help</a></p>
+<div id="content">target</div>
+</body></html>`, 50, 20)
+	sink := &codecSink{}
+	b.sessionOut = sink
+	b.HandleKey("f")
+	if !b.LinkHints {
+		t.Fatalf("hints were rejected: %q", b.status)
+	}
+	if len(b.HintItems) < 1 {
+		t.Fatalf("hint items = %d", len(b.HintItems))
+	}
+}
+
 func TestLinkHintsPickLetterFromText(t *testing.T) {
 	b := hintTestSession(t, `<html><body>
 <p><a href="#one">Documentation</a></p>
