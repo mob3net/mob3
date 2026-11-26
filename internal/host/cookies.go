@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 
 	"browser/internal/protocol"
@@ -47,10 +48,6 @@ type cookieMeta struct {
 	sameSite http.SameSite
 	hostOnly bool
 	expires  time.Time // zero for a session cookie
-	// asciiDomain reports that domain can be compared exactly. Cookies on a
-	// non-ASCII host are stored punycoded by cookiejar, so their identity is
-	// compared conservatively instead.
-	asciiDomain bool
 }
 
 func NewCookieJar() *CookieJar {
@@ -62,9 +59,15 @@ func NewCookieJar() *CookieJar {
 
 // cookieIdentityFor computes the identity cookiejar will store for c on u.
 // ok is false for a cookie the jar rejects, such as a foreign or public-suffix
-// Domain attribute.
-func cookieIdentityFor(u *url.URL, c *http.Cookie) (id cookieIdentity, ascii bool, ok bool) {
+// Domain attribute. Both the request host and the Domain attribute are
+// canonicalized to the jar's lower-case punycode form before comparing, so an
+// IDN host cannot claim a Domain it does not own.
+func cookieIdentityFor(u *url.URL, c *http.Cookie) (id cookieIdentity, hostOnly, ok bool) {
 	if u == nil || c == nil {
+		return id, false, false
+	}
+	host, ok := canonicalCookieHost(u.Hostname())
+	if !ok {
 		return id, false, false
 	}
 	path := c.Path
@@ -72,38 +75,67 @@ func cookieIdentityFor(u *url.URL, c *http.Cookie) (id cookieIdentity, ascii boo
 		path = defaultCookiePath(u.Path)
 	}
 	domain := c.Domain
-	if domain != "" {
-		domain = strings.TrimPrefix(domain, ".")
-		if domain == "" || domain[0] == '.' || domain[len(domain)-1] == '.' ||
-			!isASCIIDomain(domain) || !cookieDomainMatches(u.Hostname(), domain) {
-			return id, false, false
-		}
-		ascii = true
-	} else {
-		domain = strings.TrimSuffix(u.Hostname(), ".")
-		ascii = isASCIIDomain(domain)
+	if domain == "" {
+		// Host-only: the jar scopes the cookie to the canonical request host.
+		return cookieIdentity{domain: host, path: path, name: c.Name}, true, true
 	}
-	if !ascii {
-		domain = strings.ToLower(domain)
+	// A Domain attribute is an ASCII wire value; the jar rejects a non-ASCII
+	// one outright, so mirror that rather than inventing a mapping.
+	domain = strings.TrimPrefix(domain, ".")
+	if domain == "" || domain[0] == '.' || domain[len(domain)-1] == '.' || !isASCIIDomain(domain) {
+		return id, false, false
 	}
-	return cookieIdentity{domain: strings.ToLower(domain), path: path, name: c.Name}, ascii, true
-}
-
-// cookieDomainMatches reports whether a Domain attribute is one cookiejar will
-// accept for host. A non-ASCII host cannot be compared against the jar's
-// punycoded form here, so it is accepted and the identity check falls back to
-// a conservative comparison.
-func cookieDomainMatches(host, domain string) bool {
-	if !isASCIIDomain(host) {
-		return true
-	}
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	domain = strings.ToLower(domain)
 	if net.ParseIP(host) != nil {
-		return host == domain
+		// The jar treats an IP Domain attribute as host-only and accepts it
+		// only when it names the host exactly.
+		if host != domain {
+			return id, false, false
+		}
+		return cookieIdentity{domain: host, path: path, name: c.Name}, true, true
 	}
+	if domain == host {
+		// The jar stores a Domain naming the exact host as host-only when the
+		// name is also a public suffix, and as a domain cookie otherwise.
+		hostOnly = publicsuffix.List.PublicSuffix(domain) == domain
+		return cookieIdentity{domain: domain, path: path, name: c.Name}, hostOnly, true
+	}
+	if publicsuffix.List.PublicSuffix(domain) == domain {
+		return id, false, false
+	}
+	if !strings.HasSuffix(host, "."+domain) {
+		return id, false, false
+	}
+	return cookieIdentity{domain: domain, path: path, name: c.Name}, false, true
+}
+
+// canonicalCookieHost returns the lower-case ASCII host the standard jar keys
+// cookies by. An ASCII host is passed through after trimming the trailing dot;
+// an internationalized host is converted to its punycode form.
+func canonicalCookieHost(host string) (string, bool) {
+	host = strings.TrimSuffix(host, ".")
+	if host == "" {
+		return "", false
+	}
+	if !isASCIIDomain(host) {
+		ascii, err := idna.Lookup.ToASCII(host)
+		if err != nil || ascii == "" {
+			return "", false
+		}
+		host = ascii
+	}
+	return strings.ToLower(host), true
+}
+
+// cookieDomainMatches reports whether a stored domain applies to a canonical
+// request host, rejecting a public-suffix domain even if a stored identity
+// were ever corrupted into one.
+func cookieDomainMatches(host, domain string) bool {
 	if host == domain {
 		return true
+	}
+	if net.ParseIP(host) != nil {
+		return false
 	}
 	if publicsuffix.List.PublicSuffix(domain) == domain {
 		return false
@@ -153,17 +185,16 @@ func (j *CookieJar) setCookiesLocked(u *url.URL, cookies []*http.Cookie) {
 	j.all.SetCookies(u, cookies)
 	visible := make([]*http.Cookie, 0, len(cookies))
 	for _, c := range cookies {
-		if id, ascii, ok := cookieIdentityFor(u, c); ok {
+		if id, hostOnly, ok := cookieIdentityFor(u, c); ok {
 			if cookieDeletes(c) {
 				delete(j.cookies, id)
 			} else {
 				m := cookieMeta{
-					value:       c.Value,
-					httpOnly:    c.HttpOnly,
-					secure:      c.Secure,
-					sameSite:    c.SameSite,
-					hostOnly:    c.Domain == "",
-					asciiDomain: ascii,
+					value:    c.Value,
+					httpOnly: c.HttpOnly,
+					secure:   c.Secure,
+					sameSite: c.SameSite,
+					hostOnly: hostOnly,
 				}
 				if c.MaxAge > 0 {
 					m.expires = time.Now().Add(time.Duration(c.MaxAge) * time.Second)
@@ -400,16 +431,15 @@ func cookieApplies(u *url.URL, id cookieIdentity, m cookieMeta) bool {
 	if m.secure && u.Scheme != "https" {
 		return false
 	}
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	host, ok := canonicalCookieHost(u.Hostname())
+	if !ok {
+		return false
+	}
 	if m.hostOnly {
 		if host != id.domain {
 			return false
 		}
-	} else if m.asciiDomain {
-		if !cookieDomainMatches(host, id.domain) {
-			return false
-		}
-	} else if host != id.domain && !strings.HasSuffix(host, "."+id.domain) {
+	} else if !cookieDomainMatches(host, id.domain) {
 		return false
 	}
 	return cookiePathMatches(u.Path, id.path)
@@ -447,18 +477,14 @@ func (j *CookieJar) SetDocumentCookie(u *url.URL, c *http.Cookie) {
 // httpOnlyProtectedLocked reports whether c has the same identity as a stored
 // HttpOnly cookie. Callers hold j.mu.
 func (j *CookieJar) httpOnlyProtectedLocked(u *url.URL, c *http.Cookie) bool {
-	id, ascii, ok := cookieIdentityFor(u, c)
+	id, _, ok := cookieIdentityFor(u, c)
 	if !ok {
 		return false
 	}
 	for key, e := range j.cookies {
-		if !e.httpOnly || key.name != id.name || key.path != id.path {
-			continue
+		if e.httpOnly && key == id {
+			return true
 		}
-		if ascii && e.asciiDomain && key.domain != id.domain {
-			continue
-		}
-		return true
 	}
 	return false
 }

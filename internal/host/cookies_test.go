@@ -128,11 +128,65 @@ func TestCookieDomainMatches(t *testing.T) {
 		{"example.com", "com", false},
 		{"127.0.0.1", "127.0.0.1", true},
 		{"127.0.0.1", "0.0.1", false},
-		{"例え.テスト", "example.com", true}, // non-ASCII hosts defer to cookiejar
+		{"xn--bcher-kva.com", "victim.com", false},
 	} {
 		if got := cookieDomainMatches(tc.host, tc.domain); got != tc.want {
 			t.Errorf("cookieDomainMatches(%q, %q) = %v", tc.host, tc.domain, got)
 		}
+	}
+}
+
+func TestCanonicalCookieHost(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"Example.COM.", "example.com", true},
+		{"bücher.com", "xn--bcher-kva.com", true},
+		{"127.0.0.1", "127.0.0.1", true},
+		{"", "", false},
+	} {
+		got, ok := canonicalCookieHost(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("canonicalCookieHost(%q) = %q, %v; want %q, %v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+// An IDN setter must not be able to plant a Domain cookie for an ASCII victim.
+func TestCookieDomainIsolationFromIDNHost(t *testing.T) {
+	j := NewCookieJar()
+	attacker, _ := url.Parse("https://bücher.com/")
+	victim, _ := url.Parse("https://victim.com/")
+	j.SetCookies(victim, []*http.Cookie{{Name: "sid", Value: "secret", Path: "/", HttpOnly: true}})
+	j.SetDocumentCookie(attacker, &http.Cookie{Name: "script", Value: "evil", Domain: "victim.com", Path: "/"})
+	j.SetCookies(attacker, []*http.Cookie{{Name: "server", Value: "evil", Domain: "victim.com", Path: "/"}})
+	// A server-set cookie with an existing identity must not be overwritten by
+	// the IDN host either.
+	j.SetCookies(attacker, []*http.Cookie{{Name: "sid", Value: "evil", Domain: "victim.com", Path: "/", HttpOnly: true}})
+	if got := cookieNames(j.RequestCookies(victim, "GET", RequestCookiePolicy{})); got != "sid" {
+		t.Fatalf("cookies planted for %s from an IDN host: %q", victim, got)
+	}
+	if got := cookieValue(j.RequestCookies(victim, "GET", RequestCookiePolicy{}), "sid"); got != "secret" {
+		t.Fatalf("HttpOnly cookie overwritten through an IDN host: %q", got)
+	}
+	if got := cookieNames(j.Cookies(victim)); got != "sid" {
+		t.Fatalf("standard jar accepted a foreign IDN cookie: %q", got)
+	}
+	if got := cookieValue(j.Cookies(victim), "sid"); got != "secret" {
+		t.Fatalf("standard jar stored an overwritten HttpOnly cookie: %q", got)
+	}
+
+	// The same IDN host must still be able to scope a cookie to itself and its
+	// subdomains using the punycode Domain a server would send.
+	own, _ := url.Parse("https://sub.bücher.com/")
+	j.SetCookies(own, []*http.Cookie{{Name: "own", Value: "1", Domain: "xn--bcher-kva.com", Path: "/"}})
+	if got := cookieNames(j.RequestCookies(own, "GET", RequestCookiePolicy{})); got != "own" {
+		t.Fatalf("legitimate IDN domain cookie = %q", got)
+	}
+	if got := cookieNames(j.RequestCookies(attacker, "GET", RequestCookiePolicy{})); got != "own" {
+		t.Fatalf("parent IDN host did not receive its domain cookie: %q", got)
 	}
 }
 
