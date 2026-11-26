@@ -1,0 +1,5 @@
+
+ Latest headline one · Latest headline two · Latest headline three · Latest headline four · Latest headline five · Late
+
+ Article heading
+ The article body stays inside the viewport instead of being pushed off to the right by the nowrap ticker.

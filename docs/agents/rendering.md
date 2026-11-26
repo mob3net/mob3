@@ -133,7 +133,10 @@ agreement, the non-negotiable constraints and the change protocol.
   `flex:1` column does not leave the column half empty. `inline-flex` and `inline-grid`
   are treated as atomic inline-block boxes so buttons and badges stay inside
   the surrounding line instead of becoming full-width rows. Items keep at least their
-  min-content width instead of shrinking into one-character columns.
+  min-content width instead of shrinking into one-character columns, except
+  that a definite width caps the automatic minimum size (the smaller of the
+  min-content width and the specified width), so a full-width row holding a
+  nowrap ticker cannot stretch the page thousands of cells to the right.
   Empty `::before`/`::after` boxes on a flex or grid container are items, so the
   common responsive-media pattern (`::after{content:"";padding-bottom:56.25%}`
   beside an absolutely positioned image) gives its box a height. Column flex

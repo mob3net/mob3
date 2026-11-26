@@ -201,6 +201,16 @@ func (l *Layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		ml, mr, _, _, bl, br, _, _, pl, pr, _, _ := l.BoxMetrics(st, availW)
 		extra := ml + mr + bl + br + pl + pr
 		_, mi := l.measure(it)
+		// The automatic minimum size of a flex item is the smaller of its
+		// min-content size and a definite specified width. Without that clamp
+		// a full-width section containing a nowrap ticker forces the whole
+		// flex line to the ticker's min-content width, which can push the rest
+		// of the page thousands of cells off-screen.
+		if st != nil && st.Width.Set && !st.Width.IsAuto() {
+			if spec := l.widthValue(st, st.Width, availW); spec >= 0 && spec < mi {
+				mi = spec
+			}
+		}
 		mins[i] = MaxInt(1, mi+extra)
 		// A flex item is still bounded by its min/max widths. Bootstrap-style
 		// columns use max-width:75%, and a wide descendant (a carousel stage

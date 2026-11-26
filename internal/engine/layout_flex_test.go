@@ -27,6 +27,39 @@ func TestFlexWrapStartsNewLine(t *testing.T) {
 	}
 }
 
+func TestFlexItemMinSizeClampedBySpecifiedWidth(t *testing.T) {
+	doc := ParseHTML(`<html><body style="display:flex">
+	<div id="row" style="display:flex;flex-flow:row wrap;width:100%">
+		<section id="ticker" style="width:100%"><div style="white-space:nowrap">` +
+		strings.Repeat("LONGLABEL ", 80) +
+		`</div></section>
+		<section id="article" style="width:100%"><p>Article body</p></section>
+	</div>
+</body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	byID := func(id string) *Node {
+		var out *Node
+		doc.FindAll(func(n *Node) bool {
+			if n.Attr("id") == id {
+				out = n
+				return true
+			}
+			return false
+		})
+		return out
+	}
+	ticker, article := byID("ticker"), byID("article")
+	if ticker == nil || article == nil {
+		t.Fatal("missing fixture nodes")
+	}
+	if box := ly.Boxes[ticker]; box.W > 40 {
+		t.Fatalf("full-width ticker expanded to %d cells, want <= 40", box.W)
+	}
+	if box := ly.Boxes[article]; box.X < 0 || box.X+box.W > 40 {
+		t.Fatalf("article section lies outside the viewport: %+v", box)
+	}
+}
+
 func TestFlexInlineBlockItemKeepsBlockChildren(t *testing.T) {
 	doc := ParseHTML(`<html><body>
 	<div style="display:flex;flex-flow:row">

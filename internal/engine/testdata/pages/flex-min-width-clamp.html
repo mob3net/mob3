@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.layout { display: flex; }
+.row { display: flex; flex-flow: row wrap; width: 100%; }
+.ticker, .article { width: 100%; }
+.ticker { background: #eee; }
+.track { white-space: nowrap; overflow: hidden; }
+.article h2 { margin: 8px 0 4px 0; }
+.article p { margin: 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="row">
+    <section class="ticker"><div class="track">Latest headline one · Latest headline two · Latest headline three · Latest headline four · Latest headline five · Latest headline six · Latest headline seven · Latest headline eight</div></section>
+    <section class="article">
+      <h2>Article heading</h2>
+      <p>The article body stays inside the viewport instead of being pushed off to the right by the nowrap ticker.</p>
+    </section>
+  </div>
+</div>
+</body>
+</html>

@@ -1,8 +1,9 @@
 
 
 
-   Long headline that wraps        Short headline
-   inside a narrow card            Sport
+   Long headline that          Short headline
+   wraps inside a narrow       Sport
+   card
    News
 
 
