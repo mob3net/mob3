@@ -91,6 +91,8 @@ type Style struct {
 	FlexBasisSet       bool
 	Gap                Length
 	RowGap             Length
+	ColumnCount        int
+	ColumnWidth        Length
 	GridCols           string
 	GridRows           string
 	GridAreas          string
@@ -835,6 +837,34 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 	case "row-gap", "grid-row-gap":
 		if l := ParseLength(val, st.FontSize); l.Set {
 			st.RowGap = l
+		}
+	case "column-count":
+		if n, err := strconv.Atoi(strings.TrimSpace(val)); err == nil && n > 0 {
+			st.ColumnCount = n
+		} else {
+			st.ColumnCount = 0
+		}
+	case "column-width":
+		if l := ParseLength(val, st.FontSize); l.Set && !l.Auto {
+			st.ColumnWidth = l
+		} else {
+			st.ColumnWidth = Length{}
+		}
+	case "columns":
+		// The shorthand sets both longhands: an integer is the count, a
+		// length is the minimum column width, and auto resets each.
+		st.ColumnCount, st.ColumnWidth = 0, Length{}
+		for _, part := range SplitFields(strings.ToLower(val)) {
+			if part == "auto" {
+				continue
+			}
+			if n, err := strconv.Atoi(part); err == nil && n > 0 {
+				st.ColumnCount = n
+				continue
+			}
+			if l := ParseLength(part, st.FontSize); l.Set && !l.Auto {
+				st.ColumnWidth = l
+			}
 		}
 	case "grid-template-columns":
 		st.GridCols = val

@@ -784,7 +784,11 @@ func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 	case st.Display == "flex" && st.FlexDir != "column":
 		contentH = l.flexRow(n, contentX, contentY, contentW)
 	default:
-		contentH = l.flow(n, contentX, contentY, contentW)
+		if hasColumns(st) {
+			contentH = l.multiColumn(n, contentX, contentY, contentW)
+		} else {
+			contentH = l.flow(n, contentX, contentY, contentW)
+		}
 	}
 	l.parentH = prevParentH
 	if st.LineClamp > 0 && st.Overflow == "hidden" {

@@ -209,6 +209,12 @@ agreement, the non-negotiable constraints and the change protocol.
   implicit column when it centers or end-aligns its items. Row spans beyond
   that new-row rule, `grid-template-rows`, named row lines, auto-fill/auto-fit
   and vertical alignment remain approximated.
+- **CSS multi-column:** `columns`, `column-count` and `column-width` with
+  `column-gap` lay block children into balanced columns in column-major order,
+  deriving a column count from the available width when only `column-width` is
+  set. A narrow terminal keeps at least five cells per column. Inline content,
+  column spans, `column-rule`, `break-inside` control and content that breaks
+  across a column boundary fall back to a single flow.
 - **Box sizing and constraints:** `box-sizing:border-box` makes declared
   widths/heights/min/max include padding and borders in block and absolute
   layout and in flex item widths/basis. A declared fixed `width` (px, em,

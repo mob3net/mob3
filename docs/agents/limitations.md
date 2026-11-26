@@ -120,6 +120,10 @@ agreement, the non-negotiable constraints and the change protocol.
   checking (CRL/OCSP), certificate UI, pinning, or warning flow beyond the
   connection error a request returns. The embedded bundle carries only the
   roots current when the binary was built.
+- Runtime CSS-in-JS stylesheets (`CSSStyleSheet.insertRule`,
+  `replaceSync` and `document.adoptedStyleSheets`) are inert. Components
+  styled only at runtime by emotion or styled-components render unstyled, and
+  their visually-hidden focus controls can appear as visible text.
 - Graphics-protocol detection is environment-based, not an active terminal
   query; users may need `-graphics` in unusual setups.
 - No font files; no real text scaling outside kitty’s `OSC 66`.
@@ -144,7 +148,10 @@ agreement, the non-negotiable constraints and the change protocol.
   basic row-major tracks, named-area column placement, explicit numeric
   `grid-row` starts and horizontal `justify-items`/`justify-self`, but not
   `grid-template-rows`, named row lines or row spans; vertical alignment stays
-  top-aligned and `grid-auto-flow`/`order` are approximated. Left/right
+  top-aligned and `grid-auto-flow`/`order` are approximated. CSS multi-column
+  is limited to block children: `columns`/`column-count`/`column-width` are
+  distributed into columns, but inline content, column spans, column rules and
+  inline fragmentation are not modelled. Left/right
   floats shrink to fit, wrap following lines and honour
   `clear`; floats are scoped to their block flow, lines that cross
   a float's bottom resume the full width, and floats inside inline wrappers
