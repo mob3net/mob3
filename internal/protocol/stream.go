@@ -179,13 +179,21 @@ func (s *streamSession) Abort() {
 }
 
 func (s *streamSession) Close() error {
+	s.Abandon()
+	<-s.done
+	return nil
+}
+
+// Abandon closes the transport without waiting for the peer read loop.
+func (s *streamSession) Abandon() {
 	if s.closed.CompareAndSwap(false, true) {
 		s.cancel()
 		_ = s.peer.Close()
 	}
-	<-s.done
-	return nil
 }
+
+// Done is closed when the peer read loop returns.
+func (s *streamSession) Done() <-chan struct{} { return s.done }
 
 func (s *streamSession) handleFrame(f MuxFrame) error {
 	ev, rest, err := DecodeEvent(f.Body, s.lim)

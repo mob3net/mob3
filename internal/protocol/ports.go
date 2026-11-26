@@ -18,6 +18,18 @@ type Session interface {
 	Close() error
 }
 
+// Abandoner releases a session without waiting for its handler to return. It is
+// the in-process equivalent of killing a child process: the caller discards the
+// tab and never reuses the session.
+type Abandoner interface {
+	Abandon()
+}
+
+// Waiter reports when a session's handler has actually stopped.
+type Waiter interface {
+	Done() <-chan struct{}
+}
+
 // EntryIDSource allocates process-wide history-entry IDs. The engine's page
 // cache and the host's URL attestation share the same sequence; a process
 // transport can keep it in the parent.

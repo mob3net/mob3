@@ -184,6 +184,32 @@ func (h *abortCountingHandler) Serve(ctx context.Context, abort <-chan struct{},
 	return nil
 }
 
+func TestInProcAbandonDoesNotWait(t *testing.T) {
+	release := make(chan struct{})
+	h := HandlerFunc(func(context.Context, <-chan struct{}, <-chan Command, EventSink) error {
+		<-release
+		return nil
+	})
+	s, err := (&InProc{}).Open(context.Background(), 1, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	abandoner := s.(Abandoner)
+	waiter := s.(Waiter)
+	abandoner.Abandon()
+	select {
+	case <-waiter.Done():
+		t.Fatal("Abandon waited for the blocked handler")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-waiter.Done():
+	case <-time.After(time.Second):
+		t.Fatal("handler did not finish after release")
+	}
+}
+
 func TestInProcAbortCallsHandlerDirectly(t *testing.T) {
 	h := &abortCountingHandler{}
 	s, err := (&InProc{}).Open(context.Background(), 1, h)
