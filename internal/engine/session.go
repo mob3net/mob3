@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"browser/internal/protocol"
 )
@@ -43,6 +45,9 @@ type Session struct {
 	router      *FrameRouter
 	budgets     *BudgetManager
 	budgetShare budgetShare
+
+	loadAbortMu     sync.Mutex
+	loadAbortCancel context.CancelFunc
 }
 
 // NewSession creates an empty page session.

@@ -54,6 +54,8 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 	if res.Seq != s.LoadSeq {
 		return
 	}
+	s.pageStopped = false
+	s.setLoadAbort(nil)
 	note := h.TakePendingStatus()
 	if s.ClearHints() {
 		h.SetStatus("")

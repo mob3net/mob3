@@ -15,8 +15,9 @@ type statusState struct {
 	jsErr               bool
 	// moduleErr records that an ES module script failed to load, link or
 	// evaluate, so the footer can point at the console.
-	moduleErr bool
-	status    string
+	moduleErr   bool
+	pageStopped bool
+	status      string
 	// frontendOverlay is true while a front-end-owned window (the view or zoom
 	// menu) covers the page. Native images and scaled text are disabled so
 	// neither can composite above the window.
@@ -120,8 +121,12 @@ func (b *Session) contentRect() contentRect {
 // payload of the State event; the front end never derives these values from
 // page text itself.
 func (b *Session) stateMessage() protocol.State {
+	status := b.status
+	if b.pageStopped {
+		status = "Page stopped"
+	}
 	st := protocol.State{
-		Status:    b.status,
+		Status:    status,
 		Loading:   b.Loading,
 		Scroll:    b.Scroll,
 		MaxScroll: b.maxScroll(),

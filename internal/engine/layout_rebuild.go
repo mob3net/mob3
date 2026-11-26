@@ -27,9 +27,12 @@ func (s *Session) RebuildLayout(viewH int, bigText bool) {
 	if s.Reader && s.ReaderRoot != nil {
 		root, author = s.ReaderRoot, ReaderRules
 	}
+	abortGen := s.abortGen.Load()
+	budget := s.LayoutBudget
+	budget.abort = func() bool { return s.abortGen.Load() != abortGen }
 	deadline := time.Time{}
-	if s.LayoutBudget.Time > 0 {
-		deadline = start.Add(s.LayoutBudget.Time)
+	if budget.Time > 0 {
+		deadline = start.Add(budget.Time)
 	}
 	layoutWidth := s.Width
 	// Interactive pages reserve the rightmost column for the scrollbar, so
@@ -38,10 +41,16 @@ func (s *Session) RebuildLayout(viewH int, bigText bool) {
 		layoutWidth--
 	}
 	imagesOff := s.Images != nil && s.Images.ImagesDisabled()
-	s.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, viewH, s.BigText, s.Dark, s.HideFixed, s.NoSticky, imagesOff, deadline, s.LayoutBudget)
+	s.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, viewH, s.BigText, s.Dark, s.HideFixed, s.NoSticky, imagesOff, deadline, budget)
 	s.Layout.BackgroundsOff = s.HideBackgrounds
 	s.UpdatePDFPageStarts()
-	if s.BigText && LayoutTextOverlaps(s.Layout) {
+	if s.Layout.Stopped {
+		s.pageStopped = true
+		s.status = "Page stopped"
+	} else {
+		s.pageStopped = false
+	}
+	if s.BigText && !s.Layout.Stopped && LayoutTextOverlaps(s.Layout) {
 		// Scaled kitty glyphs are wider than their base font. On dense
 		// multi-column pages that pushes text from one column over another, so
 		// this page falls back to normal-size text for the rest of its session.
@@ -49,12 +58,16 @@ func (s *Session) RebuildLayout(viewH int, bigText bool) {
 		s.BigText = false
 		start = time.Now()
 		deadline = time.Time{}
-		if s.LayoutBudget.Time > 0 {
-			deadline = start.Add(s.LayoutBudget.Time)
+		if budget.Time > 0 {
+			deadline = start.Add(budget.Time)
 		}
-		s.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, viewH, false, s.Dark, s.HideFixed, s.NoSticky, imagesOff, deadline, s.LayoutBudget)
+		s.Layout = BuildLayoutBudgetDeadlineImages(root, author, layoutWidth, viewH, false, s.Dark, s.HideFixed, s.NoSticky, imagesOff, deadline, budget)
 		s.Layout.BackgroundsOff = s.HideBackgrounds
 		s.UpdatePDFPageStarts()
+		if s.Layout.Stopped {
+			s.pageStopped = true
+			s.status = "Page stopped"
+		}
 	}
 	s.ScaledLayout = s.BigText
 	s.PageHasHover = rulesUseHover(author)

@@ -16,6 +16,7 @@ type styleEngine struct {
 	rootFontPx float64
 	dark       bool
 	deadline   time.Time
+	abort      func() bool
 	media      map[string]bool
 	expired    bool
 	// Rules are indexed by their rightmost compound so each element only
@@ -146,6 +147,10 @@ func newStyleEngineDeadline(author []Rule, viewportPx int, deadline time.Time) *
 // still produce a partial page without doing unbounded selector work.
 func (e *styleEngine) outOfTime() bool {
 	if e.expired {
+		return true
+	}
+	if e.abort != nil && e.abort() {
+		e.expired = true
 		return true
 	}
 	if !e.deadline.IsZero() && time.Now().After(e.deadline) {

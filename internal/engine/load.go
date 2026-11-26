@@ -47,6 +47,7 @@ func (s *Session) BeginLoad(load LoadFunc, u *url.URL, method, target string, bo
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = protocol.WithRequestEntry(ctx, entryID)
 	s.CancelLoad = cancel
+	s.setLoadAbort(cancel)
 	s.Loading = true
 	s.StartProgress()
 	if s.LoadCh == nil {
@@ -73,8 +74,28 @@ func (s *Session) CancelLoadNow() {
 		s.CancelLoad()
 		s.CancelLoad = nil
 	}
+	s.setLoadAbort(nil)
 	s.Loading = false
 	s.ClearProgress()
+}
+
+// setLoadAbort stores the cancel function the front-end goroutine may call
+// out-of-band. It is separate from the engine-loop-owned CancelLoad field.
+func (s *Session) setLoadAbort(cancel context.CancelFunc) {
+	s.loadAbortMu.Lock()
+	s.loadAbortCancel = cancel
+	s.loadAbortMu.Unlock()
+}
+
+// cancelLoadFromFrontend cancels a load or PDF parse without touching any
+// engine-loop state.
+func (s *Session) cancelLoadFromFrontend() {
+	s.loadAbortMu.Lock()
+	cancel := s.loadAbortCancel
+	s.loadAbortMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (s *Session) StartProgress() {

@@ -11,6 +11,16 @@ func build(src string, width int) *Layout {
 	return BuildLayout(doc, nil, width)
 }
 
+func TestLayoutAbortMarksStopped(t *testing.T) {
+	root := ParseHTML(strings.Repeat("<div>", 300) + "deep" + strings.Repeat("</div>", 300))
+	budget := DefaultLayoutBudget
+	budget.abort = func() bool { return true }
+	ly := BuildLayoutBudgetDeadlineImages(root, nil, 40, 0, false, false, false, false, false, time.Time{}, budget)
+	if !ly.Stopped {
+		t.Fatal("aborted layout was not marked stopped")
+	}
+}
+
 func TestLayoutBudgetPresets(t *testing.T) {
 	if _, ok := ParseLayoutBudget("nonsense"); ok {
 		t.Fatal("invalid budget name accepted")
