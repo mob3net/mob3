@@ -10,6 +10,20 @@ import (
 	"browser/internal/host"
 )
 
+// loaderConfigFor maps the CLI options to the document loader policy.
+func loaderConfigFor(o runOptions, graphicsMode frontend.GraphicsMode, interactive bool) engine.LoaderConfig {
+	return engine.LoaderConfig{
+		NoScripts:    o.NoJS,
+		NoPDF:        o.NoPDF,
+		NoImages:     graphicsMode == frontend.GraphicsNone,
+		IgnoreBlocks: o.IgnoreBlocks,
+		Search:       o.Search,
+		UserAgent:    o.UA,
+		Certs:        o.Certs,
+		DeferImages:  interactive && !o.MCP,
+	}
+}
+
 // execute runs one MOB³ invocation after flag parsing and validation.
 func execute(o runOptions) int {
 	if o.MemLimit > 0 {
@@ -25,16 +39,7 @@ func execute(o runOptions) int {
 	}
 	hostSess := host.NewSession()
 	browserContext := engine.NewBrowserContext()
-	loaderConfig := engine.LoaderConfig{
-		NoScripts:    o.NoJS,
-		NoPDF:        o.NoPDF,
-		NoImages:     graphicsMode == frontend.GraphicsNone,
-		IgnoreBlocks: o.IgnoreBlocks,
-		Search:       o.Search,
-		UserAgent:    o.UA,
-		Certs:        o.Certs,
-		DeferImages:  interactive && !o.MCP,
-	}
+	loaderConfig := loaderConfigFor(o, graphicsMode, interactive)
 	loader, err := engine.NewConfiguredLoader(hostSess, loaderConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))

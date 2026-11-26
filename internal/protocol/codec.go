@@ -367,6 +367,8 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 	case Pong:
 		kind = EvPong
 		e.u64(v.ID)
+	case Ready:
+		kind = EvReady
 	case AutomationResult:
 		kind = EvAutomationResult
 		e.u8(uint8(v.Op))
@@ -677,6 +679,8 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Quit{}
 	case EvPong:
 		body = Pong{ID: d.u64()}
+	case EvReady:
+		body = Ready{}
 	case EvAutomationResult:
 		body = AutomationResult{
 			Op:   AutomationOp(d.u8()),

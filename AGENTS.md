@@ -222,8 +222,8 @@ published by the Pages build.
   only.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   portable stream mux, single-stream page/host dispatcher, serializable host
-  RPC, liveness Ping/Pong, codec, shared-state ports and limits; standard
-  library only),
+  and storage RPC, liveness Ping/Pong, codec, shared-state ports and limits;
+  standard library only),
   `internal/textedit` (pure
   line editing; standard library only), `internal/textwidth` (pure
   terminal-cell text arithmetic; standard library only), `internal/movekeys`

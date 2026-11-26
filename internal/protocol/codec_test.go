@@ -91,6 +91,7 @@ func testEvents() []Event {
 		}},
 		{Session: 11, Seq: 11, Body: Quit{}},
 		{Session: 11, Seq: 11, Body: Pong{ID: 99}},
+		{Session: 11, Seq: 11, Body: Ready{}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
 	}
 }

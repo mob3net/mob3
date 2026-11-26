@@ -39,10 +39,12 @@ const (
 	MuxCommand MuxKind = iota + 1
 	// MuxEvent carries one encoded Event.
 	MuxEvent
-	// MuxHostCall and MuxHostResult carry host-broker requests in a future
-	// process transport.
+	// MuxHostCall and MuxHostResult carry host-broker requests.
 	MuxHostCall
 	MuxHostResult
+	// MuxStorageCall and MuxStorageResult carry shared storage-broker calls.
+	MuxStorageCall
+	MuxStorageResult
 	// MuxPing and MuxPong are liveness frames for a watchdog.
 	MuxPing
 	MuxPong

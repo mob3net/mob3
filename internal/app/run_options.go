@@ -21,6 +21,7 @@ type runOptions struct {
 	MemLimit      int
 	LayoutBudget  string
 	Zoom          string
+	Engine        string
 	MCP           bool
 	Target        string
 }

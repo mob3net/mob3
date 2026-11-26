@@ -38,11 +38,18 @@ falls back to dump mode and prints the rendered page.
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
 | `-certs string` | `system` | TLS trust store: `system` or `embedded` |
+| `-engine string` | `inproc` | Interactive engine placement: `inproc` or `process` (one child process per tab) |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
 
 Run `mob3 -h` for the exact defaults in your build.
+
+## Engine placement
+
+`-engine=process` runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
+
+Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. Memory budgets are still computed per child until shared budget RPC lands. Dump, PNG and MCP modes remain in-process. The default is `-engine=inproc`.
 
 ## Images and graphics
 
