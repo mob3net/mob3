@@ -189,11 +189,25 @@ func imageMemorySize(img image.Image) int64 {
 	return int64(w)*int64(h)*4 + 128
 }
 
-// cacheControlAllows reports whether a response may be stored in the session
+// CacheControlAllows reports whether a response may be stored in the session
 // memory cache.
 func CacheControlAllows(header string) bool {
 	for _, part := range strings.Split(strings.ToLower(header), ",") {
 		if strings.TrimSpace(part) == "no-store" {
+			return false
+		}
+	}
+	return true
+}
+
+// CacheVaryAllows reports whether a response's Vary header still permits the
+// session cache to reuse one body. Requests carry a constant User-Agent,
+// Accept and Accept-Language and no Referer, so only Cookie (and the wildcard)
+// can distinguish responses; those are not cached.
+func CacheVaryAllows(header string) bool {
+	for _, part := range strings.Split(strings.ToLower(header), ",") {
+		switch strings.TrimSpace(part) {
+		case "*", "cookie":
 			return false
 		}
 	}

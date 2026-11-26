@@ -1199,19 +1199,32 @@ func TestLocalNetworkDialContextFromRequest(t *testing.T) {
 func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	l := newTestLoader()
 	u := mustURL(t, "https://intranet.example/app.css")
-	testHost(l).Cache().PutBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
-	reached := false
-	testHTTP(l).Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		reached = true
-		h := make(http.Header)
-		h.Set("Content-Type", "text/css")
-		return &http.Response{
-			StatusCode: 200, Status: "200 OK", Header: h,
-			Body: io.NopCloser(strings.NewReader("network")), Request: req,
-		}, nil
-	})
+	// Both documents share the same top-level site, so only the local flag
+	// distinguishes them; the public page must not reuse the local entry.
+	page := mustURL(t, "https://example.com/")
+	respond := func(body string, noStore bool) {
+		testHTTP(l).Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			h := make(http.Header)
+			h.Set("Content-Type", "text/css")
+			if noStore {
+				h.Set("Cache-Control", "no-store")
+			}
+			return &http.Response{
+				StatusCode: 200, Status: "200 OK", Header: h,
+				Body: io.NopCloser(strings.NewReader(body)), Request: req,
+			}, nil
+		})
+	}
+	local := withRequestKind(context.Background(), "css")
+	local = withRequestPage(local, page, true)
+	respond("local-secret", false)
+	if data, _, _, _, err := l.FetchCtx(local, u); err != nil || string(data) != "local-secret" {
+		t.Fatalf("local seed fetch = %q, %v", data, err)
+	}
+
+	respond("network", true)
 	public := withRequestKind(context.Background(), "css")
-	public = withRequestPage(public, mustURL(t, "https://example.com/"), false)
+	public = withRequestPage(public, page, false)
 	data, _, _, _, err := l.FetchCtx(public, u)
 	if err != nil {
 		t.Fatal(err)
@@ -1219,18 +1232,11 @@ func TestLocalNetworkGuardSkipsLocalCacheForPublicPage(t *testing.T) {
 	if string(data) != "network" {
 		t.Fatalf("public page read cached local body %q", data)
 	}
-	if !reached {
-		t.Fatal("public page skipped the local cache entry but made no request")
-	}
 
-	// A local document may use the same entry without a request.
-	local := withRequestKind(context.Background(), "css")
-	local = withRequestPage(local, mustURL(t, "http://127.0.0.1:3000/"), true)
-	testHost(l).Cache().PutBytes(u.String(), []byte("local-secret"), "text/css", u.String(), true)
-	reached = false
+	// A local document may still use the local entry without a request.
 	data, _, _, _, err = l.FetchCtx(local, u)
-	if err != nil || string(data) != "local-secret" || reached {
-		t.Fatalf("local page cache hit = %q, %v (request made: %v)", data, err, reached)
+	if err != nil || string(data) != "local-secret" {
+		t.Fatalf("local page cache hit = %q, %v", data, err)
 	}
 }
 

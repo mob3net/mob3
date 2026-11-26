@@ -95,6 +95,15 @@ func TestResourceCacheIgnoresInvalidInput(t *testing.T) {
 	}
 }
 
+func TestCacheVaryAllows(t *testing.T) {
+	for _, header := range []string{"", "Accept-Encoding", "Accept-Encoding, Cookie", "*", "Cookie"} {
+		want := header != "Accept-Encoding, Cookie" && header != "*" && header != "Cookie"
+		if got := CacheVaryAllows(header); got != want {
+			t.Errorf("CacheVaryAllows(%q) = %v, want %v", header, got, want)
+		}
+	}
+}
+
 func TestCacheControlAllows(t *testing.T) {
 	for _, tc := range []struct {
 		header string

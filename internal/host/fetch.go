@@ -42,6 +42,24 @@ func cookiePolicyFor(meta RequestMeta) RequestCookiePolicy {
 	return RequestCookiePolicy{TopSite: siteOf(u), TopLevel: meta.Kind == "doc"}
 }
 
+// resourceCacheKey partitions CSS/JS entries by the top-level schemeful site,
+// so one site cannot read another site's cached response (including one fetched
+// with credentials the other site would not have sent). Images keep their
+// URL-only key in the engine loader.
+func resourceCacheKey(meta RequestMeta, u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	partition := ""
+	if page, err := url.Parse(meta.PageURL); err == nil {
+		partition = siteOf(page)
+	}
+	if partition == "" {
+		partition = meta.PageURL
+	}
+	return partition + "\x00" + u.String()
+}
+
 // applyCookies replaces the Cookie header according to the SameSite policy.
 func (f *Fetcher) applyCookies(req *http.Request, policy RequestCookiePolicy) {
 	if f.Cookies == nil || req == nil {
@@ -132,8 +150,9 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 	cacheable := method == http.MethodGet && len(body) == 0 &&
 		(u.Scheme == "http" || u.Scheme == "https") &&
 		(meta.Kind == "css" || meta.Kind == "js")
+	cacheKey := resourceCacheKey(meta, u)
 	if cacheable {
-		if cached, ct, final, cachedLocal, ok := f.Cache.GetBytes(u.String()); ok && !(meta.BlockLocal && cachedLocal) {
+		if cached, ct, final, cachedLocal, ok := f.Cache.GetBytes(cacheKey); ok && !(meta.BlockLocal && cachedLocal) {
 			f.Requests.RecordCacheHit(gen, method, u.String(), meta.Kind, len(cached))
 			finalURL := u
 			if parsed, err := url.Parse(final); err == nil && parsed.IsAbs() {
@@ -220,8 +239,10 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 			return nil, "", u, resp.StatusCode, ErrResourceTooLarge
 		}
 		ctype := resp.Header.Get("Content-Type")
-		if cacheable && resp.StatusCode == 200 && CacheControlAllows(resp.Header.Get("Cache-Control")) {
-			f.Cache.PutBytes(u.String(), b, ctype, resp.Request.URL.String(), !meta.BlockLocal)
+		if cacheable && resp.StatusCode == 200 &&
+			CacheControlAllows(resp.Header.Get("Cache-Control")) &&
+			CacheVaryAllows(resp.Header.Get("Vary")) {
+			f.Cache.PutBytes(cacheKey, b, ctype, resp.Request.URL.String(), !meta.BlockLocal)
 		}
 		return b, ctype, resp.Request.URL, resp.StatusCode, nil
 	}

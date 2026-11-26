@@ -67,6 +67,78 @@ func TestFetcherFetchCtxAndBlockedRecord(t *testing.T) {
 	}
 }
 
+func TestCSSJSCachePartitionedByTopLevelSite(t *testing.T) {
+	calls := 0
+	f := &Fetcher{
+		Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/javascript"}},
+				Body:       io.NopCloser(strings.NewReader("code")),
+				Request:    r,
+			}, nil
+		})},
+		Settings: NewSettings("ua", ""), Requests: NewRequestLog(),
+		Cache: NewResourceCache(1 << 20),
+	}
+	target, _ := url.Parse("https://cdn.example.net/app.js")
+	one, _ := url.Parse("https://a.example.org/")
+	two, _ := url.Parse("https://b.example.net/")
+	fetch := func(page *url.URL) {
+		ctx := WithRequestMeta(context.Background(), 1, "js")
+		ctx = WithRequestPage(ctx, page, false)
+		if _, _, _, _, err := f.FetchRequest(ctx, http.MethodGet, target, nil, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fetch(one)
+	fetch(one)
+	if calls != 1 {
+		t.Fatalf("same-site fetch made %d requests, want one cache hit", calls)
+	}
+	fetch(two)
+	if calls != 2 {
+		t.Fatalf("cross-site fetch made %d requests, want a cache miss", calls)
+	}
+	fetch(two)
+	if calls != 2 {
+		t.Fatalf("second same-site fetch made %d requests, want one cache hit", calls)
+	}
+}
+
+func TestCacheSkipsCookieVaryingResponses(t *testing.T) {
+	calls := 0
+	f := &Fetcher{
+		Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Content-Type": []string{"text/javascript"},
+					"Vary":         []string{"Cookie"},
+				},
+				Body:    io.NopCloser(strings.NewReader("code")),
+				Request: r,
+			}, nil
+		})},
+		Settings: NewSettings("ua", ""), Requests: NewRequestLog(),
+		Cache: NewResourceCache(1 << 20),
+	}
+	target, _ := url.Parse("https://cdn.example.net/app.js")
+	page, _ := url.Parse("https://a.example.org/")
+	for i := 0; i < 2; i++ {
+		ctx := WithRequestMeta(context.Background(), 1, "js")
+		ctx = WithRequestPage(ctx, page, false)
+		if _, _, _, _, err := f.FetchRequest(ctx, http.MethodGet, target, nil, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("Vary: Cookie response made %d requests, want no cache hit", calls)
+	}
+}
+
 func TestSessionFetchAndPolicyWrappers(t *testing.T) {
 	s := NewSession()
 	s.SetHTTPClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {

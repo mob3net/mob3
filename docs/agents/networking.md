@@ -146,12 +146,15 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Session resource cache:** CSS and JavaScript response bodies and decoded
   images share a session-only LRU byte cache. Its budget is 3% of
   `-mem-limit`/`GOMEMLIMIT`, or 32 MiB when the process is unlimited, with a
-  2 MiB per-entry cap. Only successful GET CSS/JS responses and decoded images
-  are stored; page
-  documents, POST and `data:` reads are not cached, and
-  `Cache-Control: no-store` responses are skipped. Hits avoid network requests;
-  nothing is written to disk. The limit is editable in `about:config`. The
-  separate back/forward page cache is described under History.
+  2 MiB per-entry cap, and key/metadata bytes count against it. Only successful
+  GET CSS/JS responses and decoded images are stored; page documents, POST and
+  `data:` reads are not cached, `Cache-Control: no-store` responses are skipped,
+  and a response varying on `Cookie` (or `Vary: *`) is not cached. CSS and
+  JavaScript keys include the top-level schemeful site so one site cannot reuse
+  another site's cached body; decoded images stay keyed by URL. Hits avoid
+  network requests; nothing is written to disk. The limit is editable in
+  `about:config`. The separate back/forward page cache is described under
+  History.
 - Images load concurrently (max 6) and use the session resource cache per
   resolved URL for reloads. Initial loading also selects `srcset`/`picture`
   candidates, and images added or changed by page scripts (including lazy

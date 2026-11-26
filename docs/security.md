@@ -180,7 +180,10 @@ The back/forward history-cache pool is 12% of `-mem-limit`/`GOMEMLIMIT` (or
 128 MB when unlimited), divided across active tabs. Each tab evicts its least
 recently used pages first, and a page heavier than half its share is never
 cached. When a heavy cached page is evicted, one collection plus scavenge runs
-between frames so its memory returns to the OS.
+between frames so its memory returns to the OS. The separate subresource cache
+keys CSS and JavaScript by top-level site as well as URL, so one site cannot
+reuse another site's cached response, and a response that varies on `Cookie`
+(or `Vary: *`) is not cached at all. Decoded images remain keyed by URL.
 
 `-mem-limit` sets an optional soft limit on the Go heap, making the runtime
 collect harder as memory approaches it. It is off by default (`0`), so memory is
