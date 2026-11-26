@@ -17,8 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-// 5: Hints carries an explicit mode.
-const Version = 5
+// 6: liveness Ping/Pong.
+const Version = 6
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
@@ -60,6 +60,7 @@ const (
 	CmdVisibility
 	CmdGraphics
 	CmdFollowLink
+	CmdPing
 )
 
 const (
@@ -81,6 +82,7 @@ const (
 	EvHistoryCommit
 	EvOpenTab
 	EvLinkPreview
+	EvPong
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

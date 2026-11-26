@@ -231,6 +231,21 @@ type Shutdown struct{}
 
 func (Shutdown) commandKind() Kind { return CmdShutdown }
 
+// Ping asks the engine loop for a liveness response. The engine answers with
+// Pong even when the page itself has no work to do.
+type Ping struct {
+	ID uint64
+}
+
+func (Ping) commandKind() Kind { return CmdPing }
+
+// Pong is the response to one Ping.
+type Pong struct {
+	ID uint64
+}
+
+func (Pong) eventKind() Kind { return EvPong }
+
 // Select asks the front end to display a page select popup. The engine blocks
 // no timers; the front end answers with SelectResult.
 type Select struct {

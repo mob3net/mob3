@@ -44,6 +44,7 @@ func testCommands() []Command {
 		{Session: 8, Seq: 8, Body: Find{Scope: FindHTML, Query: "needle", Next: true, Prev: true, Close: true}},
 		{Session: 9, Seq: 9, Body: Abort{Reason: "escape"}},
 		{Session: 10, Seq: 10, Body: Shutdown{}},
+		{Session: 10, Seq: 10, Body: Ping{ID: 99}},
 		{Session: 11, Seq: 11, Body: DialogResult{ID: 77, OK: true, Text: "yes"}},
 		{Session: 12, Seq: 12, Body: ClientError{Message: "invalid engine event: test"}},
 		{Session: 13, Seq: 13, Body: Automation{Op: AutomationRunCommand, Name: "snapshot", Args: []byte(`{"x":1}`)}},
@@ -89,6 +90,7 @@ func testEvents() []Event {
 			Highlights: []ConsoleHighlight{{Line: 1, X: 2, W: 4, Current: true}},
 		}},
 		{Session: 11, Seq: 11, Body: Quit{}},
+		{Session: 11, Seq: 11, Body: Pong{ID: 99}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
 	}
 }

@@ -30,6 +30,9 @@ type SessionLoop struct {
 	Keys   <-chan string
 	Resize <-chan os.Signal
 	Quit   <-chan os.Signal
+	// Stuck carries tabs whose liveness probe expired. They are discarded on
+	// the loop goroutine.
+	Stuck <-chan *Tab
 
 	// KillTab force-releases a tab that cannot answer a graceful close. The app
 	// supplies it; a nil callback falls back to CloseTab.
@@ -103,6 +106,7 @@ func (l *SessionLoop) Run() error {
 		add(l.Keys, 0, nil)
 		add(l.Resize, 1, nil)
 		add(l.Quit, 2, nil)
+		add(l.Stuck, 4, nil)
 		for _, tab := range l.Tabs {
 			if tab == nil || tab.Session == nil {
 				continue
@@ -157,6 +161,14 @@ func (l *SessionLoop) Run() error {
 				continue
 			}
 			return nil
+		case 4:
+			if !ok {
+				l.Stuck = nil
+				continue
+			}
+			if tab, _ := recv.Interface().(*Tab); tab != nil {
+				l.DiscardTab(tab)
+			}
 		case 3:
 			tab := eventTabs[chosen]
 			if !ok {
