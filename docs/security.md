@@ -168,7 +168,8 @@ content.
 
 PDF responses are parsed in-repo rather than by a third-party renderer. The
 reader is bounded (500 pages, 4 seconds of parse time, 4 MiB of extracted
-text, 32 MiB per decoded stream), rejects encrypted documents, and contains
+text, 32 MiB per decoded stream, 64 MiB of retained page content), stops on
+the requesting page's cancellation, rejects encrypted documents, and contains
 panics, so a malformed file degrades to a note instead of a crash. It never
 rasterizes a page and writes nothing to disk. A panic in the engine goroutine
 is recovered by the session transport, reported as a crash, and the interactive

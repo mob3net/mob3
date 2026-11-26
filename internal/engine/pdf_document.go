@@ -9,6 +9,7 @@ package engine
 // deliberately out of scope.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -86,7 +87,14 @@ func LooksLikePDF(mediaType string, data []byte) bool {
 
 // loadPDFPage builds a readable page from a PDF response.
 
-func BuildPDFDocument(data []byte) (doc *PDFDocument) {
+func BuildPDFDocument(data []byte) *PDFDocument {
+	return BuildPDFDocumentContext(context.Background(), data)
+}
+
+// BuildPDFDocumentContext is BuildPDFDocument with cancellation for the
+// requesting page. A stopped load stops the parser instead of leaving it
+// running in the load goroutine.
+func BuildPDFDocumentContext(ctx context.Context, data []byte) (doc *PDFDocument) {
 	defer func() {
 		if recover() != nil {
 			doc = &PDFDocument{
@@ -95,7 +103,7 @@ func BuildPDFDocument(data []byte) (doc *PDFDocument) {
 			}
 		}
 	}()
-	pdf, err := ParsePDF(data)
+	pdf, err := ParsePDFContext(ctx, data)
 	if err != nil {
 		doc = &PDFDocument{Title: "PDF document"}
 		switch {
@@ -141,7 +149,9 @@ func BuildPDFDocument(data []byte) (doc *PDFDocument) {
 		doc.Pages = append(doc.Pages, PDFPageText{Number: numbers[i], Spans: spans})
 	}
 	doc.PageRows, doc.PageCells = PDFPageBox(doc.Pages)
-	if doc.Partial {
+	if pdf.contentLimit {
+		doc.Note = "Document truncated at the content limit."
+	} else if doc.Partial {
 		doc.Note = fmt.Sprintf("Document truncated after %d pages.", len(pages))
 	}
 	if pdf.textLimit {

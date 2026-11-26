@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/zlib"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,10 @@ const (
 	maxPDFDecoded = 32 << 20
 	// maxPDFText bounds the extracted text kept for one document.
 	maxPDFText = 4 << 20
+	// maxPDFContentTotal bounds the decoded page content retained across the
+	// whole document. The per-stream cap alone would allow hundreds of pages
+	// to retain many gigabytes before extraction.
+	maxPDFContentTotal = 64 << 20
 	// maxPDFDepth bounds page-tree and form-XObject descent.
 	maxPDFDepth = 16
 	// pdfParseTimeout bounds total parsing work for one document.
@@ -46,6 +51,7 @@ var (
 	errPDFNoXref      = errors.New("PDF cross-reference is missing")
 	errPDFUnsupported = errors.New("unsupported PDF feature")
 	errPDFTooLarge    = errors.New("PDF resource limit exceeded")
+	errPDFTimeout     = errors.New("PDF parse time limit exceeded")
 )
 
 // pdfName is a PDF name object without its leading slash.
@@ -82,14 +88,21 @@ type PDFDoc struct {
 	trailer   pdfDict
 	objects   int
 	encrypted bool
-	// truncated reports that the page cap stopped the page-tree walk, and
-	// textLimit that the extracted-text budget stopped a page.
-	truncated bool
-	textLimit bool
-	deadline  time.Time
+	// truncated reports that the page cap or content budget stopped the
+	// page-tree walk, and textLimit that the extracted-text budget stopped a
+	// page.
+	truncated    bool
+	textLimit    bool
+	contentLimit bool
+	deadline     time.Time
+	ctx          context.Context
+	contentBytes int64
 }
 
 func (d *PDFDoc) expired() bool {
+	if d.ctx != nil && d.ctx.Err() != nil {
+		return true
+	}
 	return !d.deadline.IsZero() && time.Now().After(d.deadline)
 }
 
@@ -536,6 +549,16 @@ type pdfOp string
 
 // ParsePDF builds a document from raw bytes.
 func ParsePDF(data []byte) (*PDFDoc, error) {
+	return ParsePDFContext(context.Background(), data)
+}
+
+// ParsePDFContext is ParsePDF with cancellation. The deadline and ctx are
+// checked by the parser loops, which otherwise would keep working after the
+// page that requested the document has been stopped.
+func ParsePDFContext(ctx context.Context, data []byte) (*PDFDoc, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(data) == 0 {
 		return nil, errPDFInvalid
 	}
@@ -553,6 +576,7 @@ func ParsePDF(data []byte) (*PDFDoc, error) {
 		objStms:  make(map[int]map[int]any),
 		loading:  make(map[int]bool),
 		deadline: time.Now().Add(pdfParseTimeout),
+		ctx:      ctx,
 	}
 	if err := d.loadXref(); err != nil {
 		d.xref = make(map[int]xrefEntry)
@@ -741,13 +765,20 @@ func (d *PDFDoc) readXrefStream(st *pdfStream) (int, error) {
 		}
 		return v
 	}
+	entries := 0
 	for i := 0; i+1 < len(index); i += 2 {
+		if d.expired() {
+			return 0, errPDFTimeout
+		}
 		start := int(pdfFloat(d.resolve(index[i])))
 		count := int(pdfFloat(d.resolve(index[i+1])))
-		if start < 0 || count < 0 || count > maxPDFObjects {
+		if start < 0 || count < 0 || count > maxPDFObjects || entries+count > maxPDFObjects {
 			return 0, errPDFTooLarge
 		}
 		for j := 0; j < count; j++ {
+			if j&255 == 0 && d.expired() {
+				return 0, errPDFTimeout
+			}
 			if pos+rowLen > len(data) {
 				return int(pdfFloat(d.resolve(dict["Prev"]))), nil
 			}
@@ -767,6 +798,7 @@ func (d *PDFDoc) readXrefStream(st *pdfStream) (int, error) {
 			case 2:
 				d.setXref(start+j, xrefEntry{kind: 2, stm: int(f2), idx: int(f3)})
 			}
+			entries++
 		}
 	}
 	return int(pdfFloat(d.resolve(dict["Prev"]))), nil
@@ -776,7 +808,12 @@ func (d *PDFDoc) readXrefStream(st *pdfStream) (int, error) {
 // rescues files with a damaged or missing cross-reference table.
 func (d *PDFDoc) scanObjects() error {
 	data := d.data
+	steps := 0
 	for i := 0; i < len(data); {
+		steps++
+		if steps&4095 == 0 && d.expired() {
+			return errPDFTimeout
+		}
 		rel := bytes.Index(data[i:], []byte("obj"))
 		if rel < 0 {
 			break
@@ -831,7 +868,12 @@ func (d *PDFDoc) scanObjects() error {
 		}
 	}
 	if d.trailer == nil || d.trailer["Root"] == nil {
+		tried := 0
 		for num, ent := range d.xref {
+			tried++
+			if tried&63 == 0 && d.expired() {
+				return errPDFTimeout
+			}
 			if ent.kind != 1 {
 				continue
 			}
@@ -996,6 +1038,9 @@ func (d *PDFDoc) objectStream(stmNum int) (map[int]any, error) {
 	nums := make([]int, n)
 	offs := make([]int, n)
 	for i := 0; i < n; i++ {
+		if i&255 == 0 && d.expired() {
+			return nil, errPDFTimeout
+		}
 		if nums[i], err = sc.readInt(); err != nil {
 			return nil, err
 		}
@@ -1005,6 +1050,9 @@ func (d *PDFDoc) objectStream(stmNum int) (map[int]any, error) {
 	}
 	m := make(map[int]any, n)
 	for i := 0; i < n; i++ {
+		if i&63 == 0 && d.expired() {
+			return nil, errPDFTimeout
+		}
 		pos := first + offs[i]
 		if pos < 0 || pos >= len(data) {
 			continue
@@ -1144,7 +1192,7 @@ func (d *PDFDoc) decodeStream(s *pdfStream) ([]byte, error) {
 			return nil, errPDFTooLarge
 		}
 		if parms[i] != nil {
-			if data, err = pdfPredictor(data, parms[i]); err != nil {
+			if data, err = pdfPredictor(data, parms[i], d.expired); err != nil {
 				return nil, err
 			}
 		}
@@ -1395,7 +1443,7 @@ func absInt(v int) int {
 }
 
 // pdfPredictor undoes TIFF and PNG row predictors.
-func pdfPredictor(data []byte, parms pdfDict) ([]byte, error) {
+func pdfPredictor(data []byte, parms pdfDict, expired func() bool) ([]byte, error) {
 	pred := int(pdfFloat(parms["Predictor"]))
 	if pred <= 1 {
 		return data, nil
@@ -1429,6 +1477,9 @@ func pdfPredictor(data []byte, parms pdfDict) ([]byte, error) {
 			return nil, fmt.Errorf("%w: TIFF predictor bits %d", errPDFUnsupported, bpc)
 		}
 		for r := 0; r+rowLen <= len(data); r += rowLen {
+			if expired != nil && expired() {
+				return nil, errPDFTimeout
+			}
 			row := data[r : r+rowLen]
 			for i := bpp; i < len(row); i++ {
 				row[i] += row[i-bpp]
@@ -1439,6 +1490,9 @@ func pdfPredictor(data []byte, parms pdfDict) ([]byte, error) {
 		out := make([]byte, 0, len(data))
 		prev := make([]byte, rowLen)
 		for r := 0; r+1+rowLen <= len(data); r += 1 + rowLen {
+			if expired != nil && expired() {
+				return nil, errPDFTimeout
+			}
 			ft := data[r]
 			row := make([]byte, rowLen)
 			copy(row, data[r+1:r+1+rowLen])
