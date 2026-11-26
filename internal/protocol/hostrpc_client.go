@@ -16,33 +16,34 @@ var ErrHostRPCClosed = errors.New("protocol: host RPC closed")
 // HostClient is the front-end side of a host RPC channel. Calls may run
 // concurrently; responses are matched by request ID.
 type HostClient struct {
-	mux *Mux
-	rw  io.ReadWriteCloser
-	lim Limits
+	peer     *MuxPeer
+	ownsPeer bool
+	lim      Limits
 
-	next atomic.Uint64
-	mu   sync.Mutex
-	pend map[uint64]chan HostResult
-
-	done      chan struct{}
-	closeOnce sync.Once
-	closed    atomic.Bool
-	errMu     sync.Mutex
-	err       error
+	next   atomic.Uint64
+	mu     sync.Mutex
+	pend   map[uint64]chan HostResult
+	closed atomic.Bool
 }
 
-// NewHostClient starts a host RPC client over rw. The channel must be dedicated
-// to host traffic.
+// NewHostClient starts a host RPC client over a dedicated rw channel.
 func NewHostClient(rw io.ReadWriteCloser, lim Limits) *HostClient {
-	lim = lim.normalized()
+	peer := NewMuxPeerReadWriter(rw, lim)
+	c := NewHostClientPeer(peer)
+	c.ownsPeer = true
+	go func() { _ = peer.Run(context.Background()) }()
+	return c
+}
+
+// NewHostClientPeer mounts a host client on an existing peer. The caller runs
+// the peer, which lets page and host traffic share one stream.
+func NewHostClientPeer(peer *MuxPeer) *HostClient {
 	c := &HostClient{
-		mux:  NewMuxReadWriter(rw, lim),
-		rw:   rw,
-		lim:  lim,
+		peer: peer,
+		lim:  peer.lim,
 		pend: make(map[uint64]chan HostResult),
-		done: make(chan struct{}),
 	}
-	go c.readLoop()
+	_ = peer.Handle(MuxHostResult, c.handleFrame)
 	return c
 }
 
@@ -56,15 +57,11 @@ func (c *HostClient) Call(ctx context.Context, call HostCall) (HostResult, error
 	}
 	id := c.next.Add(1)
 	call.ID = id
-	body, err := AppendHostCall(nil, call, c.lim)
-	if err != nil {
-		return HostResult{}, err
-	}
 	ch := make(chan HostResult, 1)
 	c.mu.Lock()
 	c.pend[id] = ch
 	c.mu.Unlock()
-	if err := c.mux.WriteFrame(MuxHostCall, id, body); err != nil {
+	if err := c.peer.WriteHostCall(call); err != nil {
 		c.remove(id)
 		return HostResult{}, err
 	}
@@ -75,19 +72,20 @@ func (c *HostClient) Call(ctx context.Context, call HostCall) (HostResult, error
 		c.remove(id)
 		c.cancel(id)
 		return HostResult{}, ctx.Err()
-	case <-c.done:
+	case <-c.peer.Done():
 		c.remove(id)
 		return HostResult{}, c.clientError()
 	}
 }
 
-// Close closes the channel and waits for the reader to stop.
+// Close stops a dedicated client. A client mounted on a shared peer only stops
+// accepting new calls; the session owner closes the peer.
 func (c *HostClient) Close() error {
-	c.closeOnce.Do(func() {
-		c.closed.Store(true)
-		_ = c.rw.Close()
-	})
-	<-c.done
+	c.closed.Store(true)
+	if c.ownsPeer {
+		_ = c.peer.Close()
+		<-c.peer.Done()
+	}
 	return nil
 }
 
@@ -98,62 +96,31 @@ func (c *HostClient) remove(id uint64) {
 }
 
 func (c *HostClient) cancel(id uint64) {
-	body, err := AppendHostCall(nil, HostCall{Op: HostOpCancel, ID: id}, c.lim)
+	_ = c.peer.WriteHostCall(HostCall{Op: HostOpCancel, ID: id})
+}
+
+func (c *HostClient) handleFrame(f MuxFrame) error {
+	result, err := DecodeHostResult(f.Body, c.lim)
 	if err != nil {
-		return
+		return err
 	}
-	_ = c.mux.WriteFrame(MuxHostCall, id, body)
-}
-
-func (c *HostClient) readLoop() {
-	defer close(c.done)
-	for {
-		f, err := c.mux.ReadFrame()
-		if err != nil {
-			c.fail(err)
-			return
-		}
-		switch f.Kind {
-		case MuxHostResult:
-			result, err := DecodeHostResult(f.Body, c.lim)
-			if err != nil {
-				c.fail(err)
-				return
-			}
-			result.ID = f.ID
-			c.mu.Lock()
-			ch := c.pend[f.ID]
-			delete(c.pend, f.ID)
-			c.mu.Unlock()
-			if ch != nil {
-				select {
-				case ch <- result:
-				default:
-				}
-			}
-		case MuxPing:
-			_ = c.mux.WriteFrame(MuxPong, f.ID, nil)
+	result.ID = f.ID
+	c.mu.Lock()
+	ch := c.pend[f.ID]
+	delete(c.pend, f.ID)
+	c.mu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- result:
 		default:
-			c.fail(ErrInvalid)
-			return
 		}
 	}
-}
-
-func (c *HostClient) fail(err error) {
-	c.errMu.Lock()
-	if c.err == nil {
-		c.err = err
-	}
-	c.errMu.Unlock()
-	c.closed.Store(true)
+	return nil
 }
 
 func (c *HostClient) clientError() error {
-	c.errMu.Lock()
-	defer c.errMu.Unlock()
-	if c.err != nil {
-		return c.err
+	if err := c.peer.Err(); err != nil {
+		return err
 	}
 	return ErrHostRPCClosed
 }

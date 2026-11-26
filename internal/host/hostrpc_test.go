@@ -38,6 +38,70 @@ func hostRPCPair(t *testing.T) (*protocol.RemoteHost, *host.Session) {
 	return protocol.NewRemoteHost(clientSide), session
 }
 
+func TestPageAndHostRPCOnOnePeer(t *testing.T) {
+	serverSide, clientSide := net.Pipe()
+	parentPeer := protocol.NewMuxPeerReadWriter(clientSide, protocol.DefaultLimits)
+	childPeer := protocol.NewMuxPeerReadWriter(serverSide, protocol.DefaultLimits)
+
+	hostSession := host.NewSession()
+	_ = protocol.NewHostServerPeer(parentPeer, hostSession)
+	hostClient := protocol.NewHostClientPeer(childPeer)
+	remote := protocol.NewRemoteHost(hostClient)
+	session := protocol.DialPeer(context.Background(), parentPeer, 1, protocol.DefaultLimits, 8)
+	defer session.Close()
+
+	handler := protocol.HandlerFunc(func(ctx context.Context, _ <-chan struct{}, in <-chan protocol.Command, out protocol.EventSink) error {
+		for {
+			select {
+			case cmd, ok := <-in:
+				if !ok {
+					return nil
+				}
+				if _, ok := cmd.Body.(protocol.Navigate); ok {
+					if err := out.Send(protocol.Event{Body: protocol.State{Title: "shared peer"}}); err != nil {
+						return err
+					}
+				}
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- protocol.ServePeer(context.Background(), childPeer, 1, handler, protocol.DefaultLimits, 8)
+	}()
+
+	remote.SetUserAgent("shared-agent")
+	if got := remote.UserAgent(); got != "shared-agent" {
+		t.Fatalf("host RPC over shared peer = %q", got)
+	}
+	if err := session.Send(protocol.Command{Body: protocol.Navigate{URL: "https://example.test/"}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev, ok := <-session.Events():
+		if !ok {
+			t.Fatal("event stream closed")
+		}
+		st, ok := ev.Body.(protocol.State)
+		if !ok || st.Title != "shared peer" {
+			t.Fatalf("event = %#v", ev.Body)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("page event did not arrive over the shared peer")
+	}
+	_ = session.Close()
+	select {
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("page server did not stop")
+	}
+}
+
 func TestRemoteHostSettings(t *testing.T) {
 	remote, _ := hostRPCPair(t)
 	remote.SetUserAgent("remote-agent")

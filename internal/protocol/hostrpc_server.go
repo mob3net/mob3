@@ -12,85 +12,75 @@ import (
 // HostServer serves Host calls from a host RPC client. Calls run concurrently so
 // one slow fetch cannot block settings, cookies or another fetch.
 type HostServer struct {
-	host Host
-	mux  *Mux
-	rw   io.ReadWriteCloser
-	lim  Limits
+	host     Host
+	peer     *MuxPeer
+	ownsPeer bool
+	lim      Limits
 
 	mu      sync.Mutex
 	pending map[uint64]context.CancelFunc
 	wg      sync.WaitGroup
 }
 
-// NewHostServer creates a host RPC server over rw. The channel must be
-// dedicated to host traffic.
+// NewHostServer creates a host RPC server over a dedicated rw channel.
 func NewHostServer(rw io.ReadWriteCloser, host Host, lim Limits) *HostServer {
-	lim = lim.normalized()
-	return &HostServer{
-		host:    host,
-		mux:     NewMuxReadWriter(rw, lim),
-		rw:      rw,
-		lim:     lim,
-		pending: make(map[uint64]context.CancelFunc),
-	}
+	peer := NewMuxPeerReadWriter(rw, lim)
+	s := NewHostServerPeer(peer, host)
+	s.ownsPeer = true
+	return s
 }
 
-// Serve reads calls until the channel closes or ctx is cancelled. In-flight
-// calls are cancelled before it returns.
+// NewHostServerPeer mounts a host server on an existing peer. The caller runs
+// the peer, so page and host traffic share one stream.
+func NewHostServerPeer(peer *MuxPeer, host Host) *HostServer {
+	s := &HostServer{
+		host:    host,
+		peer:    peer,
+		lim:     peer.lim,
+		pending: make(map[uint64]context.CancelFunc),
+	}
+	_ = peer.Handle(MuxHostCall, s.handleFrame)
+	go func() {
+		<-peer.Done()
+		s.cancelAll()
+	}()
+	return s
+}
+
+// Serve runs a dedicated host channel until it closes or ctx is cancelled.
+// In-flight calls are cancelled before it returns. A server mounted on a shared
+// peer is driven by whatever runs that peer instead.
 func (s *HostServer) Serve(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	watchDone := make(chan struct{})
-	defer close(watchDone)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = s.rw.Close()
-		case <-watchDone:
-		}
-	}()
-	for {
-		f, err := s.mux.ReadFrame()
-		if err != nil {
-			s.cancelAll()
-			s.wg.Wait()
-			_ = s.rw.Close()
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		switch f.Kind {
-		case MuxPing:
-			_ = s.mux.WriteFrame(MuxPong, f.ID, nil)
-			continue
-		case MuxHostCall:
-		default:
-			s.cancelAll()
-			s.wg.Wait()
-			_ = s.rw.Close()
-			return fmt.Errorf("%w: host channel frame kind %d", ErrInvalid, f.Kind)
-		}
-		call, err := DecodeHostCall(f.Body, s.lim)
-		if err != nil {
-			s.cancelAll()
-			s.wg.Wait()
-			_ = s.rw.Close()
-			return err
-		}
-		call.ID = f.ID
-		if call.Op == HostOpCancel {
-			s.cancel(call.ID)
-			continue
-		}
-		callCtx, cancel := context.WithCancel(ctx)
-		s.mu.Lock()
-		s.pending[call.ID] = cancel
-		s.mu.Unlock()
-		s.wg.Add(1)
-		go s.handle(callCtx, call, cancel)
+	err := s.peer.Run(ctx)
+	s.cancelAll()
+	s.wg.Wait()
+	_ = s.peer.Close()
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || ctx.Err() != nil {
+		return nil
 	}
+	return err
+}
+
+func (s *HostServer) handleFrame(f MuxFrame) error {
+	call, err := DecodeHostCall(f.Body, s.lim)
+	if err != nil {
+		return err
+	}
+	call.ID = f.ID
+	if call.Op == HostOpCancel {
+		s.cancel(call.ID)
+		return nil
+	}
+	callCtx, cancel := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.pending[call.ID] = cancel
+	s.mu.Unlock()
+	s.wg.Add(1)
+	go s.handle(callCtx, call, cancel)
+	return nil
 }
 
 func (s *HostServer) handle(ctx context.Context, call HostCall, cancel context.CancelFunc) {
@@ -200,14 +190,14 @@ func (s *HostServer) dispatch(ctx context.Context, call HostCall) HostResult {
 func (s *HostServer) send(result HostResult) {
 	body, err := AppendHostResult(nil, result, s.lim)
 	if err == nil && len(body) <= s.lim.MaxMessageBytes {
-		_ = s.mux.WriteFrame(MuxHostResult, result.ID, body)
+		_ = s.peer.WriteFrame(MuxHostResult, result.ID, body)
 		return
 	}
 	// A result that cannot fit is reported as an error instead of leaving the
 	// caller waiting for a frame that will never arrive.
 	small := HostResult{ID: result.ID, ErrKind: HostErrLimit, ErrText: ErrLimit.Error()}
 	if body, err = AppendHostResult(nil, small, s.lim); err == nil {
-		_ = s.mux.WriteFrame(MuxHostResult, small.ID, body)
+		_ = s.peer.WriteFrame(MuxHostResult, small.ID, body)
 	}
 }
 
