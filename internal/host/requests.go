@@ -4,7 +4,24 @@ import (
 	"browser/internal/protocol"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
+
+// maxRequestLogURL bounds the URL stored for one request record. The request
+// list is a display aid, so a page cannot retain unbounded URL strings.
+const maxRequestLogURL = 2 << 10
+
+// logURL returns a bounded, rune-safe form of a request URL.
+func logURL(raw string) string {
+	if len(raw) <= maxRequestLogURL {
+		return raw
+	}
+	cut := maxRequestLogURL - len("…")
+	for cut > 0 && !utf8.RuneStart(raw[cut]) {
+		cut--
+	}
+	return raw[:cut] + "…"
+}
 
 // Record is one network request shown in the console request pane.
 type Record = protocol.RequestRecord
@@ -48,7 +65,7 @@ func (l *RequestLog) Start(gen int, method, rawURL, kind string) (int, bool) {
 	l.next++
 	id := l.next
 	l.records = append(l.records, Record{
-		ID: id, Gen: gen, Method: method, URL: rawURL, Kind: kind,
+		ID: id, Gen: gen, Method: method, URL: logURL(rawURL), Kind: kind,
 	})
 	if len(l.records) > 512 {
 		l.records = append([]Record(nil), l.records[len(l.records)-512:]...)
@@ -64,7 +81,7 @@ func (l *RequestLog) RecordCacheHit(gen int, method, rawURL, kind string, size i
 	}
 	l.next++
 	l.records = append(l.records, Record{
-		ID: l.next, Gen: gen, Method: method, URL: rawURL, Kind: kind,
+		ID: l.next, Gen: gen, Method: method, URL: logURL(rawURL), Kind: kind,
 		Status: 200, Size: size, Done: true, Cached: true,
 	})
 	if len(l.records) > 512 {

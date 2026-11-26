@@ -3,6 +3,7 @@ package host
 import (
 	"image"
 	"image/color"
+	"strings"
 	"testing"
 )
 
@@ -33,8 +34,18 @@ func TestResourceCacheBytesAndImages(t *testing.T) {
 	}
 }
 
+func TestResourceCacheCountsKeys(t *testing.T) {
+	c := NewResourceCache(1 << 20)
+	key := strings.Repeat("k", 1000)
+	c.PutBytes(key, []byte("x"), "text/css", "", false)
+	used, _, _ := c.Stats()
+	if used < int64(len(key)+1) {
+		t.Fatalf("cache used %d bytes, want key accounted", used)
+	}
+}
+
 func TestResourceCacheEvictsLRUAndRejectsOversized(t *testing.T) {
-	c := NewResourceCache(200)
+	c := NewResourceCache(230)
 	c.PutBytes("a", make([]byte, 100), "text/plain", "a", false)
 	c.PutBytes("b", make([]byte, 100), "text/plain", "b", false)
 	c.PutBytes("c", make([]byte, 100), "text/plain", "c", false)
@@ -48,7 +59,7 @@ func TestResourceCacheEvictsLRUAndRejectsOversized(t *testing.T) {
 		t.Fatal("newest entry is missing")
 	}
 
-	c.PutBytes("huge", make([]byte, 201), "text/plain", "huge", false)
+	c.PutBytes("huge", make([]byte, 501), "text/plain", "huge", false)
 	if _, _, _, _, ok := c.GetBytes("huge"); ok {
 		t.Fatal("oversized entry was stored")
 	}

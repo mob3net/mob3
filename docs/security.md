@@ -73,7 +73,9 @@ response, because the standard cookie jar accepts it. `localStorage` and
 `localStorage` is shared per origin across tabs, while `sessionStorage` is per
 tab and origin. Each area is capped at 5 MiB and the whole browser context at
 32 MiB. Opaque origins get a private area that is not shared with any other
-document.
+document. One cookie is capped at 4 KiB accounting size, a domain at 180
+cookies, and the jar at 1024 cookies / 4 MiB; a cookie that would exceed a bound
+is not stored.
 
 ## Clipboard
 
@@ -197,5 +199,8 @@ a call that is running, so a page cannot reset its budget on every timer
 callback. A page's load-time scripts also share an 8-second budget and a
 2,000-script cap, and Esc or Ctrl-C interrupts the script currently blocking the
 loop and cancels its in-flight requests; closing the tab does the same before
-releasing it. Timer counts and per-tick callbacks are capped. These limits protect
-against runaway scripts, not against malicious pages in general.
+releasing it. Timer counts and per-tick callbacks are capped. Go-side copies of
+page data are capped too: the console log at 8 KiB per line and 512 KiB total,
+DOM text and attribute values at 1 MiB each and 64 MiB per runtime, script-visible
+nodes at 200,000, and request-log URLs at 2 KiB. These limits protect against
+runaway scripts, not against malicious pages in general.

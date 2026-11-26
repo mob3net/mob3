@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -187,6 +188,48 @@ func TestCookieDomainIsolationFromIDNHost(t *testing.T) {
 	}
 	if got := cookieNames(j.RequestCookies(attacker, "GET", RequestCookiePolicy{})); got != "own" {
 		t.Fatalf("parent IDN host did not receive its domain cookie: %q", got)
+	}
+}
+
+func TestCookieStorageCaps(t *testing.T) {
+	u, _ := url.Parse("https://example.com/")
+
+	// One cookie larger than the per-cookie bound is rejected outright.
+	j := NewCookieJar()
+	j.SetDocumentCookie(u, &http.Cookie{Name: "big", Value: strings.Repeat("a", maxCookieBytes), Path: "/"})
+	if got := cookieNames(j.RequestCookies(u, "GET", RequestCookiePolicy{})); got != "" {
+		t.Fatalf("oversized cookie was stored: %q", got)
+	}
+
+	// A domain keeps at most maxCookiesPerDomain cookies, but replacing an
+	// existing identity at the cap still works.
+	j = NewCookieJar()
+	for i := 0; i < maxCookiesPerDomain+20; i++ {
+		j.SetCookies(u, []*http.Cookie{{Name: fmt.Sprintf("c%d", i), Value: "1", Path: "/"}})
+	}
+	if got := len(j.RequestCookies(u, "GET", RequestCookiePolicy{})); got != maxCookiesPerDomain {
+		t.Fatalf("per-domain cookies = %d, want %d", got, maxCookiesPerDomain)
+	}
+	j.SetCookies(u, []*http.Cookie{{Name: "c0", Value: "2", Path: "/"}})
+	if got := cookieValue(j.RequestCookies(u, "GET", RequestCookiePolicy{}), "c0"); got != "2" {
+		t.Fatalf("replacement at the domain cap = %q, want 2", got)
+	}
+
+	// The total count and byte caps hold across domains and oversized values.
+	j = NewCookieJar()
+	for d := 0; d < 8; d++ {
+		host, _ := url.Parse(fmt.Sprintf("https://d%d.test/", d))
+		for i := 0; i < maxCookiesPerDomain; i++ {
+			j.SetCookies(host, []*http.Cookie{{
+				Name: fmt.Sprintf("c%d", i), Value: strings.Repeat("v", maxCookieBytes-64), Path: "/",
+			}})
+		}
+	}
+	if len(j.cookies) > maxCookiesTotal {
+		t.Fatalf("total cookies = %d, want at most %d", len(j.cookies), maxCookiesTotal)
+	}
+	if j.bytes > maxCookieJarBytes {
+		t.Fatalf("cookie bytes = %d, want at most %d", j.bytes, maxCookieJarBytes)
 	}
 }
 

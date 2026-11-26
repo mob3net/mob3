@@ -247,7 +247,7 @@ func styleGet(n *Node, prop string) string {
 	return ""
 }
 
-func styleSet(n *Node, prop, value string) {
+func styleSet(j *jsRuntime, n *Node, prop, value string) {
 	decls := ParseDeclarations(AttrValue(n, "style"))
 	found := false
 	for i := range decls {
@@ -268,7 +268,7 @@ func styleSet(n *Node, prop, value string) {
 	for _, d := range decls {
 		parts = append(parts, d.Prop+": "+d.Value)
 	}
-	SetAttr(n, "style", strings.Join(parts, "; "))
+	j.setAttr(n, "style", strings.Join(parts, "; "))
 }
 
 func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
@@ -279,11 +279,11 @@ func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
 	j.accessor(o, "cssText", func() sobek.Value {
 		return j.vm.ToValue(AttrValue(n, "style"))
 	}, func(v sobek.Value) {
-		SetAttr(n, "style", v.String())
+		j.setAttr(n, "style", v.String())
 		j.markDirty()
 	})
 	j.method(o, "setProperty", func(call sobek.FunctionCall) sobek.Value {
-		styleSet(n, call.Argument(0).String(), call.Argument(1).String())
+		styleSet(j, n, call.Argument(0).String(), call.Argument(1).String())
 		j.markDirty()
 		return sobek.Undefined()
 	})
@@ -304,7 +304,7 @@ func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
 	j.method(o, "removeProperty", func(call sobek.FunctionCall) sobek.Value {
 		prop := call.Argument(0).String()
 		old := styleGet(n, prop)
-		styleSet(n, prop, "")
+		styleSet(j, n, prop, "")
 		j.markDirty()
 		return j.vm.ToValue(old)
 	})
@@ -313,7 +313,7 @@ func (j *jsRuntime) styleObject(n *Node) *sobek.Object {
 		j.accessor(o, jsName, func() sobek.Value {
 			return j.vm.ToValue(styleGet(n, cssName))
 		}, func(v sobek.Value) {
-			styleSet(n, cssName, v.String())
+			styleSet(j, n, cssName, v.String())
 			j.markDirty()
 		})
 	}

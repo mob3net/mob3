@@ -140,6 +140,9 @@ func (c *ResourceCache) put(e *cacheEntry) {
 	if c == nil || e.size <= 0 {
 		return
 	}
+	// The key and metadata are retained with the entry, so they count against
+	// the same budget; otherwise a page could park unbounded URLs in the cache.
+	e.size += int64(len(e.key) + len(e.contentType) + len(e.finalURL))
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.limit <= 0 || e.size > c.maxEntry {

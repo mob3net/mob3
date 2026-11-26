@@ -6,7 +6,9 @@ import (
 )
 
 func TestResourceCacheLRUEviction(t *testing.T) {
-	c := newResourceCache(8)
+	// Each entry also costs its key and metadata, so three 4-byte bodies plus
+	// their URLs need about 114 bytes.
+	c := newResourceCache(90)
 	c.PutBytes("a", make([]byte, 4), "text/css", "https://example.com/a.css", false)
 	c.PutBytes("b", make([]byte, 4), "text/css", "https://example.com/b.css", false)
 	if _, _, _, _, ok := c.GetBytes("a"); !ok {
@@ -25,14 +27,14 @@ func TestResourceCacheLRUEviction(t *testing.T) {
 }
 
 func TestResourceCacheLimitAndEntryCap(t *testing.T) {
-	c := newResourceCache(8)
-	c.PutBytes("too-big", make([]byte, 9), "text/css", "https://example.com/big.css", false)
+	c := newResourceCache(90)
+	c.PutBytes("too-big", make([]byte, 100), "text/css", "https://example.com/big.css", false)
 	if _, _, _, _, ok := c.GetBytes("too-big"); ok {
 		t.Fatal("oversized entry was cached")
 	}
 	c.PutBytes("fit", make([]byte, 8), "text/css", "https://example.com/fit.css", false)
 	if _, _, _, _, ok := c.GetBytes("fit"); !ok {
-		t.Fatal("entry at the limit was not cached")
+		t.Fatal("entry within the limit was not cached")
 	}
 	c.SetLimit(0)
 	if _, _, _, _, ok := c.GetBytes("fit"); ok {

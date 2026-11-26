@@ -31,6 +31,23 @@ type CookieJar struct {
 	// flags, expiry) for the storage inspector, and marks HttpOnly cookies so
 	// document.cookie can refuse to replace or delete them.
 	cookies map[cookieIdentity]cookieMeta
+	// bytes is the accounted size of cookies, so a page cannot grow the jar
+	// without bound.
+	bytes int
+}
+
+// Cookie storage bounds. The per-cookie cap follows the usual browser limit;
+// the count and byte caps keep a malicious page from exhausting the process.
+const (
+	maxCookieBytes      = 4096
+	maxCookiesPerDomain = 180
+	maxCookiesTotal     = 1024
+	maxCookieJarBytes   = 4 << 20
+)
+
+// cookieSize is the accounted size of one stored cookie.
+func cookieSize(id cookieIdentity, value string) int {
+	return len(id.name) + len(value) + len(id.path) + len(id.domain)
 }
 
 // cookieIdentity is the (effective domain, path, name) triple cookiejar uses
@@ -181,29 +198,96 @@ func (j *CookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	j.setCookiesLocked(u, cookies)
 }
 
-func (j *CookieJar) setCookiesLocked(u *url.URL, cookies []*http.Cookie) {
-	j.all.SetCookies(u, cookies)
-	visible := make([]*http.Cookie, 0, len(cookies))
-	for _, c := range cookies {
-		if id, hostOnly, ok := cookieIdentityFor(u, c); ok {
-			if cookieDeletes(c) {
-				delete(j.cookies, id)
-			} else {
-				m := cookieMeta{
-					value:    c.Value,
-					httpOnly: c.HttpOnly,
-					secure:   c.Secure,
-					sameSite: c.SameSite,
-					hostOnly: hostOnly,
-				}
-				if c.MaxAge > 0 {
-					m.expires = time.Now().Add(time.Duration(c.MaxAge) * time.Second)
-				} else if c.MaxAge == 0 {
-					m.expires = c.Expires
-				}
-				j.cookies[id] = m
+// purgeExpiredLocked drops expired cookies and their accounted bytes.
+func (j *CookieJar) purgeExpiredLocked(now time.Time) {
+	for id, m := range j.cookies {
+		if !m.expires.IsZero() && !m.expires.After(now) {
+			j.bytes -= cookieSize(id, m.value)
+			delete(j.cookies, id)
+		}
+	}
+	if j.bytes < 0 {
+		j.bytes = 0
+	}
+}
+
+// acceptsCookieLocked reports whether a new or replacement cookie fits the
+// storage bounds. Replacing an existing identity does not increase the count.
+func (j *CookieJar) acceptsCookieLocked(id cookieIdentity, value string) bool {
+	size := cookieSize(id, value)
+	if size > maxCookieBytes {
+		return false
+	}
+	delta := size
+	if old, ok := j.cookies[id]; ok {
+		delta -= cookieSize(id, old.value)
+	} else {
+		if len(j.cookies) >= maxCookiesTotal {
+			return false
+		}
+		perDomain := 0
+		for key := range j.cookies {
+			if key.domain == id.domain {
+				perDomain++
 			}
 		}
+		if perDomain >= maxCookiesPerDomain {
+			return false
+		}
+	}
+	return j.bytes+delta <= maxCookieJarBytes
+}
+
+func (j *CookieJar) setCookiesLocked(u *url.URL, cookies []*http.Cookie) {
+	now := time.Now()
+	j.purgeExpiredLocked(now)
+	accepted := make([]*http.Cookie, 0, len(cookies))
+	for _, c := range cookies {
+		id, hostOnly, ok := cookieIdentityFor(u, c)
+		if !ok {
+			continue
+		}
+		if cookieDeletes(c) {
+			accepted = append(accepted, c)
+			if old, exists := j.cookies[id]; exists {
+				j.bytes -= cookieSize(id, old.value)
+				delete(j.cookies, id)
+			}
+			continue
+		}
+		if !j.acceptsCookieLocked(id, c.Value) {
+			continue
+		}
+		m := cookieMeta{
+			value:    c.Value,
+			httpOnly: c.HttpOnly,
+			secure:   c.Secure,
+			sameSite: c.SameSite,
+			hostOnly: hostOnly,
+		}
+		if c.MaxAge > 0 {
+			m.expires = now.Add(time.Duration(c.MaxAge) * time.Second)
+		} else if c.MaxAge == 0 {
+			m.expires = c.Expires
+		}
+		if old, exists := j.cookies[id]; exists {
+			j.bytes -= cookieSize(id, old.value)
+		}
+		j.cookies[id] = m
+		j.bytes += cookieSize(id, c.Value)
+		accepted = append(accepted, c)
+	}
+	if j.bytes < 0 {
+		j.bytes = 0
+	}
+	if len(accepted) == 0 {
+		return
+	}
+	// The standard and visible jars see only the cookies that fit the bounds,
+	// so neither can grow past the metadata account.
+	j.all.SetCookies(u, accepted)
+	visible := make([]*http.Cookie, 0, len(accepted))
+	for _, c := range accepted {
 		if c.HttpOnly {
 			// A server may replace a JS-visible cookie with an HttpOnly one.
 			// Remove any previous visible entry with the same identity.
@@ -268,6 +352,7 @@ func (j *CookieJar) RequestCookies(u *url.URL, method string, p RequestCookiePol
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	now := time.Now()
+	j.purgeExpiredLocked(now)
 	site := siteOf(u)
 	sameSite := p.TopSite == "" || site == p.TopSite
 	safeTop := p.TopLevel && (strings.EqualFold(method, http.MethodGet) || strings.EqualFold(method, http.MethodHead))
@@ -277,10 +362,6 @@ func (j *CookieJar) RequestCookies(u *url.URL, method string, p RequestCookiePol
 	}
 	var out []selected
 	for id, m := range j.cookies {
-		if !m.expires.IsZero() && !m.expires.After(now) {
-			delete(j.cookies, id)
-			continue
-		}
 		if !cookieApplies(u, id, m) {
 			continue
 		}
@@ -326,12 +407,9 @@ func (j *CookieJar) CookiesForDisplay(u *url.URL) []*http.Cookie {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	now := time.Now()
+	j.purgeExpiredLocked(now)
 	out := make([]*http.Cookie, 0, len(j.cookies))
 	for id, m := range j.cookies {
-		if !m.expires.IsZero() && !m.expires.After(now) {
-			delete(j.cookies, id)
-			continue
-		}
 		if !cookieApplies(u, id, m) {
 			continue
 		}
@@ -370,12 +448,9 @@ func (j *CookieJar) CookieViews(u *url.URL) []protocol.CookieView {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	now := time.Now()
+	j.purgeExpiredLocked(now)
 	out := make([]protocol.CookieView, 0, len(j.cookies))
 	for id, m := range j.cookies {
-		if !m.expires.IsZero() && !m.expires.After(now) {
-			delete(j.cookies, id)
-			continue
-		}
 		if !cookieApplies(u, id, m) {
 			continue
 		}

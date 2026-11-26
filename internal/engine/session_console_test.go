@@ -24,6 +24,27 @@ func TestJSDialogsNonInteractive(t *testing.T) {
 	}
 }
 
+func TestJSLogByteCaps(t *testing.T) {
+	b := newTestSession(40, 10)
+	b.logJS("log", strings.Repeat("x", maxJSLogLine*2))
+	if len(b.jsLog) != 1 || len(b.jsLog[0]) > maxJSLogLine+len("[log] ") {
+		t.Fatalf("long line = %d bytes, want at most %d", len(b.jsLog[0]), maxJSLogLine+len("[log] "))
+	}
+	for i := 0; i < jsLogCap+20; i++ {
+		b.logJS("log", strings.Repeat("y", maxJSLogLine))
+	}
+	if len(b.jsLog) > jsLogCap {
+		t.Fatalf("lines = %d, want at most %d", len(b.jsLog), jsLogCap)
+	}
+	if b.jsLogBytes > maxJSLogBytes {
+		t.Fatalf("log bytes = %d, want at most %d", b.jsLogBytes, maxJSLogBytes)
+	}
+	b.clearJSLog()
+	if len(b.jsLog) != 0 || b.jsLogBytes != 0 {
+		t.Fatal("clearJSLog left state behind")
+	}
+}
+
 func TestConsoleStorageSection(t *testing.T) {
 	page := newJSPage(`<html><body></body></html>`,
 		`localStorage.setItem("theme", "dark"); sessionStorage.setItem("tab", "1");`)

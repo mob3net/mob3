@@ -2,6 +2,7 @@ package host
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,6 +49,23 @@ func TestRequestLogLifecycleAndGenerations(t *testing.T) {
 	next := l.BeginPage()
 	if next != 2 || l.Count() != 0 {
 		t.Fatalf("new page gen=%d count=%d", next, l.Count())
+	}
+}
+
+func TestRequestLogTruncatesLongURLs(t *testing.T) {
+	l := NewRequestLog()
+	gen := l.BeginPage()
+	long := "https://example.test/" + strings.Repeat("a", maxRequestLogURL+100)
+	id, _ := l.Start(gen, "GET", long, "img")
+	l.Finish(id, gen, 200, 1, 0, nil)
+	got := l.Snapshot()[0].URL
+	if len(got) > maxRequestLogURL || !strings.HasSuffix(got, "…") {
+		t.Fatalf("logged URL = %d bytes, want at most %d with a marker", len(got), maxRequestLogURL)
+	}
+	l.RecordCacheHit(gen, "GET", long, "css", 1)
+	got = l.Snapshot()[1].URL
+	if len(got) > maxRequestLogURL {
+		t.Fatalf("cache-hit URL = %d bytes", len(got))
 	}
 }
 

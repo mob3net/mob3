@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/grafana/sobek"
 
@@ -30,10 +31,49 @@ type consoleState struct {
 	consoleHist   linehistory.History
 	toolHist      linehistory.History
 
-	htmlPage  *Page
-	htmlWidth int
-	htmlCache []string
-	jsLog     []string
+	htmlPage   *Page
+	htmlWidth  int
+	htmlCache  []string
+	jsLog      []string
+	jsLogBytes int
+}
+
+// JS console bounds. Each page-controlled line and the whole log are capped in
+// bytes, not just line count, so a page cannot exhaust the process through the
+// console.
+const (
+	maxJSLogLine  = 8 << 10
+	maxJSLogBytes = 512 << 10
+	jsLogCap      = 200
+)
+
+// truncateLogBytes returns a bounded, rune-safe prefix with a marker.
+func truncateLogBytes(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	cut := limit - len("…")
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
+// appendJSLog adds one line and evicts from the front until both the line and
+// byte bounds hold.
+func (b *Session) appendJSLog(entry string) {
+	b.jsLog = append(b.jsLog, entry)
+	b.jsLogBytes += len(entry)
+	for len(b.jsLog) > jsLogCap || (b.jsLogBytes > maxJSLogBytes && len(b.jsLog) > 1) {
+		b.jsLogBytes -= len(b.jsLog[0])
+		b.jsLog = b.jsLog[1:]
+	}
+}
+
+// clearJSLog drops the log and its byte account.
+func (b *Session) clearJSLog() {
+	b.jsLog = nil
+	b.jsLogBytes = 0
 }
 
 // modalState is the JS dialog, select popup and download/notice state.
@@ -99,10 +139,8 @@ func (b *Session) logJS(kind, msg string) {
 	if msg == "" {
 		return
 	}
-	b.jsLog = append(b.jsLog, "["+kind+"] "+msg)
-	if len(b.jsLog) > 200 {
-		b.jsLog = b.jsLog[len(b.jsLog)-200:]
-	}
+	msg = truncateLogBytes(msg, maxJSLogLine)
+	b.appendJSLog("[" + kind + "] " + msg)
 	if kind == "error" {
 		b.jsErr = true
 		if strings.HasPrefix(b.status, "JS:") {
@@ -298,7 +336,7 @@ func (b *Session) runConsoleInput() {
 		return
 	}
 	if isClearCommand(src) {
-		b.jsLog = nil
+		b.clearJSLog()
 		b.jsErr = false
 		b.consoleScroll = 0
 		b.consolePane = consoleLogs
@@ -331,7 +369,7 @@ func (b *Session) runConsoleInput() {
 // called before the new page's scripts run so stale errors cannot mix with the
 // fresh document.
 func (b *Session) resetConsole() {
-	b.jsLog = nil
+	b.clearJSLog()
 	b.jsErr = false
 	b.consoleText = ""
 	b.consoleCursor = 0

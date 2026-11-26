@@ -67,6 +67,13 @@ func (j *jsRuntime) contentTarget(n *Node) *Node {
 // cloneNodeValue clones a node and carries a template's content fragment over
 // to the clone.
 func (j *jsRuntime) cloneNodeValue(n *Node, deep bool) *Node {
+	count := 1
+	if deep {
+		count = countNodes(n)
+	}
+	if !j.reserveDOMNode(count) || !j.chargeDOMText(nodeTextBytes(n)) {
+		return nil
+	}
 	c := cloneNode(n, deep)
 	if frag, ok := j.templates[n]; ok && frag != nil {
 		cf := &Node{Type: ElementNode, Tag: "#fragment"}

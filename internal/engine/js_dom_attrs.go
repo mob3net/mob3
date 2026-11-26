@@ -69,7 +69,7 @@ func (j *jsRuntime) attributesObject(n *Node) *sobek.Object {
 		if name == nil || value == nil {
 			return sobek.Null()
 		}
-		SetAttr(n, name.String(), value.String())
+		j.setAttr(n, name.String(), value.String())
 		j.markDirty()
 		return sobek.Null()
 	})
@@ -83,7 +83,7 @@ func (j *jsRuntime) classListObject(n *Node) *sobek.Object {
 	}
 	get := func() []string { return n.ClassList() }
 	put := func(list []string) {
-		SetAttr(n, "class", strings.Join(list, " "))
+		j.setAttr(n, "class", strings.Join(list, " "))
 		j.markDirty()
 	}
 	j.accessor(o, "value", func() sobek.Value {

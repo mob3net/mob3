@@ -21,7 +21,7 @@ func (j *jsRuntime) initCanvasObject(o *sobek.Object, n *Node) {
 			return j.vm.ToValue(def)
 		}
 		set := func(v sobek.Value) {
-			SetAttr(n, attr, strconv.Itoa(int(v.ToInteger())))
+			j.setAttr(n, attr, strconv.Itoa(int(v.ToInteger())))
 			j.markDirty()
 		}
 		return get, set

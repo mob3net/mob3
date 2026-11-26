@@ -128,7 +128,10 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		}
 		return j.vm.ToValue(strings.TrimSpace(title.TextContent()))
 	}, func(v sobek.Value) {
-		s := v.String()
+		s, ok := j.domText(v.String())
+		if !ok {
+			return
+		}
 		if title == nil {
 			if head == nil {
 				if html == nil {
@@ -228,7 +231,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 	j.method(o, "exitFullscreen", func(sobek.FunctionCall) sobek.Value { return j.resolvedPromise(nil) })
 	j.method(o, "execCommand", func(sobek.FunctionCall) sobek.Value { return j.vm.ToValue(false) })
 	j.method(o, "createComment", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+		return j.wrap(j.textNode(call.Argument(0).String()))
 	})
 	pointNode := func(px, py float64) *Node {
 		if j.host == nil || j.host.Layout() == nil {
@@ -320,7 +323,7 @@ func (j *jsRuntime) documentObject() *sobek.Object {
 		return j.wrap(&Node{Type: ElementNode, Tag: tag})
 	})
 	j.method(o, "createTextNode", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+		return j.wrap(j.textNode(call.Argument(0).String()))
 	})
 	j.method(o, "createEvent", func(call sobek.FunctionCall) sobek.Value {
 		return j.createEvent(call.Argument(0).String())

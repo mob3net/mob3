@@ -932,7 +932,9 @@ func (j *jsRuntime) installElementCompatProto(p *sobek.Object) {
 		return call.Argument(1)
 	})
 	j.protoMethod(p, "insertAdjacentText", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		insertAdjacent(n, call.Argument(0).String(), &Node{Type: TextNode, Text: call.Argument(1).String()})
+		if txt := j.textNode(call.Argument(1).String()); txt != nil {
+			insertAdjacent(n, call.Argument(0).String(), txt)
+		}
 		return sobek.Undefined()
 	})
 	j.protoMethod(p, "getAttributeNames", func(n *Node, _ sobek.FunctionCall) sobek.Value {
@@ -950,7 +952,7 @@ func (j *jsRuntime) installElementCompatProto(p *sobek.Object) {
 			apply = force.ToBoolean()
 		}
 		if apply {
-			SetAttr(n, name, "")
+			j.setAttr(n, name, "")
 		} else {
 			RemoveAttr(n, name)
 		}
@@ -1010,7 +1012,7 @@ func (j *jsRuntime) datasetObject(n *Node) sobek.Value {
 			return j.vm.ToValue(AttrValue(n, name))
 		},
 		Set: func(target *sobek.Object, prop string, value sobek.Value, receiver sobek.Value) bool {
-			SetAttr(n, "data-"+camelToKebab(prop), value.String())
+			j.setAttr(n, "data-"+camelToKebab(prop), value.String())
 			j.markDirty()
 			return true
 		},

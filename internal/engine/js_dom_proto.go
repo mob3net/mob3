@@ -21,6 +21,9 @@ func (j *jsRuntime) wrap(n *Node) sobek.Value {
 	if o, ok := j.nodes[n]; ok {
 		return o
 	}
+	if !j.reserveDOMNode(1) {
+		return sobek.Null()
+	}
 	if n.Type == ElementNode {
 		if o, ok := j.constructCustomElement(n); ok {
 			return o
@@ -65,14 +68,18 @@ func (j *jsRuntime) initTextProto(p *sobek.Object) {
 	j.protoAccessor(p, "textContent", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.Text)
 	}, func(n *Node, v sobek.Value) {
-		n.Text = v.String()
-		j.markDirty()
+		if s, ok := j.domText(v.String()); ok {
+			n.Text = s
+			j.markDirty()
+		}
 	})
 	j.protoAccessor(p, "nodeValue", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.Text)
 	}, func(n *Node, v sobek.Value) {
-		n.Text = v.String()
-		j.markDirty()
+		if s, ok := j.domText(v.String()); ok {
+			n.Text = s
+			j.markDirty()
+		}
 	})
 	j.protoAccessor(p, "parentNode", func(n *Node) sobek.Value { return j.wrap(n.Parent) }, nil)
 	j.protoAccessor(p, "nextSibling", func(n *Node) sobek.Value { return j.wrap(nextSiblingNode(n)) }, nil)
@@ -102,23 +109,23 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(elementNamespaceURI(n))
 	}, nil)
 	j.protoAccessor(p, "id", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "id")) }, func(n *Node, v sobek.Value) {
-		SetAttr(n, "id", v.String())
+		j.setAttr(n, "id", v.String())
 		j.markDirty()
 	})
 	j.protoAccessor(p, "className", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "class")) }, func(n *Node, v sobek.Value) {
-		SetAttr(n, "class", v.String())
+		j.setAttr(n, "class", v.String())
 		j.markDirty()
 	})
 	reflectString := func(jsName, attr string) {
 		j.protoAccessor(p, jsName, func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, attr)) }, func(n *Node, v sobek.Value) {
-			SetAttr(n, attr, v.String())
+			j.setAttr(n, attr, v.String())
 			j.markDirty()
 		})
 	}
 	reflectBool := func(jsName, attr string) {
 		j.protoAccessor(p, jsName, func(n *Node) sobek.Value { return j.vm.ToValue(n.HasAttr(attr)) }, func(n *Node, v sobek.Value) {
 			if v.ToBoolean() {
-				SetAttr(n, attr, "")
+				j.setAttr(n, attr, "")
 			} else {
 				RemoveAttr(n, attr)
 			}
@@ -136,9 +143,9 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(AttrValue(n, "draggable") == "true")
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			SetAttr(n, "draggable", "true")
+			j.setAttr(n, "draggable", "true")
 		} else {
-			SetAttr(n, "draggable", "false")
+			j.setAttr(n, "draggable", "false")
 		}
 		j.markDirty()
 	})
@@ -149,9 +156,9 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(true)
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			SetAttr(n, "spellcheck", "true")
+			j.setAttr(n, "spellcheck", "true")
 		} else {
-			SetAttr(n, "spellcheck", "false")
+			j.setAttr(n, "spellcheck", "false")
 		}
 		j.markDirty()
 	})
@@ -159,9 +166,9 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(AttrValue(n, "translate") != "no")
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			SetAttr(n, "translate", "yes")
+			j.setAttr(n, "translate", "yes")
 		} else {
-			SetAttr(n, "translate", "no")
+			j.setAttr(n, "translate", "no")
 		}
 		j.markDirty()
 	})
@@ -171,7 +178,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		}
 		return j.vm.ToValue("inherit")
 	}, func(n *Node, v sobek.Value) {
-		SetAttr(n, "contenteditable", v.String())
+		j.setAttr(n, "contenteditable", v.String())
 		j.markDirty()
 	})
 	j.protoAccessor(p, "isContentEditable", func(n *Node) sobek.Value {
@@ -180,31 +187,37 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "tabIndex", func(n *Node) sobek.Value {
 		return j.vm.ToValue(nodeTabIndex(n))
 	}, func(n *Node, v sobek.Value) {
-		SetAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
+		j.setAttr(n, "tabindex", strconv.Itoa(int(v.ToInteger())))
 		j.markDirty()
 	})
 	j.protoAccessor(p, "outerText", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.TextContent())
 	}, func(n *Node, v sobek.Value) {
-		replaceNodeWithText(n, v.String())
+		s, ok := j.domText(v.String())
+		if !ok || !j.reserveDOMNode(1) {
+			return
+		}
+		replaceNodeWithText(n, s)
 		j.markDirty()
 	})
 	j.protoAccessor(p, "href", func(n *Node) sobek.Value { return j.vm.ToValue(AttrValue(n, "href")) }, func(n *Node, v sobek.Value) {
-		SetAttr(n, "href", v.String())
+		j.setAttr(n, "href", v.String())
 		j.markDirty()
 	})
 	j.protoAccessor(p, "value", func(n *Node) sobek.Value {
 		return j.vm.ToValue(InputValue(n))
 	}, func(n *Node, v sobek.Value) {
-		n.Value = v.String()
-		n.ValueSet = true
-		j.markDirty()
+		if s, ok := j.domText(v.String()); ok {
+			n.Value = s
+			n.ValueSet = true
+			j.markDirty()
+		}
 	})
 	j.protoAccessor(p, "checked", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.HasAttr("checked"))
 	}, func(n *Node, v sobek.Value) {
 		if v.ToBoolean() {
-			SetAttr(n, "checked", "")
+			j.setAttr(n, "checked", "")
 		} else {
 			RemoveAttr(n, "checked")
 		}
@@ -220,7 +233,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		j.protoAccessor(p, jsName, func(n *Node) sobek.Value {
 			return j.vm.ToValue(AttrValue(n, attrName))
 		}, func(n *Node, v sobek.Value) {
-			SetAttr(n, attrName, v.String())
+			j.setAttr(n, attrName, v.String())
 			j.markDirty()
 		})
 	}
@@ -275,11 +288,18 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "textContent", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.TextContent())
 	}, func(n *Node, v sobek.Value) {
+		s, ok := j.domText(v.String())
+		if !ok {
+			return
+		}
 		for _, c := range n.Children {
 			c.Parent = nil
 		}
 		n.Children = nil
-		if s := v.String(); s != "" {
+		if s != "" {
+			if !j.reserveDOMNode(1) {
+				return
+			}
 			n.Children = append(n.Children, &Node{Type: TextNode, Text: s, Parent: n})
 		}
 		j.markDirty()
@@ -287,11 +307,18 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	j.protoAccessor(p, "innerText", func(n *Node) sobek.Value {
 		return j.vm.ToValue(n.TextContent())
 	}, func(n *Node, v sobek.Value) {
+		s, ok := j.domText(v.String())
+		if !ok {
+			return
+		}
 		for _, c := range n.Children {
 			c.Parent = nil
 		}
 		n.Children = nil
-		if s := v.String(); s != "" {
+		if s != "" {
+			if !j.reserveDOMNode(1) {
+				return
+			}
 			n.Children = append(n.Children, &Node{Type: TextNode, Text: s, Parent: n})
 		}
 		j.markDirty()
@@ -408,7 +435,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		return j.vm.ToValue(AttrValue(n, call.Argument(0).String()))
 	})
 	j.protoMethod(p, "setAttribute", func(n *Node, call sobek.FunctionCall) sobek.Value {
-		SetAttr(n, call.Argument(0).String(), call.Argument(1).String())
+		j.setAttr(n, call.Argument(0).String(), call.Argument(1).String())
 		j.markDirty()
 		return sobek.Undefined()
 	})
@@ -496,7 +523,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 			child := j.unwrap(arg)
 			if child == nil {
 				if s := arg.String(); s != "" {
-					child = &Node{Type: TextNode, Text: s}
+					child = j.textNode(s)
 				}
 			}
 			if child != nil {
@@ -515,7 +542,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 			child := j.unwrap(arg)
 			if child == nil {
 				if s := arg.String(); s != "" {
-					child = &Node{Type: TextNode, Text: s}
+					child = j.textNode(s)
 				}
 			}
 			if child != nil {
@@ -566,8 +593,18 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	})
 	j.protoMethod(p, "insertAdjacentHTML", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		pos := strings.ToLower(call.Argument(0).String())
-		html := call.Argument(1).String()
+		html, ok := j.domText(call.Argument(1).String())
+		if !ok {
+			return sobek.Undefined()
+		}
 		frag := j.parseFragment(html)
+		count := 0
+		for _, c := range frag {
+			count += countNodes(c)
+		}
+		if !j.reserveDOMNode(count) {
+			return sobek.Undefined()
+		}
 		switch pos {
 		case "beforebegin":
 			if n.Parent != nil {
@@ -616,7 +653,10 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 				child.Parent = n
 				n.Children = append(n.Children, child)
 			} else if s := arg.String(); s != "" {
-				n.Children = append(n.Children, &Node{Type: TextNode, Text: s, Parent: n})
+				if child := j.textNode(s); child != nil {
+					child.Parent = n
+					n.Children = append(n.Children, child)
+				}
 			}
 		}
 		j.markDirty()
@@ -709,7 +749,7 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 		if name == nil || value == nil {
 			return sobek.Null()
 		}
-		SetAttr(n, name.String(), value.String())
+		j.setAttr(n, name.String(), value.String())
 		j.markDirty()
 		return sobek.Null()
 	})

@@ -47,6 +47,10 @@ type jsRuntime struct {
 
 	nodes map[*Node]*sobek.Object
 	rev   map[*sobek.Object]*Node
+	// domTextBytes and domNodes account page-controlled strings and nodes
+	// copied into the Go DOM, which sits outside the sobek heap sampler.
+	domTextBytes int64
+	domNodes     int
 	// templates maps a <template> element to the inert fragment that holds its
 	// content, created on first access to template.content.
 	templates map[*Node]*Node

@@ -14,7 +14,7 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 		return j.vm.ToValue(n.HasAttr("open"))
 	}, func(v sobek.Value) {
 		if v.ToBoolean() {
-			SetAttr(n, "open", "")
+			j.setAttr(n, "open", "")
 		} else {
 			RemoveAttr(n, "open")
 		}
@@ -26,7 +26,7 @@ func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 		n.DialogReturnValue = v.String()
 	})
 	open := func(sobek.FunctionCall) sobek.Value {
-		SetAttr(n, "open", "")
+		j.setAttr(n, "open", "")
 		j.markDirty()
 		return sobek.Undefined()
 	}
@@ -104,10 +104,10 @@ func (j *jsRuntime) newDetachedDocument(title string) *sobek.Object {
 		})
 	})
 	j.method(doc, "createTextNode", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+		return j.wrap(j.textNode(call.Argument(0).String()))
 	})
 	j.method(doc, "createComment", func(call sobek.FunctionCall) sobek.Value {
-		return j.wrap(&Node{Type: TextNode, Text: call.Argument(0).String()})
+		return j.wrap(j.textNode(call.Argument(0).String()))
 	})
 	j.method(doc, "createDocumentFragment", func(sobek.FunctionCall) sobek.Value {
 		return j.wrap(&Node{Type: ElementNode, Tag: "#fragment"})
