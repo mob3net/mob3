@@ -22,9 +22,12 @@ type tabBackend interface {
 type tabBackendFactory func(loader *engine.Loader, id protocol.SessionID, init protocol.Init, target string) (tabBackend, error)
 
 type inProcTabBackend struct {
-	once    sync.Once
-	session protocol.Session
-	engine  *engine.Session
+	mu           sync.Mutex
+	startedClose bool
+	killed       bool
+	releaseOnce  sync.Once
+	session      protocol.Session
+	engine       *engine.Session
 }
 
 func newInProcBackendFactory(newSession func(*engine.Loader, int, int) *engine.Session) tabBackendFactory {
@@ -51,15 +54,50 @@ func newInProcBackendFactory(newSession func(*engine.Loader, int, int) *engine.S
 
 func (b *inProcTabBackend) Session() protocol.Session { return b.session }
 
-// Close releases the transport and then the engine. An in-process backend
-// cannot force a wedged goroutine to stop, so Kill has the same effect here.
-func (b *inProcTabBackend) Close() { b.Kill() }
+// Close releases the transport and then the engine, waiting for the handler.
+func (b *inProcTabBackend) Close() {
+	b.mu.Lock()
+	if b.killed || b.startedClose {
+		b.mu.Unlock()
+		return
+	}
+	b.startedClose = true
+	b.mu.Unlock()
+	if b.session != nil {
+		_ = b.session.Close()
+	}
+	b.release()
+}
 
+// Kill discards the tab without waiting for a wedged handler. The engine
+// goroutine is leaked until the process exits; that is the in-process
+// counterpart of killing a child process. Release still runs if the handler
+// eventually returns.
 func (b *inProcTabBackend) Kill() {
-	b.once.Do(func() {
-		if b.session != nil {
-			_ = b.session.Close()
-		}
+	b.mu.Lock()
+	if b.killed {
+		b.mu.Unlock()
+		return
+	}
+	b.killed = true
+	b.mu.Unlock()
+	if abandoner, ok := b.session.(protocol.Abandoner); ok {
+		abandoner.Abandon()
+	} else if b.session != nil {
+		go func() { _ = b.session.Close() }()
+	}
+	if waiter, ok := b.session.(protocol.Waiter); ok {
+		go func() {
+			<-waiter.Done()
+			b.release()
+		}()
+	} else {
+		b.release()
+	}
+}
+
+func (b *inProcTabBackend) release() {
+	b.releaseOnce.Do(func() {
 		if b.engine != nil {
 			b.engine.Release()
 		}

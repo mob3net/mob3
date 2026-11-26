@@ -3,12 +3,17 @@ package app
 import (
 	"os"
 	"strings"
+	"time"
 
 	"browser/internal/engine"
 	"browser/internal/frontend"
 	"browser/internal/host"
 	"browser/internal/protocol"
 )
+
+// tabCloseGrace is how long a normal close may wait before the backend is
+// force-discarded.
+const tabCloseGrace = 2 * time.Second
 
 // interactiveTabs owns the per-tab backends for the interactive loop. The host,
 // browser context and settings stay shared; each tab gets its own loader,
@@ -18,6 +23,7 @@ type interactiveTabs struct {
 	loaderConfig engine.LoaderConfig
 	home         string
 	cellW, cellH int
+	closeGrace   time.Duration
 	newBackend   tabBackendFactory
 	backends     map[*frontend.Tab]tabBackend
 }
@@ -28,7 +34,7 @@ func newInteractiveTabs(hostSess *host.Session, loaderConfig engine.LoaderConfig
 	}
 	return &interactiveTabs{
 		hostSess: hostSess, loaderConfig: loaderConfig, home: home,
-		cellW: cellW, cellH: cellH,
+		cellW: cellW, cellH: cellH, closeGrace: tabCloseGrace,
 		newBackend: newInProcBackendFactory(newSession),
 		backends:   make(map[*frontend.Tab]tabBackend),
 	}
@@ -66,13 +72,23 @@ func (t *interactiveTabs) open(id protocol.SessionID, w, h, contentTop, contentH
 	return t.openWithLoader(id, w, h, contentTop, contentHeight, target, loader)
 }
 
-// close releases a tab's backend.
+// close releases a tab's backend. If the graceful close wedges, the backend is
+// force-discarded so quitting or closing a tab cannot hang the browser.
 func (t *interactiveTabs) close(tab *frontend.Tab) {
 	if tab == nil {
 		return
 	}
 	if backend := t.backends[tab]; backend != nil {
-		backend.Close()
+		done := make(chan struct{})
+		go func() {
+			backend.Close()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(t.closeGrace):
+			backend.Kill()
+		}
 		delete(t.backends, tab)
 		return
 	}

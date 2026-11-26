@@ -170,23 +170,36 @@ func (s *inProcSession) Abort() {
 // to exit. It is idempotent. Pending events are discarded: the front end has
 // already asked the session to go away.
 func (s *inProcSession) Close() error {
-	if s.closed.CompareAndSwap(false, true) {
-		// Ask a busy handler to stop before cancelling the context, so a long
-		// script cannot hold Close open until it returns on its own.
-		if s.aborter != nil {
-			s.aborter.AbortSession()
-		}
-		s.cancel()
-		// A handler may be blocked publishing an event that nobody will read
-		// now. Drain the queue so it can observe the cancelled context and
-		// return instead of holding Close forever.
-		go func() {
-			for range s.events {
-			}
-		}()
-	}
+	s.abandon()
 	<-s.serveDone
 	return nil
+}
+
+// Abandon stops the session without waiting for the handler. A tab that is
+// being discarded must not depend on the engine returning.
+func (s *inProcSession) Abandon() {
+	s.abandon()
+}
+
+// Done is closed when the handler goroutine returns.
+func (s *inProcSession) Done() <-chan struct{} { return s.serveDone }
+
+func (s *inProcSession) abandon() {
+	if !s.closed.CompareAndSwap(false, true) {
+		return
+	}
+	// Ask a busy handler to stop before cancelling the context, so a long
+	// script cannot hold shutdown open until it returns on its own.
+	if s.aborter != nil {
+		s.aborter.AbortSession()
+	}
+	s.cancel()
+	// A handler may be blocked publishing an event that nobody will read now.
+	// Drain the queue so it can observe the cancelled context and return.
+	go func() {
+		for range s.events {
+		}
+	}()
 }
 
 // runHandler runs one handler and turns a panic into an ordinary error. The

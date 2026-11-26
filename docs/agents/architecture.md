@@ -285,7 +285,7 @@ child process.
 | `internal/host/fetch.go` | `Fetcher`: raw HTTP/data requests, size and encoding limits, cache use and request accounting. Page parsing/assembly is engine-owned; the host returns raw bytes. |
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. The engine loader implements the contract. |
 | `internal/engine/page_assemble.go` | About/blocked/PDF page assembly, the anti-bot response heuristic and `AboutPageName`. |
-| `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
+| `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, abandon-without-wait for a discarded tab, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/mux.go` | Portable typed frame envelope over one byte stream (`command`, `event`, host-call/result, ping/pong, close), so a page session can run over separate stdin/stdout pipes with no platform-specific file descriptors. |
 | `internal/protocol/mux_peer.go` | One read loop per stream that dispatches commands, events, host calls/results and ping/pong to registered handlers. Page and host RPC share one stdin/stdout pair. |
 | `internal/protocol/stream.go` | Stream transport: `ServeStream`/`ServePeer` handler side with direct abort and `DialStream`/`DialPeer` front-end session over the portable peer. Used by tests and available for a future process transport. |
@@ -294,7 +294,7 @@ child process.
 | `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. `ConfigToken` calls are forwarded. It can own a dedicated peer or mount on the session peer. |
 | `internal/protocol/hostrpc_server.go` | `HostServer` dispatches calls concurrently to the trusted host, cancels in-flight work on a cancel frame or shutdown, maps errors to sentinel kinds and contains panics as host errors. It can own a dedicated peer or mount on the session peer. |
 | `internal/protocol/storage.go` | `Storage`/`StorageProvider` ports and storage kinds/errors. A process-backed engine resolves `localStorage`/`sessionStorage` through the parent without changing the JS storage surface. |
-| `internal/protocol/ports.go` | Shared `EntryIDSource` and `BudgetShare` data. The parent can own the history-entry sequence and divide memory pools without sending engine types across the process boundary. |
+| `internal/protocol/ports.go` | Shared `EntryIDSource`, `BudgetShare`, `Abandoner` and `Waiter`. The parent can own the history-entry sequence and divide memory pools, and a discarded tab can drop a session without waiting for its handler. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
@@ -342,8 +342,8 @@ child process.
 | `internal/app/run_options.go` | The validated `runOptions` surface, `onOff` and `cleanError`. |
 | `internal/app/graphics.go` | Native graphics detection, engine capabilities and the `i`-key graphics-mode cycle. |
 | `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
-| `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. |
-| `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. The interface is the seam a process-backed tab will implement without changing the front end or tab registry. |
+| `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. A close that exceeds the grace period is force-discarded. |
+| `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. The interface is the seam a process-backed tab will implement without changing the front end or tab registry; `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |

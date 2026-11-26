@@ -2,8 +2,10 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"browser/internal/engine"
+	"browser/internal/frontend"
 	"browser/internal/host"
 	"browser/internal/protocol"
 )
@@ -24,6 +26,72 @@ type backendTestBackend struct {
 func (b *backendTestBackend) Session() protocol.Session { return b.session }
 func (b *backendTestBackend) Close()                    { b.closed++ }
 func (b *backendTestBackend) Kill()                     { b.killed++ }
+
+type abandonTestSession struct {
+	done      chan struct{}
+	abandoned chan struct{}
+}
+
+func (s *abandonTestSession) Send(protocol.Command) error   { return nil }
+func (s *abandonTestSession) Events() <-chan protocol.Event { return nil }
+func (s *abandonTestSession) Abort()                        {}
+func (s *abandonTestSession) Close() error                  { return nil }
+func (s *abandonTestSession) Abandon()                      { close(s.abandoned) }
+func (s *abandonTestSession) Done() <-chan struct{}         { return s.done }
+
+func TestInProcKillDoesNotWaitForHandler(t *testing.T) {
+	session := &abandonTestSession{done: make(chan struct{}), abandoned: make(chan struct{})}
+	backend := &inProcTabBackend{session: session}
+	done := make(chan struct{})
+	go func() {
+		backend.Kill()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Kill waited for the handler")
+	}
+	select {
+	case <-session.abandoned:
+	default:
+		t.Fatal("Kill did not abandon the session")
+	}
+	close(session.done)
+}
+
+type blockingCloseBackend struct {
+	block  chan struct{}
+	killed chan struct{}
+}
+
+func (b *blockingCloseBackend) Session() protocol.Session { return backendTestSession{} }
+func (b *blockingCloseBackend) Close()                    { <-b.block }
+func (b *blockingCloseBackend) Kill()                     { close(b.killed) }
+
+func TestInteractiveTabsCloseTimesOutAndKills(t *testing.T) {
+	tabs := newInteractiveTabs(host.NewSession(), engine.LoaderConfig{}, "about:home", 8, 16, nil)
+	tabs.closeGrace = 20 * time.Millisecond
+	backend := &blockingCloseBackend{block: make(chan struct{}), killed: make(chan struct{})}
+	tab := &frontend.Tab{}
+	tabs.backends[tab] = backend
+	done := make(chan struct{})
+	go func() {
+		tabs.close(tab)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("close did not time out")
+	}
+	select {
+	case <-backend.killed:
+	default:
+		t.Fatal("backend was not killed after close timeout")
+	}
+	close(backend.block)
+}
 
 func TestInteractiveTabsKillAndCloseBackend(t *testing.T) {
 	tabs := newInteractiveTabs(host.NewSession(), engine.LoaderConfig{}, "about:home", 8, 16, nil)
