@@ -305,11 +305,6 @@ func (b *Session) handlePageKey(k string) bool {
 	case "enter":
 		b.followFocused()
 	case "f":
-		if li := b.currentFindLink(); li != nil {
-			b.Focus = li.Index
-			b.followFocused()
-			return false
-		}
 		b.openLinkHints(protocol.HintFollow)
 	case "F":
 		b.openLinkHints(protocol.HintNewTab)

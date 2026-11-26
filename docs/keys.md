@@ -111,9 +111,8 @@ fallback.
 highlights every match. `Enter` confirms and closes the bar; `n`/`N` then move
 between matches, and the footer shows the match position with the `n`/`N` hint.
 `Down`/`Up` also move while the bar is open. `Esc` closes the
-bar but keeps highlights; a later `Esc` clears them. If the current match is
-inside a link, the footer shows `(f → <resolved URL>)` and `f` follows that
-link directly; clear the search to get normal `f` link hints back.
+bar but keeps highlights; a later `Esc` clears them. After the bar closes, `f`
+keeps its normal link-hint behavior.
 
 The find bar supports the same word-editing keys as the URL prompt.
 

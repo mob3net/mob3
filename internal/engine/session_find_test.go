@@ -110,7 +110,7 @@ func TestFindWorksOnAboutPages(t *testing.T) {
 	}
 }
 
-func TestFindStatusHintsLinkMatch(t *testing.T) {
+func TestFindStatusDoesNotFollowLinks(t *testing.T) {
 	root := ParseHTML(`<html><body><p><a href="#one">evidence link</a></p><p>plain evidence text</p><div id="one">target</div></body></html>`)
 	u := mustParse(t, "https://example.com/")
 	b := newTestSession(80, 20)
@@ -118,31 +118,19 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 	b.URL = u
 	b.Layout = BuildLayout(root, nil, 80)
 
-	// The first match is the link text.
+	// The first match is the link text, but the find status must not advertise
+	// link following; f always opens link hints.
 	typeFindQuery(t, b, func() { b.HandleKey("/") }, "evidence")
 	b.status = b.findStatusText()
-	if !strings.Contains(b.status, "(f → https://example.com/#one)") {
-		t.Fatalf("link match status = %q", b.status)
+	if strings.Contains(b.status, "(f ") {
+		t.Fatalf("find status advertises link following: %q", b.status)
 	}
 	if !strings.Contains(b.status, "n/N next/prev") {
 		t.Fatalf("status is missing the result key hint: %q", b.status)
 	}
-
-	// f follows the matched link rather than opening hint mode.
 	b.HandleKey("f")
-	if b.FindActive || b.URL == nil || b.URL.Fragment != "one" {
-		t.Fatalf("f did not follow the matched link: active=%v url=%v", b.FindActive, b.URL)
-	}
-
-	// The second match is plain text, so the hint disappears.
-	b.applyFindCommand(protocol.Find{Query: "plain"})
-	b.status = b.findStatusText()
-	if strings.Contains(b.status, "(f ") {
-		t.Fatalf("plain match status = %q", b.status)
-	}
-	b.HandleKey("f")
-	if !b.LinkHints {
-		t.Fatal("f on a plain match did not open link hints")
+	if b.FindActive || !b.LinkHints {
+		t.Fatalf("f opened hints=%v instead of link hints from a find match", b.LinkHints)
 	}
 }
 

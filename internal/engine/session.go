@@ -183,22 +183,6 @@ func (s *Session) ClearFind() {
 	s.FindIdx = -1
 }
 
-// CurrentFindLink returns the link containing the current page find match.
-func (s *Session) CurrentFindLink() *LinkInfo {
-	if s.FindScope != FindScopePage || s.Layout == nil || len(s.FindMatches) == 0 {
-		return nil
-	}
-	idx := s.FindIdx
-	if idx < 0 || idx >= len(s.FindMatches) {
-		idx = 0
-	}
-	m := s.FindMatches[idx]
-	if m.Frag < 0 || m.Frag >= len(s.Layout.Frags) {
-		return nil
-	}
-	return s.Layout.Frags[m.Frag].Link
-}
-
 // FindBarCount formats the current/total find count.
 func (s *Session) FindBarCount() string {
 	if s.FindText == "" || len(s.FindMatches) == 0 {

@@ -44,18 +44,8 @@ func (b *Session) findStatusText() string {
 		idx = 0
 	}
 	status := fmt.Sprintf("Find %d/%d: %s", idx+1, len(b.FindMatches), b.FindText)
-	if li := b.currentFindLink(); li != nil {
-		if target := b.resolveHref(li.Href); target != "" && target != "#" {
-			status += " (f → " + target + ")"
-		} else {
-			status += " (f follows this link)"
-		}
-	}
 	return status + " · n/N next/prev"
 }
-
-// currentFindLink returns the link containing the current page find match.
-func (b *Session) currentFindLink() *LinkInfo { return b.CurrentFindLink() }
 
 // refreshFind recomputes matches and jumps to the first one at or after the
 // current match/viewport.

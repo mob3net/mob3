@@ -117,9 +117,8 @@ stopping the others.</p>
 closes it and <b>n</b>/<b>N</b> move between matches; the footer shows the
 match position and the <b>n</b>/<b>N</b> key hint. <b>Esc</b> closes it; a
 second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b> or
-<b>Ctrl-F</b> searches the raw source. If the current match is inside a link, the footer
-shows <b>(f → resolved URL)</b> and <b>f</b> follows it directly; clearing the
-search restores normal link hints.</p>
+<b>Ctrl-F</b> searches the raw source. After the bar closes, <b>f</b> keeps its
+normal link-hint behavior.</p>
 
 <h2>Link hints</h2>
 <p>Press <b>f</b> to follow a link: it highlights a letter from each visible

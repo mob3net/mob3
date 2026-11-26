@@ -48,9 +48,6 @@ func TestSessionFindHintsAndSelection(t *testing.T) {
 	if got := s.FindBarCount(); got != " 1/1 " {
 		t.Fatalf("count = %q", got)
 	}
-	if s.CurrentFindLink() == nil {
-		t.Fatal("current find link missing")
-	}
 	s.ClearFind()
 	if s.FindActive || s.FindText != "" || s.FindMatches != nil {
 		t.Fatalf("clear find active=%v text=%q matches=%v", s.FindActive, s.FindText, s.FindMatches)
