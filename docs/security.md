@@ -22,13 +22,15 @@
 
 ## In-process tab isolation (iframes are inert)
 
-Tabs are implemented inside the one Go process:
+Tabs are implemented inside one Go process by default; `-engine=process` can
+move each interactive tab's engine into a child process for fault isolation:
 
 - A tab is one protocol session with its own engine session, page, layout,
   JavaScript runtime and back/forward history.
 - `localStorage` is shared per origin across tabs; `sessionStorage` is per tab
   and origin; cookies remain host-owned and domain-scoped.
-- One shared budget covers all JS runtimes, page caches and image/SVG work.
+- In-process mode uses one shared budget for all JS runtimes, page caches and
+  image/SVG work. Process mode gives each tab its own `-mem-limit` cap.
   Zoom stays browser-global.
 - Only the active tab draws. A background tab keeps loading and updates its own
   state, history and title, but its timers and deferred image work pause.
@@ -195,10 +197,12 @@ reuse another site's cached response, and a response that varies on `Cookie`
 
 `-mem-limit` sets an optional soft limit on the Go heap, making the runtime
 collect harder as memory approaches it. It is off by default (`0`), so memory is
-unlimited and any `GOMEMLIMIT` environment setting applies. Image decoding and
-inline-SVG rasterization draw on shared pools (12% and 3% of the limit when
-set, with conservative fallbacks otherwise) divided across active tabs. These
-limits are best-effort resource bounds, not a sandbox.
+unlimited and any `GOMEMLIMIT` environment setting applies. In-process tabs
+divide the image/SVG pools (12% and 3% of the limit when set, with conservative
+fallbacks otherwise). With `-engine=process`, each tab child receives the full
+`-mem-limit` as a per-tab cap, so the browser total is not bounded by one limit
+and the parent/host cache sits outside it. These limits are best-effort
+resource bounds, not a sandbox.
 
 ## JavaScript safety limits
 
