@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,6 +96,49 @@ func TestSelectors(t *testing.T) {
 		if got != c.n {
 			t.Errorf("%s matched %d, want %d", c.sel, got, c.n)
 		}
+	}
+}
+
+func TestDeepDescendantSelectorIsBounded(t *testing.T) {
+	const depth = 300
+	root := ParseHTML(strings.Repeat("<div>", depth) + "<span>deep</span>" + strings.Repeat("</div>", depth))
+	span := root.FindFirst("span")
+	if span == nil {
+		t.Fatal("deep span was not parsed")
+	}
+	sel, err := ParseSelector("div div div div div div div div span")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan bool, 1)
+	go func() { done <- sel.Match(span) }()
+	select {
+	case got := <-done:
+		if !got {
+			t.Fatal("deep selector did not match")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("deep selector did not finish")
+	}
+
+	budget := &matchBudget{max: 10}
+	sel.matchWith(span, budget)
+	if budget.steps > budget.max {
+		t.Fatalf("selector used %d steps, max %d", budget.steps, budget.max)
+	}
+}
+
+func TestUAStylesSurviveAuthorBudgetExhaustion(t *testing.T) {
+	root := ParseHTML(`<html><body><script type="application/json">payload</script><div>visible</div></body></html>`)
+	engine := newStyleEngine(nil, 100)
+	engine.matchBudget.max = 1 // author matching is effectively exhausted
+	styles := engine.computeAll(root)
+	script := root.FindFirst("script")
+	if script == nil || styles[script] == nil {
+		t.Fatal("script node has no computed style")
+	}
+	if styles[script].Display != "none" {
+		t.Fatalf("script display = %q, want none", styles[script].Display)
 	}
 }
 

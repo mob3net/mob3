@@ -507,12 +507,13 @@ func (j *jsRuntime) initElementProto(p *sobek.Object) {
 	})
 	j.protoMethod(p, "matches", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		sels := j.ParsedSelectors(call.Argument(0).String())
-		return j.vm.ToValue(matchSelectors(n, sels))
+		return j.vm.ToValue(matchSelectors(n, sels, j.selectorBudget()))
 	})
 	j.protoMethod(p, "closest", func(n *Node, call sobek.FunctionCall) sobek.Value {
 		sels := j.ParsedSelectors(call.Argument(0).String())
+		budget := j.selectorBudget()
 		for p := n; p != nil; p = p.Parent {
-			if p.Type == ElementNode && matchSelectors(p, sels) {
+			if p.Type == ElementNode && matchSelectors(p, sels, budget) {
 				return j.wrap(p)
 			}
 		}
