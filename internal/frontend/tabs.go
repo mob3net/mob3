@@ -31,6 +31,10 @@ type SessionLoop struct {
 	Resize <-chan os.Signal
 	Quit   <-chan os.Signal
 
+	// KillTab force-releases a tab that cannot answer a graceful close. The app
+	// supplies it; a nil callback falls back to CloseTab.
+	KillTab func(*Tab)
+
 	// TerminalSize supplies the current width/height for a resize command.
 	TerminalSize func() (w, h int, ok bool)
 	CellW        int
@@ -222,6 +226,16 @@ func (l *SessionLoop) markDead(tab *Tab, message string) {
 }
 
 func (l *SessionLoop) removeTab(tab *Tab) {
+	l.removeTabWith(tab, false)
+}
+
+// DiscardTab removes a tab whose session is wedged. It uses KillTab instead of
+// waiting for a graceful close, so a hung engine cannot hold the loop.
+func (l *SessionLoop) DiscardTab(tab *Tab) {
+	l.removeTabWith(tab, true)
+}
+
+func (l *SessionLoop) removeTabWith(tab *Tab, kill bool) {
 	if tab == nil {
 		return
 	}
@@ -242,7 +256,11 @@ func (l *SessionLoop) removeTab(tab *Tab) {
 	}
 	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
 	l.forgetTabHistory(tab)
-	l.releaseTab(tab)
+	if kill {
+		l.discardTab(tab)
+	} else {
+		l.releaseTab(tab)
+	}
 	if active && len(l.Tabs) > 0 {
 		if next := l.previousTab(); next != nil {
 			l.activateTab(l.tabIndex(next))
@@ -256,6 +274,19 @@ func (l *SessionLoop) removeTab(tab *Tab) {
 		return
 	}
 	l.syncTabBar()
+}
+
+func (l *SessionLoop) discardTab(tab *Tab) {
+	if tab == nil {
+		return
+	}
+	if l.KillTab != nil {
+		l.KillTab(tab)
+	} else if tab.Session != nil {
+		_ = tab.Session.Close()
+	}
+	tab.Session = nil
+	tab.Presenter = nil
 }
 
 // releaseTab closes the transport and releases any per-tab resources.

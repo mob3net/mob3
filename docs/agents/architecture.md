@@ -293,7 +293,7 @@ child process.
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
-| `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. |
+| `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. `CloseTab` is graceful; `KillTab` and `DiscardTab` remove a wedged tab without waiting for its session. |
 | `internal/frontend/prompt.go` | URL/command prompt state and input, line editing, recall history, visible window and mouse caret mapping. |
 | `internal/frontend/linehistory.go` | Shell-style recall list for the URL prompt and console input rows: bounded entries, consecutive-duplicate removal, draft preservation and Up/Down. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, each tab's own back/forward stack and scroll tracking, the shared visited-page log, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
@@ -337,6 +337,8 @@ child process.
 | `internal/app/run_options.go` | The validated `runOptions` surface, `onOff` and `cleanError`. |
 | `internal/app/graphics.go` | Native graphics detection, engine capabilities and the `i`-key graphics-mode cycle. |
 | `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
+| `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. |
+| `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. The interface is the seam a process-backed tab will implement without changing the front end or tab registry. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |
