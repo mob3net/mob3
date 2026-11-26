@@ -18,7 +18,9 @@
   `-certs` changes which root bundle is trusted; it is not certificate
   inspection, revocation checking or pinning.
 - No phishing, malware, tracker or fingerprinting protection.
-- No proxy configuration UI.
+- No proxy configuration UI. Standard `HTTP_PROXY`, `HTTPS_PROXY` and
+  `NO_PROXY` environment variables are honored by the host transport; see
+  [Proxies](#proxies).
 - No private/incognito concept: every session is ephemeral. Pages share one
   process; tab separation is logical only, not memory or site isolation.
 
@@ -153,6 +155,21 @@ platform store. No certificate file is read. The embedded
 bundle keeps Mozilla's distrust-after dates, so a constrained root stops
 validating certificates issued after that date. Revocation is still not checked
 in any mode, and there is no certificate UI or warning flow.
+
+## Proxies
+
+The host transport uses Go's `http.ProxyFromEnvironment`, so
+`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` work without a CLI flag or UI. HTTP
+proxies, HTTPS proxies and SOCKS5 proxy URLs are supported by the transport.
+The variables are read at process start.
+
+With a proxy, the proxy resolves and contacts the destination. The
+local-network guard cannot inspect that target, so the proxy is a deliberate
+exception to the private-network check. The proxy can see plain HTTP traffic
+and destination hostnames; HTTPS remains end-to-end encrypted unless the proxy
+terminates TLS. Proxy credentials in environment variables are visible to
+child processes and may be visible through process-environment inspection.
+This is best-effort networking, not a security boundary.
 
 ## Automation
 

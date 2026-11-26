@@ -72,7 +72,8 @@ curl command.
   geolocation, clipboard APIs, notifications and browser payment APIs.
 - Async generator syntax (`async function*`) and `for await`: the script
   containing them does not parse, so it is skipped.
-- CSP enforcement, certificate UI and proxy configuration UI.
+- CSP enforcement and certificate UI. Environment proxy variables are
+  supported; there is no proxy configuration UI.
 - Browser pixel screenshots for automation; the MCP `screenshot` tool exports
   the terminal-cell raster instead.
 
