@@ -30,13 +30,31 @@ func parseSelectors(sel string) []*Selector {
 	return out
 }
 
-func matchSelectors(n *Node, sels []*Selector) bool {
+func matchSelectors(n *Node, sels []*Selector, budget *matchBudget) bool {
 	for _, s := range sels {
-		if s.Match(n) {
+		if s.matchWith(n, budget) {
 			return true
 		}
 	}
 	return false
+}
+
+// selectorBudget bounds one DOM query and makes an Esc/Ctrl-C abort or the
+// page's script deadline visible inside native selector matching.
+func (j *jsRuntime) selectorBudget() *matchBudget {
+	abortGen := uint64(0)
+	if j != nil && j.host != nil {
+		abortGen = j.host.AbortGen()
+	}
+	return &matchBudget{max: queryMatchSteps, abort: func() bool {
+		if j == nil {
+			return true
+		}
+		if j.host != nil && j.host.AbortGen() != abortGen {
+			return true
+		}
+		return j.loadDeadline.Load() != 0 && j.deadlineExpired()
+	}}
 }
 
 func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Node {
@@ -44,6 +62,7 @@ func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Nod
 	if len(sels) == 0 || root == nil {
 		return nil
 	}
+	budget := j.selectorBudget()
 	var found *Node
 	var walk func(*Node)
 	walk = func(x *Node) {
@@ -54,7 +73,7 @@ func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Nod
 			if c.Type != ElementNode {
 				continue
 			}
-			if matchSelectors(c, sels) {
+			if matchSelectors(c, sels, budget) {
 				found = c
 				return
 			}
@@ -64,7 +83,7 @@ func (j *jsRuntime) querySelector(root *Node, sel string, includeRoot bool) *Nod
 			}
 		}
 	}
-	if includeRoot && root.Type == ElementNode && matchSelectors(root, sels) {
+	if includeRoot && root.Type == ElementNode && matchSelectors(root, sels, budget) {
 		return root
 	}
 	walk(root)
@@ -76,12 +95,13 @@ func (j *jsRuntime) querySelectorAll(root *Node, sel string, includeRoot bool) [
 	if len(sels) == 0 || root == nil {
 		return nil
 	}
+	budget := j.selectorBudget()
 	var out []*Node
-	if includeRoot && root.Type == ElementNode && matchSelectors(root, sels) {
+	if includeRoot && root.Type == ElementNode && matchSelectors(root, sels, budget) {
 		out = append(out, root)
 	}
 	root.FindAll(func(x *Node) bool {
-		if matchSelectors(x, sels) {
+		if matchSelectors(x, sels, budget) {
 			out = append(out, x)
 		}
 		return false

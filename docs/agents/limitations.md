@@ -47,7 +47,9 @@ agreement, the non-negotiable constraints and the change protocol.
   no-JavaScript fallback.
 - **CSS `:has()`:** supported with a bounded descendant/sibling search.
   Very large subtrees can exceed the search budget and are treated as
-  non-matching rather than scanning without a limit.
+  non-matching rather than scanning without a limit. Selector matching itself
+  is memoized and step-budgeted, so a pathological descendant selector is also
+  treated as non-matching instead of freezing the style pass or `querySelector`.
 - Dynamic `import()` loads a real module namespace and rejects on failure.
   Iframes have no browsing context and expose an inert stub document.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once

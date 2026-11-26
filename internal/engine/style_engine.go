@@ -25,6 +25,8 @@ type styleEngine struct {
 	authorAfter  []Rule
 	beforeIndex  *ruleIndex
 	afterIndex   *ruleIndex
+	matchBudget  *matchBudget
+	uaBudget     *matchBudget
 }
 
 // StyleEngine is the exported name of the cascade engine.
@@ -101,6 +103,8 @@ func newStyleEngine(author []Rule, viewportPx int) *styleEngine {
 	e.authorAfter = filterPseudoRules(author, "after")
 	e.beforeIndex = indexRules(e.authorBefore)
 	e.afterIndex = indexRules(e.authorAfter)
+	e.matchBudget = &matchBudget{max: styleMatchSteps, abort: e.outOfTime}
+	e.uaBudget = &matchBudget{max: defaultMatchSteps}
 	return e
 }
 
@@ -207,7 +211,7 @@ func (e *styleEngine) computeAll(root *Node) map[*Node]*Style {
 	return styles
 }
 
-func (e *styleEngine) applyMatching(rules []Rule, n *Node, st *Style, parent *Style) {
+func (e *styleEngine) applyMatching(rules []Rule, n *Node, st *Style, parent *Style, budget *matchBudget) {
 	var matched []Rule
 	for i, r := range rules {
 		if i&63 == 0 && e.outOfTime() {
@@ -216,7 +220,8 @@ func (e *styleEngine) applyMatching(rules []Rule, n *Node, st *Style, parent *St
 		if r.Media != "" && !e.mediaMatches(r.Media) {
 			continue
 		}
-		if r.Selector.Match(n) {
+		budget.reset()
+		if r.Selector.matchWith(n, budget) {
 			matched = append(matched, r)
 		}
 	}
@@ -233,7 +238,8 @@ func (e *styleEngine) applyMatchingIndex(idx *ruleIndex, n *Node, st *Style, par
 		if r.Media != "" && !e.mediaMatches(r.Media) {
 			continue
 		}
-		if r.Selector.Match(n) {
+		e.matchBudget.reset()
+		if r.Selector.matchWith(n, e.matchBudget) {
 			matched = append(matched, r)
 		}
 	}
@@ -271,7 +277,8 @@ func (e *styleEngine) matchingPseudo(idx *ruleIndex, n *Node, pseudo string) []R
 		if r.Media != "" && !e.mediaMatches(r.Media) {
 			continue
 		}
-		if r.Selector.MatchPseudo(n, pseudo) {
+		e.matchBudget.reset()
+		if r.Selector.matchPseudoWith(n, pseudo, e.matchBudget) {
 			matched = append(matched, r)
 		}
 	}
@@ -330,7 +337,7 @@ func layerPriority(layer int, important bool) int {
 func (e *styleEngine) nodeStyle(n *Node, parent *Style) *Style {
 	st := inheritStyle(parent)
 	if !e.outOfTime() {
-		e.applyMatching(e.ua, n, st, parent)
+		e.applyMatching(e.ua, n, st, parent, e.uaBudget)
 		ApplyPresentationAttrs(n, st)
 		e.applyMatchingIndex(e.authorIndex, n, st, parent)
 		if inline := n.Attr("style"); inline != "" {

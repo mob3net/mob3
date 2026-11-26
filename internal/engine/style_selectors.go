@@ -477,8 +477,76 @@ func parseAttrTest(s string) (AttrTest, bool) {
 	return at, i == len(s)
 }
 
+// matchBudget bounds selector matching. A hostile selector with many
+// descendant combinators can otherwise explore an exponential number of
+// ancestor combinations; steps also give the style pass and script abort a
+// safe point inside one Match call.
+type matchBudget struct {
+	steps int64
+	max   int64
+	abort func() bool
+}
+
+const (
+	defaultMatchSteps = int64(1_000_000)
+	styleMatchSteps   = int64(250_000)
+	queryMatchSteps   = int64(1_000_000)
+)
+
+// reset starts a fresh step allowance. The style pass resets once per selector
+// so one pathological rule cannot exhaust the budget for every later rule,
+// while the style deadline still bounds the pass as a whole.
+func (b *matchBudget) reset() {
+	if b != nil {
+		b.steps = 0
+	}
+}
+
+func (b *matchBudget) step() bool {
+	if b == nil {
+		return true
+	}
+	if b.max > 0 && b.steps >= b.max {
+		return false
+	}
+	b.steps++
+	if b.steps&255 == 0 && b.abort != nil && b.abort() {
+		return false
+	}
+	return true
+}
+
+// matchKey memoizes one (compound, node) result for a fixed selector and
+// anchor. It turns repeated ancestor combinators into polynomial work.
+type matchKey struct {
+	part int
+	node *Node
+}
+
+type matchState struct {
+	parts  []SelPart
+	anchor *Node
+	lead   byte
+	budget *matchBudget
+	memo   map[matchKey]bool
+}
+
+func newMatchState(parts []SelPart, anchor *Node, lead byte, budget *matchBudget) *matchState {
+	return &matchState{parts: parts, anchor: anchor, lead: lead, budget: budget}
+}
+
 // Match reports whether the selector matches element n.
 func (s *Selector) Match(n *Node) bool {
+	return s.matchWith(n, nil)
+}
+
+// MatchPseudo reports whether the selector matches element n as the given
+// generated pseudo-element.
+func (s *Selector) MatchPseudo(n *Node, pseudo string) bool {
+	return s.matchPseudoWith(n, pseudo, nil)
+}
+
+func (s *Selector) matchWith(n *Node, budget *matchBudget) bool {
 	if n == nil || n.Type != ElementNode || len(s.Parts) == 0 {
 		return false
 	}
@@ -487,12 +555,13 @@ func (s *Selector) Match(n *Node) bool {
 			return false
 		}
 	}
-	return matchPart(s.Parts, len(s.Parts)-1, n)
+	if budget == nil {
+		budget = &matchBudget{max: defaultMatchSteps}
+	}
+	return newMatchState(s.Parts, nil, 0, budget).match(len(s.Parts)-1, n)
 }
 
-// MatchPseudo reports whether the selector matches element n as the given
-// generated pseudo-element.
-func (s *Selector) MatchPseudo(n *Node, pseudo string) bool {
+func (s *Selector) matchPseudoWith(n *Node, pseudo string, budget *matchBudget) bool {
 	if n == nil || n.Type != ElementNode || len(s.Parts) == 0 {
 		return false
 	}
@@ -505,50 +574,71 @@ func (s *Selector) MatchPseudo(n *Node, pseudo string) bool {
 			return false
 		}
 	}
-	return matchPart(s.Parts, last, n)
+	if budget == nil {
+		budget = &matchBudget{max: defaultMatchSteps}
+	}
+	return newMatchState(s.Parts, nil, 0, budget).match(last, n)
 }
 
-func matchPart(parts []SelPart, i int, n *Node) bool {
-	return matchPartFrom(parts, i, n, nil, 0)
-}
-
-// matchPartFrom matches parts[i] and its ancestors. When anchor is non-nil the
-// leftmost compound must stand in the given relative relation to it, which is
-// how a :has() argument is anchored to the element being matched.
-func matchPartFrom(parts []SelPart, i int, n, anchor *Node, lead byte) bool {
+func (st *matchState) match(i int, n *Node) bool {
 	if n == nil || n.Type != ElementNode {
 		return false
 	}
-	if !parts[i].matches(n) {
+	key := matchKey{part: i, node: n}
+	if st.memo != nil {
+		if ok, found := st.memo[key]; found {
+			return ok
+		}
+	}
+	if !st.budget.step() {
+		return false
+	}
+	if !st.parts[i].matchesBudget(n, st.budget) {
+		st.store(key, false)
 		return false
 	}
 	if i == 0 {
-		if anchor == nil {
-			return true
+		if st.anchor != nil && !relativeAnchor(n, st.anchor, st.lead) {
+			st.store(key, false)
+			return false
 		}
-		return relativeAnchor(n, anchor, lead)
+		st.store(key, true)
+		return true
 	}
-	switch parts[i].Comb {
+	var ok bool
+	switch st.parts[i].Comb {
 	case '>':
-		return matchPartFrom(parts, i-1, parentElement(n), anchor, lead)
+		ok = st.match(i-1, parentElement(n))
 	case '+':
 		p := prevElement(n)
-		return p != nil && matchPartFrom(parts, i-1, p, anchor, lead)
+		ok = p != nil && st.match(i-1, p)
 	case '~':
 		for p := prevElement(n); p != nil; p = prevElement(p) {
-			if matchPartFrom(parts, i-1, p, anchor, lead) {
-				return true
+			if st.match(i-1, p) {
+				ok = true
+				break
 			}
 		}
-		return false
 	default:
 		for p := parentElement(n); p != nil; p = parentElement(p) {
-			if matchPartFrom(parts, i-1, p, anchor, lead) {
-				return true
+			if st.match(i-1, p) {
+				ok = true
+				break
 			}
 		}
-		return false
 	}
+	st.store(key, ok)
+	return ok
+}
+
+func (st *matchState) store(key matchKey, ok bool) {
+	if len(st.parts) < 3 {
+		return
+	}
+	if st.memo == nil {
+		st.memo = make(map[matchKey]bool)
+	}
+	st.memo[key] = ok
 }
 
 // relativeAnchor checks the relation between the leftmost compound of a :has()
@@ -580,17 +670,18 @@ func relativeAnchor(n, anchor *Node, lead byte) bool {
 // style matching into an unbounded traversal.
 const maxHasNodes = 2048
 
-func matchHas(h HasSelector, anchor *Node) bool {
+func matchHas(h HasSelector, anchor *Node, budget *matchBudget) bool {
 	if anchor == nil || len(h.Sel.Parts) == 0 {
 		return false
 	}
-	budget := maxHasNodes
+	remaining := maxHasNodes
+	state := newMatchState(h.Sel.Parts, anchor, h.Comb, budget)
 	try := func(n *Node) bool {
-		if budget <= 0 {
+		if remaining <= 0 {
 			return false
 		}
-		budget--
-		return matchPartFrom(h.Sel.Parts, len(h.Sel.Parts)-1, n, anchor, h.Comb)
+		remaining--
+		return state.match(len(h.Sel.Parts)-1, n)
 	}
 	var roots []*Node
 	switch h.Comb {
@@ -613,7 +704,7 @@ func matchHas(h HasSelector, anchor *Node) bool {
 		stack = append(stack, roots[i])
 	}
 	for len(stack) > 0 {
-		if budget <= 0 {
+		if remaining <= 0 {
 			return false
 		}
 		n := stack[len(stack)-1]
@@ -634,6 +725,13 @@ func matchHas(h HasSelector, anchor *Node) bool {
 }
 
 func (p *SelPart) matches(n *Node) bool {
+	return p.matchesBudget(n, nil)
+}
+
+func (p *SelPart) matchesBudget(n *Node, budget *matchBudget) bool {
+	if budget != nil && !budget.step() {
+		return false
+	}
 	if p.Tag != "" && p.Tag != "*" && p.Tag != n.Tag {
 		return false
 	}
@@ -707,14 +805,14 @@ func (p *SelPart) matches(n *Node) bool {
 		}
 	}
 	for i := range p.Not {
-		if p.Not[i].matches(n) {
+		if p.Not[i].matchesBudget(n, budget) {
 			return false
 		}
 	}
 	if len(p.Is) > 0 {
 		ok := false
 		for i := range p.Is {
-			if p.Is[i].matches(n) {
+			if p.Is[i].matchesBudget(n, budget) {
 				ok = true
 				break
 			}
@@ -724,7 +822,7 @@ func (p *SelPart) matches(n *Node) bool {
 		}
 	}
 	for i := range p.Has {
-		if !matchHas(p.Has[i], n) {
+		if !matchHas(p.Has[i], n, budget) {
 			return false
 		}
 	}

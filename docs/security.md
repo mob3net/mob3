@@ -166,6 +166,12 @@ stroke outline beyond a fixed point budget is dropped. These limits bound
 resource use and crashes, not the general risk of rendering attacker-controlled
 content.
 
+CSS selector matching memoizes repeated ancestor states and runs under a
+per-selector or per-query step budget. A pathological selector is treated as
+non-matching instead of freezing the engine, and the style deadline and script
+abort flag are checked inside the match. UA rules have their own small budget,
+so exhausting author matching cannot expose script/style raw text.
+
 PDF responses are parsed in-repo rather than by a third-party renderer. The
 reader is bounded (500 pages, 4 seconds of parse time, 4 MiB of extracted
 text, 32 MiB per decoded stream, 64 MiB of retained page content), stops on
