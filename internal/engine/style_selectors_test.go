@@ -5,6 +5,71 @@ import (
 	"time"
 )
 
+func TestHasSelector(t *testing.T) {
+	doc := ParseHTML(`<div id="root">
+		<figure id="direct"><img></figure>
+		<figure id="nested"><span><img></span></figure>
+		<div id="card"><span class="badge">x</span></div>
+		<div id="empty"></div>
+		<ul><li id="one"></li><li id="two" class="next"></li><li id="three"></li></ul>
+		<div id="childwrap"><span class="a"><i class="b"></i></span></div>
+		<div id="anchor"></div><div class="sib"><span class="deep"></span></div>
+	</div>`)
+	check := func(sel string, id string, want bool) {
+		s, err := ParseSelector(sel)
+		if err != nil {
+			t.Fatalf("%s: %v", sel, err)
+		}
+		n := findByID(doc, id)
+		if n == nil {
+			t.Fatalf("missing #%s", id)
+		}
+		if got := s.Match(n); got != want {
+			t.Errorf("%s on #%s = %v, want %v", sel, id, got, want)
+		}
+	}
+	check("figure:has(> img)", "direct", true)
+	check("figure:has(> img)", "nested", false)
+	check("figure:has(img)", "nested", true)
+	check("#card:has(.badge)", "card", true)
+	check("#empty:has(.badge)", "empty", false)
+	check("#one:has(+ .next)", "one", true)
+	check("#one:has(~ .next)", "one", true)
+	check("#three:has(+ .next)", "three", false)
+	check("#card:has(> .badge)", "card", true)
+	check("#childwrap:has(> .a > .b)", "childwrap", true)
+	check("#childwrap:has(> .a .b)", "childwrap", true)
+	check("#anchor:has(+ .sib .deep)", "anchor", true)
+	check("#anchor:has(~ .sib .deep)", "anchor", true)
+}
+
+func TestHasSelectorRulesApply(t *testing.T) {
+	doc := ParseHTML(`<html><body><div class="card" id="yes"><img></div><div class="card" id="no"></div></body></html>`)
+	rules := ParseStylesheet(`.card:has(img){background:#ff0000}`)
+	styles := newStyleEngine(rules, 80).computeAll(doc)
+	if st := styles[findByID(doc, "yes")]; st == nil || st.Background.R != 255 || st.Background.G != 0 {
+		t.Fatalf("has rule did not apply: %#v", st)
+	}
+	if st := styles[findByID(doc, "no")]; st != nil && st.Background.R == 255 {
+		t.Fatal("has rule applied without a matching descendant")
+	}
+}
+
+func TestEmptyHasIsInvalid(t *testing.T) {
+	for _, sel := range []string{":has()", "div:has()", "div:has(>)"} {
+		if _, err := ParseSelector(sel); err == nil {
+			t.Fatalf("%q parsed as a valid selector", sel)
+		}
+	}
+}
+
+func TestHasSelectorUsesHover(t *testing.T) {
+	rules := ParseStylesheet(`.card:has(.badge:hover){color:#ff0000}`)
+	if !rulesUseHover(rules) {
+		t.Fatal(":has(:hover) did not mark the rules as hover-dependent")
+	}
+}
+
 func TestSelectors(t *testing.T) {
 	doc := ParseHTML(`<div><p class="a b" data-x="hello world">1</p><p id="last">2</p><span></span></div>`)
 	cases := []struct {

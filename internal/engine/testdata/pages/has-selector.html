@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 4px; font-family: monospace; }
+.card { border: 1px solid #cccccc; padding: 2px; margin-bottom: 4px; }
+.card:has(> img) { padding-left: 8px; }
+.card:has(.badge) { margin-left: 8px; }
+.card:has(+ .note) { margin-bottom: 10px; }
+.note { background: #f4f4f4; padding: 2px; }
+</style>
+</head>
+<body>
+<div class="card">plain card</div>
+<div class="card"><img alt="preview"> image card</div>
+<div class="card"><span><img alt="nested"> nested image card</span></div>
+<div class="card"><span class="badge">badge</span> card with badge</div>
+<div class="card">card before note</div>
+<div class="note">following note</div>
+</body>
+</html>

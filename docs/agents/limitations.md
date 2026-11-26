@@ -45,6 +45,9 @@ agreement, the non-negotiable constraints and the change protocol.
   delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
+- **CSS `:has()`:** supported with a bounded descendant/sibling search.
+  Very large subtrees can exceed the search budget and are treated as
+  non-matching rather than scanning without a limit.
 - Dynamic `import()` loads a real module namespace and rejects on failure.
   Iframes have no browsing context and expose an inert stub document.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once

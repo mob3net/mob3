@@ -13,6 +13,13 @@ type AttrTest struct {
 	Fold  bool
 }
 
+// HasSelector is one relative selector inside :has(). Comb is the leading
+// combinator (0 for descendant, '>', '+' or '~').
+type HasSelector struct {
+	Comb byte
+	Sel  Selector
+}
+
 // SelPart is one compound selector plus the combinator that links it to the
 // compound on its left.
 type SelPart struct {
@@ -24,6 +31,7 @@ type SelPart struct {
 	Pseudo  string // "before" or "after" for a pseudo-element selector
 	Not     []SelPart
 	Is      []SelPart
+	Has     []HasSelector
 	Comb    byte // 0, ' ', '>', '+', '~'
 }
 
@@ -81,6 +89,13 @@ func partUsesHover(p SelPart) bool {
 	for _, np := range p.Is {
 		if partUsesHover(np) {
 			return true
+		}
+	}
+	for _, hs := range p.Has {
+		for _, np := range hs.Sel.Parts {
+			if partUsesHover(np) {
+				return true
+			}
 		}
 	}
 	return false
@@ -297,6 +312,51 @@ func parseCompound(s string) (SelPart, [3]int, int, bool) {
 				for k := range spec {
 					spec[k] += ispec[k]
 				}
+			} else if name == "has" {
+				var best [3]int
+				found := false
+				for _, alt := range SplitTopLevel(arg, ',') {
+					alt = strings.TrimSpace(alt)
+					if alt == "" {
+						continue
+					}
+					lead := byte(0)
+					if alt[0] == '>' || alt[0] == '+' || alt[0] == '~' {
+						lead = alt[0]
+						alt = strings.TrimSpace(alt[1:])
+					}
+					if alt == "" {
+						continue
+					}
+					rel, err := ParseSelector(alt)
+					if err != nil || len(rel.Parts) == 0 {
+						continue
+					}
+					valid := true
+					for _, part := range rel.Parts {
+						if part.Pseudo != "" {
+							valid = false
+							break
+						}
+					}
+					if !valid {
+						continue
+					}
+					p.Has = append(p.Has, HasSelector{Comb: lead, Sel: *rel})
+					found = true
+					for k := range best {
+						if rel.Spec[k] > best[k] {
+							best[k] = rel.Spec[k]
+						}
+					}
+				}
+				if !found {
+					return p, spec, 0, false
+				}
+				spec[1]++
+				for k := range spec {
+					spec[k] += best[k]
+				}
 			} else if name == "is" || name == "where" {
 				var best [3]int
 				found := false
@@ -449,6 +509,13 @@ func (s *Selector) MatchPseudo(n *Node, pseudo string) bool {
 }
 
 func matchPart(parts []SelPart, i int, n *Node) bool {
+	return matchPartFrom(parts, i, n, nil, 0)
+}
+
+// matchPartFrom matches parts[i] and its ancestors. When anchor is non-nil the
+// leftmost compound must stand in the given relative relation to it, which is
+// how a :has() argument is anchored to the element being matched.
+func matchPartFrom(parts []SelPart, i int, n, anchor *Node, lead byte) bool {
 	if n == nil || n.Type != ElementNode {
 		return false
 	}
@@ -456,29 +523,114 @@ func matchPart(parts []SelPart, i int, n *Node) bool {
 		return false
 	}
 	if i == 0 {
-		return true
+		if anchor == nil {
+			return true
+		}
+		return relativeAnchor(n, anchor, lead)
 	}
 	switch parts[i].Comb {
 	case '>':
-		return matchPart(parts, i-1, parentElement(n))
+		return matchPartFrom(parts, i-1, parentElement(n), anchor, lead)
 	case '+':
 		p := prevElement(n)
-		return p != nil && matchPart(parts, i-1, p)
+		return p != nil && matchPartFrom(parts, i-1, p, anchor, lead)
 	case '~':
 		for p := prevElement(n); p != nil; p = prevElement(p) {
-			if matchPart(parts, i-1, p) {
+			if matchPartFrom(parts, i-1, p, anchor, lead) {
 				return true
 			}
 		}
 		return false
 	default:
 		for p := parentElement(n); p != nil; p = parentElement(p) {
-			if matchPart(parts, i-1, p) {
+			if matchPartFrom(parts, i-1, p, anchor, lead) {
 				return true
 			}
 		}
 		return false
 	}
+}
+
+// relativeAnchor checks the relation between the leftmost compound of a :has()
+// argument and the element that owns the :has().
+func relativeAnchor(n, anchor *Node, lead byte) bool {
+	switch lead {
+	case '>':
+		return parentElement(n) == anchor
+	case '+':
+		return prevElement(n) == anchor
+	case '~':
+		for p := prevElement(n); p != nil; p = prevElement(p) {
+			if p == anchor {
+				return true
+			}
+		}
+		return false
+	default:
+		for p := parentElement(n); p != nil; p = parentElement(p) {
+			if p == anchor {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// maxHasNodes bounds one :has() search so a deep or huge subtree cannot turn
+// style matching into an unbounded traversal.
+const maxHasNodes = 2048
+
+func matchHas(h HasSelector, anchor *Node) bool {
+	if anchor == nil || len(h.Sel.Parts) == 0 {
+		return false
+	}
+	budget := maxHasNodes
+	try := func(n *Node) bool {
+		if budget <= 0 {
+			return false
+		}
+		budget--
+		return matchPartFrom(h.Sel.Parts, len(h.Sel.Parts)-1, n, anchor, h.Comb)
+	}
+	var roots []*Node
+	switch h.Comb {
+	case '+', '~':
+		for c := nextElement(anchor); c != nil && len(roots) < maxHasNodes; c = nextElement(c) {
+			roots = append(roots, c)
+		}
+	default:
+		for _, c := range anchor.Children {
+			if len(roots) >= maxHasNodes {
+				break
+			}
+			if c.Type == ElementNode {
+				roots = append(roots, c)
+			}
+		}
+	}
+	stack := make([]*Node, 0, len(roots)+8)
+	for i := len(roots) - 1; i >= 0; i-- {
+		stack = append(stack, roots[i])
+	}
+	for len(stack) > 0 {
+		if budget <= 0 {
+			return false
+		}
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if try(n) {
+			return true
+		}
+		for i := len(n.Children) - 1; i >= 0; i-- {
+			if len(stack) >= maxHasNodes {
+				break
+			}
+			if n.Children[i].Type == ElementNode {
+				stack = append(stack, n.Children[i])
+			}
+		}
+	}
+	return false
 }
 
 func (p *SelPart) matches(n *Node) bool {
@@ -568,6 +720,11 @@ func (p *SelPart) matches(n *Node) bool {
 			}
 		}
 		if !ok {
+			return false
+		}
+	}
+	for i := range p.Has {
+		if !matchHas(p.Has[i], n) {
 			return false
 		}
 	}

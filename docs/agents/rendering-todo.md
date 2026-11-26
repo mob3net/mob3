@@ -16,9 +16,6 @@ engine work only; do not add site-specific exceptions.
 
 ## P1 — Selectors and container queries
 
-- **`:has()` selector.** Rules using `:has()` are dropped entirely, so layout
-  rules written with it never apply (5/11 pages in the current sample used it).
-  Matching needs a bounded descendant check against the rebuilt tree.
 - **`@container` queries.** Container-query blocks are dropped today and 4/11
   sampled pages use them. Only add an approximation if it can be made sound
   through size containment; do not guess from the viewport.
