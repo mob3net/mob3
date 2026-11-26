@@ -30,6 +30,11 @@ type Waiter interface {
 	Done() <-chan struct{}
 }
 
+// Flusher waits for queued transport writes to reach the peer.
+type Flusher interface {
+	Flush(context.Context) error
+}
+
 // EntryIDSource allocates process-wide history-entry IDs. The engine's page
 // cache and the host's URL attestation share the same sequence; a process
 // transport can keep it in the parent.

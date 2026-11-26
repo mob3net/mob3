@@ -20,6 +20,10 @@ type MuxPeer struct {
 	mu       sync.RWMutex
 	handlers map[MuxKind]func(MuxFrame) error
 
+	out        chan writeReq
+	writerDone chan struct{}
+	stop       chan struct{}
+
 	done      chan struct{}
 	startOnce sync.Once
 	startErr  chan error
@@ -28,15 +32,27 @@ type MuxPeer struct {
 	err       error
 }
 
+type writeReq struct {
+	kind MuxKind
+	id   uint64
+	body []byte
+	ack  chan struct{}
+}
+
 // NewMuxPeer creates a peer over separate reader and writer streams.
 func NewMuxPeer(r io.Reader, w io.Writer, lim Limits) *MuxPeer {
 	lim = lim.normalized()
-	return &MuxPeer{
-		mux:      NewMux(r, w, lim),
-		lim:      lim,
-		handlers: make(map[MuxKind]func(MuxFrame) error),
-		done:     make(chan struct{}),
+	p := &MuxPeer{
+		mux:        NewMux(r, w, lim),
+		lim:        lim,
+		handlers:   make(map[MuxKind]func(MuxFrame) error),
+		out:        make(chan writeReq, 64),
+		writerDone: make(chan struct{}),
+		stop:       make(chan struct{}),
+		done:       make(chan struct{}),
 	}
+	go p.writeLoop()
+	return p
 }
 
 // NewMuxPeerReadWriter creates a peer over one bidirectional stream and closes
@@ -82,6 +98,7 @@ func (p *MuxPeer) Run(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	defer close(p.done)
+	defer p.Close()
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -123,18 +140,19 @@ func (p *MuxPeer) Run(ctx context.Context) error {
 	}
 }
 
-// Close closes the underlying stream. Run returns once the read loop notices.
+// Close stops the writer and closes the underlying stream. Run returns once
+// the read loop notices.
 func (p *MuxPeer) Close() error {
 	if p == nil {
 		return nil
 	}
-	var err error
 	p.closeOnce.Do(func() {
+		close(p.stop)
 		if p.closer != nil {
-			err = p.closer.Close()
+			_ = p.closer.Close()
 		}
 	})
-	return err
+	return nil
 }
 
 // Done is closed when Run returns.
@@ -158,16 +176,52 @@ func (p *MuxPeer) setErr(err error) {
 	p.errMu.Unlock()
 }
 
-// WriteFrame writes one frame through the shared stream.
+// WriteFrame queues one frame without waiting for the other process to read.
+// A full queue returns ErrSessionBusy so the front end can discard the tab
+// instead of blocking its event loop on a wedged child.
 func (p *MuxPeer) WriteFrame(kind MuxKind, id uint64, body []byte) error {
-	return p.mux.WriteFrame(kind, id, body)
+	if p == nil || !kind.valid() {
+		return fmt.Errorf("%w: mux kind %d", ErrInvalid, kind)
+	}
+	if len(body) > p.lim.MaxMessageBytes {
+		return fmt.Errorf("%w: mux payload is %d bytes", ErrLimit, len(body))
+	}
+	select {
+	case <-p.stop:
+		return ErrSessionClosed
+	case <-p.writerDone:
+		return ErrSessionClosed
+	default:
+	}
+	select {
+	case p.out <- writeReq{kind: kind, id: id, body: body}:
+		return nil
+	case <-p.stop:
+		return ErrSessionClosed
+	case <-p.writerDone:
+		return ErrSessionClosed
+	default:
+		return ErrSessionBusy
+	}
 }
 
 // WriteCommand writes one page command.
-func (p *MuxPeer) WriteCommand(c Command) error { return p.mux.WriteCommand(c) }
+func (p *MuxPeer) WriteCommand(c Command) error {
+	body, err := AppendCommand(nil, c, p.lim)
+	if err != nil {
+		return err
+	}
+	return p.WriteFrame(MuxCommand, 0, body)
+}
 
 // WriteEvent writes one page event.
-func (p *MuxPeer) WriteEvent(ev Event) error { return p.mux.WriteEvent(ev) }
+func (p *MuxPeer) WriteEvent(ev Event) error {
+	body, err := AppendEvent(nil, ev, p.lim)
+	if err != nil {
+		return err
+	}
+	return p.WriteFrame(MuxEvent, 0, body)
+}
 
 // WriteHostCall writes one host RPC request.
 func (p *MuxPeer) WriteHostCall(call HostCall) error {
@@ -175,7 +229,7 @@ func (p *MuxPeer) WriteHostCall(call HostCall) error {
 	if err != nil {
 		return err
 	}
-	return p.mux.WriteFrame(MuxHostCall, call.ID, body)
+	return p.WriteFrame(MuxHostCall, call.ID, body)
 }
 
 // WriteHostResult writes one host RPC response.
@@ -184,5 +238,52 @@ func (p *MuxPeer) WriteHostResult(result HostResult) error {
 	if err != nil {
 		return err
 	}
-	return p.mux.WriteFrame(MuxHostResult, result.ID, body)
+	return p.WriteFrame(MuxHostResult, result.ID, body)
+}
+
+// Flush waits until every frame queued before the call has been written. It
+// returns ctx.Err() if the peer stops reading first.
+func (p *MuxPeer) Flush(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ack := make(chan struct{})
+	select {
+	case p.out <- writeReq{ack: ack}:
+	case <-p.stop:
+		return ErrSessionClosed
+	case <-p.writerDone:
+		return ErrSessionClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-ack:
+		return nil
+	case <-p.stop:
+		return ErrSessionClosed
+	case <-p.writerDone:
+		return ErrSessionClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (p *MuxPeer) writeLoop() {
+	defer close(p.writerDone)
+	for {
+		select {
+		case req := <-p.out:
+			if req.ack != nil {
+				close(req.ack)
+				continue
+			}
+			if err := p.mux.WriteFrame(req.kind, req.id, req.body); err != nil {
+				p.setErr(err)
+				return
+			}
+		case <-p.stop:
+			return
+		}
+	}
 }

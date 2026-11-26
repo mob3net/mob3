@@ -146,6 +146,10 @@ func (l *SessionLoop) Run() error {
 				continue
 			}
 			quit, err := l.Active.handleInput(k)
+			if errors.Is(err, protocol.ErrSessionBusy) {
+				l.DiscardTab(l.Active)
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -161,6 +165,10 @@ func (l *SessionLoop) Run() error {
 				continue
 			}
 			if err := l.resizeTab(l.Active); err != nil {
+				if errors.Is(err, protocol.ErrSessionBusy) {
+					l.DiscardTab(l.Active)
+					continue
+				}
 				return err
 			}
 			l.revealPending = true

@@ -17,8 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-// 8: shared-storage RPC frames.
-const Version = 8
+// 9: busy/timer state flag.
+const Version = 9
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
@@ -228,6 +228,9 @@ const (
 	// StateNativeImages reports that the engine is writing terminal-native
 	// image placements itself, so the front end must leave those frames alone.
 	StateNativeImages
+	// StateBusy reports that a timer or frame callback is due soon, so the
+	// front end keeps its liveness probe armed until the engine reports idle.
+	StateBusy
 )
 
 // MenuKind identifies a front-end-owned choice window.

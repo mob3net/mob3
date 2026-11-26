@@ -478,10 +478,11 @@ agreement, the non-negotiable constraints and the change protocol.
   refresh the budget, so a timer-driven loop stops too. Any user input or
   navigation command clears the count. Each tab keeps at most 500 back/forward
   entries, dropping the oldest. Nothing is persisted.
-- **Stuck pages:** a tab that produces no event for 10 s after a command is
-  probed with `Ping`. If no `Pong` arrives within 2 s, the tab is discarded;
-  the other tabs keep running. A normal slow load keeps producing progress
-  events.
+- **Stuck pages:** a tab that produces no event for 10 s after a command, while
+  loading, or while a timer/frame callback is due is probed with `Ping`. If no
+  `Pong` arrives within 2 s, the tab is discarded; the other tabs keep running.
+  A normal slow load keeps producing progress events. A stuck tab cannot block
+  another tab's input because the child transport write queue is bounded.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored
