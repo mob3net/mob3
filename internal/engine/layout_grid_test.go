@@ -372,6 +372,40 @@ func TestGridOrder(t *testing.T) {
 	}
 }
 
+func TestGridFrTracksKeepMinContent(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:repeat(4,1fr);width:20px">` +
+		`<div>hello</div><div>world</div><div>alpha</div><div>beta</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 20)
+	for _, want := range []string{"hello", "world", "alpha", "beta"} {
+		if textFrag(ly, want) == nil {
+			t.Fatalf("fr track collapsed %q into a vertical column", want)
+		}
+	}
+}
+
+func TestGridMinmaxZeroAllowsShrink(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:20px">` +
+		`<div>hello</div><div>world</div><div>alpha</div><div>beta</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 20)
+	if textFrag(ly, "hello") != nil {
+		t.Fatal("minmax(0,1fr) kept a min-content floor")
+	}
+}
+
+func TestGridItemMinWidthZeroAllowsShrink(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:repeat(4,1fr);width:20px">` +
+		`<div style="min-width:0;overflow:hidden">hello</div><div>world</div><div>alpha</div><div>beta</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 20)
+	if textFrag(ly, "hello") != nil {
+		t.Fatal("min-width:0/overflow:hidden item kept a min-content floor")
+	}
+	for _, want := range []string{"world", "alpha"} {
+		if textFrag(ly, want) == nil {
+			t.Fatalf("other column collapsed %q", want)
+		}
+	}
+}
+
 func TestGridAreasWithoutExplicitColumns(t *testing.T) {
 	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-areas:'a b' 'c d'">` +
 		`<div id="a" style="grid-area:a">a</div><div id="b" style="grid-area:b">b</div>` +

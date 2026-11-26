@@ -15,11 +15,6 @@ engine work only; do not add site-specific exceptions.
 
 ## P2 — Flex and float layout
 
-- **Shrinking and min-content.** Audit flex/grid items that collapse to one
-  character per line. Respect `min-width:0`, automatic minimum sizes,
-  `overflow` and wrapping so text never becomes a vertical
-  column (`flex-shrink` is honoured, and `flex-shrink:0` items keep their
-  size).
 - **Float edge cases.** Floats crossing nested block flows and
   block background/border interplay are approximated; floats inside inline
   wrappers are laid out inline. Add coverage before changing the float pass.

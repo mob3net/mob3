@@ -178,7 +178,10 @@ agreement, the non-negotiable constraints and the change protocol.
   track takes the max-content width of the items placed in it (spanned items
   spread their deficit over the columns they cover), shrinks toward its
   min-content width when the row is too narrow, and the `fr` tracks then split
-  what remains. That keeps the common `auto 1fr` thumbnail-beside-text row from
+  what remains. Plain `fr` tracks keep an automatic min-content lower bound, so
+  a narrow page grid does not turn every word into a one-character column;
+  `minmax(0,1fr)` or an item's `min-width:0`/non-visible `overflow` removes that
+  floor. That keeps the common `auto 1fr` thumbnail-beside-text row from
   collapsing the thumbnail column to one cell and stretching the image
   vertically. With no `fr` track, leftover space is shared between the `auto`
   tracks so plain `auto auto` rows still fill the width. Dense grids

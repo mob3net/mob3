@@ -13,6 +13,10 @@ type gridTrack struct {
 	Fixed int
 	Flex  float64
 	Auto  bool
+	// MinContent and MinFixed describe an fr track's lower bound. A plain
+	// `1fr` keeps its automatic min-content floor; `minmax(0,1fr)` opts out.
+	MinContent bool
+	MinFixed   int
 }
 
 func splitGridParts(s string) []string {
@@ -136,6 +140,7 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		if part == "" {
 			continue
 		}
+		minContent, minFixed, hasMin := false, 0, false
 		if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
 			for _, name := range strings.Fields(part[1 : len(part)-1]) {
 				lines[name] = append(lines[name], len(out))
@@ -171,17 +176,25 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 			inner := part[len("minmax(") : len(part)-1]
 			fields := SplitTopLevel(inner, ',')
 			if len(fields) == 2 {
+				minContent, minFixed = parseGridTrackMin(fields[0], avail, font)
+				hasMin = true
 				part = strings.TrimSpace(fields[1])
 				lower = strings.ToLower(part)
 			}
 		}
 		switch {
 		case strings.HasSuffix(lower, "fr"):
+			t := gridTrack{Flex: 1}
 			if f, err := strconv.ParseFloat(strings.TrimSuffix(lower, "fr"), 64); err == nil && f > 0 {
-				out = append(out, gridTrack{Flex: f})
-			} else {
-				out = append(out, gridTrack{Flex: 1})
+				t.Flex = f
 			}
+			if hasMin {
+				t.MinContent, t.MinFixed = minContent, minFixed
+			} else {
+				// A plain fr track keeps the automatic min-content floor.
+				t.MinContent = true
+			}
+			out = append(out, t)
 		case lower == "auto" || strings.Contains(lower, "content") || strings.HasPrefix(lower, "fit-content"):
 			out = append(out, gridTrack{Auto: true})
 		default:
@@ -193,6 +206,26 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		}
 	}
 	return out, lines
+}
+
+// parseGridTrackMin resolves the minimum side of minmax() for a column track.
+// Auto/content minimums become a min-content floor; 0 opts out of the
+// automatic floor, and fixed lengths become a cell minimum.
+func parseGridTrackMin(raw string, avail int, font float64) (minContent bool, minFixed int) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "", "0", "0px", "0%":
+		return false, 0
+	case "auto", "min-content", "max-content":
+		return true, 0
+	}
+	if strings.HasSuffix(raw, "fr") {
+		return true, 0
+	}
+	if l := ParseLength(raw, font); l.Set && !l.Auto {
+		return false, nonNeg(l.ResolveH(avail, font))
+	}
+	return true, 0
 }
 
 // maxGridRows bounds explicit and implicit row state so a hostile grid value
@@ -385,6 +418,9 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 		for i, t := range tracks {
 			if t.Flex > 0 {
 				widths[i] = int(float64(remaining) * t.Flex / flexTotal)
+				if m := gridTrackMin(t, i, minContent); m > widths[i] {
+					widths[i] = m
+				}
 			}
 		}
 	} else if autoCount > 0 && remaining > 0 {
@@ -420,7 +456,24 @@ func resolveGridTracks(tracks []gridTrack, avail, gap int, content, minContent [
 			}
 		}
 	}
+	for i, t := range tracks {
+		if m := gridTrackMin(t, i, minContent); m > widths[i] {
+			widths[i] = m
+		}
+	}
 	return widths
+}
+
+// gridTrackMin is the minimum width an fr track may take. Plain fr tracks use
+// their min-content floor; minmax(0, …) tracks have none.
+func gridTrackMin(t gridTrack, i int, minContent []int) int {
+	if t.MinFixed > 0 {
+		return t.MinFixed
+	}
+	if t.MinContent && i < len(minContent) && minContent[i] > 0 {
+		return minContent[i]
+	}
+	return 0
 }
 
 // shrinkAutoTracks removes cells from auto tracks in proportion to their slack
@@ -494,6 +547,15 @@ func (l *Layouter) gridTrackContent(cells []gridCell, cols int) (content, minCon
 			span = cols - c.start
 		}
 		mw, mi := l.measure(c.node)
+		if c.node.Style != nil {
+			// An explicit min-width:0 or a non-visible overflow removes the
+			// automatic min-content floor, as in CSS. Authors use this to let
+			// flexible tracks shrink below their longest word.
+			if c.node.Style.Overflow == "hidden" ||
+				(c.node.Style.MinWidth.Set && !c.node.Style.MinWidth.IsAuto() && l.widthValue(c.node.Style, c.node.Style.MinWidth, l.Width) == 0) {
+				mi = 0
+			}
+		}
 		growTrackSpan(content, c.start, span, mw)
 		growTrackSpan(minContent, c.start, span, mi)
 	}
@@ -512,12 +574,14 @@ func growTrackSpan(widths []int, start, span, need int) {
 		return
 	}
 	deficit := need - used
+	base := deficit / span
+	rem := deficit % span
 	for i := 0; i < span && start+i < len(widths); i++ {
-		add := deficit / span
-		if i == span-1 {
-			add = deficit - add*i
+		add := base
+		if i < rem {
+			add++
 		}
-		if widths[start+i]+add > widths[start+i] {
+		if add > 0 {
 			widths[start+i] += add
 		}
 	}
