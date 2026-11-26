@@ -485,7 +485,7 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	case "y":
 		l.expectClipboard()
 		_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleCopy, Pane: w.consolePane}})
-	case "/":
+	case "/", "ctrl-f":
 		if w.consolePane == consolePaneHTML {
 			w.consoleFindActive = true
 			w.consoleFindSet = false

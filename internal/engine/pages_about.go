@@ -66,7 +66,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>Z</b></td><td>open the zoom window to choose a preset with the mouse, arrow keys, mouse wheel or pointer hover (the badge at the right end of the URL row does the same with the mouse)</td></tr>
 <tr><td><b>X</b></td><td>open the view options window (Fixed elements, Sticky elements, Background images); the mouse wheel, pointer hover or arrow keys move the highlight, and <b>Space</b>/<b>Enter</b> toggles the selected switch</td></tr>
 <tr><td><b>o</b> / <b>Ctrl-L</b> / <b>:</b></td><td>open a URL prompt; <b>:</b> also accepts <b>q</b> to quit immediately</td></tr>
-<tr><td><b>/</b></td><td>find in the page, or in the console HTML tab</td></tr>
+<tr><td><b>/</b> / <b>Ctrl-F</b></td><td>find in the page, or in the console HTML tab</td></tr>
 <tr><td><b>f</b></td><td>highlight letters in the visible links, then type them to follow a link</td></tr>
 <tr><td><b>F</b></td><td>same as <b>f</b>, but opens the chosen link in a background tab after the current one</td></tr>
 <tr><td><b>p</b></td><td>preview the chosen link: <b>Enter</b> follows, <b>y</b> copies, <b>Esc</b> cancels</td></tr>
@@ -113,10 +113,11 @@ never draws. A crashed tab stays marked <b>Crashed</b> and can be closed without
 stopping the others.</p>
 
 <h2>Find</h2>
-<p><b>/</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>
-closes it and <b>n</b>/<b>N</b> move between matches. <b>Esc</b> closes it; a
-second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b>
-searches the raw source. If the current match is inside a link, the footer
+<p><b>/</b> or <b>Ctrl-F</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>
+closes it and <b>n</b>/<b>N</b> move between matches; the footer shows the
+match position and the <b>n</b>/<b>N</b> key hint. <b>Esc</b> closes it; a
+second <b>Esc</b> clears the highlights. In the console HTML tab, <b>/</b> or
+<b>Ctrl-F</b> searches the raw source. If the current match is inside a link, the footer
 shows <b>(f → resolved URL)</b> and <b>f</b> follows it directly; clearing the
 search restores normal link hints.</p>
 

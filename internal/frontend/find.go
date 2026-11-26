@@ -79,7 +79,7 @@ func (w *findOverlay) status() string {
 	if cur < 1 {
 		cur = 1
 	}
-	return fmt.Sprintf("Find %d/%d: %s", cur, w.findTotal, w.find.text)
+	return fmt.Sprintf("Find %d/%d: %s · n/N next/prev", cur, w.findTotal, w.find.text)
 }
 
 func (w *findOverlay) setResults(l *Tab, current, total int) {

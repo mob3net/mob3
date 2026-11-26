@@ -25,7 +25,7 @@ key, mouse and form reference for the running build.
 | `Z` | Open the zoom window to choose a preset with the mouse, arrow keys, mouse wheel or pointer hover |
 | `X` | Open the view options window (Fixed elements, Sticky elements, Background images); `Space`/`Enter` toggles the selected switch, and the mouse wheel or pointer hover moves the highlight |
 | `o` / `Ctrl-L` | Open the URL prompt |
-| `/` | Find in the page, or in the console HTML tab |
+| `/`, `Ctrl-F` | Find in the page, or in the console HTML tab |
 | `n` / `N` | Next / previous find match |
 | `f` | Highlight letters in the visible links and follow one by typing them |
 | `F` | Open the chosen link in a background tab after the current one |
@@ -107,9 +107,10 @@ fallback.
 
 ## Find
 
-`/` opens the incremental find bar. Typing searches case-insensitively and
+`/` or `Ctrl-F` opens the incremental find bar. Typing searches case-insensitively and
 highlights every match. `Enter` confirms and closes the bar; `n`/`N` then move
-between matches. `Down`/`Up` also move while the bar is open. `Esc` closes the
+between matches, and the footer shows the match position with the `n`/`N` hint.
+`Down`/`Up` also move while the bar is open. `Esc` closes the
 bar but keeps highlights; a later `Esc` clears them. If the current match is
 inside a link, the footer shows `(f → <resolved URL>)` and `f` follows that
 link directly; clear the search to get normal `f` link hints back.

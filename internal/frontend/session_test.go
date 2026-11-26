@@ -503,6 +503,21 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 	if !strings.Contains(loop.State.Page.FooterLeft, "Find 1/2: ab") {
 		t.Fatalf("footer = %q", loop.State.Page.FooterLeft)
 	}
+	if !strings.Contains(loop.State.Page.FooterLeft, "n/N next/prev") {
+		t.Fatalf("footer is missing the result key hint: %q", loop.State.Page.FooterLeft)
+	}
+}
+
+func TestCtrlFIsFindAlias(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{URL: "https://example.com/", FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	if handled, _ := loop.handleShellKey("ctrl-f"); !handled || !loop.findActive {
+		t.Fatalf("ctrl-f handled=%v active=%v", handled, loop.findActive)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Scope: protocol.FindPage, Query: ""}) {
+		t.Fatalf("open commands = %#v", s.cmds)
+	}
 }
 
 func TestMenuKeysToggleAndZoom(t *testing.T) {
@@ -1369,5 +1384,16 @@ func TestConsoleFindKeys(t *testing.T) {
 	}
 	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "needle" || !f.Prev {
 		t.Fatalf("prev find = %#v", s.cmds[0].Body)
+	}
+	s.cmds = nil
+	loop.handleShellKey("ctrl-f")
+	if !loop.consoleFindActive {
+		t.Fatal("console find did not open with ctrl-f")
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("ctrl-f commands = %#v", s.cmds)
+	}
+	if f, ok := s.cmds[0].Body.(protocol.Find); !ok || f.Scope != protocol.FindHTML || f.Query != "" {
+		t.Fatalf("ctrl-f open find = %#v", s.cmds[0].Body)
 	}
 }

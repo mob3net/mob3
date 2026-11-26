@@ -51,7 +51,7 @@ func (b *Session) findStatusText() string {
 			status += " (f follows this link)"
 		}
 	}
-	return status
+	return status + " · n/N next/prev"
 }
 
 // currentFindLink returns the link containing the current page find match.

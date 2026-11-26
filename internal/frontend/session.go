@@ -472,7 +472,7 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 		l.Session.Abort()
 		l.startQuit()
 		return true, false
-	case "/":
+	case "/", "ctrl-f":
 		l.findOverlay.start(l)
 		return true, false
 	case "o", "ctrl-l":

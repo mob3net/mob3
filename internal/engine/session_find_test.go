@@ -124,6 +124,9 @@ func TestFindStatusHintsLinkMatch(t *testing.T) {
 	if !strings.Contains(b.status, "(f → https://example.com/#one)") {
 		t.Fatalf("link match status = %q", b.status)
 	}
+	if !strings.Contains(b.status, "n/N next/prev") {
+		t.Fatalf("status is missing the result key hint: %q", b.status)
+	}
 
 	// f follows the matched link rather than opening hint mode.
 	b.HandleKey("f")
