@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +19,10 @@ func TestProcessWorkerHelper(t *testing.T) {
 	if os.Getenv("MOB3_PROCESS_TEST_HELPER") != "1" {
 		return
 	}
+	if os.Getenv("MOB3_PROCESS_TEST_FAIL") == "1" {
+		fmt.Fprint(os.Stderr, "\x1b[31mfatal worker test\n")
+		os.Exit(3)
+	}
 	os.Exit(runProcessWorker(runOptions{
 		Home: "about:home", Graphics: "none", LayoutBudget: "standard",
 		Zoom: "100", TextScale: "auto", Certs: "system", Process: "per-tab",
@@ -24,11 +30,16 @@ func TestProcessWorkerHelper(t *testing.T) {
 }
 
 func processTestFactory() tabBackendFactory {
+	return processTestFactoryWithEnv(nil)
+}
+
+func processTestFactoryWithEnv(extra []string) tabBackendFactory {
+	env := append([]string{"MOB3_PROCESS_TEST_HELPER=1"}, extra...)
 	return startProcessBackend(
 		host.NewSession(), engine.NewBrowserContext(),
 		os.Args[0],
 		[]string{"-test.run=^TestProcessWorkerHelper$"},
-		[]string{"MOB3_PROCESS_TEST_HELPER=1"},
+		env,
 		0, 1, int(frontend.GraphicsNone),
 	)
 }
@@ -57,6 +68,38 @@ func TestProcessBackendLifecycle(t *testing.T) {
 	case <-backend.(*processTabBackend).done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("worker process did not exit")
+	}
+}
+
+func TestBoundedStderrSanitizesAndBounds(t *testing.T) {
+	b := newBoundedStderr()
+	_, _ = b.Write([]byte("\x1b[31mfatal\x1b[0m\nmessage\n"))
+	text := b.Text()
+	if strings.Contains(text, "\x1b") || strings.Contains(text, "\n") {
+		t.Fatalf("stderr = %q", text)
+	}
+	if !strings.Contains(text, "fatal") || !strings.Contains(text, "message") {
+		t.Fatalf("stderr = %q", text)
+	}
+	big := strings.Repeat("x", maxChildStderrBytes+1024)
+	_, _ = b.Write([]byte(big))
+	if len(b.Text()) > maxChildStderrRunes {
+		t.Fatalf("stderr tail = %d runes", len(b.Text()))
+	}
+}
+
+func TestProcessBackendCapturesStderr(t *testing.T) {
+	factory := processTestFactoryWithEnv([]string{"MOB3_PROCESS_TEST_FAIL=1"})
+	_, err := factory(nil, 1, protocol.Init{Width: 80, Height: 24, CellW: 8, CellH: 16}, "about:help")
+	if err == nil {
+		t.Fatal("failing worker started successfully")
+	}
+	message := err.Error()
+	if strings.Contains(message, "\x1b") {
+		t.Fatalf("raw terminal escape in %q", message)
+	}
+	if !strings.Contains(message, "fatal worker test") {
+		t.Fatalf("stderr tail missing from %q", message)
 	}
 }
 

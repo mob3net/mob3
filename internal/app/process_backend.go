@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -71,6 +72,7 @@ type processTabBackend struct {
 	session protocol.Session
 	cmd     *exec.Cmd
 	pipes   *processPipes
+	stderr  *boundedStderr
 	done    chan struct{}
 	once    sync.Once
 
@@ -111,11 +113,23 @@ func (b *processTabBackend) Kill() {
 // Done is closed after the child has exited and been reaped.
 func (b *processTabBackend) Done() <-chan struct{} { return b.done }
 
-// ExitError reports the child's wait error, if any.
+// ExitError reports the child's wait error and the sanitized stderr tail, if
+// any, without exposing raw terminal bytes to the front end.
 func (b *processTabBackend) ExitError() error {
 	b.errMu.Lock()
-	defer b.errMu.Unlock()
-	return b.exitErr
+	waitErr := b.exitErr
+	b.errMu.Unlock()
+	tail := ""
+	if b.stderr != nil {
+		tail = b.stderr.Text()
+	}
+	if tail != "" {
+		if waitErr != nil {
+			return fmt.Errorf("%w: %s", waitErr, tail)
+		}
+		return errors.New(tail)
+	}
+	return waitErr
 }
 
 // UserClosed reports whether Close or Kill initiated the exit.
@@ -165,7 +179,8 @@ func startProcessBackend(hostSess *host.Session, storage protocol.StorageProvide
 			processConfigEnv+"="+string(raw),
 		)
 		cmd.Env = env
-		cmd.Stderr = os.Stderr
+		stderr := newBoundedStderr()
+		cmd.Stderr = stderr
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return nil, err
@@ -181,7 +196,7 @@ func startProcessBackend(hostSess *host.Session, storage protocol.StorageProvide
 			return nil, err
 		}
 		pipes := &processPipes{r: stdout, w: stdin}
-		backend := &processTabBackend{cmd: cmd, pipes: pipes, done: make(chan struct{})}
+		backend := &processTabBackend{cmd: cmd, pipes: pipes, stderr: stderr, done: make(chan struct{})}
 		peer := protocol.NewMuxPeerReadWriter(pipes, protocol.DefaultLimits)
 		_ = protocol.NewHostServerPeer(peer, hostSess)
 		_ = protocol.NewStorageServerPeer(peer, storage)
@@ -194,6 +209,9 @@ func startProcessBackend(hostSess *host.Session, storage protocol.StorageProvide
 		}()
 		if err := waitWorkerReady(backend.session, 5*time.Second); err != nil {
 			backend.Kill()
+			if tail := stderr.Text(); tail != "" {
+				return nil, fmt.Errorf("%w: %s", err, tail)
+			}
 			return nil, err
 		}
 		init.Caps = caps
