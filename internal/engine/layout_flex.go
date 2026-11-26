@@ -364,11 +364,12 @@ func (l *Layouter) layFlexLine(items []*Node, x, y, availW, gap int, base *Style
 		basis := MaxInt(1, widths[i])
 		starts[i] = len(l.frags)
 		var h int
-		if l.isBlock(it) || (it.Style != nil && it.Style.Display == "inline") {
-			// Flex items are blockified: an inline element becomes a block
-			// container, so its width and block descendants apply. Keeping it
-			// inline collapsed cards whose markup is an inline anchor around
-			// block content.
+		if flexItemBlockified(it) {
+			// Flex items are blockified: inline, inline-block, inline-flex and
+			// inline-grid all become block containers, so their width and block
+			// descendants apply. Keeping an inline-block item inline flattened
+			// every block inside it into one inline flow, so grid columns and
+			// card boxes lost their layout.
 			// The flex line already resolved this item's width, including
 			// percentages and grow/shrink; do not apply Width again inside
 			// block layout or the box drifts from its assigned slot.
@@ -416,6 +417,22 @@ func flexShrinkOf(n *Node) float64 {
 		return 1
 	}
 	return n.Style.FlexShrink
+}
+
+// flexItemBlockified reports whether a flex item is laid out as a block
+// container. Flex items are blockified, so every inline-level display becomes
+// block-level and its block descendants keep their own layout. Form controls
+// stay on the inline widget path the block path cannot paint.
+func flexItemBlockified(n *Node) bool {
+	if n == nil || n.Style == nil || IsFormControl(n) {
+		return false
+	}
+	switch n.Style.Display {
+	case "block", "flex", "grid", "list-item", "table", "table-row", "table-cell",
+		"inline", "inline-block":
+		return true
+	}
+	return false
 }
 
 // clampFlexWidth applies an item's min-width/max-width to a border-box width.

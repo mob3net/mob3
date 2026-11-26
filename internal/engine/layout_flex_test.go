@@ -27,6 +27,43 @@ func TestFlexWrapStartsNewLine(t *testing.T) {
 	}
 }
 
+func TestFlexInlineBlockItemKeepsBlockChildren(t *testing.T) {
+	doc := ParseHTML(`<html><body>
+	<div style="display:flex;flex-flow:row">
+		<div id="a" style="display:inline-block;width:50%"><div id="ab" style="width:100%">alpha</div><div id="ac">beta</div></div>
+		<div id="b" style="display:inline-block;width:50%"><div id="bb">gamma</div></div>
+	</div>
+</body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	byID := func(id string) *Node {
+		var out *Node
+		doc.FindAll(func(n *Node) bool {
+			if n.Attr("id") == id {
+				out = n
+				return true
+			}
+			return false
+		})
+		return out
+	}
+	for _, id := range []string{"ab", "ac", "bb"} {
+		n := byID(id)
+		if n == nil {
+			t.Fatalf("missing #%s", id)
+		}
+		if box := ly.Boxes[n]; box.W <= 0 || box.H <= 0 {
+			t.Fatalf("#%s has no block box: %+v", id, box)
+		}
+	}
+	ab, ac, bb := ly.Boxes[byID("ab")], ly.Boxes[byID("ac")], ly.Boxes[byID("bb")]
+	if ac.Y <= ab.Y {
+		t.Fatalf("block children of an inline-block flex item were flattened inline: ab=%+v ac=%+v", ab, ac)
+	}
+	if bb.X <= ab.X {
+		t.Fatalf("second flex item is not to the right of the first: ab=%+v bb=%+v", ab, bb)
+	}
+}
+
 func TestSearchInputFlexFullWidth(t *testing.T) {
 	ly := build(`<form style="display:flex;gap:8px"><input type="search" name="q" placeholder="Search or enter address" style="flex:1"><button type="submit">Go</button></form>`, 40)
 	inputY, inputW, buttonY := -1, 0, -1

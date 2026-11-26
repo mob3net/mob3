@@ -152,8 +152,10 @@ agreement, the non-negotiable constraints and the change protocol.
   keeps items on one line. A flex item's assigned width is used as its box
   width without re-resolving percentage widths inside block layout, so padded
   percentage columns keep their slots and do not overlap the next column.
-  Items are blockified, so an inline element becomes a block container and its
-  width and block children apply. `order` reorders items stably;
+  Items are blockified, so an inline or `inline-block` item becomes a block
+  container, even without an explicit width, and its width and block children
+  apply instead of being flattened into one inline flow. `order` reorders
+  items stably;
   `justify-content`
   supports start/end/center/space-between/around/evenly, `margin:auto` on a
   flex item absorbs the free space before justify-content (so

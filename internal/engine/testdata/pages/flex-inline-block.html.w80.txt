@@ -1,0 +1,13 @@
+
+
+ Section heading
+
+
+ Lead text stays above the cards and fills the whole column instead of running
+ into them.
+
+
+
+
+ First card                Second card               Third card
+ Body of the first card.   Body of the second card.  Body of the third card.
