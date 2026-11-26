@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +39,65 @@ func TestInlineModuleImportMetaURL(t *testing.T) {
 	b.startJS(page)
 	if got := page.Root.FindFirst("p").TextContent(); got != "https://example.com/" {
 		t.Fatalf("import.meta.url = %q", got)
+	}
+}
+
+// A cross-origin <base href> changes where relative specifiers resolve, but it
+// must not change the request's document identity: a Strict cookie for the
+// base origin must not be sent for a module fetched from that origin by a page
+// on another site.
+func TestModulePolicyUsesDocumentURLNotBase(t *testing.T) {
+	loader := newTestLoader()
+	var gotCookie string
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		gotCookie = req.Header.Get("Cookie")
+		h := make(http.Header)
+		h.Set("Content-Type", "text/javascript")
+		return &http.Response{
+			StatusCode: 200, Status: "200 OK", Header: h,
+			Body: io.NopCloser(strings.NewReader("export const n = 1;")), Request: req,
+		}, nil
+	})})
+	victim := mustURL(t, "https://victim.example/")
+	testHost(loader).Cookies().SetCookies(victim, []*http.Cookie{{
+		Name: "s", Value: "1", Path: "/", SameSite: http.SameSiteStrictMode,
+	}})
+	page := newJSPage(`<html><body></body></html>`, "")
+	page.URL = mustURL(t, "https://evil.example/")
+	page.Base = victim
+	page.Scripts = []Script{{Module: true, Code: `import "https://victim.example/mod.js";`}}
+	b := newTestSession(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if gotCookie != "" {
+		t.Fatalf("cross-origin base href leaked a Strict cookie: %q", gotCookie)
+	}
+	if b.moduleErr {
+		t.Fatalf("module did not load: %s", strings.Join(b.jsLog, "; "))
+	}
+}
+
+// An HTTPS document must not downgrade a module fetch just because its
+// <base href> is HTTP; mixed-content policy follows the document scheme.
+func TestModulePolicyUsesDocumentSchemeNotBase(t *testing.T) {
+	loader := newTestLoader()
+	calls := 0
+	testSetHTTPClient(loader, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		return nil, context.Canceled
+	})})
+	page := newJSPage(`<html><body></body></html>`, "")
+	page.URL = mustURL(t, "https://evil.example/")
+	page.Base = mustURL(t, "http://cdn.example/")
+	page.Scripts = []Script{{Module: true, Code: `import "http://cdn.example/mod.js";`}}
+	b := newTestSession(40, 10)
+	b.loader = loader
+	b.startJS(page)
+	if calls != 0 {
+		t.Fatalf("mixed-content module reached the network %d times", calls)
+	}
+	if !b.moduleErr {
+		t.Fatal("mixed-content module was not rejected")
 	}
 }
 

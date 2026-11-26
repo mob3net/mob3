@@ -450,7 +450,16 @@ func (m *jsModuleLoader) fetchModule(u *url.URL) (string, error) {
 	if m.j.host == nil {
 		return "", errors.New("no host for module fetch")
 	}
-	ctx := m.j.host.RequestContext("js", m.base, m.j.page != nil && m.j.page.Local, nil)
+	// Resolution uses the page's <base href>, but request policy must use the
+	// document URL. Otherwise a cross-origin <base> makes the module request
+	// look same-site for cookies and same-scheme for mixed content.
+	var page *url.URL
+	pageLocal := false
+	if m.j.page != nil {
+		page = m.j.page.URL
+		pageLocal = m.j.page.Local
+	}
+	ctx := m.j.host.RequestContext("js", page, pageLocal, nil)
 	data, ctype, _, status, err := m.j.host.FetchResource(ctx, u)
 	if err != nil {
 		return "", err
