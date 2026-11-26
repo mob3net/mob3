@@ -7,11 +7,13 @@
 
 ## What it does not do
 
-- No sandbox, process isolation, site isolation or permission prompts.
-- No memory, site or OS isolation. Tabs are separate in-process protocol
-  sessions with their own JavaScript runtime and history, over shared
-  origin-scoped storage, but they share one address space; iframes remain inert
-  stubs. An engine bug or a sobek escape can still cross tab boundaries.
+- No sandbox, site isolation or permission prompts.
+- No memory, site or OS isolation. By default tabs are separate engine child
+  processes with their own JavaScript runtime and history, over parent-owned
+  shared origin storage, but they still trust the same parent host and protocol
+  values; iframes remain inert stubs. The child process is fault isolation,
+  not a security boundary, and `-process=single` puts every tab back in one
+  address space. An engine bug or a sobek escape can still cross tab boundaries.
 - No CSP enforcement, certificate warnings or certificate management UI.
   `-certs` changes which root bundle is trusted; it is not certificate
   inspection, revocation checking or pinning.
@@ -20,10 +22,11 @@
 - No private/incognito concept: every session is ephemeral. Pages share one
   process; tab separation is logical only, not memory or site isolation.
 
-## In-process tab isolation (iframes are inert)
+## Tab isolation (iframes are inert)
 
-Tabs are implemented inside one Go process by default; `-process=per-tab` can
-move each interactive tab's engine into a child process for fault isolation:
+Interactive tabs run one engine child process per tab by default;
+`-process=single` keeps them inside one Go process. This is fault isolation,
+not a sandbox:
 
 - A tab is one protocol session with its own engine session, page, layout,
   JavaScript runtime and back/forward history.

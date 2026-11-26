@@ -38,7 +38,7 @@ falls back to dump mode and prints the rendered page.
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
 | `-certs string` | `system` | TLS trust store: `system` or `embedded` |
-| `-process string` | `single` | Tab engine process placement: `single` (one process for all tabs) or `per-tab` (one child engine process per tab) |
+| `-process string` | `per-tab` | Tab engine process placement: `single` (one process for all tabs) or `per-tab` (one child engine process per tab) |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
@@ -47,9 +47,9 @@ Run `mob3 -h` for the exact defaults in your build.
 
 ## Process placement
 
-`-process=per-tab` runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
+`-process=per-tab` (the default) runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
 
-Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=single`.
+Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=per-tab`.
 
 ## Images and graphics
 

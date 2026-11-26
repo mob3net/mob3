@@ -45,8 +45,9 @@ a process transport can omit.
 **Non-goals of this step:** the package split itself added no subprocess, OS
 sandbox, tabs or per-site renderer, and no behavior or visual change. The
 default target in [Tabs, frames and isolation](#tabs-frames-and-isolation)
-keeps one process; `-process=per-tab` is an optional fault-isolation transport
-behind the same frame router and ownership model.
+uses one engine child per interactive tab; `-process=single` keeps the whole
+browser in one process. Both sit behind the same frame router and ownership
+model.
 
 ### Migration order
 
@@ -108,10 +109,11 @@ process is not part of the target.
 
 ## Tabs, frames and isolation
 
-The default target keeps one Go process. `-process=per-tab` can put each
-interactive tab's engine in a child process for fault isolation. Neither mode is
-a security boundary: tab separation is logical origin isolation, not memory,
-site or OS isolation, and no sandbox or per-site renderer is part of the model.
+The default target puts each interactive tab's engine in a child process for
+fault isolation. `-process=single` keeps the whole browser in one Go process.
+Neither mode is a security boundary: tab separation is logical origin
+isolation, not memory, site or OS isolation, and no sandbox or per-site
+renderer is part of the model.
 
 - A tab is one protocol session (`SessionID`). The front end owns the tab list,
   the active tab, one shared visited-page list and per-tab back/forward stacks
@@ -182,8 +184,9 @@ sessions.
 ## Current layout
 
 This is the **actual** state. Tabs are implemented. Real iframe browsing
-contexts are a permanent non-goal; iframes stay inert stubs. An optional engine
-child process exists behind `-process=per-tab`; the default remains in-process.
+contexts are a permanent non-goal; iframes stay inert stubs. Interactive tabs
+run one engine child per tab by default; `-process=single` keeps them in one
+process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
