@@ -192,7 +192,7 @@ func (j *jsRuntime) newURLSearchParams(init sobek.Value) *sobek.Object {
 	return o
 }
 
-func (j *jsRuntime) storageObject(view *StorageView) *sobek.Object {
+func (j *jsRuntime) storageObject(view protocol.Storage) *sobek.Object {
 	if view == nil {
 		view = newPrivateStorageView()
 	}

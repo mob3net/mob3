@@ -169,7 +169,8 @@ placeholder box for their declared size; they are a permanent non-goal, not
 pending architecture work. The `Session` embeds the top-level `Frame` that owns
 the page, layout, URL, scroll and JS runtime; the tab loop asks the frame for
 its timers.
-`localStorage` and `sessionStorage` use the shared `StorageBroker`, and the
+`localStorage` and `sessionStorage` use the shared `StorageBroker` behind the
+`protocol.StorageProvider` port, and the
 shared `BudgetManager` divides the JS, page-cache, image and SVG pools across
 sessions.
 
@@ -290,6 +291,8 @@ child process.
 | `internal/protocol/hostrpc.go` | Serializable host-broker call/result types, request metadata, error identity codes and the bounded codec. Flat payloads cover every `protocol.Host` method; no `image.Image`, certificate pool or context value crosses the boundary. |
 | `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. `ConfigToken` calls are forwarded. |
 | `internal/protocol/hostrpc_server.go` | `HostServer` dispatches calls concurrently to the trusted host, cancels in-flight work on a cancel frame or shutdown, maps errors to sentinel kinds and contains panics as host errors. |
+| `internal/protocol/storage.go` | `Storage`/`StorageProvider` ports and storage kinds/errors. A process-backed engine resolves `localStorage`/`sessionStorage` through the parent without changing the JS storage surface. |
+| `internal/protocol/ports.go` | Shared `EntryIDSource` and `BudgetShare` data. The parent can own the history-entry sequence and divide memory pools without sending engine types across the process boundary. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
@@ -323,7 +326,7 @@ child process.
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
 | `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
-| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker` and `BudgetManager`; shared settings join it with the tab and frame model. |
+| `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, owns the shared `StorageBroker` and `BudgetManager`, and accepts injectable `protocol.StorageProvider` and `protocol.EntryIDSource` ports for a process-backed engine. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
 | `internal/engine/frame.go` | `Frame`: the tab's top-level browsing context. It holds the tab's `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID. Iframes are inert stubs with no child frame, so no frame tree exists. `Session` embeds the top-level frame and remains the tab-level façade. |
 | `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses an iframe boundary. It holds the top-level frame; iframes are inert stubs. |

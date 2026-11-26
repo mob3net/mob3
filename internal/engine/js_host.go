@@ -59,8 +59,8 @@ type JSHost interface {
 	BeginJSCall()
 	ImportCh() chan<- ImportTask
 
-	LocalStorage() *StorageView
-	SessionStorage() *StorageView
+	LocalStorage() protocol.Storage
+	SessionStorage() protocol.Storage
 
 	UserAgent() string
 	Interactive() bool

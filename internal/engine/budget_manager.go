@@ -1,17 +1,15 @@
 package engine
 
-import "sync"
+import (
+	"sync"
+
+	"browser/internal/protocol"
+)
 
 // budgetShare is the part of one process budget a session may use. The JS,
 // history, image and SVG pools are divided across active sessions; the
 // resource cache is shared by the host and is not divided.
-type budgetShare struct {
-	JSHeap        int64
-	HistoryCache  int64
-	ImageBytes    int64
-	SVGPixels     int64
-	ResourceCache int64
-}
+type budgetShare = protocol.BudgetShare
 
 type budgetConsumer interface {
 	applyBudgetShare(budgetShare)

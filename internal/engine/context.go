@@ -3,6 +3,8 @@ package engine
 import (
 	"sync"
 	"sync/atomic"
+
+	"browser/internal/protocol"
 )
 
 // BrowserContext is the state shared by every tab session in one browser
@@ -20,14 +22,37 @@ type BrowserContext struct {
 	storage     *StorageBroker
 	budgetsOnce sync.Once
 	budgets     *BudgetManager
+
+	storageProvider protocol.StorageProvider
+	entryIDs        protocol.EntryIDSource
 }
 
 // NewBrowserContext creates the shared state for one browser process.
 func NewBrowserContext() *BrowserContext {
+	storage := NewStorageBroker()
 	return &BrowserContext{
-		storage: NewStorageBroker(),
-		budgets: NewBudgetManager(effectiveMemoryLimit()),
+		storage:         storage,
+		storageProvider: storageProvider{broker: storage},
+		budgets:         NewBudgetManager(effectiveMemoryLimit()),
 	}
+}
+
+// SetStorageProvider replaces the storage-area resolver. A process-backed
+// engine uses this to forward localStorage and sessionStorage to the parent.
+func (c *BrowserContext) SetStorageProvider(p protocol.StorageProvider) {
+	if c == nil {
+		return
+	}
+	c.storageProvider = p
+}
+
+// SetEntryIDSource replaces the history-entry ID allocator. A process-backed
+// engine uses this when the parent owns the process-wide ID sequence.
+func (c *BrowserContext) SetEntryIDSource(source protocol.EntryIDSource) {
+	if c == nil {
+		return
+	}
+	c.entryIDs = source
 }
 
 // Storage returns the context's shared storage pools.
@@ -63,5 +88,8 @@ func (c *BrowserContext) NextTabID() uint64 {
 
 // NextEntryID returns a process-unique opaque history-entry ID.
 func (c *BrowserContext) NextEntryID() uint64 {
+	if c.entryIDs != nil {
+		return c.entryIDs.NextEntryID()
+	}
 	return c.nextEntryID.Add(1)
 }

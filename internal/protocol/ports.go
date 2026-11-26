@@ -18,6 +18,24 @@ type Session interface {
 	Close() error
 }
 
+// EntryIDSource allocates process-wide history-entry IDs. The engine's page
+// cache and the host's URL attestation share the same sequence; a process
+// transport can keep it in the parent.
+type EntryIDSource interface {
+	NextEntryID() uint64
+}
+
+// BudgetShare is one session's part of the process-wide memory pools. A
+// process-backed engine receives it from the parent instead of running its own
+// BudgetManager.
+type BudgetShare struct {
+	JSHeap        int64
+	HistoryCache  int64
+	ImageBytes    int64
+	SVGPixels     int64
+	ResourceCache int64
+}
+
 // FetchPurpose tells the host why a request exists, so it can apply the right
 // origin, credential and private-network policy.
 type FetchPurpose uint8
