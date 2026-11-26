@@ -30,8 +30,8 @@ move each interactive tab's engine into a child process for fault isolation:
 - `localStorage` is shared per origin across tabs; `sessionStorage` is per tab
   and origin; cookies remain host-owned and domain-scoped.
 - In-process mode uses one shared budget for all JS runtimes, page caches and
-  image/SVG work. Process mode gives each tab its own `-mem-limit` cap.
-  Zoom stays browser-global.
+  image/SVG work. Process mode gives each tab child its own process-wide
+  `-mem-limit` cap. Zoom stays browser-global.
 - Only the active tab draws. A background tab keeps loading and updates its own
   state, history and title, but its timers and deferred image work pause.
 
@@ -199,10 +199,10 @@ reuse another site's cached response, and a response that varies on `Cookie`
 collect harder as memory approaches it. It is off by default (`0`), so memory is
 unlimited and any `GOMEMLIMIT` environment setting applies. In-process tabs
 divide the image/SVG pools (12% and 3% of the limit when set, with conservative
-fallbacks otherwise). With `-engine=process`, each tab child receives the full
-`-mem-limit` as a per-tab cap, so the browser total is not bounded by one limit
-and the parent/host cache sits outside it. These limits are best-effort
-resource bounds, not a sandbox.
+fallbacks otherwise) because they share one process. With `-engine=process`,
+every tab child is its own process and receives the full `-mem-limit`, as does
+the parent, so the browser total is not bounded by one limit. These limits are
+best-effort resource bounds, not a sandbox.
 
 ## JavaScript safety limits
 

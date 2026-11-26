@@ -119,8 +119,8 @@ site or OS isolation, and no sandbox or per-site renderer is part of the model.
 - The tab manager creates one loader, engine `Session` and protocol session per
   tab. Tabs share the host, cookies, cache, TLS state and origin storage; each
   tab owns its loader counters and page cache. In-process tabs divide the pools
-  through `BudgetManager`; each `-engine=process` child gets `-mem-limit` as its
-  own per-tab cap.
+  through `BudgetManager`; in process mode every tab child is a separate process
+  with its own `-mem-limit`.
 - The session loop drains every tab's event stream. Only the active tab's frames
   are presented; a background tab's state, history and overlay events still
   update its own model. `protocol.Visibility` tells the engine which tab is
@@ -149,9 +149,9 @@ site or OS isolation, and no sandbox or per-site renderer is part of the model.
   unique history-entry IDs. `localStorage` is keyed by origin and shared across
   tabs; `sessionStorage` is keyed by tab and origin.
 - In-process mode uses one budget manager across all runtimes, page caches and
-  image/SVG work, so N tabs divide the pools. `-engine=process` deliberately
-  gives every tab child the full `-mem-limit` as a per-tab cap; the parent and
-  host cache are outside that child cap.
+  image/SVG work, so N tabs divide the pools of that one process.
+  `-engine=process` applies `-mem-limit` per process: every tab child and the
+  parent each get their own limit.
 - Zoom and the image graphics mode stay browser-global across tabs; the
   terminal cell size is process-wide.
 - The front end is the only terminal writer. The engine has no terminal
@@ -362,7 +362,7 @@ child process exists behind `-engine=process`; the default remains in-process.
 | `internal/engine/loader_svg.go` | Per-page inline-SVG rasterization with pixel/count budgets. |
 | `internal/engine/loader_certs.go` | Loader trust-store selection and label. |
 | `internal/engine/loader_decode.go` | Charset decoding, single-byte charset table and JavaScript MIME classification. |
-| `internal/engine/budget_manager.go` | `BudgetManager`: in-process division of the JS, history-cache, image-byte and inline-SVG pools across active sessions; the host resource cache stays shared. One session gets the old percentages, two sessions halve each pool. `Session.applyBudgetShare` installs a share on the runtime, page cache and loader. Process-mode children skip the split and use `-mem-limit` per tab. |
+| `internal/engine/budget_manager.go` | `BudgetManager`: in-process division of the JS, history-cache, image-byte and inline-SVG pools across active sessions; the host resource cache stays shared. One session gets the old percentages, two sessions halve each pool. `Session.applyBudgetShare` installs a share on the runtime, page cache and loader. Process-mode children skip the split because each is its own process with its own `-mem-limit`. |
 | `internal/engine/budget.go` | Effective memory limit, total percentage budgets, `ByteLimiter`, and loader content/resource-cache budget application. |
 | `internal/engine/version.go` | Injected build version for built-in pages. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |

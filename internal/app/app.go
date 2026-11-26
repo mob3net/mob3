@@ -44,7 +44,7 @@ func Run(args []string) int {
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	memLimit := fs.Int("mem-limit", 0, "soft memory limit in MB; per tab in process mode, divided across tabs in inproc mode; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
+	memLimit := fs.Int("mem-limit", 0, "soft memory limit per process in MB; in inproc mode all tabs share that one process, while process mode gives each tab child its own limit; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
 	engineMode := fs.String("engine", "inproc", "interactive engine placement: inproc or process")
