@@ -87,8 +87,15 @@ func (b *Session) findAnchor() int {
 		return b.FindMatches[b.FindIdx].Y
 	}
 	if b.FindScope == findScopeHTML {
-		l := newConsoleLayout(b.Height, consoleHTML)
-		return paneStart(len(b.htmlLines(b.Width-2)), b.htmlScroll, l.bodyRows)
+		if b.window.valid {
+			if b.window.start >= 0 {
+				return b.window.start
+			}
+			if b.window.rows > 0 {
+				return clampConsoleStart(len(b.htmlLines(b.window.width-2)), -1, b.window.rows)
+			}
+		}
+		return 0
 	}
 	return b.Scroll
 }
@@ -110,7 +117,11 @@ func (b *Session) reindexFind() {
 
 func (b *Session) computeFindMatches() []findMatch {
 	if b.FindScope == findScopeHTML {
-		return FindHTMLMatches(b.htmlLines(b.Width-2), b.FindText)
+		width := b.Width - 2
+		if b.window.valid {
+			width = b.window.width - 2
+		}
+		return FindHTMLMatches(b.htmlLines(width), b.FindText)
 	}
 	return FindPageMatches(b.Layout, b.FindText, b.BigText)
 }
@@ -144,18 +155,8 @@ func (b *Session) focusFindMatch(idx int) {
 	b.FindIdx = idx
 	m := b.FindMatches[idx]
 	if b.FindScope == findScopeHTML {
-		rows := newConsoleLayout(b.Height, consoleHTML).bodyRows
-		if rows < 1 {
-			return
-		}
-		total := len(b.htmlLines(b.Width - 2))
-		start := paneStart(total, b.htmlScroll, rows)
-		if m.Line < start || m.Line >= start+rows {
-			b.htmlScroll = total - rows - m.Line
-			if b.htmlScroll < 0 {
-				b.htmlScroll = 0
-			}
-		}
+		// The front end scrolls to the reported FindLine; the engine keeps no
+		// console scroll state.
 		return
 	}
 	top, bottom := b.viewport()

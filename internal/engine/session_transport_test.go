@@ -356,6 +356,7 @@ func TestConsoleDrawEmitsView(t *testing.T) {
 	b.consoleOpen = true
 	capture := &consoleSink{}
 	b.sessionOut = capture
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleLogs, Start: -1, Rows: 5, Width: 40})
 	b.draw()
 	if !capture.got || capture.view.Width != 40 || capture.view.Height != 10 {
 		t.Fatalf("console view = %+v", capture.view)
@@ -563,45 +564,46 @@ func TestConsoleViewTransport(t *testing.T) {
 	b := newTestSession(80, 24)
 	sink := &consoleSink{}
 	b.sessionOut = sink
-	b.toggleConsole()
-	if !sink.got || sink.view.Width != 80 || len(sink.view.Tabs) != 5 || !b.consoleOpen {
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleOpen})
+	if !b.consoleOpen || sink.got {
+		t.Fatalf("open=%v emitted=%v", b.consoleOpen, sink.got)
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleLogs, Start: -1, Rows: 10, Width: 80, Enter: true})
+	b.draw()
+	if !sink.got || sink.view.Width != 80 || len(sink.view.Tabs) != 5 {
 		t.Fatalf("console view = %+v open=%v", sink.view, b.consoleOpen)
 	}
-	if sink.view.Pane != 0 || sink.view.Hint == "" {
-		t.Fatalf("pane=%d hint=%q", sink.view.Pane, sink.view.Hint)
+	if sink.view.Pane != consoleLogs || sink.view.Start != 0 || sink.view.Total != 1 {
+		t.Fatalf("logs view = %+v", sink.view)
 	}
-	b.consolePane = consoleRequests
-	sink.got = false
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleRequests, Start: 0, Rows: 5, Width: 80})
 	b.draw()
-	if !sink.got || sink.view.Pane != consoleRequests {
+	if sink.view.Pane != consoleRequests || len(sink.view.Lines) > 5 {
 		t.Fatalf("request view = %+v", sink.view)
 	}
 }
 
 func TestConsoleActionInputAndTabs(t *testing.T) {
 	b := newTestSession(80, 24)
-	b.NoDraw = true
-	b.toggleConsole()
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleFocus})
-	if !b.consoleEdit {
-		t.Fatal("focus did not open input")
-	}
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: "1+1"})
-	if len(b.jsLog) == 0 || b.consoleText != "" {
-		t.Fatalf("jsLog = %#v text=%q", b.jsLog, b.consoleText)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleOpen})
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleInput, Pane: consoleLogs, Text: "1+1"})
+	if len(b.jsLog) == 0 {
+		t.Fatalf("jsLog = %#v", b.jsLog)
 	}
 	records := make([]protocol.RequestRecord, 60)
 	for i := range records {
 		records[i] = protocol.RequestRecord{URL: fmt.Sprintf("https://example.com/%d", i)}
 	}
 	testHost(b.loader).Requests().SetRecords(records)
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: consoleRequests})
-	if b.consolePane != consoleRequests || b.consoleEdit {
-		t.Fatalf("pane=%d edit=%v", b.consolePane, b.consoleEdit)
+	sink := &consoleSink{}
+	b.sessionOut = sink
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleRequests, Start: 0, Rows: 5, Width: 80, Enter: true})
+	b.draw()
+	if sink.view.Pane != consoleRequests || sink.view.Total != 60 || len(sink.view.Lines) != 5 {
+		t.Fatalf("request window = %+v", sink.view)
 	}
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: 1})
-	if b.reqScroll == 0 {
-		t.Fatal("scroll did not change")
+	if sink.view.Summary == "" {
+		t.Fatal("request summary is empty")
 	}
 	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleClose})
 	if b.consoleOpen {
@@ -612,26 +614,32 @@ func TestConsoleActionInputAndTabs(t *testing.T) {
 func TestConsoleHTMLFindCommand(t *testing.T) {
 	b := newTestSession(60, 20)
 	b.consoleOpen = true
-	b.consolePane = consoleHTML
 	b.Page = &Page{RawHTML: "<html>\n<p>Needle</p>\n<p>needle</p>\n</html>"}
 	sink := &consoleSink{}
 	b.sessionOut = sink
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleHTML, Start: 0, Rows: 10, Width: 60})
 	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Query: "needle"})
+	b.draw()
 	if b.FindScope != findScopeHTML || len(b.FindMatches) != 2 {
 		t.Fatalf("scope=%d matches=%d", b.FindScope, len(b.FindMatches))
 	}
-	b.emitConsoleView()
-	if !sink.got || sink.view.FindText != "needle" || sink.view.FindTotal != 2 || len(sink.view.Highlights) == 0 {
+	if !sink.got || sink.view.FindTotal != 2 || len(sink.view.Highlights) == 0 || !sink.view.FindLineValid {
 		t.Fatalf("console view = %+v", sink.view)
 	}
 	first := b.FindIdx
+	firstLine := sink.view.FindLine
 	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Next: true})
+	b.draw()
 	if b.FindText != "needle" || len(b.FindMatches) != 2 || b.FindIdx == first {
 		t.Fatalf("next: text=%q matches=%d idx=%d first=%d", b.FindText, len(b.FindMatches), b.FindIdx, first)
 	}
+	if !sink.view.FindLineValid || sink.view.FindLine == firstLine {
+		t.Fatalf("next line = %+v, first line %d", sink.view, firstLine)
+	}
 	b.applyFindCommand(protocol.Find{Scope: protocol.FindHTML, Prev: true})
-	if b.FindIdx != first {
-		t.Fatalf("prev: idx=%d want %d", b.FindIdx, first)
+	b.draw()
+	if b.FindIdx != first || sink.view.FindLine != firstLine {
+		t.Fatalf("prev: idx=%d line=%d want %d/%d", b.FindIdx, sink.view.FindLine, first, firstLine)
 	}
 }
 

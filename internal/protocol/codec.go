@@ -157,7 +157,10 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		kind = CmdConsoleAction
 		e.u8(uint8(v.Op))
 		e.i32(v.Pane)
-		e.i32(v.Delta)
+		e.i32(v.Start)
+		e.i32(v.Rows)
+		e.i32(v.Width)
+		e.bool(v.Enter)
 		e.str(v.Text)
 	case ClientError:
 		kind = CmdClientError
@@ -321,18 +324,13 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		for _, l := range v.Lines {
 			e.str(l)
 		}
+		e.i32(v.Start)
+		e.i32(v.Total)
 		e.str(v.Summary)
-		e.str(v.Input)
-		e.i32(v.Cursor)
-		e.bool(v.Edit)
-		e.str(v.Hint)
-		e.str(v.Footer)
-		e.bool(v.Quit)
-		e.bool(v.FindActive)
-		e.str(v.FindText)
-		e.i32(v.FindCursor)
 		e.i32(v.FindCurrent)
 		e.i32(v.FindTotal)
+		e.i32(v.FindLine)
+		e.bool(v.FindLineValid)
 		e.count(len(v.Highlights))
 		for _, h := range v.Highlights {
 			e.i32(h.Line)
@@ -461,7 +459,7 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 	case CmdHintResult:
 		body = HintResult{Target: d.i32(), Cancel: d.bool()}
 	case CmdConsoleAction:
-		body = ConsoleAction{Op: ConsoleOp(d.u8()), Pane: d.i32(), Delta: d.i32(), Text: d.str()}
+		body = ConsoleAction{Op: ConsoleOp(d.u8()), Pane: d.i32(), Start: d.i32(), Rows: d.i32(), Width: d.i32(), Enter: d.bool(), Text: d.str()}
 	case CmdClientError:
 		body = ClientError{Message: d.str()}
 	case CmdAutomation:
@@ -628,18 +626,13 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		for i := range v.Lines {
 			v.Lines[i] = d.str()
 		}
+		v.Start = d.i32()
+		v.Total = d.i32()
 		v.Summary = d.str()
-		v.Input = d.str()
-		v.Cursor = d.i32()
-		v.Edit = d.bool()
-		v.Hint = d.str()
-		v.Footer = d.str()
-		v.Quit = d.bool()
-		v.FindActive = d.bool()
-		v.FindText = d.str()
-		v.FindCursor = d.i32()
 		v.FindCurrent = d.i32()
 		v.FindTotal = d.i32()
+		v.FindLine = d.i32()
+		v.FindLineValid = d.bool()
 		n = d.count(lim.MaxCells)
 		v.Highlights = make([]ConsoleHighlight, n)
 		for i := range v.Highlights {

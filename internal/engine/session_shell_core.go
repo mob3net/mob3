@@ -676,6 +676,10 @@ func (b *Session) resizeWithContent(w, h, top, contentH int) {
 	}
 	b.Width, b.Height = w, h
 	b.ContentTop, b.ContentHeight = top, contentH
+	if b.consoleOpen {
+		// The front end re-requests the window with the new rows and width.
+		b.window = consoleWindow{}
+	}
 	b.applyImageCap()
 	b.clearSelection()
 	b.rebuild()

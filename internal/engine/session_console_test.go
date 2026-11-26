@@ -46,45 +46,70 @@ func TestJSLogByteCaps(t *testing.T) {
 	}
 }
 
-func TestConsoleHTMLScrollsFromTop(t *testing.T) {
+func TestConsoleWindowSlicesStatelessly(t *testing.T) {
 	b := newTestSession(40, 12)
 	b.Page = &Page{RawHTML: strings.Repeat("line\n", 100)}
+	sink := &consoleSink{}
+	b.sessionOut = sink
 	b.consoleOpen = true
-	b.selectConsolePane(consoleHTML)
-	total := len(b.consolePaneLines(consoleHTML, b.Width-2))
-	rows := newConsoleLayout(b.Height, consoleHTML).bodyRows
-	if got := paneStart(total, b.htmlScroll, rows); got != 0 {
-		t.Fatalf("HTML pane opened at line %d, want 0", got)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleHTML, Start: 0, Rows: 5, Width: b.Width})
+	b.draw()
+	if !sink.got || sink.view.Start != 0 || len(sink.view.Lines) != 5 || sink.view.Total < 100 {
+		t.Fatalf("top window = %+v", sink.view)
 	}
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
-	if got := paneStart(total, b.htmlScroll, rows); got != 1 {
-		t.Fatalf("one j from the top moved to line %d, want 1", got)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleHTML, Start: -1, Rows: 5, Width: b.Width})
+	b.draw()
+	wantBottom := sink.view.Total - 5
+	if sink.view.Start != wantBottom {
+		t.Fatalf("bottom start = %d, want %d", sink.view.Start, wantBottom)
 	}
-	// g returns to the top, and j must work immediately again.
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleBottom})
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleTop})
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
-	if got := paneStart(total, b.htmlScroll, rows); got != 1 {
-		t.Fatalf("one j after g moved to line %d, want 1", got)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleHTML, Start: 1_000_000, Rows: 5, Width: b.Width})
+	b.draw()
+	if sink.view.Start != wantBottom {
+		t.Fatalf("overscroll start = %d, want %d", sink.view.Start, wantBottom)
+	}
+	// A new request is independent of the previous one: no scroll state sticks.
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleHTML, Start: 7, Rows: 5, Width: b.Width})
+	b.draw()
+	if sink.view.Start != 7 || b.window.start != 7 {
+		t.Fatalf("requested window = %+v cache=%+v", sink.view, b.window)
 	}
 }
 
-func TestConsoleLogsScrollFromTop(t *testing.T) {
+func TestConsoleWindowLogs(t *testing.T) {
 	b := newTestSession(40, 12)
 	for i := 0; i < 100; i++ {
 		b.jsLog = append(b.jsLog, fmt.Sprintf("[log] line %d", i))
 	}
+	sink := &consoleSink{}
+	b.sessionOut = sink
 	b.consoleOpen = true
-	b.selectConsolePane(consoleLogs)
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleTop})
-	total := len(b.consolePaneLines(consoleLogs, b.Width-2))
-	rows := b.consoleVisibleRows(consoleLogs)
-	if got := paneStart(total, b.consoleScroll, rows); got != 0 {
-		t.Fatalf("logs top = line %d, want 0", got)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleLogs, Start: 10, Rows: 4, Width: b.Width})
+	b.draw()
+	if sink.view.Total != 100 || sink.view.Start != 10 || len(sink.view.Lines) != 4 {
+		t.Fatalf("logs window = %+v", sink.view)
 	}
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
-	if got := paneStart(total, b.consoleScroll, rows); got != 1 {
-		t.Fatalf("one j from the logs top moved to line %d, want 1", got)
+	if sink.view.Lines[0] != "[log] line 10" {
+		t.Fatalf("first line = %q", sink.view.Lines[0])
+	}
+}
+
+func TestConsoleToolsHelpSeedsOnEntry(t *testing.T) {
+	b := newTestSession(60, 20)
+	b.consoleOpen = true
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleTools, Start: -1, Rows: 10, Width: 60, Enter: true})
+	if len(b.toolLog) == 0 {
+		t.Fatal("Tools help was not seeded on first entry")
+	}
+	seeded := len(b.toolLog)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleTools, Start: 0, Rows: 10, Width: 60})
+	if len(b.toolLog) != seeded {
+		t.Fatalf("scrolling re-seeded help: %d -> %d", seeded, len(b.toolLog))
+	}
+	b.clearToolLog()
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleWindow, Pane: consoleTools, Start: -1, Rows: 10, Width: 60, Enter: true})
+	if len(b.toolLog) != seeded {
+		t.Fatalf("re-entry help = %d lines, want %d", len(b.toolLog), seeded)
 	}
 }
 
@@ -254,12 +279,9 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	b := newTestSession(40, 10)
 	b.jsLog = []string{"[error] old"}
 	b.jsErr = true
-	b.consoleText = "draft"
-	b.consoleCursor = 5
-	b.consoleScroll = 3
-	b.storageScroll = 2
-	b.consolePane = consoleStorage
-	b.consoleEdit = true
+	b.FindActive = true
+	b.FindScope = findScopeHTML
+	b.FindText = "old"
 	withQuietStdout(t, func() {
 		b.finishLoad(LoadResult{Page: page, URL: page.URL})
 	})
@@ -269,10 +291,8 @@ func TestConsoleResetsOnSuccessfulNavigation(t *testing.T) {
 	if b.jsErr {
 		t.Fatal("JS error state survived navigation")
 	}
-	if b.consoleText != "" || b.consoleCursor != 0 || b.consoleScroll != 0 ||
-		b.storageScroll != 0 || b.consolePane != consoleLogs || b.consoleEdit {
-		t.Fatalf("console input state survived navigation: %q cursor=%d scroll=%d storage=%d pane=%d edit=%v",
-			b.consoleText, b.consoleCursor, b.consoleScroll, b.storageScroll, b.consolePane, b.consoleEdit)
+	if b.FindActive || b.FindText != "" {
+		t.Fatalf("console find survived navigation: active=%v text=%q", b.FindActive, b.FindText)
 	}
 }
 
@@ -294,7 +314,7 @@ func TestConsoleYCopiesActiveSection(t *testing.T) {
 	b.jsLog = []string{"[log] hello", "[error] boom"}
 	sink := &clipboardSink{}
 	b.sessionOut = sink
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy, Pane: consoleLogs})
 	if sink.text != "[log] hello\n[error] boom" {
 		t.Fatalf("log copy = %q", sink.text)
 	}
@@ -302,11 +322,10 @@ func TestConsoleYCopiesActiveSection(t *testing.T) {
 		t.Fatalf("status = %q", b.status)
 	}
 
-	// The HTML tab copies the raw source, not the width-wrapped display lines.
+	// The HTML section copies the raw source, not the width-wrapped display lines.
 	b.Page = &Page{RawHTML: "<html>\n<body>raw source</body>\n</html>"}
-	b.selectConsolePane(consoleHTML)
 	sink.text = ""
-	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy})
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleCopy, Pane: consoleHTML})
 	if sink.text != b.Page.RawHTML {
 		t.Fatalf("HTML copy = %q", sink.text)
 	}

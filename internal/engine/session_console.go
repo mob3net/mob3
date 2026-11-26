@@ -10,26 +10,27 @@ import (
 
 	"github.com/grafana/sobek"
 
-	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textwidth"
 )
 
-// consoleState is the JavaScript console and its per-pane scroll positions.
+// consoleWindow is the latest visible-window request from the front end. It is
+// a request cache, not UI state: the front end owns the pane, scroll, input and
+// history, and the engine only slices the section it asks for.
+type consoleWindow struct {
+	pane  int
+	start int
+	rows  int
+	width int
+	valid bool
+}
+
+// consoleState is the JavaScript console data: the per-page log, the Tools
+// scrollback and the last requested window.
 type consoleState struct {
-	consoleOpen   bool
-	consoleScroll int
-	reqScroll     int
-	storageScroll int
-	htmlScroll    int
-	toolScroll    int
-	toolLog       []string
-	consolePane   int // 0 = JS logs, 1 = requests, 2 = storage, 3 = HTML, 4 = tools
-	consoleText   string
-	consoleCursor int
-	consoleEdit   bool // the input row inside the logs or tools section has focus
-	consoleHist   linehistory.History
-	toolHist      linehistory.History
+	consoleOpen bool
+	window      consoleWindow
+	toolLog     []string
 
 	htmlPage   *Page
 	htmlWidth  int
@@ -114,14 +115,6 @@ const (
 // toolLogCap bounds the Tools tab scrollback; the newest lines are kept.
 const toolLogCap = 500
 
-// consoleHistoryFor selects the per-tab history used by the active input row.
-func (b *Session) consoleHistoryFor(pane int) *linehistory.History {
-	if pane == consoleTools {
-		return &b.toolHist
-	}
-	return &b.consoleHist
-}
-
 // logEngineError records a contained engine failure for the console view. It
 // sanitizes the message, keeps duplicate consecutive reports out of the log,
 // and points the footer at the console so the failure is discoverable.
@@ -154,24 +147,13 @@ func (b *Session) logJS(kind, msg string) {
 	}
 }
 
-func (b *Session) toggleConsole() {
-	b.consoleOpen = !b.consoleOpen
-	if !b.consoleOpen && b.FindScope == findScopeHTML {
-		b.clearFind()
-	}
-	b.consoleScroll = 0
-	b.reqScroll = 0
-	b.storageScroll = 0
-	b.htmlScroll = 0
-	b.toolScroll = 0
-	b.consolePane = consoleLogs
-	b.consoleEdit = false
-	b.consoleHist.Reset()
-	b.toolHist.Reset()
+func (b *Session) openConsole() {
 	if b.consoleOpen {
-		b.jsErr = false
+		return
 	}
-	b.draw()
+	b.consoleOpen = true
+	b.jsErr = false
+	b.window = consoleWindow{}
 }
 
 // closeConsole closes the console like Escape does, leaving the usual exit hint.
@@ -179,51 +161,70 @@ func (b *Session) closeConsole() {
 	if !b.consoleOpen {
 		return
 	}
+	b.consoleOpen = false
+	b.window = consoleWindow{}
+	if b.FindScope == findScopeHTML {
+		b.clearFind()
+	}
 	b.status = exitHint
-	b.toggleConsole()
+	b.draw()
 }
 
 func (b *Session) applyConsoleAction(v protocol.ConsoleAction) {
+	switch v.Op {
+	case protocol.ConsoleOpen:
+		b.openConsole()
+		return
+	case protocol.ConsoleClose:
+		b.closeConsole()
+		return
+	}
 	if !b.consoleOpen {
 		return
 	}
 	switch v.Op {
-	case protocol.ConsolePane:
-		b.selectConsolePane(v.Pane)
-		b.consoleEdit = false
-	case protocol.ConsoleCycle:
-		b.consoleCyclePane(v.Delta)
-	case protocol.ConsoleScroll:
-		b.scrollConsolePane(b.consolePane, v.Delta)
-	case protocol.ConsoleTop:
-		b.scrollConsoleToEnd(b.consolePane, true)
-	case protocol.ConsoleBottom:
-		b.scrollConsoleToEnd(b.consolePane, false)
-	case protocol.ConsoleFocus:
-		b.focusConsoleInput()
-	case protocol.ConsoleCancelEdit:
-		b.consoleEdit = false
+	case protocol.ConsoleWindow:
+		b.applyConsoleWindow(v)
 	case protocol.ConsoleInput:
-		b.consoleText = v.Text
-		b.runConsoleInput()
-		b.consoleEdit = true
+		b.runConsoleInput(v.Pane, v.Text)
 	case protocol.ConsoleCopy:
-		b.copyConsole()
-	case protocol.ConsoleQuit:
-		b.quitPending = true
-		b.status = quitConfirmText
-	case protocol.ConsoleCancelQuit:
-		b.quitPending = false
-		b.status = ""
-	case protocol.ConsoleClose:
-		b.closeConsole()
+		b.copyConsole(v.Pane)
 	}
 }
 
-// consoleCopyText returns the full text of the active console section. The
-// HTML section copies its raw source rather than the display-wrapped lines.
-func (b *Session) consoleCopyText() string {
-	switch b.consolePane {
+// applyConsoleWindow records the front-end window request and runs the
+// first-entry side effects the front end cannot perform itself. It never stores
+// a pane or scroll position beyond this request.
+func (b *Session) applyConsoleWindow(v protocol.ConsoleAction) {
+	pane := v.Pane
+	if pane < 0 || pane >= consoleSectionCount {
+		pane = consoleLogs
+	}
+	if v.Enter {
+		if pane == consoleTools && len(b.toolLog) == 0 {
+			for _, line := range toolsHelpLines() {
+				b.appendToolLine(line)
+			}
+		}
+		if pane != consoleHTML && b.FindScope == findScopeHTML {
+			b.clearFind()
+		}
+	}
+	rows := v.Rows
+	if rows < 0 {
+		rows = 0
+	}
+	width := v.Width
+	if width < 1 {
+		width = 1
+	}
+	b.window = consoleWindow{pane: pane, start: v.Start, rows: rows, width: width, valid: true}
+}
+
+// consoleCopyText returns the full text of one console section. The HTML
+// section copies its raw source rather than the display-wrapped lines.
+func (b *Session) consoleCopyText(pane int) string {
+	switch pane {
 	case consoleRequests:
 		return strings.Join(b.requestLines(), "\n")
 	case consoleStorage:
@@ -241,154 +242,25 @@ func (b *Session) consoleCopyText() string {
 // copyConsole copies the whole active console section. Terminal text
 // selection needs Shift+drag, so y gives one key that copies all of the log,
 // the HTML source or the other section bodies.
-func (b *Session) copyConsole() {
-	b.copyText(strings.TrimRight(b.consoleCopyText(), "\n"))
+func (b *Session) copyConsole(pane int) {
+	b.copyText(strings.TrimRight(b.consoleCopyText(pane), "\n"))
 }
 
-// consoleVisibleRows returns the rows the pane actually paints, matching
-// emitConsoleView: the logs and tools panes reserve their input row, and the
-// requests pane reserves its summary row.
-func (b *Session) consoleVisibleRows(pane int) int {
-	l := newConsoleLayout(b.Height, pane)
-	rows := l.bodyRows
-	if rows <= 0 {
-		return 0
-	}
-	switch pane {
-	case consoleLogs, consoleTools:
-		if l.inputY >= 0 {
-			rows = l.inputY - l.bodyY
-		}
-	case consoleRequests:
-		if rows > 1 {
-			rows--
-		}
-	}
-	if rows < 0 {
-		return 0
-	}
-	return rows
-}
-
-// consoleMaxScroll is the scroll value that shows the first line of a pane.
-// paneStart subtracts both the visible rows and the scroll, so setting the
-// scroll to the raw line count would leave the first screenful of j presses
-// clamped against the top.
-func (b *Session) consoleMaxScroll(pane int) int {
-	rows := b.consoleVisibleRows(pane)
-	if rows < 1 {
-		return 0
-	}
-	total := len(b.consolePaneLines(pane, b.Width-2))
-	if total <= rows {
-		return 0
-	}
-	return total - rows
-}
-
-// scrollConsolePane scrolls the open console section.
-func (b *Session) scrollConsolePane(pane, delta int) {
-	p := b.consoleScrollFor(pane)
-	if p == nil || delta == 0 {
-		return
-	}
-	*p += delta
-	if *p < 0 {
-		*p = 0
-	}
-	if max := b.consoleMaxScroll(pane); *p > max {
-		*p = max
-	}
-}
-
-func (b *Session) consoleScrollFor(pane int) *int {
-	switch pane {
-	case consoleRequests:
-		return &b.reqScroll
-	case consoleStorage:
-		return &b.storageScroll
-	case consoleHTML:
-		return &b.htmlScroll
-	case consoleTools:
-		return &b.toolScroll
-	case consoleLogs:
-		return &b.consoleScroll
-	}
-	return nil
-}
-
-func (b *Session) scrollConsoleToEnd(pane int, end bool) {
-	p := b.consoleScrollFor(pane)
-	if p == nil {
-		return
-	}
-	if end {
-		*p = b.consoleMaxScroll(pane)
-	} else {
-		*p = 0
-	}
-}
-
-func (b *Session) focusConsoleInput() {
-	if b.consolePane != consoleTools {
-		b.consolePane = consoleLogs
-	}
-	b.consoleEdit = true
-	b.consoleCursor = len(b.consoleText)
-}
-
-// selectConsolePane opens a console section, expanding the HTML section at its
-// first line rather than at the end of the source.
-func (b *Session) selectConsolePane(pane int) {
-	if pane < 0 || pane >= consoleSectionCount {
-		pane = consoleLogs
-	}
-	if pane == consoleHTML && b.consolePane != consoleHTML {
-		b.htmlScroll = b.consoleMaxScroll(consoleHTML)
-	}
-	if b.FindActive && b.FindScope == findScopeHTML && pane != consoleHTML {
-		b.FindActive = false
-	}
-	if pane == consoleTools && len(b.toolLog) == 0 {
-		for _, line := range toolsHelpLines() {
-			b.appendToolLine(line)
-		}
-		b.toolScroll = b.consoleMaxScroll(consoleTools)
-	}
-	b.consolePane = pane
-}
-
-// consoleCyclePane moves the open section through logs, requests, storage,
-// HTML and tools. Only the selected section stays expanded; the input row
-// belongs to the logs and tools sections, so cycling away also ends input
-// editing.
-func (b *Session) consoleCyclePane(dir int) {
-	if b.consolePane < 0 || b.consolePane >= consoleSectionCount {
-		b.consolePane = consoleLogs
-	}
-	b.selectConsolePane((b.consolePane + dir + consoleSectionCount) % consoleSectionCount)
-	b.consoleEdit = false
-}
-
-// handleConsoleInputKey edits the one-line JavaScript input row.
-// handleConsoleInputKey edits the one-line JavaScript input row.
-func (b *Session) runConsoleInput() {
-	src := strings.TrimSpace(b.consoleText)
+// runConsoleInput evaluates one line typed in the JavaScript or Tools input
+// row. The front end owns the input text, caret and history; the engine only
+// runs the command and appends its output.
+func (b *Session) runConsoleInput(pane int, src string) {
+	src = strings.TrimSpace(src)
 	if src == "" {
 		return
 	}
-	b.consoleHistoryFor(b.consolePane).Record(src)
-	b.consoleText = ""
-	b.consoleCursor = 0
-	if b.consolePane == consoleTools {
+	if pane == consoleTools {
 		b.runToolInput(src)
 		return
 	}
 	if isClearCommand(src) {
 		b.clearJSLog()
 		b.jsErr = false
-		b.consoleScroll = 0
-		b.consolePane = consoleLogs
 		return
 	}
 	b.logJS("input", src)
@@ -410,26 +282,14 @@ func (b *Session) runConsoleInput() {
 		b.rebuild()
 	}
 	b.consumePendingJS()
-	b.consolePane = consoleLogs
-	b.consoleScroll = 0
 }
 
-// resetConsole clears the JS log and input for a newly loaded page. It is
-// called before the new page's scripts run so stale errors cannot mix with the
-// fresh document.
+// resetConsole clears the JS log for a newly loaded page. It is called before
+// the new page's scripts run so stale errors cannot mix with the fresh
+// document. The front end keeps its pane, scroll and input state.
 func (b *Session) resetConsole() {
 	b.clearJSLog()
 	b.jsErr = false
-	b.consoleText = ""
-	b.consoleCursor = 0
-	b.consoleScroll = 0
-	b.reqScroll = 0
-	b.storageScroll = 0
-	b.htmlScroll = 0
-	b.consolePane = consoleLogs
-	b.consoleEdit = false
-	b.consoleHist.Reset()
-	b.toolHist.Reset()
 	b.clearFind()
 }
 
@@ -518,22 +378,6 @@ func humanSize(n int) string {
 	}
 }
 
-// consolePaneLines returns the lines rendered for a console section.
-func (b *Session) consolePaneLines(pane, width int) []string {
-	switch pane {
-	case consoleRequests:
-		return b.requestLinesWidth(width)
-	case consoleStorage:
-		return b.storageLinesWidth(width)
-	case consoleHTML:
-		return b.htmlLines(width)
-	case consoleTools:
-		return b.toolLines(width)
-	default:
-		return b.consoleLines(width)
-	}
-}
-
 // toolLines returns the Tools tab scrollback wrapped to width.
 func (b *Session) toolLines(width int) []string {
 	if width < 1 {
@@ -589,7 +433,6 @@ func sanitizeToolLine(line string) string {
 // clearToolLog empties the Tools tab scrollback.
 func (b *Session) clearToolLog() {
 	b.toolLog = nil
-	b.toolScroll = 0
 }
 
 // isClearCommand reports the console shortcut that empties the active log.
@@ -603,13 +446,10 @@ func isClearCommand(s string) bool {
 func (b *Session) runToolInput(src string) {
 	if isClearCommand(src) {
 		b.clearToolLog()
-		b.consolePane = consoleTools
 		return
 	}
 	b.appendToolLine("[tool] " + src)
 	b.runToolCommand(src)
-	b.toolScroll = 0
-	b.consolePane = consoleTools
 }
 
 // runToolCommand executes the read-only command surface that is safe inside
@@ -866,47 +706,6 @@ func sanitizeStorageText(s string) string {
 	return s
 }
 
-// consoleLayout describes the console menu row and the active section body.
-type consoleLayout struct {
-	tabsY    int
-	bodyY    int // -1 when there is no body
-	bodyRows int
-	inputY   int // -1 unless the logs section is open with an input row
-	open     int
-	footerY  int // -1 when the footer row does not fit
-}
-
-func newConsoleLayout(h, open int) consoleLayout {
-	l := consoleLayout{tabsY: -1, bodyY: -1, inputY: -1, open: open, footerY: -1}
-	if open < 0 || open >= consoleSectionCount {
-		open = consoleLogs
-		l.open = open
-	}
-	if h <= 0 {
-		return l
-	}
-	if h >= 2 {
-		l.footerY = h - 1
-	}
-	avail := h
-	if l.footerY >= 0 {
-		avail = h - 1
-	}
-	if avail <= 0 {
-		return l
-	}
-	l.tabsY = 0
-	l.bodyY = 1
-	l.bodyRows = avail - 1
-	if l.bodyRows < 0 {
-		l.bodyRows = 0
-	}
-	if (open == consoleLogs || open == consoleTools) && l.bodyRows > 0 {
-		l.inputY = l.bodyY + l.bodyRows - 1
-	}
-	return l
-}
-
 // consoleTabTitles returns the top-menu labels for the console sections.
 func (b *Session) consoleTabTitles() [consoleSectionCount]string {
 	reqCount := 0
@@ -922,28 +721,33 @@ func (b *Session) consoleTabTitles() [consoleSectionCount]string {
 	}
 }
 
-func paneStart(total, scroll, rows int) int {
+// clampConsoleStart resolves an absolute start line. A negative request means
+// the bottom of the section; the result is the first line the window shows.
+func clampConsoleStart(total, start, rows int) int {
 	if rows < 1 {
 		return 0
 	}
-	start := total - rows - scroll
-	if start < 0 {
-		start = 0
-	}
-	if start > total-rows {
-		start = total - rows
+	maxStart := total - rows
+	if maxStart < 0 {
+		maxStart = 0
 	}
 	if start < 0 {
-		start = 0
+		return maxStart
+	}
+	if start > maxStart {
+		return maxStart
 	}
 	return start
 }
 
-func visibleConsoleLines(items []string, scroll, rows, width int) []string {
-	if rows < 1 {
+// windowLines returns the requested slice, truncated to the content width.
+func windowLines(items []string, start, rows, width int) []string {
+	if rows < 1 || start >= len(items) {
 		return nil
 	}
-	start := paneStart(len(items), scroll, rows)
+	if start < 0 {
+		start = 0
+	}
 	out := make([]string, 0, rows)
 	for i := 0; i < rows && start+i < len(items); i++ {
 		out = append(out, textwidth.Truncate(items[start+i], width))
@@ -951,85 +755,80 @@ func visibleConsoleLines(items []string, scroll, rows, width int) []string {
 	return out
 }
 
-// emitConsoleView sends the text model of the console to the front end.
+// emitConsoleView slices the requested console window and sends it to the
+// front end. The engine keeps only the last request; the front end owns pane,
+// scroll, input, history and quit state.
 func (b *Session) emitConsoleView() {
-	w, h := b.Width, b.Height
+	req := b.window
+	if !req.valid || b.sessionOut == nil {
+		return
+	}
+	w := req.width
 	if w < 1 {
 		w = 1
 	}
+	h := b.Height
 	if h < 1 {
 		h = 1
 	}
-	l := newConsoleLayout(h, b.consolePane)
+	contentWidth := w - 2
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
 	titles := b.consoleTabTitles()
 	v := protocol.ConsoleView{
-		Width: w, Height: h, Pane: b.consolePane,
+		Width: w, Height: h,
+		Pane: req.pane,
 		Tabs: append([]string(nil), titles[:]...),
 	}
-	if l.bodyY >= 0 && l.bodyRows > 0 {
-		switch b.consolePane {
-		case consoleRequests:
-			reqRows := l.bodyRows
-			if reqRows > 1 {
-				reqRows--
-			}
-			v.Lines = visibleConsoleLines(b.requestLinesWidth(w-2), b.reqScroll, reqRows, w-2)
-			v.Summary = textwidth.Truncate(b.requestCacheSummary(), w-2)
-		case consoleStorage:
-			v.Lines = visibleConsoleLines(b.storageLinesWidth(w-2), b.storageScroll, l.bodyRows, w-2)
-		case consoleHTML:
-			v.Lines = visibleConsoleLines(b.htmlLines(w-2), b.htmlScroll, l.bodyRows, w-2)
-		case consoleLogs, consoleTools:
-			logRows := l.bodyRows
-			if l.inputY >= 0 {
-				logRows = l.inputY - l.bodyY
-			}
-			if b.consolePane == consoleTools {
-				v.Lines = visibleConsoleLines(b.toolLines(w-2), b.toolScroll, logRows, w-2)
-			} else {
-				v.Lines = visibleConsoleLines(b.consoleLines(w-2), b.consoleScroll, logRows, w-2)
-			}
-			v.Input = b.consoleText
-			v.Cursor = b.consoleCursor
-			v.Edit = b.consoleEdit
-			if b.consoleText == "" && !b.consoleEdit {
-				v.Hint = "JavaScript input"
-				if b.consolePane == consoleTools {
-					v.Hint = "Tools: help · form · links · requests · logs · source · snapshot"
-				}
-			}
-		}
+	rows := req.rows
+	if rows < 0 {
+		rows = 0
 	}
-	if h >= 2 {
-		v.Footer = " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · y: copy all · q: quit · Esc: close "
-		if b.quitPending {
-			v.Footer = " " + quitConfirmText
-			v.Quit = true
+	if rows > 0 {
+		var lines []string
+		switch req.pane {
+		case consoleRequests:
+			lines = b.requestLinesWidth(contentWidth)
+			v.Summary = textwidth.Truncate(b.requestCacheSummary(), contentWidth)
+		case consoleStorage:
+			lines = b.storageLinesWidth(contentWidth)
+		case consoleHTML:
+			lines = b.htmlLines(contentWidth)
+		case consoleTools:
+			lines = b.toolLines(contentWidth)
+		default:
+			lines = b.consoleLines(contentWidth)
 		}
+		v.Total = len(lines)
+		v.Start = clampConsoleStart(v.Total, req.start, rows)
+		v.Lines = windowLines(lines, v.Start, rows, contentWidth)
 	}
 	if b.FindScope == findScopeHTML && b.FindText != "" {
-		v.FindText = b.FindText
-		v.FindCursor = b.FindCursor
 		v.FindCurrent = b.FindIdx + 1
 		if v.FindCurrent < 1 {
 			v.FindCurrent = 1
 		}
 		v.FindTotal = len(b.FindMatches)
-		lines := b.htmlLines(w - 2)
-		start := paneStart(len(lines), b.htmlScroll, l.bodyRows)
-		for i, m := range b.FindMatches {
-			rects := m.Rects
-			if len(rects) == 0 {
-				rects = []findRect{{X: m.X, Line: m.Line, W: m.W}}
-			}
-			for _, r := range rects {
-				rel := r.Line - start
-				if rel < 0 || rel >= l.bodyRows {
-					continue
+		if b.FindIdx >= 0 && b.FindIdx < len(b.FindMatches) {
+			v.FindLine = b.FindMatches[b.FindIdx].Line
+			v.FindLineValid = true
+		}
+		if rows > 0 && req.pane == consoleHTML {
+			for i, m := range b.FindMatches {
+				rects := m.Rects
+				if len(rects) == 0 {
+					rects = []findRect{{X: m.X, Line: m.Line, W: m.W}}
 				}
-				v.Highlights = append(v.Highlights, protocol.ConsoleHighlight{
-					Line: rel, X: 1 + r.X, W: r.W, Current: i == b.FindIdx,
-				})
+				for _, r := range rects {
+					rel := r.Line - v.Start
+					if rel < 0 || rel >= rows {
+						continue
+					}
+					v.Highlights = append(v.Highlights, protocol.ConsoleHighlight{
+						Line: rel, X: 1 + r.X, W: r.W, Current: i == b.FindIdx,
+					})
+				}
 			}
 		}
 	}

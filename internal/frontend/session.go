@@ -507,7 +507,8 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	case "S":
 		return send(protocol.App{Action: protocol.AppDownload})
 	case "!":
-		return send(protocol.App{Action: protocol.AppToggleConsole})
+		l.consoleOverlay.toggle(l)
+		return true, false
 	case "X":
 		l.menuOverlay.start(l, protocol.MenuView)
 		return true, false
@@ -838,7 +839,8 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 		l.menuOverlay.start(l, protocol.MenuZoom)
 		return
 	case ChromeHitConsole:
-		body = protocol.App{Action: protocol.AppToggleConsole}
+		l.consoleOverlay.toggle(l)
+		return
 	case ChromeHitJS:
 		body = protocol.App{Action: protocol.AppToggleJS}
 	case ChromeHitReader:

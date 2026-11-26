@@ -81,7 +81,6 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 	}{
 		{"reload", ChromeHitReload, protocol.App{Action: protocol.AppReload}},
 		{"graphics", ChromeHitGraphics, protocol.App{Action: protocol.AppToggleImages}},
-		{"console", ChromeHitConsole, protocol.App{Action: protocol.AppToggleConsole}},
 	}
 	st := chromeState()
 	for _, tc := range cases {
@@ -109,6 +108,54 @@ func TestHandleChromeMouseSendsHeaderActions(t *testing.T) {
 				t.Fatalf("command = %#v, want %#v", s.cmds[0].Body, tc.body)
 			}
 		})
+	}
+}
+
+func TestChromeConsoleIconOpensConsole(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = chromeState()
+	var hit ChromeHit
+	for _, h := range LayoutChrome(loop.State.Page).Hits {
+		if h.Kind == ChromeHitConsole {
+			hit = h
+			break
+		}
+	}
+	if hit.W == 0 {
+		t.Fatal("no console hit")
+	}
+	if !loop.handleChromeMouse(MouseEvent{X: hit.X + 1, Y: hit.Y + 1, Press: true}) {
+		t.Fatal("console hit not consumed")
+	}
+	if !loop.consoleActive {
+		t.Fatal("console did not open")
+	}
+	if len(s.cmds) != 2 {
+		t.Fatalf("commands = %d, want open and window", len(s.cmds))
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleOpen {
+		t.Fatalf("first command = %#v", s.cmds[0].Body)
+	}
+	if a, ok := s.cmds[1].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow {
+		t.Fatalf("second command = %#v", s.cmds[1].Body)
+	}
+	s.cmds = nil
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs,
+		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
+	}})
+	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 24, Press: true}) {
+		t.Fatal("console footer hit not consumed")
+	}
+	if loop.consoleActive {
+		t.Fatal("console did not close")
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("close commands = %d, want 1", len(s.cmds))
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleClose {
+		t.Fatalf("close command = %#v", s.cmds[0].Body)
 	}
 }
 
@@ -406,10 +453,13 @@ func TestBuildConsoleFrame(t *testing.T) {
 	v := &protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: 0,
 		Tabs:  []string{" JS logs (1) ", " Requests (0) ", " Storage ", " HTML ", " Tools "},
-		Lines: []string{"[log] hello"}, Input: "1+1", Cursor: 3, Edit: true,
+		Lines: []string{"[log] hello"},
+	}
+	ui := ConsoleUI{
+		Pane: 0, Input: "1+1", Cursor: 3, Edit: true,
 		Footer: " Click/Tab/h/l: switch section · Esc: close ",
 	}
-	f := BuildConsoleFrame(v)
+	f := BuildConsoleFrame(v, ui)
 	if f.W != 80 || f.H != 24 || len(f.Cells) != 80*24 {
 		t.Fatalf("frame = %dx%d", f.W, f.H)
 	}

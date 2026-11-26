@@ -89,7 +89,7 @@ func (b *Session) draw() {
 		w = 1
 	}
 	if b.consoleOpen {
-		if b.sessionOut != nil {
+		if b.window.valid && b.sessionOut != nil {
 			b.emitConsoleView()
 		}
 		return

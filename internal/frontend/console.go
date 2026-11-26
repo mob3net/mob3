@@ -5,24 +5,48 @@ import (
 	"io"
 	"strings"
 
-	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textedit"
 	"browser/internal/textwidth"
 )
 
-// consoleOverlay is the full-screen JavaScript console and tools pane.
+// Console sections, ordered as they are stacked in the console view. The
+// values match the engine's section order.
+const (
+	consolePaneLogs = iota
+	consolePaneRequests
+	consolePaneStorage
+	consolePaneHTML
+	consolePaneTools
+	consolePaneCount
+)
+
+const (
+	consoleFooter = " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · y: copy all · q: quit · Esc: close "
+	consoleHint   = "JavaScript input"
+	toolsHint     = "Tools: help · form · links · requests · logs · source · snapshot"
+)
+
+// consoleOverlay is the full-screen JavaScript console and tools pane. It owns
+// the pane, scroll, input, history and quit state; the engine only supplies the
+// requested section window.
 type consoleOverlay struct {
 	consoleActive     bool
 	consoleView       protocol.ConsoleView
 	consolePane       int
+	consoleStart      [consolePaneCount]int
+	consoleTotal      [consolePaneCount]int
+	consoleFollow     [consolePaneCount]bool
 	consoleEdit       bool
 	consoleText       string
 	consoleCursor     int
-	consoleHist       [5]linehistory.History
+	consoleHist       [consolePaneCount]lineHistory
+	consoleQuit       bool
 	consoleFindActive bool
 	consoleFindText   string
 	consoleFindCursor int
+	consoleFindLine   int
+	consoleFindSet    bool
 }
 
 func (w *consoleOverlay) isOpen() bool { return w.consoleActive }
@@ -33,81 +57,339 @@ func (w *consoleOverlay) dismissOnModal() bool { return false }
 
 func (w *consoleOverlay) reset(l *Tab) {
 	w.consoleActive = false
+	w.consoleEdit = false
+	w.consoleQuit = false
 	w.consoleFindActive = false
+	w.consoleFindSet = false
 }
 
 // install reports that the console owns the whole screen; the caller presents
 // it after every other window has republished its view.
-func (w *consoleOverlay) install(l *Tab) bool { return true }
+func (w *consoleOverlay) install(l *Tab) bool {
+	return true
+}
 
 func (w *consoleOverlay) close(l *Tab) {
-	w.consoleActive = false
+	if !w.consoleActive {
+		return
+	}
+	w.deactivate()
 	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleClose}})
+}
+
+// deactivate drops the local window state without sending a command.
+func (w *consoleOverlay) deactivate() {
+	w.consoleActive = false
+	w.consoleEdit = false
+	w.consoleQuit = false
+	w.consoleFindActive = false
+	w.consoleFindSet = false
+	w.consoleFindText = ""
+	w.consoleFindCursor = 0
+}
+
+// toggle opens or closes the console from the shell key or the footer icon.
+func (w *consoleOverlay) toggle(l *Tab) {
+	if w.consoleActive {
+		w.close(l)
+		return
+	}
+	w.open(l)
+}
+
+func (w *consoleOverlay) open(l *Tab) {
+	if w.consoleActive {
+		return
+	}
+	w.consoleActive = true
+	w.consolePane = consolePaneLogs
+	for i := range w.consoleStart {
+		w.consoleStart[i] = -1
+		w.consoleFollow[i] = true
+	}
+	w.consoleEdit = false
+	w.consoleText = ""
+	w.consoleCursor = 0
+	w.consoleQuit = false
+	w.consoleFindActive = false
+	w.consoleFindSet = false
+	w.consoleFindText = ""
+	w.consoleFindCursor = 0
+	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleOpen}})
+	w.request(l, true)
 }
 
 // applyState reports false: console state arrives as its own event, so page
 // state updates keep flowing to the page underneath.
 func (w *consoleOverlay) applyState(l *Tab, st protocol.State) bool { return false }
 
+// applyView stores a content window and scrolls to a new find match when one
+// arrives. It ignores a window for a section the front end has already left.
 func (w *consoleOverlay) applyView(l *Tab, v protocol.ConsoleView) {
-	if !w.consoleActive {
-		w.consolePane = v.Pane
-		w.consoleEdit = false
-		w.consoleText = ""
-		w.consoleCursor = 0
+	if !w.consoleActive || v.Pane != w.consolePane {
+		return
 	}
-	w.consoleActive = true
-	w.consolePane = v.Pane
 	w.consoleView = v
-	if w.consoleFindActive {
-		w.consoleView.FindActive = true
-		w.consoleView.FindText = w.consoleFindText
-		w.consoleView.FindCursor = w.consoleFindCursor
+	w.consoleTotal[w.consolePane] = v.Total
+	if w.consoleFollow[w.consolePane] && v.Total > 0 {
+		want := w.maxStart()
+		w.consoleStart[w.consolePane] = want
+		if v.Start != want {
+			w.present(l)
+			w.request(l, false)
+			return
+		}
+	} else {
+		w.consoleStart[w.consolePane] = v.Start
 	}
-	if w.consoleEdit {
-		w.consoleView.Input = w.consoleText
-		w.consoleView.Cursor = w.consoleCursor
-		w.consoleView.Edit = true
-		w.consoleView.Hint = ""
+	if w.consoleFindText != "" && v.FindLineValid && (!w.consoleFindSet || v.FindLine != w.consoleFindLine) {
+		w.consoleFindLine = v.FindLine
+		w.consoleFindSet = true
+		if !w.lineVisible(v.FindLine) {
+			start := v.FindLine
+			if max := w.maxStart(); start > max {
+				start = max
+			}
+			if start < 0 {
+				start = 0
+			}
+			w.consoleStart[w.consolePane] = start
+			w.consoleFollow[w.consolePane] = false
+			w.present(l)
+			w.request(l, false)
+			return
+		}
 	}
 	w.present(l)
+}
+
+func (w *consoleOverlay) lineVisible(line int) bool {
+	rows := w.contentRows(w.consoleView.Height)
+	start := w.consoleStart[w.consolePane]
+	return rows > 0 && line >= start && line < start+rows
 }
 
 func (w *consoleOverlay) present(l *Tab) {
 	if l.Presenter == nil {
 		return
 	}
-	w.consoleView.Input = w.consoleText
-	w.consoleView.Cursor = w.consoleCursor
-	w.consoleView.Edit = w.consoleEdit
-	if w.consoleEdit {
-		w.consoleView.Hint = ""
-	}
 	w.consoleView.Pane = w.consolePane
-	if w.consoleFindActive {
-		w.consoleView.FindActive = true
-		w.consoleView.FindText = w.consoleFindText
-		w.consoleView.FindCursor = w.consoleFindCursor
-	} else {
-		w.consoleView.FindActive = false
-	}
-	_ = l.Presenter.PresentConsole(&w.consoleView)
+	_ = l.Presenter.PresentConsole(&w.consoleView, w.ui())
 }
 
-func (w *consoleOverlay) action(l *Tab, a protocol.ConsoleAction) {
-	_ = l.Session.Send(protocol.Command{Body: a})
+// ui snapshots the front-end-owned console chrome for the frame renderer.
+func (w *consoleOverlay) ui() ConsoleUI {
+	hint := consoleHint
+	if w.consolePane == consolePaneTools {
+		hint = toolsHint
+	}
+	footer := consoleFooter
+	if w.consoleQuit {
+		footer = " " + quitPrompt
+	}
+	if w.consoleFindActive {
+		hint = ""
+	}
+	return ConsoleUI{
+		Pane: w.consolePane, Input: w.consoleText, Cursor: w.consoleCursor,
+		Edit: w.consoleEdit, Hint: hint, Footer: footer, Quit: w.consoleQuit,
+		FindActive: w.consoleFindActive, FindText: w.consoleFindText,
+		FindCursor: w.consoleFindCursor,
+	}
+}
+
+// size returns the terminal dimensions the console fills.
+func (w *consoleOverlay) size(l *Tab) (int, int) {
+	width, height := w.consoleView.Width, w.consoleView.Height
+	if width <= 0 {
+		width = l.State.Page.Width
+	}
+	if height <= 0 {
+		height = l.State.Page.Height
+	}
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 24
+	}
+	return width, height
+}
+
+// contentRows returns the section body rows requested from the engine,
+// excluding the input row on logs/tools and the summary row on requests.
+func (w *consoleOverlay) contentRows(height int) int {
+	return w.contentRowsFor(consoleLayoutFor(height, w.consolePane))
+}
+
+func (w *consoleOverlay) contentRowsFor(l consoleLayout) int {
+	rows := l.bodyRows
+	if rows <= 0 {
+		return 0
+	}
+	switch w.consolePane {
+	case consolePaneLogs, consolePaneTools:
+		if l.inputY >= 0 {
+			rows = l.inputY - l.bodyY
+		}
+	case consolePaneRequests:
+		if rows > 1 {
+			rows--
+		}
+	}
+	if rows < 0 {
+		return 0
+	}
+	return rows
+}
+
+func (w *consoleOverlay) request(l *Tab, enter bool) {
+	if !w.consoleActive {
+		return
+	}
+	width, height := w.size(l)
+	start := w.consoleStart[w.consolePane]
+	if w.consoleFollow[w.consolePane] {
+		start = -1
+	}
+	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{
+		Op: protocol.ConsoleWindow, Pane: w.consolePane, Start: start,
+		Rows: w.contentRows(height), Width: width, Enter: enter,
+	}})
+}
+
+// resize updates the console dimensions and requests a fresh window. The
+// engine invalidates its cached request on resize, so this request is required
+// to repaint the open console.
+func (w *consoleOverlay) resize(l *Tab, width, height int) {
+	if !w.consoleActive {
+		return
+	}
+	w.consoleView.Width = width
+	w.consoleView.Height = height
+	if start := w.consoleStart[w.consolePane]; start >= 0 && !w.consoleFollow[w.consolePane] {
+		if max := w.maxStart(); start > max {
+			w.consoleStart[w.consolePane] = max
+		}
+	}
+	w.request(l, false)
+}
+
+// maxStart is the largest first-line index that still fills the body.
+func (w *consoleOverlay) maxStart() int {
+	rows := w.contentRows(w.consoleView.Height)
+	total := w.consoleTotal[w.consolePane]
+	if rows < 1 || total <= rows {
+		return 0
+	}
+	return total - rows
+}
+
+// scroll moves the active section by delta lines. Following the bottom keeps
+// new output visible; scrolling up leaves follow mode.
+func (w *consoleOverlay) scroll(l *Tab, delta int) {
+	pane := w.consolePane
+	if w.consoleFollow[pane] {
+		if delta > 0 {
+			return
+		}
+		w.consoleStart[pane] = w.maxStart()
+		w.consoleFollow[pane] = false
+	}
+	start := w.consoleStart[pane]
+	if start < 0 {
+		start = w.maxStart()
+	}
+	start += delta
+	if start < 0 {
+		start = 0
+	}
+	if max := w.maxStart(); start >= max {
+		start = max
+		w.consoleFollow[pane] = true
+	}
+	w.consoleStart[pane] = start
+	w.present(l)
+	w.request(l, false)
+}
+
+func (w *consoleOverlay) jump(l *Tab, top bool) {
+	w.consoleFollow[w.consolePane] = !top
+	if top {
+		w.consoleStart[w.consolePane] = 0
+	} else {
+		w.consoleStart[w.consolePane] = -1
+	}
+	w.present(l)
+	w.request(l, false)
+}
+
+// selectPane switches the active section. HTML enters at its first line; the
+// other sections keep their own position. Leaving HTML closes its find bar.
+func (w *consoleOverlay) selectPane(l *Tab, pane int, enter bool) {
+	if pane < 0 || pane >= consolePaneCount {
+		pane = consolePaneLogs
+	}
+	if pane != w.consolePane {
+		if pane == consolePaneHTML {
+			w.consoleStart[pane] = 0
+			w.consoleFollow[pane] = false
+		}
+		if pane != consolePaneHTML {
+			w.closeFind(l)
+		}
+		w.consolePane = pane
+		w.consoleEdit = false
+		enter = true
+	}
+	w.present(l)
+	w.request(l, enter)
+}
+
+func (w *consoleOverlay) cycle(l *Tab, dir int) {
+	pane := (w.consolePane + dir + consolePaneCount) % consolePaneCount
+	w.selectPane(l, pane, true)
+}
+
+func (w *consoleOverlay) focusInput(l *Tab) {
+	if w.consolePane != consolePaneTools && w.consolePane != consolePaneLogs {
+		w.selectPane(l, consolePaneLogs, true)
+	}
+	w.consoleEdit = true
+	w.consoleCursor = len(w.consoleText)
+	w.present(l)
+}
+
+// hideFind hides the find bar but keeps the query, match state and last line so
+// n/N can continue after Esc without yanking the section.
+func (w *consoleOverlay) hideFind() {
+	w.consoleFindActive = false
+}
+
+// closeFind hides the find bar and clears the engine's HTML find, used when the
+// user leaves the HTML section.
+func (w *consoleOverlay) closeFind(l *Tab) {
+	if !w.consoleFindActive && w.consoleFindText == "" {
+		return
+	}
+	w.hideFind()
+	w.consoleFindSet = false
+	w.consoleFindText = ""
+	w.consoleFindCursor = 0
+	_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Close: true}})
 }
 
 func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	if w.consoleFindActive {
 		return w.handleFindKey(l, k)
 	}
-	if w.consoleView.Quit {
+	if w.consoleQuit {
 		switch k {
 		case "y", "Y", "enter":
 			return true, true
 		default:
-			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCancelQuit})
+			w.consoleQuit = false
+			w.present(l)
 			return true, false
 		}
 	}
@@ -115,40 +397,42 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		switch k {
 		case "esc":
 			w.consoleEdit = false
-			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCancelEdit})
 			w.present(l)
 			return true, false
 		case "ctrl-c":
 			return true, false
 		case "tab":
 			w.consoleEdit = false
-			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
-			w.present(l)
+			w.cycle(l, 1)
 			return true, false
 		case "backtab":
 			w.consoleEdit = false
-			w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
-			w.present(l)
+			w.cycle(l, -1)
 			return true, false
 		case "enter":
 			text := strings.TrimSpace(w.consoleText)
 			if text != "" {
-				w.consoleHist[w.consolePane].Record(text)
-				w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleInput, Text: text})
+				w.consoleHist[w.consolePane].record(text)
+				_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{
+					Op: protocol.ConsoleInput, Pane: w.consolePane, Text: text,
+				}})
 			}
 			w.consoleText = ""
 			w.consoleCursor = 0
+			w.consoleStart[w.consolePane] = -1
+			w.consoleFollow[w.consolePane] = true
 			w.present(l)
+			w.request(l, false)
 			return true, false
 		case "up", "ctrl-p":
-			if prev, ok := w.consoleHist[w.consolePane].Up(w.consoleText); ok {
+			if prev, ok := w.consoleHist[w.consolePane].up(w.consoleText); ok {
 				w.consoleText = prev
 				w.consoleCursor = len(prev)
 			}
 			w.present(l)
 			return true, false
 		case "down", "ctrl-n":
-			if next, ok := w.consoleHist[w.consolePane].Down(w.consoleText); ok {
+			if next, ok := w.consoleHist[w.consolePane].down(w.consoleText); ok {
 				w.consoleText = next
 				w.consoleCursor = len(next)
 			}
@@ -169,49 +453,43 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	}
 	switch k {
 	case "esc", "!":
-		w.consoleActive = false
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleClose})
+		w.close(l)
 	case "q", "ctrl-c":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleQuit})
-	case "tab", "l", "right":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1})
-	case "backtab", "h", "left":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: -1})
-	case ":", "enter":
-		if w.consolePane != 4 {
-			w.consolePane = 0
-		}
-		w.consoleEdit = true
-		w.consoleText = ""
-		w.consoleCursor = 0
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleFocus})
+		w.consoleQuit = true
 		w.present(l)
+	case "tab", "l", "right":
+		w.cycle(l, 1)
+	case "backtab", "h", "left":
+		w.cycle(l, -1)
+	case ":", "enter":
+		w.focusInput(l)
 	case "k", "up":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: 1})
+		w.scroll(l, -1)
 	case "j", "down":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+		w.scroll(l, 1)
 	case "g":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleTop})
+		w.jump(l, true)
 	case "G":
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleBottom})
+		w.jump(l, false)
 	case "y":
 		l.expectClipboard()
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleCopy})
+		_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleCopy, Pane: w.consolePane}})
 	case "/":
-		if w.consolePane == 3 {
+		if w.consolePane == consolePaneHTML {
 			w.consoleFindActive = true
+			w.consoleFindSet = false
 			w.consoleFindText = ""
 			w.consoleFindCursor = 0
 			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: ""}})
 			w.present(l)
 		}
 	case "n":
-		if w.consoleView.FindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleView.FindText, Next: true}})
+		if w.consolePane == consolePaneHTML && w.consoleFindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Next: true}})
 		}
 	case "N":
-		if w.consoleView.FindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleView.FindText, Prev: true}})
+		if w.consolePane == consolePaneHTML && w.consoleFindText != "" {
+			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Prev: true}})
 		}
 	}
 	return true, false
@@ -223,7 +501,7 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 // so a click cannot reach the page underneath.
 func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 	v := w.consoleView
-	if v.Width <= 0 || v.Height <= 0 || v.Quit || w.consoleFindActive {
+	if v.Width <= 0 || v.Height <= 0 || w.consoleQuit || w.consoleFindActive {
 		return true
 	}
 	if ev.Wheel != 0 {
@@ -231,7 +509,7 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 		if ev.Wheel > 0 {
 			delta = -3
 		}
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: delta})
+		w.scroll(l, delta)
 		return true
 	}
 	if ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {
@@ -245,22 +523,13 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 	switch {
 	case y == layout.tabsY:
 		if pane := consoleTabAt(v.Tabs, v.Width, x); pane >= 0 {
-			w.consolePane = pane
 			w.consoleEdit = false
-			w.action(l, protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: pane})
-			w.present(l)
+			w.selectPane(l, pane, true)
 		}
 	case layout.inputY >= 0 && y == layout.inputY:
-		if w.consolePane != 4 {
-			w.consolePane = 0
-		}
-		w.consoleEdit = true
-		w.consoleCursor = len(w.consoleText)
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleFocus})
-		w.present(l)
+		w.focusInput(l)
 	case y == layout.footerY && v.Width >= 6 && x >= v.Width-textwidth.StringWidth(">_"):
-		w.consoleActive = false
-		w.action(l, protocol.ConsoleAction{Op: protocol.ConsoleClose})
+		w.close(l)
 	}
 	return true
 }
@@ -268,7 +537,7 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 func (w *consoleOverlay) handleFindKey(l *Tab, k string) (handled, quit bool) {
 	switch k {
 	case "esc", "enter", "tab", "backtab":
-		w.consoleFindActive = false
+		w.hideFind()
 		w.present(l)
 		return true, false
 	case "down":
@@ -289,6 +558,7 @@ func (w *consoleOverlay) handleFindKey(l *Tab, k string) (handled, quit bool) {
 	}
 	w.consoleFindCursor = cur
 	if changed {
+		w.consoleFindSet = false
 		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: text}})
 	}
 	w.present(l)
@@ -301,8 +571,8 @@ type consoleLayout struct {
 
 func consoleLayoutFor(h, pane int) consoleLayout {
 	l := consoleLayout{tabsY: -1, bodyY: -1, inputY: -1, footerY: -1}
-	if pane < 0 || pane > 4 {
-		pane = 0
+	if pane < 0 || pane >= consolePaneCount {
+		pane = consolePaneLogs
 	}
 	if h <= 0 {
 		return l
@@ -323,7 +593,7 @@ func consoleLayoutFor(h, pane int) consoleLayout {
 	if l.bodyRows < 0 {
 		l.bodyRows = 0
 	}
-	if (pane == 0 || pane == 4) && l.bodyRows > 0 {
+	if (pane == consolePaneLogs || pane == consolePaneTools) && l.bodyRows > 0 {
 		l.inputY = l.bodyY + l.bodyRows - 1
 	}
 	return l
@@ -350,8 +620,24 @@ func consoleTabAt(tabs []string, w, x int) int {
 	return -1
 }
 
-// BuildConsoleFrame renders one console snapshot into a full-screen frame.
-func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
+// ConsoleUI is the front-end-owned console chrome drawn around a section
+// window: pane, input row, footer and find bar.
+type ConsoleUI struct {
+	Pane       int
+	Input      string
+	Cursor     int
+	Edit       bool
+	Hint       string
+	Footer     string
+	Quit       bool
+	FindActive bool
+	FindText   string
+	FindCursor int
+}
+
+// BuildConsoleFrame renders one console window and its local chrome into a
+// full-screen frame.
+func BuildConsoleFrame(v *protocol.ConsoleView, ui ConsoleUI) protocol.Frame {
 	w, h := v.Width, v.Height
 	if w < 1 || h < 1 {
 		return protocol.Frame{}
@@ -366,7 +652,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 	hdrBG := rgb(0x1f, 0x29, 0x37)
 	ftrBG := rgb(0x1b, 0x24, 0x30)
 	activeBG := rgb(0x2f, 0x6f, 0xbf)
-	l := consoleLayoutFor(h, v.Pane)
+	l := consoleLayoutFor(h, ui.Pane)
 	if l.footerY >= 0 {
 		c.fill(0, l.footerY, w, 1, ftrBG)
 	}
@@ -382,7 +668,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 				tw = w - x
 			}
 			tabBG := hdrBG
-			if pane == v.Pane {
+			if pane == ui.Pane {
 				tabBG = activeBG
 			}
 			c.fill(x, l.tabsY, tw, 1, tabBG)
@@ -431,10 +717,10 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 			c.text(0, y, "> ", fg, 0)
 			contentW := w - 2
 			if contentW > 0 {
-				input := protocol.StripControls(v.Input)
-				hint := protocol.StripControls(v.Hint)
-				if v.Edit {
-					runes, start, end, cur := promptWindow(input, v.Cursor, contentW, false)
+				input := protocol.StripControls(ui.Input)
+				hint := protocol.StripControls(ui.Hint)
+				if ui.Edit {
+					runes, start, end, cur := promptWindow(input, ui.Cursor, contentW, false)
 					xx := 2
 					for i := start; i < end; i++ {
 						if i == cur {
@@ -461,9 +747,9 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 		}
 	}
 	if l.footerY >= 0 {
-		if v.FindActive {
+		if ui.FindActive {
 			drawFindBarAt(c, l.footerY, protocol.State{
-				FindActive: true, FindText: v.FindText, FindCursor: v.FindCursor,
+				FindActive: true, FindText: ui.FindText, FindCursor: ui.FindCursor,
 				FindCurrent: v.FindCurrent, FindTotal: v.FindTotal,
 			})
 			return f
@@ -478,9 +764,9 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 		if hintW < 1 {
 			hintW = 1
 		}
-		footer := protocol.StripControls(v.Footer)
+		footer := protocol.StripControls(ui.Footer)
 		footerFG := fg
-		if v.Quit {
+		if ui.Quit {
 			footerFG = rgb(0x9a, 0x5b, 0x00)
 		}
 		c.text(0, l.footerY, textwidth.Pad(textwidth.Truncate(footer, hintW), hintW), footerFG, 0)
@@ -493,7 +779,7 @@ func BuildConsoleFrame(v *protocol.ConsoleView) protocol.Frame {
 
 // PresentConsole draws a console snapshot and stores it for chrome-only
 // refreshes (dialogs/select/download/notice over the console).
-func (p *Presenter) PresentConsole(v *protocol.ConsoleView) error {
+func (p *Presenter) PresentConsole(v *protocol.ConsoleView, ui ConsoleUI) error {
 	if p == nil || p.out == nil || v == nil {
 		return nil
 	}
@@ -501,8 +787,9 @@ func (p *Presenter) PresentConsole(v *protocol.ConsoleView) error {
 		p.prev = nil
 	}
 	p.console = v
+	p.consoleUI = ui
 	p.consoleActive = true
-	f := BuildConsoleFrame(v)
+	f := BuildConsoleFrame(v, ui)
 	p.applyConsoleOverlays(&f)
 	return p.presentFull(f)
 }

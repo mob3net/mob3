@@ -4,7 +4,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"browser/internal/linehistory"
 	"browser/internal/protocol"
 	"browser/internal/textedit"
 	"browser/internal/textwidth"
@@ -18,7 +17,7 @@ type promptOverlay struct {
 	promptCursor    int
 	promptSelectAll bool
 	promptBase      protocol.State
-	promptHist      linehistory.History
+	promptHist      lineHistory
 }
 
 func (w *promptOverlay) isOpen() bool         { return w.promptActive }
@@ -55,7 +54,7 @@ func (w *promptOverlay) startValue(l *Tab, text string, vim, selectAll bool) {
 	w.promptText = text
 	w.promptCursor = len(w.promptText)
 	w.promptSelectAll = selectAll
-	w.promptHist.Reset()
+	w.promptHist.reset()
 	w.sync(l)
 }
 
@@ -110,7 +109,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 			return true, true
 		}
 		if text != "" {
-			w.promptHist.Record(text)
+			w.promptHist.record(text)
 			l.navigate(text)
 		}
 		return true, false
@@ -122,7 +121,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.close(l)
 		return true, false
 	case "up", "ctrl-p":
-		if prev, ok := w.promptHist.Up(w.promptText); ok {
+		if prev, ok := w.promptHist.up(w.promptText); ok {
 			w.promptText = prev
 			w.promptCursor = len(prev)
 		}
@@ -130,7 +129,7 @@ func (w *promptOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.sync(l)
 		return true, false
 	case "down", "ctrl-n":
-		if next, ok := w.promptHist.Down(w.promptText); ok {
+		if next, ok := w.promptHist.down(w.promptText); ok {
 			w.promptText = next
 			w.promptCursor = len(next)
 		}

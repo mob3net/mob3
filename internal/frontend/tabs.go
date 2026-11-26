@@ -434,6 +434,7 @@ func (l *SessionLoop) resizeTab(tab *Tab) error {
 	if err := tab.Session.Send(protocol.Command{Body: l.resizeCommand(w, h)}); err != nil && !errors.Is(err, protocol.ErrSessionClosed) {
 		return err
 	}
+	tab.consoleOverlay.resize(tab, w, h)
 	return nil
 }
 

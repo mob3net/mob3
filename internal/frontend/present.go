@@ -28,6 +28,7 @@ type Presenter struct {
 	notice        *NoticeView
 	hint          *HintView
 	console       *protocol.ConsoleView
+	consoleUI     ConsoleUI
 	consoleActive bool
 	lastFrame     protocol.Frame
 	hasFrame      bool
@@ -209,7 +210,7 @@ func (p *Presenter) Refresh() error {
 		return nil
 	}
 	if p.consoleActive && p.console != nil {
-		return p.PresentConsole(p.console)
+		return p.PresentConsole(p.console, p.consoleUI)
 	}
 	if p.hasFrame {
 		return p.Present(p.lastFrame, p.lastScroll, p.lastNative)

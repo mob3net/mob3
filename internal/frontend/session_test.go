@@ -164,7 +164,6 @@ func TestShellKeysSendAppActions(t *testing.T) {
 		"i":      protocol.App{Action: protocol.AppToggleImages},
 		"E":      protocol.App{Action: protocol.AppStatusDetails},
 		"S":      protocol.App{Action: protocol.AppDownload},
-		"!":      protocol.App{Action: protocol.AppToggleConsole},
 		"?":      protocol.Navigate{URL: "about:help", Push: true},
 	}
 	for key, want := range cases {
@@ -420,7 +419,7 @@ func TestPromptEditsAndNavigates(t *testing.T) {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
 	loop.promptOverlay.start(loop, false)
-	if _, ok := loop.promptHist.Up(""); !ok {
+	if _, ok := loop.promptHist.up(""); !ok {
 		t.Fatal("history did not record the URL")
 	}
 }
@@ -955,15 +954,13 @@ func TestContentClickStaysWithFocusedPageInput(t *testing.T) {
 func TestConsoleInputKeys(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
-	view := protocol.ConsoleView{
-		Width: 80, Height: 24, Pane: 0,
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
-		Hint: "JavaScript input",
-	}
-	loop.applyEvent(protocol.Event{Body: view})
-	if !loop.consoleActive {
-		t.Fatal("console did not activate")
-	}
+	}})
 	loop.handleShellKey(":")
 	if !loop.consoleEdit {
 		t.Fatal("console input did not focus")
@@ -976,11 +973,14 @@ func TestConsoleInputKeys(t *testing.T) {
 		t.Fatalf("input = %q cursor=%d", loop.consoleText, loop.consoleCursor)
 	}
 	loop.handleShellKey("enter")
-	if len(s.cmds) != 1 {
+	if len(s.cmds) != 2 {
 		t.Fatalf("commands = %#v", s.cmds)
 	}
-	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleInput || a.Text != "1+1" {
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleInput || a.Text != "1+1" || a.Pane != consolePaneLogs {
 		t.Fatalf("input action = %#v", s.cmds[0].Body)
+	}
+	if a, ok := s.cmds[1].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != -1 {
+		t.Fatalf("window action = %#v", s.cmds[1].Body)
 	}
 	if loop.consoleText != "" {
 		t.Fatalf("input not cleared: %q", loop.consoleText)
@@ -989,43 +989,49 @@ func TestConsoleInputKeys(t *testing.T) {
 	loop.handleShellKey("esc") // leave input
 	s.cmds = nil
 	loop.handleShellKey("tab")
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleCycle, Delta: 1}) {
-		t.Fatalf("cycle action = %#v", s.cmds)
+	if len(s.cmds) != 1 {
+		t.Fatalf("cycle commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Pane != consolePaneRequests || !a.Enter {
+		t.Fatalf("cycle action = %#v", s.cmds[0].Body)
 	}
 }
 
 func TestConsoleQuitAndCloseKeys(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
-	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Tabs: []string{"a"}}})
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: []string{"a"}}})
 	loop.handleShellKey("q")
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleQuit}) {
-		t.Fatalf("quit action = %#v", s.cmds)
+	if len(s.cmds) != 0 || !loop.consoleQuit {
+		t.Fatalf("quit state=%v commands=%#v", loop.consoleQuit, s.cmds)
 	}
-	s.cmds = nil
-	loop.writeConsoleQuitForTest()
 	if handled, quit := loop.handleShellKey("y"); !handled || !quit {
 		t.Fatalf("y handled=%v quit=%v", handled, quit)
 	}
 	s.cmds = nil
-	loop.consoleActive = true
-	loop.consoleView.Quit = false
+	loop.consoleQuit = false
 	loop.handleShellKey("esc")
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
 		t.Fatalf("close action = %#v", s.cmds)
+	}
+	if loop.consoleActive {
+		t.Fatal("console stayed open")
 	}
 }
 
 func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
 	tabs := []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
-		Width: 80, Height: 24, Pane: 0, Tabs: tabs,
+		Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: tabs,
 	}})
-	if !loop.consoleActive {
-		t.Fatal("console did not activate")
-	}
 
 	// Click the Storage tab: walk the same widths the menu draws.
 	x := 0
@@ -1035,25 +1041,25 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	if !loop.handleChromeMouse(MouseEvent{X: x + 1, Y: 1, Press: true}) {
 		t.Fatal("tab click not consumed")
 	}
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: 2}) {
-		t.Fatalf("tab action = %#v", s.cmds)
+	if len(s.cmds) != 1 {
+		t.Fatalf("tab commands = %#v", s.cmds)
 	}
-	if loop.consolePane != 2 {
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Pane != consolePaneStorage || !a.Enter {
+		t.Fatalf("tab action = %#v", s.cmds[0].Body)
+	}
+	if loop.consolePane != consolePaneStorage {
 		t.Fatalf("pane = %d", loop.consolePane)
 	}
 
 	// Click the input row on the logs pane.
-	loop.consolePane = 0
+	loop.consolePane = consolePaneLogs
 	s.cmds = nil
-	inputY := consoleLayoutFor(24, 0).inputY
+	inputY := consoleLayoutFor(24, consolePaneLogs).inputY
 	if !loop.handleChromeMouse(MouseEvent{X: 3, Y: inputY + 1, Press: true}) {
 		t.Fatal("input click not consumed")
 	}
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleFocus}) {
-		t.Fatalf("input action = %#v", s.cmds)
-	}
-	if !loop.consoleEdit {
-		t.Fatal("input row click did not focus the input")
+	if len(s.cmds) != 0 || !loop.consoleEdit {
+		t.Fatalf("input click commands=%#v edit=%v", s.cmds, loop.consoleEdit)
 	}
 
 	// The footer >_ icon closes the console.
@@ -1070,13 +1076,20 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	}
 
 	// The wheel and a body click stay in the console rather than the page.
-	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{Width: 80, Height: 24, Pane: 0, Tabs: tabs}})
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: tabs, Start: 5, Total: 30,
+	}})
 	s.cmds = nil
 	if !loop.handleChromeMouse(MouseEvent{Wheel: 1, X: 5, Y: 5}) {
 		t.Fatal("wheel not consumed")
 	}
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -3}) {
-		t.Fatalf("wheel action = %#v", s.cmds)
+	if len(s.cmds) != 1 {
+		t.Fatalf("wheel commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 2 {
+		t.Fatalf("wheel action = %#v", s.cmds[0].Body)
 	}
 	s.cmds = nil
 	if !loop.handleChromeMouse(MouseEvent{X: 5, Y: 5, Press: true}) {
@@ -1087,13 +1100,146 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	}
 }
 
-func (l *Tab) writeConsoleQuitForTest() { l.consoleView.Quit = true }
+func TestConsoleOpenAndCloseKeys(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	if handled, quit := loop.handleShellKey("!"); !handled || quit {
+		t.Fatalf("! handled=%v quit=%v", handled, quit)
+	}
+	if !loop.consoleActive {
+		t.Fatal("console did not open")
+	}
+	if len(s.cmds) != 2 {
+		t.Fatalf("open commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleOpen {
+		t.Fatalf("open action = %#v", s.cmds[0].Body)
+	}
+	if a, ok := s.cmds[1].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != -1 {
+		t.Fatalf("window action = %#v", s.cmds[1].Body)
+	}
+	s.cmds = nil
+	loop.handleShellKey("!")
+	if loop.consoleActive {
+		t.Fatal("! did not close the console")
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
+		t.Fatalf("close action = %#v", s.cmds)
+	}
+}
+
+func TestConsoleResizeRequestsWindow(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.consoleView = protocol.ConsoleView{Width: 80, Height: 24}
+	loop.consoleOverlay.resize(loop, 100, 30)
+	if len(s.cmds) != 1 {
+		t.Fatalf("resize commands = %#v", s.cmds)
+	}
+	a, ok := s.cmds[0].Body.(protocol.ConsoleAction)
+	if !ok || a.Op != protocol.ConsoleWindow || a.Width != 100 || a.Rows != consoleLayoutFor(30, consolePaneLogs).bodyRows-1 {
+		t.Fatalf("resize action = %#v", s.cmds[0].Body)
+	}
+}
+
+func TestConsoleViewScrollsToFindLine(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneHTML
+	loop.consoleFindActive = true
+	loop.consoleFindText = "needle"
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneHTML,
+		Tabs:  []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
+		Start: 0, Total: 100, FindCurrent: 1, FindTotal: 2, FindLine: 50, FindLineValid: true,
+	}})
+	if loop.consoleStart[consolePaneHTML] != 50 {
+		t.Fatalf("start = %d, want 50", loop.consoleStart[consolePaneHTML])
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("scroll commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 50 {
+		t.Fatalf("scroll action = %#v", s.cmds[0].Body)
+	}
+}
+
+func TestConsoleFollowsBottomOnNewOutput(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.consoleFollow[consolePaneLogs] = true
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs, Start: 8, Total: 29,
+	}})
+	if loop.consoleStart[consolePaneLogs] != 8 {
+		t.Fatalf("start = %d, want bottom 8", loop.consoleStart[consolePaneLogs])
+	}
+	s.cmds = nil
+	// The engine emitted a window for the old bottom after new output arrived.
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs, Start: 8, Total: 30,
+	}})
+	if loop.consoleStart[consolePaneLogs] != 9 {
+		t.Fatalf("start = %d, want new bottom 9", loop.consoleStart[consolePaneLogs])
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("follow commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != -1 {
+		t.Fatalf("follow action = %#v", s.cmds[0].Body)
+	}
+}
+
+func TestConsoleFindContinuesAfterEsc(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneHTML
+	loop.consoleFindActive = true
+	loop.consoleFindText = "needle"
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneHTML,
+		Start: 0, Total: 100, FindLine: 5, FindLineValid: true,
+	}})
+	loop.handleShellKey("esc")
+	if loop.consoleFindActive {
+		t.Fatal("find bar stayed open")
+	}
+	s.cmds = nil
+	// The next n moves the engine match; the hidden bar still scrolls to it.
+	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneHTML,
+		Start: 0, Total: 100, FindLine: 50, FindLineValid: true,
+	}})
+	if loop.consoleStart[consolePaneHTML] != 50 {
+		t.Fatalf("start = %d, want 50", loop.consoleStart[consolePaneHTML])
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("find scroll commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 50 {
+		t.Fatalf("find scroll action = %#v", s.cmds[0].Body)
+	}
+}
 
 func TestConsoleFindKeys(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneHTML
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
-		Width: 80, Height: 24, Pane: 3,
+		Width: 80, Height: 24, Pane: consolePaneHTML,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
 	}})
 	loop.handleShellKey("/")
@@ -1130,7 +1276,10 @@ func TestConsoleFindKeys(t *testing.T) {
 	if loop.consoleFindActive {
 		t.Fatal("console find stayed open")
 	}
-	loop.consoleView.FindText = "needle"
+	if len(s.cmds) != 0 {
+		t.Fatalf("close find commands = %#v", s.cmds)
+	}
+	s.cmds = nil
 	loop.handleShellKey("n")
 	if len(s.cmds) != 1 {
 		t.Fatalf("next commands = %#v", s.cmds)

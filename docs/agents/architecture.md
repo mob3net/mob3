@@ -14,7 +14,6 @@ in `internal/protocol`; this section records ownership.
 | `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/textedit` | Shared single-line text editing for form fields, the URL prompt, JS dialogs, find and console inputs. Standard library only. |
 | `internal/textwidth` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows and wrapping. Standard library only. |
-| `internal/linehistory` | Shared shell-style recall list: bounded entries, consecutive-duplicate removal, draft preservation and Up/Down. Standard library only. |
 | `internal/engine` | HTML/CSS parsing and style, document loading through `protocol.Host`, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings and the request log. Session back/forward history lives in the front end, the download/curl hint is presentation, and the engine keeps only a memory-only page cache. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, session history, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
@@ -24,13 +23,12 @@ Allowed imports:
 
 ```
 app         -> engine, host, frontend, protocol
-frontend    -> protocol, textedit, textwidth, linehistory
-engine      -> protocol, textedit, textwidth, linehistory
+frontend    -> protocol, textedit, textwidth
+engine      -> protocol, textedit, textwidth
 host        -> protocol
 protocol    -> standard library only
 textedit    -> standard library only
 textwidth   -> standard library only
-linehistory -> standard library only
 ```
 
 The split is a value boundary. Nothing in `protocol` holds a pointer to engine
@@ -78,7 +76,7 @@ in-process frame model; the engine child process is not part of the target.
 - `-dump` and `-png` are byte-identical to the baseline over the synthetic
   page corpus.
 - `frontend` and `host` do not import `engine`; `engine` imports only
-  `protocol`, `textedit`, `textwidth`, `linehistory`, approved modules and the
+  `protocol`, `textedit`, `textwidth`, approved modules and the
   standard library, with no
   `net/http`, `syscall` or `os` left. `net/url` is a pure value package and
   remains.
@@ -187,8 +185,8 @@ contexts are the remaining architecture step. There is no engine child process.
   promoted and call sites keep using `b.Field`. It draws only the page content
   rectangle; chrome, console, dialogs, the find bar and the hint overlay are
   front-end-owned. MCP transport lives in `internal/app`. Production code
-  imports only `internal/protocol`, `internal/textedit`, `internal/textwidth`
-  and `internal/linehistory` (plus approved vendored modules).
+  imports only `internal/protocol`, `internal/textedit` and
+  `internal/textwidth` (plus approved vendored modules).
 - The front end owns terminal raw mode, capability detection, key/mouse
   decoding, resize/quit signals, ANSI/PNG output, presentation, native image
   placement, clipboard encoding, the terminal loop and active-tab routing
@@ -197,7 +195,7 @@ contexts are the remaining architecture step. There is no engine child process.
   header/footer and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
   select popup, download/notice modals, link hints and console
-  composition/input/find. It also owns the session history list, current
+  pane/scroll/input/history/quit/find. It also owns the session history list, current
   index, scroll offsets, the `about:history` display snapshot and the
   content-rectangle geometry (`ContentBounds` → `Init`/`Resize`); the engine
   keys its page cache by the front-end entry ID. It also owns the displayed
@@ -206,8 +204,8 @@ contexts are the remaining architecture step. There is no engine child process.
   reads it by entry ID, so the engine's `HistoryCommit` URL is not trusted. While a page form field holds the key
   path, `State.KeysEngine` stays true for key routing, but `State.FrontendChrome`
   stays true and the front end composes the header, footer and scrollbar.
-- The engine imports only `internal/protocol`, `internal/textedit`,
-  `internal/textwidth` and `internal/linehistory` (plus approved vendored
+- The engine imports only `internal/protocol`, `internal/textedit` and
+  `internal/textwidth` (plus approved vendored
   modules), and the dependency test enforces that. It does
   not import
   `internal/frontend`, `internal/host`, `net/http` or `os`: encoders and the
@@ -281,6 +279,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
 | `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. |
 | `internal/frontend/prompt.go` | URL/command prompt state and input, line editing, recall history, visible window and mouse caret mapping. |
+| `internal/frontend/linehistory.go` | Shell-style recall list for the URL prompt and console input rows: bounded entries, consecutive-duplicate removal, draft preservation and Up/Down. |
 | `internal/frontend/history.go` | Front-end-owned session history and displayed URL ledger: entries, each tab's own back/forward stack and scroll tracking, the shared visited-page log, host-attested URL lookup, validated `HistoryCommit` scroll updates, `about:history` snapshot and back/forward restore requests. |
 | `internal/frontend/history_overlay.go` | Front-end history overlay state and input: builds the newest-first popup from the shared visited-page log, handles keys/mouse through the shared choice layout, and opens the selected URL in the current tab. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |
@@ -290,7 +289,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/download.go` | Download curl hint state and input, layout and drawing. |
 | `internal/frontend/notice.go` | Informational notice state and input, layout and drawing. |
 | `internal/frontend/hints.go` | Link-hint state and input, prefix matching and overlay painting. |
-| `internal/frontend/console.go` | Console state and input, snapshot renderer, input row, tabs, scrolling data, HTML highlight/find bar and console overlay stacking. |
+| `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight/find bar, window requests and console overlay stacking. |
 | `internal/frontend/find.go` | In-page find bar state and input, results status and its footer row. |
 | `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |
 | `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
@@ -363,8 +362,8 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/automation_inspect.go` | Links, request log, JS logs and page source. |
 | `internal/engine/automation_command.go` | `RunCommand` dispatch and JSON argument decoding. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
-| `internal/engine/session_console.go` | Console state, actions and `ConsoleView` snapshots; JS dialog request/response state; download/notice state. All console, dialog, download and notice rendering and input are front-end-owned. |
-| `internal/engine/session_find.go` | Find state, navigation, scrolling, result messages and page highlight painting; match computation calls `FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find are front-end-owned. |
+| `internal/engine/session_console.go` | Console data, evaluation, tools, copy and stateless `ConsoleView` window slices; JS dialog request/response state; download/notice state. The front end owns pane, scroll, layout, input, history, quit, rendering and the find bar. |
+| `internal/engine/session_find.go` | Find state, navigation, result messages and page highlight painting; match computation calls `FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find scrolling are front-end-owned. |
 | `internal/engine/session_hints.go` | Hint-mode state, key handling, following, background-tab opening and the destination-preview step; target discovery, glyph collection and label assignment call `BuildHintTargets`, `CollectHintGlyphs` and `AssignLinkHints`. Overlay painting and input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |
 | `internal/engine/selection.go` | Selection range ordering, text extraction, summary and viewport painting. |
@@ -375,7 +374,6 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/form_edit.go` | Form control predicates, Tab-status text, radio/select grouping, label lookup, form request encoding, input-fragment updates, range hit testing and input-line/caret helpers. |
 | `internal/textedit/textedit.go` | Shared single-line editor: caret and word motion, deletion, selection replacement, insertion and length caps, used by page form fields and the front-end URL, dialog, find and console inputs. |
 | `internal/textwidth/textwidth.go` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows, wrapping and hanging indent, used by engine layout/paint and front-end chrome, dialogs and console. |
-| `internal/linehistory/linehistory.go` | Shared recall list: bounded entries, consecutive-duplicate removal, draft preservation and Up/Down, used by the front-end URL/console inputs and the engine console input. |
 | `internal/engine/tab_order.go` | Standard Tab-order target discovery: links, controls and one stop per radio group. |
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |

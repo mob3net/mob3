@@ -128,8 +128,6 @@ func (b *Session) handleAppAction(a protocol.App) (bool, error) {
 		b.reload()
 	case protocol.AppStop:
 		b.stopLoading()
-	case protocol.AppToggleConsole:
-		b.toggleConsole()
 	case protocol.AppToggleJS:
 		b.toggleJavaScript()
 	case protocol.AppStatusDetails:

@@ -281,7 +281,7 @@ func TestConsoleKeepsKittyImageDataForReturn(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := p.PresentConsole(&protocol.ConsoleView{Width: 8, Height: 3}); err != nil {
+	if err := p.PresentConsole(&protocol.ConsoleView{Width: 8, Height: 3}, ConsoleUI{}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(out.String(), "\x1b[2J") {

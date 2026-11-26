@@ -178,7 +178,6 @@ const (
 	AppZoomReset
 	AppOpenURL
 	AppOpenZoom
-	AppToggleConsole
 	AppToggleJS
 	AppStatusDetails
 	AppDownload
@@ -255,32 +254,32 @@ func (SelectResult) commandKind() Kind { return CmdSelectResult }
 type ConsoleOp uint8
 
 const (
-	ConsolePane ConsoleOp = iota + 1
-	ConsoleCycle
-	ConsoleScroll
-	ConsoleTop
-	ConsoleBottom
-	ConsoleFocus
-	ConsoleCancelEdit
+	ConsoleOpen ConsoleOp = iota + 1
+	ConsoleClose
+	// ConsoleWindow requests the visible lines for one section. Start is the
+	// first visible line, or -1 for the bottom. Enter marks the first request
+	// after the front end switches into the section.
+	ConsoleWindow
 	ConsoleInput
 	ConsoleCopy
-	ConsoleQuit
-	ConsoleCancelQuit
-	ConsoleClose
 )
 
 // ConsoleAction applies one console operation.
 type ConsoleAction struct {
 	Op    ConsoleOp
 	Pane  int
-	Delta int
+	Start int
+	Rows  int
+	Width int
+	Enter bool
 	Text  string
 }
 
 func (ConsoleAction) commandKind() Kind { return CmdConsoleAction }
 
-// ConsoleView is the visible console screen: tabs, the active pane's visible
-// lines, optional request summary, input row and footer.
+// ConsoleView is the visible window of the active console section: tabs and
+// footer data, the requested lines, optional request summary and find marks.
+// Pane, scroll, input, history and quit state are front-end-owned.
 type ConsoleHighlight struct {
 	Line    int
 	X, W    int
@@ -292,18 +291,12 @@ type ConsoleView struct {
 	Pane          int
 	Tabs          []string
 	Lines         []string
+	Start, Total  int
 	Summary       string
-	Input         string
-	Cursor        int
-	Edit          bool
-	Hint          string
-	Footer        string
-	Quit          bool
-	FindActive    bool
-	FindText      string
-	FindCursor    int
 	FindCurrent   int
 	FindTotal     int
+	FindLine      int
+	FindLineValid bool
 	Highlights    []ConsoleHighlight
 }
 
