@@ -82,7 +82,7 @@ func TestSetCertSourceRejectsFiles(t *testing.T) {
 	if !strings.Contains(err.Error(), "system or embedded") {
 		t.Fatalf("error = %q", err)
 	}
-	if l.CertStore != CertSourceSystem || l.CertPool != nil {
+	if l.CertStore != CertSourceSystem {
 		t.Fatalf("failed load changed the trust store to %q", l.CertStore)
 	}
 	if tr := testHost(l).Client().Transport(); tr == nil || tr.TLSClientConfig != nil {
@@ -94,8 +94,8 @@ func TestConfigSwitchesCertSource(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	b.applyConfig(url.Values{"certs": {CertSourceEmbedded}})
-	if b.loader.CertStore != CertSourceEmbedded || b.loader.CertPool == nil {
-		t.Fatalf("cert source = %q pool=%v, want embedded", b.loader.CertStore, b.loader.CertPool)
+	if b.loader.CertStore != CertSourceEmbedded {
+		t.Fatalf("cert source = %q, want embedded", b.loader.CertStore)
 	}
 	if b.certSourceLabel() != CertSourceEmbedded {
 		t.Fatalf("config label = %q, want embedded", b.certSourceLabel())

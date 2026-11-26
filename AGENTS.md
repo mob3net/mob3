@@ -219,7 +219,8 @@ published by the Pages build.
   half-page and page step deltas, and the wheel-step direction. Standard library
   only.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
-  codec, ports and limits; standard library only), `internal/textedit` (pure
+  portable stream mux and serializable host RPC, codec, ports and limits;
+  standard library only), `internal/textedit` (pure
   line editing; standard library only), `internal/textwidth` (pure
   terminal-cell text arithmetic; standard library only), `internal/movekeys`
   (pure viewport movement; standard library only), `internal/engine` (HTML,

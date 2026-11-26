@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"crypto/x509"
 	"image"
 	"net/url"
 	"time"
@@ -69,8 +68,6 @@ type Host interface {
 	CacheStats() (used, limit int64, entries int)
 	CacheLimitBytes() int64
 	SetCacheLimitBytes(int64)
-	GetCachedImage(key string) (image.Image, int, bool, bool)
-	PutCachedImage(key string, img image.Image, rawSize int, local bool)
 
 	DocumentCookieValues(u *url.URL) []CookieView
 	SetDocumentCookieRaw(u *url.URL, raw string) bool
@@ -78,7 +75,14 @@ type Host interface {
 
 	SetCertSource(source string) error
 	CertSource() string
-	CertPool() *x509.CertPool
 
 	ConfigToken() ConfigToken
+}
+
+// ImageCache is the optional host-side decoded-image cache. It is separate
+// from Host so a process transport can omit it or implement a child-local
+// cache without serializing image.Image values.
+type ImageCache interface {
+	GetCachedImage(key string) (image.Image, int, bool, bool)
+	PutCachedImage(key string, img image.Image, rawSize int, local bool)
 }
