@@ -3,14 +3,21 @@ package protocol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync/atomic"
 )
 
-// ServeStream runs a handler over one stream connection. It closes rw when the
-// session ends. Abort commands are applied directly on the reader goroutine so
-// a busy script stops without waiting for the command loop.
+// ServeStream runs a handler over a dedicated stream connection.
 func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Handler, lim Limits, queue int) error {
+	peer := NewMuxPeerReadWriter(rw, lim)
+	return ServePeer(ctx, peer, id, h, lim, queue)
+}
+
+// ServePeer runs a handler over an existing peer. Host RPC handlers can be
+// mounted on the same peer before this call, so one stream carries page and
+// host traffic.
+func ServePeer(ctx context.Context, peer *MuxPeer, id SessionID, h Handler, lim Limits, queue int) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -21,49 +28,50 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	mux := NewMuxReadWriter(rw, lim)
 	in := make(chan Command, defaultCommandQueue)
+	inbox := newCommandInbox(ctx, in, 1024)
+	go inbox.run()
 	events := make(chan Event, queue)
 	out := newOutbox(ctx, events, queue)
 	sink := &eventSink{id: id, lim: lim, out: out}
 	abortCh := make(chan struct{}, 1)
-
-	readErr := make(chan error, 1)
 	readerDone := make(chan struct{})
-	go func() {
-		defer close(readerDone)
-		defer close(in)
-		for {
-			c, err := mux.ReadCommand()
-			if err != nil {
-				select {
-				case readErr <- err:
-				default:
-				}
-				if a, ok := h.(Aborter); ok {
-					a.AbortSession()
-				}
-				cancel()
-				return
+
+	if err := peer.Handle(MuxCommand, func(f MuxFrame) error {
+		c, rest, err := DecodeCommand(f.Body, lim)
+		if err == nil && len(rest) != 0 {
+			err = fmt.Errorf("%w: %d trailing command bytes", ErrInvalid, len(rest))
+		}
+		if err != nil {
+			if a, ok := h.(Aborter); ok {
+				a.AbortSession()
 			}
-			if _, ok := c.Body.(Abort); ok {
-				if a, ok := h.(Aborter); ok {
-					a.AbortSession()
-				}
-				select {
-				case abortCh <- struct{}{}:
-				default:
-				}
+			cancel()
+			return err
+		}
+		if _, ok := c.Body.(Abort); ok {
+			if a, ok := h.(Aborter); ok {
+				a.AbortSession()
 			}
 			select {
-			case in <- c:
-			case <-ctx.Done():
-				return
+			case abortCh <- struct{}{}:
+			default:
 			}
 		}
+		if err := inbox.push(c); err != nil {
+			cancel()
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	go func() {
+		defer close(readerDone)
+		_ = peer.Run(ctx)
+		cancel()
 	}()
 
-	writeErr := make(chan error, 1)
 	writerDone := make(chan struct{})
 	go func() {
 		defer close(writerDone)
@@ -73,11 +81,7 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 				if !ok {
 					return
 				}
-				if err := mux.WriteEvent(ev); err != nil {
-					select {
-					case writeErr <- err:
-					default:
-					}
+				if err := peer.WriteEvent(ev); err != nil {
 					cancel()
 					return
 				}
@@ -97,31 +101,29 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 	out.finish()
 	<-writerDone
 	cancel()
-	_ = rw.Close()
+	_ = peer.Close()
 	<-readerDone
+	<-inbox.done
 
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
-	select {
-	case e := <-readErr:
-		if e != nil && !errors.Is(e, io.EOF) && !errors.Is(e, context.Canceled) {
-			return e
-		}
-	default:
-	}
-	select {
-	case e := <-writeErr:
-		if e != nil && !errors.Is(e, context.Canceled) && !errors.Is(e, io.ErrClosedPipe) {
-			return e
-		}
-	default:
+	if peerErr := peer.Err(); peerErr != nil && !errors.Is(peerErr, io.EOF) &&
+		!errors.Is(peerErr, io.ErrClosedPipe) && ctx.Err() == nil {
+		return peerErr
 	}
 	return nil
 }
 
-// DialStream returns the front-end handle for a stream connection.
+// DialStream returns the front-end handle for a dedicated stream connection.
 func DialStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, lim Limits, queue int) Session {
+	peer := NewMuxPeerReadWriter(rw, lim)
+	return DialPeer(ctx, peer, id, lim, queue)
+}
+
+// DialPeer returns the front-end handle for an existing peer. Host RPC handlers
+// can be mounted on the same peer before this call.
+func DialPeer(ctx context.Context, peer *MuxPeer, id SessionID, lim Limits, queue int) Session {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -130,21 +132,26 @@ func DialStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, lim Li
 	}
 	lim = lim.normalized()
 	s := &streamSession{
-		rw:     rw,
-		mux:    NewMuxReadWriter(rw, lim),
+		peer:   peer,
 		id:     id,
+		lim:    lim,
 		events: make(chan Event, queue),
 		done:   make(chan struct{}),
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	go s.readLoop()
+	_ = peer.Handle(MuxEvent, s.handleFrame)
+	go func() {
+		defer close(s.done)
+		defer close(s.events)
+		_ = peer.Run(s.ctx)
+	}()
 	return s
 }
 
 type streamSession struct {
-	rw     io.ReadWriteCloser
-	mux    *Mux
+	peer   *MuxPeer
 	id     SessionID
+	lim    Limits
 	ctx    context.Context
 	cancel context.CancelFunc
 	events chan Event
@@ -160,7 +167,7 @@ func (s *streamSession) Send(c Command) error {
 	if c.Session == 0 {
 		c.Session = s.id
 	}
-	return s.mux.WriteCommand(c)
+	return s.peer.WriteCommand(c)
 }
 
 func (s *streamSession) Events() <-chan Event { return s.events }
@@ -174,30 +181,24 @@ func (s *streamSession) Abort() {
 func (s *streamSession) Close() error {
 	if s.closed.CompareAndSwap(false, true) {
 		s.cancel()
-		_ = s.rw.Close()
+		_ = s.peer.Close()
 	}
 	<-s.done
 	return nil
 }
 
-func (s *streamSession) readLoop() {
-	defer close(s.done)
-	defer close(s.events)
-	for {
-		ev, err := s.mux.ReadEvent()
-		if err != nil {
-			if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrClosedPipe) && s.ctx.Err() == nil {
-				select {
-				case s.events <- Event{Body: Crash{Message: "transport: " + err.Error()}}:
-				case <-s.ctx.Done():
-				}
-			}
-			return
-		}
-		select {
-		case s.events <- ev:
-		case <-s.ctx.Done():
-			return
-		}
+func (s *streamSession) handleFrame(f MuxFrame) error {
+	ev, rest, err := DecodeEvent(f.Body, s.lim)
+	if err == nil && len(rest) != 0 {
+		err = fmt.Errorf("%w: %d trailing event bytes", ErrInvalid, len(rest))
+	}
+	if err != nil {
+		return err
+	}
+	select {
+	case s.events <- ev:
+		return nil
+	case <-s.ctx.Done():
+		return nil
 	}
 }
