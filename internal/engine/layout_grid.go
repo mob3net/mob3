@@ -1246,7 +1246,7 @@ func (l *Layouter) alignGridItemY(container, item *Node, available, height, frag
 		oldH := box.H
 		box.H += leftover
 		l.boxes[item] = box
-		fillDone, imageDone := false, false
+		fillDone, imageDone, gradientDone := false, false, false
 		for i := fragStart; i < len(l.frags); i++ {
 			f := &l.frags[i]
 			if f.X != box.X || f.Y != box.Y || f.W != box.W {
@@ -1259,6 +1259,10 @@ func (l *Layouter) alignGridItemY(container, item *Node, available, height, frag
 			if !imageDone && f.Kind == FragImage && f.Background && f.H == oldH {
 				f.H += leftover
 				imageDone = true
+			}
+			if !gradientDone && f.Kind == FragGradient && f.H == oldH {
+				f.H += leftover
+				gradientDone = true
 			}
 		}
 	case "center":

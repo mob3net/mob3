@@ -1,0 +1,7 @@
+  Hero text over a horizontal gradient
+
+
+
+  Panel text over a radial gradient
+
+  Text over a repeating gradient

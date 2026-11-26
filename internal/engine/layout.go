@@ -14,6 +14,8 @@ const (
 	FragFill FragKind = iota
 	FragText
 	FragImage
+	// FragGradient paints a parsed CSS gradient background behind box content.
+	FragGradient
 	// FragLink is an invisible box for an empty anchor, so overlay links that
 	// cover a whole card remain clickable and focusable.
 	FragLink
@@ -47,6 +49,8 @@ type Frag struct {
 	Node  *Node
 	Img   image.Image
 	Crop  image.Rectangle
+	// Gradient is the parsed background gradient for FragGradient.
+	Gradient *BackgroundGradient
 	// Background marks a CSS background image painted behind the box content.
 	// It is always drawn as half-block art so text stays visible above it.
 	Background bool
@@ -733,6 +737,11 @@ func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		l.frags = append(l.frags, Frag{Kind: FragImage, X: boxX, Y: top, W: boxW, H: 1, Img: n.Img, Node: n, Background: true})
 		bgImgIndex = len(l.frags) - 1
 	}
+	bgGradIndex := -1
+	if st.BackgroundGradient != nil && paintsBackground(n, st) {
+		l.frags = append(l.frags, Frag{Kind: FragGradient, X: boxX, Y: top, W: boxW, H: 1, Gradient: st.BackgroundGradient, Node: n})
+		bgGradIndex = len(l.frags) - 1
+	}
 	clipStart := len(l.frags)
 
 	// A definite height (declared, percentage against a known parent, min-height
@@ -871,6 +880,9 @@ func (l *Layouter) blockLayoutPct(n *Node, x, y, availW, forceContentH int, widt
 		f := &l.frags[bgImgIndex]
 		f.H = totalH
 		f.Crop = backgroundCrop(f.Img, boxW, totalH, st)
+	}
+	if bgGradIndex >= 0 {
+		l.frags[bgGradIndex].H = totalH
 	}
 	if bl+br+bt+bb > 0 {
 		bc := st.BorderColor

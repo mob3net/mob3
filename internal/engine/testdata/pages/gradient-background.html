@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 4px; font-family: monospace; }
+.hero {
+  height: 48px;
+  padding: 4px;
+  color: #ffffff;
+  background-image: linear-gradient(to right, #123456, #abcdef);
+}
+.panel {
+  margin-top: 8px;
+  padding: 4px;
+  background-image: radial-gradient(circle at 20% 30%, #ff0000, #0000ff);
+}
+.repeat {
+  margin-top: 8px;
+  padding: 4px;
+  background-image: repeating-linear-gradient(45deg, #111111 0%, #111111 10%, #eeeeee 10%, #eeeeee 20%);
+}
+</style>
+</head>
+<body>
+<div class="hero">Hero text over a horizontal gradient</div>
+<div class="panel">Panel text over a radial gradient</div>
+<div class="repeat">Text over a repeating gradient</div>
+</body>
+</html>

@@ -499,6 +499,19 @@ func paintLayout(g *Grid, ly *Layout, scroll, topRow, bottomRow int, focus *Link
 				g.ClearGlyphs(f.X, clippedTop, f.W, clippedBot-clippedTop)
 			}
 			g.Fill(f.X, clippedTop, f.W, clippedBot-clippedTop, f.Color)
+		case FragGradient:
+			if f.Gradient == nil || f.W < 1 || f.H < 1 {
+				return
+			}
+			y0 := MaxInt(y, topRow)
+			y1 := MinInt(y+f.H, bottomRow)
+			if y0 >= y1 {
+				return
+			}
+			if f.Fixed || f.Sticky != 0 {
+				g.ClearGlyphs(f.X, y0, f.W, y1-y0)
+			}
+			paintGradientFragment(g, f, y0, y1)
 		case FragText:
 			if y < topRow || y >= bottomRow {
 				return

@@ -321,12 +321,12 @@ func imageSize(n *Node, st *Style, maxW, capW int) (w, h int) {
 	return cw, ch
 }
 
-// pixelsBackground reports whether a box should paint a CSS background image.
+// paintsBackground reports whether a box should paint a CSS background layer.
 // Only block-level boxes are painted: backgrounds are paint-only, and the
 // common text-over-photo pattern uses a block container. Inline boxes would
 // need per-line-fragment painting.
-func pixelsBackground(n *Node, st *Style) bool {
-	if n == nil || st == nil || st.BackgroundImage == "" || st.Hidden {
+func paintsBackground(n *Node, st *Style) bool {
+	if n == nil || st == nil || st.Hidden {
 		return false
 	}
 	if n.Tag == "html" || n.Tag == "body" {
@@ -339,6 +339,11 @@ func pixelsBackground(n *Node, st *Style) bool {
 		return true
 	}
 	return st.Position == "absolute" || st.Position == "fixed"
+}
+
+// pixelsBackground reports whether a box should paint a CSS background image.
+func pixelsBackground(n *Node, st *Style) bool {
+	return st != nil && st.BackgroundImage != "" && paintsBackground(n, st)
 }
 
 // backgroundCrop computes the source rectangle that fills a box with a

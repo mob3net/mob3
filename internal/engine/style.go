@@ -37,70 +37,73 @@ type Style struct {
 	Color           Color
 	Background      Color
 	BackgroundImage string
-	BackgroundSize  string // "cover", "contain", "stretch", or "" (auto)
-	BackgroundPosX  float64
-	BackgroundPosY  float64
-	FontSize        float64
-	Bold            bool
-	Italic          bool
-	Underline       bool
-	Strike          bool
-	TextTransform   string
-	TextAlign       string
-	VerticalAlign   string
-	TextIndent      Length
-	WhiteSpace      string
-	Content         string
-	ContentSet      bool
-	LineClamp       int
-	LineHeight      float64 // multiplier
-	Margin          [4]Length
-	Padding         [4]Length
-	Border          [4]Length
-	BorderStyle     [4]bool
-	BorderColor     Color
-	Width           Length
-	Height          Length
-	MinWidth        Length
-	MaxWidth        Length
-	MinHeight       Length
-	MaxHeight       Length
-	BoxSizing       string
-	ListStyle       string
-	Overflow        string
-	Position        string
-	Float           string
-	Clear           string
-	Top             Length
-	Right           Length
-	Bottom          Length
-	Left            Length
-	Clip            string
-	FlexDir         string
-	FlexWrap        string
-	JustifyContent  string
-	AlignItems      string
-	AlignSelf       string
-	Order           int
-	FlexGrow        float64
-	FlexShrink      float64
-	FlexBasis       Length
-	FlexBasisSet    bool
-	Gap             Length
-	RowGap          Length
-	GridCols        string
-	GridRows        string
-	GridAreas       string
-	GridArea        string
-	GridColumn      string
-	GridRow         string
-	GridAutoFlow    string
-	JustifyItems    string
-	JustifySelf     string
-	ObjectFit       string
-	ObjectPosX      float64
-	ObjectPosY      float64
-	AspectRatio     float64
+	// BackgroundGradient is a parsed CSS linear/radial gradient painted behind
+	// the box content. It is nil when no gradient is present.
+	BackgroundGradient *BackgroundGradient
+	BackgroundSize     string // "cover", "contain", "stretch", or "" (auto)
+	BackgroundPosX     float64
+	BackgroundPosY     float64
+	FontSize           float64
+	Bold               bool
+	Italic             bool
+	Underline          bool
+	Strike             bool
+	TextTransform      string
+	TextAlign          string
+	VerticalAlign      string
+	TextIndent         Length
+	WhiteSpace         string
+	Content            string
+	ContentSet         bool
+	LineClamp          int
+	LineHeight         float64 // multiplier
+	Margin             [4]Length
+	Padding            [4]Length
+	Border             [4]Length
+	BorderStyle        [4]bool
+	BorderColor        Color
+	Width              Length
+	Height             Length
+	MinWidth           Length
+	MaxWidth           Length
+	MinHeight          Length
+	MaxHeight          Length
+	BoxSizing          string
+	ListStyle          string
+	Overflow           string
+	Position           string
+	Float              string
+	Clear              string
+	Top                Length
+	Right              Length
+	Bottom             Length
+	Left               Length
+	Clip               string
+	FlexDir            string
+	FlexWrap           string
+	JustifyContent     string
+	AlignItems         string
+	AlignSelf          string
+	Order              int
+	FlexGrow           float64
+	FlexShrink         float64
+	FlexBasis          Length
+	FlexBasisSet       bool
+	Gap                Length
+	RowGap             Length
+	GridCols           string
+	GridRows           string
+	GridAreas          string
+	GridArea           string
+	GridColumn         string
+	GridRow            string
+	GridAutoFlow       string
+	JustifyItems       string
+	JustifySelf        string
+	ObjectFit          string
+	ObjectPosX         float64
+	ObjectPosY         float64
+	AspectRatio        float64
 	// ZIndex is the z-index of a positioned box; 0 is auto.
 	ZIndex int
 }
@@ -415,7 +418,7 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.Background = c
 		}
 	case "background-image":
-		st.BackgroundImage = backgroundURL(val)
+		setBackgroundImageValue(st, val)
 	case "background-size":
 		switch lower {
 		case "cover", "contain":
@@ -439,11 +442,10 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			if lower == "none" {
 				st.Background = Color{}
 				st.BackgroundImage = ""
+				st.BackgroundGradient = nil
 				return
 			}
-			if u := backgroundURL(val); u != "" {
-				st.BackgroundImage = u
-			}
+			setBackgroundImageValue(st, val)
 			switch {
 			case strings.Contains(lower, "cover"):
 				st.BackgroundSize = "cover"

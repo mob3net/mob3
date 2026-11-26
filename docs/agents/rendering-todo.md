@@ -42,9 +42,11 @@ engine work only; do not add site-specific exceptions.
   decode (for example an AVIF URL without a `type` hint), the `img` fallback is
   not retried, and `srcset` URLs containing literal commas are split as
   candidates.
-- **Background gradients and repeat.** `background-image:url(...)` is
-  rendered (see the images section), but gradients and tiled repeat patterns
-  are not; such values leave the box's background colour only.
+- **Tiled background images.** `background-image:url(...)` is painted once with
+  cover/stretch sizing, but `background-repeat` and repeated bitmap patterns
+  are not rendered.
+- **Conic gradients.** `conic-gradient()` backgrounds are not rendered;
+  linear, radial and repeating linear/radial gradients are.
 
 ## P4 — JavaScript-rendered pages
 
