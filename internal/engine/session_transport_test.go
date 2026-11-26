@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"io"
 	"net/http"
@@ -589,6 +590,11 @@ func TestConsoleActionInputAndTabs(t *testing.T) {
 	if len(b.jsLog) == 0 || b.consoleText != "" {
 		t.Fatalf("jsLog = %#v text=%q", b.jsLog, b.consoleText)
 	}
+	records := make([]protocol.RequestRecord, 60)
+	for i := range records {
+		records[i] = protocol.RequestRecord{URL: fmt.Sprintf("https://example.com/%d", i)}
+	}
+	testHost(b.loader).Requests().SetRecords(records)
 	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsolePane, Pane: consoleRequests})
 	if b.consolePane != consoleRequests || b.consoleEdit {
 		t.Fatalf("pane=%d edit=%v", b.consolePane, b.consoleEdit)

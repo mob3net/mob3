@@ -4,6 +4,7 @@ import (
 	"browser/internal/protocol"
 	"browser/internal/textwidth"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -42,6 +43,48 @@ func TestJSLogByteCaps(t *testing.T) {
 	b.clearJSLog()
 	if len(b.jsLog) != 0 || b.jsLogBytes != 0 {
 		t.Fatal("clearJSLog left state behind")
+	}
+}
+
+func TestConsoleHTMLScrollsFromTop(t *testing.T) {
+	b := newTestSession(40, 12)
+	b.Page = &Page{RawHTML: strings.Repeat("line\n", 100)}
+	b.consoleOpen = true
+	b.selectConsolePane(consoleHTML)
+	total := len(b.consolePaneLines(consoleHTML, b.Width-2))
+	rows := newConsoleLayout(b.Height, consoleHTML).bodyRows
+	if got := paneStart(total, b.htmlScroll, rows); got != 0 {
+		t.Fatalf("HTML pane opened at line %d, want 0", got)
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+	if got := paneStart(total, b.htmlScroll, rows); got != 1 {
+		t.Fatalf("one j from the top moved to line %d, want 1", got)
+	}
+	// g returns to the top, and j must work immediately again.
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleBottom})
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleTop})
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+	if got := paneStart(total, b.htmlScroll, rows); got != 1 {
+		t.Fatalf("one j after g moved to line %d, want 1", got)
+	}
+}
+
+func TestConsoleLogsScrollFromTop(t *testing.T) {
+	b := newTestSession(40, 12)
+	for i := 0; i < 100; i++ {
+		b.jsLog = append(b.jsLog, fmt.Sprintf("[log] line %d", i))
+	}
+	b.consoleOpen = true
+	b.selectConsolePane(consoleLogs)
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleTop})
+	total := len(b.consolePaneLines(consoleLogs, b.Width-2))
+	rows := b.consoleVisibleRows(consoleLogs)
+	if got := paneStart(total, b.consoleScroll, rows); got != 0 {
+		t.Fatalf("logs top = line %d, want 0", got)
+	}
+	b.applyConsoleAction(protocol.ConsoleAction{Op: protocol.ConsoleScroll, Delta: -1})
+	if got := paneStart(total, b.consoleScroll, rows); got != 1 {
+		t.Fatalf("one j from the logs top moved to line %d, want 1", got)
 	}
 }
 

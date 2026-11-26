@@ -245,6 +245,47 @@ func (b *Session) copyConsole() {
 	b.copyText(strings.TrimRight(b.consoleCopyText(), "\n"))
 }
 
+// consoleVisibleRows returns the rows the pane actually paints, matching
+// emitConsoleView: the logs and tools panes reserve their input row, and the
+// requests pane reserves its summary row.
+func (b *Session) consoleVisibleRows(pane int) int {
+	l := newConsoleLayout(b.Height, pane)
+	rows := l.bodyRows
+	if rows <= 0 {
+		return 0
+	}
+	switch pane {
+	case consoleLogs, consoleTools:
+		if l.inputY >= 0 {
+			rows = l.inputY - l.bodyY
+		}
+	case consoleRequests:
+		if rows > 1 {
+			rows--
+		}
+	}
+	if rows < 0 {
+		return 0
+	}
+	return rows
+}
+
+// consoleMaxScroll is the scroll value that shows the first line of a pane.
+// paneStart subtracts both the visible rows and the scroll, so setting the
+// scroll to the raw line count would leave the first screenful of j presses
+// clamped against the top.
+func (b *Session) consoleMaxScroll(pane int) int {
+	rows := b.consoleVisibleRows(pane)
+	if rows < 1 {
+		return 0
+	}
+	total := len(b.consolePaneLines(pane, b.Width-2))
+	if total <= rows {
+		return 0
+	}
+	return total - rows
+}
+
 // scrollConsolePane scrolls the open console section.
 func (b *Session) scrollConsolePane(pane, delta int) {
 	p := b.consoleScrollFor(pane)
@@ -254,6 +295,9 @@ func (b *Session) scrollConsolePane(pane, delta int) {
 	*p += delta
 	if *p < 0 {
 		*p = 0
+	}
+	if max := b.consoleMaxScroll(pane); *p > max {
+		*p = max
 	}
 }
 
@@ -279,7 +323,7 @@ func (b *Session) scrollConsoleToEnd(pane int, end bool) {
 		return
 	}
 	if end {
-		*p = len(b.consolePaneLines(pane, b.Width-2))
+		*p = b.consoleMaxScroll(pane)
 	} else {
 		*p = 0
 	}
@@ -300,7 +344,7 @@ func (b *Session) selectConsolePane(pane int) {
 		pane = consoleLogs
 	}
 	if pane == consoleHTML && b.consolePane != consoleHTML {
-		b.htmlScroll = len(b.htmlLines(b.Width - 2))
+		b.htmlScroll = b.consoleMaxScroll(consoleHTML)
 	}
 	if b.FindActive && b.FindScope == findScopeHTML && pane != consoleHTML {
 		b.FindActive = false
@@ -309,7 +353,7 @@ func (b *Session) selectConsolePane(pane int) {
 		for _, line := range toolsHelpLines() {
 			b.appendToolLine(line)
 		}
-		b.toolScroll = len(b.toolLines(b.Width - 2))
+		b.toolScroll = b.consoleMaxScroll(consoleTools)
 	}
 	b.consolePane = pane
 }
