@@ -44,7 +44,7 @@ key, mouse and form reference for the running build.
 | `!` | JavaScript console |
 | `q` / `Ctrl-C` | Ask to confirm quitting (`y`/`Enter` quits; any other key cancels) |
 | `:q` | Exit immediately (in the `:` prompt) |
-| `Esc` | Stop loading or a running script, leave a field, clear a selection, or show the exit hint |
+| `Esc` | Stop loading, a running script or a synchronous layout, leave a field, clear a selection, or show the exit hint |
 
 Back and Forward remember the scroll position you last had on each history
 entry. In-page `#` links become history entries too, so `h` returns to where you

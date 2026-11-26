@@ -244,6 +244,7 @@ func (b *Session) navigateRequestForce(method, input string, body []byte, conten
 }
 
 func (b *Session) navigateRequestEntry(method, input string, body []byte, contentType string, entryID uint64, historyPush, forceBlocks bool) {
+	b.pageStopped = false
 	// A download-attribute name belongs to this load only, so consume it even
 	// when the navigation is rejected before a request is made.
 	downloadName := b.PendingDownloadName

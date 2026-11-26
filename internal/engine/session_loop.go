@@ -208,6 +208,7 @@ func (b *Session) protocolMouse(v protocol.Mouse) MouseEvent {
 // for a busy page to return on its own.
 func (b *Session) AbortSession() {
 	gen := b.abortGen.Add(1)
+	b.cancelLoadFromFrontend()
 	b.abortJSIO()
 	// A call that started after the abort already sees the new generation and
 	// must not be killed by a stale press. The snapshot is stored before

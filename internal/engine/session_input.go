@@ -331,7 +331,11 @@ func (b *Session) handlePageKey(k string) bool {
 		b.Focus = -1
 		b.clearControlFocus()
 		b.clearSelection()
-		b.status = exitHint
+		if b.pageStopped {
+			b.status = "Page stopped"
+		} else {
+			b.status = exitHint
+		}
 	}
 	return false
 }

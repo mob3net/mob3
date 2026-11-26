@@ -170,6 +170,11 @@ func (b *Session) footerModel() footerModel {
 		avail = 0
 	}
 	leftText := b.footerLeft()
+	status := b.status
+	if b.pageStopped {
+		leftText = " Page stopped"
+		status = "Page stopped"
+	}
 	pdfHint, pdfHintX := "", -1
 	if leftText == " Ready" && b.Page != nil && b.Page.PDF != nil {
 		if text, hint, cell, ok := b.pdfFooterLine(avail); ok {
@@ -180,10 +185,10 @@ func (b *Session) footerModel() footerModel {
 	statusHit := false
 	if b.HintConfirm {
 		level = statusWarning
-	} else if b.status != "" && (b.quitPending || b.hoveredLink() == nil) {
-		level = statusLevelFor(b.status)
+	} else if status != "" && (b.quitPending || b.hoveredLink() == nil) {
+		level = statusLevelFor(status)
 	}
-	if b.status != "" && !b.HintConfirm && !b.quitPending && b.hoveredLink() == nil {
+	if status != "" && !b.HintConfirm && !b.quitPending && b.hoveredLink() == nil {
 		if level == statusWarning || level == statusError {
 			statusHit = true
 		}
@@ -218,6 +223,7 @@ func statusLevelFor(s string) statusLevel {
 		return statusSuccess
 	case s == moduleFailedStatus,
 		s == layoutTruncatedStatus,
+		s == "Page stopped",
 		s == quitConfirmText,
 		strings.HasPrefix(s, "Form: "),
 		strings.HasPrefix(s, "Site blocked"),

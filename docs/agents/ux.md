@@ -481,6 +481,11 @@ agreement, the non-negotiable constraints and the change protocol.
   refresh the budget, so a timer-driven loop stops too. Any user input or
   navigation command clears the count. Each tab keeps at most 500 back/forward
   entries, dropping the oldest. Nothing is persisted.
+- **Stopping a page:** `Esc` aborts the in-flight load, PDF parse, script and
+  synchronous style/layout pass. A layout stopped by the user keeps the partial
+  frame and shows `Page stopped`; reload or navigate to resume. Pages with a
+  timer or frame callback due soon and loads in progress stay armed for the
+  liveness probe.
 - **Stuck pages:** a tab that produces no event for 10 s after a command, while
   loading, or while a timer/frame callback is due is probed with `Ping`. If no
   `Pong` arrives within 2 s, the tab is discarded; the other tabs keep running.

@@ -97,6 +97,8 @@ type Layout struct {
 
 	// Truncated reports that a resource or time limit stopped layout early.
 	Truncated bool
+	// Stopped reports that the user stopped the page while layout was running.
+	Stopped bool
 
 	// Cursor is the cell of the focused input/textarea caret, in document
 	// coordinates. It is drawn as an overlay, not part of the text.
@@ -115,6 +117,10 @@ type LayoutBudget struct {
 	Time  time.Duration
 	Frags int
 	Rows  int
+
+	// abort is an in-engine cooperative stop signal used by page-stop. It is
+	// unexported so CLI/config copies cannot accidentally carry a closure.
+	abort func() bool
 }
 
 var DefaultLayoutBudget = LayoutBudget{Name: "standard", Time: 2 * time.Second, Frags: 250000, Rows: 200000}
@@ -151,7 +157,9 @@ type Layouter struct {
 	bigText   bool
 	zoom      float64
 	truncated bool
+	stopped   bool
 	deadline  time.Time
+	abort     func() bool
 	expired   bool
 	maxFrags  int
 	maxRows   int
@@ -239,6 +247,11 @@ func (l *Layouter) outOfTime() bool {
 	if l.expired {
 		return true
 	}
+	if l.abort != nil && l.abort() {
+		l.expired = true
+		l.stopped = true
+		return true
+	}
 	if !l.deadline.IsZero() && time.Now().After(l.deadline) {
 		l.expired = true
 		l.truncated = true
@@ -311,12 +324,13 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		deadline = time.Time{}
 	}
 	engine := newStyleEngineDeadline(author, CSSWidthPx(width), deadline)
+	engine.abort = budget.abort
 	if viewportH > 0 {
 		engine.SetViewportHeight(float64(viewportH) * cellH)
 	}
 	engine.SetDark(dark)
 	styles := engine.ComputeAll(root)
-	l := &Layouter{Styles: styles, Width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
+	l := &Layouter{Styles: styles, Width: width, bigText: bigText, zoom: layoutZoom, hideFixed: hideFixed, noSticky: noSticky, imagesOff: imagesOff, deadline: deadline, abort: budget.abort, maxFrags: budget.Frags, maxRows: budget.Rows, boxes: make(map[*Node]Rect), cbs: make(map[*Node]*cbRect)}
 	l.rootCB = &cbRect{w: width}
 	if viewportH > 0 {
 		l.fixedCB = &cbRect{w: width, h: viewportH, knownH: true}
@@ -324,7 +338,11 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 		l.fixedCB = l.rootCB
 	}
 	if engine.Expired() {
-		l.truncated = true
+		if budget.abort != nil && budget.abort() {
+			l.stopped = true
+		} else {
+			l.truncated = true
+		}
 	}
 	html := root.FindFirst("html")
 	if html != nil {
@@ -383,7 +401,7 @@ func buildLayout(root *Node, author []Rule, width, viewportH int, bigText, dark,
 	}
 	out := &Layout{
 		Width: width, Height: height, Frags: l.frags, Styles: styles,
-		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated,
+		PageBG: pageBG, Body: body, HTML: html, Truncated: l.truncated, Stopped: l.stopped,
 		Cursor: l.cursor, HasCursor: l.hasCursor, Boxes: l.boxes,
 		engine: engine, stickies: l.resolveStickies(),
 	}
