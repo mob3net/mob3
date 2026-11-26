@@ -314,6 +314,9 @@ func ParseStylesheetContext(ctx context.Context, src string) []Rule {
 // caller when one is supplied so every sheet in a document agrees on the layer
 // order. A nil registry starts a fresh one.
 func parseStylesheetWithLayers(ctx context.Context, src string, layers *layerRegistry) []Rule {
+	// A UTF-8 BOM is permitted at the start of a stylesheet and is not part of
+	// the first selector.
+	src = strings.TrimPrefix(src, "\ufeff")
 	if maxCSSBytes > 0 && len(src) > maxCSSBytes {
 		src = src[:maxCSSBytes]
 	}

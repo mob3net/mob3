@@ -328,6 +328,19 @@ func TestStylesheetSurvivesEscapedQuoteSelectors(t *testing.T) {
 	}
 }
 
+func TestStylesheetBOM(t *testing.T) {
+	rules := ParseStylesheet("\ufeffbody{--brand:#ED1C24}header{background:var(--brand)}")
+	doc := ParseHTML(`<html><body><header id="h">x</header></body></html>`)
+	styles := newStyleEngine(rules, 80).computeAll(doc)
+	h := findByID(doc, "h")
+	if h == nil {
+		t.Fatal("missing header")
+	}
+	if bg := styles[h].Background; bg.R != 0xED || bg.G != 0x1C || bg.B != 0x24 || !bg.Set {
+		t.Fatalf("header background = %+v, want the BOM-prefixed custom property", bg)
+	}
+}
+
 func TestUnsupportedPseudoInvalidatesSelector(t *testing.T) {
 	// A pseudo-class the engine cannot evaluate must drop the rule. Matching
 	// it as false would turn `:not(:defined)` into a match for every element
