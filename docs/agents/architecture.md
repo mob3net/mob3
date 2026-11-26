@@ -45,7 +45,7 @@ a process transport can omit.
 **Non-goals of this step:** the package split itself added no subprocess, OS
 sandbox, tabs or per-site renderer, and no behavior or visual change. The
 default target in [Tabs, frames and isolation](#tabs-frames-and-isolation)
-keeps one process; `-engine=process` is an optional fault-isolation transport
+keeps one process; `-process=per-tab` is an optional fault-isolation transport
 behind the same frame router and ownership model.
 
 ### Migration order
@@ -108,7 +108,7 @@ process is not part of the target.
 
 ## Tabs, frames and isolation
 
-The default target keeps one Go process. `-engine=process` can put each
+The default target keeps one Go process. `-process=per-tab` can put each
 interactive tab's engine in a child process for fault isolation. Neither mode is
 a security boundary: tab separation is logical origin isolation, not memory,
 site or OS isolation, and no sandbox or per-site renderer is part of the model.
@@ -118,8 +118,8 @@ site or OS isolation, and no sandbox or per-site renderer is part of the model.
   and one terminal presenter.
 - The tab manager creates one loader, engine `Session` and protocol session per
   tab. Tabs share the host, cookies, cache, TLS state and origin storage; each
-  tab owns its loader counters and page cache. In-process tabs divide the pools
-  through `BudgetManager`; in process mode every tab child is a separate process
+  tab owns its loader counters and page cache. Single-mode tabs divide the pools
+  through `BudgetManager`; in per-tab mode every tab child is a separate process
   with its own `-mem-limit`.
 - The session loop drains every tab's event stream. Only the active tab's frames
   are presented; a background tab's state, history and overlay events still
@@ -148,9 +148,9 @@ site or OS isolation, and no sandbox or per-site renderer is part of the model.
 - A process-wide context owns the shared origin storage, settings and globally
   unique history-entry IDs. `localStorage` is keyed by origin and shared across
   tabs; `sessionStorage` is keyed by tab and origin.
-- In-process mode uses one budget manager across all runtimes, page caches and
+- Single mode uses one budget manager across all runtimes, page caches and
   image/SVG work, so N tabs divide the pools of that one process.
-  `-engine=process` applies `-mem-limit` per process: every tab child and the
+  `-process=per-tab` applies `-mem-limit` per process: every tab child and the
   parent each get their own limit.
 - Zoom and the image graphics mode stay browser-global across tabs; the
   terminal cell size is process-wide.
@@ -183,7 +183,7 @@ sessions.
 
 This is the **actual** state. Tabs are implemented. Real iframe browsing
 contexts are a permanent non-goal; iframes stay inert stubs. An optional engine
-child process exists behind `-engine=process`; the default remains in-process.
+child process exists behind `-process=per-tab`; the default remains in-process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -350,7 +350,7 @@ child process exists behind `-engine=process`; the default remains in-process.
 | `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
 | `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. A close that exceeds the grace period is force-discarded. |
 | `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
-| `internal/app/engine_worker.go` | Hidden child mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
+| `internal/app/process_worker.go` | Hidden child mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
 | `internal/app/process_backend.go` | Process-backed `tabBackend`: self-exec, stdin/stdout pipes, shared host and storage RPC peers, worker-ready handshake, graceful close and process kill. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
@@ -362,7 +362,7 @@ child process exists behind `-engine=process`; the default remains in-process.
 | `internal/engine/loader_svg.go` | Per-page inline-SVG rasterization with pixel/count budgets. |
 | `internal/engine/loader_certs.go` | Loader trust-store selection and label. |
 | `internal/engine/loader_decode.go` | Charset decoding, single-byte charset table and JavaScript MIME classification. |
-| `internal/engine/budget_manager.go` | `BudgetManager`: in-process division of the JS, history-cache, image-byte and inline-SVG pools across active sessions; the host resource cache stays shared. One session gets the old percentages, two sessions halve each pool. `Session.applyBudgetShare` installs a share on the runtime, page cache and loader. Process-mode children skip the split because each is its own process with its own `-mem-limit`. |
+| `internal/engine/budget_manager.go` | `BudgetManager`: in-process division of the JS, history-cache, image-byte and inline-SVG pools across active sessions; the host resource cache stays shared. One session gets the old percentages, two sessions halve each pool. `Session.applyBudgetShare` installs a share on the runtime, page cache and loader. Per-tab children skip the split because each is its own process with its own `-mem-limit`. |
 | `internal/engine/budget.go` | Effective memory limit, total percentage budgets, `ByteLimiter`, and loader content/resource-cache budget application. |
 | `internal/engine/version.go` | Injected build version for built-in pages. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |

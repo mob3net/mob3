@@ -55,10 +55,10 @@ agreement, the non-negotiable constraints and the change protocol.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
-- `-engine=process` runs one engine child per interactive tab. The parent still
+- `-process=per-tab` runs one engine child per interactive tab. The parent still
   owns the terminal, host policy, cookies, cache, settings, history and shared
-  `localStorage`/`sessionStorage`. `-mem-limit` is per process: in-process mode
-  has one shared process, while process mode gives each tab child its own limit,
+  `localStorage`/`sessionStorage`. `-mem-limit` is per process: single mode
+  has one shared process, while per-tab mode gives each tab child its own limit,
   so the browser total is not bounded by one limit. Dump, PNG and MCP stay
   in-process.
 - Tabs are implemented, but iframes are permanent inert stubs, not a pending

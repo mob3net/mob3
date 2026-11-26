@@ -37,7 +37,7 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 
 	sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cellW, cellH, graphicsMode)
 	tabs := newInteractiveTabs(hostSess, loaderConfig, o.Home, cellW, cellH, sessions.newSession)
-	if o.Engine == "process" {
+	if o.Process == "per-tab" {
 		tabs.newBackend = newProcessBackendFactory(
 			hostSess, browserContext, os.Args[1:],
 			capabilitiesFor(nativeGraphicsMode(graphicsMode), cellW, cellH),

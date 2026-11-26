@@ -44,10 +44,10 @@ func Run(args []string) int {
 	ignoreBlocks := fs.Bool("ignore-blocks", false, "load anti-bot/CAPTCHA pages instead of the blocked page")
 	home := fs.String("home", "about:home", "home URL opened at startup and by the Home button")
 	textScale := fs.String("text-scale", "auto", "kitty scaled text: auto or off")
-	memLimit := fs.Int("mem-limit", 0, "soft memory limit per process in MB; in inproc mode all tabs share that one process, while process mode gives each tab child its own limit; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
+	memLimit := fs.Int("mem-limit", 0, "soft memory limit per process in MB; in single mode all tabs share that one process, while per-tab mode gives each tab child its own limit; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
-	engineMode := fs.String("engine", "inproc", "interactive engine placement: inproc or process")
+	processMode := fs.String("process", "single", "tab engine process placement: single (one process for all tabs) or per-tab (one child engine process per tab)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url]\n\n", os.Args[0])
@@ -75,9 +75,9 @@ func Run(args []string) int {
 		fmt.Fprintln(os.Stderr, "mob3: -mem-limit must be 0 or positive")
 		return 2
 	}
-	placement := strings.ToLower(strings.TrimSpace(*engineMode))
-	if placement != "inproc" && placement != "process" {
-		fmt.Fprintln(os.Stderr, "mob3: -engine must be inproc or process")
+	placement := strings.ToLower(strings.TrimSpace(*processMode))
+	if placement != "single" && placement != "per-tab" {
+		fmt.Fprintln(os.Stderr, "mob3: -process must be single or per-tab")
 		return 2
 	}
 	// 0 keeps every page for a dump and page 1 for a PNG; -1 means all pages.
@@ -109,10 +109,10 @@ func Run(args []string) int {
 		Reader: *reader, Dark: *dark, IgnoreBlocks: *ignoreBlocks,
 		Home: *home, TextScale: *textScale, MemLimit: *memLimit,
 		LayoutBudget: *layoutBudget, Zoom: *zoomFlag, MCP: *mcpMode,
-		Engine: placement, Target: start,
+		Process: placement, Target: start,
 	}
-	if os.Getenv(engineWorkerEnv) == "1" {
-		return runEngineWorker(o)
+	if os.Getenv(processWorkerEnv) == "1" {
+		return runProcessWorker(o)
 	}
 	return execute(o)
 }

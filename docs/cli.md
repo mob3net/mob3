@@ -29,7 +29,7 @@ falls back to dump mode and prints the rendered page.
 | `-dark` | off | Start in dark mode |
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
 | `-home string` | `about:home` | Startup and Home-button target |
-| `-mem-limit int` | 0 | Soft memory limit per process in MB; in `inproc` one process is shared by all tabs, while `-engine=process` gives each tab child its own limit; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
+| `-mem-limit int` | 0 | Soft memory limit per process in MB; in `single` mode one process is shared by all tabs, while `-process=per-tab` gives each tab child its own limit; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
 | `-zoom string` | `100%` | Layout zoom percent from 25 to 200; `%` is optional and `+`/`-` step the presets |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
@@ -38,18 +38,18 @@ falls back to dump mode and prints the rendered page.
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
 | `-certs string` | `system` | TLS trust store: `system` or `embedded` |
-| `-engine string` | `inproc` | Interactive engine placement: `inproc` or `process` (one child process per tab) |
+| `-process string` | `single` | Tab engine process placement: `single` (one process for all tabs) or `per-tab` (one child engine process per tab) |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
 
 Run `mob3 -h` for the exact defaults in your build.
 
-## Engine placement
+## Process placement
 
-`-engine=process` runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
+`-process=per-tab` runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
 
-Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `inproc` mode all tabs share one process and one limit, while process mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-engine=inproc`.
+Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=single`.
 
 ## Images and graphics
 

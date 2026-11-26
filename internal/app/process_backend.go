@@ -16,7 +16,7 @@ import (
 	"browser/internal/protocol"
 )
 
-var errWorkerNotReady = errors.New("engine worker did not become ready")
+var errWorkerNotReady = errors.New("process worker did not become ready")
 
 func waitWorkerReady(session protocol.Session, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
@@ -111,7 +111,7 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 		if err != nil || self == "" {
 			self = os.Args[0]
 		}
-		cfg := engineWorkerConfig{
+		cfg := processWorkerConfig{
 			Width: init.Width, Height: init.Height,
 			CellW: init.CellW, CellH: init.CellH, Zoom: zoom,
 			Graphics: graphics, TabID: uint64(id), SessionID: uint32(id),
@@ -122,8 +122,8 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 		}
 		cmd := exec.Command(self, args...)
 		cmd.Env = append(workerEnv(os.Environ()),
-			engineWorkerEnv+"=1",
-			engineConfigEnv+"="+string(raw),
+			processWorkerEnv+"=1",
+			processConfigEnv+"="+string(raw),
 		)
 		cmd.Stderr = os.Stderr
 		stdin, err := cmd.StdinPipe()
@@ -145,7 +145,7 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 		peer := protocol.NewMuxPeerReadWriter(pipes, protocol.DefaultLimits)
 		_ = protocol.NewHostServerPeer(peer, hostSess)
 		_ = protocol.NewStorageServerPeer(peer, storage)
-		backend.session = protocol.DialPeer(context.Background(), peer, id, protocol.DefaultLimits, engineWorkerQueue)
+		backend.session = protocol.DialPeer(context.Background(), peer, id, protocol.DefaultLimits, processWorkerQueue)
 		go func() {
 			_ = cmd.Wait()
 			_ = pipes.Close()
@@ -173,7 +173,7 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 func workerEnv(env []string) []string {
 	out := env[:0]
 	for _, item := range env {
-		if strings.HasPrefix(item, engineWorkerEnv+"=") || strings.HasPrefix(item, engineConfigEnv+"=") {
+		if strings.HasPrefix(item, processWorkerEnv+"=") || strings.HasPrefix(item, processConfigEnv+"=") {
 			continue
 		}
 		out = append(out, item)
