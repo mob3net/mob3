@@ -2,63 +2,10 @@ package protocol
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"io"
-	"sync"
 	"sync/atomic"
 )
-
-// ReadCommand reads and decodes one command from a stream. Malformed or
-// oversized input returns an error without allocating beyond the limit.
-func ReadCommand(r io.Reader, lim Limits) (Command, error) {
-	buf, err := readWire(r, lim)
-	if err != nil {
-		return Command{}, err
-	}
-	c, rest, err := DecodeCommand(buf, lim)
-	if err != nil {
-		return Command{}, err
-	}
-	if len(rest) != 0 {
-		return Command{}, ErrInvalid
-	}
-	return c, nil
-}
-
-// ReadEvent reads and decodes one event from a stream.
-func ReadEvent(r io.Reader, lim Limits) (Event, error) {
-	buf, err := readWire(r, lim)
-	if err != nil {
-		return Event{}, err
-	}
-	ev, rest, err := DecodeEvent(buf, lim)
-	if err != nil {
-		return Event{}, err
-	}
-	if len(rest) != 0 {
-		return Event{}, ErrInvalid
-	}
-	return ev, nil
-}
-
-func readWire(r io.Reader, lim Limits) ([]byte, error) {
-	lim = lim.normalized()
-	var hdr [headerSize]byte
-	if _, err := io.ReadFull(r, hdr[:]); err != nil {
-		return nil, err
-	}
-	n := int(binary.LittleEndian.Uint32(hdr[20:24]))
-	if n > lim.MaxMessageBytes {
-		return nil, ErrLimit
-	}
-	buf := make([]byte, headerSize+n)
-	copy(buf, hdr[:])
-	if _, err := io.ReadFull(r, buf[headerSize:]); err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
 
 // ServeStream runs a handler over one stream connection. It closes rw when the
 // session ends. Abort commands are applied directly on the reader goroutine so
@@ -74,6 +21,7 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	mux := NewMuxReadWriter(rw, lim)
 	in := make(chan Command, defaultCommandQueue)
 	events := make(chan Event, queue)
 	out := newOutbox(ctx, events, queue)
@@ -86,7 +34,7 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 		defer close(readerDone)
 		defer close(in)
 		for {
-			c, err := ReadCommand(rw, lim)
+			c, err := mux.ReadCommand()
 			if err != nil {
 				select {
 				case readErr <- err:
@@ -125,11 +73,7 @@ func ServeStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, h Han
 				if !ok {
 					return
 				}
-				buf, err := AppendEvent(nil, ev, lim)
-				if err == nil {
-					err = writeAll(rw, buf)
-				}
-				if err != nil {
+				if err := mux.WriteEvent(ev); err != nil {
 					select {
 					case writeErr <- err:
 					default:
@@ -184,10 +128,11 @@ func DialStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, lim Li
 	if queue < 1 {
 		queue = defaultEventQueue
 	}
+	lim = lim.normalized()
 	s := &streamSession{
 		rw:     rw,
+		mux:    NewMuxReadWriter(rw, lim),
 		id:     id,
-		lim:    lim.normalized(),
 		events: make(chan Event, queue),
 		done:   make(chan struct{}),
 	}
@@ -198,16 +143,14 @@ func DialStream(ctx context.Context, rw io.ReadWriteCloser, id SessionID, lim Li
 
 type streamSession struct {
 	rw     io.ReadWriteCloser
+	mux    *Mux
 	id     SessionID
-	lim    Limits
 	ctx    context.Context
 	cancel context.CancelFunc
 	events chan Event
 	done   chan struct{}
 
-	writeMu sync.Mutex
-	buf     []byte
-	closed  atomic.Bool
+	closed atomic.Bool
 }
 
 func (s *streamSession) Send(c Command) error {
@@ -217,14 +160,7 @@ func (s *streamSession) Send(c Command) error {
 	if c.Session == 0 {
 		c.Session = s.id
 	}
-	s.writeMu.Lock()
-	var err error
-	s.buf, err = AppendCommand(s.buf[:0], c, s.lim)
-	if err == nil {
-		err = writeAll(s.rw, s.buf)
-	}
-	s.writeMu.Unlock()
-	return err
+	return s.mux.WriteCommand(c)
 }
 
 func (s *streamSession) Events() <-chan Event { return s.events }
@@ -248,7 +184,7 @@ func (s *streamSession) readLoop() {
 	defer close(s.done)
 	defer close(s.events)
 	for {
-		ev, err := ReadEvent(s.rw, s.lim)
+		ev, err := s.mux.ReadEvent()
 		if err != nil {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrClosedPipe) && s.ctx.Err() == nil {
 				select {
@@ -264,18 +200,4 @@ func (s *streamSession) readLoop() {
 			return
 		}
 	}
-}
-
-func writeAll(w io.Writer, p []byte) error {
-	for len(p) > 0 {
-		n, err := w.Write(p)
-		if err != nil {
-			return err
-		}
-		if n <= 0 {
-			return io.ErrShortWrite
-		}
-		p = p[n:]
-	}
-	return nil
 }
