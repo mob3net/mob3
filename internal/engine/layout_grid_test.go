@@ -232,6 +232,119 @@ func TestGridMaxTrackExpression(t *testing.T) {
 	}
 }
 
+func TestGridTemplateRowsFixedHeight(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr;grid-template-rows:32px 48px">` +
+		`<div id="a">a</div><div id="b">b</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	a, b := box["a"], box["b"]
+	if b.Y-a.Y < 2 {
+		t.Fatalf("row template height = %d, want the 32px first row", b.Y-a.Y)
+	}
+}
+
+func TestGridRowSpanReservesCells(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:32px 32px 32px">` +
+		`<div id="span" style="grid-column:1;grid-row:1/span 2">span</div>` +
+		`<div id="side" style="grid-column:2;grid-row:1">side</div>` +
+		`<div id="auto">auto</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 60)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	span, side, auto := box["span"], box["side"], box["auto"]
+	if auto.X != side.X {
+		t.Fatalf("auto x=%d, want the free second column x=%d (span=%d)", auto.X, side.X, span.X)
+	}
+	if auto.Y <= side.Y {
+		t.Fatalf("auto y=%d, want a row below side y=%d", auto.Y, side.Y)
+	}
+}
+
+func TestGridNamedRowLines(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr;grid-template-rows:[top] 32px [middle] 32px [bottom]">` +
+		`<div id="named" style="grid-row:middle">named</div>` +
+		`<div id="auto">auto</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	named, auto := box["named"], box["auto"]
+	if auto.Y >= named.Y {
+		t.Fatalf("named row item y=%d, auto item y=%d; want the named item below the auto row", named.Y, auto.Y)
+	}
+}
+
+func TestGridAreaRowSpan(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:32px 32px;grid-template-areas:'hero side' 'hero .'">` +
+		`<div id="hero" style="grid-area:hero">hero</div>` +
+		`<div id="side" style="grid-area:side">side</div>` +
+		`<div id="auto">auto</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 60)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	side, auto := box["side"], box["auto"]
+	if auto.X != side.X || auto.Y <= side.Y {
+		t.Fatalf("after hero row span, auto box=%+v side=%+v; want the second column below side", auto, side)
+	}
+}
+
+func TestGridAreasWithoutExplicitColumns(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-areas:'a b' 'c d'">` +
+		`<div id="a" style="grid-area:a">a</div><div id="b" style="grid-area:b">b</div>` +
+		`<div id="c" style="grid-area:c">c</div><div id="d" style="grid-area:d">d</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	a, b, c, d := box["a"], box["b"], box["c"], box["d"]
+	if b.X <= a.X || d.X != b.X {
+		t.Fatalf("area columns: a=%+v b=%+v c=%+v d=%+v", a, b, c, d)
+	}
+	if c.Y <= a.Y || d.Y != c.Y {
+		t.Fatalf("area rows: a=%+v b=%+v c=%+v d=%+v", a, b, c, d)
+	}
+}
+
+func TestParseGridRowsAndAreas(t *testing.T) {
+	tracks, lines := parseGridRows("[head] 16px [body] 1fr [foot]", 16)
+	if len(tracks) != 2 || lines["head"][0] != 0 || lines["body"][0] != 1 || lines["foot"][0] != 2 {
+		t.Fatalf("tracks=%+v lines=%+v", tracks, lines)
+	}
+	repeatTracks, repeatLines := parseGridRows("repeat(2, [row] 16px)", 16)
+	if len(repeatTracks) != 2 || len(repeatLines["row"]) != 2 || repeatLines["row"][0] != 0 || repeatLines["row"][1] != 1 {
+		t.Fatalf("repeat tracks=%+v lines=%+v", repeatTracks, repeatLines)
+	}
+	areas := parseGridAreas("'hero side' 'hero .'")
+	hero, ok := areas["hero"]
+	if !ok || hero.start != 0 || hero.span != 1 || hero.rowStart != 0 || hero.rowSpan != 2 {
+		t.Fatalf("hero area = %+v", hero)
+	}
+}
+
 // TestGridJustifyItemsCenter covers horizontal grid item alignment, including
 // the implicit single-column grid used by max-width page wrappers.
 func TestGridJustifyItemsCenter(t *testing.T) {

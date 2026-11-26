@@ -1,0 +1,14 @@
+ Lead story spanning two rows                        Side rail
+
+
+ Caption on the second row
+
+
+
+ Area heading
+
+
+ Main area spanning two rows            Side area
+
+
+                                        Footer area

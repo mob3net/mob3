@@ -76,31 +76,6 @@ func gridTrackFunctionAt(lower string, i int) bool {
 	return false
 }
 
-func hasNamedGridRows(n *Node) bool {
-	for _, child := range layoutChildren(n) {
-		if child.Type != ElementNode || child.Style == nil {
-			continue
-		}
-		// Only a line *name* needs two-dimensional placement. The value also
-		// contains keywords and numbers (`1/span 1`, `span 2`, `auto`), which
-		// must not be mistaken for names just because "span" has letters.
-		row := strings.ToLower(child.Style.GridRow)
-		for _, tok := range strings.FieldsFunc(row, func(r rune) bool {
-			return r == '/' || r == ',' || r == ' ' || r == '\t'
-		}) {
-			if tok == "" || tok == "span" || tok == "auto" {
-				continue
-			}
-			for _, r := range tok {
-				if (r >= 'a' && r <= 'z') || r == '_' {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
 // parseMinMaxTrack resolves a max()/min() track expression to the largest or
 // smallest fixed size among its arguments. Grids use `max(340px,calc(...))` for
 // a rail that never drops below its content width.
@@ -217,6 +192,138 @@ func parseGridTemplate(raw string, avail int, font float64) ([]gridTrack, map[st
 		}
 	}
 	return out, lines
+}
+
+// maxGridRows bounds explicit and implicit row state so a hostile grid value
+// cannot allocate unbounded rows.
+const maxGridRows = 256
+
+// parseGridRows parses explicit row tracks and named row lines. Row tracks
+// store their minimum height in cells; auto and fr rows grow with content
+// because the grid container itself has indefinite height.
+func parseGridRows(raw string, font float64) ([]gridTrack, map[string][]int) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.EqualFold(raw, "none") || strings.HasPrefix(strings.ToLower(raw), "subgrid") {
+		return nil, nil
+	}
+	var out []gridTrack
+	lines := map[string][]int{}
+	for _, part := range splitGridParts(raw) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
+			for _, name := range strings.Fields(part[1 : len(part)-1]) {
+				lines[name] = append(lines[name], len(out))
+			}
+			continue
+		}
+		lower := strings.ToLower(part)
+		if strings.HasPrefix(lower, "repeat(") && strings.HasSuffix(part, ")") {
+			inner := part[len("repeat(") : len(part)-1]
+			fields := SplitTopLevel(inner, ',')
+			if len(fields) < 2 {
+				continue
+			}
+			count := 1
+			first := strings.TrimSpace(fields[0])
+			if n, err := strconv.Atoi(first); err == nil && n > 0 {
+				count = n
+			}
+			rest := strings.Join(fields[1:], ",")
+			tracks, nestedLines := parseGridRows(rest, font)
+			for i := 0; i < count && i < 64; i++ {
+				base := len(out)
+				out = append(out, tracks...)
+				for name, indexes := range nestedLines {
+					for _, index := range indexes {
+						lines[name] = append(lines[name], base+index)
+					}
+				}
+				if len(out) >= maxGridRows {
+					break
+				}
+			}
+			continue
+		}
+		if (strings.HasPrefix(lower, "max(") || strings.HasPrefix(lower, "min(")) && strings.HasSuffix(part, ")") {
+			if t, ok := parseMinMaxRowTrack(part, font); ok {
+				out = append(out, t)
+			}
+			continue
+		}
+		if strings.HasPrefix(lower, "minmax(") && strings.HasSuffix(part, ")") {
+			inner := part[len("minmax(") : len(part)-1]
+			fields := SplitTopLevel(inner, ',')
+			if len(fields) == 2 {
+				minRaw := strings.TrimSpace(fields[0])
+				if l := ParseLength(minRaw, font); l.Set && !l.Auto && l.U != UnitPercent {
+					if h := l.ResolveV(0, font); h > 0 {
+						out = append(out, gridTrack{Fixed: h})
+						continue
+					}
+				}
+				out = append(out, gridTrack{Auto: true})
+				continue
+			}
+		}
+		switch {
+		case strings.HasSuffix(lower, "fr"):
+			out = append(out, gridTrack{Auto: true})
+		case lower == "auto" || strings.Contains(lower, "content") || strings.HasPrefix(lower, "fit-content"):
+			out = append(out, gridTrack{Auto: true})
+		default:
+			if l := ParseLength(part, font); l.Set && !l.Auto && l.U != UnitPercent {
+				if h := l.ResolveV(0, font); h >= 0 {
+					out = append(out, gridTrack{Fixed: h})
+					continue
+				}
+			}
+			out = append(out, gridTrack{Auto: true})
+		}
+	}
+	if len(out) > maxGridRows {
+		out = out[:maxGridRows]
+	}
+	return out, lines
+}
+
+// parseMinMaxRowTrack resolves a min()/max() row expression to its smallest or
+// largest fixed height in cells.
+func parseMinMaxRowTrack(part string, font float64) (gridTrack, bool) {
+	low := strings.ToLower(part)
+	isMax := strings.HasPrefix(low, "max(")
+	prefix := "min("
+	if isMax {
+		prefix = "max("
+	}
+	if !strings.HasPrefix(low, prefix) || !strings.HasSuffix(part, ")") {
+		return gridTrack{}, false
+	}
+	inner := part[len(prefix) : len(part)-1]
+	best := 0
+	found := false
+	for _, f := range SplitTopLevel(inner, ',') {
+		f = strings.TrimSpace(f)
+		fl := strings.ToLower(f)
+		if f == "" || fl == "auto" || strings.HasSuffix(fl, "fr") {
+			continue
+		}
+		l := ParseLength(f, font)
+		if !l.Set || l.Auto || l.U == UnitPercent {
+			continue
+		}
+		h := l.ResolveV(0, font)
+		if !found || (isMax && h > best) || (!isMax && h < best) {
+			best = h
+			found = true
+		}
+	}
+	if !found {
+		return gridTrack{Auto: true}, true
+	}
+	return gridTrack{Fixed: best}, true
 }
 
 // resolveGridTracks distributes the container width over the parsed tracks.
@@ -483,13 +590,15 @@ func gridPlacementNamed(raw string, cols int, lines map[string][]int) (start, sp
 }
 
 type gridAreaSpan struct {
-	start int
-	span  int
+	start    int
+	span     int
+	rowStart int
+	rowSpan  int
 }
 
-// parseGridAreas extracts named areas from grid-template-areas. Only the
-// column placement is needed by the row-major grid implementation; a name
-// spanning several rows still starts at its leftmost column.
+// parseGridAreas extracts named areas from grid-template-areas. The name's
+// column and row bounds both describe its placement, so a hero spanning two
+// area rows reserves both rows.
 func parseGridAreas(raw string) map[string]gridAreaSpan {
 	out := map[string]gridAreaSpan{}
 	if strings.TrimSpace(raw) == "" {
@@ -516,11 +625,11 @@ func parseGridAreas(raw string) map[string]gridAreaSpan {
 		i++
 	}
 	type bounds struct {
-		start, end int
-		rows       int
+		start, end       int
+		rowStart, rowEnd int
 	}
 	seen := map[string]bounds{}
-	for _, row := range rows {
+	for r, row := range rows {
 		for c, name := range row {
 			if name == "." || name == "" {
 				continue
@@ -528,6 +637,7 @@ func parseGridAreas(raw string) map[string]gridAreaSpan {
 			b, ok := seen[name]
 			if !ok {
 				b.start, b.end = c, c
+				b.rowStart, b.rowEnd = r, r
 			} else {
 				if c < b.start {
 					b.start = c
@@ -535,13 +645,21 @@ func parseGridAreas(raw string) map[string]gridAreaSpan {
 				if c > b.end {
 					b.end = c
 				}
+				if r < b.rowStart {
+					b.rowStart = r
+				}
+				if r > b.rowEnd {
+					b.rowEnd = r
+				}
 			}
-			b.rows++
 			seen[name] = b
 		}
 	}
 	for name, b := range seen {
-		out[name] = gridAreaSpan{start: b.start, span: b.end - b.start + 1}
+		out[name] = gridAreaSpan{
+			start: b.start, span: b.end - b.start + 1,
+			rowStart: b.rowStart, rowSpan: b.rowEnd - b.rowStart + 1,
+		}
 	}
 	return out
 }
@@ -555,19 +673,27 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 		return l.flow(n, x, y, availW)
 	}
 	tracks, gridLines := parseGridTemplate(st.GridCols, availW, st.FontSize)
-	if hasNamedGridRows(n) {
-		// Named row lines need full two-dimensional placement. Without it,
-		// stacking the items is more readable than letting them overlap.
-		return l.flow(n, x, y, availW)
+	rowTracks, rowLines := parseGridRows(st.GridRows, st.FontSize)
+	areas := parseGridAreas(st.GridAreas)
+	areaCols := 0
+	for _, a := range areas {
+		if end := a.start + a.span; end > areaCols {
+			areaCols = end
+		}
 	}
 	if len(tracks) == 0 {
 		// A grid with no explicit template has one implicit column. Keep it as
-		// a grid when the container centers or right-aligns its items, so a
-		// max-width child is aligned instead of falling back to block flow and
-		// sticking to the left edge.
-		if st.JustifyItems == "center" || st.JustifyItems == "end" {
+		// a grid when the container centers or right-aligns its items, when
+		// explicit rows need the 2D placement path, or when grid areas define
+		// the implicit columns.
+		switch {
+		case areaCols > 0:
+			for i := 0; i < areaCols; i++ {
+				tracks = append(tracks, gridTrack{Flex: 1})
+			}
+		case len(rowTracks) > 0 || st.JustifyItems == "center" || st.JustifyItems == "end":
 			tracks = []gridTrack{{Flex: 1}}
-		} else {
+		default:
 			return l.flow(n, x, y, availW)
 		}
 	}
@@ -579,8 +705,7 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 	if st.RowGap.Set {
 		rowGap = st.RowGap.ResolveH(availW, st.FontSize)
 	}
-	areas := parseGridAreas(st.GridAreas)
-	cells := gridCells(n, len(tracks), gridLines, areas)
+	cells := gridCells(n, len(tracks), gridLines, rowLines, len(rowTracks), areas)
 	content, minContent := l.gridTrackContent(cells, len(tracks))
 	widths := resolveGridTracks(tracks, availW, gap, content, minContent)
 	// An auto track placed by a named area is at least as wide as that area's
@@ -660,21 +785,34 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 		cx += w + gap
 	}
 	startY := y
-	maxRow := 0
+	maxRow := len(rowTracks) - 1
 	for _, c := range cells {
 		if c.out {
 			l.deferAbsolute(c.node, x, y)
 			continue
 		}
-		if c.row > maxRow {
-			maxRow = c.row
+		if end := c.row + c.rowSpan - 1; end > maxRow {
+			maxRow = end
+		}
+	}
+	rowHeights := make([]int, maxRow+1)
+	for i := range rowHeights {
+		if i < len(rowTracks) && rowTracks[i].Flex == 0 && !rowTracks[i].Auto {
+			if h := rowTracks[i].Fixed; h > 0 {
+				rowHeights[i] = h
+			}
 		}
 	}
 	// Lay out one row at a time: items on the same row share its height, and
 	// an explicit grid-row keeps a side rail level with the lead card even
-	// when the lead card comes first in the DOM.
+	// when the lead card comes first in the DOM. Content of a row-spanning item
+	// is distributed over its spanned rows so later tracks stay aligned.
+	type spanNeed struct {
+		end, height int
+	}
 	for r := 0; r <= maxRow; r++ {
-		rowH := 0
+		rowH := rowHeights[r]
+		var spans []spanNeed
 		for _, c := range cells {
 			if c.out || c.row != r {
 				continue
@@ -696,75 +834,92 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 			fragStart := len(l.frags)
 			absStart := len(l.abs)
 			h := l.block(c.node, cellX, y, cellW)
-			if h > rowH {
+			if c.rowSpan > 1 {
+				spans = append(spans, spanNeed{end: c.row + c.rowSpan - 1, height: h})
+			} else if h > rowH {
 				rowH = h
 			}
 			l.alignGridItemX(n, c.node, cellX, cellW, fragStart, absStart)
 		}
-		y += rowH
-		if r < maxRow && rowH > 0 {
+		rowHeights[r] = rowH
+		for _, s := range spans {
+			sum := rowGap * (s.end - r)
+			for i := r; i <= s.end; i++ {
+				sum += rowHeights[i]
+			}
+			if s.height > sum {
+				rowHeights[s.end] += s.height - sum
+			}
+		}
+		y += rowHeights[r]
+		if r < maxRow && rowHeights[r] > 0 {
 			y += rowGap
 		}
 	}
 	return y - startY
 }
 
-// gridCell is one grid item's resolved column placement.
+// gridCell is one grid item's resolved placement.
 type gridCell struct {
-	node     *Node
-	start    int
-	span     int
-	row      int
-	explicit bool
-	out      bool // out-of-flow item, deferred to the absolute pass
+	node    *Node
+	start   int
+	span    int
+	row     int
+	rowSpan int
+	colSet  bool
+	rowSet  bool
+	out     bool // out-of-flow item, deferred to the absolute pass
 }
 
-// gridRowPlacement reads a numeric grid-row start. Named lines are handled by
-// hasNamedGridRows, which sends such grids to block flow before this is used.
-func gridRowPlacement(raw string) (start, span int, set bool) {
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	if raw == "" || raw == "auto" {
-		return 0, 1, false
+// gridOccupancy marks the cells reserved by placed items so sparse auto
+// placement can find a free slot.
+type gridOccupancy struct {
+	cols int
+	rows [][]bool
+}
+
+func (o *gridOccupancy) ensure(row int) {
+	for len(o.rows) <= row {
+		o.rows = append(o.rows, make([]bool, o.cols))
 	}
-	parts := SplitTopLevel(raw, '/')
-	first := strings.TrimSpace(parts[0])
-	if first == "" || first == "auto" || strings.HasPrefix(first, "span ") {
-		return 0, 1, false
+}
+
+func (o *gridOccupancy) free(row, col, rowSpan, colSpan int) bool {
+	if col < 0 || colSpan < 1 || col+colSpan > o.cols || row < 0 || rowSpan < 1 || row+rowSpan > maxGridRows {
+		return false
 	}
-	n, err := strconv.Atoi(first)
-	if err != nil {
-		return 0, 1, false
-	}
-	start = n - 1
-	if start < 0 {
-		return 0, 1, false
-	}
-	span = 1
-	if len(parts) > 1 {
-		end := strings.TrimSpace(parts[1])
-		if strings.HasPrefix(end, "span ") {
-			if v, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(end, "span "))); err == nil && v > 0 {
-				span = v
+	o.ensure(row + rowSpan - 1)
+	for r := row; r < row+rowSpan; r++ {
+		for c := col; c < col+colSpan; c++ {
+			if o.rows[r][c] {
+				return false
 			}
-		} else if v, err := strconv.Atoi(end); err == nil && v > n {
-			span = v - n
 		}
 	}
-	return start, span, true
+	return true
 }
 
-// gridCells resolves every item's column start and span in row-major order.
-// Sizing the tracks and laying the items out share this placement, so an item
-// cannot be measured for one column and painted in another. An explicit
-// numeric grid-row lands in that row even when it appears later in the DOM
-// than a card placed to its right, which keeps page grids with a centre lead
-// card and side rails on one row instead of stacking the rails below it.
-func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridAreaSpan) []gridCell {
+func (o *gridOccupancy) mark(row, col, rowSpan, colSpan int) {
+	if col < 0 || colSpan < 1 || col+colSpan > o.cols || row < 0 || rowSpan < 1 {
+		return
+	}
+	o.ensure(row + rowSpan - 1)
+	for r := row; r < row+rowSpan; r++ {
+		for c := col; c < col+colSpan; c++ {
+			o.rows[r][c] = true
+		}
+	}
+}
+
+// gridCells resolves every item's row and column placement before sizing and
+// painting. Definite placements are reserved first, then auto items fill the
+// remaining cells in sparse row-major order. Row spans reserve every covered
+// cell so an auto item cannot land inside them.
+func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string][]int, rowCount int, areas map[string]gridAreaSpan) []gridCell {
 	if cols < 1 {
 		return nil
 	}
 	var cells []gridCell
-	autoRow, autoCol := 0, 0
 	for _, child := range layoutChildrenWithPseudo(n) {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
@@ -773,44 +928,157 @@ func gridCells(n *Node, cols int, lines map[string][]int, areas map[string]gridA
 			cells = append(cells, gridCell{node: child, out: true})
 			continue
 		}
-		start, span, explicit := gridPlacementNamed(child.Style.GridColumn, cols, lines)
+		cell := gridCell{node: child, start: -1, span: 1, row: -1, rowSpan: 1}
+		colStart, colSpan, colExplicit := gridPlacementNamed(child.Style.GridColumn, cols, colLines)
+		rowStart, rowSpan, rowExplicit := gridPlacementNamed(child.Style.GridRow, rowCount, rowLines)
+		if span := colSpan; span > 1 {
+			cell.span = span
+		}
+		if span := rowSpan; span > 1 {
+			cell.rowSpan = span
+		}
+		if colExplicit && colStart >= 0 {
+			cell.start = colStart
+			cell.colSet = true
+		}
+		if rowExplicit && rowStart >= 0 {
+			cell.row = rowStart
+			cell.rowSet = true
+		}
 		if name := child.Style.GridArea; name != "" {
 			if a, ok := areas[name]; ok {
-				start, span, explicit = a.start, a.span, true
+				cell.start, cell.span, cell.colSet = a.start, a.span, true
+				if !rowExplicit {
+					cell.row, cell.rowSpan, cell.rowSet = a.rowStart, a.rowSpan, true
+				}
 			}
 		}
-		if span < 1 {
-			span = 1
+		if cell.span < 1 {
+			cell.span = 1
 		}
-		if span > cols {
-			span = cols
+		if cell.span > cols {
+			cell.span = cols
 		}
-		if row, _, rowSet := gridRowPlacement(child.Style.GridRow); rowSet {
-			if start < 0 || start+span > cols {
-				start = 0
+		if cell.rowSpan < 1 {
+			cell.rowSpan = 1
+		}
+		if cell.rowSpan > maxGridRows {
+			cell.rowSpan = maxGridRows
+		}
+		if cell.rowSet && cell.row >= maxGridRows {
+			cell.row = maxGridRows - 1
+		}
+		if cell.rowSet && cell.row+cell.rowSpan > maxGridRows {
+			cell.rowSpan = maxGridRows - cell.row
+		}
+		if cell.rowSpan < 1 {
+			cell.rowSpan = 1
+		}
+		if cell.colSet && (cell.start < 0 || cell.start+cell.span > cols) {
+			cell.start = 0
+			if cell.span > cols {
+				cell.span = cols
 			}
-			cells = append(cells, gridCell{node: child, start: start, span: span, row: row, explicit: true})
+		}
+		cells = append(cells, cell)
+	}
+	occ := &gridOccupancy{cols: cols}
+	maxReserved := 0
+	for i := range cells {
+		c := &cells[i]
+		if !c.out && c.rowSet {
+			if end := c.row + c.rowSpan - 1; end > maxReserved {
+				maxReserved = end
+			}
+		}
+		if !c.out && c.rowSet && c.colSet {
+			occ.mark(c.row, c.start, c.rowSpan, c.span)
+		}
+	}
+	autoRow, autoCol := 0, 0
+	limit := len(cells) + rowCount + 8
+	if maxReserved+8 > limit {
+		limit = maxReserved + 8
+	}
+	if limit >= maxGridRows {
+		limit = maxGridRows - 1
+	}
+	for i := range cells {
+		c := &cells[i]
+		if c.out || c.rowSet && c.colSet {
 			continue
 		}
-		if explicit && start >= 0 && start < cols {
-			// An explicit placement that would move backwards on the current
-			// row starts a new row (named areas commonly span a full row).
-			if start < autoCol {
+		switch {
+		case c.rowSet:
+			// Definite row: take the first free column in that row.
+			col := -1
+			for start := autoCol; start < cols; start++ {
+				if occ.free(c.row, start, c.rowSpan, c.span) {
+					col = start
+					break
+				}
+			}
+			if col < 0 {
+				for start := 0; start < autoCol; start++ {
+					if occ.free(c.row, start, c.rowSpan, c.span) {
+						col = start
+						break
+					}
+				}
+			}
+			if col < 0 {
+				col = 0
+			}
+			c.start, c.colSet = col, true
+		case c.colSet:
+			// Definite column: take the first free row at that column.
+			row := -1
+			for r := autoRow; r <= limit; r++ {
+				if occ.free(r, c.start, c.rowSpan, c.span) {
+					row = r
+					break
+				}
+			}
+			if row < 0 {
+				row = autoRow
+			}
+			c.row, c.rowSet = row, true
+		default:
+			// Fully auto: sparse row-major placement from the cursor.
+			row, col := -1, -1
+			for r := autoRow; r <= limit && row < 0; r++ {
+				start := 0
+				if r == autoRow {
+					start = autoCol
+				}
+				for cc := start; cc+c.span <= cols; cc++ {
+					if occ.free(r, cc, c.rowSpan, c.span) {
+						row, col = r, cc
+						break
+					}
+				}
+			}
+			if row < 0 {
+				row, col = autoRow, 0
+			}
+			c.row, c.start = row, col
+			c.rowSet, c.colSet = true, true
+			autoRow, autoCol = row, col+c.span
+			if autoCol >= cols {
 				autoRow++
 				autoCol = 0
 			}
-			autoCol = start
 		}
-		if autoCol+span > cols {
-			autoRow++
-			autoCol = 0
+		if c.row >= maxGridRows {
+			c.row = maxGridRows - 1
 		}
-		cells = append(cells, gridCell{node: child, start: autoCol, span: span, explicit: explicit, row: autoRow})
-		autoCol += span
-		if autoCol >= cols {
-			autoCol = 0
-			autoRow++
+		if c.row+c.rowSpan > maxGridRows {
+			c.rowSpan = maxGridRows - c.row
 		}
+		if c.rowSpan < 1 {
+			c.rowSpan = 1
+		}
+		occ.mark(c.row, c.start, c.rowSpan, c.span)
 	}
 	return cells
 }

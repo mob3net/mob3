@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 4px; font-family: monospace; }
+.hero {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: [top] 32px [body] 48px;
+  column-gap: 4px;
+  row-gap: 4px;
+  margin-bottom: 8px;
+}
+.hero .lead { grid-column: 1; grid-row: top / body; background: #eeeeee; padding: 2px; }
+.hero .rail { grid-column: 2; grid-row: top; background: #dddddd; padding: 2px; }
+.hero .caption { grid-column: 1; grid-row: body; background: #f4f4f4; padding: 2px; }
+.areas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 32px 32px 32px;
+  grid-template-areas: "head head" "main side" "main foot";
+  gap: 4px;
+}
+.areas h2 { grid-area: head; margin: 0; }
+.areas .main { grid-area: main; background: #eeeeee; padding: 2px; }
+.areas .side { grid-area: side; background: #dddddd; padding: 2px; }
+.areas .foot { grid-area: foot; background: #f4f4f4; padding: 2px; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="lead">Lead story spanning two rows</div>
+  <div class="rail">Side rail</div>
+  <div class="caption">Caption on the second row</div>
+</div>
+<div class="areas">
+  <h2>Area heading</h2>
+  <div class="main">Main area spanning two rows</div>
+  <div class="side">Side area</div>
+  <div class="foot">Footer area</div>
+</div>
+</body>
+</html>

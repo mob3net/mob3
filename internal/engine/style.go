@@ -88,6 +88,7 @@ type Style struct {
 	Gap             Length
 	RowGap          Length
 	GridCols        string
+	GridRows        string
 	GridAreas       string
 	GridArea        string
 	GridColumn      string
@@ -819,6 +820,8 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		}
 	case "grid-template-columns":
 		st.GridCols = val
+	case "grid-template-rows":
+		st.GridRows = val
 	case "grid-template-areas":
 		st.GridAreas = val
 	case "grid-area":

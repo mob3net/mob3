@@ -9,11 +9,6 @@ engine work only; do not add site-specific exceptions.
 
 ## P0 — Main content and hero placement
 
-- **Two-dimensional CSS grid.** Explicit numeric `grid-row` starts keep a
-  lead card and its side rails on one row, but `grid-template-rows`, named row
-  lines, row spans and `grid-area` rows are still flat. Grids that need them
-  lose vertical placement. `layout_grid.go` (`grid`, `gridCells`,
-  `gridRowPlacement`, `hasNamedGridRows`) is the entry point.
 - **Grid vertical alignment and auto flow.** Horizontal
   `justify-items`/`justify-self` work, including implicit single-column grids;
   `align-self`, vertical `align-items`, `grid-auto-flow` and `order` for grid
