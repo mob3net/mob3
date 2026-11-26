@@ -81,9 +81,12 @@ func (l *Loader) FetchImageResult(ctx context.Context, u *url.URL, gen int) (ima
 	}
 	key := u.String()
 	meta := protocol.RequestMetaFrom(ctx)
-	if cached, rawSize, cachedLocal, ok := l.Host.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
-		l.RecordCacheHit(gen, "GET", key, "img", rawSize)
-		return cached, true
+	cache := l.imageCache()
+	if cache != nil {
+		if cached, rawSize, cachedLocal, ok := cache.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
+			l.RecordCacheHit(gen, "GET", key, "img", rawSize)
+			return cached, true
+		}
 	}
 	data, ctype, _, status, err := l.FetchCtx(ctx, u)
 	if err != nil || status < 200 || status >= 400 {
@@ -93,8 +96,20 @@ func (l *Loader) FetchImageResult(ctx context.Context, u *url.URL, gen int) (ima
 	if err != nil {
 		return nil, false
 	}
-	l.Host.PutCachedImage(key, img, len(data), !meta.BlockLocal)
+	if cache != nil {
+		cache.PutCachedImage(key, img, len(data), !meta.BlockLocal)
+	}
 	return img, true
+}
+
+// imageCache returns the optional decoded-image cache. A process-backed host
+// may omit it; the loader then decodes each image instead of sharing one.
+func (l *Loader) imageCache() protocol.ImageCache {
+	if l == nil || l.Host == nil {
+		return nil
+	}
+	cache, _ := l.Host.(protocol.ImageCache)
+	return cache
 }
 
 // imageResultStream fetches the queued images concurrently and streams decoded
@@ -185,6 +200,7 @@ func (l *Loader) LoadImages(ctx context.Context, root *Node, base *url.URL) bool
 	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
 	changed := false
+	cache := l.imageCache()
 	for _, n := range imgs {
 		src := ImageSource(n, l.ViewportPx)
 		if src == "" {
@@ -209,10 +225,12 @@ func (l *Loader) LoadImages(ctx context.Context, root *Node, base *url.URL) bool
 			continue
 		}
 		key := u.String()
-		if cached, rawSize, cachedLocal, ok := l.Host.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
-			l.RecordCacheHit(gen, "GET", key, "img", rawSize)
-			n.Img = cached
-			continue
+		if cache != nil {
+			if cached, rawSize, cachedLocal, ok := cache.GetCachedImage(key); ok && !(meta.BlockLocal && cachedLocal) {
+				l.RecordCacheHit(gen, "GET", key, "img", rawSize)
+				n.Img = cached
+				continue
+			}
 		}
 		wg.Add(1)
 		go func(node *Node, u *url.URL) {
@@ -239,7 +257,9 @@ func (l *Loader) LoadImages(ctx context.Context, root *Node, base *url.URL) bool
 				return
 			}
 			node.Img = img
-			l.Host.PutCachedImage(key, img, len(data), !meta.BlockLocal)
+			if cache != nil {
+				cache.PutCachedImage(key, img, len(data), !meta.BlockLocal)
+			}
 		}(n, u)
 	}
 	wg.Wait()

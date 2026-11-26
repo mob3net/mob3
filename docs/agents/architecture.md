@@ -11,7 +11,7 @@ in `internal/protocol`; this section records ownership.
 
 | Package | Owns |
 | --- | --- |
-| `internal/protocol` | Message types, binary codec, portable typed stream mux, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
+| `internal/protocol` | Message types, binary codec, portable typed stream mux, serializable host RPC, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/textedit` | Shared single-line text editing for form fields, the URL prompt, JS dialogs, find and console inputs. Standard library only. |
 | `internal/textwidth` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows and wrapping. Standard library only. |
 | `internal/movekeys` | Shared movement table and line/half/page step deltas for page and console scrolling, the wheel direction, and the line/top/bottom subset used by list selection. Standard library only. |
@@ -37,7 +37,10 @@ The split is a value boundary. Nothing in `protocol` holds a pointer to engine
 state: frames, events and commands are plain data, and a codec round-trip
 covers every message. Images cross as encoded bytes with size caps, never as
 `image.Image`. Terminal capability detection is front-end-owned and cookie
-parsing is host-side; JS `fetch`/XHR go through the host broker.
+parsing is host-side; JS `fetch`/XHR go through the host broker. Host calls are
+also data: request metadata travels in `HostCall`, not through context values,
+and the optional decoded-image cache is a separate `ImageCache` interface that
+a process transport can omit.
 
 **Non-goals of this step:** the package split itself added no subprocess, OS
 sandbox, tabs or per-site renderer, and no behavior or visual change. The
@@ -284,6 +287,9 @@ child process.
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
 | `internal/protocol/mux.go` | Portable typed frame envelope over one byte stream (`command`, `event`, host-call/result, ping/pong, close), so a page session can run over separate stdin/stdout pipes with no platform-specific file descriptors. |
 | `internal/protocol/stream.go` | Stream transport: `ServeStream` handler side with direct abort and `DialStream` front-end session over the portable mux. Used by tests and available for a future process transport. |
+| `internal/protocol/hostrpc.go` | Serializable host-broker call/result types, request metadata, error identity codes and the bounded codec. Flat payloads cover every `protocol.Host` method; no `image.Image`, certificate pool or context value crosses the boundary. |
+| `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. `ConfigToken` calls are forwarded. |
+| `internal/protocol/hostrpc_server.go` | `HostServer` dispatches calls concurrently to the trusted host, cancels in-flight work on a cancel frame or shutdown, maps errors to sentinel kinds and contains panics as host errors. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |

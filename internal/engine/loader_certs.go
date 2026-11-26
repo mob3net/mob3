@@ -9,7 +9,6 @@ func (l *Loader) SetCertSource(source string) error {
 		return err
 	}
 	l.CertStore = l.Host.CertSource()
-	l.CertPool = l.Host.CertPool()
 	return nil
 }
 

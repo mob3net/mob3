@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"mime"
 	"net/url"
@@ -25,11 +24,9 @@ const defaultUserAgent = "MOB3/1.0 (+terminal; +https://mob3.net)"
 type Loader struct {
 	Host      protocol.Host
 	NoScripts bool
-	// CertStore labels the active TLS trust store ("system" or "embedded");
-	// CertPool holds its roots. A nil pool means the platform store. See
-	// SetCertSource.
+	// CertStore labels the active TLS trust store ("system" or "embedded").
+	// TLS itself stays host-side; see SetCertSource.
 	CertStore string
-	CertPool  *x509.CertPool
 	// HistoryFunc supplies the in-memory session history for about:history.
 	HistoryFunc func() ([]string, int)
 	// IgnoreBlocks disables anti-bot/CAPTCHA detection when set, so the
