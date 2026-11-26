@@ -99,8 +99,10 @@ subresources, `fetch` or XHR from loopback, private, link-local, CGNAT,
 `0.0.0.0/8` or reserved addresses. Literal local hosts and local names are
 rejected before the request and on every redirect hop; names that only resolve
 locally are rejected after DNS resolution, and every connection is re-checked
-before it is reused from the pool. Documents that themselves loaded from a local
-address keep access, and top-level navigation is not blocked.
+before it is reused from the pool. Only the final document address decides local
+access, so a public page reached through a local redirect hop is still public.
+Documents that themselves loaded from a local address keep access, and top-level
+navigation is not blocked.
 Blocked requests appear as `ERR` in the console request list.
 
 MOB³ upgrades HTTP image requests on HTTPS pages to HTTPS and does not retry

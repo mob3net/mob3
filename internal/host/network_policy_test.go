@@ -218,6 +218,47 @@ func TestLocalPeerGuardBlocksReusedConnectionForJSFetch(t *testing.T) {
 	}
 }
 
+type fixedRemoteConn struct {
+	net.Conn
+	remote net.Addr
+}
+
+func (c *fixedRemoteConn) RemoteAddr() net.Addr { return c.remote }
+
+// A local intermediate hop in a redirect chain must not make the public final
+// document inherit local-network access.
+func TestPageLocalTracksFinalRedirectHop(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "http://public.example/final", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	localAddr := srv.Listener.Addr().String()
+	tr := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, _, _ := net.SplitHostPort(addr)
+		c, err := (&net.Dialer{}).DialContext(ctx, network, localAddr)
+		if err != nil {
+			return nil, err
+		}
+		if host == "public.example" {
+			return &fixedRemoteConn{Conn: c, remote: &net.TCPAddr{IP: net.ParseIP("8.8.8.8"), Port: 443}}, nil
+		}
+		return c, nil
+	}}
+	s := NewSession()
+	s.SetHTTPClient(&http.Client{Transport: tr})
+	res, err := s.Fetch(context.Background(), http.MethodGet, mustURL(t, "http://intranet.invalid/start"), nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.PageLocal {
+		t.Fatal("public final redirect hop inherited PageLocal from a local intermediate hop")
+	}
+}
+
 func mustURL(t *testing.T, raw string) *url.URL {
 	t.Helper()
 	u, err := url.Parse(raw)

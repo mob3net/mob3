@@ -88,6 +88,11 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 	}
 	meta := RequestMetaFrom(ctx)
 	space := PageSpaceFrom(ctx)
+	if space != nil {
+		// PageLocal describes the document's final connection, not any hop.
+		// Reset for the first hop; redirectCheck resets for each later one.
+		space.Local.Store(false)
+	}
 	var guard *localPeerGuard
 	if meta.BlockLocal {
 		guard = &localPeerGuard{}
@@ -231,6 +236,11 @@ func (f *Fetcher) redirectCheck(blockLocal, secureSubresource bool, policy Reque
 	return func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
+		}
+		if space := PageSpaceFrom(next.Context()); space != nil {
+			// Only the final hop decides PageLocal; a local intermediate hop
+			// must not make a public final page inherit local access.
+			space.Local.Store(false)
 		}
 		guard.setTarget(next.URL)
 		if secureSubresource && next.URL.Scheme == "http" {
