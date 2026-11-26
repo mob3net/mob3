@@ -514,11 +514,7 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 		return true
 	}
 	if ev.Wheel != 0 {
-		delta := 3
-		if ev.Wheel > 0 {
-			delta = -3
-		}
-		w.scroll(l, delta)
+		w.scroll(l, movekeys.WheelDelta(ev.Wheel))
 		return true
 	}
 	if ev.Motion || !ev.Press || ev.Button != MouseButtonLeft {

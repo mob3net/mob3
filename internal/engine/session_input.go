@@ -150,11 +150,7 @@ func (b *Session) HandleMouse(ev MouseEvent) bool {
 		}
 	}
 	if ev.Wheel != 0 {
-		step := 3
-		if ev.Wheel < 0 {
-			step = -step
-		}
-		b.scrollBy(step)
+		b.scrollBy(movekeys.WheelDelta(ev.Wheel))
 		top, bottom := b.viewport()
 		b.updateHover(x, y, top, bottom)
 		return false

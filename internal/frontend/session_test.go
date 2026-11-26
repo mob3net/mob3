@@ -1088,8 +1088,18 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 	if len(s.cmds) != 1 {
 		t.Fatalf("wheel commands = %#v", s.cmds)
 	}
-	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 2 {
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 8 {
 		t.Fatalf("wheel action = %#v", s.cmds[0].Body)
+	}
+	s.cmds = nil
+	if !loop.handleChromeMouse(MouseEvent{Wheel: -1, X: 5, Y: 5}) {
+		t.Fatal("wheel up not consumed")
+	}
+	if len(s.cmds) != 1 {
+		t.Fatalf("wheel up commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow || a.Start != 5 {
+		t.Fatalf("wheel up action = %#v", s.cmds[0].Body)
 	}
 	s.cmds = nil
 	if !loop.handleChromeMouse(MouseEvent{X: 5, Y: 5, Press: true}) {

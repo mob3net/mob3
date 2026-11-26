@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"browser/internal/movekeys"
 	"browser/internal/protocol"
 )
 
@@ -63,6 +64,19 @@ func TestPageMovementAliases(t *testing.T) {
 		if b.Scroll != c.want {
 			t.Errorf("%q scrolled to %d, want %d", c.key, b.Scroll, c.want)
 		}
+	}
+}
+
+func TestWheelScrollDirection(t *testing.T) {
+	b := newTestSession(80, 24)
+	b.Layout = &Layout{Height: 100}
+	b.HandleMouse(MouseEvent{X: 5, Y: 5, Wheel: 1})
+	if b.Scroll != movekeys.WheelLines {
+		t.Fatalf("wheel down scrolled to %d, want %d", b.Scroll, movekeys.WheelLines)
+	}
+	b.HandleMouse(MouseEvent{X: 5, Y: 5, Wheel: -1})
+	if b.Scroll != 0 {
+		t.Fatalf("wheel up scrolled to %d, want 0", b.Scroll)
 	}
 }
 

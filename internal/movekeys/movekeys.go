@@ -1,7 +1,22 @@
-// Package movekeys maps movement key tokens to relative commands. The page and
+// Package movekeys maps movement inputs to relative commands. The page and
 // console share the viewport deltas; list overlays use the line and top/bottom
 // subset for selection. Standard library only.
 package movekeys
+
+// WheelLines is the number of lines one wheel notch scrolls.
+const WheelLines = 3
+
+// WheelDelta converts a decoded wheel direction (-1 up, +1 down) into a
+// signed line delta.
+func WheelDelta(wheel int) int {
+	if wheel < 0 {
+		return -WheelLines
+	}
+	if wheel > 0 {
+		return WheelLines
+	}
+	return 0
+}
 
 // Move is one viewport movement command.
 type Move uint8

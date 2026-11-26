@@ -29,6 +29,21 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestWheelDelta(t *testing.T) {
+	cases := []struct{ wheel, want int }{
+		{-1, -WheelLines},
+		{1, WheelLines},
+		{0, 0},
+		{2, WheelLines},
+		{-2, -WheelLines},
+	}
+	for _, c := range cases {
+		if got := WheelDelta(c.wheel); got != c.want {
+			t.Errorf("WheelDelta(%d) = %d, want %d", c.wheel, got, c.want)
+		}
+	}
+}
+
 func TestDelta(t *testing.T) {
 	cases := []struct {
 		move Move
