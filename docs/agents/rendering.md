@@ -178,7 +178,10 @@ agreement, the non-negotiable constraints and the change protocol.
   atomic inline box.
 - **CSS grid:** `display:grid` lays children in row-major order over tracks
   parsed from `grid-template-columns` (lengths, percentages, `fr`, `auto`,
-  `repeat()`, `minmax()`, named lines), honours `gap`/`column-gap`/`row-gap`,
+  `repeat()`, `minmax()`, named lines) and from the `grid-template` shorthand,
+  whose top-level slash separates the row tracks from the column tracks and
+  whose quoted strings carry `grid-template-areas`. It honours
+  `gap`/`column-gap`/`row-gap`,
   `grid-column`/`span`, and sizes row heights from the tallest item. An `auto`
   track takes the max-content width of the items placed in it (spanned items
   spread their deficit over the columns they cover), shrinks toward its

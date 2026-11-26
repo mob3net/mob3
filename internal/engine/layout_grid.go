@@ -119,9 +119,43 @@ func parseMinMaxTrack(part string, avail int, font float64) (gridTrack, bool) {
 	return gridTrack{Fixed: best}, true
 }
 
+// parseGridTracks returns the tracks of one grid axis.
 func parseGridTracks(raw string, avail int, font float64) []gridTrack {
 	tracks, _ := parseGridTemplate(raw, avail, font)
 	return tracks
+}
+
+// splitGridTemplate splits the `grid-template` shorthand into its row and
+// column track lists. The two axes are separated by a top-level slash. When
+// the left side contains quoted strings it is a grid-template-areas list,
+// optionally with row sizes, and only the column list is explicit. `none`
+// resets every axis. ok is false for values the engine cannot use.
+func splitGridTemplate(raw string) (rows, cols, areas string, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", "", false
+	}
+	if strings.EqualFold(raw, "none") {
+		return "", "", "", true
+	}
+	parts := SplitTopLevel(raw, '/')
+	if len(parts) != 2 {
+		// The area-only form has quoted rows and no slash; the column tracks
+		// stay implicit.
+		if len(parts) == 1 && strings.ContainsAny(raw, "\"'") {
+			return "", "", raw, true
+		}
+		return "", "", "", false
+	}
+	left := strings.TrimSpace(parts[0])
+	cols = strings.TrimSpace(parts[1])
+	if cols == "" {
+		return "", "", "", false
+	}
+	if strings.ContainsAny(left, "\"'") {
+		return "", cols, left, true
+	}
+	return left, cols, "", true
 }
 
 // parseGridTemplate returns tracks plus named grid lines. A bracketed line

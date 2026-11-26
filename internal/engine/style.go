@@ -840,6 +840,13 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		st.GridCols = val
 	case "grid-template-rows":
 		st.GridRows = val
+	case "grid-template":
+		// The shorthand carries rows and columns around a top-level slash, and
+		// may spell the rows as quoted grid-template-areas strings. A bare
+		// `none` resets all three longhands.
+		if rows, cols, areas, ok := splitGridTemplate(val); ok {
+			st.GridRows, st.GridCols, st.GridAreas = rows, cols, areas
+		}
 	case "grid-template-areas":
 		st.GridAreas = val
 	case "grid-area":

@@ -33,6 +33,43 @@ func TestGridAutoTrackSizedToContent(t *testing.T) {
 	}
 }
 
+func TestSplitGridTemplateShorthand(t *testing.T) {
+	rows, cols, areas, ok := splitGridTemplate("min-content 1fr min-content / 12.25rem minmax(0,1fr)")
+	if !ok || rows != "min-content 1fr min-content" || cols != "12.25rem minmax(0,1fr)" || areas != "" {
+		t.Fatalf("plain shorthand = %q / %q / %q ok=%v", rows, cols, areas, ok)
+	}
+	rows, cols, areas, ok = splitGridTemplate(`"side main" 1fr / 12rem minmax(0,1fr)`)
+	if !ok || rows != "" || cols != "12rem minmax(0,1fr)" || !strings.Contains(areas, `"side main"`) {
+		t.Fatalf("area shorthand = %q / %q / %q ok=%v", rows, cols, areas, ok)
+	}
+	if rows, cols, areas, ok = splitGridTemplate("none"); !ok || rows != "" || cols != "" || areas != "" {
+		t.Fatalf("none shorthand = %q / %q / %q ok=%v", rows, cols, areas, ok)
+	}
+	if rows, cols, areas, ok = splitGridTemplate(`"side main" "footer footer"`); !ok || rows != "" || cols != "" || !strings.Contains(areas, "footer") {
+		t.Fatalf("area-only shorthand = %q / %q / %q ok=%v", rows, cols, areas, ok)
+	}
+}
+
+func TestGridTemplateShorthandColumns(t *testing.T) {
+	// The shorthand's fixed first track must stay 12rem wide instead of
+	// leaving the engine to split the columns from grid-template-areas.
+	ly := build(`<div style="display:grid;grid-template:auto / 12rem minmax(0,1fr);grid-template-areas:'side main'">`+
+		`<div style="grid-area:side">Side</div>`+
+		`<div style="grid-area:main">Main content</div></div>`, 80)
+	var main *Frag
+	for i := range ly.Frags {
+		if ly.Frags[i].Kind == FragText && ly.Frags[i].Text == "Main" {
+			main = &ly.Frags[i]
+		}
+	}
+	if main == nil {
+		t.Fatal("missing main content")
+	}
+	if main.X < 20 || main.X > 30 {
+		t.Fatalf("main column x = %d, want it after the 12rem sidebar", main.X)
+	}
+}
+
 func TestResolveGridTracksAutoContent(t *testing.T) {
 	tracks := parseGridTracks("auto 1fr", 40, 16)
 	widths := resolveGridTracks(tracks, 40, 1, []int{12, 0}, []int{4, 0})

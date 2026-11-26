@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { font-size: 16px; margin: 0; padding: 8px; }
+.layout {
+  display: grid;
+  grid-template: auto / 12rem minmax(0, 1fr);
+  grid-template-areas: "side main";
+  column-gap: 8px;
+}
+.side { grid-area: side; }
+.main { grid-area: main; }
+.side h2 { margin: 0; }
+.main h1 { margin: 0 0 8px 0; font-size: 24px; }
+.main p { margin: 0 0 8px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="side"><h2>Contents</h2><p>Overview<br>History<br>Geography</p></nav>
+  <main class="main">
+    <h1>Article heading</h1>
+    <p>The fixed first track keeps the navigation narrow while the flexible second track gives the article the rest of the row.</p>
+  </main>
+</div>
+</body>
+</html>
