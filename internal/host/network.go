@@ -8,8 +8,10 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -177,6 +179,61 @@ func LocalNetworkDialContext(ctx context.Context, network, addr string) (net.Con
 
 func IsLocalNetworkError(err error) bool {
 	return errors.Is(err, ErrLocalNetworkBlocked)
+}
+
+// localPeerGuard aborts a guarded request whose actual connection peer is
+// local. The dial-time guard never runs when the transport reuses an idle
+// pooled connection, so a public page could otherwise reach a host it first
+// loaded while unguarded. GotConn runs for new and reused connections alike.
+type localPeerGuard struct {
+	mu      sync.Mutex
+	target  string
+	blocked bool
+	cancel  context.CancelFunc
+}
+
+// setTarget records the URL the next (or redirected) request will contact, so
+// a configured proxy is not mistaken for the target address.
+func (g *localPeerGuard) setTarget(u *url.URL) {
+	if g == nil || u == nil {
+		return
+	}
+	g.mu.Lock()
+	g.target = u.String()
+	g.mu.Unlock()
+}
+
+// check inspects the peer of a connection the transport is about to use. A
+// local peer for a direct request is blocked by closing the connection and
+// cancelling the request context.
+func (g *localPeerGuard) check(info httptrace.GotConnInfo) {
+	if g == nil || info.Conn == nil || !RemoteAddrLocal(info.Conn.RemoteAddr()) {
+		return
+	}
+	g.mu.Lock()
+	proxy := RequestUsesProxy(g.target)
+	if !proxy {
+		g.blocked = true
+	}
+	cancel := g.cancel
+	g.mu.Unlock()
+	if proxy {
+		return
+	}
+	info.Conn.Close()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// wasBlocked reports whether check aborted the request for a local peer.
+func (g *localPeerGuard) wasBlocked() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.blocked
 }
 
 // remoteAddrLocal reports whether a completed connection's peer is local.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"time"
@@ -58,6 +59,16 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		return out, err
 	}
 	blockLocal := RequestMetaFrom(ctx).BlockLocal
+	var guard *localPeerGuard
+	if blockLocal {
+		guard = &localPeerGuard{}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		guard.cancel = cancel
+		defer cancel()
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: guard.check})
+	}
+	guard.setTarget(u)
 	var reqID int
 	start := time.Now()
 	if req.Kind != "" {
@@ -98,6 +109,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
 		}
+		guard.setTarget(next.URL)
 		if blockLocal && IsLocalURL(next.URL) {
 			return ErrLocalNetworkBlocked
 		}
@@ -123,7 +135,7 @@ func (f *Fetcher) JSFetch(ctx context.Context, req protocol.FetchRequest) (proto
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		if IsLocalNetworkError(err) {
+		if guard.wasBlocked() || IsLocalNetworkError(err) {
 			err = ErrLocalNetworkBlocked
 		}
 		if IsMixedContentError(err) {

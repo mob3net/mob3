@@ -80,17 +80,6 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 	if err := ctx.Err(); err != nil {
 		return nil, "", u, 0, err
 	}
-	if space := PageSpaceFrom(ctx); space != nil {
-		// The document request records whether its own connection was local,
-		// so an intranet page is not treated like a public one.
-		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-			GotConn: func(info httptrace.GotConnInfo) {
-				if info.Conn != nil && RemoteAddrLocal(info.Conn.RemoteAddr()) {
-					space.Local.Store(true)
-				}
-			},
-		})
-	}
 	if method == "" {
 		method = http.MethodGet
 	}
@@ -98,6 +87,28 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		return nil, "", u, 0, errors.New("request body too large")
 	}
 	meta := RequestMetaFrom(ctx)
+	space := PageSpaceFrom(ctx)
+	var guard *localPeerGuard
+	if meta.BlockLocal {
+		guard = &localPeerGuard{}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		guard.cancel = cancel
+		defer cancel()
+	}
+	if space != nil || guard != nil {
+		// The document request records whether its own connection was local,
+		// so an intranet page is not treated like a public one. The guard
+		// re-checks every connection, including a reused pooled one.
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) {
+				if info.Conn != nil && RemoteAddrLocal(info.Conn.RemoteAddr()) && space != nil {
+					space.Local.Store(true)
+				}
+				guard.check(info)
+			},
+		})
+	}
 	gen := meta.Gen
 	if gen == 0 {
 		gen = f.Requests.CurrentPageGeneration()
@@ -112,6 +123,7 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		f.RecordBlocked(gen, method, u, meta.Kind, err)
 		return nil, "", u, 0, err
 	}
+	guard.setTarget(u)
 	cacheable := method == http.MethodGet && len(body) == 0 &&
 		(u.Scheme == "http" || u.Scheme == "https") &&
 		(meta.Kind == "css" || meta.Kind == "js")
@@ -175,11 +187,11 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		policy := cookiePolicyFor(meta)
 		c := *f.Client
 		c.Jar = nil
-		c.CheckRedirect = f.redirectCheck(meta.BlockLocal, meta.PageSecure && meta.Kind != "" && meta.Kind != "doc", policy)
+		c.CheckRedirect = f.redirectCheck(meta.BlockLocal, meta.PageSecure && meta.Kind != "" && meta.Kind != "doc", policy, guard)
 		f.applyCookies(req, policy)
 		resp, e := c.Do(req)
 		if e != nil {
-			if IsLocalNetworkError(e) {
+			if guard.wasBlocked() || IsLocalNetworkError(e) {
 				e = ErrLocalNetworkBlocked
 			}
 			if IsMixedContentError(e) {
@@ -215,11 +227,12 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 // local-network policy on every hop, not just the initial URL. It also
 // retargets the request metadata so the dial guard and the proxy decision see
 // the host actually being contacted.
-func (f *Fetcher) redirectCheck(blockLocal, secureSubresource bool, policy RequestCookiePolicy) func(*http.Request, []*http.Request) error {
+func (f *Fetcher) redirectCheck(blockLocal, secureSubresource bool, policy RequestCookiePolicy, guard *localPeerGuard) func(*http.Request, []*http.Request) error {
 	return func(next *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return errors.New("too many redirects")
 		}
+		guard.setTarget(next.URL)
 		if secureSubresource && next.URL.Scheme == "http" {
 			return ErrMixedContentBlocked
 		}

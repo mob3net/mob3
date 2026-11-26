@@ -5,8 +5,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
+
+	"browser/internal/protocol"
 )
 
 func TestIsLocalHostAndURL(t *testing.T) {
@@ -151,6 +156,65 @@ func TestLocalDialUsesGuardForPublicPages(t *testing.T) {
 	_, err := LocalNetworkDialContext(ctx, "tcp", "127.0.0.1:1")
 	if !errors.Is(err, ErrLocalNetworkBlocked) {
 		t.Fatalf("guarded dial error = %v", err)
+	}
+}
+
+// pooledLocalFetcher returns a fetcher whose transport resolves a
+// public-looking host to a loopback test server. The custom dialer models a
+// name that only resolves locally and deliberately skips the dial-time guard,
+// so only the per-connection peer check can catch the reuse.
+func pooledLocalFetcher(t *testing.T) (*Fetcher, *url.URL, *url.URL, *atomic.Int32) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(srv.Close)
+	addr := srv.Listener.Addr().String()
+	var dials atomic.Int32
+	tr := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		dials.Add(1)
+		var d net.Dialer
+		return d.DialContext(ctx, network, addr)
+	}}
+	f := &Fetcher{
+		Client:   &http.Client{Transport: tr},
+		Settings: NewSettings("ua", ""),
+		Requests: NewRequestLog(),
+		Cache:    NewResourceCache(0),
+	}
+	target, _ := url.Parse("http://intranet.invalid/")
+	return f, target, mustURL(t, "http://page.example/"), &dials
+}
+
+func TestLocalPeerGuardBlocksReusedPooledConnection(t *testing.T) {
+	f, target, page, dials := pooledLocalFetcher(t)
+	seed := WithRequestPage(WithRequestMeta(context.Background(), 1, "img"), page, true)
+	if _, _, _, _, err := f.FetchRequest(seed, http.MethodGet, target, nil, ""); err != nil {
+		t.Fatalf("seed request: %v", err)
+	}
+	guarded := WithRequestPage(WithRequestMeta(context.Background(), 2, "img"), page, false)
+	if _, _, _, _, err := f.FetchRequest(guarded, http.MethodGet, target, nil, ""); !errors.Is(err, ErrLocalNetworkBlocked) {
+		t.Fatalf("guarded request over a reused connection = %v, want blocked", err)
+	}
+	if got := dials.Load(); got != 1 {
+		t.Fatalf("guarded request dialed %d times, want the pooled connection reused", got)
+	}
+}
+
+func TestLocalPeerGuardBlocksReusedConnectionForJSFetch(t *testing.T) {
+	f, target, page, dials := pooledLocalFetcher(t)
+	seed := WithRequestPage(WithRequestMeta(context.Background(), 1, "img"), page, true)
+	if _, _, _, _, err := f.FetchRequest(seed, http.MethodGet, target, nil, ""); err != nil {
+		t.Fatalf("seed request: %v", err)
+	}
+	if _, err := f.JSFetch(context.Background(), protocol.FetchRequest{
+		URL: target.String(), Method: "GET", Origin: page.String(),
+		Purpose: protocol.FetchFetch, Kind: "fetch",
+	}); !errors.Is(err, ErrLocalNetworkBlocked) {
+		t.Fatalf("guarded fetch over a reused connection = %v, want blocked", err)
+	}
+	if got := dials.Load(); got != 1 {
+		t.Fatalf("guarded fetch dialed %d times, want the pooled connection reused", got)
 	}
 }
 
