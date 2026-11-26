@@ -11,7 +11,7 @@ in `internal/protocol`; this section records ownership.
 
 | Package | Owns |
 | --- | --- |
-| `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
+| `internal/protocol` | Message types, binary codec, portable typed stream mux, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/textedit` | Shared single-line text editing for form fields, the URL prompt, JS dialogs, find and console inputs. Standard library only. |
 | `internal/textwidth` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows and wrapping. Standard library only. |
 | `internal/movekeys` | Shared movement table and line/half/page step deltas for page and console scrolling, the wheel direction, and the line/top/bottom subset used by list selection. Standard library only. |
@@ -282,7 +282,8 @@ child process.
 | `internal/engine/page_loader.go` | `PageFetcher` contract and HTML page assembly: parse, base/title, stylesheets, scripts and import map. The engine loader implements the contract. |
 | `internal/engine/page_assemble.go` | About/blocked/PDF page assembly, the anti-bot response heuristic and `AboutPageName`. |
 | `internal/protocol/transport.go` | `Handler`/`Transport` contract and the in-process session: handler goroutine, out-of-band abort, validated frame handoff, bounded coalescing outbox. |
-| `internal/protocol/stream.go` | Stream transport: framed reads, `ServeStream` handler side with direct abort, and `DialStream` front-end session. Used by tests and available for a future process transport; the target keeps one process. |
+| `internal/protocol/mux.go` | Portable typed frame envelope over one byte stream (`command`, `event`, host-call/result, ping/pong, close), so a page session can run over separate stdin/stdout pipes with no platform-specific file descriptors. |
+| `internal/protocol/stream.go` | Stream transport: `ServeStream` handler side with direct abort and `DialStream` front-end session over the portable mux. Used by tests and available for a future process transport. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
 | `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
