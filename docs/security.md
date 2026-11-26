@@ -61,7 +61,9 @@ cache, log or download files. Closing MOB³ saves nothing.
 - OS-level reads by Go's TLS, DNS and timezone libraries are not application
   storage. By default TLS roots come from the platform store; `-certs` can
   switch to the CA bundle compiled into the binary. No PEM file is read.
-- The memory footer uses Go's runtime statistics; no `/proc` file is sampled.
+- The memory footer uses Go's runtime statistics for the active engine
+  process; no `/proc` file is sampled. Per-tab mode therefore shows the active
+  tab's child process, not the whole browser.
 
 ## Cookies and storage
 

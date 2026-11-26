@@ -48,9 +48,11 @@ agreement, the non-negotiable constraints and the change protocol.
   tab stays in the bar as `Crashed` and does not stop the others. New tabs from
   `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
   focused URL prompt when no target is given; a link opened in a background tab
-  is inserted directly after the active tab. Graphics mode, zoom, terminal cell size and
-  the memory readout are browser-wide. Memory is the process total, not one
-  tab's share.
+  is inserted directly after the active tab. Graphics mode, zoom and terminal
+  cell size are browser-wide. The `MEM` readout is the active engine process:
+  the whole browser process in `-process=single`, or the active tab's child
+  engine in `-process=per-tab`. It is not the sum of the parent and all
+  children.
 - **Config:** the `⚙` toolbar icon opens `about:config` in a new tab, a form listing every
   CLI option with its current value. Editable options apply immediately for the
   session (no-js, ignore-blocks, home,
@@ -407,7 +409,8 @@ agreement, the non-negotiable constraints and the change protocol.
   relayouts when its box grows or shrinks.
 - **Footer:** shows the hovered link target, status or the PDF page line on
   the left and, on the
-  right, current resident memory (`MEM 18MB`),
+  right, the active engine process's memory (`MEM 18MB`; per-tab mode shows the
+  active tab's child, not the browser total),
   resolved `Graphics:<mode>` notices, `JavaScript:on`/`JavaScript:off` (which
   becomes red bold `JavaScript:Error` when a script fails), clickable
   `Graphics:<mode>`, `Dark:on`/`Dark:off` and `Reader:on`/`Reader:off` labels
