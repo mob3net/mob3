@@ -96,6 +96,28 @@ func TestSessionLoopRoutesOnlyActiveFrames(t *testing.T) {
 	}
 }
 
+func TestDiscardTabKillsWithoutGracefulClose(t *testing.T) {
+	first := multiTab(1, "one")
+	second := multiTab(2, "two")
+	var closed, killed bool
+	loop := &SessionLoop{
+		Tabs: []*Tab{first, second}, Active: first,
+		CloseTab: func(*Tab) { closed = true },
+		KillTab:  func(*Tab) { killed = true },
+	}
+	loop.syncTabBar()
+	loop.DiscardTab(first)
+	if !killed || closed {
+		t.Fatalf("discard killed=%v closed=%v", killed, closed)
+	}
+	if len(loop.Tabs) != 1 || loop.Active != second {
+		t.Fatalf("tabs=%d active=%v", len(loop.Tabs), loop.Active)
+	}
+	if first.Session != nil || first.Presenter != nil {
+		t.Fatal("discarded tab kept its session or presenter")
+	}
+}
+
 func TestActivateTabMovesThePresenter(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)

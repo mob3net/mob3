@@ -194,8 +194,10 @@ published by the Pages build.
 - `internal/app/` — flag parsing, validation, mode dispatch and the
   interactive session boot. It constructs `host.Session` and
   `engine.NewConfiguredLoader`, then `engine.NewConfiguredSession`,
-  `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`. MCP transport
-  and the dump/PNG output loop live in `internal/app`.
+  `engine.NewAutomationWithConfig` or `engine.NewDumpHandler`. Interactive tabs
+  go through the `tabBackend` seam, which owns one session's lifecycle and
+  exposes graceful close plus force kill. MCP transport and the dump/PNG output
+  loop live in `internal/app`.
 - `internal/engine/` — the 393-method `Session`: page/layout/URL/scroll, the
   load lifecycle and application, forms, JS lifecycle, hit testing,
   find/hint/selection/reader state, text scaling, dark mode, content input and

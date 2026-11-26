@@ -80,6 +80,7 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 		Keys: keys, Resize: winch, Quit: quitSig,
 		OpenTab:      tabs.open,
 		CloseTab:     tabs.close,
+		KillTab:      tabs.kill,
 		TerminalSize: func() (int, int, bool) { return frontend.TerminalSize(os.Stdout) },
 		CellW:        cellW, CellH: cellH,
 
