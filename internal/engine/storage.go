@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"sort"
 	"sync"
 
@@ -17,14 +16,14 @@ const (
 
 // ErrStorageQuota reports a write that would exceed a storage area or the
 // browser-context total.
-var ErrStorageQuota = errors.New("storage quota exceeded")
+var ErrStorageQuota = protocol.ErrStorageQuota
 
 // StorageKind selects localStorage or sessionStorage.
-type StorageKind uint8
+type StorageKind = protocol.StorageKind
 
 const (
-	StorageLocal StorageKind = iota
-	StorageSession
+	StorageLocal   = protocol.StorageLocal
+	StorageSession = protocol.StorageSession
 )
 
 type storageScope struct {
@@ -51,6 +50,13 @@ type StorageBroker struct {
 // NewStorageBroker creates the default in-memory storage pools.
 func NewStorageBroker() *StorageBroker {
 	return newStorageBroker(storagePerOriginLimit, storageTotalLimit)
+}
+
+// storageProvider adapts a StorageBroker to the serializable provider port.
+type storageProvider struct{ broker *StorageBroker }
+
+func (p storageProvider) View(kind protocol.StorageKind, tabID uint64, origin protocol.Origin) protocol.Storage {
+	return p.broker.View(kind, tabID, origin)
 }
 
 func newStorageBroker(perOrigin, total int64) *StorageBroker {
@@ -327,8 +333,8 @@ func (b *StorageBroker) clear(kind StorageKind, scope storageScope) {
 	}
 }
 
-// storageView resolves the frame's origin against the tab's shared broker.
-func (s *Session) storageView(kind StorageKind, f *Frame) *StorageView {
+// storageView resolves the frame's origin against the tab's storage provider.
+func (s *Session) storageView(kind StorageKind, f *Frame) protocol.Storage {
 	if s.browser == nil {
 		s.browser = NewBrowserContext()
 	}
@@ -336,5 +342,9 @@ func (s *Session) storageView(kind StorageKind, f *Frame) *StorageView {
 	if f != nil {
 		origin = f.Origin()
 	}
-	return s.browser.Storage().View(kind, s.tabID, origin)
+	provider := s.browser.storageProvider
+	if provider == nil {
+		provider = storageProvider{broker: s.browser.Storage()}
+	}
+	return provider.View(kind, s.tabID, origin)
 }

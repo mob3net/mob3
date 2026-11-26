@@ -123,8 +123,8 @@ type jsRuntime struct {
 
 	storageLocal       *sobek.Object
 	storageSession     *sobek.Object
-	storageLocalView   *StorageView
-	storageSessionView *StorageView
+	storageLocalView   protocol.Storage
+	storageSessionView protocol.Storage
 	currentScript      *sobek.Object
 
 	nodeListeners map[*Node]map[string][]jsListener
@@ -222,7 +222,8 @@ func NewJSRuntime(host JSHost, page *Page) *jsRuntime {
 	j.installEventConstructors()
 	j.installIntl()
 	j.installFetch()
-	localStorage, sessionStorage := newPrivateStorageView(), newPrivateStorageView()
+	var localStorage protocol.Storage = newPrivateStorageView()
+	var sessionStorage protocol.Storage = newPrivateStorageView()
 	if host != nil {
 		if v := host.LocalStorage(); v != nil {
 			localStorage = v
