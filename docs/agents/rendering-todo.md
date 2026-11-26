@@ -7,13 +7,6 @@ Open rendering issues, ordered by the number of affected pages in the site
 audit. Remove an item when it is fixed and covered by tests. This page is for
 engine work only; do not add site-specific exceptions.
 
-## P1 — Overflow and hidden content
-
-- **Visually hidden UI.** Extend detection beyond `clip:rect(1px…)` and
-  `inset(50%)`: off-screen absolute/fixed skip links and mobile menus can still
-  occupy cells or wrap into narrow columns. Suppress only boxes that are fully
-  outside the layout box and cannot become visible.
-
 ## P1 — Selectors and container queries
 
 - **`@container` queries.** Container-query blocks are dropped today and 4/11

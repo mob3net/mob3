@@ -34,6 +34,23 @@ func (l *Layouter) finalizeAbsolute() {
 	}
 }
 
+// boxFullyOffscreen reports whether a resolved box is completely outside the
+// horizontal page and, for fixed boxes, the viewport. A box above the document
+// is also off-screen; one below an auto-height document is not, because it may
+// extend the scrollable page.
+func boxFullyOffscreen(x, y, w, h, width, viewportH int) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	if x+w <= 0 || x >= width {
+		return true
+	}
+	if y+h <= 0 {
+		return true
+	}
+	return viewportH > 0 && y >= viewportH
+}
+
 // layoutAbsolute places one absolute box against its containing block,
 // resolving left/right/top/bottom, percentage offsets, shrink-to-fit widths
 // and top+bottom height stretching.
@@ -182,6 +199,17 @@ func (l *Layouter) layoutAbsolute(a *absBox) {
 		desiredY = cb.y + topOff + mt
 	case hasB:
 		desiredY = cb.y + cbH - bottomOff - mb - rect.H
+	}
+	viewportH := 0
+	if a.fixed && l.fixedCB != nil && l.fixedCB.knownH {
+		viewportH = l.fixedCB.h
+	}
+	if boxFullyOffscreen(desiredX, desiredY, rect.W, rect.H, l.Width, viewportH) {
+		// Skip a box entirely outside the drawable area and drop absolute
+		// descendants queued inside it. Off-screen skip links and closed
+		// mobile menus must not reserve rows or add invisible fragments.
+		l.abs = l.abs[:absStart]
+		return
 	}
 	dx, dy := desiredX-rect.X, desiredY-rect.Y
 	if a.fixed {

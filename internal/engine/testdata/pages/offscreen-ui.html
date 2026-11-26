@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 4px; font-family: monospace; }
+.skip { position: absolute; left: -9999px; top: 0; }
+.drawer { position: fixed; left: -100%; top: 0; width: 100%; background: #eeeeee; padding: 8px; }
+.offscreen-top { position: absolute; top: -9999px; left: 0; }
+.partial { position: absolute; left: -2px; top: 64px; width: 80px; background: #f4f4f4; padding: 2px; }
+.content { margin-top: 8px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="drawer">Closed mobile menu</div>
+<div class="offscreen-top">Hidden banner</div>
+<div class="partial">Partially visible box</div>
+<main class="content" id="main">Visible page content</main>
+</body>
+</html>

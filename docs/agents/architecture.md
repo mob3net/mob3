@@ -250,7 +250,7 @@ child process.
 | `internal/engine/style_media.go` | `@media` evaluation against the layout viewport: `screen`/`all`, min/max-width and range syntax, and `prefers-color-scheme` following the dark-mode state. |
 | `internal/engine/style_ua.go` | The UA stylesheet written in the same CSS subset, and its compiled rules. |
 | `internal/engine/layout.go` | Layout entry points, the `-layout-budget` deadline/fragment/row limits, `Frag`/`LinkInfo`/`Layout` types, the fragment builders, the box model, block flow and relative offsets. |
-| `internal/engine/layout_absolute.go` | Out-of-flow absolute/fixed boxes: deferral, containing-block resolution and placement. |
+| `internal/engine/layout_absolute.go` | Out-of-flow absolute/fixed boxes: deferral, containing-block resolution, placement, and suppression of boxes fully outside the page width, above the document, or outside a known viewport. |
 | `internal/engine/layout_flow.go` | Flow scaffolding: children, floats and `clear`, fragment trimming and overflow clipping, list markers, generated `::before`/`::after` boxes with their literal text, and inline pseudo content. |
 | `internal/engine/layout_inline.go` | Inline formatting: line boxes, item collection, inline edges/margins, text and word emission, atomic inline boxes, scaled-text overlap handling. |
 | `internal/engine/layout_forms.go` | Form widget layout: labels, inputs, textareas, selects, ranges, checkbox glyphs and control predicates. |

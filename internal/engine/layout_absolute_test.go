@@ -211,6 +211,36 @@ func TestAbsoluteWidthResolvedOnce(t *testing.T) {
 	}
 }
 
+func TestOffscreenAbsoluteAndFixedBoxesAreSuppressed(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0">
+<a id="skip" style="position:absolute;left:-9999px;top:0">skip link</a>
+<div id="menu" style="position:absolute;left:-100%;top:0;width:100%">off-screen menu</div>
+<div id="fixed" style="position:fixed;left:0;top:-9999px">fixed menu</div>
+<div id="partial" style="position:absolute;left:-2px;top:48px;width:80px">partial</div>
+<p>visible content</p>
+</body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	var all strings.Builder
+	for _, f := range ly.Frags {
+		if f.Kind == FragText {
+			all.WriteString(f.Text)
+			all.WriteByte('\n')
+		}
+	}
+	text := all.String()
+	for _, hidden := range []string{"skip link", "off-screen menu", "fixed menu"} {
+		if strings.Contains(text, hidden) {
+			t.Fatalf("off-screen %q rendered", hidden)
+		}
+	}
+	if !strings.Contains(text, "partial") {
+		t.Fatal("partially visible absolute box was suppressed")
+	}
+	if !strings.Contains(text, "visible") || !strings.Contains(text, "content") {
+		t.Fatal("visible content was suppressed")
+	}
+}
+
 func TestAbsoluteChildOfShiftedAbsoluteBox(t *testing.T) {
 	doc := ParseHTML(`<div style="position:relative;width:400px;height:64px">` +
 		`<div id="w" style="position:absolute;right:0;top:0">` +

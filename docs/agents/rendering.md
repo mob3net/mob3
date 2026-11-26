@@ -349,7 +349,10 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Screen-reader-only boxes:** `overflow:hidden` with 1px width and height,
   `clip:rect(…1px…)` with all sides at most 1px, and `clip-path:inset(50%)`
   are hidden (`display:none`) to avoid rendering them as one-character columns
-  or visible “skip to content” links.
+  or visible “skip to content” links. Absolute and fixed boxes fully outside
+  the page width, above the document, or outside a known viewport are skipped
+  entirely, so off-screen skip links, closed drawers and mobile menus do not
+  reserve rows; a partially visible box keeps its content.
 - **Percentage heights** resolve against the containing block's definite
   content height: a parent with a declared height (including one resolved from
   a percentage), a stretched absolute box, or a flex/grid cell with a known
