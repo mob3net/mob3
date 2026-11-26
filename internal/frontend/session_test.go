@@ -475,13 +475,13 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 	if handled, _ := loop.handleShellKey("/"); !handled || !loop.findActive {
 		t.Fatalf("slash handled=%v active=%v", handled, loop.findActive)
 	}
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Query: ""}) {
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Scope: protocol.FindPage, Query: ""}) {
 		t.Fatalf("open commands = %#v", s.cmds)
 	}
 	s.cmds = nil
 	loop.handleShellKey("a")
 	loop.handleShellKey("b")
-	if len(s.cmds) != 2 || s.cmds[0].Body != (protocol.Find{Query: "a"}) || s.cmds[1].Body != (protocol.Find{Query: "ab"}) {
+	if len(s.cmds) != 2 || s.cmds[0].Body != (protocol.Find{Scope: protocol.FindPage, Query: "a"}) || s.cmds[1].Body != (protocol.Find{Scope: protocol.FindPage, Query: "ab"}) {
 		t.Fatalf("query commands = %#v", s.cmds)
 	}
 	if _, err := loop.applyEvent(protocol.Event{Body: protocol.FindResults{Query: "ab", Current: 1, Total: 2}}); err != nil {
@@ -494,7 +494,7 @@ func TestFindKeysSendQueriesAndResults(t *testing.T) {
 	if handled, quit := loop.handleShellKey("down"); !handled || quit {
 		t.Fatalf("down handled=%v quit=%v", handled, quit)
 	}
-	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Query: "ab", Next: true}) {
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.Find{Scope: protocol.FindPage, Query: "ab", Next: true}) {
 		t.Fatalf("next command = %#v", s.cmds)
 	}
 	if handled, quit := loop.handleShellKey("enter"); !handled || quit || loop.findActive {
@@ -1218,7 +1218,7 @@ func TestConsoleViewScrollsToFindLine(t *testing.T) {
 	loop.consoleActive = true
 	loop.consolePane = consolePaneHTML
 	loop.consoleFindActive = true
-	loop.consoleFindText = "needle"
+	loop.consoleFind.text = "needle"
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: consolePaneHTML,
 		Tabs:  []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
@@ -1271,7 +1271,7 @@ func TestConsoleFindContinuesAfterEsc(t *testing.T) {
 	loop.consoleActive = true
 	loop.consolePane = consolePaneHTML
 	loop.consoleFindActive = true
-	loop.consoleFindText = "needle"
+	loop.consoleFind.text = "needle"
 	loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
 		Width: 80, Height: 24, Pane: consolePaneHTML,
 		Start: 0, Total: 100, FindLine: 5, FindLineValid: true,
@@ -1321,8 +1321,8 @@ func TestConsoleFindKeys(t *testing.T) {
 	for _, r := range "needle" {
 		loop.handleShellKey(string(r))
 	}
-	if loop.consoleFindText != "needle" || len(s.cmds) != 6 {
-		t.Fatalf("text=%q commands=%d", loop.consoleFindText, len(s.cmds))
+	if loop.consoleFind.text != "needle" || len(s.cmds) != 6 {
+		t.Fatalf("text=%q commands=%d", loop.consoleFind.text, len(s.cmds))
 	}
 	s.cmds = nil
 	loop.handleShellKey("down")

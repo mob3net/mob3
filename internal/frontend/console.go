@@ -44,8 +44,7 @@ type consoleOverlay struct {
 	consoleHist       [consolePaneCount]lineHistory
 	consoleQuit       bool
 	consoleFindActive bool
-	consoleFindText   string
-	consoleFindCursor int
+	consoleFind       findBar
 	consoleFindLine   int
 	consoleFindSet    bool
 }
@@ -85,8 +84,7 @@ func (w *consoleOverlay) deactivate() {
 	w.consoleQuit = false
 	w.consoleFindActive = false
 	w.consoleFindSet = false
-	w.consoleFindText = ""
-	w.consoleFindCursor = 0
+	w.consoleFind.reset()
 }
 
 // toggle opens or closes the console from the shell key or the footer icon.
@@ -114,8 +112,7 @@ func (w *consoleOverlay) open(l *Tab) {
 	w.consoleQuit = false
 	w.consoleFindActive = false
 	w.consoleFindSet = false
-	w.consoleFindText = ""
-	w.consoleFindCursor = 0
+	w.consoleFind.reset()
 	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleOpen}})
 	w.request(l, true)
 }
@@ -143,7 +140,7 @@ func (w *consoleOverlay) applyView(l *Tab, v protocol.ConsoleView) {
 	} else {
 		w.consoleStart[w.consolePane] = v.Start
 	}
-	if w.consoleFindText != "" && v.FindLineValid && (!w.consoleFindSet || v.FindLine != w.consoleFindLine) {
+	if w.consoleFind.text != "" && v.FindLineValid && (!w.consoleFindSet || v.FindLine != w.consoleFindLine) {
 		w.consoleFindLine = v.FindLine
 		w.consoleFindSet = true
 		if !w.lineVisible(v.FindLine) {
@@ -194,8 +191,8 @@ func (w *consoleOverlay) ui() ConsoleUI {
 	return ConsoleUI{
 		Pane: w.consolePane, Input: w.consoleText, Cursor: w.consoleCursor,
 		Edit: w.consoleEdit, Hint: hint, Footer: footer, Quit: w.consoleQuit,
-		FindActive: w.consoleFindActive, FindText: w.consoleFindText,
-		FindCursor: w.consoleFindCursor,
+		FindActive: w.consoleFindActive, FindText: w.consoleFind.text,
+		FindCursor: w.consoleFind.cursor,
 	}
 }
 
@@ -388,13 +385,12 @@ func (w *consoleOverlay) hideFind() {
 // closeFind hides the find bar and clears the engine's HTML find, used when the
 // user leaves the HTML section.
 func (w *consoleOverlay) closeFind(l *Tab) {
-	if !w.consoleFindActive && w.consoleFindText == "" {
+	if !w.consoleFindActive && w.consoleFind.text == "" {
 		return
 	}
 	w.hideFind()
 	w.consoleFindSet = false
-	w.consoleFindText = ""
-	w.consoleFindCursor = 0
+	w.consoleFind.reset()
 	_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Close: true}})
 }
 
@@ -493,18 +489,16 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		if w.consolePane == consolePaneHTML {
 			w.consoleFindActive = true
 			w.consoleFindSet = false
-			w.consoleFindText = ""
-			w.consoleFindCursor = 0
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: ""}})
+			w.consoleFind.open(l, protocol.FindHTML)
 			w.present(l)
 		}
 	case "n":
-		if w.consolePane == consolePaneHTML && w.consoleFindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Next: true}})
+		if w.consolePane == consolePaneHTML && w.consoleFind.text != "" {
+			w.consoleFind.step(l, protocol.FindHTML, true)
 		}
 	case "N":
-		if w.consolePane == consolePaneHTML && w.consoleFindText != "" {
-			_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Prev: true}})
+		if w.consolePane == consolePaneHTML && w.consoleFind.text != "" {
+			w.consoleFind.step(l, protocol.FindHTML, false)
 		}
 	}
 	return true, false
@@ -550,31 +544,17 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 }
 
 func (w *consoleOverlay) handleFindKey(l *Tab, k string) (handled, quit bool) {
-	switch k {
-	case "esc", "enter", "tab", "backtab":
+	action, changed := w.consoleFind.handleKey(l, k, protocol.FindHTML)
+	switch action {
+	case findKeyClose:
 		w.hideFind()
 		w.present(l)
 		return true, false
-	case "down":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Next: true}})
-		return true, false
-	case "up":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: w.consoleFindText, Prev: true}})
+	case findKeyNext, findKeyPrev:
 		return true, false
 	}
-	if k == "ctrl-a" {
-		k = "home"
-	}
-	text, cur, _ := textedit.EditLineKey(w.consoleFindText, w.consoleFindCursor, k, textedit.EditConfig{MaxRunes: 512})
-	changed := text != w.consoleFindText
-	w.consoleFindText = text
-	if cur > len(text) {
-		cur = len(text)
-	}
-	w.consoleFindCursor = cur
 	if changed {
 		w.consoleFindSet = false
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Scope: protocol.FindHTML, Query: text}})
 	}
 	w.present(l)
 	return true, false

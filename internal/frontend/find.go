@@ -4,14 +4,12 @@ import (
 	"fmt"
 
 	"browser/internal/protocol"
-	"browser/internal/textedit"
 )
 
 // findOverlay is the in-page find bar.
 type findOverlay struct {
 	findActive  bool
-	findText    string
-	findCursor  int
+	find        findBar
 	findCurrent int
 	findTotal   int
 	findBase    protocol.State
@@ -31,18 +29,17 @@ func (w *findOverlay) start(l *Tab) {
 	}
 	w.findActive = true
 	w.findBase = l.State.Page
-	w.findText = ""
-	w.findCursor = 0
+	w.find.reset()
 	w.findCurrent, w.findTotal = 0, 0
 	w.sync(l)
-	_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: ""}})
+	w.find.open(l, protocol.FindPage)
 }
 
 func (w *findOverlay) sync(l *Tab) {
 	st := l.State.Page
 	st.FindActive = true
-	st.FindText = w.findText
-	st.FindCursor = w.findCursor
+	st.FindText = w.find.text
+	st.FindCursor = w.find.cursor
 	st.FindCurrent = w.findCurrent
 	st.FindTotal = w.findTotal
 	st.KeysEngine = true
@@ -72,7 +69,7 @@ func (w *findOverlay) close(l *Tab) {
 }
 
 func (w *findOverlay) status() string {
-	if w.findText == "" {
+	if w.find.text == "" {
 		return ""
 	}
 	if w.findTotal == 0 {
@@ -82,7 +79,7 @@ func (w *findOverlay) status() string {
 	if cur < 1 {
 		cur = 1
 	}
-	return fmt.Sprintf("Find %d/%d: %s", cur, w.findTotal, w.findText)
+	return fmt.Sprintf("Find %d/%d: %s", cur, w.findTotal, w.find.text)
 }
 
 func (w *findOverlay) setResults(l *Tab, current, total int) {
@@ -105,32 +102,13 @@ func (w *findOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	if k == "ctrl-c" {
 		l.Session.Abort()
 	}
-	switch k {
-	case "esc", "enter":
+	action, _ := w.find.handleKey(l, k, protocol.FindPage)
+	switch action {
+	case findKeyClose:
 		w.close(l)
 		return true, false
-	case "down":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: w.findText, Next: true}})
+	case findKeyNext, findKeyPrev:
 		return true, false
-	case "up":
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: w.findText, Prev: true}})
-		return true, false
-	case "tab", "backtab":
-		w.close(l)
-		return true, false
-	}
-	if k == "ctrl-a" {
-		k = "home"
-	}
-	text, cur, _ := textedit.EditLineKey(w.findText, w.findCursor, k, textedit.EditConfig{MaxRunes: 512})
-	changed := text != w.findText
-	w.findText = text
-	if cur > len(text) {
-		cur = len(text)
-	}
-	w.findCursor = cur
-	if changed {
-		_ = l.Session.Send(protocol.Command{Body: protocol.Find{Query: text}})
 	}
 	w.sync(l)
 	return true, false

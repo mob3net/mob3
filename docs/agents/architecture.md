@@ -291,8 +291,9 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/download.go` | Download curl hint state and input, layout and drawing. |
 | `internal/frontend/notice.go` | Informational notice state and input, layout and drawing. |
 | `internal/frontend/hints.go` | Link-hint state and input, prefix matching and overlay painting. |
-| `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight/find bar, window requests and console overlay stacking. |
-| `internal/frontend/find.go` | In-page find bar state and input, results status and its footer row. |
+| `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight plus the shared find bar, window requests and console overlay stacking. |
+| `internal/frontend/find.go` | In-page find bar state, results status and its footer row. |
+| `internal/frontend/findbar.go` | Shared find query, caret and key handling for the page find bar and the console HTML find bar; the engine owns matching. |
 | `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |
 | `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
 | `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
