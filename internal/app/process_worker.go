@@ -13,15 +13,15 @@ import (
 )
 
 const (
-	engineWorkerEnv   = "MOB3_ENGINE_WORKER"
-	engineConfigEnv   = "MOB3_ENGINE_CONFIG"
-	engineWorkerQueue = 8
+	processWorkerEnv   = "MOB3_PROCESS_WORKER"
+	processConfigEnv   = "MOB3_PROCESS_CONFIG"
+	processWorkerQueue = 8
 )
 
-// engineWorkerConfig is the geometry the parent supplies to one child. The
+// processWorkerConfig is the geometry the parent supplies to one child. The
 // child parses the normal CLI flags for policy so the two processes share one
 // option surface.
-type engineWorkerConfig struct {
+type processWorkerConfig struct {
 	Width, Height int
 	CellW, CellH  int
 	Zoom          float64
@@ -30,14 +30,14 @@ type engineWorkerConfig struct {
 	SessionID     uint32
 }
 
-// runEngineWorker is the hidden child mode. It runs only the engine side over
+// runProcessWorker is the hidden child mode. It runs only the engine side over
 // stdin/stdout; the parent owns the terminal, host policy and shared state.
-func runEngineWorker(o runOptions) int {
+func runProcessWorker(o runOptions) int {
 	if o.MemLimit > 0 {
 		debug.SetMemoryLimit(int64(o.MemLimit) << 20)
 	}
-	var cfg engineWorkerConfig
-	if raw := os.Getenv(engineConfigEnv); raw != "" {
+	var cfg processWorkerConfig
+	if raw := os.Getenv(processConfigEnv); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "mob3 worker: config: %s\n", cleanError(err))
 			return 2
@@ -90,7 +90,7 @@ func runEngineWorker(o runOptions) int {
 	engine.SetZoom(zoomFactor)
 	sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cfg.CellW, cfg.CellH, graphicsMode)
 	session := sessions.newSession(loader, cfg.Width, cfg.Height)
-	if err := protocol.ServePeerReady(ctx, peer, protocol.SessionID(cfg.SessionID), session, protocol.DefaultLimits, engineWorkerQueue); err != nil {
+	if err := protocol.ServePeerReady(ctx, peer, protocol.SessionID(cfg.SessionID), session, protocol.DefaultLimits, processWorkerQueue); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3 worker: session: %s\n", cleanError(err))
 		return 1
 	}
