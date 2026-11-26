@@ -213,9 +213,14 @@ published by the Pages build.
   engine's layout/paint and the front end's chrome, dialogs and console:
   rune/string widths, truncation, padding, tail windows and wrapping. Standard
   library only.
+- `internal/movekeys/` — pure viewport-movement key table shared by page and
+  console scrolling: token lookup plus line, half-page and page step deltas.
+  Standard library only.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/textedit` (pure
-  line editing; standard library only), `internal/engine` (HTML,
+  line editing; standard library only), `internal/textwidth` (pure
+  terminal-cell text arithmetic; standard library only), `internal/movekeys`
+  (pure viewport movement; standard library only), `internal/engine` (HTML,
   CSS, layout, paint, JS/DOM, PDF, images, document loading, find, selection,
   hints, reader),
   `internal/host` (network, cookies, cache, certificates, settings, request
@@ -225,7 +230,7 @@ published by the Pages build.
   engine keeps only a memory-only page cache. MOB³ keeps no global visited list
   or download history. The allowed
   imports are `app` → `engine`, `host`, `frontend`, `protocol`, and each of
-  `engine`, `frontend` → `protocol`, `textedit`, `textwidth`,
+  `engine`, `frontend` → `protocol`, `textedit`, `textwidth`, `movekeys`,
   plus `host` → `protocol`; the
   front end and the host never
   import `engine`, and `engine` never imports `frontend`, `host`, `net` or

@@ -756,7 +756,11 @@ agreement, the non-negotiable constraints and the change protocol.
   five tabs.
   Mouse reporting stays enabled so tabs and the input row can be clicked, and
   the wheel scrolls the active section (plain terminal drag-selection needs the
-  Shift override).
+  Shift override). When the input row is not focused, movement uses the same
+  vocabulary as the page: `j`/`k` (also Down/Up or Ctrl-N/P) scroll one line,
+  `d`/`u` or Ctrl-D/U half a screen, `Space`/`b` (also PgDn/PgUp or Ctrl-V) a
+  full screen, and `g`/`G` or Home/End jump to the ends. Steps use the visible
+  section body, so the input and summary rows do not count.
   `:` or `Enter` (or a click on the input row) focuses the input; typing edits a
   one-line expression and `Enter` evaluates it in the page runtime under the
   usual JS timeout/memory guards. The input row supports the same Ctrl/Alt

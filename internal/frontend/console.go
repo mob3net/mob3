@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"browser/internal/movekeys"
 	"browser/internal/protocol"
 	"browser/internal/textedit"
 	"browser/internal/textwidth"
@@ -22,7 +23,7 @@ const (
 )
 
 const (
-	consoleFooter = " Click/Tab/h/l: switch section · : focus input · j/k: scroll · g/G: ends · y: copy all · q: quit · Esc: close "
+	consoleFooter = " Click/Tab/h/l: section · : input · j/k d/u: scroll · Space/b: page · g/G: ends · y: copy all · q: quit · Esc: close "
 	consoleHint   = "JavaScript input"
 	toolsHint     = "Tools: help · form · links · requests · logs · source · snapshot"
 )
@@ -288,6 +289,9 @@ func (w *consoleOverlay) maxStart() int {
 // scroll moves the active section by delta lines. Following the bottom keeps
 // new output visible; scrolling up leaves follow mode.
 func (w *consoleOverlay) scroll(l *Tab, delta int) {
+	if delta == 0 {
+		return
+	}
 	pane := w.consolePane
 	if w.consoleFollow[pane] {
 		if delta > 0 {
@@ -322,6 +326,21 @@ func (w *consoleOverlay) jump(l *Tab, top bool) {
 	}
 	w.present(l)
 	w.request(l, false)
+}
+
+// move applies one shared viewport movement command to the active section.
+func (w *consoleOverlay) move(l *Tab, m movekeys.Move) {
+	switch m {
+	case movekeys.Top:
+		w.jump(l, true)
+	case movekeys.Bottom:
+		w.jump(l, false)
+	default:
+		_, height := w.size(l)
+		if delta, ok := m.Delta(w.contentRows(height)); ok {
+			w.scroll(l, delta)
+		}
+	}
 }
 
 // selectPane switches the active section. HTML enters at its first line; the
@@ -451,6 +470,10 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.present(l)
 		return true, false
 	}
+	if m, ok := movekeys.Lookup(k); ok {
+		w.move(l, m)
+		return true, false
+	}
 	switch k {
 	case "esc", "!":
 		w.close(l)
@@ -463,14 +486,6 @@ func (w *consoleOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 		w.cycle(l, -1)
 	case ":", "enter":
 		w.focusInput(l)
-	case "k", "up":
-		w.scroll(l, -1)
-	case "j", "down":
-		w.scroll(l, 1)
-	case "g":
-		w.jump(l, true)
-	case "G":
-		w.jump(l, false)
 	case "y":
 		l.expectClipboard()
 		_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleCopy, Pane: w.consolePane}})

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"browser/internal/movekeys"
 	"browser/internal/protocol"
 	"strings"
 )
@@ -295,24 +296,12 @@ func (b *Session) handlePageKey(k string) bool {
 		b.stopLoading()
 		return false
 	}
+	if m, ok := movekeys.Lookup(k); ok {
+		b.applyMove(m)
+		return false
+	}
 
 	switch k {
-	case "j", "down", "ctrl-n":
-		b.scrollBy(1)
-	case "k", "up", "ctrl-p":
-		b.scrollBy(-1)
-	case " ", "space", "pgdn", "ctrl-v":
-		b.scrollBy(b.viewportHeight() - 1)
-	case "b", "pgup":
-		b.scrollBy(-(b.viewportHeight() - 1))
-	case "d", "ctrl-d":
-		b.scrollBy(b.viewportHeight() / 2)
-	case "u", "ctrl-u":
-		b.scrollBy(-b.viewportHeight() / 2)
-	case "g", "home":
-		b.Scroll = 0
-	case "G", "end":
-		b.Scroll = b.maxScroll()
 	case "tab":
 		b.tabStep(1)
 	case "backtab":

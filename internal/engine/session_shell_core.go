@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"browser/internal/movekeys"
 	"browser/internal/protocol"
 	"time"
 )
@@ -688,6 +689,20 @@ func (b *Session) resizeWithContent(w, h, top, contentH int) {
 func (b *Session) maxScroll() int { return b.MaxScroll(b.viewportHeight()) }
 
 func (b *Session) clampScroll() { b.ClampScroll(b.viewportHeight()) }
+
+// applyMove performs one shared viewport movement command.
+func (b *Session) applyMove(m movekeys.Move) {
+	switch m {
+	case movekeys.Top:
+		b.Scroll = 0
+	case movekeys.Bottom:
+		b.Scroll = b.maxScroll()
+	default:
+		if delta, ok := m.Delta(b.viewportHeight()); ok {
+			b.scrollBy(delta)
+		}
+	}
+}
 
 func (b *Session) scrollBy(n int) {
 	b.clearLinkHints()

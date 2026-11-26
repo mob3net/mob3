@@ -1129,6 +1129,71 @@ func TestConsoleOpenAndCloseKeys(t *testing.T) {
 	}
 }
 
+func TestConsoleMovementAliases(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	tabs := []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
+	// A 24-row terminal leaves 21 visible log rows after the menu, footer and
+	// input row.
+	cases := []struct {
+		key   string
+		want  int
+		start int
+	}{
+		{"j", 51, 51}, {"down", 51, 51}, {"ctrl-n", 51, 51},
+		{"k", 49, 49}, {"up", 49, 49}, {"ctrl-p", 49, 49},
+		{"d", 60, 60}, {"ctrl-d", 60, 60},
+		{"u", 40, 40}, {"ctrl-u", 40, 40},
+		{" ", 70, 70}, {"space", 70, 70}, {"pgdn", 70, 70}, {"ctrl-v", 70, 70},
+		{"b", 30, 30}, {"pgup", 30, 30},
+		{"g", 0, 0}, {"home", 0, 0},
+		{"G", -1, -1}, {"end", -1, -1},
+	}
+	for _, c := range cases {
+		loop.consoleActive = true
+		loop.consolePane = consolePaneLogs
+		loop.consoleEdit = false
+		loop.consoleStart[consolePaneLogs] = 50
+		loop.consoleFollow[consolePaneLogs] = false
+		loop.consoleTotal[consolePaneLogs] = 100
+		loop.consoleView = protocol.ConsoleView{Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: tabs}
+		s.cmds = nil
+		if handled, quit := loop.handleShellKey(c.key); !handled || quit {
+			t.Fatalf("%q handled=%v quit=%v", c.key, handled, quit)
+		}
+		if loop.consoleStart[consolePaneLogs] != c.want {
+			t.Errorf("%q start = %d, want %d", c.key, loop.consoleStart[consolePaneLogs], c.want)
+		}
+		if len(s.cmds) != 1 {
+			t.Errorf("%q commands = %#v", c.key, s.cmds)
+			continue
+		}
+		a, ok := s.cmds[0].Body.(protocol.ConsoleAction)
+		if !ok || a.Op != protocol.ConsoleWindow || a.Start != c.start {
+			t.Errorf("%q action = %#v, want window start %d", c.key, s.cmds[0].Body, c.start)
+		}
+	}
+}
+
+func TestConsoleMovementIgnoredWhileEditing(t *testing.T) {
+	s := &recordSession{}
+	loop := &Tab{Session: s}
+	loop.State.Page = protocol.State{Width: 80, Height: 24}
+	loop.consoleActive = true
+	loop.consolePane = consolePaneLogs
+	loop.consoleEdit = true
+	loop.consoleStart[consolePaneLogs] = 50
+	loop.consoleView = protocol.ConsoleView{Width: 80, Height: 24, Pane: consolePaneLogs}
+	loop.handleShellKey("d")
+	if loop.consoleText != "d" || loop.consoleStart[consolePaneLogs] != 50 {
+		t.Fatalf("text=%q start=%d", loop.consoleText, loop.consoleStart[consolePaneLogs])
+	}
+	if len(s.cmds) != 0 {
+		t.Fatalf("editing typed a movement command: %#v", s.cmds)
+	}
+}
+
 func TestConsoleResizeRequestsWindow(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}

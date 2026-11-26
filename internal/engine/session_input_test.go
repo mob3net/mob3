@@ -37,6 +37,35 @@ func TestHalfPageAliases(t *testing.T) {
 	}
 }
 
+func TestPageMovementAliases(t *testing.T) {
+	b := newTestSession(80, 24)
+	b.Layout = &Layout{Height: 100}
+	rows := b.viewportHeight()
+	half := rows / 2
+	page := max(rows-1, 0)
+	maxScroll := b.maxScroll()
+	cases := []struct {
+		key  string
+		want int
+	}{
+		{"j", 51}, {"down", 51}, {"ctrl-n", 51},
+		{"k", 49}, {"up", 49}, {"ctrl-p", 49},
+		{"d", 50 + half}, {"ctrl-d", 50 + half},
+		{"u", 50 - half}, {"ctrl-u", 50 - half},
+		{" ", 50 + page}, {"space", 50 + page}, {"pgdn", 50 + page}, {"ctrl-v", 50 + page},
+		{"b", 50 - page}, {"pgup", 50 - page},
+		{"g", 0}, {"home", 0},
+		{"G", maxScroll}, {"end", maxScroll},
+	}
+	for _, c := range cases {
+		b.Scroll = 50
+		b.HandleKey(c.key)
+		if b.Scroll != c.want {
+			t.Errorf("%q scrolled to %d, want %d", c.key, b.Scroll, c.want)
+		}
+	}
+}
+
 func TestMiddleClickRequestsBackgroundTab(t *testing.T) {
 	doc := ParseHTML(`<p><a href="/next">Next page</a></p>`)
 	u := mustParse(t, "https://example.com/start/")

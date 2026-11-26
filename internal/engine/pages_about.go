@@ -280,7 +280,9 @@ submitted.</p>
 <h2>JavaScript console</h2>
 <p><b>!</b> opens logs, requests, storage, the page HTML and Tools. Use
 <b>Tab</b> or <b>h</b>/<b>l</b> to switch tabs, <b>:</b>/<b>Enter</b> to focus the input, <b>Enter</b>
-to run JavaScript, <b>j</b>/<b>k</b> to scroll and <b>Esc</b> to close. <b>y</b>
+to run JavaScript, <b>j</b>/<b>k</b>, <b>d</b>/<b>u</b> or <b>Space</b>/<b>b</b>
+to scroll by a line, half a screen or a screen, <b>g</b>/<b>G</b> for the ends,
+and <b>Esc</b> to close. <b>y</b>
 copies the whole active tab — the logs, the raw HTML source, the request list
 or the Tools scrollback — because selecting long output by dragging is
 awkward. Use <b>Shift</b>-drag when you only want part of it. Script
