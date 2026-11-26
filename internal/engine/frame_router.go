@@ -33,8 +33,8 @@ type RoutedMessage struct {
 
 // FrameRouter is the only path for cross-frame access inside a tab. It owns
 // the frame IDs, enforces the target-origin check and copies the payload
-// before delivery. A frame tree is not implemented yet; the router currently
-// holds the tab's top-level frame.
+// before delivery. Iframes are inert stubs, so the router holds only the tab's
+// top-level frame.
 type FrameRouter struct {
 	mu      sync.Mutex
 	frames  map[FrameID]*Frame

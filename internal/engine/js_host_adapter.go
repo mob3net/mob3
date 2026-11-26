@@ -13,8 +13,7 @@ type jsHost = JSHost
 
 // frameJSHost is the in-process adapter from one frame's runtime to the tab
 // shell. Layout, scroll and hit testing come from the frame; the terminal
-// viewport, loader, dialogs and form focus remain tab-level until child frames
-// get their own viewport and input state.
+// viewport, loader, dialogs and form focus remain tab-level.
 type frameJSHost struct {
 	b *Session
 	f *Frame

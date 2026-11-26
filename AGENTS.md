@@ -120,7 +120,7 @@ published by the Pages build.
   license file and the README License section in sync.
 - **Not a secure browser.** No sandboxing, process or site isolation, CSP
   enforcement, certificate UI or security hardening, and it is not audited.
-  Tab and planned frame separation is logical only inside one Go process
+  Tab separation is logical only inside one Go process
   (separate JS runtimes and origin checks), not memory, site or OS isolation.
   This warning stays prominent in `README.md` and on the built-in start and
   help pages. Never present MOB³ as safe for passwords, accounts, payments or

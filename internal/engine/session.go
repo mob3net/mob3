@@ -11,8 +11,8 @@ import (
 // Session is one tab: the top-level frame, shell glue and view state. The
 // front end owns the trusted navigation list and terminal presentation; this
 // type keeps the memory-only page cache. The embedded Frame owns the page,
-// layout, URL and scroll position so the tab and frame model can grow without
-// moving the tab-level state.
+// layout, URL and scroll position, keeping the top-level browsing context
+// separate from tab-level state. Iframes are inert stubs and add no child frame.
 type Session struct {
 	*Frame
 

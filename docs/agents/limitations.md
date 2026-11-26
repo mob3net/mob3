@@ -50,9 +50,10 @@ agreement, the non-negotiable constraints and the change protocol.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
-- Tabs are implemented, but real iframes are still the recorded target. The
-  model is one Go process with one sobek VM per tab; iframe elements have inert
-  stub documents and are postMessage-only (`contentDocument`/`contentWindow`
+- Tabs are implemented, but iframes are permanent inert stubs, not a pending
+  target. The model is one Go process with one sobek VM per tab; iframe
+  elements have inert stub documents and are postMessage-only
+  (`contentDocument`/`contentWindow`
   return one shared inert stub, no message is delivered, `frameElement` is null
   and there is no DOM bridge). Layout still reserves the iframe's replaced box:
   CSS `width`/`height` (with the legacy `width`/`height` attributes mapped

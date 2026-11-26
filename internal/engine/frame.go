@@ -9,10 +9,10 @@ import (
 // FrameID identifies one frame inside a tab.
 type FrameID uint32
 
-// Frame is one browsing context. For now it is the tab's top-level document;
-// child frames and a frame tree join it with the iframe work. A frame owns its
-// document, layout, URL and scroll position, while the Session remains the
-// tab-level façade that also carries the shell, loader and history state.
+// Frame is the tab's top-level browsing context. Iframes are inert stubs with
+// no browsing context or child frame tree, so one Frame owns the whole tab's
+// document, layout, URL and scroll position. The Session remains the tab-level
+// façade that also carries the shell, loader and history state.
 type Frame struct {
 	id     FrameID
 	Page   *Page

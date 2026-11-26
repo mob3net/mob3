@@ -20,7 +20,7 @@
 - No private/incognito concept: every session is ephemeral. Pages share one
   process; tab separation is logical only, not memory or site isolation.
 
-## In-process tab isolation (real iframes remain the target)
+## In-process tab isolation (iframes are inert)
 
 Tabs are implemented inside the one Go process:
 
@@ -37,10 +37,10 @@ No DOM or sobek value crosses a tab boundary. This is logical isolation, not
 memory or site isolation. A compromised engine or a JavaScript-engine escape
 can read across tabs, and there is no OS sandbox or Spectre mitigation.
 
-Real iframes remain the target and are not implemented: iframe elements have
-inert stub documents, `contentDocument` is null even for a same-origin frame,
-`frameElement` is null, and there is no DOM bridge. The planned frame tree would
-give each frame its own runtime and postMessage-only cross-frame access.
+Iframes are a permanent non-goal. Iframe elements have inert stub documents,
+`contentDocument` is null even for a same-origin frame, `frameElement` is null,
+and there is no DOM bridge. There is no child browsing context, frame tree or
+cross-frame DOM access, and none is planned.
 
 ## No persistence
 

@@ -49,8 +49,9 @@ router, not change the ownership model.
 
 All steps are landed. The temporary aliases, test-only host factory and the
 migration tracker are gone. The host records each document's final URL and the
-front end reads it by entry ID. The remaining architecture work is the
-in-process frame model; the engine child process is not part of the target.
+front end reads it by entry ID. The top-level browsing frame model is complete;
+real iframes are an explicit non-goal, not pending work. The engine child
+process is not part of the target.
 
 1. **Landed.** `internal/protocol`, codec, dependency test and the
    output/benchmark baseline.
@@ -121,20 +122,23 @@ OS-specific isolation mechanism is part of the model.
   progress ticks and usage wakeups.
 - A failed tab is contained: its transport is released, the tab stays in the
   bar marked crashed, and the other tabs keep running.
-- A tab owns a frame tree. The top-level document and every iframe are frames.
-  Each frame owns its document/`Page`, `Layout`, URL and origin, viewport,
+- A tab owns one top-level browsing frame. Iframes stay inert stub documents
+  with no browsing context; there is no child frame tree and none is planned.
+  The frame owns its document/`Page`, `Layout`, URL and origin, viewport,
   scroll, timers and one sobek VM.
-- There is one sobek VM per frame. No `*sobek.Object`, `*Node` or other engine
-  value crosses a frame or tab boundary. Cross-frame access goes through a
-  frame router that copies data and checks the frame's origin.
+- There is one sobek VM per top-level frame. No `*sobek.Object`, `*Node` or
+  other engine value crosses a tab boundary. The frame router remains the only
+  path for the limited cross-frame surface the stubs expose and for a future
+  process transport; it copies data and checks the committed origin.
 - A frame's origin comes from the URL the host and loader committed for that
-  document, never from a script-supplied value. Every cross-frame and
-  origin-scoped API uses that origin.
-- Iframes are postMessage-only. `contentWindow` is a WindowProxy with
-  `postMessage` and the limited Window surface; `contentDocument` is null even
-  for a same-origin frame, `frameElement` is null, and there is no DOM bridge.
-  `parent` and `top` are WindowProxies, not references to the other frame's
-  document.
+  document, never from a script-supplied value. Every origin-scoped API uses
+  that origin.
+- Iframes are inert postMessage-only stubs. `contentWindow` is a WindowProxy
+  with `postMessage` and the limited Window surface; `contentDocument` is null
+  even for a same-origin frame, `frameElement` is null, and there is no DOM
+  bridge. `parent` and `top` are WindowProxies, not references to another
+  document. Iframe navigation, child layout, child scripts and a cross-frame DOM
+  bridge are not planned.
 - A process-wide context owns the shared origin storage, memory budgets,
   settings and globally unique history-entry IDs. `localStorage` is keyed by
   origin and shared across tabs; `sessionStorage` is keyed by tab and origin.
@@ -157,18 +161,20 @@ protocol session with its own engine `Session` and loader over the shared
 A background tab keeps loading and updates its own state, history, title and
 overlays but receives no frames, runs no JavaScript timers and does not stream
 deferred images. Closing a tab closes its transport and unregisters its budget
-share. Iframes remain inert stub documents and reserve only a labeled black
-placeholder box for their declared size: the frame tree is the remaining
-architecture work. The `Session` embeds a top-level `Frame` that owns the page,
-layout, URL, scroll and JS runtime; the tab loop asks the frame for its timers.
+share. Iframes are inert stub documents that reserve only a labeled black
+placeholder box for their declared size; they are a permanent non-goal, not
+pending architecture work. The `Session` embeds the top-level `Frame` that owns
+the page, layout, URL, scroll and JS runtime; the tab loop asks the frame for
+its timers.
 `localStorage` and `sessionStorage` use the shared `StorageBroker`, and the
 shared `BudgetManager` divides the JS, page-cache, image and SVG pools across
 sessions.
 
 ## Current layout
 
-This is the **actual** state. Tabs are implemented; real iframe browsing
-contexts are the remaining architecture step. There is no engine child process.
+This is the **actual** state. Tabs are implemented. Real iframe browsing
+contexts are a permanent non-goal; iframes stay inert stubs. There is no engine
+child process.
 
 - `cmd/mob3/main.go` — thin entry point; calls `app.Run(os.Args[1:])`.
 - `internal/protocol`, `internal/engine`, `internal/host`, `internal/frontend`
@@ -311,8 +317,8 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/context.go` | `BrowserContext`: state shared by every tab session in one process. It allocates the opaque history-entry ID sequence and tab IDs, and owns the shared `StorageBroker` and `BudgetManager`; shared settings join it with the tab and frame model. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
-| `internal/engine/frame.go` | `Frame`: one browsing context. It currently holds the tab's top-level `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID; child frames and the frame tree join it with the iframe work. `Session` embeds the top-level frame and remains the tab-level façade. |
-| `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses a frame boundary. It currently holds the top-level frame. |
+| `internal/engine/frame.go` | `Frame`: the tab's top-level browsing context. It holds the tab's `Page`, `Layout`, `URL`, `Scroll`, JavaScript runtime and router ID. Iframes are inert stubs with no child frame, so no frame tree exists. `Session` embeds the top-level frame and remains the tab-level façade. |
+| `internal/engine/frame_router.go` | `FrameRouter`: the only cross-frame path in a tab. It assigns frame IDs, derives each frame's committed origin, enforces the postMessage target-origin rule and copies the payload, so no node, layout or sobek value crosses an iframe boundary. It holds the top-level frame; iframes are inert stubs. |
 | `internal/engine/session_new.go` | `SessionConfig`, `NewConfiguredSession`, `NewAutomationWithConfig` and `AutomationConfig`; the app supplies flags, the shared `BrowserContext` and terminal setup. |
 | `internal/engine/version.go` | Injected build version and the help-page wrapper. |
 | `internal/engine/session_certs.go` | Config-page trust-store label. |
@@ -390,13 +396,13 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/history_cache.go` | Back/forward cache glue: cache limit and page cap, cache/suspend the current page, entry removal, drop-all and the one-shot scavenge request. |
 | `internal/engine/session_apply.go` | Load-result application and cached-page restore, driven through the `SessionHooks` trusted-shell effects (JS, console, modals, rebuild, status, download and history commit). |
 | `internal/engine/forms.go` | Form editing and focus: Tab order, control activation/stepping, text/range editing, submission, label targets and form requests, with UI/JS effects supplied by `SessionHooks`. |
-| `internal/engine/js_life.go` | Frame-owned JS runtime lifecycle: start/stop, registration of the running top-level runtime for out-of-band abort, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. The tab loop asks the top-level frame for its next timer; child frames will do the same. |
+| `internal/engine/js_life.go` | Frame-owned JS runtime lifecycle: start/stop, registration of the running top-level runtime for out-of-band abort, timer deadlines, redraw throttling, hover-rebuild deadlines, pending-navigation drain and dynamic-import completion. The tab loop asks the top-level frame for its next timer. |
 | `internal/engine/commands.go` | Front-end command dispatch: navigation, history, resize, keys, mouse, scroll, app, find, select, modal, hint, console and error commands, with shell effects supplied by `CommandHooks`. |
 | `internal/engine/serve.go` | Transport event loop: load/image/import/timer/progress/usage events, draw/state/frame emission and shutdown, with terminal effects supplied by `RuntimeHooks`. |
 | `internal/engine/session.go` | The engine-side tab state: the embedded top-level `Frame`, form/selection state and session dependencies, plus the unexported state groups embedded in place (viewport, options, render, display, load, images, placements, find, hints, console, modal, history, transport, status, config) declared in the file that owns each subsystem. Promoted fields keep the existing `b.Field` call sites; scroll/page/find/hint/PDF helpers stay here. |
 | `internal/engine/page_cache.go` | Bounded memory-only back/forward page cache: cached pages, byte/page budgets, eviction callbacks, page/DOM/image weight estimates. |
 | `internal/engine/js.go` | sobek runtime, script execution, module script dispatch, internal event dispatch, timers and DOM mutation hooks. |
-| `internal/engine/js_host.go` | Per-frame `JSHost` contract and `ImportTask`: layout, scroll and hit testing from the frame, with viewport, focus, dialogs, status, form/upload, cookie/fetch brokering and the import queue from the tab until child frames have their own viewport and input state. |
+| `internal/engine/js_host.go` | Per-frame `JSHost` contract and `ImportTask`: layout, scroll and hit testing from the frame, with viewport, focus, dialogs, status, form/upload, cookie/fetch brokering and the import queue from the tab. |
 | `internal/engine/js_life_adapter.go` | Thin JS lifecycle wrappers over `StartJSWithHooks`, timers and import completion. |
 | `internal/engine/js_host_adapter.go` | Frame-scoped implementation of the engine `JSHost` contract: layout, scroll and node lookup come from the frame; terminal viewport, loader, dialogs and form focus stay tab-level. |
 | `internal/engine/js_dom.go` | DOM wrapper plumbing: attribute and tree mutation helpers, fragment parsing, wrapper/unwrap and instance initialization, and custom-element construction. The document wrapper also carries the Node mutation methods and element-child views because frameworks that hydrate with `document` as the root container call them on the document itself. |
