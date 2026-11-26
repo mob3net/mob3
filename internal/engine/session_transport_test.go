@@ -136,6 +136,23 @@ func TestSessionInitResizeAndScroll(t *testing.T) {
 	}
 }
 
+func TestSessionPingPong(t *testing.T) {
+	b := newTestSession(60, 10)
+	b.NoDraw = true
+	s := openTestSession(t, b)
+	defer s.Close()
+	if err := s.Send(protocol.Command{Body: protocol.Ping{ID: 42}}); err != nil {
+		t.Fatal(err)
+	}
+	body := waitEvent(t, s, func(body protocol.EventBody) bool {
+		pong, ok := body.(protocol.Pong)
+		return ok && pong.ID == 42
+	})
+	if pong := body.(protocol.Pong); pong.ID != 42 {
+		t.Fatalf("pong = %+v", pong)
+	}
+}
+
 func TestSessionAbortIsOutOfBand(t *testing.T) {
 	b := newTestSession(60, 10)
 	b.NoJS = true

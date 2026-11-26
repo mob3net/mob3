@@ -134,6 +134,9 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 		e.str(v.Reason)
 	case Shutdown:
 		kind = CmdShutdown
+	case Ping:
+		kind = CmdPing
+		e.u64(v.ID)
 	case DialogResult:
 		kind = CmdDialogResult
 		e.u32(v.ID)
@@ -361,6 +364,9 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		}
 	case Quit:
 		kind = EvQuit
+	case Pong:
+		kind = EvPong
+		e.u64(v.ID)
 	case AutomationResult:
 		kind = EvAutomationResult
 		e.u8(uint8(v.Op))
@@ -450,6 +456,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = Abort{Reason: d.str()}
 	case CmdShutdown:
 		body = Shutdown{}
+	case CmdPing:
+		body = Ping{ID: d.u64()}
 	case CmdDialogResult:
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
 	case CmdSelectResult:
@@ -667,6 +675,8 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = h
 	case EvQuit:
 		body = Quit{}
+	case EvPong:
+		body = Pong{ID: d.u64()}
 	case EvAutomationResult:
 		body = AutomationResult{
 			Op:   AutomationOp(d.u8()),

@@ -118,6 +118,12 @@ func (s *Session) ServeWithHooks(ctx context.Context, abort <-chan struct{}, in 
 			if !ok {
 				return nil
 			}
+			if ping, ok := cmd.Body.(protocol.Ping); ok {
+				if err := out.Send(protocol.Event{Body: protocol.Pong{ID: ping.ID}}); err != nil {
+					return err
+				}
+				continue
+			}
 			quit, err := s.HandleCommand(cmd, h)
 			if err != nil {
 				return err

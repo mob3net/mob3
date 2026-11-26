@@ -48,6 +48,14 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 	kittyKeys := frontend.KittyKeyboardEnabled()
 	_, _ = os.Stdout.WriteString(enterTerminal(kittyKeys))
 
+	stuck := make(chan *frontend.Tab, 4)
+	tabs.setDiscard(func(tab *frontend.Tab) {
+		select {
+		case stuck <- tab:
+		default:
+		}
+	})
+
 	top, contentH := frontend.ContentBounds(h)
 	tab, err := tabs.openWithLoader(1, w, h, top, contentH, o.Target, loader)
 	if err != nil {
@@ -77,7 +85,7 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 
 	loop = &frontend.SessionLoop{
 		Tabs: []*frontend.Tab{tab}, Active: tab, Presenter: presenter,
-		Keys: keys, Resize: winch, Quit: quitSig,
+		Keys: keys, Resize: winch, Quit: quitSig, Stuck: stuck,
 		OpenTab:      tabs.open,
 		CloseTab:     tabs.close,
 		KillTab:      tabs.kill,
