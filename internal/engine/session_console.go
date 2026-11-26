@@ -45,6 +45,11 @@ const (
 	maxJSLogLine  = 8 << 10
 	maxJSLogBytes = 512 << 10
 	jsLogCap      = 200
+	// maxPageDialogs bounds interactive alert/confirm/prompt dialogs per page
+	// load so a script cannot reopen them indefinitely.
+	maxPageDialogs = 20
+	// maxDialogBytes bounds one dialog message or prompt default.
+	maxDialogBytes = 8 << 10
 )
 
 // truncateLogBytes returns a bounded, rune-safe prefix with a marker.
@@ -1094,10 +1099,25 @@ func (b *Session) showPrompt(msg, def string) (string, bool) {
 // caller until the answer arrives. Headless callers (automation, dump and
 // direct tests) use the non-interactive defaults.
 func (b *Session) runDialog(d *jsDialog) (string, bool) {
-	if b.sessionOut != nil && b.sessionIn != nil {
-		return b.runTransportDialog(d)
+	d.message = truncateLogBytes(d.message, maxDialogBytes)
+	if d.kind == "prompt" {
+		d.text = truncateLogBytes(d.text, maxDialogBytes)
 	}
-	return d.text, d.kind == "alert"
+	if b.sessionOut == nil || b.sessionIn == nil {
+		return d.text, d.kind == "alert"
+	}
+	if b.Dialogs >= maxPageDialogs {
+		// Suppress further dialogs with the non-interactive defaults, and say
+		// so once, instead of letting a page reopen a modal forever.
+		if !b.DialogsBlocked {
+			b.DialogsBlocked = true
+			b.logJS("warn", "Additional dialogs blocked for this page")
+			b.status = "Dialogs blocked — too many for this page"
+		}
+		return d.text, d.kind == "alert"
+	}
+	b.Dialogs++
+	return b.runTransportDialog(d)
 }
 
 // runTransportDialog hands a dialog to the front end and waits for its answer.

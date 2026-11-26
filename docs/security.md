@@ -205,5 +205,8 @@ loop and cancels its in-flight requests; closing the tab does the same before
 releasing it. Timer counts and per-tick callbacks are capped. Go-side copies of
 page data are capped too: the console log at 8 KiB per line and 512 KiB total,
 DOM text and attribute values at 1 MiB each and 64 MiB per runtime, script-visible
-nodes at 200,000, and request-log URLs at 2 KiB. These limits protect against
-runaway scripts, not against malicious pages in general.
+nodes at 200,000, and request-log URLs at 2 KiB. Interactive
+`alert`/`confirm`/`prompt` dialogs are limited to 20 per page load and 8 KiB
+each; later calls return the non-interactive defaults, so a script cannot reopen
+a modal forever. These limits protect against runaway scripts, not against
+malicious pages in general.

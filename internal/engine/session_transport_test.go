@@ -373,6 +373,60 @@ func (s *dialogSink) Send(ev protocol.Event) error {
 	return nil
 }
 
+type autoDialogSink struct {
+	in    chan<- protocol.Command
+	count int
+	last  protocol.Dialog
+}
+
+func (s *autoDialogSink) Send(ev protocol.Event) error {
+	if d, ok := ev.Body.(protocol.Dialog); ok {
+		s.count++
+		s.last = d
+		s.in <- protocol.Command{Body: protocol.DialogResult{ID: d.ID, OK: true, Text: "ok"}}
+	}
+	return nil
+}
+
+func TestDialogsAreBoundedPerPage(t *testing.T) {
+	b := newTestSession(60, 10)
+	in := make(chan protocol.Command, 8)
+	sink := &autoDialogSink{in: in}
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = sink
+
+	for i := 0; i < maxPageDialogs+5; i++ {
+		b.showAlert("x")
+	}
+	if sink.count != maxPageDialogs {
+		t.Fatalf("dialogs shown = %d, want %d", sink.count, maxPageDialogs)
+	}
+	if !b.DialogsBlocked {
+		t.Fatal("dialog budget exhaustion was not recorded")
+	}
+	if b.showConfirm("c") {
+		t.Fatal("suppressed confirm returned true")
+	}
+	if got, ok := b.showPrompt("p", "def"); ok || got != "def" {
+		t.Fatalf("suppressed prompt = %q, %v", got, ok)
+	}
+	if sink.count != maxPageDialogs {
+		t.Fatalf("suppressed dialogs sent %d events", sink.count)
+	}
+
+	// A new page load restores the budget, and one message is byte-capped.
+	b.ResetUI()
+	b.showAlert(strings.Repeat("m", maxDialogBytes*2))
+	if sink.count != maxPageDialogs+1 {
+		t.Fatalf("dialogs after reset = %d, want %d", sink.count, maxPageDialogs+1)
+	}
+	if len(sink.last.Text) > maxDialogBytes {
+		t.Fatalf("dialog message = %d bytes, want at most %d", len(sink.last.Text), maxDialogBytes)
+	}
+}
+
 func TestDialogTransportRoundTrip(t *testing.T) {
 	b := newTestSession(60, 10)
 	b.NoDraw = true

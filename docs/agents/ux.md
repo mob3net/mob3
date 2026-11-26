@@ -42,7 +42,9 @@ agreement, the non-negotiable constraints and the change protocol.
   keyboard and pointer, so tab switching (bar clicks, keyboard cycling, number
   keys) and middle-click closing wait until it is dismissed; the URL prompt and
   find bar hand a click on another chrome control to that control in the same
-  click. A crashed
+  click. A page may open at most 20 interactive alert/confirm/prompt dialogs per
+  document load; later calls return the non-interactive defaults and one
+  warning is logged, so a timer or loop cannot reopen a modal forever. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs from
   `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
   focused URL prompt when no target is given; a link opened in a background tab

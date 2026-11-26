@@ -19,6 +19,11 @@ type loadState struct {
 	ProgressHold    int
 	AutoNavigations int
 	LoopStopped     bool
+	// Dialogs counts interactive alert/confirm/prompt dialogs shown for the
+	// current page load; DialogsBlocked records the one-time warning once the
+	// budget is spent.
+	Dialogs         int
+	DialogsBlocked  bool
 	LastMethod      string
 	LastBody        []byte
 	LastContentType string

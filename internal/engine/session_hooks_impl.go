@@ -23,6 +23,8 @@ func (b *Session) ResetUI() {
 	b.quitPending = false
 	b.jsErr = false
 	b.moduleErr = false
+	b.Dialogs = 0
+	b.DialogsBlocked = false
 }
 
 func (b *Session) ResetConsole()        { b.resetConsole() }
