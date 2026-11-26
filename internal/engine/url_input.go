@@ -52,7 +52,17 @@ func ResolveInput(input string, base *url.URL, searchURL string) (*url.URL, erro
 		return url.Parse("http://" + s)
 	}
 	if searchURL != "" && looksLikeSearch(s) {
-		return searchURLFor(searchURL, s)
+		u, err := searchURLFor(searchURL, s)
+		if err != nil {
+			return nil, err
+		}
+		// The search template is configuration, but its result must still be a
+		// document scheme. A data: template would otherwise bypass the input
+		// check above.
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return nil, errors.New("search template produced an unsupported URL scheme")
+		}
+		return u, nil
 	}
 	return url.Parse("https://" + s)
 }

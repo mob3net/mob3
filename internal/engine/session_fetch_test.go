@@ -711,6 +711,12 @@ func TestResolveRejectsDataDocuments(t *testing.T) {
 	if _, err := ResolveInput("about:blank", nil, ""); err != nil {
 		t.Fatalf("about: input was rejected: %v", err)
 	}
+	if u, err := ResolveInput("query", nil, "data:text/html,"); err == nil {
+		t.Fatalf("data: search template resolved to %v", u)
+	}
+	if u, err := ResolveInput("query", nil, "https://search.example/?q="); err != nil || u.Scheme != "https" {
+		t.Fatalf("https search template = %v, %v", u, err)
+	}
 }
 
 func TestRequestOrigin(t *testing.T) {

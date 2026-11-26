@@ -390,6 +390,9 @@ func (f Frame) Validate(lim Limits) error {
 		if p.W <= 0 || p.H <= 0 || p.X < 0 || p.Y < 0 || p.X+p.W > f.W || p.Y+p.H > f.H {
 			return fmt.Errorf("protocol: placement %d is outside the frame", i)
 		}
+		if p.RowStart < 0 || p.TotalRows <= 0 || p.RowStart >= p.TotalRows {
+			return fmt.Errorf("protocol: placement %d has invalid source rows", i)
+		}
 		if p.Format != PlacementPNG {
 			return fmt.Errorf("protocol: placement %d has unknown format", i)
 		}

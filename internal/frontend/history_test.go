@@ -158,7 +158,7 @@ func TestPageStateUsesHistoryLedger(t *testing.T) {
 
 func TestInvalidHistoryCommitIgnored(t *testing.T) {
 	l := &Tab{}
-	for _, u := range []string{"file:///etc/passwd", "javascript:alert(1)", "", "not a url\n"} {
+	for _, u := range []string{"file:///etc/passwd", "javascript:alert(1)", "data:text/html,<p>x</p>", "", "not a url\n"} {
 		l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 1, URL: u, Push: true})
 	}
 	if len(l.history) != 0 {

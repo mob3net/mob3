@@ -67,8 +67,9 @@ values are enforced: `Strict` cookies are sent only to the same site, `Lax`
 also on top-level `GET`/`HEAD` navigations, and `None` only when `Secure` over
 HTTPS. A cookie with no `SameSite` keeps the legacy send-everywhere behavior.
 Non-GET form submissions carry the submitting page's `Origin`, so a server can
-reject cross-site posts. A `Secure` cookie can still be planted over an HTTP
-response, because the standard cookie jar accepts it. `localStorage` and
+reject cross-site posts. A `Secure` cookie is accepted only over HTTPS, and the
+`__Secure-`/`__Host-` prefixes are enforced: the former needs `Secure`, the
+latter needs `Secure`, `Path=/` and no `Domain`. `localStorage` and
 `sessionStorage` are in-memory and do not persist across restarts:
 `localStorage` is shared per origin across tabs, while `sessionStorage` is per
 tab and origin. Each area is capped at 5 MiB and the whole browser context at

@@ -241,6 +241,12 @@ func TestFrameValidation(t *testing.T) {
 		{"placement data", func(f *Frame) {
 			f.Placements = []Placement{{X: 0, Y: 0, W: 1, H: 1, Format: PlacementPNG}}
 		}},
+		{"placement row start", func(f *Frame) {
+			f.Placements = []Placement{{X: 0, Y: 0, W: 1, H: 1, RowStart: -1, TotalRows: 1, Format: PlacementPNG, Data: []byte{1}}}
+		}},
+		{"placement total rows", func(f *Frame) {
+			f.Placements = []Placement{{X: 0, Y: 0, W: 1, H: 1, TotalRows: 0, Format: PlacementPNG, Data: []byte{1}}}
+		}},
 	}
 	for _, tc := range cases {
 		f := testFrame()
@@ -257,6 +263,29 @@ func TestFrameOversizeCellsRejected(t *testing.T) {
 	f := testFrame()
 	if err := f.Validate(lim); err == nil {
 		t.Fatal("oversized frame validated")
+	}
+}
+
+func TestHintsValidate(t *testing.T) {
+	good := Hints{Mode: HintPreview, Prefix: "d", Items: []HintItem{{
+		Target: 2, Label: "d", X: 1, Y: 2, W: 3, H: 1,
+		Chars: []HintChar{{R: 'D', X: 1, Y: 2}}, Link: true, Href: "/next",
+	}}}
+	if err := good.Validate(DefaultLimits); err != nil {
+		t.Fatalf("valid hints rejected: %v", err)
+	}
+	bad := []Hints{
+		{Mode: HintFollow, Items: []HintItem{{Target: -1}}},
+		{Mode: HintFollow, Prefix: "\x1b", Items: nil},
+		{Mode: HintFollow, Items: []HintItem{{Target: 0, Label: "\x1b"}}},
+		{Mode: HintFollow, Items: []HintItem{{Target: 0, Href: "x\x1b"}}},
+		{Mode: HintFollow, Items: []HintItem{{Target: 0, X: -1}}},
+		{Mode: HintFollow, Items: []HintItem{{Target: 0, Chars: []HintChar{{R: '\x1b'}}}}},
+	}
+	for i, h := range bad {
+		if h.Validate(DefaultLimits) == nil {
+			t.Errorf("invalid hints %d validated", i)
+		}
 	}
 }
 

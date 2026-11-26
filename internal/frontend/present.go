@@ -176,6 +176,14 @@ func (p *Presenter) SetHint(v *HintView) {
 }
 
 func (p *Presenter) SetState(st protocol.State) {
+	// State comes from the engine. Clamp before it can size a frame or canvas,
+	// matching the protocol frame limit rather than trusting the sender.
+	if st.Width > protocol.DefaultLimits.MaxFrameWidth {
+		st.Width = protocol.DefaultLimits.MaxFrameWidth
+	}
+	if st.Height > protocol.DefaultLimits.MaxFrameHeight {
+		st.Height = protocol.DefaultLimits.MaxFrameHeight
+	}
 	if p.state.FrontendChrome != st.FrontendChrome ||
 		p.state.HeaderRows != st.HeaderRows ||
 		p.state.Width != st.Width || p.state.Height != st.Height {
@@ -206,14 +214,23 @@ func (p *Presenter) Refresh() error {
 	if p.hasFrame {
 		return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
 	}
-	if !p.state.FrontendChrome || p.state.Width <= 0 || p.state.HeaderRows <= 0 ||
-		p.state.Height <= p.state.HeaderRows+1 {
+	// Defensive clamp in case a state bypassed SetState.
+	w := p.state.Width
+	if w > protocol.DefaultLimits.MaxFrameWidth {
+		w = protocol.DefaultLimits.MaxFrameWidth
+	}
+	height := p.state.Height
+	if height > protocol.DefaultLimits.MaxFrameHeight {
+		height = protocol.DefaultLimits.MaxFrameHeight
+	}
+	if !p.state.FrontendChrome || w <= 0 || p.state.HeaderRows <= 0 ||
+		height <= p.state.HeaderRows+1 {
 		return nil
 	}
 	// A modal can arrive before the first page frame. Compose it over a blank
 	// content rectangle so the download/notice/dialog is still visible.
-	h := p.state.Height - p.state.HeaderRows - 1
-	f := protocol.Frame{W: p.state.Width, H: h, Cells: make([]protocol.Cell, p.state.Width*h)}
+	h := height - p.state.HeaderRows - 1
+	f := protocol.Frame{W: w, H: h, Cells: make([]protocol.Cell, w*h)}
 	bg := rgb(255, 255, 255)
 	for i := range f.Cells {
 		f.Cells[i] = protocol.Cell{R: ' ', BG: bg}

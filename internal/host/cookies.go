@@ -238,11 +238,29 @@ func (j *CookieJar) acceptsCookieLocked(id cookieIdentity, value string) bool {
 	return j.bytes+delta <= maxCookieJarBytes
 }
 
+// validCookieScope enforces the transport and name-prefix rules a regular
+// browser applies before storing a cookie.
+func validCookieScope(u *url.URL, c *http.Cookie) bool {
+	if c.Secure && (u == nil || u.Scheme != "https") {
+		return false
+	}
+	switch {
+	case strings.HasPrefix(c.Name, "__Secure-"):
+		return c.Secure
+	case strings.HasPrefix(c.Name, "__Host-"):
+		return c.Secure && c.Domain == "" && c.Path == "/"
+	}
+	return true
+}
+
 func (j *CookieJar) setCookiesLocked(u *url.URL, cookies []*http.Cookie) {
 	now := time.Now()
 	j.purgeExpiredLocked(now)
 	accepted := make([]*http.Cookie, 0, len(cookies))
 	for _, c := range cookies {
+		if !validCookieScope(u, c) {
+			continue
+		}
 		id, hostOnly, ok := cookieIdentityFor(u, c)
 		if !ok {
 			continue

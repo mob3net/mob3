@@ -191,6 +191,30 @@ func TestCookieDomainIsolationFromIDNHost(t *testing.T) {
 	}
 }
 
+func TestCookieSecureAndPrefixRules(t *testing.T) {
+	httpURL, _ := url.Parse("http://example.com/")
+	httpsURL, _ := url.Parse("https://example.com/")
+
+	j := NewCookieJar()
+	j.SetCookies(httpURL, []*http.Cookie{{Name: "plain", Value: "1", Path: "/", Secure: true}})
+	j.SetDocumentCookie(httpURL, &http.Cookie{Name: "script", Value: "1", Path: "/", Secure: true})
+	if got := cookieNames(j.RequestCookies(httpsURL, "GET", RequestCookiePolicy{})); got != "" {
+		t.Fatalf("Secure cookies planted over HTTP: %q", got)
+	}
+
+	j.SetCookies(httpsURL, []*http.Cookie{
+		{Name: "__Secure-no", Value: "1", Path: "/"},
+		{Name: "__Secure-yes", Value: "1", Path: "/", Secure: true},
+		{Name: "__Host-yes", Value: "1", Path: "/", Secure: true},
+		{Name: "__Host-domain", Value: "1", Path: "/", Secure: true, Domain: "example.com"},
+		{Name: "__Host-path", Value: "1", Path: "/sub", Secure: true},
+	})
+	got := cookieNames(j.RequestCookies(httpsURL, "GET", RequestCookiePolicy{}))
+	if got != "__Host-yes,__Secure-yes" {
+		t.Fatalf("prefix cookies = %q", got)
+	}
+}
+
 func TestCookieStorageCaps(t *testing.T) {
 	u, _ := url.Parse("https://example.com/")
 

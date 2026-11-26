@@ -54,6 +54,32 @@ func TestHintOverlayDoesNotMutateStoredFrame(t *testing.T) {
 	}
 }
 
+func TestPresenterClampsStateSize(t *testing.T) {
+	p := NewPresenter(io.Discard, false)
+	maxW, maxH := protocol.DefaultLimits.MaxFrameWidth, protocol.DefaultLimits.MaxFrameHeight
+	p.SetState(protocol.State{FrontendChrome: true, Width: maxW + 5000, Height: 20, HeaderRows: 2})
+	if p.state.Width != maxW {
+		t.Fatalf("width = %d, want clamped %d", p.state.Width, maxW)
+	}
+	if err := p.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if p.lastFrame.W != maxW {
+		t.Fatalf("frame width = %d, want %d", p.lastFrame.W, maxW)
+	}
+	p = NewPresenter(io.Discard, false)
+	p.SetState(protocol.State{FrontendChrome: true, Width: 20, Height: maxH + 5000, HeaderRows: 2})
+	if p.state.Height != maxH {
+		t.Fatalf("height = %d, want clamped %d", p.state.Height, maxH)
+	}
+	if err := p.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if p.lastFrame.H != maxH-3 {
+		t.Fatalf("frame height = %d, want %d", p.lastFrame.H, maxH-3)
+	}
+}
+
 func TestPresenterDiffsChangedRows(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)

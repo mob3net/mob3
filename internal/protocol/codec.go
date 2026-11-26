@@ -667,7 +667,11 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 			item.Href = d.str()
 			items[i] = item
 		}
-		body = Hints{Mode: mode, Prefix: prefix, Items: items}
+		h := Hints{Mode: mode, Prefix: prefix, Items: items}
+		if err := h.Validate(d.lim); err != nil {
+			return Event{}, nil, err
+		}
+		body = h
 	case EvQuit:
 		body = Quit{}
 	case EvAutomationResult:

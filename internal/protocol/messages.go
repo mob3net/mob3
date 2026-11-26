@@ -1,5 +1,7 @@
 package protocol
 
+import "fmt"
+
 // Command is one message from the front end to a page session.
 type Command struct {
 	Session SessionID
@@ -344,6 +346,49 @@ type Hints struct {
 }
 
 func (Hints) eventKind() Kind { return EvHints }
+
+// Validate checks a Hints event from a compromised engine before the front end
+// paints, copies or sends back any of its values.
+func (h Hints) Validate(lim Limits) error {
+	lim = lim.normalized()
+	switch h.Mode {
+	case HintFollow, HintNewTab, HintPreview:
+	default:
+		return fmt.Errorf("protocol: unknown hint mode %d", h.Mode)
+	}
+	if len(h.Prefix) > 64 || !SafeText(h.Prefix) {
+		return fmt.Errorf("protocol: invalid hint prefix")
+	}
+	if len(h.Items) > lim.MaxLinks {
+		return fmt.Errorf("protocol: too many hint items")
+	}
+	for i, item := range h.Items {
+		if item.Target < 0 {
+			return fmt.Errorf("protocol: hint %d has a negative target", i)
+		}
+		if len(item.Label) > 256 || !SafeText(item.Label) {
+			return fmt.Errorf("protocol: hint %d has an invalid label", i)
+		}
+		if len(item.Href) > lim.MaxTextBytes || !SafeText(item.Href) {
+			return fmt.Errorf("protocol: hint %d has an invalid href", i)
+		}
+		if item.X < 0 || item.Y < 0 || item.W < 0 || item.H < 0 ||
+			item.X > lim.MaxFrameWidth || item.Y > lim.MaxFrameHeight ||
+			item.W > lim.MaxFrameWidth || item.H > lim.MaxFrameHeight {
+			return fmt.Errorf("protocol: hint %d is outside the frame", i)
+		}
+		if len(item.Chars) > lim.MaxCells {
+			return fmt.Errorf("protocol: hint %d has too many characters", i)
+		}
+		for j, c := range item.Chars {
+			if !SafeRune(c.R) || c.X < 0 || c.Y < 0 ||
+				c.X > lim.MaxFrameWidth || c.Y > lim.MaxFrameHeight {
+				return fmt.Errorf("protocol: hint %d character %d is invalid", i, j)
+			}
+		}
+	}
+	return nil
+}
 
 // HintResult answers a Hints event.
 type HintResult struct {

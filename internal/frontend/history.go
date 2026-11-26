@@ -43,7 +43,7 @@ func validDisplayURL(raw string) bool {
 		return false
 	}
 	switch strings.ToLower(u.Scheme) {
-	case "http", "https", "about", "data":
+	case "http", "https", "about":
 		return true
 	}
 	return false
