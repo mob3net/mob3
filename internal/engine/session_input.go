@@ -269,6 +269,7 @@ const quitConfirmText = "Are you sure you want to quit? (y)"
 // HandleKey processes one content key. Shell keys are front-end-owned; this
 // path keeps page movement, forms, find navigation, hints and selection.
 func (b *Session) HandleKey(k string) bool {
+	b.resetAutoNavigationBudget()
 	if ev, ok := ParseMouseToken(k); ok {
 		return b.HandleMouse(ev)
 	}

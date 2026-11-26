@@ -473,10 +473,11 @@ agreement, the non-negotiable constraints and the change protocol.
   refresh or a load-time scripted `location.href`/`assign` replaces it, so
   Back skips the redirect page instead of landing on it and being forwarded
   again. A navigation queued after the page settled (a click or timer handler)
-  still pushes a new entry. Consecutive scripted and meta-refresh redirects
-  stop after 20 hops with `Redirect loop stopped` instead of loading and
-  growing the session forever.
-  Nothing is persisted.
+  still pushes a new entry. Automatic scripted and meta-refresh navigations
+  stop after 20 hops with `Redirect loop stopped`; settling a load does not
+  refresh the budget, so a timer-driven loop stops too. Any user input or
+  navigation command clears the count. Each tab keeps at most 500 back/forward
+  entries, dropping the oldest. Nothing is persisted.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored

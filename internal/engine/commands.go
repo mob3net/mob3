@@ -28,6 +28,9 @@ type CommandHooks interface {
 // HandleCommand applies one front-end command. It reports whether the session
 // should exit.
 func (s *Session) HandleCommand(cmd protocol.Command, h CommandHooks) (bool, error) {
+	// Any front-end command is user or automation activity, so it clears the
+	// automatic-navigation budget even if the load that follows is scripted.
+	s.resetAutoNavigationBudget()
 	switch v := cmd.Body.(type) {
 	case protocol.Init:
 		h.Init(v)

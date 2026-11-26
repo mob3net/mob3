@@ -162,9 +162,10 @@ positions are kept. Up to ten visited pages stay in an in-memory back/forward
 cache, so <b>Back</b> and <b>Forward</b> restore a page, its JavaScript state and
 your scroll position without reloading it. The rendered <b>about:history</b> page
 is still available by URL. Nothing is saved after MOB³ exits. Script and
-meta-refresh redirect chains stop after 20 hops with
-<b>Redirect loop stopped</b>, so a page that redirects to itself cannot loop
-forever.</p>
+meta-refresh navigations stop after 20 automatic hops with
+<b>Redirect loop stopped</b>; the count clears when you type, click, scroll or
+navigate, so a page that redirects to itself cannot loop forever. Each tab
+keeps at most 500 back/forward entries.</p>
 
 <h2>Config</h2>
 <p>The <b>⚙</b> icon opens <b>about:config</b> in a new tab. Changes apply to this session

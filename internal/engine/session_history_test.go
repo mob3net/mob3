@@ -453,6 +453,59 @@ func TestScriptRedirectLoopStops(t *testing.T) {
 	}
 }
 
+// A page that navigates from a timer after each load must not get a fresh
+// redirect budget just because the previous load settled.
+func TestTimerNavigationLoopStops(t *testing.T) {
+	b := newTestSession(80, 10)
+	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {
+		u, err := url.Parse(target)
+		if err != nil {
+			return nil, err
+		}
+		return &Page{URL: u, Base: u, Root: ParseHTML(`<html><body>timer</body></html>`)}, nil
+	}
+	next := func() {
+		select {
+		case res := <-b.LoadCh:
+			b.finishLoad(res)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timer navigation load stalled")
+		}
+	}
+	b.Navigate("https://example.com/start", true)
+	next()
+
+	stopped := false
+	for i := 0; i < maxAutoNavigations+5; i++ {
+		if b.JS == nil {
+			t.Fatal("no runtime for the timer navigation")
+		}
+		b.JS.SetPendingNav(fmt.Sprintf("https://example.com/%d", i))
+		if !b.applyPendingJS(false, b.EntryID, false) {
+			stopped = true
+			break
+		}
+		next()
+	}
+	if !stopped {
+		t.Fatalf("timer loop was not stopped after %d navigations", b.AutoNavigations)
+	}
+	if !b.LoopStopped {
+		t.Fatal("stopped timer loop was not flagged")
+	}
+
+	// User input gives the page a fresh budget.
+	b.HandleKey("x")
+	if b.AutoNavigations != 0 || b.LoopStopped {
+		t.Fatalf("user input left auto=%d stopped=%v", b.AutoNavigations, b.LoopStopped)
+	}
+	b.JS.SetPendingNav("https://example.com/after-input")
+	if !b.applyPendingJS(false, b.EntryID, false) {
+		t.Fatal("user input did not reset the auto-navigation budget")
+	}
+	next()
+}
+
 func TestMetaRefreshLoopStops(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.LoadFn = func(ctx context.Context, method, target string, body []byte, contentType string) (*Page, error) {

@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -49,6 +50,29 @@ func TestApplyHistoryCommitPushReplaceAndTruncate(t *testing.T) {
 	l.applyHistoryCommit(protocol.HistoryCommit{EntryID: 4, URL: "https://example.com/d", Scroll: 2})
 	if len(l.history) != 2 || l.historyIndex != 1 || l.history[1].url != "https://example.com/d" || l.history[1].scroll != 2 {
 		t.Fatalf("replace = %+v at %d", l.history, l.historyIndex)
+	}
+}
+
+func TestTabHistoryIsBounded(t *testing.T) {
+	urls := map[uint64]string{}
+	l := attestedLoop(urls)
+	total := maxTabHistory + 25
+	for i := 1; i <= total; i++ {
+		url := fmt.Sprintf("https://example.com/%d", i)
+		urls[uint64(i)] = url
+		l.applyHistoryCommit(protocol.HistoryCommit{EntryID: uint64(i), URL: url, Push: true})
+	}
+	if len(l.history) != maxTabHistory {
+		t.Fatalf("history = %d entries, want %d", len(l.history), maxTabHistory)
+	}
+	if l.historyIndex != len(l.history)-1 {
+		t.Fatalf("index = %d, want %d", l.historyIndex, len(l.history)-1)
+	}
+	if got := l.history[l.historyIndex].url; got != fmt.Sprintf("https://example.com/%d", total) {
+		t.Fatalf("newest entry = %q", got)
+	}
+	if got := l.history[0].url; got != fmt.Sprintf("https://example.com/%d", total-maxTabHistory+1) {
+		t.Fatalf("oldest kept entry = %q", got)
 	}
 }
 

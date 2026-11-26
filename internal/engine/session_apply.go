@@ -10,6 +10,14 @@ import (
 // MaxAutoNavigations caps consecutive scripted or meta-refresh redirects.
 const MaxAutoNavigations = 20
 
+// resetAutoNavigationBudget clears a stopped or partly spent automatic
+// navigation chain. Only user input calls it: a timer-driven loop must not get
+// a fresh budget just because a load settled.
+func (s *Session) resetAutoNavigationBudget() {
+	s.AutoNavigations = 0
+	s.LoopStopped = false
+}
+
 // SessionHooks are the trusted-shell effects around applying a page or a
 // cached history entry. The browser implements them during the migration.
 type SessionHooks interface {
@@ -58,7 +66,6 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 	s.CancelLoad = nil
 	s.Loading = false
 	if res.Err != nil {
-		s.AutoNavigations = 0
 		s.LoopStopped = false
 		h.SetStatus("Error: " + res.Err.Error())
 		s.FinishProgress()
@@ -166,7 +173,6 @@ func (s *Session) ApplyLoadResult(res LoadResult, h SessionHooks) {
 			EntryID: res.EntryID, URL: s.URL.String(), Scroll: s.Scroll, Push: res.HistoryPush,
 		})
 	}
-	s.AutoNavigations = 0
 	h.InvalidateFrame()
 	if s.DeferredImages {
 		s.Progress = 0.9

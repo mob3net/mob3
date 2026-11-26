@@ -25,6 +25,10 @@ const historyLimit = 50
 // trusted history ledger.
 const maxDisplayURL = 4096
 
+// maxTabHistory bounds one tab's back/forward list. It matches the shared
+// visited-page log; older entries fall off the back.
+const maxTabHistory = 500
+
 // validDisplayURL accepts only the schemes the session can render. The front
 // end owns the address bar, so a malformed or unsupported commit is ignored.
 func validDisplayURL(raw string) bool {
@@ -150,6 +154,7 @@ func (l *Tab) attestedURL(entryID uint64) (string, bool) {
 
 // storeHistoryCommit applies the push/merge rule with the trusted URL.
 func (l *Tab) storeHistoryCommit(v protocol.HistoryCommit, url string) {
+	defer l.trimHistory()
 	e := historyEntry{id: v.EntryID, url: url, scroll: v.Scroll}
 	l.trackGlobalHistory(e)
 	if v.Push {
@@ -174,6 +179,20 @@ func (l *Tab) storeHistoryCommit(v protocol.HistoryCommit, url string) {
 		l.historyIndex = len(l.history) - 1
 	}
 	l.history[l.historyIndex] = e
+}
+
+// trimHistory drops the oldest entries when a tab's back/forward list grows
+// past maxTabHistory, keeping the current position valid.
+func (l *Tab) trimHistory() {
+	drop := len(l.history) - maxTabHistory
+	if drop <= 0 {
+		return
+	}
+	l.history = append([]historyEntry(nil), l.history[drop:]...)
+	l.historyIndex -= drop
+	if l.historyIndex < 0 {
+		l.historyIndex = 0
+	}
 }
 
 func (l *Tab) entryByID(id uint64) *historyEntry {
