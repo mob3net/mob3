@@ -51,6 +51,48 @@ Run `mob3 -h` for the exact defaults in your build.
 
 Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=per-tab`.
 
+## Proxy
+
+MOB3 has no `-proxy` flag or proxy settings UI, but the host transport follows
+Go's standard environment proxy variables:
+
+```sh
+HTTPS_PROXY=http://proxy.example:3128 \
+HTTP_PROXY=http://proxy.example:3128 \
+NO_PROXY=localhost,127.0.0.1 \
+bin/mob3
+```
+
+The variables are read by `http.ProxyFromEnvironment` when the process starts.
+`HTTP_PROXY` and `HTTPS_PROXY` cover the corresponding request schemes;
+`NO_PROXY` excludes hosts. `ALL_PROXY` is not used by Go's environment proxy
+lookup.
+
+SOCKS5 is supported by Go's HTTP transport, so an SSH tunnel works too:
+
+```sh
+ssh -N -D 1080 user@proxy.example
+HTTPS_PROXY=socks5://127.0.0.1:1080 \
+HTTP_PROXY=socks5://127.0.0.1:1080 \
+NO_PROXY=localhost,127.0.0.1 \
+bin/mob3
+```
+
+The proxy is used by the parent host process, which owns all network requests.
+It applies to interactive, dump, PNG and MCP modes. In `-process=per-tab`, the
+engine children still send host RPC to the parent, so the proxy applies there
+too.
+
+Proxy URLs may contain credentials (`http://user:pass@host:port`). Environment
+variables are visible to child processes and to `ps e`-style inspection on some
+systems, so prefer an SSH tunnel or a local authenticated proxy when the
+credentials matter.
+
+This is best-effort networking, not a security boundary: the proxy sees HTTP
+traffic and destination hostnames, HTTPS remains end-to-end encrypted unless the
+proxy performs MITM, and the local-network guard cannot inspect the target the
+proxy resolves.
+
 ## Images and graphics
 
 `-graphics=none` is the default: no external image downloads and no inline SVG

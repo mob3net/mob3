@@ -173,6 +173,11 @@ agreement, the non-negotiable constraints and the change protocol.
   documented in `docs/cli.md`, the built-in help page and this page whenever it
   changes.
 - HTTPS uses Go’s TLS; there is no certificate UI or proxy configuration UI.
+- **Proxies:** the transport uses `http.ProxyFromEnvironment`, so
+  `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` are honored, including HTTP, HTTPS and
+  SOCKS5 proxy URLs. Environment only; read at process start. With a proxy the
+  target is resolved by the proxy, so the local-network guard cannot inspect it.
+  The parent host process owns the network in both process modes.
 - **TLS trust store:** `-certs` selects the roots used for HTTPS. `system`
   (the default) keeps the platform store Go reads; `embedded` uses the official
   Mozilla NSS bundle from `golang.org/x/crypto/x509roots/fallback`. Certificate
