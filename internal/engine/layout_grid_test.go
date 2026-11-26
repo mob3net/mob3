@@ -308,6 +308,70 @@ func TestGridAreaRowSpan(t *testing.T) {
 	}
 }
 
+func TestGridVerticalAlignment(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr;grid-template-rows:64px;align-items:center">` +
+		`<div id="item">item</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	item, _ := findSelectorNode(doc, "#item")
+	if box := ly.Boxes[item]; box.Y <= 0 {
+		t.Fatalf("centered grid item y = %d, want below the row top", box.Y)
+	}
+
+	doc = ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr;grid-template-rows:64px;align-items:start">` +
+		`<div id="item" style="align-self:end">item</div></div></body></html>`)
+	ly = BuildLayout(doc, nil, 40)
+	item, _ = findSelectorNode(doc, "#item")
+	if box := ly.Boxes[item]; box.Y <= 0 {
+		t.Fatalf("end-aligned grid item y = %d, want below the row top", box.Y)
+	}
+}
+
+func TestGridDefaultStretch(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr;grid-template-rows:64px">` +
+		`<div id="item">item</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	item, _ := findSelectorNode(doc, "#item")
+	if box := ly.Boxes[item]; box.H < 2 {
+		t.Fatalf("stretched grid item height = %d, want the row track height", box.H)
+	}
+}
+
+func TestGridAutoFlowColumn(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:32px 32px;grid-auto-flow:column">` +
+		`<div id="a">a</div><div id="b">b</div><div id="c">c</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 60)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	a, b, c := box["a"], box["b"], box["c"]
+	if a.X != b.X || b.Y <= a.Y {
+		t.Fatalf("column flow first column: a=%+v b=%+v", a, b)
+	}
+	if c.X <= a.X || c.Y != a.Y {
+		t.Fatalf("column flow second column: a=%+v c=%+v", a, c)
+	}
+}
+
+func TestGridOrder(t *testing.T) {
+	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-columns:1fr 1fr">` +
+		`<div id="a">a</div><div id="b" style="order:-1">b</div></div></body></html>`)
+	ly := BuildLayout(doc, nil, 40)
+	box := map[string]Rect{}
+	doc.FindAll(func(n *Node) bool {
+		if id := n.Attr("id"); id != "" {
+			box[id] = ly.Boxes[n]
+		}
+		return false
+	})
+	if box["b"].X >= box["a"].X {
+		t.Fatalf("order did not move b before a: a=%+v b=%+v", box["a"], box["b"])
+	}
+}
+
 func TestGridAreasWithoutExplicitColumns(t *testing.T) {
 	doc := ParseHTML(`<html><body style="margin:0"><div style="display:grid;grid-template-areas:'a b' 'c d'">` +
 		`<div id="a" style="grid-area:a">a</div><div id="b" style="grid-area:b">b</div>` +

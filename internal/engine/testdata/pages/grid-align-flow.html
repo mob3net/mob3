@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 4px; font-family: monospace; }
+.align {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 48px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  background: #f4f4f4;
+}
+.align .start { align-self: start; background: #eeeeee; padding: 2px; }
+.align .end { align-self: end; background: #dddddd; padding: 2px; }
+.flow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 32px 32px;
+  grid-auto-flow: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.flow div { background: #eeeeee; padding: 2px; }
+.order {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.order div { background: #dddddd; padding: 2px; }
+.order .first { order: -1; }
+</style>
+</head>
+<body>
+<div class="align">
+  <div class="start">top aligned</div>
+  <div class="end">bottom aligned</div>
+</div>
+<div class="flow">
+  <div>one</div>
+  <div>two</div>
+  <div>three</div>
+</div>
+<div class="order">
+  <div>normal</div>
+  <div class="first">ordered first</div>
+</div>
+</body>
+</html>

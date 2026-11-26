@@ -80,6 +80,7 @@ type Style struct {
 	FlexWrap        string
 	JustifyContent  string
 	AlignItems      string
+	AlignSelf       string
 	Order           int
 	FlexGrow        float64
 	FlexShrink      float64
@@ -758,8 +759,23 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 			st.AlignItems = "center"
 		case "flex-end", "end", "bottom":
 			st.AlignItems = "end"
+		case "stretch", "normal":
+			st.AlignItems = "stretch"
 		default:
 			st.AlignItems = "start"
+		}
+	case "align-self":
+		switch lower {
+		case "auto":
+			st.AlignSelf = ""
+		case "center":
+			st.AlignSelf = "center"
+		case "flex-end", "end", "bottom":
+			st.AlignSelf = "end"
+		case "stretch", "normal":
+			st.AlignSelf = "stretch"
+		default:
+			st.AlignSelf = "start"
 		}
 	case "order":
 		if n, err := strconv.Atoi(lower); err == nil {
@@ -882,15 +898,19 @@ func applyDecl(st *Style, prop, val string, parent *Style) {
 		fields := SplitFields(lower)
 		if len(fields) == 1 {
 			st.JustifyItems = gridJustifyKeyword(fields[0])
+			st.AlignItems = gridAlignKeyword(fields[0])
 		} else if len(fields) >= 2 {
 			st.JustifyItems = gridJustifyKeyword(fields[1])
+			st.AlignItems = gridAlignKeyword(fields[0])
 		}
 	case "place-self":
 		fields := SplitFields(lower)
 		if len(fields) == 1 {
 			st.JustifySelf = gridJustifyKeyword(fields[0])
+			st.AlignSelf = gridAlignKeyword(fields[0])
 		} else if len(fields) >= 2 {
 			st.JustifySelf = gridJustifyKeyword(fields[1])
+			st.AlignSelf = gridAlignKeyword(fields[0])
 		}
 	case "transform":
 		// Content moved fully off-screen (common for cloned fixed navs and
@@ -1406,6 +1426,21 @@ func gridJustifyKeyword(v string) string {
 	case "start", "flex-start", "left":
 		return "start"
 	case "end", "flex-end", "right":
+		return "end"
+	case "center":
+		return "center"
+	case "stretch", "normal":
+		return "stretch"
+	}
+	return ""
+}
+
+// gridAlignKeyword normalizes vertical item alignment for grid placement.
+func gridAlignKeyword(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "start", "flex-start", "top", "baseline":
+		return "start"
+	case "end", "flex-end", "bottom":
 		return "end"
 	case "center":
 		return "center"

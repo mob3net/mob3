@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -705,7 +706,8 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 	if st.RowGap.Set {
 		rowGap = st.RowGap.ResolveH(availW, st.FontSize)
 	}
-	cells := gridCells(n, len(tracks), gridLines, rowLines, len(rowTracks), areas)
+	flow := strings.ToLower(st.GridAutoFlow)
+	cells := gridCells(n, len(tracks), gridLines, rowLines, len(rowTracks), areas, strings.Contains(flow, "column"), strings.Contains(flow, "dense"))
 	content, minContent := l.gridTrackContent(cells, len(tracks))
 	widths := resolveGridTracks(tracks, availW, gap, content, minContent)
 	// An auto track placed by a named area is at least as wide as that area's
@@ -810,6 +812,7 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 	type spanNeed struct {
 		end, height int
 	}
+	var placed []gridPlaced
 	for r := 0; r <= maxRow; r++ {
 		rowH := rowHeights[r]
 		var spans []spanNeed
@@ -840,6 +843,10 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 				rowH = h
 			}
 			l.alignGridItemX(n, c.node, cellX, cellW, fragStart, absStart)
+			placed = append(placed, gridPlaced{
+				node: c.node, row: c.row, rowSpan: c.rowSpan,
+				fragStart: fragStart, absStart: absStart, height: h,
+			})
 		}
 		rowHeights[r] = rowH
 		for _, s := range spans {
@@ -856,7 +863,29 @@ func (l *Layouter) grid(n *Node, x, y, availW int) int {
 			y += rowGap
 		}
 	}
+	for _, p := range placed {
+		avail := 0
+		end := p.row + p.rowSpan - 1
+		for i := p.row; i <= end; i++ {
+			avail += rowHeights[i]
+			if i > p.row {
+				avail += rowGap
+			}
+		}
+		l.alignGridItemY(n, p.node, avail, p.height, p.fragStart, p.absStart)
+	}
 	return y - startY
+}
+
+// gridPlaced records one laid-out grid item for vertical alignment after its
+// final row heights are known.
+type gridPlaced struct {
+	node      *Node
+	row       int
+	rowSpan   int
+	fragStart int
+	absStart  int
+	height    int
 }
 
 // gridCell is one grid item's resolved placement.
@@ -911,16 +940,69 @@ func (o *gridOccupancy) mark(row, col, rowSpan, colSpan int) {
 	}
 }
 
+func (o *gridOccupancy) firstFreeRowMajor(rowStart, colStart, rowSpan, colSpan, limit int) (int, int, bool) {
+	if rowStart < 0 {
+		rowStart = 0
+	}
+	if colStart < 0 {
+		colStart = 0
+	}
+	for r := rowStart; r <= limit; r++ {
+		start := 0
+		if r == rowStart {
+			start = colStart
+		}
+		for c := start; c+colSpan <= o.cols; c++ {
+			if o.free(r, c, rowSpan, colSpan) {
+				return r, c, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+func (o *gridOccupancy) firstFreeColumnMajor(rowStart, colStart, rowSpan, colSpan, limit int) (int, int, bool) {
+	if rowStart < 0 {
+		rowStart = 0
+	}
+	if colStart < 0 {
+		colStart = 0
+	}
+	for c := colStart; c+colSpan <= o.cols; c++ {
+		start := 0
+		if c == colStart {
+			start = rowStart
+		}
+		for r := start; r <= limit; r++ {
+			if o.free(r, c, rowSpan, colSpan) {
+				return r, c, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
 // gridCells resolves every item's row and column placement before sizing and
 // painting. Definite placements are reserved first, then auto items fill the
 // remaining cells in sparse row-major order. Row spans reserve every covered
 // cell so an auto item cannot land inside them.
-func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string][]int, rowCount int, areas map[string]gridAreaSpan) []gridCell {
+func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string][]int, rowCount int, areas map[string]gridAreaSpan, columnFlow, dense bool) []gridCell {
 	if cols < 1 {
 		return nil
 	}
+	children := layoutChildrenWithPseudo(n)
+	sort.SliceStable(children, func(i, j int) bool {
+		oi, oj := 0, 0
+		if children[i].Style != nil {
+			oi = children[i].Style.Order
+		}
+		if children[j].Style != nil {
+			oj = children[j].Style.Order
+		}
+		return oi < oj
+	})
 	var cells []gridCell
-	for _, child := range layoutChildrenWithPseudo(n) {
+	for _, child := range children {
 		if child.Type != ElementNode || child.Style == nil || child.Style.Display == "none" {
 			continue
 		}
@@ -1003,6 +1085,20 @@ func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string
 	if limit >= maxGridRows {
 		limit = maxGridRows - 1
 	}
+	colLimit := limit
+	if columnFlow {
+		colLimit = rowCount
+		if colLimit < 1 {
+			colLimit = 1
+		}
+		if maxReserved+1 > colLimit {
+			colLimit = maxReserved + 1
+		}
+		if colLimit > maxGridRows {
+			colLimit = maxGridRows
+		}
+		colLimit--
+	}
 	for i := range cells {
 		c := &cells[i]
 		if c.out || c.rowSet && c.colSet {
@@ -1044,29 +1140,40 @@ func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string
 			}
 			c.row, c.rowSet = row, true
 		default:
-			// Fully auto: sparse row-major placement from the cursor.
-			row, col := -1, -1
-			for r := autoRow; r <= limit && row < 0; r++ {
-				start := 0
-				if r == autoRow {
-					start = autoCol
-				}
-				for cc := start; cc+c.span <= cols; cc++ {
-					if occ.free(r, cc, c.rowSpan, c.span) {
-						row, col = r, cc
-						break
-					}
-				}
+			// Fully auto: sparse placement from the cursor, or from the origin
+			// for dense flow.
+			startRow, startCol := autoRow, autoCol
+			if dense {
+				startRow, startCol = 0, 0
 			}
-			if row < 0 {
+			var row, col int
+			var ok bool
+			if columnFlow {
+				row, col, ok = occ.firstFreeColumnMajor(startRow, startCol, c.rowSpan, c.span, colLimit)
+			} else {
+				row, col, ok = occ.firstFreeRowMajor(startRow, startCol, c.rowSpan, c.span, limit)
+			}
+			if !ok {
 				row, col = autoRow, 0
 			}
 			c.row, c.start = row, col
 			c.rowSet, c.colSet = true, true
-			autoRow, autoCol = row, col+c.span
-			if autoCol >= cols {
-				autoRow++
-				autoCol = 0
+			if !dense {
+				if columnFlow {
+					autoRow, autoCol = row+c.rowSpan, col
+					if autoRow > colLimit {
+						autoRow, autoCol = 0, autoCol+1
+					}
+					if autoCol >= cols {
+						autoRow, autoCol = 0, 0
+					}
+				} else {
+					autoRow, autoCol = row, col+c.span
+					if autoCol >= cols {
+						autoRow++
+						autoCol = 0
+					}
+				}
 			}
 		}
 		if c.row >= maxGridRows {
@@ -1084,7 +1191,6 @@ func gridCells(n *Node, cols int, colLines map[string][]int, rowLines map[string
 }
 
 // alignGridItemX applies justify-items/justify-self to one placed grid item.
-// Vertical alignment and auto-flow remain approximated.
 func (l *Layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart, absStart int) {
 	align := ""
 	if item != nil && item.Style != nil {
@@ -1109,23 +1215,82 @@ func (l *Layouter) alignGridItemX(container, item *Node, cellX, cellW, fragStart
 	if align == "center" {
 		dx = leftover / 2
 	}
-	if dx == 0 {
+	l.shiftGridItem(item, fragStart, absStart, dx, 0)
+}
+
+// alignGridItemY applies align-items/align-self inside one row or row span.
+func (l *Layouter) alignGridItemY(container, item *Node, available, height, fragStart, absStart int) {
+	align := ""
+	if item != nil && item.Style != nil {
+		align = item.Style.AlignSelf
+	}
+	if align == "" && container != nil && container.Style != nil {
+		align = container.Style.AlignItems
+	}
+	if align == "" {
+		align = "stretch"
+	}
+	leftover := available - height
+	if leftover <= 0 || item == nil {
+		return
+	}
+	switch align {
+	case "stretch":
+		if item.Style != nil && item.Style.Height.Set && !item.Style.Height.IsAuto() {
+			return
+		}
+		box, ok := l.boxes[item]
+		if !ok {
+			return
+		}
+		oldH := box.H
+		box.H += leftover
+		l.boxes[item] = box
+		fillDone, imageDone := false, false
+		for i := fragStart; i < len(l.frags); i++ {
+			f := &l.frags[i]
+			if f.X != box.X || f.Y != box.Y || f.W != box.W {
+				continue
+			}
+			if !fillDone && f.Kind == FragFill && f.H == oldH {
+				f.H += leftover
+				fillDone = true
+			}
+			if !imageDone && f.Kind == FragImage && f.Background && f.H == oldH {
+				f.H += leftover
+				imageDone = true
+			}
+		}
+	case "center":
+		l.shiftGridItem(item, fragStart, absStart, 0, leftover/2)
+	case "end":
+		l.shiftGridItem(item, fragStart, absStart, 0, leftover)
+	}
+}
+
+// shiftGridItem moves the laid-out fragments and boxes for one grid item.
+func (l *Layouter) shiftGridItem(item *Node, fragStart, absStart, dx, dy int) {
+	if (dx == 0 && dy == 0) || item == nil {
 		return
 	}
 	for i := fragStart; i < len(l.frags); i++ {
 		l.frags[i].X += dx
+		l.frags[i].Y += dy
 	}
 	for i := absStart; i < len(l.abs); i++ {
 		l.abs[i].staticX += dx
+		l.abs[i].staticY += dy
 	}
 	var walk func(*Node)
 	walk = func(n *Node) {
 		if r, ok := l.boxes[n]; ok {
 			r.X += dx
+			r.Y += dy
 			l.boxes[n] = r
 		}
 		if cb := l.cbs[n]; cb != nil {
 			cb.x += dx
+			cb.y += dy
 		}
 		for _, c := range n.Children {
 			walk(c)

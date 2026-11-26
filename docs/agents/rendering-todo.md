@@ -7,13 +7,6 @@ Open rendering issues, ordered by the number of affected pages in the site
 audit. Remove an item when it is fixed and covered by tests. This page is for
 engine work only; do not add site-specific exceptions.
 
-## P0 — Main content and hero placement
-
-- **Grid vertical alignment and auto flow.** Horizontal
-  `justify-items`/`justify-self` work, including implicit single-column grids;
-  `align-self`, vertical `align-items`, `grid-auto-flow` and `order` for grid
-  items remain approximated (order currently applies only to flex).
-
 ## P1 — Overflow and hidden content
 
 - **Visually hidden UI.** Extend detection beyond `clip:rect(1px…)` and
@@ -42,6 +35,9 @@ engine work only; do not add site-specific exceptions.
   wrappers are laid out inline. Add coverage before changing the float pass.
 - **Flex alignment edge cases.** `align-items:stretch` and `align-self` are
   still approximate; verify icon/label rows and cards with mixed heights.
+- **Grid alignment edge cases.** `align-content`, baseline alignment, `fr`
+  row tracks inside a definite-height grid container, and percentage heights
+  inside stretched items remain approximated.
 
 ## P3 — Images and backgrounds
 
