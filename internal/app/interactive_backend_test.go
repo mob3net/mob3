@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,6 +93,43 @@ func TestInteractiveTabsCloseTimesOutAndKills(t *testing.T) {
 		t.Fatal("backend was not killed after close timeout")
 	}
 	close(backend.block)
+}
+
+type exitTestBackend struct {
+	session protocol.Session
+	done    chan struct{}
+	err     error
+}
+
+func (b *exitTestBackend) Session() protocol.Session { return b.session }
+func (b *exitTestBackend) Close()                    {}
+func (b *exitTestBackend) Kill()                     {}
+func (b *exitTestBackend) Done() <-chan struct{}     { return b.done }
+func (b *exitTestBackend) ExitError() error          { return b.err }
+func (b *exitTestBackend) UserClosed() bool          { return false }
+
+func TestInteractiveTabsReportsBackendFailure(t *testing.T) {
+	tabs := newInteractiveTabs(host.NewSession(), engine.LoaderConfig{}, "about:home", 8, 16, nil)
+	backend := &exitTestBackend{session: backendTestSession{}, done: make(chan struct{}), err: errors.New("exit status 2")}
+	tabs.newBackend = func(*engine.Loader, protocol.SessionID, protocol.Init, string) (tabBackend, error) {
+		return backend, nil
+	}
+	failed := make(chan string, 1)
+	tabs.setFailure(func(_ *frontend.Tab, message string) { failed <- message })
+	tab, err := tabs.openWithLoader(1, 80, 24, 2, 21, "about:home", &engine.Loader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(backend.done)
+	select {
+	case message := <-failed:
+		if !strings.Contains(message, "Page engine stopped") || !strings.Contains(message, "exit status 2") {
+			t.Fatalf("failure message = %q", message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("backend failure was not reported")
+	}
+	tabs.kill(tab)
 }
 
 func TestInteractiveTabsKillAndCloseBackend(t *testing.T) {

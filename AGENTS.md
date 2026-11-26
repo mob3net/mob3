@@ -119,13 +119,14 @@ published by the Pages build.
   separate commercial license is available on request; do not add commercial
   terms or a contact unless the copyright holder supplies them. Keep the
   license file and the README License section in sync.
-- **Not a secure browser.** No sandboxing, process or site isolation, CSP
+- **Not a secure browser.** No sandboxing, memory, site or OS isolation, CSP
   enforcement, certificate UI or security hardening, and it is not audited.
-  Tab separation is logical only inside one Go process
-  (separate JS runtimes and origin checks), not memory, site or OS isolation.
-  This warning stays prominent in `README.md` and on the built-in start and
-  help pages. Never present MOB³ as safe for passwords, accounts, payments or
-  confidential data.
+  Tab separation is logical only (separate JS runtimes and origin checks).
+  The default per-tab child process is fault isolation, not a security
+  boundary: tabs still share the parent host, storage broker and address space
+  trust model. This warning stays prominent in `README.md` and on the built-in
+  start and help pages. Never present MOB³ as safe for passwords, accounts,
+  payments or confidential data.
 - **No filesystem I/O.** The binary must not read or write files: no
   configuration, bookmark, certificate, cache, history, log or download files,
   and no local page files (`file:` URLs are rejected and bare paths are never
@@ -259,10 +260,12 @@ published by the Pages build.
   `frontend/console.go` and `frontend/history.go`. The front end validates the committed URL scheme and
   renders only committed history entries for chrome. The host records each
   document fetch's final URL and exposes it to the front end by entry ID; the
-  engine's `HistoryCommit` URL is ignored. The engine stays in one Go process
-  with the front end and host: tabs have separate JS runtimes and frames get
-  origin checks, which is logical isolation, not memory, site or OS
-  isolation. A fully compromised engine shares the process.
+  engine's `HistoryCommit` URL is ignored. With `-process=single` the engine
+  stays in one Go process with the front end and host; the default
+  `-process=per-tab` gives each interactive tab an engine child. In both modes
+  tabs have separate JS runtimes and frames get origin checks, which is logical
+  isolation, not memory, site or OS isolation. A compromised engine process is
+  still inside the same trust model.
   Ownership, migration order and exit gates are in
   [docs/agents/architecture.md](docs/agents/architecture.md#target-boundary).
 - **Files by subsystem within a package.** Every file belongs to one package

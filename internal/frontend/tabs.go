@@ -12,6 +12,12 @@ import (
 // SessionLoop owns the terminal side of the browser: one shared presenter,
 // input channels and the active tab. It drains every tab's event stream so a
 // background session never blocks on its queue, but only the active tab draws.
+// TabFailure reports a contained failure that leaves the tab in place.
+type TabFailure struct {
+	Tab     *Tab
+	Message string
+}
+
 type SessionLoop struct {
 	Tabs   []*Tab
 	Active *Tab
@@ -33,6 +39,8 @@ type SessionLoop struct {
 	// Stuck carries tabs whose liveness probe expired. They are discarded on
 	// the loop goroutine.
 	Stuck <-chan *Tab
+	// Failed carries a contained backend failure, usually a child process exit.
+	Failed <-chan TabFailure
 
 	// KillTab force-releases a tab that cannot answer a graceful close. The app
 	// supplies it; a nil callback falls back to CloseTab.
@@ -107,6 +115,7 @@ func (l *SessionLoop) Run() error {
 		add(l.Resize, 1, nil)
 		add(l.Quit, 2, nil)
 		add(l.Stuck, 4, nil)
+		add(l.Failed, 5, nil)
 		for _, tab := range l.Tabs {
 			if tab == nil || tab.Session == nil {
 				continue
@@ -168,6 +177,14 @@ func (l *SessionLoop) Run() error {
 			}
 			if tab, _ := recv.Interface().(*Tab); tab != nil {
 				l.DiscardTab(tab)
+			}
+		case 5:
+			if !ok {
+				l.Failed = nil
+				continue
+			}
+			if failure, _ := recv.Interface().(TabFailure); failure.Tab != nil {
+				l.markDead(failure.Tab, failure.Message)
 			}
 		case 3:
 			tab := eventTabs[chosen]
@@ -244,7 +261,11 @@ func (l *SessionLoop) removeTab(tab *Tab) {
 // DiscardTab removes a tab whose session is wedged. It uses KillTab instead of
 // waiting for a graceful close, so a hung engine cannot hold the loop.
 func (l *SessionLoop) DiscardTab(tab *Tab) {
+	wasActive := tab == l.Active
 	l.removeTabWith(tab, true)
+	if wasActive && l.Active != nil {
+		l.showStatusError("Page stopped; tab discarded")
+	}
 }
 
 func (l *SessionLoop) removeTabWith(tab *Tab, kill bool) {

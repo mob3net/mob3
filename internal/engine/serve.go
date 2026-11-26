@@ -114,6 +114,9 @@ func (s *Session) ServeWithHooks(ctx context.Context, abort <-chan struct{}, in 
 		case <-ctx.Done():
 			return nil
 		case <-abort:
+			if s.Loading || s.DeferredImages {
+				s.stopLoading()
+			}
 		case cmd, ok := <-in:
 			if !ok {
 				return nil

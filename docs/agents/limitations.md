@@ -62,7 +62,8 @@ agreement, the non-negotiable constraints and the change protocol.
   so the browser total is not bounded by one limit. Dump, PNG and MCP stay
   in-process.
 - Tabs are implemented, but iframes are permanent inert stubs, not a pending
-  target. The model is one Go process with one sobek VM per tab; iframe
+  target. The default is one Go process per tab with one sobek VM in each
+  engine process; iframe
   elements have inert stub documents and are postMessage-only
   (`contentDocument`/`contentWindow`
   return one shared inert stub, no message is delivered, `frameElement` is null
@@ -85,9 +86,9 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Address-bar integrity:** the host records each document's final URL and
   the front end reads it by entry ID, so an engine bug cannot forge a new
   history entry's URL through the protocol. This is not process isolation: a
-  fully compromised engine shares the process and could read or corrupt
-  trusted memory. The recorded target keeps the engine in-process, so this
-  remains a value boundary, not memory, site or OS isolation.
+  fully compromised engine could still corrupt trusted state. The default
+  per-tab child process is fault isolation, not memory or site isolation, so
+  this remains a value boundary.
 - Mixed content is handled for `https` documents: HTTP image requests
   (including CSS background images and `srcset`/`<picture>` candidates) are
   upgraded to HTTPS without an HTTP fallback, while HTTP scripts, stylesheets,

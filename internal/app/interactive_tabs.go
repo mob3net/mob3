@@ -31,6 +31,7 @@ type interactiveTabs struct {
 	newBackend   tabBackendFactory
 	backends     map[*frontend.Tab]tabBackend
 	onDiscard    func(*frontend.Tab)
+	onFailure    func(*frontend.Tab, string)
 }
 
 func newInteractiveTabs(hostSess *host.Session, loaderConfig engine.LoaderConfig, home string, cellW, cellH int, newSession func(*engine.Loader, int, int) *engine.Session) *interactiveTabs {
@@ -64,11 +65,38 @@ func (t *interactiveTabs) openWithLoader(id protocol.SessionID, w, h, contentTop
 	})
 	tab.State.Clipboard = os.Stdout
 	t.backends[tab] = backend
+	if exited, ok := backend.(interface {
+		Done() <-chan struct{}
+		ExitError() error
+		UserClosed() bool
+	}); ok {
+		go func() {
+			<-exited.Done()
+			if exited.UserClosed() {
+				return
+			}
+			message := "Page engine stopped"
+			if err := exited.ExitError(); err != nil {
+				message += ": " + cleanError(err)
+			}
+			t.reportFailure(tab, message)
+		}()
+	}
 	return tab, nil
 }
 
 func (t *interactiveTabs) setDiscard(fn func(*frontend.Tab)) {
 	t.onDiscard = fn
+}
+
+func (t *interactiveTabs) setFailure(fn func(*frontend.Tab, string)) {
+	t.onFailure = fn
+}
+
+func (t *interactiveTabs) reportFailure(tab *frontend.Tab, message string) {
+	if t.onFailure != nil {
+		t.onFailure(tab, message)
+	}
 }
 
 func (t *interactiveTabs) discard(tab *frontend.Tab) {

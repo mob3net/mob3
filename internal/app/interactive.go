@@ -62,6 +62,13 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 		default:
 		}
 	})
+	failed := make(chan frontend.TabFailure, 4)
+	tabs.setFailure(func(tab *frontend.Tab, message string) {
+		select {
+		case failed <- frontend.TabFailure{Tab: tab, Message: message}:
+		default:
+		}
+	})
 
 	top, contentH := frontend.ContentBounds(h)
 	tab, err := tabs.openWithLoader(1, w, h, top, contentH, o.Target, loader)
@@ -92,7 +99,7 @@ func runInteractive(o runOptions, hostSess *host.Session, loader *engine.Loader,
 
 	loop = &frontend.SessionLoop{
 		Tabs: []*frontend.Tab{tab}, Active: tab, Presenter: presenter,
-		Keys: keys, Resize: winch, Quit: quitSig, Stuck: stuck,
+		Keys: keys, Resize: winch, Quit: quitSig, Stuck: stuck, Failed: failed,
 		OpenTab:      tabs.open,
 		CloseTab:     tabs.close,
 		KillTab:      tabs.kill,
