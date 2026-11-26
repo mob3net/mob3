@@ -5,7 +5,8 @@ agreement, the non-negotiable constraints and the change protocol.
 
 Open rendering issues, ordered by the number of affected pages in the site
 audit. Remove an item when it is fixed and covered by tests. This page is for
-engine work only; do not add site-specific exceptions.
+engine work only; do not add site-specific exceptions. The wider list of
+widely available CSS gaps is in [css-availability.md](css-availability.md).
 
 ## P1 — Selectors and container queries
 

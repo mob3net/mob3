@@ -17,6 +17,7 @@ force. Do not append history, and do not leave a superseded rule standing.
 | --- | --- |
 | [docs/agents/architecture.md](docs/agents/architecture.md) | choosing or adding a file, moving code, checking what a subsystem owns |
 | [docs/agents/rendering.md](docs/agents/rendering.md) | touching style, layout, paint, text, images, backgrounds or PDF display |
+| [docs/agents/css-availability.md](docs/agents/css-availability.md) | checking which widely available CSS features are missing, or choosing CSS support work |
 | [docs/agents/ux.md](docs/agents/ux.md) | touching chrome, keys, mouse, forms, history, reader, dark mode, dialogs or the JS console |
 | [docs/agents/networking.md](docs/agents/networking.md) | touching fetching, caching, cookies, TLS, content types or resource limits |
 | [docs/agents/js-web-api.md](docs/agents/js-web-api.md) | touching the JS surface or judging whether a library can work |
