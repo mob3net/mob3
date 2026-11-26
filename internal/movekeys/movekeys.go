@@ -1,7 +1,6 @@
-// Package movekeys maps viewport movement key tokens to relative commands.
-// The page and the console share the same Vim-style vocabulary and step
-// formulas; each caller supplies its own visible row count. Standard library
-// only.
+// Package movekeys maps movement key tokens to relative commands. The page and
+// console share the viewport deltas; list overlays use the line and top/bottom
+// subset for selection. Standard library only.
 package movekeys
 
 // Move is one viewport movement command.

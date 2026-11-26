@@ -14,7 +14,7 @@ in `internal/protocol`; this section records ownership.
 | `internal/protocol` | Message types, binary codec, `Session`/`Broker`/`Transport` ports, the in-process transport with validated frame handoff, limits and version. Standard library only; never imports another project package. |
 | `internal/textedit` | Shared single-line text editing for form fields, the URL prompt, JS dialogs, find and console inputs. Standard library only. |
 | `internal/textwidth` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows and wrapping. Standard library only. |
-| `internal/movekeys` | Shared viewport-movement key table and line/half/page step deltas for page and console scrolling. Standard library only. |
+| `internal/movekeys` | Shared movement key table and line/half/page step deltas for page and console scrolling, plus the line/top/bottom subset used by list selection. Standard library only. |
 | `internal/engine` | HTML/CSS parsing and style, document loading through `protocol.Host`, layout, paint into a content-rect frame, sobek and the DOM, PDF text extraction, image and SVG decoding, find, selection, hints, reader, dark palette. |
 | `internal/host` | HTTP/S, TLS and certificates, cookie jar, resource cache, runtime settings and the request log. Session back/forward history lives in the front end, the download/curl hint is presentation, and the engine keeps only a memory-only page cache. |
 | `internal/frontend` | Terminal raw mode and key/mouse decoding, chrome and dialogs, session history, ANSI encoding, kitty/iTerm2 placement, PNG output, clipboard. |
@@ -294,6 +294,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight plus the shared find bar, window requests and console overlay stacking. |
 | `internal/frontend/find.go` | In-page find bar state, results status and its footer row. |
 | `internal/frontend/findbar.go` | Shared find query, caret and key handling for the page find bar and the console HTML find bar; the engine owns matching. |
+| `internal/frontend/listnav.go` | Shared list-selection movement for the history, view/zoom menu and select popups: the line/top/bottom subset of the movement key table plus clamped index moves. |
 | `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |
 | `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
 | `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
@@ -377,7 +378,7 @@ contexts are the remaining architecture step. There is no engine child process.
 | `internal/engine/form_edit.go` | Form control predicates, Tab-status text, radio/select grouping, label lookup, form request encoding, input-fragment updates, range hit testing and input-line/caret helpers. |
 | `internal/textedit/textedit.go` | Shared single-line editor: caret and word motion, deletion, selection replacement, insertion and length caps, used by page form fields and the front-end URL, dialog, find and console inputs. |
 | `internal/textwidth/textwidth.go` | Shared terminal-cell text arithmetic: rune/string widths and the wide-rune table, truncation, padding, tail windows, wrapping and hanging indent, used by engine layout/paint and front-end chrome, dialogs and console. |
-| `internal/movekeys/movekeys.go` | Shared viewport movement: key-token lookup plus line, half-page and page step deltas, used by page scrolling and the front-end console. |
+| `internal/movekeys/movekeys.go` | Shared movement: key-token lookup plus line, half-page and page step deltas, used by page scrolling and the front-end console; list overlays reuse the line/top/bottom subset. |
 | `internal/engine/tab_order.go` | Standard Tab-order target discovery: links, controls and one stop per radio group. |
 | `internal/engine/form_step.go` | Radio-group, single-select and multi-select stepping, including disabled/hidden skips and selected-option updates. |
 | `internal/engine/dark.go` | Dark-mode post-layout palette remap: light backgrounds become dark, dark text becomes light, hues are preserved for links and accents. |

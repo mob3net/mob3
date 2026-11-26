@@ -100,25 +100,13 @@ func (w *menuOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 			w.close(l)
 			return true, false
 		}
-	case "up", "k", "ctrl-p":
-		w.menuIndex = moveChoice(w.menuIndex, -1, menuRowCount(w.menuKind))
-		w.sync(l)
-		return true, false
-	case "down", "j", "ctrl-n":
-		w.menuIndex = moveChoice(w.menuIndex, 1, menuRowCount(w.menuKind))
-		w.sync(l)
-		return true, false
-	case "home", "g":
-		w.menuIndex = 0
-		w.sync(l)
-		return true, false
-	case "end", "G":
-		w.menuIndex = menuRowCount(w.menuKind) - 1
-		w.sync(l)
-		return true, false
 	case " ", "enter":
 		w.activate(l)
 		return true, false
+	}
+	if next, ok := moveList(k, w.menuIndex, menuRowCount(w.menuKind)); ok {
+		w.menuIndex = next
+		w.sync(l)
 	}
 	return true, false
 }
@@ -393,21 +381,6 @@ func choiceRowAt(layout MenuLayout, ev MouseEvent) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-// moveChoice shifts a selection by delta and clamps it to the list.
-func moveChoice(index, delta, count int) int {
-	if count < 1 {
-		return 0
-	}
-	index += delta
-	if index < 0 {
-		return 0
-	}
-	if index >= count {
-		return count - 1
-	}
-	return index
 }
 
 // DrawSelect paints the page select popup on a full-screen canvas.

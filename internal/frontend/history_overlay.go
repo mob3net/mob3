@@ -55,25 +55,14 @@ func (w *historyOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	case "esc", "q", "ctrl-c":
 		w.close(l)
 		return true, false
-	case "up", "k", "ctrl-p":
-		if w.historyView.index > 0 {
-			w.historyView.index--
-		}
-	case "down", "j", "ctrl-n":
-		if w.historyView.index < n-1 {
-			w.historyView.index++
-		}
-	case "home", "g":
-		w.historyView.index = 0
-	case "end", "G":
-		if n > 0 {
-			w.historyView.index = n - 1
-		}
 	case "enter", " ":
 		if n > 0 {
 			w.choose(l, w.historyView.index)
 		}
 		return true, false
+	}
+	if next, ok := moveList(k, w.historyView.index, n); ok {
+		w.historyView.index = next
 	}
 	w.sync(l)
 	return true, false

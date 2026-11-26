@@ -213,9 +213,9 @@ published by the Pages build.
   engine's layout/paint and the front end's chrome, dialogs and console:
   rune/string widths, truncation, padding, tail windows and wrapping. Standard
   library only.
-- `internal/movekeys/` — pure viewport-movement key table shared by page and
-  console scrolling: token lookup plus line, half-page and page step deltas.
-  Standard library only.
+- `internal/movekeys/` — pure movement key table shared by page and console
+  scrolling and the line/top/bottom subset of list selection: token lookup plus
+  line, half-page and page step deltas. Standard library only.
 - **Target boundary.** The code splits into `internal/protocol` (wire types,
   codec, ports and limits; standard library only), `internal/textedit` (pure
   line editing; standard library only), `internal/textwidth` (pure

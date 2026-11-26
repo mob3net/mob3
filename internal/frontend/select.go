@@ -87,21 +87,14 @@ func (w *selectOverlay) handleKey(l *Tab, k string) (handled, quit bool) {
 	case "esc", "q", "ctrl-c":
 		w.answer(l, 0, true)
 		return true, false
-	case "up", "k", "ctrl-p":
-		w.selectView.Index = moveChoice(w.selectView.Index, -1, n)
-	case "down", "j", "ctrl-n":
-		w.selectView.Index = moveChoice(w.selectView.Index, 1, n)
-	case "home", "g":
-		w.selectView.Index = 0
-	case "end", "G":
-		if n > 0 {
-			w.selectView.Index = n - 1
-		}
 	case "enter", " ":
 		if n > 0 {
 			w.answer(l, w.selectView.Index, false)
 		}
 		return true, false
+	}
+	if next, ok := moveList(k, w.selectView.Index, n); ok {
+		w.selectView.Index = next
 	}
 	w.sync(l)
 	return true, false
