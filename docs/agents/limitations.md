@@ -57,8 +57,10 @@ agreement, the non-negotiable constraints and the change protocol.
   reader, not a streaming fetch body; `Worker` never executes.
 - `-engine=process` runs one engine child per interactive tab. The parent still
   owns the terminal, host policy, cookies, cache, settings, history and shared
-  `localStorage`/`sessionStorage`; memory budgets are still computed per child
-  until shared budget RPC lands. Dump, PNG and MCP stay in-process.
+  `localStorage`/`sessionStorage`. `-mem-limit` is a per-tab cap in process
+  mode, so the total across tabs is not bounded by one process-wide limit;
+  in-process mode still divides the pools across tabs. Dump, PNG and MCP stay
+  in-process.
 - Tabs are implemented, but iframes are permanent inert stubs, not a pending
   target. The model is one Go process with one sobek VM per tab; iframe
   elements have inert stub documents and are postMessage-only

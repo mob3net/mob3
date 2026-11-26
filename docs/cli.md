@@ -29,7 +29,7 @@ falls back to dump mode and prints the rendered page.
 | `-dark` | off | Start in dark mode |
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
 | `-home string` | `about:home` | Startup and Home-button target |
-| `-mem-limit int` | 0 | Soft process memory limit in MB; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
+| `-mem-limit int` | 0 | Soft memory limit in MB; per tab in `-engine=process`, divided across tabs in `inproc`; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
 | `-zoom string` | `100%` | Layout zoom percent from 25 to 200; `%` is optional and `+`/`-` step the presets |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
@@ -49,7 +49,7 @@ Run `mob3 -h` for the exact defaults in your build.
 
 `-engine=process` runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
 
-Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. Memory budgets are still computed per child until shared budget RPC lands. Dump, PNG and MCP modes remain in-process. The default is `-engine=inproc`.
+Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. In process mode each tab gets `-mem-limit` as its own cap; the parent and host cache are outside that cap. Dump, PNG and MCP modes remain in-process. The default is `-engine=inproc`.
 
 ## Images and graphics
 
