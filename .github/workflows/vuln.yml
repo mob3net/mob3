@@ -1,0 +1,35 @@
+name: Vulnerability scan
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vuln
+  cancel-in-progress: true
+
+env:
+  # The scanner resolves its own tool and module graph; the normal build keeps
+  # GOPROXY=off and vendor mode.
+  GOFLAGS: ""
+  GOPROXY: "https://proxy.golang.org"
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

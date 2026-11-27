@@ -146,7 +146,7 @@ Press `?` inside the app for keys, mouse and forms help. Run `mob3 -h` for the f
 
 ## Contributing
 
-Contributions are welcome. Every pull request must include the broad license-grant CLA statement described in [CONTRIBUTING.md](https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md); it keeps MOB³ available under both AGPL-3.0-only and a commercial license. The PR workflow checks the statement. The CI workflow runs formatting, vet and tests.
+Contributions are welcome. Every pull request must include the broad license-grant CLA statement described in [CONTRIBUTING.md](https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md); it keeps MOB³ available under both AGPL-3.0-only and a commercial license. The PR workflow checks the statement. The CI workflow runs formatting, vet and tests, and a separate nightly workflow runs a vulnerability scan.
 
 ## License
 

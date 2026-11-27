@@ -48,6 +48,10 @@ agreement, the non-negotiable constraints and the change protocol.
   `docker build --build-arg VERSION=vX.Y.Z`.
 - `.github/workflows/ci.yml` runs gofmt, `go vet` and tests on pushes to `main`
   and on open, synchronize, reopen and edit pull-request events.
+  `.github/workflows/vuln.yml` runs `govulncheck` nightly and on manual
+  dispatch; it needs network access to resolve
+  `golang.org/x/vuln/cmd/govulncheck@latest`, while the build/test job keeps
+  `GOPROXY=off` and vendor mode.
   `.github/workflows/fuzz.yml` runs both codec decoders for 60 s each nightly
   and on manual dispatch.
   `.github/workflows/pr.yml` runs only for pull requests and requires the exact

@@ -159,7 +159,8 @@ published by the Pages build.
   (`v0.48.0`, `v0.63.0`) after the 2026 security audit, and `go.mod` pins
   `toolchain go1.27.4`. Re-run
   `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` after any dependency
-  or toolchain change; the scan must report no reachable vulnerabilities.
+  or toolchain change; the scan must report no reachable vulnerabilities. The
+  nightly `Vulnerability scan` workflow runs the same command.
   `sobek` carries one local patch in `func.go` (`await` attaches reactions to a
   native promise directly, so a page replacing `Promise.prototype` cannot leave
   the wrapper pending); re-apply it after `go mod vendor`. Bump

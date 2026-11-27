@@ -118,6 +118,9 @@ automation split is:
 ## Workflows
 
 - `CI` runs gofmt, `go vet` and tests on pushes to `main` and pull requests.
+  `Vulnerability scan` runs `govulncheck` nightly and on manual dispatch; it
+  downloads the scanner and needs network access, while the normal build/test
+  job stays vendored and offline.
 - `PR` requires the exact CLA statement described in `CONTRIBUTING.md`.
 - `Release binaries` builds seven targets on `v*` tags.
 - `Docker` publishes the multi-arch image after a successful release.
