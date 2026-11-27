@@ -57,13 +57,14 @@ func TestAutomationNavigateAndSnapshot(t *testing.T) {
 		"URL: https://example.com/",
 		"Title: Home",
 		"Welcome",
-		"[1] Next page -> https://example.com/next",
-		`name="q"`,
-		" at (",
+		"Next page",
 	} {
 		if !strings.Contains(snap, want) {
 			t.Errorf("snapshot missing %q:\n%s", want, snap)
 		}
+	}
+	if strings.Contains(snap, "\nLinks:\n") || strings.Contains(snap, "\nInputs:\n") {
+		t.Errorf("snapshot still contains viewport link/input sections:\n%s", snap)
 	}
 }
 
@@ -746,10 +747,12 @@ func TestAutomationLinksListsOffscreen(t *testing.T) {
 	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
 		t.Fatal(err)
 	}
-	if snap := a.Snapshot(); !strings.Contains(snap, "Far link") {
+	snap := a.Snapshot()
+	if !strings.Contains(snap, "Far link") {
 		t.Fatalf("full-page snapshot missing off-screen link text:\n%s", snap)
-	} else if strings.Contains(snap, "-> https://example.com/next") {
-		t.Fatalf("off-screen link unexpectedly in the snapshot links section:\n%s", snap)
+	}
+	if strings.Contains(snap, "\nLinks:\n") {
+		t.Fatalf("snapshot still contains a links section:\n%s", snap)
 	}
 	out, err := a.Links("")
 	if err != nil {

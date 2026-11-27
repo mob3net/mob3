@@ -239,8 +239,7 @@ func mcpToolDefinitions() []map[string]any {
 		{
 			"name": "snapshot",
 			"description": "Return the page text, or one window of it with offset/rows. The header reports the page height, " +
-				"the returned layout-row range and the next offset. The first window includes the visible links and form " +
-				"controls; use links/form for every link or control.",
+				"the returned layout-row range and the next offset. Use links and form for link and control lists.",
 			"inputSchema": object(map[string]any{
 				"offset": integer("zero-based layout row to start from (default 0)"),
 				"rows":   integer("maximum layout rows to return (default fits one response)"),
@@ -390,7 +389,7 @@ func mcpToolDefinitions() []map[string]any {
 		},
 		{
 			"name":        "scroll",
-			"description": "Scroll the page by lines or pages, or jump to top/bottom.",
+			"description": "Move the interaction viewport for screenshots and coordinate clicks, or jump to top/bottom. Snapshot text is independent of scroll.",
 			"inputSchema": object(map[string]any{
 				"lines":  integer("line delta"),
 				"pages":  integer("page delta"),

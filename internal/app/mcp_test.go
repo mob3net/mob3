@@ -19,7 +19,7 @@ func (f *fakeAutomation) Navigate(_ context.Context, target string) error {
 	f.nav = target
 	return nil
 }
-func (f *fakeAutomation) Snapshot() string { return "URL: " + f.nav + "\nLinks:\n[1] next" }
+func (f *fakeAutomation) Snapshot() string { return "URL: " + f.nav + "\nWelcome" }
 func (f *fakeAutomation) Screenshot(int) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
@@ -97,7 +97,7 @@ func TestMCPProtocol(t *testing.T) {
 	if len(resps) != 7 {
 		t.Fatalf("responses = %d, want 7; out=%s", len(resps), out.String())
 	}
-	if got := mcpText(t, resps[4]); !strings.Contains(got, "Links:") || !strings.Contains(got, "example.com") {
+	if got := mcpText(t, resps[4]); !strings.Contains(got, "Welcome") || !strings.Contains(got, "example.com") {
 		t.Fatalf("snapshot = %q", got)
 	}
 	if got := mcpText(t, resps[5]); got != "2" {

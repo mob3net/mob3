@@ -249,26 +249,11 @@ Page: 100x1400  Rows: 0-230 of 1400  Next: 230  Viewport: 100x27  Scroll: 0%
 
 Example Domain
 ...
-
-Links:
-[1] More information... -> https://iana.org/domains/example
-
-Inputs:
-- input name="q" type="search" value="" at (4,12)
 ```
 
 `offset` is a zero-based layout row. `rows` caps the window; omit it (or pass
-0) to fill one response. Only the first window (`offset` 0) includes the
-visible `Links` and `Inputs` sections, with viewport coordinates; use `links`
-and `form` for every link or control in the document.
-
-- `[n]` is a 1-based link index for `click({link:n})`.
-- Only visible links are listed. Link numbers are stable layout indices, so a
-  filtered list may skip numbers.
-- `Inputs` positions are zero-based page-viewport cells, matching `click`.
-- Password input values are never printed: a non-empty password shows
-  `value="[redacted]"`, an empty one shows `value=""`.
-- Page text is the viewport, not the whole document. Use `scroll`.
+0) to fill one response. Snapshot is text only and does not depend on scroll;
+use `links` and `form` for link and control lists, selectors and values.
 
 ### `links`
 
@@ -279,8 +264,7 @@ and `form` for every link or control in the document.
 ```
 
 Lists every rendered anchor in the document, including links outside the
-current viewport, with the same `[n]` index that `snapshot` shows and `click`
-accepts:
+current viewport, with the `[n]` index that `click` accepts:
 
 ```text
 Links: 2
@@ -318,11 +302,13 @@ Controls: 3  Showing: 1-3 of 3
 ```
 
 Hidden inputs are omitted because they cannot be edited. Controls outside any
-form are listed separately. Selectors prefer an `#id`, then a
-`form-id name` pair, then an `nth-child` path. Pass a form or control selector
-to list just that form. A response holds up to 2,000 controls or about 50,000
-characters; `Showing` reports the range and `Next` is the 0-based `offset` for
-the following call. A page that starts inside a form repeats that form's header.
+form are listed separately. Password input values are never printed: a
+non-empty password shows `value="[redacted]"`, an empty one shows `value=""`.
+Selectors prefer an `#id`, then a `form-id name` pair, then an `nth-child`
+path. Pass a form or control selector to list just that form. A response holds
+up to 2,000 controls or about 50,000 characters; `Showing` reports the range
+and `Next` is the 0-based `offset` for the following call. A page that starts
+inside a form repeats that form's header.
 
 ### `fill`
 
@@ -423,7 +409,7 @@ disables image downloads so image regions show alt text.
 {"x":4,"y":12}
 ```
 
-- `link` uses a snapshot or `links` link number, including off-screen links.
+- `link` uses a `links` link number, including off-screen links.
 - `text` clicks the most specific rendered element whose visible text matches,
   case-insensitively. Exact matches are preferred, then links and buttons over
   containers. It also matches submit-button `value` text and `aria-label`/`alt`
@@ -484,15 +470,16 @@ Lists session history, most recent first; `*` marks the current entry.
 ## Typical agent loop
 
 1. `navigate` a page.
-2. `snapshot` to read text and collect visible link numbers; use `links` when
-   the target link is below the fold.
+2. `snapshot` to read the page text; use `links` for link numbers and
+   selectors, including links below the fold.
 3. `form` to get every control's selector and current value.
 4. `fill`, `select` and `toggle` to set fields without focusing or scrolling.
 5. `submit` to send the form, then read the returned snapshot.
 6. Use `wait_for` after clicks and submissions that load content with timers,
    then `snapshot` when ready.
 7. Use `click`/`type`/`press` for special widgets, `evaluate` for DOM
-   extraction, or `scroll`/`back`/`history` to move.
+   extraction, `scroll` for screenshots or coordinate clicks, and `back`/
+   `history` to move.
 8. When a page loads wrong, check `requests` for blocked or missing resources,
    `logs` for script errors, and `source` for the markup that was fetched.
 
