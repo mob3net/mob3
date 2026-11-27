@@ -108,7 +108,7 @@ func BuildPDFDocumentContext(ctx context.Context, data []byte) (doc *PDFDocument
 		doc = &PDFDocument{Title: "PDF document"}
 		switch {
 		case errors.Is(err, errPDFUnsupported):
-			doc.Note = "This PDF uses features MOB³ does not support: " + err.Error() + "."
+			doc.Note = "This PDF uses features MOB3 does not support: " + err.Error() + "."
 		default:
 			doc.Note = "This PDF could not be parsed: " + err.Error() + "."
 		}
@@ -117,7 +117,7 @@ func BuildPDFDocumentContext(ctx context.Context, data []byte) (doc *PDFDocument
 	doc = &PDFDocument{Title: PDFInfoTitle(pdf)}
 	if pdf.encrypted {
 		doc.Encrypted = true
-		doc.Note = "This PDF is encrypted. MOB³ cannot open password-protected documents."
+		doc.Note = "This PDF is encrypted. MOB3 cannot open password-protected documents."
 		return doc
 	}
 	pages, err := pdf.Pages()

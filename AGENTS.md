@@ -1,6 +1,6 @@
 # AGENTS.md — Project decisions and working agreement
 
-MOB³ is a small web browser for the terminal, written in Go.
+MOB3 is a small web browser for the terminal, written in Go.
 
 Read this file first. It carries the working agreement, the non-negotiable
 constraints, the commands and the change protocol. Detailed engine, UI, network,
@@ -125,14 +125,14 @@ published by the Pages build.
   The default per-tab child process is fault isolation, not a security
   boundary: tabs still share the parent host, storage broker and address space
   trust model. This warning stays prominent in `README.md` and on the built-in
-  start and help pages. Never present MOB³ as safe for passwords, accounts,
+  start and help pages. Never present MOB3 as safe for passwords, accounts,
   payments or confidential data.
 - **No filesystem I/O.** The binary must not read or write files: no
   configuration, bookmark, certificate, cache, history, log or download files,
   and no local page files (`file:` URLs are rejected and bare paths are never
   probed). Documents come from the network or `about:`; `data:` is accepted
   only as an inline subresource, never as a page, and every cache and piece of
-  state is memory-only; closing MOB³ saves nothing. The
+  state is memory-only; closing MOB3 saves nothing. The
   download popup only copies a `curl` command. The memory footer uses Go's
   runtime statistics, not `/proc`. OS-level reads by Go's TLS, DNS and timezone
   libraries, `os.Executable`/self-exec for the per-tab process transport, and
@@ -187,7 +187,7 @@ published by the Pages build.
   External scripts and modules require a JavaScript MIME type. `-no-js`
   disables fetching and execution. The supported API surface and its intentional
   limits are in `docs/agents/js-web-api.md`; do not add a stub that would make a
-  library depend on behavior MOB³ cannot provide.
+  library depend on behavior MOB3 cannot provide.
 - **Keep it bare-bones but functional:** real fetching, parsing, layout,
   rendering, navigation and scrolling.
 
@@ -238,7 +238,7 @@ published by the Pages build.
   log), `internal/frontend` (terminal, input, chrome, ANSI encoding, native
   images, dialogs) and `internal/app` (wiring). Session back/forward history
   lives in the front end and the download/curl hint is presentation; the
-  engine keeps only a memory-only page cache. MOB³ keeps no global visited list
+  engine keeps only a memory-only page cache. MOB3 keeps no global visited list
   or download history. The allowed
   imports are `app` → `engine`, `host`, `frontend`, `protocol`, and each of
   `engine`, `frontend` → `protocol`, `textedit`, `textwidth`, `movekeys`,

@@ -126,7 +126,7 @@ func TestConfigNavigation(t *testing.T) {
 	oldHome, oldMem := b.home, b.JSMemLimit
 	// A typed query without the form token applies nothing.
 	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome", true)
-	if b.Page == nil || b.Page.Title != "Config — MOB³" {
+	if b.Page == nil || b.Page.Title != "Config — MOB3" {
 		t.Fatalf("config page = %+v", b.Page)
 	}
 	if b.home != oldHome || b.JSMemLimit != oldMem {
@@ -210,7 +210,7 @@ func TestConfigBlockedInReaderMode(t *testing.T) {
 
 	cfg := newTestSession(80, 10)
 	cfgURL := mustParse(t, "about:config")
-	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB³"}
+	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB3"}
 	cfg.URL = cfgURL
 	cfg.toggleReader()
 	if cfg.Reader {

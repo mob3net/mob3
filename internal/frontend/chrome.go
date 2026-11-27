@@ -119,7 +119,7 @@ func LayoutChromeWithTabs(st protocol.State, tabs []TabView, offset int) ChromeL
 	url := protocol.StripControls(st.URL)
 	title := protocol.StripControls(st.Title)
 	if title == "" {
-		title = "MOB³"
+		title = "MOB3"
 	}
 	zoom := protocol.StripControls(st.ZoomLabel)
 	prompt := protocol.StripControls(st.PromptText)

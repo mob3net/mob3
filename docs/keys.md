@@ -1,6 +1,6 @@
 # Keyboard and mouse
 
-Press `?` inside MOB³ for the built-in `about:help` page, which is the canonical
+Press `?` inside MOB3 for the built-in `about:help` page, which is the canonical
 key, mouse and form reference for the running build.
 
 ## Page navigation
@@ -204,7 +204,7 @@ Shift override.
 
 ## Terminal support
 
-MOB³ enables the kitty keyboard protocol in detected kitty, WezTerm, Ghostty
+MOB3 enables the kitty keyboard protocol in detected kitty, WezTerm, Ghostty
 and foot terminals. That makes `Esc`, modified keys, `Shift-Tab` and key
 releases reliable. Multiplexers (tmux, screen, zellij) are excluded because
 their forwarding is inconsistent.

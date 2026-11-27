@@ -1,6 +1,6 @@
 ## Contribution agreement
 
-I have read and agree to the MOB³ Contributor License Agreement. I confirm that
+I have read and agree to the MOB3 Contributor License Agreement. I confirm that
 I have the right to submit this contribution and to grant the licenses
 described in the CLA.
 

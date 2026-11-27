@@ -517,5 +517,5 @@ func scaleImage(src image.Image, w, h int) *image.NRGBA {
 	return dst
 }
 
-// inMultiplexer reports whether a terminal multiplexer sits between MOB³ and
+// inMultiplexer reports whether a terminal multiplexer sits between MOB3 and
 // the terminal. Escapes may be consumed unless explicit passthrough is set.

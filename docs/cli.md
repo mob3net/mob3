@@ -4,12 +4,12 @@
 mob3 [flags] [url]
 ```
 
-With no URL, MOB³ opens the `-home` target (`about:home` by default). Input that
+With no URL, MOB3 opens the `-home` target (`about:home` by default). Input that
 looks like a search query instead of a URL uses the `-search` fallback. Local
 file pages are not supported: `file:` URLs are rejected and a bare path is
 treated as a URL or search query, never read from disk.
 
-Interactive mode starts only when stdin and stdout are TTYs. Otherwise MOB³
+Interactive mode starts only when stdin and stdout are TTYs. Otherwise MOB3
 falls back to dump mode and prints the rendered page.
 
 ## Flags

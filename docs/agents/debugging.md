@@ -1,6 +1,6 @@
 # Debugging guide
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 This is the working recipe for layout, rendering and engine bugs. Keep probes
@@ -52,7 +52,7 @@ command, and the engine adds `[engine] ...` to the `!` console and sets
 suppressed until a frame presents successfully, so a per-frame fault does not
 flood the terminal.
 
-MOB³ writes no log file. When the alternate screen hides stderr, capture it
+MOB3 writes no log file. When the alternate screen hides stderr, capture it
 with shell redirection:
 
 ```sh
@@ -212,7 +212,7 @@ It is a debugging tool only, never a project dependency.
 - Keep the Node script in `/tmp`; it is not part of the repository.
 - Compare structure, media-query results, padding reserved for fixed headers,
   and whether nav items sit on one line. Do not expect pixel parity: Chromium
-  uses real CSS pixels and fonts, while MOB³ uses terminal cells.
+  uses real CSS pixels and fonts, while MOB3 uses terminal cells.
 
 ## Timing and limits
 

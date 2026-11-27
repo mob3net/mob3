@@ -1,6 +1,6 @@
 # Known limitations
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 - JavaScript is a practical subset: CSP is unsupported. ES modules run, and a
@@ -82,7 +82,7 @@ agreement, the non-negotiable constraints and the change protocol.
   but request tagging by tab is not implemented.
 - Cross-origin scripts/stylesheets/images still load like a normal browser and
   share the cookie jar (third-party requests), with no CSP. This is a separate
-  residual risk from XHR; do not treat MOB³ as a security boundary.
+  residual risk from XHR; do not treat MOB3 as a security boundary.
 - **Address-bar integrity:** the host records each document's final URL and
   the front end reads it by entry ID, so an engine bug cannot forge a new
   history entry's URL through the protocol. This is not process isolation: a
@@ -104,13 +104,13 @@ agreement, the non-negotiable constraints and the change protocol.
   target is resolved by the proxy, so only literal/local names are caught.
   Proxy support is environment-only; there is no proxy UI or per-tab setting.
 - Browser checks and anti-bot/firewall blocks cannot be completed. On
-  401/403/429/503 responses, MOB³ looks for Cloudflare, CAPTCHA,
+  401/403/429/503 responses, MOB3 looks for Cloudflare, CAPTCHA,
   DataDome/PerimeterX, Imperva/Sucuri, “verify you are human”, “unusual
   traffic” and access-denied signatures and shows a generic “Site blocked”
   page with the detected reason, HTTP status and URL. Challenge scripts are
   not executed unless the user follows the page’s one-shot **Try anyway** link
   or passes `-ignore-blocks`; even then most checks fail, so sites behind such
-  protection are generally not usable. MOB³ is not a security boundary and
+  protection are generally not usable. MOB3 is not a security boundary and
   challenge pages may run arbitrary script once explicitly retried.
 - No automatic downloads. A link with a `download` attribute or a
   non-HTML response opens a popup with a copyable `curl` command instead of

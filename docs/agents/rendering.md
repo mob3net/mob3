@@ -1,6 +1,6 @@
 # Rendering and layout
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 - **Scope:** ambitious CSS subset rather than text-only or solid-basics — own

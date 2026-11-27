@@ -132,7 +132,7 @@ func (s *mcpServer) initialize(req mcpRequest) *mcpResponse {
 			"name":    "mob3",
 			"version": Version,
 		},
-		"instructions": "MOB³ is a terminal browser. Use snapshot for readable page text, " +
+		"instructions": "MOB3 is a terminal browser. Use snapshot for readable page text, " +
 			"links as [n], and form-control positions; click accepts link, text, selector, x/y. " +
 			"Use links for every off-screen link and form for every control's selector and value, fill/select/toggle to set them, " +
 			"and submit to send a form. Use evaluate for DOM queries, and requests/logs/source " +

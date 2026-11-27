@@ -1,9 +1,9 @@
 # Security and privacy
 
-> **Warning:** **MOB³ is not a secure browser.** It has no sandboxing, process
+> **Warning:** **MOB3 is not a secure browser.** It has no sandboxing, process
 > or site isolation, CSP enforcement, certificate UI, phishing protection or
 > security audit. Treat every page as code running beside the browser. Do not
-> use MOB³ for passwords, accounts, payments or confidential data.
+> use MOB3 for passwords, accounts, payments or confidential data.
 
 ## What it does not do
 
@@ -52,7 +52,7 @@ cross-frame DOM access, and none is planned.
 ## No persistence
 
 The running browser does not create or update configuration, history, cookie,
-cache, log or download files. Closing MOB³ saves nothing.
+cache, log or download files. Closing MOB3 saves nothing.
 
 - History, cookies, `localStorage`/`sessionStorage`, the image cache and all
   JavaScript state live in memory only.
@@ -95,7 +95,7 @@ Page JavaScript cannot read or write the clipboard (`navigator.clipboard` is
 absent and `document.execCommand("copy")` is false). The engine emits plain text;
 the front end allows one clipboard event per copy action, drops unsolicited
 events, strips terminal and display-format controls, caps the payload at
-100 KiB and reports "Clipboard unavailable" when the terminal write fails. MOB³
+100 KiB and reports "Clipboard unavailable" when the terminal write fails. MOB3
 never reads the clipboard. Terminal support for OSC 52 still varies.
 
 ## Cross-origin requests
@@ -117,19 +117,19 @@ Documents that themselves loaded from a local address keep access, and top-level
 navigation is not blocked.
 Blocked requests appear as `ERR` in the console request list.
 
-MOB³ upgrades HTTP image requests on HTTPS pages to HTTPS and does not retry
+MOB3 upgrades HTTP image requests on HTTPS pages to HTTPS and does not retry
 them over HTTP; HTTP scripts, stylesheets, modules, `@import`, XHR/fetch and
 secure-subresource redirects to HTTP are blocked. IP-literal image hosts are
 blocked rather than upgraded. Top-level navigation to HTTP remains allowed.
 
 ## Blocked sites and challenges
 
-On 401/403/429/503 responses, MOB³ looks for common anti-bot/CAPTCHA signatures
+On 401/403/429/503 responses, MOB3 looks for common anti-bot/CAPTCHA signatures
 and shows a generic “Site blocked” page with the reason, status and URL. The
 site's challenge scripts are not executed unless you follow the one-shot
 **Try anyway** link, or start with `-ignore-blocks`.
 
-Challenge pages can run arbitrary script after that bypass. MOB³ cannot
+Challenge pages can run arbitrary script after that bypass. MOB3 cannot
 complete most browser checks, and it is not a security boundary.
 
 ## Local files and downloads
@@ -140,10 +140,10 @@ never probed on disk, and every document comes from `http`, `https` or
 stylesheets, scripts), never as a document. Remote pages therefore cannot use
 the viewport, a stylesheet, a script, an image or XHR to read a local file.
 
-MOB³ never saves downloads. A download link opens a popup with a
+MOB3 never saves downloads. A download link opens a popup with a
 ready-to-copy `curl` command without fetching the file, except for a `.pdf`
 download, which is fetched and shown in the text viewer. Running the `curl`
-command is your choice and outside MOB³.
+command is your choice and outside MOB3.
 
 ## TLS trust store
 

@@ -48,7 +48,7 @@ func ConfigPageHTML(items []ConfigItem, updated bool, notice, token string, widt
 		b.WriteString(EscapeHTML(notice))
 		b.WriteString(`</p>`)
 	}
-	b.WriteString(`<p>Changes are in memory only and disappear when MOB³ exits.
+	b.WriteString(`<p>Changes are in memory only and disappear when MOB3 exits.
 Options marked <b>startup</b> cannot be changed without restarting; they are
 shown read-only. Options marked <b>dump only</b> apply only to <b>-dump</b>
 runs. On/off options use checkboxes; all other fields can be edited for this
@@ -127,7 +127,7 @@ session.</p>
 <p><button name="apply" value="1">Apply changes</button></p>
 </form>
 <p><a href="about:start">Back to the start page</a></p>`)
-	return AppPageHTML("Config — MOB³", `input { width: 34em; max-width: 100%; }
+	return AppPageHTML("Config — MOB3", `input { width: 34em; max-width: 100%; }
 .note { color: #57606a; }
 .fixed { color: #57606a; }
 .viewport { background: #f6f8fa; border: 1px solid #d0d7de; padding: 8px 10px; }

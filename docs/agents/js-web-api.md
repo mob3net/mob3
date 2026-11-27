@@ -1,9 +1,9 @@
 # JavaScript and web API compatibility
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
-MOB³ targets core DOM plus jQuery-era libraries, not a modern browser
+MOB3 targets core DOM plus jQuery-era libraries, not a modern browser
 platform. Keep this list current when the JS surface changes.
 
 Works well:
@@ -103,5 +103,5 @@ Known unsupported families (do not present these as available):
   (`attr()`, counters, images), background gradients/repeat, full flexbox.
 
 Do not add a stub just to silence an error when a library would then depend on
-behavior MOB³ cannot provide; document it here instead or implement the real
+behavior MOB3 cannot provide; document it here instead or implement the real
 subset.

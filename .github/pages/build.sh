@@ -39,7 +39,7 @@ let body = fs.readFileSync(bodyPath, "utf8");
 const SITE = "https://mob3.net/";
 const isDocs = bodyClass === "docs-page";
 const fullTitle =
-  isDocs && !title.includes("MOB³") ? `${title} — MOB³ documentation` : title;
+  isDocs && !title.includes("MOB3") ? `${title} — MOB3 documentation` : title;
 const ogType = isDocs ? "article" : "website";
 
 // Structured data: the landing page describes the software itself, docs pages

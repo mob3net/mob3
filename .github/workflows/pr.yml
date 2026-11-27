@@ -21,7 +21,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          needle="I have read and agree to the MOB³ Contributor License Agreement."
+          needle="I have read and agree to the MOB3 Contributor License Agreement."
           if ! grep -Fq -- "$needle" <<<"${PR_BODY:-}"; then
             echo "::error::Add the CLA statement from CONTRIBUTING.md to the pull request description." >&2
             exit 1

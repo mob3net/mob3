@@ -476,7 +476,7 @@ func TestNewTabURLShowsTargetWithoutPrompt(t *testing.T) {
 }
 
 func TestHomePageKeepsItsTitleButTabSaysNewTab(t *testing.T) {
-	tab := multiTab(1, "MOB³")
+	tab := multiTab(1, "MOB3")
 	tab.State.Page.URL = "about:home"
 	if got := tab.BarView(true).Title; got != "New Tab" {
 		t.Fatalf("home tab label = %q", got)

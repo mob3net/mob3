@@ -7,7 +7,7 @@ import (
 )
 
 // initDialogObject adds the HTMLDialogElement subset pages use to open and
-// dismiss dialogs. MOB³ does not paint a modal backdrop, but tracking the open
+// dismiss dialogs. MOB3 does not paint a modal backdrop, but tracking the open
 // state keeps the UA dialog rules and close events working.
 func (j *jsRuntime) initDialogObject(o *sobek.Object, n *Node) {
 	j.accessor(o, "open", func() sobek.Value {

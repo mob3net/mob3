@@ -1,6 +1,6 @@
 # Automation with MCP
 
-`mob3 -mcp` runs MOB³ headlessly as a
+`mob3 -mcp` runs MOB3 headlessly as a
 [Model Context Protocol](https://modelcontextprotocol.io/) server over
 stdin/stdout. It exposes the browser to scripts and AI agents through a small
 set of text-oriented tools.
@@ -22,7 +22,7 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 
 ## Client configuration
 
-MOB³ speaks MCP over stdio, so any MCP client that can start a local command
+MOB3 speaks MCP over stdio, so any MCP client that can start a local command
 can use it. The examples below assume `mob3` is installed at
 `/usr/local/bin/mob3`; replace that path with the output of `command -v mob3`
 on your machine (for example `/opt/homebrew/bin/mob3` on Apple Silicon).
@@ -36,7 +36,7 @@ coordinates, and the optional starting URL defaults to `about:home`:
 
 ### OpenCode
 
-Add MOB³ as a global local server:
+Add MOB3 as a global local server:
 
 ```sh
 opencode mcp add mob3 --global -- /usr/local/bin/mob3 -mcp -width 100 about:home
@@ -65,7 +65,7 @@ connection state.
 
 ### Claude Code
 
-Add MOB³ at user scope so it is available in every project:
+Add MOB3 at user scope so it is available in every project:
 
 ```sh
 claude mcp add --transport stdio --scope user mob3 -- \
@@ -466,7 +466,7 @@ Lists session history, most recent first; `*` marks the current entry.
 ## Limitations
 
 - **Terminal-cell rasters.** `screenshot` returns a PNG of the terminal-cell
-  raster, not a browser pixel capture: MOB³ has no font rasterizer, so glyphs
+  raster, not a browser pixel capture: MOB3 has no font rasterizer, so glyphs
   are monospaced and some CJK/emoji glyphs may be missing.
 - **One page per server.** The headless session has a single page and no tab
   UI; tabs are an interactive-mode feature. Iframes are inert stubs, so there is

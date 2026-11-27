@@ -1,6 +1,6 @@
 # Browser and UX
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 - **Chrome:** a browser-like top bar, two rows on terminals at least five rows
@@ -602,7 +602,7 @@ agreement, the non-negotiable constraints and the change protocol.
   in a text document stay blank. `-no-pdf` (also in
   `about:config`) turns the viewer off for the session and restores the old
   “Cannot display” page and popup. Nothing is written to disk.
-- **Downloads:** MOB³ never saves files. A link with a `download` attribute
+- **Downloads:** MOB3 never saves files. A link with a `download` attribute
   opens the modal download popup without making a request, because the
   attribute means "save" in a browser. The exception is a PDF: when the URL
   path or the attribute filename ends in `.pdf`, the link is fetched so the

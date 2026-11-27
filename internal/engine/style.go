@@ -275,7 +275,7 @@ func inheritStyle(parent *Style) *Style {
 	return st
 }
 
-// setPair applies a logical start/end shorthand to two physical sides. MOB³
+// setPair applies a logical start/end shorthand to two physical sides. MOB3
 // only lays out horizontal-tb text, so inline maps to left/right and block to
 // top/bottom.
 func setPair(dst *[4]Length, start, end int, fields []string, fontPx float64) {

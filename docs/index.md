@@ -1,13 +1,13 @@
-# MOB³ documentation
+# MOB3 documentation
 
-MOB³ is a small web browser for the terminal, written in Go. It has its own
+MOB3 is a small web browser for the terminal, written in Go. It has its own
 HTML parser, CSS cascade, layout engine, ANSI renderer and pure-Go JavaScript
 runtime. History, cookies, storage and caches live in memory only.
 
 The project aims to cover most of the features people actually use while using
 a fraction of the CPU and memory of a mainstream browser.
 
-> **Warning:** MOB³ is **not a secure browser**. It has no sandboxing, process
+> **Warning:** MOB3 is **not a secure browser**. It has no sandboxing, process
 > or site isolation, CSP enforcement, certificate UI or security audit. Do not
 > use it for passwords, accounts, payments or confidential data.
 

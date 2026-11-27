@@ -1,6 +1,6 @@
 # Networking and resources
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 - Cookie jar and redirects via `net/http`; the page’s final URL is kept for
@@ -167,7 +167,7 @@ agreement, the non-negotiable constraints and the change protocol.
   the shared built-in page shell instead of bare user-agent styles. Clicking the
   link re-fetches the page once with block detection disabled, and
   `-ignore-blocks` disables the detection for all loads.
-- Default User-Agent: **`MOB3/1.0 (+terminal; +https://mob3.net)`**. MOB³ identifies itself
+- Default User-Agent: **`MOB3/1.0 (+terminal; +https://mob3.net)`**. MOB3 identifies itself
   rather than impersonating another browser; UA-sniffing sites may therefore
   serve simplified or no-JavaScript pages. `-ua` overrides it. Keep this string
   documented in `docs/cli.md`, the built-in help page and this page whenever it

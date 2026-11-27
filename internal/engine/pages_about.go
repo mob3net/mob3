@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-const helpPageBody = `<h1>MOB³ Help</h1>
+const helpPageBody = `<h1>MOB3 Help</h1>
 <p class="muted">Version <b>{{VERSION}}</b> · a small terminal browser. Keys are vim-first.</p>
-<p class="muted">MOB³ keeps history, cookies, storage and caches in memory only.
+<p class="muted">MOB3 keeps history, cookies, storage and caches in memory only.
 Nothing is written to disk.</p>
 
 <h2>Command line</h2>
@@ -161,7 +161,7 @@ newest first. Use <b>j</b>/<b>k</b> or <b>Up</b>/<b>Down</b> to move,
 positions are kept. Up to ten visited pages stay in an in-memory back/forward
 cache, so <b>Back</b> and <b>Forward</b> restore a page, its JavaScript state and
 your scroll position without reloading it. The rendered <b>about:history</b> page
-is still available by URL. Nothing is saved after MOB³ exits. Script and
+is still available by URL. Nothing is saved after MOB3 exits. Script and
 meta-refresh navigations stop after 20 automatic hops with
 <b>Redirect loop stopped</b>; the count clears when you type, click, scroll or
 navigate, so a page that redirects to itself cannot loop forever. Each tab
@@ -206,7 +206,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 </table>
 
 <h2>Downloads</h2>
-<p>MOB³ never saves files. Download links and non-HTML responses open a popup
+<p>MOB3 never saves files. Download links and non-HTML responses open a popup
 with a <b>curl</b> command; <b>y</b> copies it, and <b>Esc</b>/<b>Enter</b>/<b>q</b>
 closes it.</p>
 
@@ -242,14 +242,14 @@ urlencoded POST forms submit; multipart and file uploads are not supported.</p>
 <h2>Try it</h2>
 <p>These links run JavaScript in this page:</p>
 <ul>
-<li><a href="#" onclick="alert('Hello from MOB³!'); return false;">show an alert</a></li>
-<li><a href="#" onclick="return confirm('Do you like MOB³?')">ask a yes/no question</a></li>
+<li><a href="#" onclick="alert('Hello from MOB3!'); return false;">show an alert</a></li>
+<li><a href="#" onclick="return confirm('Do you like MOB3?')">ask a yes/no question</a></li>
 <li><a href="#" onclick="var n = prompt('What is your name?', 'friend'); if (n) { alert('Hello, ' + n + '!'); } return false;">ask for a name</a></li>
 </ul>
 <h3>Download and upload</h3>
 <p><a href="https://mob3.net/index.html" download="index.html">Download a sample file</a>
 opens a popup with a <b>curl</b> command; press <b>y</b> to copy it and close
-the popup, then run it in your terminal. MOB³ itself never saves the file.</p>
+the popup, then run it in your terminal. MOB3 itself never saves the file.</p>
 <p>File uploads are not supported. Click the file control below to see a notice
 explaining this; it is rendered for layout only and is skipped when a form is
 submitted.</p>
@@ -292,7 +292,7 @@ awkward. Use <b>Shift</b>-drag when you only want part of it. Script
 
 // HelpPageHTML wraps the help body in the shared page shell.
 func HelpPageHTML(version string) string {
-	return AppPageHTML("Help — MOB³", "",
+	return AppPageHTML("Help — MOB3", "",
 		strings.Replace(helpPageBody, "{{VERSION}}", EscapeHTML(version), 1))
 }
 
@@ -301,7 +301,7 @@ func HistoryPageHTML(urls []string, current int) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Session history</h1>
 <p>Pages visited in this session, most recent first. History is kept in
-memory only and disappears when MOB³ exits.</p>
+memory only and disappears when MOB3 exits.</p>
 `)
 	const limit = 50
 	start := 0
@@ -331,11 +331,11 @@ memory only and disappears when MOB³ exits.</p>
 	if len(urls) > limit {
 		b.WriteString(`<p>Only the most recent 50 entries are shown.</p>`)
 	}
-	return AppPageHTML("History — MOB³", "li { margin: 6px 0; }\n", b.String())
+	return AppPageHTML("History — MOB3", "li { margin: 6px 0; }\n", b.String())
 }
 
 const StartPageHTML = `<!DOCTYPE html>
-<html><head><title>MOB³</title></head>
+<html><head><title>MOB3</title></head>
 <body><article>
 <h1>MOB³ - a small terminal web browser</h1>
 <h3>Getting started</h3>
@@ -351,7 +351,7 @@ const StartPageHTML = `<!DOCTYPE html>
 <input type="search" name="q" placeholder="Search or enter address">
 <button type="submit">Go</button>
 </form>
-<p><b>Warning:</b> MOB³ is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
+<p><b>Warning:</b> MOB3 is not a secure browser in any way. Do not use it for passwords, accounts, payments or confidential data.</p>
 </article></body></html>`
 
 func BlockedPageHTML(rawURL, reason string, status int) string {
@@ -359,7 +359,7 @@ func BlockedPageHTML(rawURL, reason string, status int) string {
 		reason = "site protection"
 	}
 	body := `<h1>Site blocked</h1>
-<p class="warn">This site blocked MOB³ or requires a browser check that it
+<p class="warn">This site blocked MOB3 or requires a browser check that it
 cannot complete. Common causes are Cloudflare, CAPTCHA, anti-bot or firewall
 protection, and login protections that need a full browser with
 JavaScript/WASM, fingerprinting and browser APIs.</p>
@@ -367,7 +367,7 @@ JavaScript/WASM, fingerprinting and browser APIs.</p>
 <p class="try"><a href="about:retry">Try anyway</a> — reload this URL without block
 detection and run the challenge page's scripts. This is a one-shot bypass; the
 site may still refuse access. Challenge pages can run arbitrary script, and
-MOB³ is not a secure browser, so only do this if you trust the site.</p>
+MOB3 is not a secure browser, so only do this if you trust the site.</p>
 <p>The requested page was not loaded. Try a different source, use the site's
 direct or alternative URL, or open it in a full browser.</p>
 <p>URL: <b>` + EscapeHTML(rawURL) + `</b></p>`

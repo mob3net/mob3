@@ -61,7 +61,7 @@ debugging recipe in `docs/agents/debugging.md`; delete it afterwards.
 
 ## Documentation
 
-- `README.md` is the short landing page: what MOB³ is, how to run it, and what
+- `README.md` is the short landing page: what MOB3 is, how to run it, and what
   to expect.
 - `docs/` holds long-form documentation.
 - `mob3 -h` and the in-app `about:help` page are canonical for flags and keys.

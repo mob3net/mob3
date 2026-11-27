@@ -1,6 +1,6 @@
-# Contributing to MOB³
+# Contributing to MOB3
 
-MOB³ is dual-licensed: AGPL-3.0-only for the community and a separate
+MOB3 is dual-licensed: AGPL-3.0-only for the community and a separate
 commercial license. To keep that possible, every contribution must be covered
 by the Contributor License Agreement (CLA) below. You keep the copyright to
 your work; you grant the maintainer the rights needed to use it under both
@@ -25,7 +25,7 @@ licensing options.
 Please report all bugs in this repository's issues tracker:
 <https://github.com/mob3net/mob3/issues>. The bug report form requires nothing:
 share the page URL, what is wrong, how it should look instead, a screenshot of
-each, and the MOB³ version with your terminal if you can. Clear before/after
+each, and the MOB3 version with your terminal if you can. Clear before/after
 pictures are what make rendering problems fixable.
 
 ## Security policy
@@ -40,7 +40,7 @@ instead of using the public issue tracker.
 
 Include this statement in the description of every pull request:
 
-> I have read and agree to the MOB³ Contributor License Agreement. I confirm
+> I have read and agree to the MOB3 Contributor License Agreement. I confirm
 > that I have the right to submit this contribution and to grant the licenses
 > described in the CLA.
 
@@ -54,7 +54,7 @@ so. If a submission is not intended to be a contribution, clearly mark it as
 
 This Contributor License Agreement ("CLA") is between you ("You") and Milos
 Stojanovic ("Maintainer") and covers every contribution You submit to the
-MOB³ project ("Project").
+MOB3 project ("Project").
 
 ### 1. Definitions
 

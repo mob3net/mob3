@@ -1,6 +1,6 @@
 # Build, test, release and the website
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 - `make` = `mkdir -p bin && CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o bin/mob3 ./cmd/mob3`
@@ -55,7 +55,7 @@ agreement, the non-negotiable constraints and the change protocol.
   `.github/workflows/fuzz.yml` runs both codec decoders for 60 s each nightly
   and on manual dispatch.
   `.github/workflows/pr.yml` runs only for pull requests and requires the exact
-  statement `I have read and agree to the MOB³ Contributor License Agreement.`
+  statement `I have read and agree to the MOB3 Contributor License Agreement.`
   in the PR description.
 - The GitHub Pages site lives on the generated `gh-pages` branch.
   `.github/pages/build.sh` converts `README.md` to `index.html` and every
@@ -74,14 +74,14 @@ agreement, the non-negotiable constraints and the change protocol.
   (`WebSite` + free `SoftwareApplication` on the landing page,
   `BreadcrumbList` + `TechArticle` on docs pages). Per-page descriptions come
   from the `page_description` map in `build.sh`, falling back to the first prose
-  paragraph; docs `<title>`s carry the `— MOB³ documentation` suffix. The build
+  paragraph; docs `<title>`s carry the `— MOB3 documentation` suffix. The build
   also writes `sitemap.xml`, `robots.txt` (pointing at the sitemap) and copies
   `.github/pages/assets/` to `assets/` plus `docs/screenshots/` to
   `docs/screenshots/`. Those assets are committed binaries — `favicon-32.png`,
   `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
   `og-image.png` (a 1200×630 card built from the README hero screenshot) and
   `site.webmanifest` — so the Pages build needs no image tooling. The icon is
-  the MOB³ GitHub avatar (a black pixel robot) on a white background, padded
+  the MOB3 GitHub avatar (a black pixel robot) on a white background, padded
   and rounded for favicons and full-bleed white for the Apple/Android icons.
   Regenerate the PNGs if the avatar or the hero screenshot changes; do not
   hotlink GitHub, `interactive32.com` or attachment URLs from the page head.

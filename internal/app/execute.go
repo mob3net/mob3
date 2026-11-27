@@ -24,7 +24,7 @@ func loaderConfigFor(o runOptions, graphicsMode frontend.GraphicsMode, interacti
 	}
 }
 
-// execute runs one MOB³ invocation after flag parsing and validation.
+// execute runs one MOB3 invocation after flag parsing and validation.
 func execute(o runOptions) int {
 	if o.MemLimit > 0 {
 		debug.SetMemoryLimit(int64(o.MemLimit) << 20)

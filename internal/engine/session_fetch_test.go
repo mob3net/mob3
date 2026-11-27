@@ -262,7 +262,7 @@ func TestBlockedChallenge(t *testing.T) {
 	if page.Title != "Site blocked" || len(page.Scripts) != 0 {
 		t.Fatalf("blocked page = title %q scripts %d", page.Title, len(page.Scripts))
 	}
-	if !strings.Contains(page.Root.TextContent(), "blocked MOB³") {
+	if !strings.Contains(page.Root.TextContent(), "blocked MOB3") {
 		t.Fatal("blocked explanation missing")
 	}
 	if !strings.Contains(page.Root.TextContent(), "Cloudflare") {
@@ -649,7 +649,7 @@ func TestImageConfigLimit(t *testing.T) {
 }
 
 func TestBranding(t *testing.T) {
-	for _, want := range []string{"MOB³"} {
+	for _, want := range []string{"MOB3"} {
 		if !strings.Contains(StartPageHTML, want) {
 			t.Errorf("start page is missing %q", want)
 		}
@@ -964,7 +964,7 @@ func TestPageKeepsRawHTML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(about.RawHTML, "MOB³") {
+	if !strings.Contains(about.RawHTML, "MOB3") {
 		t.Fatalf("about page RawHTML is empty: %q", about.RawHTML)
 	}
 }

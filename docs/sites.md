@@ -1,6 +1,6 @@
 # Site support
 
-MOB³ is a content browser, not a full browser engine. It is happiest with
+MOB3 is a content browser, not a full browser engine. It is happiest with
 text-focused, server-rendered pages and gets rough on modern JavaScript apps.
 
 ## Works well

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// AppPageCSS is the shared stylesheet for MOB³'s own pages: help, config,
+// AppPageCSS is the shared stylesheet for MOB3's own pages: help, config,
 // history, the blocked page and the error pages. It gives them one centered
 // reading column, heading scale, table, secondary-text and warning style.
 // Page-specific rules are appended by AppPageHTML.
@@ -36,7 +36,7 @@ func AppPageHTML(title, extraCSS, body string) string {
 	return b.String()
 }
 
-// CannotDisplayPageHTML renders the page shown for a response MOB³ cannot
+// CannotDisplayPageHTML renders the page shown for a response MOB3 cannot
 // render, such as an image, an archive or a binary file.
 func CannotDisplayPageHTML(mediaType string, u *url.URL) string {
 	raw := ""

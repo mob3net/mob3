@@ -148,7 +148,7 @@ func TestHistoryPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Title != "History — MOB³" {
+	if page.Title != "History — MOB3" {
 		t.Fatalf("title = %q", page.Title)
 	}
 	text := page.Root.TextContent()

@@ -1,12 +1,12 @@
 # Use cases
 
-MOB³ is a terminal browser with a headless MCP mode, so it fits anywhere a
+MOB3 is a terminal browser with a headless MCP mode, so it fits anywhere a
 graphical browser does not: SSH sessions, containers, CI runners, remote
 servers and AI agents. It is small and text-focused, not a full browser engine,
 so the best results come from content pages, docs and server-rendered HTML; see
 [site support](sites.md).
 
-Remember that MOB³ is **not a secure browser**: no sandboxing, no site
+Remember that MOB3 is **not a secure browser**: no sandboxing, no site
 isolation, no CSP. Use it for reading and automation, never for passwords,
 accounts, payments or confidential data. See [security](security.md).
 
@@ -68,5 +68,5 @@ Start with `mob3 -mcp` and the [automation reference](automation.md).
 - **Link checking** — visit URLs and inspect whether pages render correctly.
 - **Content conversion** — turn rendered web pages into text or screenshots for
   further processing.
-- **Custom tooling** — build other applications and agents on top of MOB³'s
+- **Custom tooling** — build other applications and agents on top of MOB3's
   browser capabilities.

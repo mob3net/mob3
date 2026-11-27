@@ -857,7 +857,7 @@ func TestMouseClickSubmitButton(t *testing.T) {
 func TestHomeSearchFormUsesURLResolution(t *testing.T) {
 	newHome := func(value string) (*Session, *Node, chan string) {
 		u := mustParse(t, "about:home")
-		page := &Page{URL: u, Base: u, Root: ParseHTML(StartPageHTML), Title: "MOB³"}
+		page := &Page{URL: u, Base: u, Root: ParseHTML(StartPageHTML), Title: "MOB3"}
 		b := newTestSession(80, 20)
 		b.Page = page
 		b.URL = u

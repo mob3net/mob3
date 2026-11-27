@@ -23,7 +23,7 @@ RUN GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOARM="${TARGETVARIANT#v}" \
 
 FROM alpine:3
 
-LABEL org.opencontainers.image.title="MOB³" \
+LABEL org.opencontainers.image.title="MOB3" \
       org.opencontainers.image.description="A small terminal web browser" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.source="https://github.com/mob3net/mob3"

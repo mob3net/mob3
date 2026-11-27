@@ -191,7 +191,7 @@ func TestRunHome(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if !bytes.Contains(out, []byte("MOB³ Help")) {
+	if !bytes.Contains(out, []byte("MOB3 Help")) {
 		t.Fatalf("home dump output = %q", out)
 	}
 }

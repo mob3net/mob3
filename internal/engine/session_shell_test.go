@@ -651,7 +651,7 @@ func TestHelpAlertExample(t *testing.T) {
 	})
 	found := false
 	for _, line := range b.jsLog {
-		if strings.Contains(line, "Hello from MOB³!") {
+		if strings.Contains(line, "Hello from MOB3!") {
 			found = true
 		}
 	}

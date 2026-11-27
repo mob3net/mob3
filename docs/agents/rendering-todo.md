@@ -1,6 +1,6 @@
 # Rendering TODO
 
-Part of the MOB³ agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
+Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
 agreement, the non-negotiable constraints and the change protocol.
 
 Open rendering issues, ordered by the number of affected pages in the site

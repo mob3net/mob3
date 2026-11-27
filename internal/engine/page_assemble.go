@@ -40,12 +40,12 @@ func AssembleAboutPage(ctx context.Context, fetcher PageFetcher, u *url.URL, ver
 	if !noScripts {
 		RemoveNoscript(root)
 	}
-	title := "MOB³"
+	title := "MOB3"
 	switch AboutPageName(u) {
 	case "help":
-		title = "Help — MOB³"
+		title = "Help — MOB3"
 	case "history":
-		title = "History — MOB³"
+		title = "History — MOB3"
 	}
 	page := &Page{URL: u, Base: u, Root: root, Title: title, RawHTML: doc, Status: 200}
 	page.Author = CollectStylesheets(ctx, fetcher, root, page.Base)

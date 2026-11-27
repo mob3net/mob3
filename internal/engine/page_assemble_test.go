@@ -32,7 +32,7 @@ func TestAboutPageName(t *testing.T) {
 func TestAssembleAboutPages(t *testing.T) {
 	u, _ := url.Parse("about:home")
 	page := AssembleAboutPage(context.Background(), testPageFetcher{}, u, "9.9.9", nil, -1, true)
-	if page == nil || page.Title != "MOB³" {
+	if page == nil || page.Title != "MOB3" {
 		t.Fatalf("home page = %+v", page)
 	}
 	if !strings.Contains(page.RawHTML, "small terminal web browser") {
@@ -44,7 +44,7 @@ func TestAssembleAboutPages(t *testing.T) {
 
 	help, _ := url.Parse("about:help")
 	page = AssembleAboutPage(context.Background(), testPageFetcher{}, help, "9.9.9", nil, -1, true)
-	if page.Title != "Help — MOB³" || !strings.Contains(page.RawHTML, "9.9.9") {
+	if page.Title != "Help — MOB3" || !strings.Contains(page.RawHTML, "9.9.9") {
 		t.Fatalf("help page = %q / %q", page.Title, page.RawHTML[:min(len(page.RawHTML), 80)])
 	}
 }

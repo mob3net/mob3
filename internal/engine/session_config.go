@@ -246,7 +246,7 @@ func (b *Session) configPage(u *url.URL, updated bool) *Page {
 	}
 	doc := configPageHTML(b.configItems(), updated, b.configNotice, token, b.Width, b.viewportHeight(), b.CellW, b.CellH)
 	root := ParseHTML(doc)
-	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB³", RawHTML: doc, Status: 200}
+	page := &Page{URL: u, Base: u, Root: root, Title: "Config — MOB3", RawHTML: doc, Status: 200}
 	ApplyPageStyles(root, page)
 	return page
 }

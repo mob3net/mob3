@@ -398,7 +398,7 @@ func (u procUsage) footer() string {
 	return fmt.Sprintf("MEM %dMB", (u.rss+(1<<19))>>20)
 }
 
-// processRSS returns Go's total OS memory. MOB³ reads no proc files, so this
+// processRSS returns Go's total OS memory. MOB3 reads no proc files, so this
 // is the closest process-wide figure available without a filesystem read.
 func processRSS() uint64 {
 	var stats runtime.MemStats
