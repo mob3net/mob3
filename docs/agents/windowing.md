@@ -92,6 +92,27 @@ toolbar buttons work in one click; hints and link previews keep their current
 dismissal rules; and every page-derived string stays bounded and stripped of
 terminal controls before painting.
 
+## Input and state ownership
+
+One component owns keyboard and pointer input in each mode; do not add a mode
+where the page and console compete for the same event.
+
+| Mode | Keyboard | Pointer | Scrolling | Chrome and geometry |
+| --- | --- | --- | --- | --- |
+| Page | Engine page keys; front end handles shell shortcuts | Engine content; front end owns header/footer and scrollbar hits | Page | Front-end header/footer; engine content rectangle |
+| Page text field | Engine owns all typing | Engine content; chrome clicks still reach the front end | Page | Same as page while the field is focused |
+| Console | Console | Console | Console section | Full-screen console surface; page hidden |
+| URL prompt | Front-end prompt | Front-end prompt field | Page underneath | Header URL row |
+| Find bar | Front-end find bar | Footer find row | Page underneath | Footer row |
+| JS dialog | Dialog modal | Dialog modal | None until answered | Drawn over the page or console; engine waits for the answer |
+| Menu, config, history, select, download, notice | Front-end window | Front-end window | Window itself | Painted over the current surface; modal dismissal rules apply |
+| Hints, link preview | Page-scoped overlay | Page-scoped overlay | Page | Painted over the page; dismissed by its own keys or pointer |
+
+The page engine owns page content, form focus and the content rectangle. The
+front end owns the console, tab chrome, URL prompt, find bar, menus and
+dialogs. A change that needs both to own input, scroll or geometry at the same
+time is a redesign, not a local feature.
+
 ## Migration
 
 ### Stage 0: stopgap (landed)
