@@ -175,8 +175,13 @@ func (w *promptOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 			return true
 		default:
 			// A click on another chrome control closes the prompt and runs that
-			// control in the same event, like Esc followed by the click.
+			// control in the same event, like Esc followed by the click. A
+			// middle click on a tab is a close action, not a select action.
 			w.close(l)
+			if ev.Button == MouseButtonMiddle && (hit.Kind == ChromeHitTab || hit.Kind == ChromeHitTabClose) {
+				l.handleMiddleTabClick(ev)
+				return true
+			}
 			l.activateChromeHit(hit)
 			return true
 		}
