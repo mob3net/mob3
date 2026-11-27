@@ -67,43 +67,85 @@ func TestFetcherFetchCtxAndBlockedRecord(t *testing.T) {
 	}
 }
 
-func TestCSSJSCachePartitionedByTopLevelSite(t *testing.T) {
+func TestSubresourceCachePartitionedByTopLevelSite(t *testing.T) {
+	for _, kind := range []string{"js", "img"} {
+		t.Run(kind, func(t *testing.T) {
+			calls := 0
+			f := &Fetcher{
+				Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					calls++
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     http.Header{"Content-Type": []string{"application/octet-stream"}},
+						Body:       io.NopCloser(strings.NewReader("body")),
+						Request:    r,
+					}, nil
+				})},
+				Settings: NewSettings("ua", ""), Requests: NewRequestLog(),
+				Cache: NewResourceCache(1 << 20),
+			}
+			target, _ := url.Parse("https://cdn.example.net/asset")
+			one, _ := url.Parse("https://a.example.org/")
+			two, _ := url.Parse("https://b.example.net/")
+			fetch := func(page *url.URL) {
+				ctx := WithRequestMeta(context.Background(), 1, kind)
+				ctx = WithRequestPage(ctx, page, false)
+				if _, _, _, _, err := f.FetchRequest(ctx, http.MethodGet, target, nil, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			fetch(one)
+			fetch(one)
+			if calls != 1 {
+				t.Fatalf("same-site fetch made %d requests, want one cache hit", calls)
+			}
+			fetch(two)
+			if calls != 2 {
+				t.Fatalf("cross-site fetch made %d requests, want a cache miss", calls)
+			}
+			fetch(two)
+			if calls != 2 {
+				t.Fatalf("second same-site fetch made %d requests, want one cache hit", calls)
+			}
+		})
+	}
+}
+
+func TestImageBodyCachedAndLogged(t *testing.T) {
 	calls := 0
 	f := &Fetcher{
 		Client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			calls++
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Header:     http.Header{"Content-Type": []string{"text/javascript"}},
-				Body:       io.NopCloser(strings.NewReader("code")),
+				Header:     http.Header{"Content-Type": []string{"image/png"}},
+				Body:       io.NopCloser(strings.NewReader("pixels")),
 				Request:    r,
 			}, nil
 		})},
 		Settings: NewSettings("ua", ""), Requests: NewRequestLog(),
 		Cache: NewResourceCache(1 << 20),
 	}
-	target, _ := url.Parse("https://cdn.example.net/app.js")
-	one, _ := url.Parse("https://a.example.org/")
-	two, _ := url.Parse("https://b.example.net/")
-	fetch := func(page *url.URL) {
-		ctx := WithRequestMeta(context.Background(), 1, "js")
-		ctx = WithRequestPage(ctx, page, false)
-		if _, _, _, _, err := f.FetchRequest(ctx, http.MethodGet, target, nil, ""); err != nil {
-			t.Fatal(err)
+	gen := f.Requests.BeginPage()
+	page, _ := url.Parse("https://a.example.org/")
+	ctx := WithRequestMeta(context.Background(), gen, "img")
+	ctx = WithRequestPage(ctx, page, false)
+	target, _ := url.Parse("https://cdn.example.net/pic.png")
+	for i := 0; i < 2; i++ {
+		data, ctype, _, status, err := f.FetchRequest(ctx, http.MethodGet, target, nil, "")
+		if err != nil || status != http.StatusOK || string(data) != "pixels" || ctype != "image/png" {
+			t.Fatalf("fetch %d = %q %q %d %v", i, data, ctype, status, err)
 		}
 	}
-	fetch(one)
-	fetch(one)
 	if calls != 1 {
-		t.Fatalf("same-site fetch made %d requests, want one cache hit", calls)
+		t.Fatalf("image HTTP requests = %d, want one cache hit", calls)
 	}
-	fetch(two)
-	if calls != 2 {
-		t.Fatalf("cross-site fetch made %d requests, want a cache miss", calls)
+	recs := f.Requests.Snapshot()
+	if len(recs) != 2 || recs[0].Cached || !recs[1].Cached {
+		t.Fatalf("request records = %+v", recs)
 	}
-	fetch(two)
-	if calls != 2 {
-		t.Fatalf("second same-site fetch made %d requests, want one cache hit", calls)
+	if recs[1].Kind != "img" || recs[1].Size != len("pixels") || recs[1].Status != http.StatusOK {
+		t.Fatalf("cache-hit record = %+v", recs[1])
 	}
 }
 

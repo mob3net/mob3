@@ -144,22 +144,26 @@ agreement, the non-negotiable constraints and the change protocol.
   ordered after the existing author rules; a dynamic `<link rel=stylesheet>` is
   not fetched, and removing or rewriting a style leaves its earlier rules in
   place.
-- **Session resource cache:** CSS and JavaScript response bodies and decoded
-  images share a session-only LRU byte cache. Its budget is 3% of
+- **Session resource cache:** CSS, JavaScript and image response bodies plus
+  decoded images share a session-only LRU byte cache. Its budget is 3% of
   `-mem-limit`/`GOMEMLIMIT`, or 32 MiB when the process is unlimited, with a
   2 MiB per-entry cap, and key/metadata bytes count against it. Only successful
-  GET CSS/JS responses and decoded images are stored; page documents, POST and
-  `data:` reads are not cached, `Cache-Control: no-store` responses are skipped,
-  and a response varying on `Cookie` (or `Vary: *`) is not cached. CSS and
-  JavaScript keys include the top-level schemeful site so one site cannot reuse
-  another site's cached body; decoded images stay keyed by URL. Hits avoid
-  network requests; nothing is written to disk. The limit is derived from
-  `-mem-limit`, which is editable in the config window. The separate
+  GET CSS/JS/image responses and decoded images are stored; page documents, POST
+  and `data:` reads are not cached, `Cache-Control: no-store` responses are
+  skipped, and a response varying on `Cookie` (or `Vary: *`) is not cached. CSS,
+  JavaScript and raw image keys include the top-level schemeful site so one site
+  cannot reuse another site's cached body; decoded images stay keyed by URL.
+  Hits avoid network requests; nothing is written to disk. The limit is derived
+  from `-mem-limit`, which is editable in the config window. The separate
   back/forward page cache is described under History.
-- Images load concurrently (max 6) and use the session resource cache per
-  resolved URL for reloads. Initial loading also selects `srcset`/`picture`
-  candidates, and images added or changed by page scripts (including lazy
-  `data-src` hydration) are loaded after scripts and timer-driven rebuilds.
+- Images load concurrently (max 6) and reuse the session cache on reloads, so a
+  refresh avoids re-downloading an image whose compressed body is still cached.
+  In per-tab mode that cache lives in the parent process and is shared by the
+  tab children; the decoded-image cache is only available when the engine shares
+  the host process (`-process=single`), so a per-tab reload decodes a cached
+  body again. Initial loading also selects `srcset`/`picture` candidates, and
+  images added or changed by page scripts (including lazy `data-src` hydration)
+  are loaded after scripts and timer-driven rebuilds.
 - Blocked responses are replaced with a locally generated “Site blocked” page
   with a `about:retry` **Try anyway** link; by default they do not run the
   site’s challenge scripts or load its assets. The generated page's inline

@@ -281,9 +281,9 @@ label) to toggle this for the session and reload the current page.
 The resource cache and the back/forward history cache follow the same limit:
 3% and 12% of `-mem-limit`/`GOMEMLIMIT`, with 32 MB and 128 MB fallbacks when
 the process is unlimited. The resource cache is a session-only LRU for CSS/JS
-response bodies and decoded images; nothing is written to disk, and cache hits
-appear in the `!` console. The history cache weighs suspended pages and evicts
-the least recently used ones.
+and image response bodies plus decoded images; nothing is written to disk, and
+cache hits appear in the `!` console. The history cache weighs suspended pages
+and evicts the least recently used ones.
 
 ## Home and search
 

@@ -42,10 +42,11 @@ func cookiePolicyFor(meta RequestMeta) RequestCookiePolicy {
 	return RequestCookiePolicy{TopSite: siteOf(u), TopLevel: meta.Kind == "doc"}
 }
 
-// resourceCacheKey partitions CSS/JS entries by the top-level schemeful site,
-// so one site cannot read another site's cached response (including one fetched
-// with credentials the other site would not have sent). Images keep their
-// URL-only key in the engine loader.
+// resourceCacheKey partitions subresource entries (CSS, JavaScript and raw
+// image bodies) by the top-level schemeful site, so one site cannot read
+// another site's cached response (including one fetched with credentials the
+// other site would not have sent). Decoded images keep their URL-only key in
+// the engine's optional ImageCache.
 func resourceCacheKey(meta RequestMeta, u *url.URL) string {
 	if u == nil {
 		return ""
@@ -147,9 +148,12 @@ func (f *Fetcher) FetchRequest(ctx context.Context, method string, u *url.URL, b
 		return nil, "", u, 0, err
 	}
 	guard.setTarget(u)
+	// Raw image bodies are cached as well: a reload refetches the document but
+	// should not download its images again. The engine may additionally hold
+	// decoded images when the host implements protocol.ImageCache.
 	cacheable := method == http.MethodGet && len(body) == 0 &&
 		(u.Scheme == "http" || u.Scheme == "https") &&
-		(meta.Kind == "css" || meta.Kind == "js")
+		(meta.Kind == "css" || meta.Kind == "js" || meta.Kind == "img")
 	cacheKey := resourceCacheKey(meta, u)
 	if cacheable {
 		if cached, ct, final, cachedLocal, ok := f.Cache.GetBytes(cacheKey); ok && !(meta.BlockLocal && cachedLocal) {
