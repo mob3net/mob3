@@ -77,6 +77,26 @@ func TestMultiSelectShowsAndTogglesAllOptions(t *testing.T) {
 	}
 }
 
+func TestClickOutsideInputClearsFocus(t *testing.T) {
+	u := mustParse(t, "https://example.com/")
+	b := newTestSession(40, 10)
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<input name=q value="hello"><p>body text</p>`)}
+	b.URL = u
+	b.rebuild()
+	q := b.Page.Root.FindFirst("input")
+	if q == nil {
+		t.Fatal("missing input")
+	}
+	b.setInputFocus(q)
+	if b.Forms.InputFocus == nil {
+		t.Fatal("input focus was not installed")
+	}
+	b.clickContent(0, 9999)
+	if b.Forms.InputFocus != nil {
+		t.Fatal("clicking away did not clear the input focus")
+	}
+}
+
 func TestInputTypingAndSubmit(t *testing.T) {
 	doc := ParseHTML(`<html><body><form action="/search" method="get">
 		<input type="hidden" name="hl" value="en">

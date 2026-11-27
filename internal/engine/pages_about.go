@@ -198,6 +198,7 @@ only; startup and dump-only options are not shown.</p>
 <tr><td>click the footer <b>Dark:on</b>/<b>Dark:off</b> label</td><td>toggle dark mode</td></tr>
 <tr><td>click the footer <b>Reader:on</b>/<b>Reader:off</b> label</td><td>toggle reader mode</td></tr>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
+<tr><td>click the <b>×</b> icon</td><td>close the console from its top-right corner</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; <b>y</b> copies the active section</td></tr>
 <tr><td>click the console input row</td><td>focus the JavaScript or Tools input</td></tr>
 <tr><td>click the ⚙ icon</td><td>open the settings window</td></tr>
@@ -284,7 +285,7 @@ submitted.</p>
 <b>Tab</b> or <b>h</b>/<b>l</b> to switch tabs, <b>:</b>/<b>Enter</b> to focus the input, <b>Enter</b>
 to run JavaScript, <b>j</b>/<b>k</b>, <b>d</b>/<b>u</b> or <b>Space</b>/<b>b</b>
 to scroll by a line, half a screen or a screen, <b>g</b>/<b>G</b> for the ends,
-and <b>Esc</b> to close. <b>y</b>
+and <b>Esc</b> or the <b>×</b> in the console menu to close. <b>y</b>
 copies the whole active tab — the logs, the raw HTML source, the request list
 or the Tools scrollback — because selecting long output by dragging is
 awkward. Use <b>Shift</b>-drag when you only want part of it. Script

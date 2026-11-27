@@ -1,4 +1,4 @@
-# Windowing and panes
+# Windowing and surfaces
 
 This page records the front-end window model and its migration. Start at
 [AGENTS.md](../../AGENTS.md) for the working agreement and at
@@ -12,22 +12,22 @@ console) and then paints an ordered `windowPainter` list. A dialog, menu or
 settings window is therefore painted over whatever surface is current.
 
 The goal remains one per-tab screen composed from a base surface and an ordered
-stack of windows. The console is still full-screen; making it a pane is Stage
-3, which changes surface geometry without changing window rules.
+stack of windows. The console stays full-screen; the pane split was tried and
+abandoned in Stage 3.
 
 ## Screen composition
 
-One tab is one screen: a base surface drawn into a pane, then the window stack
-painted above it. Only the active tab draws.
+One tab is one screen: a base surface filling the terminal, then the window
+stack painted above it. Only the active tab draws.
 
 ```text
 mob3 frontend
  │  one terminal; only the active tab draws
  │
  ├── tab 1 screen
- │    ├── base surface, one pane (a terminal-cell rectangle)
- │    │    ├── page pane: toolbar + tab strip, content, footer
- │    │    └── console pane: console view and input row
+ │    ├── base surface (full terminal)
+ │    │    ├── page: toolbar + tab strip, content, footer
+ │    │    └── console: console view and input row
  │    └── window stack, paint order bottom to top:
  │         hint letters -> find bar -> URL prompt -> link preview  [inline chrome]
  │         -> menu -> history -> config -> select -> notice
@@ -38,10 +38,11 @@ mob3 frontend
       └── same shape, its own windows
 ```
 
-A **pane** is the terminal-cell rectangle a surface occupies, not a window. Both
-panes are full-terminal today, so the console still hides the page; splitting
-them into side-by-side or above/below rectangles is Stage 3. The tab strip is
-page header chrome, not a window, and the full-screen console replaces it.
+The base surface is the whole terminal, not a window. The page and console each
+fill it, and the console replaces the page while open. Splitting them was
+abandoned because focus, geometry and tab chrome cannot be shared cleanly by the
+engine page and the front-end console. The tab strip is page header chrome, not
+a window.
 
 The stack is the input order too, topmost first: dialog, download, notice,
 select, config, history, menu, link preview, URL prompt, find bar, hint. The
@@ -53,9 +54,8 @@ the persistent console resumes under a modal.
 
 - **Screen:** one per tab. It owns a base surface and a window stack. Only the
   active tab draws.
-- **Surface:** the content underneath the windows. The initial surfaces are the
-  page and the full-screen console; a later split surface holds page and console
-  panes. A surface provides a frame for its rectangle and owns its scroll and
+- **Surface:** the content underneath the windows. The surfaces are the page and
+  the full-screen console. A surface fills the terminal and owns its scroll and
   input when no window claims the event.
 - **Window:** a dialog, menu, settings window, history list, URL prompt, find
   bar, download hint, notice, select popup, link preview or hint layer. Each
@@ -68,10 +68,10 @@ the persistent console resumes under a modal.
     it,
   - the existing open, close, install, reset and page-state hooks.
 - **Input:** the topmost modal owns input first. Otherwise the topmost window
-  under the pointer (mouse) or above the focused surface (keys) owns it. A
+  under the pointer (mouse) or above the active surface (keys) owns it. A
   window that does not consume a key may pass it down; the existing consume
   semantics stay until each window is migrated. When no window claims an
-  event, the focused surface handles it.
+  event, the active surface handles it.
 - **Painting:** the presenter composes the base surface into one full-screen
   frame, then paints open windows in ascending layer order, then encodes and
   presents once. A window never has its own terminal path and never encodes a
@@ -80,9 +80,8 @@ the persistent console resumes under a modal.
   The console is persistent, so a page dialog can appear over it; the dialog
   still takes input first and the console resumes when the dialog is answered.
   JavaScript dialogs are always above every surface and every other window.
-- **Focus:** a surface can have focus. A modal temporarily takes focus and
-  restores it on close. A split surface has one focused pane; moving focus
-  between panes is a surface concern, not a window concern.
+- **Focus:** the page or the open console owns the base surface. A modal
+  temporarily takes focus and restores it on close.
 - **Geometry:** a window is laid out in terminal cells from the terminal size
   and its anchor. Modal windows are centered over the whole tab. The URL prompt
   and find bar stay chrome strips pinned to their rows.
@@ -133,19 +132,20 @@ blocked-console case but is not the target model.
   dialog-over-console and multiple non-modal windows; existing console and
   dialog goldens stay unchanged.
 
-### Stage 3: panes (scaffold landed, split UX pending)
+### Stage 3: pane split (abandoned)
 
-The scaffolding is landed: `surfaceID`, `paneRect`/`paneLayout`, a focused
-surface query, the console removed from the window stack, and one
-`surfaceFrame` writer for page and console output. Both surfaces are still
-full-terminal; the split behavior below remains.
+The split was implemented and then rolled back. It made the page and console
+peers in one tab, but the page is engine-owned and the console is front-end
+owned. Every tab-level feature then needed a pane decision: focus, the URL
+prompt, find, the scrollbar, `X`/`Z` windows, mouse coordinates, form editing,
+closing geometry and native-image/scaled-text placement. Each fix exposed
+another edge case, and the terminal UI gained more state than the feature was
+worth.
 
-- Give surfaces pane rectangles and a focused pane. A split screen paints the
-  page and console side by side or above/below; the console's `ConsoleView`
-  geometry follows its pane instead of the terminal.
-- Add pane focus movement, resize handling and scrollbar/native-image rules.
-- Exit gate: the console can be a resizable split pane while dialogs, menus and
-  settings still open over the whole tab and input follows focus correctly.
+No pane geometry remains. The presenter keeps the internal `surfaceFrame`
+writer because it puts page and console output on one composition path, but both
+surfaces are full-terminal. Do not add a split or dock without a first-class
+focus/geometry protocol and a full tab-chrome redesign.
 
 ## Invariants
 

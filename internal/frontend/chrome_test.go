@@ -145,8 +145,8 @@ func TestChromeConsoleIconOpensConsole(t *testing.T) {
 		Width: 80, Height: 24, Pane: consolePaneLogs,
 		Tabs: []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
 	}})
-	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 24, Press: true}) {
-		t.Fatal("console footer hit not consumed")
+	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 1, Press: true}) {
+		t.Fatal("console close hit not consumed")
 	}
 	if loop.consoleActive {
 		t.Fatal("console did not close")
@@ -469,7 +469,7 @@ func TestBuildConsoleFrame(t *testing.T) {
 			text.WriteRune(cell.R)
 		}
 	}
-	for _, want := range []string{"JS logs", "Requests", "[log] hello", "1+1", "Click/Tab"} {
+	for _, want := range []string{"JS logs", "Requests", "[log] hello", "1+1", "Click/Tab", "×"} {
 		if !strings.Contains(text.String(), want) {
 			t.Errorf("console %q does not contain %q", text.String(), want)
 		}

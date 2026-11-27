@@ -483,7 +483,7 @@ func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 			return handled, quit
 		}
 	}
-	if l.focusedSurface() == surfaceConsole && l.consoleOverlay.isOpen() {
+	if l.consoleOverlay.isOpen() {
 		if handled, quit := l.consoleOverlay.handleKey(l, k); handled {
 			return handled, quit
 		}
@@ -729,12 +729,8 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 		}
 		return stack[i].handleMouse(l, ev)
 	}
-	if l.focusedSurface() == surfaceConsole && l.consoleOverlay.isOpen() {
-		r := l.paneFor(surfaceConsole)
-		x, y := ev.X-1, ev.Y-1
-		if r.contains(x, y) || r.covers(l.State.Page.Width, l.State.Page.Height) {
-			return l.consoleOverlay.handleMouse(l, ev)
-		}
+	if l.consoleOverlay.isOpen() {
+		return l.consoleOverlay.handleMouse(l, ev)
 	}
 	for i := split; i < count; i++ {
 		if stack[i] == &l.findOverlay {

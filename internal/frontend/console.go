@@ -21,9 +21,10 @@ const (
 )
 
 const (
-	consoleFooter = " Click/Tab/h/l: section · : input · j/k d/u: scroll · Space/b: page · g/G: ends · y: copy all · q: quit · Esc: close "
-	consoleHint   = "JavaScript input"
-	toolsHint     = "Tools: help · form · links · requests · logs · source · snapshot"
+	consoleFooter    = " Click/Tab/h/l: section · : input · j/k d/u: scroll · Space/b: page · g/G: ends · y: copy all · q: quit · Esc: close "
+	consoleHint      = "JavaScript input"
+	toolsHint        = "Tools: help · form · links · requests · logs · source · snapshot"
+	consoleCloseIcon = " × "
 )
 
 // consoleLoadingTabs labels the five sections until the first engine view
@@ -32,9 +33,9 @@ var consoleLoadingTabs = [...]string{" JS logs ", " Requests ", " Storage ", " H
 
 const consoleLoadingLine = "(opening console…)"
 
-// consoleOverlay is the full-screen JavaScript console and tools pane. It owns
-// the pane, scroll, input, history and quit state; the engine only supplies the
-// requested section window.
+// consoleOverlay is the full-screen JavaScript console and tools view. It owns
+// the active section, scroll, input, history and quit state; the engine only
+// supplies the requested section window.
 type consoleOverlay struct {
 	consoleActive     bool
 	consoleView       protocol.ConsoleView
@@ -568,14 +569,14 @@ func (w *consoleOverlay) handleMouse(l *Tab, ev MouseEvent) bool {
 	layout := consoleLayoutFor(v.Height, w.consolePane)
 	switch {
 	case y == layout.tabsY:
-		if pane := consoleTabAt(v.Tabs, v.Width, x); pane >= 0 {
+		if iconW := textwidth.StringWidth(consoleCloseIcon); iconW > 0 && x >= v.Width-iconW {
+			w.close(l)
+		} else if pane := consoleTabAt(v.Tabs, v.Width, x); pane >= 0 {
 			w.consoleEdit = false
 			w.selectPane(l, pane, true)
 		}
 	case layout.inputY >= 0 && y == layout.inputY:
 		w.focusInput(l)
-	case y == layout.footerY && v.Width >= 6 && x >= v.Width-textwidth.StringWidth(">_"):
-		w.close(l)
 	}
 	return true
 }
@@ -710,6 +711,10 @@ func BuildConsoleFrame(v *protocol.ConsoleView, ui ConsoleUI) protocol.Frame {
 		if x < w {
 			c.fill(x, l.tabsY, w-x, 1, hdrBG)
 		}
+		if iconW := textwidth.StringWidth(consoleCloseIcon); w >= iconW {
+			c.fill(w-iconW, l.tabsY, iconW, 1, hdrBG)
+			c.text(w-iconW, l.tabsY, consoleCloseIcon, fg, protocol.AttrBold)
+		}
 	}
 	if l.bodyY >= 0 && l.bodyRows > 0 {
 		for i, line := range v.Lines {
@@ -786,25 +791,12 @@ func BuildConsoleFrame(v *protocol.ConsoleView, ui ConsoleUI) protocol.Frame {
 			})
 			return f
 		}
-		icon := ">_"
-		iconW := textwidth.StringWidth(icon)
-		reserve := 0
-		if w >= 6 {
-			reserve = iconW + 2
-		}
-		hintW := w - reserve
-		if hintW < 1 {
-			hintW = 1
-		}
 		footer := protocol.StripControls(ui.Footer)
 		footerFG := fg
 		if ui.Quit {
 			footerFG = rgb(0x9a, 0x5b, 0x00)
 		}
-		c.text(0, l.footerY, textwidth.Pad(textwidth.Truncate(footer, hintW), hintW), footerFG, 0)
-		if reserve > 0 {
-			c.text(w-iconW, l.footerY, icon, rgb(0x8a, 0xc4, 0xff), protocol.AttrBold)
-		}
+		c.text(0, l.footerY, textwidth.Pad(textwidth.Truncate(footer, w), w), footerFG, 0)
 	}
 	return f
 }

@@ -76,7 +76,7 @@ agreement, the non-negotiable constraints and the change protocol.
   height back to the parent) does not happen.
   Cross-frame access is origin-checked. This is logical origin isolation only,
   not memory, site or OS isolation.
-- The console request pane is process-wide, not per tab: any tab starting a
+- The console request list is process-wide, not per tab: any tab starting a
   document load begins a new request generation and clears the shared list.
   Each tab keeps its own JavaScript log, history, scroll, focus and overlays,
   but request tagging by tab is not implemented.

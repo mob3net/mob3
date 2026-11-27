@@ -19,7 +19,7 @@ force. Do not append history, and do not leave a superseded rule standing.
 | [docs/agents/rendering.md](docs/agents/rendering.md) | touching style, layout, paint, text, images, backgrounds or PDF display |
 | [docs/agents/css-availability.md](docs/agents/css-availability.md) | checking which widely available CSS features are missing, or choosing CSS support work |
 | [docs/agents/ux.md](docs/agents/ux.md) | touching chrome, keys, mouse, forms, history, reader, dark mode, dialogs or the JS console |
-| [docs/agents/windowing.md](docs/agents/windowing.md) | designing or migrating surfaces, the window stack, z-order, focus, dialogs over the console or split panes |
+| [docs/agents/windowing.md](docs/agents/windowing.md) | designing or migrating surfaces, the window stack, z-order, focus or dialogs over the console |
 | [docs/agents/networking.md](docs/agents/networking.md) | touching fetching, caching, cookies, TLS, content types or resource limits |
 | [docs/agents/js-web-api.md](docs/agents/js-web-api.md) | touching the JS surface or judging whether a library can work |
 | [docs/agents/build-release.md](docs/agents/build-release.md) | build, Docker, CI, releases or the GitHub Pages site |
@@ -254,10 +254,10 @@ published by the Pages build.
   (`frontend/tabs.go`). Per-tab state, normal header/footer chrome, the
   displayed URL ledger, content geometry, base shell keys, scrollbar, URL/vim
   prompt, page find, view/zoom windows, JS dialogs, the select popup,
-  download/notice modals, the settings window, link hints, the console (pane,
+  download/notice modals, the settings window, link hints, the console (view,
   scroll, composition, input, history, quit and find)
   and session history (list, index, scroll and the `about:history` snapshot)
-  are `frontend.Tab` (`frontend/session.go`, with the shared window list in
+  are `frontend.Tab` (`frontend/session.go`, with the shared window stack in
   `frontend/overlay.go`) plus `frontend/chrome.go`,
   `frontend/prompt.go`, `frontend/find.go`, `frontend/menu.go`, `frontend/config.go`,
   `frontend/dialog.go`,

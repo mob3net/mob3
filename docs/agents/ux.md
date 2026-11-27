@@ -795,7 +795,7 @@ agreement, the non-negotiable constraints and the change protocol.
   commands and results append to a scrollback that keeps the newest 500 lines
   and survives page loads; new output replaces the oldest lines, a single
   oversized result keeps its beginning with a truncation note, and
-  `clear`/`cls` empties it. Long tool output wraps to the pane width with a
+  `clear`/`cls` empties it. Long tool output wraps to the console width with a
   hanging indent; copying keeps it unwrapped. The JS logs input accepts
   `clear`/`cls` too and empties the JS log (and its error state) instead of
   evaluating JavaScript. These commands must never start or wait for a
@@ -809,9 +809,9 @@ agreement, the non-negotiable constraints and the change protocol.
   request list, storage, or the Tools scrollback, so long output can be taken
   without dragging a terminal selection, and the console footer hint
   advertises `y: copy all` instead of the old Shift-drag note. While the input
-  row is focused `y` is ordinary text. The footer
-  keeps its clickable `>_` icon while the console is open; clicking it closes
-  the console the same way `Esc` does (including the usual exit hint).
+  row is focused `y` is ordinary text. The `×` in the console menu closes the
+  console the same way `Esc` does (including the usual exit hint); the console
+  footer carries no close icon of its own.
   The JS log and input draft reset when a new page is successfully applied,
   before that page's scripts run; failed loads keep the previous page's log.
   Requests list status, method, size, kind and URL (plain text, not clickable)
@@ -821,12 +821,12 @@ agreement, the non-negotiable constraints and the change protocol.
   only, resets on navigation and is capped at the latest 512 entries. A
   local-network or mixed-content request blocked by the guard shows as `ERR`
   with its reason; upgraded image requests show the HTTPS URL. Long request and
-  storage lines wrap to the pane width with a hanging indent. Storage
+  storage lines wrap to the console width with a hanging indent. Storage
   lists the current page's cookies, including HttpOnly cookies, one per line:
   `name=value`, `[HttpOnly]`/`[Secure]`/`[SameSite=…]` flags, the domain (a
   leading dot marks a domain cookie), path, and `session` or
   `expires YYYY-MM-DD`. The in-memory `localStorage`/`sessionStorage`
-  key/value pairs follow; long values wrap with a hanging indent to the pane
+  key/value pairs follow; long values wrap with a hanging indent to the console
   width, while `y` copies them unwrapped.
   HTML shows the raw decoded page source (pre-JavaScript DOM, wrapped to the
   console width and opening at the top) retained as `Page.RawHTML`, cached per

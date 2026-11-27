@@ -52,7 +52,7 @@ type overlay interface {
 
 // allWindows returns every front-end window in registration order. The order
 // only identifies them; windowStack derives priority from layer. The console is
-// a base surface, not a window, and is dispatched through focusedSurface.
+// a full-screen surface, not a window, and is dispatched directly by the tab.
 func (l *Tab) allWindows() [11]overlay {
 	return [11]overlay{
 		&l.linkPreviewOverlay,

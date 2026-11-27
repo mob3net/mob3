@@ -219,7 +219,7 @@ process.
   header/footer and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
   select popup, the settings window, download/notice modals, link hints and
-  console pane/scroll/input/history/quit/find. It also owns the session history list, current
+  console view/scroll/input/history/quit/find. It also owns the session history list, current
   index, scroll offsets, the `about:history` display snapshot and the
   content-rectangle geometry (`ContentBounds` → `Init`/`Resize`); the engine
   keys its page cache by the front-end entry ID. It also owns the displayed
@@ -309,7 +309,7 @@ process.
 | `internal/protocol/ports.go` | Shared `EntryIDSource`, `BudgetShare`, `Abandoner` and `Waiter`. The parent can own the history-entry sequence and divide memory pools, and a discarded tab can drop a session without waiting for its handler. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
-| `internal/frontend/overlay.go` | The overlay contract and the one ordered window list. Each front-end window keeps its state in its subsystem file; the list drives key, mouse, page-state, dismissal, tab-switch and crash handling in a single priority order. |
+| `internal/frontend/overlay.go` | The overlay contract and the tab's ordered window stack. Each front-end window keeps its state in its subsystem file; the stack is sorted by layer and drives key, mouse, page-state, dismissal, tab-switch and crash handling in one place. |
 | `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, the stuck-tab channel, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. `CloseTab` is graceful; `KillTab` and `DiscardTab` remove a wedged tab without waiting for its session. |
 | `internal/frontend/probe.go` | Liveness probe around one page session: commands, loading and a due JS timer keep a deadline armed; a missing event triggers a `Ping`, a missing `Pong` reports the tab as stuck, and an idle state disarms the probe. |
 | `internal/frontend/prompt.go` | URL/command prompt state and input, line editing, recall history, visible window and mouse caret mapping. |
@@ -324,7 +324,7 @@ process.
 | `internal/frontend/download.go` | Download curl hint state and input, layout and drawing. |
 | `internal/frontend/notice.go` | Informational notice state and input, layout and drawing. |
 | `internal/frontend/hints.go` | Link-hint state and input, prefix matching and overlay painting. |
-| `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight plus the shared find bar, window requests and console overlay stacking. |
+| `internal/frontend/console.go` | Console view, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight plus the shared find bar, window requests and console overlay stacking. |
 | `internal/frontend/find.go` | In-page find bar state, results status and its footer row. |
 | `internal/frontend/findbar.go` | Shared find query, caret and key handling for the page find bar and the console HTML find bar; the engine owns matching. |
 | `internal/frontend/listnav.go` | Shared list-selection movement for the history, view/zoom menu, select popup and settings window: the line/top/bottom subset of the movement key table plus clamped index moves. |
@@ -403,7 +403,7 @@ process.
 | `internal/engine/automation_inspect.go` | Links, request log, JS logs and page source. |
 | `internal/engine/automation_command.go` | `RunCommand` dispatch and JSON argument decoding. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
-| `internal/engine/session_console.go` | Console data, evaluation, tools, copy and stateless `ConsoleView` window slices; JS dialog request/response state; download/notice state. The front end owns pane, scroll, layout, input, history, quit, rendering and the find bar. |
+| `internal/engine/session_console.go` | Console data, evaluation, tools, copy and stateless `ConsoleView` window slices; JS dialog request/response state; download/notice state. The front end owns view, scroll, layout, input, history, quit, rendering and the find bar. |
 | `internal/engine/session_find.go` | Find state, navigation, result messages and page highlight painting; match computation calls `FindPageMatches`/`FindHTMLMatches`. The visible find bar, query, caret, next/previous and console HTML find scrolling are front-end-owned. |
 | `internal/engine/session_hints.go` | Hint-mode state, key handling, following, background-tab opening and the destination-preview step; target discovery, glyph collection and label assignment call `BuildHintTargets`, `CollectHintGlyphs` and `AssignLinkHints`. Overlay painting and input are front-end-owned (`frontend/hints.go`). |
 | `internal/engine/reader.go` | Reader-mode article extraction: candidate scoring, junk filtering, filtered tree cloning and the narrow `ReaderRules` stylesheet. |

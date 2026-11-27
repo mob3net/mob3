@@ -1097,7 +1097,7 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 		t.Fatalf("pane = %d", loop.consolePane)
 	}
 
-	// Click the input row on the logs pane.
+	// Click the input row on the logs tab.
 	loop.consolePane = consolePaneLogs
 	s.cmds = nil
 	inputY := consoleLayoutFor(24, consolePaneLogs).inputY
@@ -1108,17 +1108,17 @@ func TestConsoleMouseTabsInputAndClose(t *testing.T) {
 		t.Fatalf("input click commands=%#v edit=%v", s.cmds, loop.consoleEdit)
 	}
 
-	// The footer >_ icon closes the console.
+	// The × in the console menu closes the console.
 	s.cmds = nil
 	loop.consoleEdit = false
-	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 24, Press: true}) {
-		t.Fatal("footer icon click not consumed")
+	if !loop.handleChromeMouse(MouseEvent{X: 80, Y: 1, Press: true}) {
+		t.Fatal("close icon click not consumed")
 	}
 	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
-		t.Fatalf("footer action = %#v", s.cmds)
+		t.Fatalf("close action = %#v", s.cmds)
 	}
 	if loop.consoleActive {
-		t.Fatal("footer icon did not close the console")
+		t.Fatal("close icon did not close the console")
 	}
 
 	// The wheel and a body click stay in the console rather than the page.

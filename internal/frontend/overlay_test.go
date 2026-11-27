@@ -59,20 +59,13 @@ func TestWindowStackOnlyOpen(t *testing.T) {
 	}
 }
 
-// TestConsoleIsSurface checks that the console is dispatched as a focused base
-// surface, not as a window in the input stack.
-func TestConsoleIsSurface(t *testing.T) {
+// TestConsoleIsNotAWindow checks that the full-screen console stays out of the
+// window input stack.
+func TestConsoleIsNotAWindow(t *testing.T) {
 	l := &Tab{}
 	l.consoleActive = true
 	if _, count := l.windowStack(); count != 0 {
 		t.Fatalf("console stayed in the window stack: %d", count)
-	}
-	if got := l.focusedSurface(); got != surfaceConsole {
-		t.Fatalf("focused surface = %d, want console", got)
-	}
-	l.consoleActive = false
-	if got := l.focusedSurface(); got != surfacePage {
-		t.Fatalf("focused surface = %d, want page", got)
 	}
 }
 

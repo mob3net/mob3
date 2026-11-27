@@ -58,6 +58,11 @@ func (b *Session) emitLinkPreview(url string, target int) {
 // clickContent follows a link under the pointer, or clears link focus.
 // JavaScript click handlers run first and may prevent navigation.
 func (b *Session) clickContent(x, docY int) {
+	// Clicking away from a text field leaves it, like a browser. A click on the
+	// field itself keeps the focus that the press already installed.
+	if n := b.nodeAt(x, docY); n == nil || !IsTextInput(n) {
+		b.Forms.ClearInputFocus()
+	}
 	b.clearControlFocus()
 	if idx := b.linkAt(x, docY); idx >= 0 {
 		li := b.Layout.Links[idx]
