@@ -70,8 +70,10 @@ the JavaScript input row, `Tab`/`Shift-Tab` or `h`/`l` switch sections, `j`/`k` 
 logs, the raw page HTML, the request list, storage, or the Tools scrollback).
 Clicking a tab switches sections, clicking the input row focuses it, and the
 console footer keeps a clickable `>_` icon that closes it; the wheel scrolls the
-active section. `Esc` leaves the input row first and closes the console on the
-next press; `!` closes it immediately.
+active section. A JavaScript alert, confirm or prompt opened from the console is
+drawn over it and must be answered before the console takes input again. `Esc`
+leaves the input row first and closes the console on the next press; `!` closes
+it immediately.
 
 ## URL prompt
 

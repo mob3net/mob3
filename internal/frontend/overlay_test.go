@@ -13,6 +13,7 @@ func TestOverlayDispatchOrder(t *testing.T) {
 	l := &Tab{}
 	want := []string{
 		"*frontend.linkPreviewOverlay",
+		"*frontend.dialogOverlay",
 		"*frontend.consoleOverlay",
 		"*frontend.hintOverlay",
 		"*frontend.downloadOverlay",
@@ -20,7 +21,6 @@ func TestOverlayDispatchOrder(t *testing.T) {
 		"*frontend.selectOverlay",
 		"*frontend.configOverlay",
 		"*frontend.historyOverlay",
-		"*frontend.dialogOverlay",
 		"*frontend.promptOverlay",
 		"*frontend.findOverlay",
 		"*frontend.menuOverlay",

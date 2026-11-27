@@ -1012,6 +1012,15 @@ func (b *Session) runTransportDialog(d *jsDialog) (string, bool) {
 					return v.Text, true
 				}
 				return "", false
+			case protocol.ConsoleAction:
+				// The front end can open or close the console while the dialog
+				// blocks the engine loop. Apply those window changes now so the
+				// two sides cannot disagree after the dialog returns. Console
+				// input must wait: evaluating it here would re-enter JavaScript.
+				switch v.Op {
+				case protocol.ConsoleOpen, protocol.ConsoleClose, protocol.ConsoleWindow:
+					b.applyConsoleAction(v)
+				}
 			case protocol.Resize:
 				b.resize(v.Width, v.Height)
 				if v.CellW > 0 {

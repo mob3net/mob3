@@ -34,6 +34,9 @@ type overlay interface {
 func (l *Tab) overlayList() [12]overlay {
 	return [12]overlay{
 		&l.linkPreviewOverlay,
+		// A JavaScript dialog is drawn over the console and must answer for the
+		// keyboard and pointer first; the engine is blocked until it returns.
+		&l.dialogOverlay,
 		&l.consoleOverlay,
 		&l.hintOverlay,
 		&l.downloadOverlay,
@@ -41,7 +44,6 @@ func (l *Tab) overlayList() [12]overlay {
 		&l.selectOverlay,
 		&l.configOverlay,
 		&l.historyOverlay,
-		&l.dialogOverlay,
 		&l.promptOverlay,
 		&l.findOverlay,
 		&l.menuOverlay,
