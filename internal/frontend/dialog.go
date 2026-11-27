@@ -214,14 +214,6 @@ func LayoutDialog(st protocol.State, d *DialogView) DialogLayout {
 	}
 }
 
-// ComposeDialogFrame stacks the normal screen and draws the dialog over it.
-func ComposeDialogFrame(st protocol.State, content protocol.Frame, d *DialogView) (protocol.Frame, bool) {
-	full, ok := ComposeOverlayFrame(st, content, func(c *chromeCanvas) {
-		DrawDialog(c, st, d)
-	})
-	return full, ok
-}
-
 // DrawDialog paints one dialog on a full-screen canvas.
 func DrawDialog(c *chromeCanvas, st protocol.State, d *DialogView) DialogLayout {
 	layout := LayoutDialog(st, d)

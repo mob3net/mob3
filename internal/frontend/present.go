@@ -8,6 +8,24 @@ import (
 	"browser/internal/protocol"
 )
 
+// windowPainter draws one open window over a composed full-screen frame.
+// Painters are kept in ascending layer order, so later windows cover earlier
+// ones. Inline chrome such as the URL prompt, find bar, hints and link preview
+// stays part of the base surface composition.
+type windowPainter struct {
+	level windowLayer
+	draw  func(*chromeCanvas, protocol.State) bool
+}
+
+func (w windowPainter) layer() windowLayer { return w.level }
+
+func (w windowPainter) paint(c *chromeCanvas, st protocol.State) bool {
+	if w.draw == nil {
+		return false
+	}
+	return w.draw(c, st)
+}
+
 // Presenter writes engine frames to the terminal and keeps the row diff that
 // suppresses unchanged lines. It owns the ANSI output; the engine only sends
 // cell values.
@@ -16,6 +34,8 @@ type Presenter struct {
 	color bool
 	gfx   *GFX
 
+	windows       []windowPainter
+	screen        protocol.Frame
 	prev          []string
 	lastScroll    int
 	lastNative    bool
@@ -41,7 +61,75 @@ type Presenter struct {
 // NewPresenter creates a presenter for one terminal. color selects SGR output;
 // monochrome output keeps text attributes so links stay visible.
 func NewPresenter(out io.Writer, color bool) *Presenter {
-	return &Presenter{out: out, color: color}
+	p := &Presenter{out: out, color: color}
+	p.resetWindows()
+	return p
+}
+
+// resetWindows restores the always-installed menu painter and drops every
+// per-tab window painter.
+func (p *Presenter) resetWindows() {
+	p.windows = p.windows[:0]
+	p.windows = append(p.windows, windowPainter{
+		level: layerMenu,
+		draw: func(c *chromeCanvas, st protocol.State) bool {
+			if st.Menu == protocol.MenuNone {
+				return false
+			}
+			DrawMenu(c, st)
+			return true
+		},
+	})
+}
+
+// setWindow replaces the painter at one layer. Painters stay sorted from the
+// base surface upwards so a later window paints over an earlier one.
+func (p *Presenter) setWindow(w windowPainter) {
+	p.removeWindow(w.level)
+	at := len(p.windows)
+	for i := range p.windows {
+		if p.windows[i].level > w.level {
+			at = i
+			break
+		}
+	}
+	p.windows = append(p.windows, windowPainter{})
+	copy(p.windows[at+1:], p.windows[at:])
+	p.windows[at] = w
+}
+
+func (p *Presenter) removeWindow(level windowLayer) {
+	for i := range p.windows {
+		if p.windows[i].level != level {
+			continue
+		}
+		copy(p.windows[i:], p.windows[i+1:])
+		p.windows = p.windows[:len(p.windows)-1]
+		return
+	}
+}
+
+// setViewWindow installs or removes a window painter for one view.
+func (p *Presenter) setViewWindow(level windowLayer, open bool, draw func(*chromeCanvas, protocol.State)) {
+	if !open {
+		p.removeWindow(level)
+		return
+	}
+	p.setWindow(windowPainter{level: level, draw: func(c *chromeCanvas, st protocol.State) bool {
+		draw(c, st)
+		return true
+	}})
+}
+
+// paintWindows draws every open built-in window over a composed base frame.
+func (p *Presenter) paintWindows(f *protocol.Frame, st protocol.State) {
+	if p == nil || f == nil || f.W <= 0 || f.H <= 0 || len(f.Cells) < f.W*f.H {
+		return
+	}
+	c := &chromeCanvas{w: f.W, h: f.H, cells: f.Cells}
+	for _, w := range p.windows {
+		w.paint(c, st)
+	}
 }
 
 // SetGraphics installs the terminal image renderer for this presenter. Modes
@@ -106,6 +194,8 @@ func (p *Presenter) ResetForTab() {
 	p.console = nil
 	p.consoleActive = false
 	p.lastOverlay = false
+	p.screen = protocol.Frame{}
+	p.resetWindows()
 }
 
 // SetTabs installs the tab-bar labels. A change forces a repaint because the
@@ -145,36 +235,54 @@ func tabsEqual(a, b []TabView) bool {
 // Refresh composes it over the content frame.
 func (p *Presenter) SetDialog(d *DialogView) {
 	p.dialog = d
+	p.setViewWindow(layerDialog, d != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawDialog(c, st, d)
+	})
 	p.prev = nil
 }
 
 // SetSelect installs or clears the page select popup.
 func (p *Presenter) SetSelect(v *SelectView) {
 	p.selectView = v
+	p.setViewWindow(layerSelect, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawSelect(c, st, v)
+	})
 	p.prev = nil
 }
 
 // SetConfig installs or clears the settings window.
 func (p *Presenter) SetConfig(v *ConfigView) {
 	p.configView = v
+	p.setViewWindow(layerConfig, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawConfig(c, st, v)
+	})
 	p.prev = nil
 }
 
 // SetHistory installs or clears the history popup.
 func (p *Presenter) SetHistory(v *historyView) {
 	p.history = v
+	p.setViewWindow(layerHistory, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawHistory(c, st, v)
+	})
 	p.prev = nil
 }
 
 // SetDownload installs or clears the download curl hint.
 func (p *Presenter) SetDownload(v *DownloadView) {
 	p.download = v
+	p.setViewWindow(layerDownload, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawDownload(c, st, v)
+	})
 	p.prev = nil
 }
 
 // SetNotice installs or clears the informational notice.
 func (p *Presenter) SetNotice(v *NoticeView) {
 	p.notice = v
+	p.setViewWindow(layerNotice, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawNotice(c, st, v)
+	})
 	p.prev = nil
 }
 
@@ -256,6 +364,35 @@ func cloneFrameCells(f protocol.Frame) protocol.Frame {
 	return f
 }
 
+// composePageFrame stacks the page chrome around a content frame and paints
+// every open window over it. It reports false when the frame does not match the
+// current chrome geometry, leaving the caller to present the content alone.
+func (p *Presenter) composePageFrame(content protocol.Frame) (protocol.Frame, int, bool) {
+	st := p.state
+	if !st.FrontendChrome || st.Width != content.W || st.HeaderRows <= 0 ||
+		st.Height != content.H+st.HeaderRows+1 {
+		return content, 0, false
+	}
+	layout := LayoutChromeWithTabs(st, p.tabs, p.tabOffset)
+	if len(layout.Header) != st.Width*st.HeaderRows || len(layout.Footer) != st.Width {
+		return content, 0, false
+	}
+	if p.screen.W != st.Width || p.screen.H != st.Height ||
+		len(p.screen.Cells) != st.Width*st.Height {
+		p.screen = protocol.Frame{W: st.Width, H: st.Height, Cells: make([]protocol.Cell, st.Width*st.Height)}
+	}
+	full := p.screen
+	full.Version = content.Version
+	full.Runs = content.Runs
+	full.Placements = content.Placements
+	copy(full.Cells[:st.HeaderRows*st.Width], layout.Header)
+	copy(full.Cells[st.HeaderRows*st.Width:(st.HeaderRows+content.H)*st.Width], content.Cells)
+	copy(full.Cells[(st.Height-1)*st.Width:], layout.Footer)
+	p.paintWindows(&full, st)
+	p.screen = full
+	return full, st.HeaderRows, true
+}
+
 // Present writes one frame. scroll is the page scroll offset; native reports
 // that the engine is writing terminal-native image placements itself, so the
 // presenter must leave the screen alone. A scroll, native-mode or size change
@@ -305,74 +442,15 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		f = cloneFrameCells(f)
 		ApplyHints(&f, p.hint, p.color)
 	}
+	placements := f.Placements
+	headerRows := 0
+	if full, rows, ok := p.composePageFrame(f); ok {
+		f = full
+		headerRows = rows
+	}
 	lines := EncodeFrame(f, p.color, !p.color)
 	if len(lines) != f.H {
 		return nil
-	}
-	placements := f.Placements
-	headerRows := 0
-	if p.state.FrontendChrome && p.state.Width == f.W &&
-		p.state.HeaderRows > 0 && p.state.Height == f.H+p.state.HeaderRows+1 {
-		layout := LayoutChromeWithTabs(p.state, p.tabs, p.tabOffset)
-		if len(layout.Header) == p.state.Width*p.state.HeaderRows &&
-			len(layout.Footer) == p.state.Width {
-			if p.state.Menu != protocol.MenuNone {
-				if full, ok := ComposeMenuFrame(p.state, f); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.dialog != nil {
-				if full, ok := ComposeDialogFrame(p.state, f, p.dialog); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.selectView != nil {
-				if full, ok := ComposeSelectFrame(p.state, f, p.selectView); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.configView != nil {
-				if full, ok := ComposeConfigFrame(p.state, f, p.configView); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.history != nil {
-				if full, ok := ComposeHistoryFrame(p.state, f, p.history); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.download != nil {
-				if full, ok := ComposeDownloadFrame(p.state, f, p.download); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else if p.notice != nil {
-				if full, ok := ComposeNoticeFrame(p.state, f, p.notice); ok {
-					f = full
-					lines = EncodeFrame(f, p.color, !p.color)
-					headerRows = p.state.HeaderRows
-				}
-			} else {
-				header := protocol.Frame{W: p.state.Width, H: p.state.HeaderRows, Cells: layout.Header}
-				footer := protocol.Frame{W: p.state.Width, H: 1, Cells: layout.Footer}
-				hline := EncodeFrame(header, p.color, !p.color)
-				fline := EncodeFrame(footer, p.color, !p.color)
-				if len(hline) == p.state.HeaderRows && len(fline) == 1 {
-					next := make([]string, 0, len(hline)+len(lines)+1)
-					next = append(next, hline...)
-					next = append(next, lines...)
-					next = append(next, fline...)
-					lines = next
-					headerRows = p.state.HeaderRows
-				}
-			}
-		}
 	}
 	if headerRows > 0 && len(placements) > 0 {
 		shifted := make([]protocol.Placement, len(placements))

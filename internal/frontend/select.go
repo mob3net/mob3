@@ -169,8 +169,3 @@ func LayoutSelect(st protocol.State, view *SelectView) MenuLayout {
 		MinW:   40,
 	})
 }
-
-// ComposeSelectFrame stacks the normal screen and draws the select popup.
-func ComposeSelectFrame(st protocol.State, content protocol.Frame, view *SelectView) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawSelect(c, st, view) })
-}

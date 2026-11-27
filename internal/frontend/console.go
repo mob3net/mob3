@@ -831,8 +831,8 @@ func (p *Presenter) CloseConsole() error {
 	return p.Refresh()
 }
 
-// PresentConsole draws a console snapshot and stores it for chrome-only
-// refreshes (dialogs/select/download/notice over the console).
+// PresentConsole composes the full-screen console surface and paints the open
+// windows over it. It stores the snapshot for chrome-only refreshes.
 func (p *Presenter) PresentConsole(v *protocol.ConsoleView, ui ConsoleUI) error {
 	if p == nil || p.out == nil || v == nil {
 		return nil
@@ -844,27 +844,12 @@ func (p *Presenter) PresentConsole(v *protocol.ConsoleView, ui ConsoleUI) error 
 	p.consoleUI = ui
 	p.consoleActive = true
 	f := BuildConsoleFrame(v, ui)
-	p.applyConsoleOverlays(&f)
+	if f.W > 0 && f.H > 0 {
+		st := p.state
+		st.Width, st.Height, st.HeaderRows = f.W, f.H, 0
+		p.paintWindows(&f, st)
+	}
 	return p.presentFull(f)
-}
-
-func (p *Presenter) applyConsoleOverlays(f *protocol.Frame) {
-	if f.W <= 0 || f.H <= 0 {
-		return
-	}
-	st := p.state
-	st.Width, st.Height, st.HeaderRows = f.W, f.H, 0
-	c := &chromeCanvas{w: f.W, h: f.H, cells: f.Cells}
-	switch {
-	case p.dialog != nil:
-		DrawDialog(c, st, p.dialog)
-	case p.selectView != nil:
-		DrawSelect(c, st, p.selectView)
-	case p.download != nil:
-		DrawDownload(c, st, p.download)
-	case p.notice != nil:
-		DrawNotice(c, st, p.notice)
-	}
 }
 
 func (p *Presenter) presentFull(f protocol.Frame) error {

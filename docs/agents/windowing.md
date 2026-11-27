@@ -4,18 +4,16 @@ This page records the front-end window model and its migration. Start at
 [AGENTS.md](../../AGENTS.md) for the working agreement and at
 [architecture.md](architecture.md) for package ownership.
 
-The current front end already gives every tab its own dialogs, menus, prompts
-and console. The weakness is that the tab does not have a real window stack:
-`overlayList` is a fixed priority list reused for key, mouse, state, install
-and reset dispatch, `Presenter.Present` selects one page overlay through an
-`if`/`else` chain, and the console is a separate full-screen paint path
-(`PresentConsole` plus `applyConsoleOverlays`). That makes a dialog over the
-console a special case rather than one consequence of layering.
+The front end gives every tab its own dialogs, menus, prompts and console. The
+first migration stages are landed: key, mouse, state, install and close
+dispatch come from the tab's `windowStack` layers instead of a fixed list
+position, and the presenter composes a base surface (page or full-screen
+console) and then paints an ordered `windowPainter` list. A dialog, menu or
+settings window is therefore painted over whatever surface is current.
 
-The goal is one per-tab screen composed from a base surface and an ordered
-stack of windows. The console then becomes a surface, not a mode, and a dialog,
-menu or settings window is painted over whatever surface is current. A future
-resizable or split console only changes surface geometry, not window rules.
+The goal remains one per-tab screen composed from a base surface and an ordered
+stack of windows. The console is still full-screen; making it a pane is Stage
+3, which changes surface geometry without changing window rules.
 
 ## Model
 
@@ -69,11 +67,11 @@ the dialog is still painted over it. The engine applies console open, close and
 window requests that arrive while a dialog blocks its loop. This fixes the
 blocked-console case but is not the target model.
 
-### Stage 1: window stack and dispatch
+### Stage 1: window stack and dispatch (landed)
 
 - Add layer constants and the `persistent` flag to the window interface.
-  Replace `dismissOnModal` with the general modal rule; the `modal`
-  classification arrives with the Stage 2 input and paint unification.
+  Replace `dismissOnModal` with the general modal rule. A separate `modal`
+  classification is not needed until input is split from the base surface.
 - Derive the tab's open windows as one ordered stack. Replace `overlayList`
   with that stack query for key, mouse, page-state, install and close dispatch;
   crash reset still walks every registered window.
@@ -84,17 +82,19 @@ blocked-console case but is not the target model.
   unchanged; tests cover stacking, modal dismissal and a dialog over the
   console.
 
-### Stage 2: generic composition
+### Stage 2: generic composition (landed)
 
-- Introduce the base `surface` and a window `paint` method. Move the
-  `Compose*Frame`/`Draw*` pairs behind that method.
-- Make the presenter take a base frame plus the ordered window painters.
-  Remove `PresentConsole`, `applyConsoleOverlays` and the overlay `if`/`else`
-  chain from `Present`.
+- Introduce `windowPainter` and one ordered painter list in the presenter.
+  Remove the `Compose*Frame` wrappers; the existing `Draw*` functions become
+  the painters' draw calls.
+- Compose the page chrome or the console surface into a full frame, then paint
+  the ordered windows over it. Remove `applyConsoleOverlays` and the overlay
+  `if`/`else` chain from `Present`; `PresentConsole` remains only the console
+  surface entry point and shares the window painter path.
 - Keep the console full-screen, but model it as a surface. It requests the same
   `ConsoleView` width and height as today.
-- Exit gate: one paint path composes page or console plus any open windows;
-  frame snapshots cover page-only, console-only, dialog-over-page,
+- Exit gate: one window painter path composes page or console plus any open
+  windows; frame snapshots cover page-only, console-only, dialog-over-page,
   dialog-over-console and multiple non-modal windows; existing console and
   dialog goldens stay unchanged.
 
