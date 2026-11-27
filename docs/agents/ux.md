@@ -759,10 +759,15 @@ agreement, the non-negotiable constraints and the change protocol.
 - **JS console view:** `!` opens a plain-text console in the viewport. A
   one-row menu at the top has five tabs: JavaScript logs, Requests, Storage,
   HTML and Tools. The active tab is highlighted blue; only its section body is
-  shown below the menu, and the logs tab is active by default. The JavaScript
-  input row is part of the logs body, pinned to its bottom. Clicking a tab
-  switches sections, and `Tab`/`Shift-Tab` or `h`/`l` cycle through the same
-  five tabs.
+  shown below the menu. The logs tab is active the first time, and a reopened
+  console returns to the section it was last on. The window paints
+  immediately when opened: it reuses the last view when the page, section and
+  terminal size still match, and otherwise shows the section tabs with an
+  opening placeholder until the engine's fresh window arrives. Closing
+  likewise repaints the page frame cached from before the console, so neither
+  direction waits for a busy engine. The JavaScript input row is part of the
+  logs body, pinned to its bottom. Clicking a tab switches sections, and
+  `Tab`/`Shift-Tab` or `h`/`l` cycle through the same five tabs.
   Mouse reporting stays enabled so tabs and the input row can be clicked, and
   the wheel scrolls the active section (plain terminal drag-selection needs the
   Shift override). When the input row is not focused, movement uses the same
