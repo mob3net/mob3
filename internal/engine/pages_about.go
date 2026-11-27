@@ -27,7 +27,7 @@ Nothing is written to disk.</p>
 <tr><td><b>-dark</b></td><td>start in dark mode</td></tr>
 <tr><td><b>-ignore-blocks</b></td><td>load anti-bot/CAPTCHA pages instead of the blocked page</td></tr>
 <tr><td><b>-home</b> string</td><td>home URL opened at startup and by the Home button (default about:home)</td></tr>
-<tr><td><b>-mem-limit</b> int</td><td>soft process memory limit in MB; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
+<tr><td><b>-mem-limit</b> int</td><td>soft memory limit in MB per process; in per-tab mode each tab or MCP engine child and the parent have their own; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets, 0 leaves it unlimited and honors GOMEMLIMIT (default 0)</td></tr>
 <tr><td><b>-layout-budget</b> string</td><td>style/layout safety limits: low, standard, high or none (default "standard")</td></tr>
 <tr><td><b>-zoom</b> string</td><td>layout zoom percent from 25 to 200, with or without % (default "100"); + and - step the presets</td></tr>
 <tr><td><b>-text-scale</b> string</td><td>kitty scaled text: auto or off (default "auto")</td></tr>
@@ -36,7 +36,8 @@ Nothing is written to disk.</p>
 <tr><td><b>-ua</b> string</td><td>custom User-Agent (default MOB3/1.0 (+terminal; +https://mob3.net))</td></tr>
 <tr><td><b>-search</b> string</td><td>search URL template with %s (default DuckDuckGo; empty disables)</td></tr>
 <tr><td><b>-certs</b> string</td><td>TLS trust store: system or embedded (default "system")</td></tr>
-<tr><td><b>-mcp</b></td><td>run the MCP automation server on stdin/stdout</td></tr>
+<tr><td><b>-mcp</b></td><td>run the MCP automation server on stdin/stdout; its engine runs in a child process by default</td></tr>
+<tr><td><b>-process</b> string</td><td>engine placement: per-tab (one child process per interactive tab or MCP session) or single (one process; lowest memory) (default "per-tab")</td></tr>
 <tr><td><b>-version</b></td><td>print the version and exit</td></tr>
 <tr><td><b>-h</b>, <b>-help</b></td><td>print the flags and exit</td></tr>
 </table>

@@ -38,13 +38,16 @@ func execute(o runOptions) int {
 		graphicsMode = frontend.DetectGraphics(frontend.GraphicsAuto)
 	}
 	hostSess := host.NewSession()
-	browserContext := engine.NewBrowserContext()
-	loaderConfig := loaderConfigFor(o, graphicsMode, interactive)
-	loader, err := engine.NewConfiguredLoader(hostSess, loaderConfig)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))
-		return 2
+	if o.MCP && o.Process != "single" {
+		// The isolated MCP server has no engine loader in the parent, so
+		// validate the trust store here to keep the -certs exit code and
+		// message before a child is started.
+		if err := hostSess.SetCertSource(o.Certs); err != nil {
+			fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))
+			return 2
+		}
 	}
+	browserContext := engine.NewBrowserContext()
 	budget, ok := engine.ParseLayoutBudget(o.LayoutBudget)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "mob3: invalid -layout-budget %q (use low, standard, high or none)\n", o.LayoutBudget)
@@ -59,7 +62,13 @@ func execute(o runOptions) int {
 	zoomFactor := zoomPct / 100
 
 	if o.MCP {
-		return runMCP(o, loader, browserContext, budget, zoomFactor)
+		return runMCP(o, hostSess, browserContext, graphicsMode, budget, zoomFactor)
+	}
+	loaderConfig := loaderConfigFor(o, graphicsMode, interactive)
+	loader, err := engine.NewConfiguredLoader(hostSess, loaderConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mob3: -certs: %s\n", cleanError(err))
+		return 2
 	}
 	if !interactive {
 		return runDump(o, loader, budget, zoomFactor)

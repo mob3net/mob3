@@ -47,7 +47,7 @@ func Run(args []string) int {
 	memLimit := fs.Int("mem-limit", 0, "soft memory limit per process in MB; in single mode all tabs share that one process, while per-tab mode gives each tab child its own limit; also sets the 25% JS, 12% image, 3% SVG, 3% cache and 12% history budgets (0 leaves it unlimited and honors GOMEMLIMIT)")
 	layoutBudget := fs.String("layout-budget", "standard", "layout limits: low, standard, high or none")
 	zoomFlag := fs.String("zoom", "100", "layout zoom percent from 25 to 200 (e.g. 150 or 150%)")
-	processMode := fs.String("process", "per-tab", "tab engine process placement: single (one process for all tabs) or per-tab (one child engine process per tab)")
+	processMode := fs.String("process", "per-tab", "engine process placement: per-tab (one child engine process per interactive tab or MCP session) or single (one process; lowest memory and constrained hosts)")
 	mcpMode := fs.Bool("mcp", false, "run the MCP automation server on stdin/stdout")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [url]\n\n", os.Args[0])

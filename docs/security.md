@@ -21,25 +21,31 @@
 - No proxy configuration UI. Standard `HTTP_PROXY`, `HTTPS_PROXY` and
   `NO_PROXY` environment variables are honored by the host transport; see
   [Proxies](#proxies).
-- No private/incognito concept: every session is ephemeral. Pages share one
-  process; tab separation is logical only, not memory or site isolation.
+- No private/incognito concept: every session is ephemeral. Tabs may run in
+  separate engine processes by default, but that is fault isolation only, not
+  memory or site isolation.
 
 ## Tab isolation (iframes are inert)
 
-Interactive tabs run one engine child process per tab by default;
-`-process=single` keeps them inside one Go process. The process layout is drawn
-in [Process placement](cli.md#process-placement). This is fault isolation, not a
+Interactive tabs run one engine child process per tab by default, and an MCP
+automation session runs its engine in a child too; `-process=single` keeps them
+inside one Go process. The process layout is drawn in
+[Process placement](cli.md#process-placement). This is fault isolation, not a
 sandbox:
 
 - A tab is one protocol session with its own engine session, page, layout,
   JavaScript runtime and back/forward history.
 - `localStorage` is shared per origin across tabs; `sessionStorage` is per tab
   and origin; cookies remain host-owned and domain-scoped.
-- Single mode uses one shared budget for all JS runtimes, page caches and
-  image/SVG work. Per-tab mode gives each tab child its own process-wide
-  `-mem-limit` cap. Zoom stays browser-global.
+- Single mode uses one shared budget for all JS runtimes, page caches,
+  image/SVG work and the MCP engine. Per-tab mode gives each tab child and the
+  MCP engine child its own process-wide `-mem-limit` cap. Zoom stays
+  browser-global.
 - Only the active tab draws. A background tab keeps loading and updates its own
   state, history and title, but its timers and deferred image work pause.
+- A crashed MCP engine does not stop the MCP server, but the server does not
+  respawn it: later tool calls report the crash until the client restarts the
+  server.
 
 No DOM or sobek value crosses a tab boundary. This is logical isolation, not
 memory or site isolation. A compromised engine or a JavaScript-engine escape

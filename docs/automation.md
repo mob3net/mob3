@@ -19,6 +19,13 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 - `-no-js`, `-layout-budget`, `-reader`, `-dark` and search settings
   are honored.
 - History, cookies and storage are in memory only.
+- The automation engine runs in a child process by default, so an engine crash
+  does not take down the MCP server or its stdio transport. The in-flight tool
+  call and later calls return an `engine crashed` error; the engine is not
+  respawned, so restart the server to recover. `-process=single` keeps the
+  engine in the server process, where a fatal error also ends the server.
+- `-mem-limit` applies to the engine child in per-tab mode and to the single
+  server process with `-process=single`.
 
 ## Client configuration
 

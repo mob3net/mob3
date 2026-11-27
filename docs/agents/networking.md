@@ -159,9 +159,9 @@ agreement, the non-negotiable constraints and the change protocol.
 - Images load concurrently (max 6) and reuse the session cache on reloads, so a
   refresh avoids re-downloading an image whose compressed body is still cached.
   In per-tab mode that cache lives in the parent process and is shared by the
-  tab children; the decoded-image cache is only available when the engine shares
-  the host process (`-process=single`), so a per-tab reload decodes a cached
-  body again. Initial loading also selects `srcset`/`picture` candidates, and
+  tab children and an MCP engine child; the decoded-image cache is only
+  available when the engine shares the host process (`-process=single`), so a
+  per-tab reload decodes a cached body again. Initial loading also selects `srcset`/`picture` candidates, and
   images added or changed by page scripts (including lazy `data-src` hydration)
   are loaded after scripts and timer-driven rebuilds.
 - Blocked responses are replaced with a locally generated “Site blocked” page

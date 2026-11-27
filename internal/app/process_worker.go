@@ -16,12 +16,16 @@ const (
 	processWorkerEnv   = "MOB3_PROCESS_WORKER"
 	processConfigEnv   = "MOB3_PROCESS_CONFIG"
 	processWorkerQueue = 8
+
+	workerKindTab        = "tab"
+	workerKindAutomation = "automation"
 )
 
-// processWorkerConfig is the geometry the parent supplies to one child. The
-// child parses the normal CLI flags for policy so the two processes share one
-// option surface.
+// processWorkerConfig is the placement and geometry the parent supplies to one
+// child. The child parses the normal CLI flags for policy so the two processes
+// share one option surface.
 type processWorkerConfig struct {
+	Kind          string
 	Width, Height int
 	CellW, CellH  int
 	Zoom          float64
@@ -31,7 +35,8 @@ type processWorkerConfig struct {
 }
 
 // runProcessWorker is the engine worker mode. It runs only the engine side over
-// stdin/stdout; the parent owns the terminal, host policy and shared state.
+// stdin/stdout; the parent owns the terminal or MCP stdio, host policy and
+// shared state.
 func runProcessWorker(o runOptions) int {
 	if o.MemLimit > 0 {
 		debug.SetMemoryLimit(int64(o.MemLimit) << 20)
@@ -43,11 +48,21 @@ func runProcessWorker(o runOptions) int {
 			return 2
 		}
 	}
-	if cfg.Width < 20 {
-		cfg.Width = 80
+	switch cfg.Kind {
+	case "":
+		cfg.Kind = workerKindTab
+	case workerKindTab, workerKindAutomation:
+	default:
+		fmt.Fprintf(os.Stderr, "mob3 worker: unknown kind %q\n", cfg.Kind)
+		return 2
 	}
-	if cfg.Height < 5 {
-		cfg.Height = 24
+	if cfg.Kind == workerKindTab {
+		if cfg.Width < 20 {
+			cfg.Width = 80
+		}
+		if cfg.Height < 5 {
+			cfg.Height = 24
+		}
 	}
 	if cfg.CellW < 1 {
 		cfg.CellW = 8
@@ -77,7 +92,7 @@ func runProcessWorker(o runOptions) int {
 	ctx := context.Background()
 	peer.Start(ctx)
 	remoteHost := protocol.NewRemoteHost(hostClient)
-	loader, err := engine.NewConfiguredLoader(remoteHost, loaderConfigFor(o, graphicsMode, true))
+	loader, err := engine.NewConfiguredLoader(remoteHost, loaderConfigFor(o, graphicsMode, cfg.Kind == workerKindTab))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mob3 worker: loader: %s\n", cleanError(err))
 		return 2
@@ -88,9 +103,23 @@ func runProcessWorker(o runOptions) int {
 	browserContext.SetTabIDPrefix(cfg.TabID << 32)
 	browserContext.SetStorageProvider(storageClient)
 	engine.SetZoom(zoomFactor)
-	sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cfg.CellW, cfg.CellH, graphicsMode)
-	session := sessions.newSession(loader, cfg.Width, cfg.Height)
-	if err := protocol.ServePeerReady(ctx, peer, protocol.SessionID(cfg.SessionID), session, protocol.DefaultLimits, processWorkerQueue); err != nil {
+	var handler protocol.Handler
+	switch cfg.Kind {
+	case workerKindAutomation:
+		auto := engine.NewAutomationWithConfig(engine.AutomationConfig{
+			Loader: loader, BrowserContext: browserContext,
+			Width: cfg.Width, Height: cfg.Height, Zoom: zoomFactor,
+			NoJS: o.NoJS, NoPDF: o.NoPDF,
+			MemLimitBytes: int64(o.MemLimit) << 20, LayoutBudget: budget,
+			Home: o.Home, Reader: o.Reader, Dark: o.Dark,
+		})
+		auto.SetPNGEncoder(frontend.RenderPNG)
+		handler = &automationHandler{a: auto}
+	default:
+		sessions := newInteractiveSessionFactory(o, browserContext, budget, zoomFactor, cfg.CellW, cfg.CellH, graphicsMode)
+		handler = sessions.newSession(loader, cfg.Width, cfg.Height)
+	}
+	if err := protocol.ServePeerReady(ctx, peer, protocol.SessionID(cfg.SessionID), handler, protocol.DefaultLimits, processWorkerQueue); err != nil {
 		fmt.Fprintf(os.Stderr, "mob3 worker: session: %s\n", cleanError(err))
 		return 1
 	}

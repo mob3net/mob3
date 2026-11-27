@@ -29,7 +29,7 @@ falls back to dump mode and prints the rendered page.
 | `-dark` | off | Start in dark mode |
 | `-ignore-blocks` | off | Load anti-bot/CAPTCHA pages instead of the blocked page |
 | `-home string` | `about:home` | Startup and Home-button target |
-| `-mem-limit int` | 0 | Soft memory limit per process in MB; in `single` mode one process is shared by all tabs, while `-process=per-tab` gives each tab child its own limit; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
+| `-mem-limit int` | 0 | Soft memory limit per process in MB; in `single` mode one process is shared by all tabs and the MCP engine, while `-process=per-tab` gives each tab child and each MCP engine child its own limit; derives the JS (25%), image (12%), SVG (3%), resource-cache (3%) and history-cache (12%) budgets; `0` leaves it unlimited and honors `GOMEMLIMIT` |
 | `-layout-budget string` | `standard` | Layout limits: `low`, `standard`, `high`, `none` |
 | `-zoom string` | `100%` | Layout zoom percent from 25 to 200; `%` is optional and `+`/`-` step the presets |
 | `-text-scale string` | `auto` | Kitty scaled text: `auto` or `off` |
@@ -38,7 +38,7 @@ falls back to dump mode and prints the rendered page.
 | `-ua string` | `MOB3/1.0 (+terminal; +https://mob3.net)` | Custom User-Agent |
 | `-search string` | DuckDuckGo HTML endpoint | Search URL template with `%s`; empty disables the fallback |
 | `-certs string` | `system` | TLS trust store: `system` or `embedded` |
-| `-process string` | `per-tab` | Tab engine process placement: `single` (one process for all tabs) or `per-tab` (one child engine process per tab) |
+| `-process string` | `per-tab` | Engine placement: `per-tab` (one child engine process per interactive tab or MCP session) or `single` (one process; lowest memory, debugging and constrained hosts) |
 | `-mcp` | off | Run the MCP automation server on stdin/stdout |
 | `-version` | | Print the version and exit |
 | `-h`, `-help` | | Print flags and exit |
@@ -48,23 +48,23 @@ Run `mob3 -h` for the exact defaults in your build.
 ## Process placement
 
 `-process=per-tab` (the default) runs a separate engine process per interactive
-tab using the same static binary:
+tab and one for an MCP automation session, using the same static binary:
 
 ```text
 mob3 parent process
- │  terminal, tabs, network, cookies, cache, history
+ │  terminal, MCP stdio, tabs, network, cookies, cache, history
  │
  ├── tab 1 child process: DOM, JS, layout, PDF
  ├── tab 2 child process: DOM, JS, layout, PDF
- └── tab 3 child process: DOM, JS, layout, PDF
+ └── MCP engine child: automation page, DOM, JS, layout
 ```
 
-`-process=single` keeps every tab inside that one process:
+`-process=single` keeps everything inside that one process:
 
 ```text
 one mob3 process
-  terminal, tabs, network, cookies, cache, history
-  tab 1 + tab 2 + tab 3 engines: DOM, JS, layout, PDF
+  terminal, MCP stdio, tabs, network, cookies, cache, history
+  tab 1 + tab 2 + MCP engine: DOM, JS, layout, PDF
   one -mem-limit, one address space
 ```
 
@@ -80,10 +80,16 @@ the whole browser, and terminal cleanup may not run. Only the active tab draws;
 background tabs keep loading and update their state but pause their timers and
 deferred image work.
 
-`-mem-limit` applies per process: in `single` mode all tabs share one process
-and one limit, while `per-tab` mode gives each tab child its own limit and the
-parent its own. Dump, PNG and MCP modes remain in-process. The default is
-`-process=per-tab`.
+A crashed MCP engine does not stop the MCP server: the in-flight tool call and
+later calls report an engine-crashed error until the client restarts the
+server. The engine is not respawned automatically. `-dump` and `-png` stay
+in-process in both modes because they are one-shot; an engine crash ends that
+command with an error and the terminal was never in raw mode.
+
+`-mem-limit` applies per process: in `single` mode all tabs and an MCP engine
+share one process and one limit, while `per-tab` mode gives each tab child and
+the MCP engine child its own limit and the parent its own. Dump and PNG use the
+parent process. The default is `-process=per-tab`.
 
 ## Proxy
 

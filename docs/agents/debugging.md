@@ -59,9 +59,12 @@ out-of-memory are raised by the Go runtime rather than by `panic`, so `recover`
 cannot catch them and deferred cleanup does not run. With the default
 `-process=per-tab`, the fatal error stays inside that tab's child process; the
 parent keeps up to 8 KiB of stderr, split between the beginning and end so the
-fatal line and final frames both survive, and shows it in the crashed tab. With
-`-process=single`, the engine shares the browser process, so the whole browser
-terminates and the terminal may be left in raw or alternate-screen mode.
+fatal line and final frames both survive, and shows it in the crashed tab. The
+same worker contains an MCP engine crash, but the MCP server does not respawn
+it: later tool calls report the captured error until the client restarts the
+server. With `-process=single`, the engine shares the browser process, so the
+whole browser or MCP server terminates and the terminal may be left in raw or
+alternate-screen mode.
 
 MOB3 writes no log file. Other diagnostics can still be captured with shell
 redirection:

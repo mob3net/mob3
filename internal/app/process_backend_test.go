@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -128,5 +129,48 @@ func TestProcessBackendKillReaps(t *testing.T) {
 	case <-backend.(*processTabBackend).done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("worker was not reaped after Kill")
+	}
+}
+
+// TestAutomationProcessWorker drives the automation worker kind through a real
+// child and checks that a killed engine keeps reporting the crash to later
+// calls instead of hanging or being respawned.
+func TestAutomationProcessWorker(t *testing.T) {
+	eng, err := spawnProcessEngine(
+		host.NewSession(), engine.NewBrowserContext(),
+		os.Args[0],
+		[]string{"-test.run=^TestProcessWorkerHelper$"},
+		[]string{"MOB3_PROCESS_TEST_HELPER=1"},
+		processWorkerConfig{
+			Kind: workerKindAutomation, Width: 80, Height: 24,
+			Zoom: 1, TabID: 1, SessionID: 1,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Kill()
+	client := &automationClient{s: eng.Session(), exit: eng}
+	if err := client.Navigate(context.Background(), "about:help"); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	if snap := client.Snapshot(); !strings.Contains(snap, "MOB3") {
+		t.Fatalf("snapshot = %q", snap)
+	}
+	eng.Kill()
+	select {
+	case <-eng.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker was not reaped after Kill")
+	}
+	err = client.Navigate(context.Background(), "about:help")
+	if err == nil {
+		t.Fatal("navigation succeeded after the engine was killed")
+	}
+	if !strings.Contains(err.Error(), "engine") {
+		t.Fatalf("crash error = %q", err)
+	}
+	if err := client.Navigate(context.Background(), "about:help"); err == nil {
+		t.Fatal("a later call did not report the dead engine")
 	}
 }

@@ -142,7 +142,7 @@ published by the Pages build.
 - **Not a secure browser.** No sandboxing, memory, site or OS isolation, CSP
   enforcement, certificate UI or security hardening, and it is not audited.
   Tab separation is logical only (separate JS runtimes and origin checks).
-  The default per-tab child process is fault isolation, not a security
+  The default engine child process is fault isolation, not a security
   boundary: tabs still share the parent host, storage broker and address space
   trust model. This warning stays prominent in `README.md` and on the built-in
   start and help pages. Never present MOB3 as safe for passwords, accounts,
@@ -155,10 +155,10 @@ published by the Pages build.
   state is memory-only; closing MOB3 saves nothing. The
   download popup only copies a `curl` command. The memory footer uses Go's
   runtime statistics, not `/proc`. OS-level reads by Go's TLS, DNS and timezone
-  libraries, `os.Executable`/self-exec for the per-tab process transport, and
-  anonymous pipes between those processes are the only filesystem access and
-  are not application storage. Do not add automatic disk caching or
-  restore-on-start behavior.
+  libraries, `os.Executable`/self-exec for the per-tab and MCP process
+  transport, and anonymous pipes between those processes are the only
+  filesystem access and are not application storage. Do not add automatic
+  disk caching or restore-on-start behavior.
 - **Dependency policy.** Standard library plus the approved
   `github.com/grafana/sobek` JavaScript engine (maintained `goja` fork adding ES
   module records and dynamic imports), the pure-Go SVG renderer
@@ -286,7 +286,8 @@ published by the Pages build.
   document fetch's final URL and exposes it to the front end by entry ID; the
   engine's `HistoryCommit` URL is ignored. With `-process=single` the engine
   stays in one Go process with the front end and host; the default
-  `-process=per-tab` gives each interactive tab an engine child. In both modes
+  `-process=per-tab` gives each interactive tab an engine child and gives an
+  MCP automation session one engine child. In both modes
   tabs have separate JS runtimes and frames get origin checks, which is logical
   isolation, not memory, site or OS isolation. A compromised engine process is
   still inside the same trust model.

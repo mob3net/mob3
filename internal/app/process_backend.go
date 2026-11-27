@@ -68,7 +68,9 @@ func (p *processPipes) Close() error {
 	return err
 }
 
-type processTabBackend struct {
+// processEngine owns one engine child process and its protocol session. The
+// interactive tab backend and the MCP automation runner share it.
+type processEngine struct {
 	session protocol.Session
 	cmd     *exec.Cmd
 	pipes   *processPipes
@@ -81,9 +83,9 @@ type processTabBackend struct {
 	exitErr    error
 }
 
-func (b *processTabBackend) Session() protocol.Session { return b.session }
+func (b *processEngine) Session() protocol.Session { return b.session }
 
-func (b *processTabBackend) Close() {
+func (b *processEngine) Close() {
 	b.userClosed.Store(true)
 	b.once.Do(func() {
 		_ = b.session.Send(protocol.Command{Body: protocol.Shutdown{}})
@@ -102,7 +104,7 @@ func (b *processTabBackend) Close() {
 	})
 }
 
-func (b *processTabBackend) Kill() {
+func (b *processEngine) Kill() {
 	b.userClosed.Store(true)
 	b.once.Do(func() {
 		b.killProcess()
@@ -111,11 +113,11 @@ func (b *processTabBackend) Kill() {
 }
 
 // Done is closed after the child has exited and been reaped.
-func (b *processTabBackend) Done() <-chan struct{} { return b.done }
+func (b *processEngine) Done() <-chan struct{} { return b.done }
 
 // ExitError reports the child's wait error and the sanitized stderr tail, if
 // any, without exposing raw terminal bytes to the front end.
-func (b *processTabBackend) ExitError() error {
+func (b *processEngine) ExitError() error {
 	b.errMu.Lock()
 	waitErr := b.exitErr
 	b.errMu.Unlock()
@@ -133,29 +135,100 @@ func (b *processTabBackend) ExitError() error {
 }
 
 // UserClosed reports whether Close or Kill initiated the exit.
-func (b *processTabBackend) UserClosed() bool { return b.userClosed.Load() }
+func (b *processEngine) UserClosed() bool { return b.userClosed.Load() }
 
-func (b *processTabBackend) setExitError(err error) {
+func (b *processEngine) setExitError(err error) {
 	b.errMu.Lock()
 	b.exitErr = err
 	b.errMu.Unlock()
 }
 
-func (b *processTabBackend) killProcess() {
+func (b *processEngine) killProcess() {
 	if b.cmd != nil && b.cmd.Process != nil {
 		_ = b.cmd.Process.Kill()
 	}
+}
+
+// processTabBackend adapts one engine child to the interactive tab contract.
+type processTabBackend struct {
+	*processEngine
+}
+
+// executablePath returns the binary the worker should re-exec.
+func executablePath() string {
+	self, err := os.Executable()
+	if err != nil || self == "" {
+		return os.Args[0]
+	}
+	return self
+}
+
+// spawnProcessEngine starts one engine child, wires the shared host and storage
+// RPC peers, and waits for its ready handshake. The caller owns the returned
+// handle and must Close or Kill it.
+func spawnProcessEngine(hostSess *host.Session, storage protocol.StorageProvider, execPath string, args, extraEnv []string, cfg processWorkerConfig) (*processEngine, error) {
+	if cfg.Kind == "" {
+		cfg.Kind = workerKindTab
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(execPath, args...)
+	env := workerEnv(os.Environ())
+	env = append(env, extraEnv...)
+	env = append(env,
+		processWorkerEnv+"=1",
+		processConfigEnv+"="+string(raw),
+	)
+	cmd.Env = env
+	stderr := newBoundedStderr()
+	cmd.Stderr = stderr
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		return nil, err
+	}
+	pipes := &processPipes{r: stdout, w: stdin}
+	eng := &processEngine{cmd: cmd, pipes: pipes, stderr: stderr, done: make(chan struct{})}
+	peer := protocol.NewMuxPeerReadWriter(pipes, protocol.DefaultLimits)
+	_ = protocol.NewHostServerPeer(peer, hostSess)
+	_ = protocol.NewStorageServerPeer(peer, storage)
+	eng.session = protocol.DialPeer(context.Background(), peer, protocol.SessionID(cfg.SessionID), protocol.DefaultLimits, processWorkerQueue)
+	go func() {
+		err := cmd.Wait()
+		eng.setExitError(err)
+		_ = pipes.Close()
+		close(eng.done)
+	}()
+	if err := waitWorkerReady(eng.session, 5*time.Second); err != nil {
+		eng.Kill()
+		select {
+		case <-eng.done:
+		case <-time.After(processCloseGrace):
+		}
+		if tail := stderr.Text(); tail != "" {
+			return nil, fmt.Errorf("%w: %s", err, tail)
+		}
+		return nil, err
+	}
+	return eng, nil
 }
 
 // newProcessBackendFactory returns a backend factory that starts a dedicated
 // engine process per tab. The child receives the same CLI flags as the parent and
 // a small JSON geometry/config blob.
 func newProcessBackendFactory(hostSess *host.Session, storage protocol.StorageProvider, args []string, caps protocol.Capabilities, zoom float64, graphics int) tabBackendFactory {
-	self, err := os.Executable()
-	if err != nil || self == "" {
-		self = os.Args[0]
-	}
-	return startProcessBackend(hostSess, storage, self, args, nil, caps, zoom, graphics)
+	return startProcessBackend(hostSess, storage, executablePath(), args, nil, caps, zoom, graphics)
 }
 
 // startProcessBackend is the spawn seam used by tests. execPath and extraEnv
@@ -163,67 +236,25 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 func startProcessBackend(hostSess *host.Session, storage protocol.StorageProvider, execPath string, args, extraEnv []string, caps protocol.Capabilities, zoom float64, graphics int) tabBackendFactory {
 	return func(_ *engine.Loader, id protocol.SessionID, init protocol.Init, target string) (tabBackend, error) {
 		cfg := processWorkerConfig{
+			Kind:  workerKindTab,
 			Width: init.Width, Height: init.Height,
 			CellW: init.CellW, CellH: init.CellH, Zoom: zoom,
 			Graphics: graphics, TabID: uint64(id), SessionID: uint32(id),
 		}
-		raw, err := json.Marshal(cfg)
+		eng, err := spawnProcessEngine(hostSess, storage, execPath, args, extraEnv, cfg)
 		if err != nil {
-			return nil, err
-		}
-		cmd := exec.Command(execPath, args...)
-		env := workerEnv(os.Environ())
-		env = append(env, extraEnv...)
-		env = append(env,
-			processWorkerEnv+"=1",
-			processConfigEnv+"="+string(raw),
-		)
-		cmd.Env = env
-		stderr := newBoundedStderr()
-		cmd.Stderr = stderr
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return nil, err
-		}
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			_ = stdin.Close()
-			return nil, err
-		}
-		if err := cmd.Start(); err != nil {
-			_ = stdin.Close()
-			_ = stdout.Close()
-			return nil, err
-		}
-		pipes := &processPipes{r: stdout, w: stdin}
-		backend := &processTabBackend{cmd: cmd, pipes: pipes, stderr: stderr, done: make(chan struct{})}
-		peer := protocol.NewMuxPeerReadWriter(pipes, protocol.DefaultLimits)
-		_ = protocol.NewHostServerPeer(peer, hostSess)
-		_ = protocol.NewStorageServerPeer(peer, storage)
-		backend.session = protocol.DialPeer(context.Background(), peer, id, protocol.DefaultLimits, processWorkerQueue)
-		go func() {
-			err := cmd.Wait()
-			backend.setExitError(err)
-			_ = pipes.Close()
-			close(backend.done)
-		}()
-		if err := waitWorkerReady(backend.session, 5*time.Second); err != nil {
-			backend.Kill()
-			if tail := stderr.Text(); tail != "" {
-				return nil, fmt.Errorf("%w: %s", err, tail)
-			}
 			return nil, err
 		}
 		init.Caps = caps
-		if err := backend.session.Send(protocol.Command{Body: init}); err != nil {
-			backend.Kill()
+		if err := eng.session.Send(protocol.Command{Body: init}); err != nil {
+			eng.Kill()
 			return nil, err
 		}
-		if err := backend.session.Send(protocol.Command{Body: protocol.Navigate{URL: target, Push: true}}); err != nil {
-			backend.Kill()
+		if err := eng.session.Send(protocol.Command{Body: protocol.Navigate{URL: target, Push: true}}); err != nil {
+			eng.Kill()
 			return nil, err
 		}
-		return backend, nil
+		return &processTabBackend{processEngine: eng}, nil
 	}
 }
 

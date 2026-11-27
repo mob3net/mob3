@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"browser/internal/engine"
 	"browser/internal/protocol"
@@ -97,6 +99,20 @@ func (h *automationHandler) run(ctx context.Context, v protocol.Automation) (res
 type automationClient struct {
 	s  protocol.Session
 	mu sync.Mutex
+
+	// dead is set once the transport fails or the engine reports a crash.
+	// Report-only recovery: the server keeps serving, but later calls return
+	// the same error instead of waiting on a closed session.
+	dead error
+	// exit gives the crash message from the child process, when available.
+	exit processExit
+}
+
+// processExit is the part of a process-backed engine the client needs to
+// explain a closed session.
+type processExit interface {
+	Done() <-chan struct{}
+	ExitError() error
 }
 
 func (c *automationClient) call(ctx context.Context, cmd protocol.Automation) (protocol.AutomationResult, error) {
@@ -105,8 +121,12 @@ func (c *automationClient) call(ctx context.Context, cmd protocol.Automation) (p
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.dead != nil {
+		return protocol.AutomationResult{}, c.dead
+	}
 	if err := c.s.Send(protocol.Command{Body: cmd}); err != nil {
-		return protocol.AutomationResult{}, err
+		c.dead = c.failure(err)
+		return protocol.AutomationResult{}, c.dead
 	}
 	for {
 		select {
@@ -115,7 +135,8 @@ func (c *automationClient) call(ctx context.Context, cmd protocol.Automation) (p
 			return protocol.AutomationResult{}, ctx.Err()
 		case ev, ok := <-c.s.Events():
 			if !ok {
-				return protocol.AutomationResult{}, fmt.Errorf("automation session closed")
+				c.dead = c.failure(errors.New("engine session closed"))
+				return protocol.AutomationResult{}, c.dead
 			}
 			switch v := ev.Body.(type) {
 			case protocol.AutomationResult:
@@ -127,10 +148,28 @@ func (c *automationClient) call(ctx context.Context, cmd protocol.Automation) (p
 				}
 				return v, nil
 			case protocol.Crash:
-				return protocol.AutomationResult{}, fmt.Errorf("%s", v.Message)
+				c.dead = fmt.Errorf("engine crashed: %s", protocol.StripControls(v.Message))
+				return protocol.AutomationResult{}, c.dead
 			}
 		}
 	}
+}
+
+// failure turns a closed transport into an engine-crash message when the child
+// has already exited. It waits briefly for the exit status so the stderr tail
+// captured by the parent can be included.
+func (c *automationClient) failure(base error) error {
+	if c.exit == nil {
+		return base
+	}
+	select {
+	case <-c.exit.Done():
+		if err := c.exit.ExitError(); err != nil {
+			return fmt.Errorf("engine crashed: %s", err)
+		}
+	case <-time.After(250 * time.Millisecond):
+	}
+	return base
 }
 
 func (c *automationClient) Navigate(ctx context.Context, target string) error {

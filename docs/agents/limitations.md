@@ -61,15 +61,19 @@ agreement, the non-negotiable constraints and the change protocol.
   Observers are synthetic: `IntersectionObserver`/`ResizeObserver` fire once
   and do not track scrolling or resizing. `ReadableStream` is an in-memory
   reader, not a streaming fetch body; `Worker` never executes.
-- `-process=per-tab` runs one engine child per interactive tab. The parent still
-  owns the terminal, host policy, cookies, cache, settings, history and shared
+- `-process=per-tab` runs one engine child per interactive tab and one for an
+  MCP automation session. The parent still owns the terminal, MCP stdio, host
+  policy, cookies, cache, settings, history and shared
   `localStorage`/`sessionStorage`. `-mem-limit` is per process: single mode
-  has one shared process, while per-tab mode gives each tab child its own limit,
-  so the browser total is not bounded by one limit. Dump, PNG and MCP stay
-  in-process. A fatal Go runtime error cannot be recovered in-process: per-tab
-  mode contains a stack overflow or out-of-memory failure to that tab's child
-  and shows the captured message there, while single mode terminates the whole
-  browser and may leave the terminal in raw or alternate-screen mode.
+  has one shared process, while per-tab mode gives each tab child and the MCP
+  engine child its own limit, so the browser total is not bounded by one
+  limit. Dump and PNG stay in-process. A fatal Go runtime error cannot be
+  recovered in-process: per-tab mode contains a stack overflow or
+  out-of-memory failure to that tab's child or the MCP engine child and shows
+  the captured message there, while single mode terminates the whole browser
+  and may leave the terminal in raw or alternate-screen mode. A crashed MCP
+  engine does not stop the server, but it is not respawned: later tool calls
+  report the crash until the client restarts the server.
 - Tabs are implemented, but iframes are permanent inert stubs, not a pending
   target. The default is one Go process per tab with one sobek VM in each
   engine process; iframe
