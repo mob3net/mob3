@@ -15,8 +15,9 @@ type findOverlay struct {
 	findBase    protocol.State
 }
 
-func (w *findOverlay) isOpen() bool         { return w.findActive }
-func (w *findOverlay) dismissOnModal() bool { return true }
+func (w *findOverlay) isOpen() bool       { return w.findActive }
+func (w *findOverlay) layer() windowLayer { return layerFind }
+func (w *findOverlay) persistent() bool   { return false }
 
 func (w *findOverlay) reset(l *Tab) { w.findActive = false }
 

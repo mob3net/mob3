@@ -19,8 +19,9 @@ type noticeOverlay struct {
 	noticeBase   protocol.State
 }
 
-func (w *noticeOverlay) isOpen() bool         { return w.noticeActive }
-func (w *noticeOverlay) dismissOnModal() bool { return true }
+func (w *noticeOverlay) isOpen() bool       { return w.noticeActive }
+func (w *noticeOverlay) layer() windowLayer { return layerNotice }
+func (w *noticeOverlay) persistent() bool   { return false }
 
 func (w *noticeOverlay) reset(l *Tab) {
 	w.noticeActive = false

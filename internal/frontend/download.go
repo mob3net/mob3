@@ -13,8 +13,9 @@ type downloadOverlay struct {
 	downloadBase   protocol.State
 }
 
-func (w *downloadOverlay) isOpen() bool         { return w.downloadActive }
-func (w *downloadOverlay) dismissOnModal() bool { return true }
+func (w *downloadOverlay) isOpen() bool       { return w.downloadActive }
+func (w *downloadOverlay) layer() windowLayer { return layerDownload }
+func (w *downloadOverlay) persistent() bool   { return false }
 func (w *downloadOverlay) reset(l *Tab) {
 	w.downloadActive = false
 	if l.Presenter != nil {

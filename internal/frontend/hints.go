@@ -14,11 +14,12 @@ type hintOverlay struct {
 	hintBase   protocol.State
 }
 
-func (w *hintOverlay) isOpen() bool { return w.hintActive }
+func (w *hintOverlay) isOpen() bool       { return w.hintActive }
+func (w *hintOverlay) layer() windowLayer { return layerHint }
 
-// dismissOnModal is false: hints are cancelled explicitly by the callers that
-// need it, so a page modal cannot silently drop a pending hint.
-func (w *hintOverlay) dismissOnModal() bool { return false }
+// persistent is true: hints are cancelled explicitly by the callers that need
+// it, so a page modal cannot silently drop a pending hint.
+func (w *hintOverlay) persistent() bool { return true }
 
 func (w *hintOverlay) reset(l *Tab) {
 	w.hintActive = false

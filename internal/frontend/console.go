@@ -56,12 +56,13 @@ type consoleOverlay struct {
 	consoleFindSet    bool
 }
 
-func (w *consoleOverlay) isOpen() bool { return w.consoleActive }
+func (w *consoleOverlay) isOpen() bool       { return w.consoleActive }
+func (w *consoleOverlay) layer() windowLayer { return layerConsole }
 
-// dismissOnModal is false: the console owns the whole screen and a page modal
-// is drawn over it instead of replacing it. The modal still takes input first,
-// so it can be answered while the console stays open underneath.
-func (w *consoleOverlay) dismissOnModal() bool { return false }
+// persistent is true: the console owns the whole screen and a page modal is
+// drawn over it instead of replacing it. The modal still takes input first, so
+// it can be answered while the console stays open underneath.
+func (w *consoleOverlay) persistent() bool { return true }
 
 func (w *consoleOverlay) reset(l *Tab) {
 	w.consoleActive = false

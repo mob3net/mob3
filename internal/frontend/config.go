@@ -96,8 +96,9 @@ type configOverlay struct {
 	configView      ConfigView
 }
 
-func (w *configOverlay) isOpen() bool         { return w.configActive }
-func (w *configOverlay) dismissOnModal() bool { return true }
+func (w *configOverlay) isOpen() bool       { return w.configActive }
+func (w *configOverlay) layer() windowLayer { return layerConfig }
+func (w *configOverlay) persistent() bool   { return false }
 
 func (w *configOverlay) reset(l *Tab) {
 	w.configActive = false

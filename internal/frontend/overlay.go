@@ -2,14 +2,37 @@ package frontend
 
 import "browser/internal/protocol"
 
-// overlay is one front-end window layered over the page. Each window lives in
-// the file that owns its subsystem, keeps its own state and restore point, and
-// appears once in overlayList. Key, mouse, page-state, dismissal, tab-switch
-// and crash handling all walk that one list, so a new window joins the order in
-// one place instead of six.
+// windowLayer orders windows from the base surface upwards. Higher layers own
+// input first and are painted later.
+type windowLayer int
+
+const (
+	layerHint windowLayer = iota + 1
+	layerConsole
+	layerFind
+	layerPrompt
+	layerLinkPreview
+	layerMenu
+	layerHistory
+	layerConfig
+	layerSelect
+	layerNotice
+	layerDownload
+	layerDialog
+)
+
+// overlay is one front-end window layered over the current tab. Each window
+// lives in the file that owns its subsystem, keeps its own state and restore
+// point, and appears once in allWindows. Key, mouse, page-state, dismissal,
+// tab-switch and crash handling walk windowStack, so the layer is the single
+// input and paint order instead of a list position.
 type overlay interface {
 	// isOpen reports whether the window currently covers the page.
 	isOpen() bool
+	// layer reports the window's stacking order; higher wins input first.
+	layer() windowLayer
+	// persistent reports whether opening another modal leaves this window open.
+	persistent() bool
 	// applyState folds a page State event into the window. It reports whether
 	// the window consumed the event.
 	applyState(l *Tab, st protocol.State) bool
@@ -25,18 +48,13 @@ type overlay interface {
 	// reset drops the window without restoring state or sending commands, for
 	// a session that has stopped.
 	reset(l *Tab)
-	// dismissOnModal reports whether opening another modal closes the window.
-	dismissOnModal() bool
 }
 
-// overlayList returns every front-end window in dispatch priority order. This
-// is the only declaration of which windows exist and which owns input first.
-func (l *Tab) overlayList() [12]overlay {
+// allWindows returns every front-end window in registration order. The order
+// only identifies them; windowStack derives priority from layer.
+func (l *Tab) allWindows() [12]overlay {
 	return [12]overlay{
 		&l.linkPreviewOverlay,
-		// A JavaScript dialog is drawn over the console and must answer for the
-		// keyboard and pointer first; the engine is blocked until it returns.
-		&l.dialogOverlay,
 		&l.consoleOverlay,
 		&l.hintOverlay,
 		&l.downloadOverlay,
@@ -44,10 +62,30 @@ func (l *Tab) overlayList() [12]overlay {
 		&l.selectOverlay,
 		&l.configOverlay,
 		&l.historyOverlay,
+		&l.dialogOverlay,
 		&l.promptOverlay,
 		&l.findOverlay,
 		&l.menuOverlay,
 	}
+}
+
+// windowStack returns the open windows in input order, topmost first. Equal
+// layers keep registration order. The fixed array avoids an allocation on the
+// input path.
+func (l *Tab) windowStack() (stack [12]overlay, count int) {
+	for _, o := range l.allWindows() {
+		if !o.isOpen() {
+			continue
+		}
+		at := count
+		for at > 0 && stack[at-1].layer() < o.layer() {
+			stack[at] = stack[at-1]
+			at--
+		}
+		stack[at] = o
+		count++
+	}
+	return stack, count
 }
 
 // nextPageState stores st as the page state while a window stays open.

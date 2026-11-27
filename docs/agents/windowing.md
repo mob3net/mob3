@@ -71,16 +71,18 @@ blocked-console case but is not the target model.
 
 ### Stage 1: window stack and dispatch
 
-- Add layer constants and the `modal`/`persistent` flags to the window
-  interface. Replace `dismissOnModal` with the general modal rule.
-- Store the tab's open windows in one ordered stack. Replace `overlayList` with
-  a stack query used by key, mouse, page-state, install, reset and close
-  dispatch.
+- Add layer constants and the `persistent` flag to the window interface.
+  Replace `dismissOnModal` with the general modal rule; the `modal`
+  classification arrives with the Stage 2 input and paint unification.
+- Derive the tab's open windows as one ordered stack. Replace `overlayList`
+  with that stack query for key, mouse, page-state, install and close dispatch;
+  crash reset still walks every registered window.
 - Keep the current painting code in this stage so the change is input-only and
   easy to verify.
-- Exit gate: the old behavior is unchanged except the landed dialog rule; no
-  dispatch path reads a fixed list; tests cover stacking, modal dismissal and a
-  dialog over the console.
+- Exit gate: every dispatch path reads the stack in layer order; a dialog, menu
+  or other window opened over the console owns input first; painting is
+  unchanged; tests cover stacking, modal dismissal and a dialog over the
+  console.
 
 ### Stage 2: generic composition
 

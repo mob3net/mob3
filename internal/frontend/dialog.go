@@ -14,8 +14,9 @@ type dialogOverlay struct {
 	dialogBase   protocol.State
 }
 
-func (w *dialogOverlay) isOpen() bool         { return w.dialogActive }
-func (w *dialogOverlay) dismissOnModal() bool { return false }
+func (w *dialogOverlay) isOpen() bool       { return w.dialogActive }
+func (w *dialogOverlay) layer() windowLayer { return layerDialog }
+func (w *dialogOverlay) persistent() bool   { return true }
 func (w *dialogOverlay) reset(l *Tab) {
 	w.dialogActive = false
 	if l.Presenter != nil {
