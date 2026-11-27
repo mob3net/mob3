@@ -28,12 +28,19 @@ const (
 	toolsHint     = "Tools: help · form · links · requests · logs · source · snapshot"
 )
 
+// consoleLoadingTabs labels the five sections until the first engine view
+// arrives. The engine supplies the canonical labels with their counts.
+var consoleLoadingTabs = [...]string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
+
+const consoleLoadingLine = "(opening console…)"
+
 // consoleOverlay is the full-screen JavaScript console and tools pane. It owns
 // the pane, scroll, input, history and quit state; the engine only supplies the
 // requested section window.
 type consoleOverlay struct {
 	consoleActive     bool
 	consoleView       protocol.ConsoleView
+	consoleViewURL    string
 	consolePane       int
 	consoleStart      [consolePaneCount]int
 	consoleTotal      [consolePaneCount]int
@@ -74,6 +81,12 @@ func (w *consoleOverlay) close(l *Tab) {
 		return
 	}
 	w.deactivate()
+	if l.Presenter != nil {
+		// Repaint the page kept from before the console so closing has the same
+		// immediate feedback as opening. The engine's post-console frame
+		// replaces it when the engine catches up.
+		_ = l.Presenter.CloseConsole()
+	}
 	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleClose}})
 }
 
@@ -101,10 +114,14 @@ func (w *consoleOverlay) open(l *Tab) {
 		return
 	}
 	w.consoleActive = true
-	w.consolePane = consolePaneLogs
 	for i := range w.consoleStart {
 		w.consoleStart[i] = -1
 		w.consoleFollow[i] = true
+	}
+	if w.consolePane == consolePaneHTML {
+		// HTML enters at its first line, like switching to it.
+		w.consoleStart[consolePaneHTML] = 0
+		w.consoleFollow[consolePaneHTML] = false
 	}
 	w.consoleEdit = false
 	w.consoleText = ""
@@ -113,8 +130,37 @@ func (w *consoleOverlay) open(l *Tab) {
 	w.consoleFindActive = false
 	w.consoleFindSet = false
 	w.consoleFind.reset()
+	// Paint the window before the engine answers. The console content belongs
+	// to the engine, which may be busy applying a load or an image batch, so
+	// waiting for its first view would leave the key without visible feedback.
+	w.prepareView(l)
+	w.present(l)
 	_ = l.Session.Send(protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleOpen}})
 	w.request(l, true)
+}
+
+// prepareView installs what the first frame can show without the engine. The
+// last view is reused only for the same page, section and terminal size, so a
+// navigation never flashes the previous document's logs, HTML or storage.
+func (w *consoleOverlay) prepareView(l *Tab) {
+	width, height := l.State.Page.Width, l.State.Page.Height
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 24
+	}
+	if w.consoleView.Width == width && w.consoleView.Height == height &&
+		w.consoleView.Pane == w.consolePane && w.consoleView.Tabs != nil &&
+		w.consoleViewURL == l.State.Page.URL {
+		return
+	}
+	w.consoleView = protocol.ConsoleView{
+		Width: width, Height: height, Pane: w.consolePane,
+		Tabs:  append([]string(nil), consoleLoadingTabs[:]...),
+		Lines: []string{consoleLoadingLine},
+	}
+	w.consoleTotal = [consolePaneCount]int{}
 }
 
 // applyState reports false: console state arrives as its own event, so page
@@ -128,6 +174,7 @@ func (w *consoleOverlay) applyView(l *Tab, v protocol.ConsoleView) {
 		return
 	}
 	w.consoleView = v
+	w.consoleViewURL = l.State.Page.URL
 	w.consoleTotal[w.consolePane] = v.Total
 	if w.consoleFollow[w.consolePane] && v.Total > 0 {
 		want := w.maxStart()
@@ -766,6 +813,20 @@ func BuildConsoleFrame(v *protocol.ConsoleView, ui ConsoleUI) protocol.Frame {
 		}
 	}
 	return f
+}
+
+// CloseConsole drops the console snapshot and repaints the page frame cached
+// from before the console opened, so closing a console does not wait for the
+// engine to send a fresh page frame.
+func (p *Presenter) CloseConsole() error {
+	if p == nil || !p.consoleActive {
+		return nil
+	}
+	p.consoleActive = false
+	p.console = nil
+	p.consoleUI = ConsoleUI{}
+	p.prev = nil
+	return p.Refresh()
 }
 
 // PresentConsole draws a console snapshot and stores it for chrome-only

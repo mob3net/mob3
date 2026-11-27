@@ -1154,6 +1154,142 @@ func TestConsoleOpenAndCloseKeys(t *testing.T) {
 	}
 }
 
+func TestConsoleReopensOnLastSection(t *testing.T) {
+	s := &recordSession{}
+	tab := &Tab{Session: s}
+	tab.State.Page = protocol.State{Width: 80, Height: 24}
+	tab.consoleOverlay.open(tab)
+	if tab.consolePane != consolePaneLogs {
+		t.Fatalf("first console pane = %d, want logs", tab.consolePane)
+	}
+	tab.consoleOverlay.selectPane(tab, consolePaneStorage, true)
+	tab.consoleOverlay.close(tab)
+	s.cmds = nil
+	tab.consoleOverlay.open(tab)
+	if tab.consolePane != consolePaneStorage {
+		t.Fatalf("reopened console pane = %d, want storage", tab.consolePane)
+	}
+	if len(s.cmds) != 2 {
+		t.Fatalf("open commands = %#v", s.cmds)
+	}
+	if a, ok := s.cmds[0].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleOpen {
+		t.Fatalf("open action = %#v", s.cmds[0].Body)
+	}
+	if a, ok := s.cmds[1].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow ||
+		a.Pane != consolePaneStorage || !a.Enter {
+		t.Fatalf("window action = %#v", s.cmds[1].Body)
+	}
+
+	tab.consoleOverlay.selectPane(tab, consolePaneHTML, true)
+	tab.consoleOverlay.close(tab)
+	s.cmds = nil
+	tab.consoleOverlay.open(tab)
+	if tab.consolePane != consolePaneHTML {
+		t.Fatalf("reopened console pane = %d, want HTML", tab.consolePane)
+	}
+	if a, ok := s.cmds[1].Body.(protocol.ConsoleAction); !ok || a.Op != protocol.ConsoleWindow ||
+		a.Pane != consolePaneHTML || a.Start != 0 || !a.Enter {
+		t.Fatalf("HTML window action = %#v", s.cmds[1].Body)
+	}
+}
+
+func TestConsolePaintsBeforeEngineView(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	tab := &Tab{Session: &recordSession{}, Presenter: p}
+	tab.State.Page = protocol.State{
+		FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2,
+		URL: "https://example.test/",
+	}
+	tab.consoleOverlay.open(tab)
+	got := out.String()
+	for _, want := range []string{"opening console", "JS logs", "Requests", "Click/Tab/h/l"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("first console frame %q does not contain %q", got, want)
+		}
+	}
+	out.Reset()
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs,
+		Tabs:  []string{" JS logs (1) ", " Requests (0) ", " Storage ", " HTML ", " Tools "},
+		Lines: []string{"fresh engine line"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "fresh engine line") {
+		t.Fatalf("engine view was not painted: %q", out.String())
+	}
+}
+
+func TestConsoleCloseRepaintsCachedPage(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	s := &recordSession{}
+	tab := &Tab{Session: s, Presenter: p}
+	tab.State.Page = protocol.State{
+		FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2,
+		URL: "https://example.test/",
+	}
+	page := protocol.Frame{W: 80, H: 21, Cells: make([]protocol.Cell, 80*21)}
+	for i := range page.Cells {
+		page.Cells[i].R = 'P'
+	}
+	if _, err := tab.applyEvent(protocol.Event{Body: page}); err != nil {
+		t.Fatal(err)
+	}
+	if handled, quit := tab.handleShellKey("!"); !handled || quit || !tab.consoleActive {
+		t.Fatalf("console did not open: handled=%v quit=%v active=%v", handled, quit, tab.consoleActive)
+	}
+	out.Reset()
+	s.cmds = nil
+	if handled, quit := tab.handleShellKey("!"); !handled || quit || tab.consoleActive {
+		t.Fatalf("console did not close: handled=%v quit=%v active=%v", handled, quit, tab.consoleActive)
+	}
+	if !strings.Contains(out.String(), "P") {
+		t.Fatalf("closing did not repaint the cached page: %q", out.String())
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.ConsoleAction{Op: protocol.ConsoleClose}) {
+		t.Fatalf("close commands = %#v", s.cmds)
+	}
+}
+
+func TestConsoleReusesViewOnlyForTheSamePage(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	tab := &Tab{Session: &recordSession{}, Presenter: p}
+	tab.State.Page = protocol.State{
+		FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2,
+		URL: "https://example.test/one",
+	}
+	tabs := []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "}
+	tab.consoleOverlay.open(tab)
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: tabs, Lines: []string{"cached line"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	tab.consoleOverlay.close(tab)
+	p.Reset()
+	out.Reset()
+	tab.consoleOverlay.open(tab)
+	if !strings.Contains(out.String(), "cached line") {
+		t.Fatalf("same-page console did not reuse its cached view: %q", out.String())
+	}
+
+	tab.consoleOverlay.close(tab)
+	tab.State.Page.URL = "https://example.test/two"
+	p.Reset()
+	out.Reset()
+	tab.consoleOverlay.open(tab)
+	got := out.String()
+	if strings.Contains(got, "cached line") {
+		t.Fatalf("new page console reused the previous page's view: %q", got)
+	}
+	if !strings.Contains(got, "opening console") {
+		t.Fatalf("new page console did not paint a placeholder: %q", got)
+	}
+}
+
 func TestConsoleIgnoresInFlightPageFrame(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPresenter(&out, true)
