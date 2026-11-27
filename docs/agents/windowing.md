@@ -15,6 +15,40 @@ The goal remains one per-tab screen composed from a base surface and an ordered
 stack of windows. The console is still full-screen; making it a pane is Stage
 3, which changes surface geometry without changing window rules.
 
+## Screen composition
+
+One tab is one screen: a base surface drawn into a pane, then the window stack
+painted above it. Only the active tab draws.
+
+```text
+mob3 frontend
+ │  one terminal; only the active tab draws
+ │
+ ├── tab 1 screen
+ │    ├── base surface, one pane (a terminal-cell rectangle)
+ │    │    ├── page pane: toolbar + tab strip, content, footer
+ │    │    └── console pane: console view and input row
+ │    └── window stack, paint order bottom to top:
+ │         hint letters -> find bar -> URL prompt -> link preview  [inline chrome]
+ │         -> menu -> history -> config -> select -> notice
+ │         -> download -> dialog                                    [window painters]
+ ├── tab 2 screen
+ │    └── same shape, its own windows
+ └── tab 3 screen
+      └── same shape, its own windows
+```
+
+A **pane** is the terminal-cell rectangle a surface occupies, not a window. Both
+panes are full-terminal today, so the console still hides the page; splitting
+them into side-by-side or above/below rectangles is Stage 3. The tab strip is
+page header chrome, not a window, and the full-screen console replaces it.
+
+The stack is the input order too, topmost first: dialog, download, notice,
+select, config, history, menu, link preview, URL prompt, find bar, hint. The
+first four layers paint into the base surface (header, footer or page cells);
+the rest paint through `windowPainter`. A JavaScript dialog is always top, and
+the persistent console resumes under a modal.
+
 ## Model
 
 - **Screen:** one per tab. It owns a base surface and a window stack. Only the
@@ -30,7 +64,8 @@ stack of windows. The console is still full-screen; making it a pane is Stage
   - a rectangle or anchor geometry,
   - `modal` and `persistent` flags,
   - key and mouse handling,
-  - one paint method that draws over the composed base frame,
+  - one paint path: inline into the base surface, or as a `windowPainter` over
+    it,
   - the existing open, close, install, reset and page-state hooks.
 - **Input:** the topmost modal owns input first. Otherwise the topmost window
   under the pointer (mouse) or above the focused surface (keys) owns it. A
