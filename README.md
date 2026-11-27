@@ -4,7 +4,7 @@
 
 # MOB³ is a small indie web browser for the terminal
 
-MOB³ is a lightweight terminal web browser with a built-in HTML rendering engine, JavaScript runtime, ANSI renderer and inline image support. It brings Vim-style interaction, mouse controls and browser-like navigation together with headless MCP support for scripts and AI agents.
+MOB3 is a lightweight terminal web browser with a built-in HTML rendering engine, JavaScript runtime, ANSI renderer and inline image support. It brings Vim-style interaction, mouse controls and browser-like navigation together with headless MCP support for scripts and AI agents.
 
 The design goal is most of the features people actually use, with a fraction of the CPU and memory a mainstream browser needs: a small static binary, fast startup and pages that stay lightweight.
 
@@ -30,7 +30,7 @@ docker run --rm -it ghcr.io/mob3net/mob3 -graphics blocks
 
 ## Download and install
 
-[Download the latest MOB³ release](https://github.com/mob3net/mob3/releases/latest) from GitHub Releases.
+[Download the latest release](https://github.com/mob3net/mob3/releases/latest) from GitHub Releases.
 
 Release archives cover Linux (`386`, `amd64`, `armv6`, `armv7`, `arm64`) and macOS (`amd64`, `arm64`). Choose the archive for your OS and architecture, for example `mob3_vX.Y.Z_linux_amd64.tar.gz`. Each archive contains the static `mob3` binary.
 
@@ -44,13 +44,13 @@ mob3 -version
 
 ## Screenshots
 <div align="center">
-<a href="docs/screenshots/help.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/help.png" alt="MOB³ help page listing command-line flags" /></a>
+<a href="docs/screenshots/help.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/help.png" alt="MOB3 help page listing command-line flags" /></a>
 <a href="docs/screenshots/console-storage.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/console-storage.png" alt="JavaScript console showing the Storage tab" /></a>
 <a href="docs/screenshots/help-dialogs.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/help-dialogs.png" alt="Help page with an alert dialog" /></a>
 <br />
-<a href="docs/screenshots/hacker-news.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/hacker-news.png" alt="Hacker News rendered in MOB³" /></a>
-<a href="docs/screenshots/debian.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/debian.png" alt="Bits from Debian blog rendered in MOB³" /></a>
-<a href="docs/screenshots/opensource.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/opensource.png" alt="opensource.com rendered with images in MOB³" /></a>
+<a href="docs/screenshots/hacker-news.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/hacker-news.png" alt="Hacker News rendered in MOB3 /></a>
+<a href="docs/screenshots/debian.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/debian.png" alt="Bits from Debian blog rendered in MOB3 /></a>
+<a href="docs/screenshots/opensource.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/opensource.png" alt="opensource.com rendered with images in MOB3 /></a>
 <br />
 <a href="docs/screenshots/universe-today-narrow.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/universe-today-narrow.png" alt="Universe Today article in a narrow terminal" /></a>
 <a href="docs/screenshots/universe-today.png" target="_blank" rel="noopener"><img width="32%" src="docs/screenshots/universe-today.png" alt="Universe Today article in a wide terminal" /></a>
@@ -58,11 +58,11 @@ mob3 -version
 </div>
 
 ## Show your support
-If MOB³ has been useful to you, please consider [giving the project a star on GitHub](https://github.com/mob3net/mob3). It helps others discover it and supports the continued development of the project.
+If MOB3 has been useful to you, please consider [giving the project a star on GitHub](https://github.com/mob3net/mob3). It helps others discover it and supports the continued development of the project.
 
 ## What to expect
 
-MOB³ is a content browser, not a full browser engine. It is happiest with text-focused pages and gets rough on modern JavaScript-heavy apps.
+MOB3 is a content browser, not a full browser engine. It is happiest with text-focused pages and gets rough on modern JavaScript-heavy apps.
 
 **Works well**
 
@@ -140,20 +140,20 @@ make
 ./bin/mob3 https://example.com
 ```
 
-Requires Go 1.27 or newer. Interactive mode runs on Linux and macOS terminals; Windows users can run it under WSL. When stdin/stdout are not a terminal, MOB³ automatically falls back to dump mode.
+Requires Go 1.27 or newer. Interactive mode runs on Linux and macOS terminals; Windows users can run it under WSL. When stdin/stdout are not a terminal, MOB3 automatically falls back to dump mode.
 
 Press `?` inside the app for keys, mouse and forms help. Run `mob3 -h` for the full list of command-line flags. `mob3 -version` prints the embedded version.
 
 ## Contributing
 
-Contributions are welcome. Every pull request must include the broad license-grant CLA statement described in [CONTRIBUTING.md](https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md); it keeps MOB³ available under both AGPL-3.0-only and a commercial license. The PR workflow checks the statement. The CI workflow runs formatting, vet and tests, and a separate nightly workflow runs a vulnerability scan.
+Contributions are welcome. Every pull request must include the broad license-grant CLA statement described in [CONTRIBUTING.md](https://github.com/mob3net/mob3/blob/main/CONTRIBUTING.md); it keeps MOB3 available under both AGPL-3.0-only and a commercial license. The PR workflow checks the statement. The CI workflow runs formatting, vet and tests, and a separate nightly workflow runs a vulnerability scan.
 
 ## License
 
-MOB³ is licensed under the GNU Affero General Public License, version 3 only (AGPL-3.0-only). Copyright (c) 2026 Milos Stojanovic. See [LICENSE](https://github.com/mob3net/mob3/blob/main/LICENSE).
+MOB3 is licensed under the GNU Affero General Public License, version 3 only (AGPL-3.0-only). Copyright (c) 2026 Milos Stojanovic. See [LICENSE](https://github.com/mob3net/mob3/blob/main/LICENSE).
 
 A separate commercial license is available on request for use without the AGPL's source-disclosure requirements.
 
-MOB³ is provided “as is”, without warranty of any kind. See the warning at the top: this is not a security boundary.
+MOB3 is provided “as is”, without warranty of any kind. See the warning at the top: this is not a security boundary.
 
 Third-party module licenses are listed in [THIRD_PARTY_NOTICES](https://github.com/mob3net/mob3/blob/main/THIRD_PARTY_NOTICES).
