@@ -25,6 +25,13 @@
   separate engine processes by default, but that is fault isolation only, not
   memory or site isolation.
 
+## Need more isolation?
+
+MOB3 does not sandbox pages itself. If you need a more isolated environment,
+run MOB3 in a container or a dedicated virtual machine with only the network
+and filesystem access you intend. Docker is a common way to do this, but
+container and VM configuration is outside this project's support scope.
+
 ## Tab isolation (iframes are inert)
 
 Interactive tabs run one engine child process per tab by default, and an MCP
