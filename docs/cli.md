@@ -47,49 +47,11 @@ Run `mob3 -h` for the exact defaults in your build.
 
 ## Process placement
 
-`-process=per-tab` (the default) runs a separate engine process per interactive
-tab and one for an MCP automation session, using the same static binary:
-
-```text
-mob3 parent process
- │  terminal, MCP stdio, tabs, network, cookies, cache, history
- │
- ├── tab 1 child process: DOM, JS, layout, PDF
- ├── tab 2 child process: DOM, JS, layout, PDF
- └── MCP engine child: automation page, DOM, JS, layout
-```
-
-`-process=single` keeps everything inside that one process:
-
-```text
-one mob3 process
-  terminal, MCP stdio, tabs, network, cookies, cache, history
-  tab 1 + tab 2 + MCP engine: DOM, JS, layout, PDF
-  one -mem-limit, one address space
-```
-
-The parent keeps the terminal, network policy, cookies, cache, settings and
-history; a child owns its page DOM, JavaScript, layout and PDF state. Child tabs
-share `localStorage`/`sessionStorage` with the parent through the storage
-broker. A wedged tab child is force-killed and stays in the strip as a crashed
-tab with the probe-timeout reason, without stopping the browser, but this is
-fault isolation, not a security sandbox. A fatal runtime error in a tab
-child (for example a stack overflow) is contained to that tab and its captured
-stderr appears in the crashed tab; in `single` mode the same error terminates
-the whole browser, and terminal cleanup may not run. Only the active tab draws;
-background tabs keep loading and update their state but pause their timers and
-deferred image work.
-
-A crashed MCP engine does not stop the MCP server: the in-flight tool call and
-later calls report an engine-crashed error until the client restarts the
-server. The engine is not respawned automatically. `-dump` and `-png` stay
-in-process in both modes because they are one-shot; an engine crash ends that
-command with an error and the terminal was never in raw mode.
-
-`-mem-limit` applies per process: in `single` mode all tabs and an MCP engine
-share one process and one limit, while `per-tab` mode gives each tab child and
-the MCP engine child its own limit and the parent its own. Dump and PNG use the
-parent process. The default is `-process=per-tab`.
+`-process=per-tab` (the default) runs each interactive tab and an MCP
+automation session in its own engine child; `-process=single` keeps everything
+in one process. See [the process model](architecture.md#the-process-tree) for
+the spawn handshake, what stays in the parent, crash containment and the memory
+tradeoff.
 
 ## Proxy
 

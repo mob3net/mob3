@@ -26,7 +26,8 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
   does not take down the MCP server or its stdio transport. The in-flight tool
   call and later calls return an `engine crashed` error; the engine is not
   respawned, so restart the server to recover. `-process=single` keeps the
-  engine in the server process, where a fatal error also ends the server.
+  engine in the server process, where a fatal error also ends the server. The
+  process model is described in [architecture](architecture.md#the-process-tree).
 - `-mem-limit` applies to the engine child in per-tab mode and to the single
   server process with `-process=single`.
 

@@ -181,8 +181,9 @@ page_description() {
   name="$(basename "$src" .md)"
   case "$name" in
     README) text="MOB³ is a small terminal web browser written in Go. It renders HTML, a practical CSS subset and images in 24-bit color." ;;
-    index) text="MOB³ documentation: install it, every command-line flag, keyboard and mouse keys, MCP automation, security, site support and development." ;;
+    index) text="MOB³ documentation: install it, every command-line flag, keyboard and mouse keys, MCP automation, architecture, security, site support and development." ;;
     use-cases) text="Who MOB³ is for: terminal users, developers checking how a page renders, and AI agents driving a headless browser over MCP." ;;
+    architecture) text="How MOB3 is built: per-tab engine processes, the protocol boundary, rendering and JavaScript, memory-only networking, and the design tradeoffs." ;;
     install) text="Install MOB³ from a release archive, the Docker image ghcr.io/mob3net/mob3, or a source build of the static Go binary." ;;
     cli) text="Every MOB³ command-line flag with its default and limits, including -graphics, -mcp, -dump, -png, -no-js and -layout-budget." ;;
     keys) text="MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection." ;;
@@ -219,7 +220,7 @@ derive_description() {
   printf '%s' "$text" | awk '{ if (length($0) <= 155) { print; exit } s = substr($0, 1, 155); sub(/ [^ ]*$/, "", s); print s "…" }'
 }
 
-docs_order=(index use-cases install cli keys automation security sites development)
+docs_order=(index use-cases architecture install cli keys automation security sites development)
 
 sidebar_for() {
   local current="$1" name title active

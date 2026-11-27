@@ -5,7 +5,9 @@ HTML parser, CSS cascade, layout engine, ANSI renderer and pure-Go JavaScript
 runtime. History, cookies, storage and caches live in memory only.
 
 The project aims to cover most of the features people actually use while using
-a fraction of the CPU and memory of a mainstream browser.
+a fraction of the CPU and memory of a mainstream browser. See
+[architecture](architecture.md) for the process model, package boundaries and
+the tradeoffs behind the design.
 
 > **Warning:** MOB3 is **not a secure browser**. It has no sandboxing, process
 > or site isolation, CSP enforcement, certificate UI or security audit. Do not

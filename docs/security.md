@@ -29,9 +29,9 @@
 
 Interactive tabs run one engine child process per tab by default, and an MCP
 automation session runs its engine in a child too; `-process=single` keeps them
-inside one Go process. The process layout is drawn in
-[Process placement](cli.md#process-placement). This is fault isolation, not a
-sandbox:
+inside one Go process. The process layout and spawn handshake are described in
+[the process model](architecture.md#the-process-tree). This is fault isolation,
+not a sandbox:
 
 - A tab is one protocol session with its own engine session, page, layout,
   JavaScript runtime and back/forward history.

@@ -1,7 +1,9 @@
 # Architecture
 
 Part of the MOB3 agent guidance. Start at [AGENTS.md](../../AGENTS.md) for the working
-agreement, the non-negotiable constraints and the change protocol.
+agreement, the non-negotiable constraints and the change protocol. The
+published, user-facing overview is [docs/architecture.md](../../docs/architecture.md);
+this page is the file-level ownership reference.
 
 ## Target boundary
 
