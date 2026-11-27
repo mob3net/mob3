@@ -74,7 +74,13 @@ func TestAutomationMasksPasswordValue(t *testing.T) {
 		<input type="text" name="user" value="alice">
 	</form>`)
 	form := root.FindFirst("form")
-	lines, _ := controlLines(root, form, "", 10)
+	var lines []string
+	for _, n := range form.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
+		if isHiddenInput(n) {
+			continue
+		}
+		lines = append(lines, controlLine(root, n))
+	}
 	joined := strings.Join(lines, "\n")
 	if strings.Contains(joined, "hunter2") {
 		t.Fatalf("password leaked:\n%s", joined)
@@ -774,6 +780,103 @@ func TestAutomationLinksListsOffscreen(t *testing.T) {
 	}
 	if a.b.URL == nil || a.b.URL.Path != "/next" {
 		t.Fatalf("off-screen link click landed on %v", a.b.URL)
+	}
+}
+
+func TestAutomationLinksPaging(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 1000; i++ {
+		body.WriteString(`<p><a href="/page/`)
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(`">Link `)
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(`</a></p>`)
+	}
+	a := newTestAutomation(t, map[string]string{"/": "<html><body>" + body.String() + "</body></html>"})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := a.Links("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(first, "Links: 1000") || !strings.Contains(first, "Next:") {
+		t.Fatalf("first link page has no total or continuation:\n%s", first[:min(len(first), 300)])
+	}
+	const marker = "Next: "
+	i := strings.Index(first, marker)
+	if i < 0 {
+		t.Fatal("first link page has no next offset")
+	}
+	next, err := strconv.Atoi(strings.Fields(first[i+len(marker):])[0])
+	if err != nil || next <= 0 {
+		t.Fatalf("next link offset = %d, %v", next, err)
+	}
+	args, _ := json.Marshal(map[string]int{"offset": next, "limit": 25})
+	second, err := a.RunCommand(ctx, "links", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Showing: " + strconv.Itoa(next+1) + "-" + strconv.Itoa(next+25) + " of 1000"
+	if !strings.Contains(second, want) {
+		t.Fatalf("second link page range missing %q:\n%s", want, second[:min(len(second), 300)])
+	}
+	if _, err := a.RunCommand(ctx, "links", json.RawMessage(`{"offset":999999}`)); err == nil {
+		t.Fatal("offset past the last link was accepted")
+	}
+	if _, err := a.RunCommand(ctx, "links", json.RawMessage(`{"limit":-1}`)); err == nil {
+		t.Fatal("negative link limit was accepted")
+	}
+}
+
+func TestAutomationFormPaging(t *testing.T) {
+	var body strings.Builder
+	body.WriteString(`<form action="/go">`)
+	for i := 0; i < 10; i++ {
+		body.WriteString(`<input name="f`)
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(`" value="v`)
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(`">`)
+	}
+	body.WriteString(`</form>`)
+	a := newTestAutomation(t, map[string]string{"/": "<html><body>" + body.String() + "</body></html>"})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := a.RunCommand(ctx, "form", json.RawMessage(`{"limit":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Controls: 10  Showing: 1-2 of 10  Next: 2",
+		`[1] form method="GET" action="/go"`,
+		`name="f0"`,
+	} {
+		if !strings.Contains(first, want) {
+			t.Errorf("first form page missing %q:\n%s", want, first)
+		}
+	}
+	second, err := a.RunCommand(ctx, "form", json.RawMessage(`{"offset":2,"limit":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Showing: 3-4 of 10  Next: 4",
+		`[1] form method="GET" action="/go"`,
+		`name="f2"`,
+	} {
+		if !strings.Contains(second, want) {
+			t.Errorf("second form page missing %q:\n%s", want, second)
+		}
+	}
+	if _, err := a.RunCommand(ctx, "form", json.RawMessage(`{"offset":999}`)); err == nil {
+		t.Fatal("offset past the last control was accepted")
+	}
+	if _, err := a.RunCommand(ctx, "form", json.RawMessage(`{"limit":-1}`)); err == nil {
+		t.Fatal("negative control limit was accepted")
 	}
 }
 

@@ -142,19 +142,23 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 	case "links":
 		var p struct {
 			Selector string `json:"selector"`
+			Offset   int    `json:"offset"`
+			Limit    int    `json:"limit"`
 		}
 		if err := decodeArgs(args, &p); err != nil {
 			return "", err
 		}
-		return a.Links(p.Selector)
+		return a.linksPage(p.Selector, p.Offset, p.Limit)
 	case "form":
 		var p struct {
 			Selector string `json:"selector"`
+			Offset   int    `json:"offset"`
+			Limit    int    `json:"limit"`
 		}
 		if err := decodeArgs(args, &p); err != nil {
 			return "", err
 		}
-		return a.FormFields(p.Selector)
+		return a.formFieldsPage(p.Selector, p.Offset, p.Limit)
 	case "fill":
 		var p struct {
 			Selector string            `json:"selector"`

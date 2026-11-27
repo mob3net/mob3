@@ -7,11 +7,31 @@ import (
 	"strings"
 )
 
+// Listing output is bounded by item count and text size. The character budget
+// leaves room under the MCP links/form response clip so the Showing/Next header
+// always survives and the next offset is accurate.
+const (
+	automationListCap   = 2000
+	automationListChars = 49000
+)
+
 // Links lists every anchor in document order, including off-screen links, with
 // the [n] index click accepts, its text, resolved href and CSS selector.
 func (a *Automation) Links(selector string) (string, error) {
+	return a.linksPage(selector, 0, 0)
+}
+
+// linksPage returns one page of matching links. offset is a zero-based index
+// among the matches; limit <= 0 fills the response budget.
+func (a *Automation) linksPage(selector string, offset, limit int) (string, error) {
 	if a == nil || a.b == nil {
 		return "", errors.New("automation is closed")
+	}
+	if offset < 0 {
+		return "", errors.New("offset must be zero or positive")
+	}
+	if limit < 0 {
+		return "", errors.New("limit must be zero or positive")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -27,17 +47,26 @@ func (a *Automation) Links(selector string) (string, error) {
 		}
 		filter = s
 	}
-	var lines []string
+	maxItems := automationListCap
+	if limit > 0 && limit < maxItems {
+		maxItems = limit
+	}
 	total := 0
-	truncated := false
+	chars := 0
+	full := false
+	var lines []string
 	for i := range b.Layout.Links {
 		li := b.Layout.Links[i]
 		if li.Node == nil || filter != nil && !filter.Match(li.Node) {
 			continue
 		}
+		pos := total
 		total++
-		if len(lines) >= 200 {
-			truncated = true
+		if pos < offset || full {
+			continue
+		}
+		if len(lines) >= maxItems {
+			full = true
 			continue
 		}
 		text := collapseWhitespace(li.Node.TextContent())
@@ -50,8 +79,14 @@ func (a *Automation) Links(selector string) (string, error) {
 		if text == "" {
 			text = "(no text)"
 		}
-		lines = append(lines, fmt.Sprintf("[%d] %s -> %s selector=%s",
-			i+1, clipText(text, 100), b.resolveHref(li.Href), strconv.Quote(selectorForNode(b.Page.Root, li.Node))))
+		line := fmt.Sprintf("[%d] %s -> %s selector=%s",
+			i+1, clipText(text, 100), b.resolveHref(li.Href), strconv.Quote(selectorForNode(b.Page.Root, li.Node)))
+		if len(lines) > 0 && chars+len(line)+1 > automationListChars {
+			full = true
+			continue
+		}
+		lines = append(lines, line)
+		chars += len(line) + 1
 	}
 	if total == 0 {
 		if selector != "" {
@@ -59,12 +94,18 @@ func (a *Automation) Links(selector string) (string, error) {
 		}
 		return "No links found", nil
 	}
+	if offset >= total {
+		return "", fmt.Errorf("offset %d is past the last link (%d links)", offset, total)
+	}
+	end := offset + len(lines)
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Links: %d\n", total)
-	sb.WriteString(strings.Join(lines, "\n"))
-	if truncated {
-		fmt.Fprintf(&sb, "\n(truncated at %d links)", len(lines))
+	fmt.Fprintf(&sb, "Showing: %d-%d of %d", offset+1, end, total)
+	if end < total {
+		fmt.Fprintf(&sb, "  Next: %d", end)
 	}
+	sb.WriteString("\n")
+	sb.WriteString(strings.Join(lines, "\n"))
 	return sb.String(), nil
 }
 

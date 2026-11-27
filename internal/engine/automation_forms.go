@@ -13,8 +13,26 @@ import (
 // off-screen ones. Each control carries a stable CSS selector and its current
 // value or state so fill, select, toggle and submit can target it directly.
 func (a *Automation) FormFields(selector string) (string, error) {
+	return a.formFieldsPage(selector, 0, 0)
+}
+
+type formControlEntry struct {
+	form      *Node
+	formIndex int
+	node      *Node
+}
+
+// formFieldsPage returns one page of form controls. offset is a zero-based
+// control index; limit <= 0 fills the response budget.
+func (a *Automation) formFieldsPage(selector string, offset, limit int) (string, error) {
 	if a == nil || a.b == nil {
 		return "", errors.New("automation is closed")
+	}
+	if offset < 0 {
+		return "", errors.New("offset must be zero or positive")
+	}
+	if limit < 0 {
+		return "", errors.New("limit must be zero or positive")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -41,59 +59,78 @@ func (a *Automation) FormFields(selector string) (string, error) {
 		forms = root.FindAll(func(n *Node) bool { return n.Tag == "form" })
 	}
 
-	var sb strings.Builder
-	total := 0
-	truncated := false
-	if len(forms) > 0 {
-		fmt.Fprintf(&sb, "Forms: %d\n", len(forms))
-		for i, f := range forms {
-			fmt.Fprintf(&sb, "[%d] form method=%q action=%q selector=%s\n",
-				i+1, formMethod(f), f.Attr("action"), strconv.Quote(selectorForNode(root, f)))
-			lines, more := controlLines(root, f, "  ", 200-total)
-			for _, line := range lines {
-				sb.WriteString(line)
-				sb.WriteString("\n")
+	var entries []formControlEntry
+	for i, f := range forms {
+		for _, n := range f.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
+			if isHiddenInput(n) {
+				continue
 			}
-			total += len(lines)
-			if more {
-				truncated = true
-				break
-			}
+			entries = append(entries, formControlEntry{form: f, formIndex: i + 1, node: n})
 		}
 	}
-	if !truncated {
-		var loose []*Node
+	looseTotal := 0
+	if selector == "" {
 		for _, n := range root.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
 			if isHiddenInput(n) || NearestForm(n) != nil {
 				continue
 			}
-			loose = append(loose, n)
-		}
-		if len(loose) > 0 {
-			if len(forms) > 0 {
-				sb.WriteString("\n")
-			}
-			fmt.Fprintf(&sb, "Controls outside any form: %d\n", len(loose))
-			for _, n := range loose {
-				if total >= 200 {
-					truncated = true
-					break
-				}
-				sb.WriteString("  ")
-				sb.WriteString(controlLine(root, n))
-				sb.WriteString("\n")
-				total++
-			}
+			entries = append(entries, formControlEntry{node: n})
+			looseTotal++
 		}
 	}
-	if truncated {
-		sb.WriteString("(truncated at 200 controls)\n")
-	}
-	out := strings.TrimRight(sb.String(), "\n")
-	if out == "" {
+	total := len(entries)
+	if len(forms) == 0 && total == 0 {
 		return "No forms or form controls found", nil
 	}
-	return out, nil
+	if total == 0 {
+		return fmt.Sprintf("Forms: %d", len(forms)), nil
+	}
+	if offset >= total {
+		return "", fmt.Errorf("offset %d is past the last control (%d controls)", offset, total)
+	}
+	maxItems := automationListCap
+	if limit > 0 && limit < maxItems {
+		maxItems = limit
+	}
+	var lines []string
+	chars := 0
+	var prevForm *Node
+	looseHeader := false
+	for i := offset; i < total && len(lines) < maxItems; i++ {
+		e := entries[i]
+		var line strings.Builder
+		if e.form != nil && e.form != prevForm {
+			fmt.Fprintf(&line, "[%d] form method=%q action=%q selector=%s\n",
+				e.formIndex, formMethod(e.form), e.form.Attr("action"), strconv.Quote(selectorForNode(root, e.form)))
+			prevForm = e.form
+		} else if e.form == nil && !looseHeader {
+			if len(forms) > 0 {
+				line.WriteString("\n")
+			}
+			fmt.Fprintf(&line, "Controls outside any form: %d\n", looseTotal)
+			looseHeader = true
+		}
+		line.WriteString("  ")
+		line.WriteString(controlLine(root, e.node))
+		text := line.String()
+		if len(lines) > 0 && chars+len(text)+1 > automationListChars {
+			break
+		}
+		lines = append(lines, text)
+		chars += len(text) + 1
+	}
+	end := offset + len(lines)
+	var sb strings.Builder
+	if len(forms) > 0 {
+		fmt.Fprintf(&sb, "Forms: %d\n", len(forms))
+	}
+	fmt.Fprintf(&sb, "Controls: %d  Showing: %d-%d of %d", total, offset+1, end, total)
+	if end < total {
+		fmt.Fprintf(&sb, "  Next: %d", end)
+	}
+	sb.WriteString("\n")
+	sb.WriteString(strings.Join(lines, "\n"))
+	return sb.String(), nil
 }
 
 func formMethod(form *Node) string {
@@ -106,22 +143,6 @@ func formMethod(form *Node) string {
 
 func isHiddenInput(n *Node) bool {
 	return n.Tag == "input" && strings.EqualFold(strings.TrimSpace(n.Attr("type")), "hidden")
-}
-
-// controlLines renders at most max controls of one container. It reports
-// whether more controls were left out.
-func controlLines(root, container *Node, indent string, max int) ([]string, bool) {
-	var lines []string
-	for _, n := range container.FindAll(func(n *Node) bool { return IsFormControl(n) }) {
-		if isHiddenInput(n) {
-			continue
-		}
-		if len(lines) >= max {
-			return lines, true
-		}
-		lines = append(lines, indent+controlLine(root, n))
-	}
-	return lines, false
 }
 
 func controlLine(root, n *Node) string {

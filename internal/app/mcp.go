@@ -17,6 +17,8 @@ import (
 const (
 	mcpProtocolVersion = "2025-06-18"
 	mcpToolTimeout     = 90 * time.Second
+	mcpTextLimit       = 20000
+	mcpListTextLimit   = 50000
 )
 
 var mcpVersions = map[string]bool{
@@ -180,8 +182,13 @@ func (s *mcpServer) callTool(req mcpRequest) *mcpResponse {
 	if err != nil {
 		return toolError(req.ID, err)
 	}
+	limit := mcpTextLimit
+	switch p.Name {
+	case "links", "form":
+		limit = mcpListTextLimit
+	}
 	return successResponse(req.ID, mcpToolResult{
-		Content: []mcpContent{{Type: "text", Text: clipMCPText(text, 20000)}},
+		Content: []mcpContent{{Type: "text", Text: clipMCPText(text, limit)}},
 	})
 }
 
@@ -242,8 +249,13 @@ func mcpToolDefinitions() []map[string]any {
 		{
 			"name": "form",
 			"description": "List every form and form control, including off-screen ones, with a stable CSS selector, " +
-				"current value or state, and flags (required, disabled, readonly). Use these selectors with fill, select, toggle and submit.",
-			"inputSchema": object(map[string]any{"selector": str("optional form or control selector to scope the listing")}),
+				"current value or state, and flags (required, disabled, readonly). Use offset/limit and follow Next " +
+				"for large forms, and the selectors with fill, select, toggle and submit.",
+			"inputSchema": object(map[string]any{
+				"selector": str("optional form or control selector to scope the listing"),
+				"offset":   integer("zero-based control index (default 0)"),
+				"limit":    integer("maximum controls to return (default fits one response)"),
+			}),
 		},
 		{
 			"name": "requests",
@@ -272,9 +284,11 @@ func mcpToolDefinitions() []map[string]any {
 		{
 			"name": "links",
 			"description": "List every link in the document, including off-screen ones, with its [n] index for click, " +
-				"text, resolved href and CSS selector. Optional selector filters anchors.",
+				"text, resolved href and CSS selector. Use offset/limit and follow Next when a page has many links.",
 			"inputSchema": object(map[string]any{
 				"selector": str("optional CSS selector filtering which anchors are listed"),
+				"offset":   integer("zero-based index among matching links (default 0)"),
+				"limit":    integer("maximum links to return (default fits one response)"),
 			}),
 		},
 		{

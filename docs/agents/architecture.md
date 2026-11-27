@@ -406,10 +406,10 @@ child of the MCP server; `-process=single` keeps them in one process.
 | `internal/engine/automation_input.go` | Typing, key presses and page scrolling. |
 | `internal/engine/automation_history.go` | Automation back/forward/reload and its own session history list and output. |
 | `internal/engine/automation_eval.go` | `Evaluate` in the page realm. |
-| `internal/engine/automation_forms.go` | Form field listing, fill/select/toggle/submit and form-state helpers. |
+| `internal/engine/automation_forms.go` | Paged form/control listing, fill/select/toggle/submit and form-state helpers. |
 | `internal/engine/automation_wait.go` | `Wait`/`WaitFor`, timer pumping, dirty flush and pending-navigation waits. |
 | `internal/engine/automation_selector.go` | Stable CSS selector generation and matching. |
-| `internal/engine/automation_inspect.go` | Links, request log, JS logs and page source. |
+| `internal/engine/automation_inspect.go` | Paged link listing, request log, JS logs and page source. |
 | `internal/engine/automation_command.go` | `RunCommand` dispatch and JSON argument decoding. |
 | `internal/app/mcp.go` | Newline-delimited JSON-RPC 2.0 MCP server over stdin/stdout; tool calls go through the `automationRunner` interface, which in production is the protocol client. |
 | `internal/engine/session_console.go` | Console data, evaluation, tools, copy and stateless `ConsoleView` window slices; JS dialog request/response state; download/notice state. The front end owns view, scroll, layout, input, history, quit, rendering and the find bar. |

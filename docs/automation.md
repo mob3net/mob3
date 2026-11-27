@@ -200,10 +200,10 @@ inside it.
 | --- | --- | --- |
 | `navigate` | `{url}` | Snapshot after loading |
 | `snapshot` | `{offset?, rows?}` | Page text window, row range and next offset |
-| `links` | `{selector?}` | Every link with index, text, href and selector |
+| `links` | `{selector?, offset?, limit?}` | Links page with index, text, href, selector and next offset |
 | `screenshot` | `{scale}` | PNG image of the current page viewport |
 | `click` | `{link}` or `{text}` or `{selector}` or `{x,y}` | Snapshot after the click |
-| `form` | `{selector?}` | Every form and control with CSS selectors and values |
+| `form` | `{selector?, offset?, limit?}` | Controls page with CSS selectors, values and next offset |
 | `fill` | `{selector,value}` or `{fields}` | `filled N field(s)` |
 | `select` | `{selector,value}` or `{values}` or `{text}` or `{index}` | `selected …` |
 | `toggle` | `{selector,checked?}` | `… is checked` / `… is unchecked` |
@@ -275,6 +275,7 @@ and `form` for every link or control in the document.
 ```json
 {}
 {"selector":"main a"}
+{"offset":200,"limit":100}
 ```
 
 Lists every rendered anchor in the document, including links outside the
@@ -283,19 +284,23 @@ accepts:
 
 ```text
 Links: 2
+Showing: 1-2 of 2
 [1] Docs -> https://example.com/docs selector="a[href=\"/docs\"]"
 [2] Sign in -> https://example.com/login selector="#nav a:nth-child(2)"
 ```
 
 Empty anchors, hidden anchors and anchors with no rendered content are
 omitted. `selector` filters which anchors are listed (it matches the anchor,
-not its containers). Listings are capped at 200 entries.
+not its containers) before paging. A response holds up to 2,000 links or about
+50,000 characters; `Showing` reports the range and `Next` is the 0-based
+`offset` for the following call. Most pages fit in one response.
 
 ### `form`
 
 ```json
 {}
 {"selector":"form#search"}
+{"offset":200,"limit":100}
 ```
 
 Lists every form and its controls, including fields that are outside the
@@ -305,6 +310,7 @@ selector for the other form tools:
 
 ```text
 Forms: 1
+Controls: 3  Showing: 1-3 of 3
 [1] form method="GET" action="/find" selector="#search"
   - input name="q" type="text" value="old" selector="#search input[name=\"q\"]"
   - select name="lang" value="fr" options=["en" "fr"] selector="select[name=\"lang\"]"
@@ -314,7 +320,9 @@ Forms: 1
 Hidden inputs are omitted because they cannot be edited. Controls outside any
 form are listed separately. Selectors prefer an `#id`, then a
 `form-id name` pair, then an `nth-child` path. Pass a form or control selector
-to list just that form.
+to list just that form. A response holds up to 2,000 controls or about 50,000
+characters; `Showing` reports the range and `Next` is the 0-based `offset` for
+the following call. A page that starts inside a form repeats that form's header.
 
 ### `fill`
 
