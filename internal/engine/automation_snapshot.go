@@ -6,20 +6,36 @@ import (
 	"strings"
 )
 
-// Snapshot text is bounded by painted rows and cells so one tool call cannot
-// allocate an unbounded grid; the MCP transport also clips long text.
+// Snapshot text is bounded by painted rows, cells and bytes so one tool call
+// cannot allocate an unbounded grid or exceed the transport's text clip. The
+// character budget keeps the Rows/Next header and the whole page window inside
+// one response, so the next offset is accurate.
 const (
 	automationSnapshotRows  = 2000
 	automationSnapshotCells = 100000
+	automationSnapshotChars = 19000
 )
 
-// Snapshot returns a readable text view of the whole page, followed by the
-// visible links and form controls with clickable coordinates. The text is not
-// limited to the interaction viewport, so an agent does not have to scroll to
-// read a page.
+// Snapshot returns the first readable window of the whole page, followed by the
+// visible links and form controls. The text is not limited to the interaction
+// viewport, so an agent does not have to scroll to read a page. Use the
+// snapshot command's offset/rows arguments for later windows.
 func (a *Automation) Snapshot() string {
+	s, _ := a.snapshotAt(0, 0)
+	return s
+}
+
+// snapshotAt returns one window of the laid-out page. offset is a zero-based
+// layout row; rows <= 0 means as many rows as fit the response budget.
+func (a *Automation) snapshotAt(offset, rows int) (string, error) {
 	if a == nil || a.b == nil {
-		return "No page loaded"
+		return "No page loaded", nil
+	}
+	if offset < 0 {
+		return "", errors.New("offset must be zero or positive")
+	}
+	if rows < 0 {
+		return "", errors.New("rows must be zero or positive")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -49,55 +65,78 @@ func (a *Automation) Snapshot() string {
 	if b.Layout != nil {
 		pageH = b.Layout.Height
 	}
-	shown := pageH
-	if shown > automationSnapshotRows {
-		shown = automationSnapshotRows
+	if offset > 0 && offset >= pageH {
+		return "", fmt.Errorf("offset %d is past the end of the page (%d rows)", offset, pageH)
 	}
-	if b.Width > 0 {
-		if maxRows := automationSnapshotCells / b.Width; shown > maxRows {
-			shown = maxRows
-		}
-	}
-	if shown < 1 {
-		shown = 1
-	}
+	text, end := a.snapshotWindowLocked(offset, rows)
 	if pageH > 0 {
-		fmt.Fprintf(&sb, "Page: %dx%d", b.Width, pageH)
-		if shown < pageH {
-			fmt.Fprintf(&sb, " (snapshot truncated to %d rows)", shown)
+		fmt.Fprintf(&sb, "Page: %dx%d  Rows: %d-%d of %d", b.Width, pageH, offset, end, pageH)
+		if end < pageH {
+			fmt.Fprintf(&sb, "  Next: %d", end)
 		}
 		fmt.Fprintf(&sb, "  ")
 	}
 	fmt.Fprintf(&sb, "Viewport: %dx%d  Scroll: %d%%\n\n", b.Width, vh, b.scrollPercent())
-	sb.WriteString(a.fullPageTextLocked(shown))
-	if lines := a.linkLinesLocked(vh); len(lines) > 0 {
-		sb.WriteString("\nLinks:\n")
-		sb.WriteString(strings.Join(lines, "\n"))
-		sb.WriteString("\n")
+	sb.WriteString(text)
+	if offset == 0 {
+		if lines := a.linkLinesLocked(vh); len(lines) > 0 {
+			sb.WriteString("\nLinks:\n")
+			sb.WriteString(strings.Join(lines, "\n"))
+			sb.WriteString("\n")
+		}
+		if lines := a.inputLinesLocked(vh); len(lines) > 0 {
+			sb.WriteString("\nInputs:\n")
+			sb.WriteString(strings.Join(lines, "\n"))
+			sb.WriteString("\n")
+		}
 	}
-	if lines := a.inputLinesLocked(vh); len(lines) > 0 {
-		sb.WriteString("\nInputs:\n")
-		sb.WriteString(strings.Join(lines, "\n"))
-		sb.WriteString("\n")
-	}
-	return strings.TrimRight(sb.String(), "\n")
+	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
-// fullPageTextLocked paints the laid-out page from the top, independent of the
-// interaction scroll position.
-func (a *Automation) fullPageTextLocked(height int) string {
+// snapshotWindowLocked paints one laid-out window and trims it to the response
+// text budget. It returns the text and the exclusive end row.
+func (a *Automation) snapshotWindowLocked(start, maxRows int) (string, int) {
 	b := a.b
-	if b.Layout == nil || b.Page == nil || height < 1 {
-		return ""
+	if b.Layout == nil || b.Page == nil || start >= b.Layout.Height {
+		return "", start
+	}
+	pageH := b.Layout.Height
+	n := pageH - start
+	if n > automationSnapshotRows {
+		n = automationSnapshotRows
+	}
+	if b.Width > 0 {
+		if cellRows := automationSnapshotCells / b.Width; n > cellRows {
+			n = cellRows
+		}
+	}
+	if maxRows > 0 && n > maxRows {
+		n = maxRows
+	}
+	if n < 1 {
+		n = 1
 	}
 	b.Layout.SetFixedScroll(0)
-	g := NewGrid(b.Width, height, b.pageFG(), b.pageBG())
-	PaintLayout(g, b.Layout, 0, 0, height, nil, b.pageFG())
+	g := NewGrid(b.Width, n, b.pageFG(), b.pageBG())
+	PaintLayout(g, b.Layout, start, 0, n, nil, b.pageFG())
 	lines := GridLines(g)
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
+	keep := 0
+	total := 0
+	for i, line := range lines {
+		add := len(line)
+		if i > 0 {
+			add++
+		}
+		if keep > 0 && total+add > automationSnapshotChars {
+			break
+		}
+		total += add
+		keep = i + 1
 	}
-	return strings.Join(lines, "\n")
+	if keep == 0 {
+		return "", start
+	}
+	return strings.Join(lines[:keep], "\n"), start + keep
 }
 
 // viewportGrid renders the current page viewport without browser chrome.

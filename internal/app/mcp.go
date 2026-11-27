@@ -230,9 +230,14 @@ func mcpToolDefinitions() []map[string]any {
 			"inputSchema": object(map[string]any{"url": str("URL or search query")}, "url"),
 		},
 		{
-			"name":        "snapshot",
-			"description": "Return the full page text, plus the visible numbered links and form controls with coordinates.",
-			"inputSchema": object(map[string]any{}),
+			"name": "snapshot",
+			"description": "Return the page text, or one window of it with offset/rows. The header reports the page height, " +
+				"the returned layout-row range and the next offset. The first window includes the visible links and form " +
+				"controls; use links/form for every link or control.",
+			"inputSchema": object(map[string]any{
+				"offset": integer("zero-based layout row to start from (default 0)"),
+				"rows":   integer("maximum layout rows to return (default fits one response)"),
+			}),
 		},
 		{
 			"name": "form",

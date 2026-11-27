@@ -19,7 +19,7 @@ falls back to dump mode and prints the rendered page.
 | `-dump` | off | Render the page to stdout and exit |
 | `-png` | off | Write a PNG screenshot of the dump to stdout; implies `-dump`. PDFs render one page (page 1 unless `-pdf-page` chooses another) |
 | `-width int` | terminal width or 100 | Layout width in columns |
-| `-height int` | 0 | Layout viewport height and output limit; 0 uses the full page for dump/PNG and 30 rows for MCP; MCP snapshots always return the full page text |
+| `-height int` | 0 | Layout viewport height and output limit; 0 uses the full page for dump/PNG and 30 rows for MCP; MCP snapshots are independent of the viewport and page with `offset`/`rows` |
 | `-pdf-page string` | `auto` | PDF page for dump/PNG: `auto`, `all`, or a page number. `-png` defaults to page 1; a dump defaults to all pages |
 | `-graphics string` | `none` | Image mode: `none`, `auto`, `kitty`, `iterm`, `blocks` |
 | `-g string` | `none` | Alias for `-graphics` |

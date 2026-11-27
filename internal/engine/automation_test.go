@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"image/png"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -803,14 +804,62 @@ func TestAutomationSnapshotBoundsWidePage(t *testing.T) {
 		t.Fatal(err)
 	}
 	snap := a.Snapshot()
-	if len(snap) > 110000 {
+	if len(snap) > 21000 {
 		t.Fatalf("snapshot is %d bytes", len(snap))
 	}
-	if !strings.Contains(snap, "truncated") {
-		t.Fatalf("wide-page snapshot has no truncation marker:\n%s", snap[:min(len(snap), 200)])
+	if !strings.Contains(snap, "Next:") {
+		t.Fatalf("wide-page snapshot has no continuation:\n%s", snap[:min(len(snap), 200)])
 	}
 	if strings.Contains(snap, "Last row") {
-		t.Fatal("snapshot painted beyond the cell bound")
+		t.Fatal("snapshot painted beyond the text budget")
+	}
+}
+
+func TestAutomationSnapshotPaging(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 300; i++ {
+		body.WriteString("<p>Row ")
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(" ")
+		body.WriteString(strings.Repeat("x", 120))
+		body.WriteString("</p>")
+	}
+	body.WriteString(`<a href="/next">Far link</a>`)
+	a := newTestAutomation(t, map[string]string{"/": "<html><body>" + body.String() + "</body></html>"})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	first := a.Snapshot()
+	if !strings.Contains(first, "Rows: 0-") || !strings.Contains(first, "Next:") {
+		t.Fatalf("first snapshot has no page range or continuation:\n%s", first[:min(len(first), 300)])
+	}
+	const marker = "Next: "
+	i := strings.Index(first, marker)
+	if i < 0 {
+		t.Fatal("first snapshot has no next offset")
+	}
+	next, err := strconv.Atoi(strings.Fields(first[i+len(marker):])[0])
+	if err != nil || next <= 0 {
+		t.Fatalf("next offset = %d, %v", next, err)
+	}
+	args, _ := json.Marshal(map[string]int{"offset": next, "rows": 20})
+	second, err := a.RunCommand(ctx, "snapshot", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRange := "Rows: " + strconv.Itoa(next) + "-" + strconv.Itoa(next+20) + " of "
+	if !strings.Contains(second, wantRange) {
+		t.Fatalf("second snapshot range missing %q:\n%s", wantRange, second[:min(len(second), 300)])
+	}
+	if strings.Contains(second, "\nLinks:\n") {
+		t.Fatalf("offset > 0 repeated the viewport links section:\n%s", second[:min(len(second), 300)])
+	}
+	if _, err := a.RunCommand(ctx, "snapshot", json.RawMessage(`{"offset":999999}`)); err == nil {
+		t.Fatal("offset past the end of the page was accepted")
+	}
+	if _, err := a.RunCommand(ctx, "snapshot", json.RawMessage(`{"rows":-1}`)); err == nil {
+		t.Fatal("negative row count was accepted")
 	}
 }
 

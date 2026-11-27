@@ -14,9 +14,10 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 - Optional starting URL; otherwise `about:home`.
 - `-width` controls wrapping and coordinates.
 - The interaction viewport is 30 rows by default; `-height N` sets it explicitly
-  (about `N-3` page rows after chrome). `snapshot` returns the full page text
-  regardless of that viewport; the viewport still controls screenshots,
-  scrolling and click coordinates.
+  (about `N-3` page rows after chrome). `snapshot` returns page text
+  independently of that viewport, in `offset`/`rows` windows with a `Next`
+  offset for long pages; the viewport still controls screenshots, scrolling and
+  click coordinates.
 - Images are disabled.
 - `-no-js`, `-layout-budget`, `-reader`, `-dark` and search settings
   are honored.
@@ -198,7 +199,7 @@ inside it.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `navigate` | `{url}` | Snapshot after loading |
-| `snapshot` | `{}` | Full page text, plus visible links and form controls |
+| `snapshot` | `{offset?, rows?}` | Page text window, row range and next offset |
 | `links` | `{selector?}` | Every link with index, text, href and selector |
 | `screenshot` | `{scale}` | PNG image of the current page viewport |
 | `click` | `{link}` or `{text}` or `{selector}` or `{x,y}` | Snapshot after the click |
@@ -229,15 +230,22 @@ Waits for the page, meta refreshes and scripted redirects.
 
 ### `snapshot`
 
-Returns the whole laid-out page as plain text, not just the interaction
-viewport, so reading a page does not require scrolling. Pages beyond the
-snapshot bound are marked as truncated in the header (the bound shrinks with
-width), and the transport may clip a very long response again:
+Returns the page as plain text starting at the first layout row, not just the
+interaction viewport. A page that fits one response is returned whole; a longer
+page returns one window plus a `Next` offset. Pass `offset` and optional `rows`
+to read the rest without scrolling:
+
+```json
+{"offset": 1240, "rows": 200}
+```
+
+The header reports the page height, the returned layout-row range and the next
+offset; `Next` is absent on the last window:
 
 ```text
 URL: https://example.com/
 Title: Example Domain
-Page: 100x140  Viewport: 100x27  Scroll: 0%
+Page: 100x1400  Rows: 0-230 of 1400  Next: 230  Viewport: 100x27  Scroll: 0%
 
 Example Domain
 ...
@@ -249,10 +257,10 @@ Inputs:
 - input name="q" type="search" value="" at (4,12)
 ```
 
-The `Links` and `Inputs` sections list what is visible in the interaction
-viewport, with viewport coordinates; use `links` and `form` for every
-off-screen link or control. Scrolling still matters for screenshots and
-coordinate clicks, but not for reading the snapshot.
+`offset` is a zero-based layout row. `rows` caps the window; omit it (or pass
+0) to fill one response. Only the first window (`offset` 0) includes the
+visible `Links` and `Inputs` sections, with viewport coordinates; use `links`
+and `form` for every link or control in the document.
 
 - `[n]` is a 1-based link index for `click({link:n})`.
 - Only visible links are listed. Link numbers are stable layout indices, so a

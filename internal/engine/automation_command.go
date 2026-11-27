@@ -34,7 +34,14 @@ func (a *Automation) RunCommand(ctx context.Context, name string, args json.RawM
 		}
 		return a.Snapshot(), nil
 	case "snapshot":
-		return a.Snapshot(), nil
+		var p struct {
+			Offset int `json:"offset"`
+			Rows   int `json:"rows"`
+		}
+		if err := decodeArgs(args, &p); err != nil {
+			return "", err
+		}
+		return a.snapshotAt(p.Offset, p.Rows)
 	case "click":
 		var p struct {
 			Link     int    `json:"link"`
