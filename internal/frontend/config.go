@@ -554,11 +554,6 @@ func configRowAt(layout ConfigLayout, x, y int) (int, bool) {
 	return 0, false
 }
 
-// ComposeConfigFrame stacks the normal screen and draws the settings window.
-func ComposeConfigFrame(st protocol.State, content protocol.Frame, v *ConfigView) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawConfig(c, st, v) })
-}
-
 // DrawConfig paints the settings window on a full-screen canvas.
 func DrawConfig(c *chromeCanvas, st protocol.State, v *ConfigView) ConfigLayout {
 	layout := LayoutConfig(st, v)

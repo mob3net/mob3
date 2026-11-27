@@ -223,6 +223,101 @@ func TestPresenterSkipsPlacementsUnderOverlay(t *testing.T) {
 	}
 }
 
+func TestPresenterPaintsDialogOverPage(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	st := chromeState()
+	st.Width, st.Height = 60, 20
+	p.SetState(st)
+	p.SetTabs([]TabView{{Title: "Alpha", Active: true}})
+	p.SetDialog(&DialogView{ID: 1, Kind: protocol.DialogAlert, Text: "hello dialog"})
+	f := protocol.Frame{W: 60, H: 17, Cells: make([]protocol.Cell, 60*17)}
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	text := testANSI.ReplaceAllString(out.String(), "")
+	for _, want := range []string{"hello dialog", "Alpha"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("dialog page output does not contain %q: %q", want, text)
+		}
+	}
+}
+
+func TestPresenterPaintsDialogOverConsole(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	p.SetState(chromeState())
+	p.SetDialog(&DialogView{ID: 1, Kind: protocol.DialogAlert, Text: "hello dialog"})
+	v := &protocol.ConsoleView{
+		Width: 60, Height: 18, Pane: consolePaneLogs,
+		Tabs:  []string{" JS logs ", " Requests ", " Storage ", " HTML ", " Tools "},
+		Lines: []string{"console body"},
+	}
+	if err := p.PresentConsole(v, ConsoleUI{Pane: consolePaneLogs, Hint: consoleHint, Footer: consoleFooter}); err != nil {
+		t.Fatal(err)
+	}
+	text := testANSI.ReplaceAllString(out.String(), "")
+	for _, want := range []string{"hello dialog", "JS logs"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("console output does not contain %q: %q", want, text)
+		}
+	}
+}
+
+func TestPresenterPaintsEveryWindowPainter(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	st := chromeState()
+	st.Width, st.Height, st.HeaderRows = 20, 5, 1
+	p.SetState(st)
+	p.setWindow(windowPainter{level: layerConfig, draw: func(c *chromeCanvas, st protocol.State) bool {
+		c.cells[1*c.w+1].R = 'A'
+		return true
+	}})
+	p.setWindow(windowPainter{level: layerDialog, draw: func(c *chromeCanvas, st protocol.State) bool {
+		c.cells[2*c.w+1].R = 'B'
+		return true
+	}})
+	f := protocol.Frame{W: 20, H: 3, Cells: make([]protocol.Cell, 20*3)}
+	if err := p.Present(f, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	text := testANSI.ReplaceAllString(out.String(), "")
+	for _, want := range []string{"A", "B"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("window painter %q was not painted: %q", want, text)
+		}
+	}
+}
+
+func TestWindowPaintersStayLayerOrdered(t *testing.T) {
+	p := NewPresenter(io.Discard, false)
+	p.SetDialog(&DialogView{})
+	p.SetDownload(&DownloadView{})
+	p.SetNotice(&NoticeView{})
+	p.SetSelect(&SelectView{})
+	p.SetConfig(&ConfigView{})
+	p.SetHistory(&historyView{})
+	want := []windowLayer{
+		layerMenu, layerHistory, layerConfig, layerSelect,
+		layerNotice, layerDownload, layerDialog,
+	}
+	if len(p.windows) != len(want) {
+		t.Fatalf("painters = %d, want %d", len(p.windows), len(want))
+	}
+	for i, w := range p.windows {
+		if w.layer() != want[i] {
+			t.Fatalf("painter %d = %d, want %d", i, w.layer(), want[i])
+		}
+	}
+	p.SetConfig(nil)
+	for _, w := range p.windows {
+		if w.layer() == layerConfig {
+			t.Fatal("closed config window stayed in the painter stack")
+		}
+	}
+}
+
 func BenchmarkPresenterFrame(b *testing.B) {
 	const w, h = 100, 35
 	f := protocol.Frame{Version: 1, W: w, H: h, Cells: make([]protocol.Cell, w*h)}

@@ -320,36 +320,6 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
-// ComposeMenuFrame stacks the normal header, content and footer into one full
-// frame and draws the active choice window over it.
-func ComposeMenuFrame(st protocol.State, content protocol.Frame) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawMenu(c, st) })
-}
-
-// ComposeOverlayFrame stacks the normal header, content and footer into one
-// full frame and lets draw paint a modal layer over it.
-func ComposeOverlayFrame(st protocol.State, content protocol.Frame, draw func(*chromeCanvas)) (protocol.Frame, bool) {
-	if !st.FrontendChrome || st.Width != content.W || st.HeaderRows <= 0 ||
-		st.Height != content.H+st.HeaderRows+1 {
-		return protocol.Frame{}, false
-	}
-	layout := LayoutChrome(st)
-	if len(layout.Header) != st.Width*st.HeaderRows || len(layout.Footer) != st.Width {
-		return protocol.Frame{}, false
-	}
-	full := protocol.Frame{
-		Version: content.Version, W: st.Width, H: st.Height,
-		Cells: make([]protocol.Cell, st.Width*st.Height),
-	}
-	rows := st.HeaderRows
-	copy(full.Cells[:rows*st.Width], layout.Header)
-	copy(full.Cells[rows*st.Width:(rows+content.H)*st.Width], content.Cells)
-	copy(full.Cells[(st.Height-1)*st.Width:], layout.Footer)
-	c := &chromeCanvas{w: st.Width, h: st.Height, cells: full.Cells}
-	draw(c)
-	return full, true
-}
-
 // DrawMenu paints the view/zoom window on a full-screen canvas.
 func DrawMenu(c *chromeCanvas, st protocol.State) MenuLayout {
 	layout := LayoutMenu(st)

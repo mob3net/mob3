@@ -157,11 +157,6 @@ func downloadLayout(st protocol.State, v *DownloadView) MenuLayout {
 	}
 }
 
-// ComposeDownloadFrame stacks the normal screen and draws the curl hint.
-func ComposeDownloadFrame(st protocol.State, content protocol.Frame, v *DownloadView) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawDownload(c, st, v) })
-}
-
 // DrawDownload paints the download modal on a full-screen canvas.
 func DrawDownload(c *chromeCanvas, st protocol.State, v *DownloadView) MenuLayout {
 	layout := downloadLayout(st, v)

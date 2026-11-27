@@ -141,11 +141,6 @@ func noticeLayout(st protocol.State, v *NoticeView) MenuLayout {
 	}
 }
 
-// ComposeNoticeFrame stacks the normal screen and draws the notice.
-func ComposeNoticeFrame(st protocol.State, content protocol.Frame, v *NoticeView) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawNotice(c, st, v) })
-}
-
 // DrawNotice paints the informational modal on a full-screen canvas.
 func DrawNotice(c *chromeCanvas, st protocol.State, v *NoticeView) MenuLayout {
 	layout := noticeLayout(st, v)

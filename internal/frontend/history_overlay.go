@@ -124,11 +124,6 @@ func LayoutHistory(st protocol.State, view *historyView) MenuLayout {
 	})
 }
 
-// ComposeHistoryFrame stacks the normal screen and draws the history popup.
-func ComposeHistoryFrame(st protocol.State, content protocol.Frame, view *historyView) (protocol.Frame, bool) {
-	return ComposeOverlayFrame(st, content, func(c *chromeCanvas) { DrawHistory(c, st, view) })
-}
-
 // DrawHistory paints the history popup over a full-screen canvas.
 func DrawHistory(c *chromeCanvas, st protocol.State, view *historyView) MenuLayout {
 	layout := LayoutHistory(st, view)
