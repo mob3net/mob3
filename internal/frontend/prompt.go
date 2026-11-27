@@ -20,8 +20,9 @@ type promptOverlay struct {
 	promptHist      lineHistory
 }
 
-func (w *promptOverlay) isOpen() bool         { return w.promptActive }
-func (w *promptOverlay) dismissOnModal() bool { return true }
+func (w *promptOverlay) isOpen() bool       { return w.promptActive }
+func (w *promptOverlay) layer() windowLayer { return layerPrompt }
+func (w *promptOverlay) persistent() bool   { return false }
 
 func (w *promptOverlay) reset(l *Tab) {
 	w.promptActive = false

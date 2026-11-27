@@ -9,8 +9,9 @@ type historyOverlay struct {
 	historyBase   protocol.State
 }
 
-func (w *historyOverlay) isOpen() bool         { return w.historyActive }
-func (w *historyOverlay) dismissOnModal() bool { return true }
+func (w *historyOverlay) isOpen() bool       { return w.historyActive }
+func (w *historyOverlay) layer() windowLayer { return layerHistory }
+func (w *historyOverlay) persistent() bool   { return false }
 func (w *historyOverlay) reset(l *Tab) {
 	w.historyActive = false
 	if l.Presenter != nil {

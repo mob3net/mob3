@@ -9,8 +9,9 @@ type selectOverlay struct {
 	selectBase   protocol.State
 }
 
-func (w *selectOverlay) isOpen() bool         { return w.selectActive }
-func (w *selectOverlay) dismissOnModal() bool { return true }
+func (w *selectOverlay) isOpen() bool       { return w.selectActive }
+func (w *selectOverlay) layer() windowLayer { return layerSelect }
+func (w *selectOverlay) persistent() bool   { return false }
 func (w *selectOverlay) reset(l *Tab) {
 	w.selectActive = false
 	if l.Presenter != nil {

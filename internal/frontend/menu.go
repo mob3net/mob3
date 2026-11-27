@@ -12,8 +12,9 @@ type menuOverlay struct {
 	menuBase  protocol.State
 }
 
-func (w *menuOverlay) isOpen() bool         { return w.menuKind != protocol.MenuNone }
-func (w *menuOverlay) dismissOnModal() bool { return true }
+func (w *menuOverlay) isOpen() bool       { return w.menuKind != protocol.MenuNone }
+func (w *menuOverlay) layer() windowLayer { return layerMenu }
+func (w *menuOverlay) persistent() bool   { return false }
 
 func (w *menuOverlay) reset(l *Tab) { w.menuKind = protocol.MenuNone }
 

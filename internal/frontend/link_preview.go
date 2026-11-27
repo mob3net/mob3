@@ -10,9 +10,10 @@ type linkPreviewOverlay struct {
 	linkPreviewBase   protocol.State
 }
 
-func (w *linkPreviewOverlay) isOpen() bool         { return w.linkPreviewActive }
-func (w *linkPreviewOverlay) dismissOnModal() bool { return true }
-func (w *linkPreviewOverlay) reset(l *Tab)         { w.linkPreviewActive = false }
+func (w *linkPreviewOverlay) isOpen() bool       { return w.linkPreviewActive }
+func (w *linkPreviewOverlay) layer() windowLayer { return layerLinkPreview }
+func (w *linkPreviewOverlay) persistent() bool   { return false }
+func (w *linkPreviewOverlay) reset(l *Tab)       { w.linkPreviewActive = false }
 
 // install is a no-op: the preview lives in the footer of protocol.State.
 func (w *linkPreviewOverlay) install(l *Tab) bool { return false }

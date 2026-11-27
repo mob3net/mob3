@@ -68,8 +68,8 @@ type Tab struct {
 	historyLog   *historyLog
 	AttestedURL  func(entryID uint64) (string, bool)
 
-	// Each window owns its state in the file for its subsystem. overlayList
-	// sets their shared dispatch order.
+	// Each window owns its state in the file for its subsystem. windowStack
+	// derives the shared dispatch order from each window's layer.
 	linkPreviewOverlay
 	consoleOverlay
 	hintOverlay
@@ -112,8 +112,9 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 	p.ResetForTab()
 	p.SetState(l.State.Page)
 	full := false
-	for _, o := range l.overlayList() {
-		if o.isOpen() && o.install(l) {
+	stack, count := l.windowStack()
+	for i := 0; i < count; i++ {
+		if stack[i].install(l) {
 			full = true
 		}
 	}
@@ -195,7 +196,7 @@ func (l *Tab) MarkDead(message string) {
 }
 
 func (l *Tab) clearOverlaysAfterCrash() {
-	for _, o := range l.overlayList() {
+	for _, o := range l.allWindows() {
 		o.reset(l)
 	}
 	l.quitPending = false
@@ -376,8 +377,9 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		}
 	case protocol.State:
 		v = l.pageState(v)
-		for _, o := range l.overlayList() {
-			if o.isOpen() && o.applyState(l, v) {
+		stack, count := l.windowStack()
+		for i := 0; i < count; i++ {
+			if stack[i].applyState(l, v) {
 				return false, nil
 			}
 		}
@@ -461,11 +463,9 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // find bar, menu, console, dialog or editable page control. It reports whether
 // the key was consumed and whether the loop should exit.
 func (l *Tab) handleShellKey(k string) (handled, quit bool) {
-	for _, o := range l.overlayList() {
-		if !o.isOpen() {
-			continue
-		}
-		if handled, quit := o.handleKey(l, k); handled {
+	stack, count := l.windowStack()
+	for i := 0; i < count; i++ {
+		if handled, quit := stack[i].handleKey(l, k); handled {
 			return handled, quit
 		}
 	}
@@ -605,13 +605,14 @@ func tabIndexKey(k string) (int, bool) {
 	return 0, false
 }
 
-// dismissOverlays clears the page overlays that compete with a new modal.
-// JS dialogs are answered explicitly and are intentionally left alone.
+// dismissOverlays clears the page windows that compete with a new modal.
+// Persistent windows, including JS dialogs and the console, stay open.
 func (l *Tab) dismissOverlays() {
 	l.cancelQuit()
-	for _, o := range l.overlayList() {
-		if o.dismissOnModal() && o.isOpen() {
-			o.close(l)
+	stack, count := l.windowStack()
+	for i := 0; i < count; i++ {
+		if !stack[i].persistent() {
+			stack[i].close(l)
 		}
 	}
 }
@@ -687,16 +688,15 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 			l.scrollDrag = false
 		}
 	}
-	// The first open window owns the pointer. The find bar is a footer strip,
+	// The topmost open window owns the pointer. The find bar is a footer strip,
 	// not a modal, so it only claims its own row and every other open window
 	// still outranks it.
-	for _, o := range l.overlayList() {
-		if o == &l.findOverlay {
+	stack, count := l.windowStack()
+	for i := 0; i < count; i++ {
+		if stack[i] == &l.findOverlay {
 			continue
 		}
-		if o.isOpen() {
-			return o.handleMouse(l, ev)
-		}
+		return stack[i].handleMouse(l, ev)
 	}
 	if l.findOverlay.isOpen() && l.findOverlay.handleMouse(l, ev) {
 		// The find bar replaces the footer; it has no clickable labels.
