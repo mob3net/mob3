@@ -54,6 +54,21 @@ published by the Pages build.
 - **Ask before deciding.** Anything needing attention, approval, or that is a
   software design decision must be asked, not assumed. Ask **one question at a
   time** and wait for the answer. Never bundle several decisions.
+- **Separate “can be built” from “should be built” for all work.** Before
+  starting a feature, refactor or migration, give an explicit stop/go
+  recommendation, name the ownership or constraint conflicts it creates, and
+  state what would make it not worth continuing. A feasible prototype or a
+  migration-plan stage is not an endorsement. When a change starts needing
+  repeated fixes to the same ownership, state, correctness or performance
+  boundary, stop and reassess instead of patching the next symptom. Do not
+  present an optional or risky stage as approved roadmap work.
+- **Land the enabling refactor first, separately from the feature.** Do the
+  structural work — ownership, dispatch, composition, tests — as its own
+  reviewable change before the user-facing feature. If the feature is later
+  dropped, keep the refactor when it improves the current code on its own, and
+  remove feature-specific scaffolding, state and protocol that exist only for
+  the abandoned feature. Do not keep a speculative abstraction merely because
+  it was on the path to a feature.
 - **If an unanswered question matters, ask again.** An answer is not implied by
   silence.
 - **Tests as you go.** Add or update tests in the same change as every behavior

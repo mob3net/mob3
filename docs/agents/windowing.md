@@ -142,10 +142,12 @@ closing geometry and native-image/scaled-text placement. Each fix exposed
 another edge case, and the terminal UI gained more state than the feature was
 worth.
 
-No pane geometry remains. The presenter keeps the internal `surfaceFrame`
-writer because it puts page and console output on one composition path, but both
-surfaces are full-terminal. Do not add a split or dock without a first-class
-focus/geometry protocol and a full tab-chrome redesign.
+The window-stack and painter refactors stand on their own and were kept; only
+the pane-specific state was removed. The presenter keeps the internal
+`surfaceFrame` writer because it puts page and console output on one composition
+path, but both surfaces are full-terminal. Do not add a split or dock without a first-class
+focus/geometry protocol and a full tab-chrome redesign. The stop/go rule in
+[AGENTS.md](../../AGENTS.md) applies before starting that work again.
 
 ## Invariants
 
