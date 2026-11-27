@@ -43,23 +43,34 @@ The transport validates every event after the engine produces it. If a frame
 fails (for example an image placement outside the frame), the transport swaps
 it for a `Crash` event instead of delivering unsafe cell data. A panic in the
 engine handler goroutine is caught at the same layer and also becomes a
-`Crash`; the event stream then closes, the front end unwinds normally and its
-deferred cleanup restores the terminal instead of leaving raw mode on.
-The front end
-prints the first identical message to stderr, sends it back as a `ClientError`
-command, and the engine adds `[engine] ...` to the `!` console and sets
-`Error: page engine — see ! console` in the footer. Identical repeats are
-suppressed until a frame presents successfully, so a per-frame fault does not
-flood the terminal.
+`Crash`; the event stream then closes, the tab is marked dead, and the rest of
+the browser keeps running. The front end keeps the first identical message,
+repaints, and shows it in the tab that stopped: the tab stays in the bar as
+`Crashed` and its content area becomes the crash view with the sanitized
+reason, the page URL and the `t`/`W`/`q` keys. A long reason scrolls with the
+arrows, `PgUp`/`PgDn`, `Home`/`End`, and the vim movement keys.
+Identical repeats are suppressed until a frame presents successfully, so a
+per-frame fault does not flood the terminal. Interactive crashes are not written
+to stderr.
 
-MOB3 writes no log file. When the alternate screen hides stderr, capture it
-with shell redirection:
+Panics are recoverable; fatal runtime errors are not. A stack overflow
+(`goroutine stack exceeds ...-byte limit` / `fatal error: stack overflow`) and
+out-of-memory are raised by the Go runtime rather than by `panic`, so `recover`
+cannot catch them and deferred cleanup does not run. With the default
+`-process=per-tab`, the fatal error stays inside that tab's child process; the
+parent keeps up to 8 KiB of stderr, split between the beginning and end so the
+fatal line and final frames both survive, and shows it in the crashed tab. With
+`-process=single`, the engine shares the browser process, so the whole browser
+terminates and the terminal may be left in raw or alternate-screen mode.
+
+MOB3 writes no log file. Other diagnostics can still be captured with shell
+redirection:
 
 ```sh
 bin/mob3 "$URL" 2>/tmp/mob3.err
 ```
 
-A crash line is written once and the front end forces a full repaint on the
+A crash message is retained once and the front end forces a full repaint on the
 following frame, so the screen recovers. If a frame cannot be repaired at all,
 `!` still opens the console (the key path is independent of page output), and
 `q` then `y` still quits. A repaired frame drops only the offending placement,

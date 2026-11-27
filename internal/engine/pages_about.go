@@ -109,8 +109,11 @@ normal domain rules across tabs, <b>localStorage</b> is shared by tabs on the
 same origin, and <b>sessionStorage</b> is per tab and origin. Graphics
 mode, zoom and the memory readout are browser-wide. A background tab keeps
 loading and updates its title, but its timers and image work are paused and it
-never draws. A crashed tab stays marked <b>Crashed</b> and can be closed without
-stopping the others.</p>
+never draws. A crashed tab stays marked <b>Crashed</b>, shows the sanitized
+reason in a scrollable content view, and can be closed without stopping the
+others. Scroll the report with the arrow keys, <b>PgUp</b>/<b>PgDn</b> or
+<b>Home</b>/<b>End</b>. Fatal runtime errors such as a stack overflow are
+contained to the tab only in the default per-tab process mode.</p>
 
 <h2>Find</h2>
 <p><b>/</b> or <b>Ctrl-F</b> opens the find bar. Typing searches case-insensitively; <b>Enter</b>

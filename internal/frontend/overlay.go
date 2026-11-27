@@ -19,6 +19,7 @@ const (
 	layerNotice
 	layerDownload
 	layerDialog
+	layerCrash
 )
 
 // overlay is one front-end window layered over the current tab. Each window

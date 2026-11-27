@@ -61,6 +61,7 @@ type Presenter struct {
 	history       *historyView
 	download      *DownloadView
 	notice        *NoticeView
+	crash         *CrashView
 	hint          *HintView
 	console       *protocol.ConsoleView
 	consoleUI     ConsoleUI
@@ -204,6 +205,7 @@ func (p *Presenter) ResetForTab() {
 	p.history = nil
 	p.download = nil
 	p.notice = nil
+	p.crash = nil
 	p.hint = nil
 	p.console = nil
 	p.consoleActive = false
@@ -300,6 +302,16 @@ func (p *Presenter) SetNotice(v *NoticeView) {
 	p.prev = nil
 }
 
+// SetCrash installs or clears the dead-tab error view. It is above every
+// window because a stopped session has no other window left open.
+func (p *Presenter) SetCrash(v *CrashView) {
+	p.crash = v
+	p.setViewWindow(layerCrash, v != nil, func(c *chromeCanvas, st protocol.State) {
+		DrawCrash(c, st, v)
+	})
+	p.prev = nil
+}
+
 // SetHint installs or clears the link-hint overlay.
 func (p *Presenter) SetHint(v *HintView) {
 	p.hint = v
@@ -329,7 +341,8 @@ func (p *Presenter) SetState(st protocol.State) {
 // the window is open.
 func (p *Presenter) overlayOpen() bool {
 	return p.state.Menu != protocol.MenuNone || p.dialog != nil ||
-		p.selectView != nil || p.configView != nil || p.history != nil || p.download != nil || p.notice != nil || p.hint != nil
+		p.selectView != nil || p.configView != nil || p.history != nil ||
+		p.download != nil || p.notice != nil || p.crash != nil || p.hint != nil
 }
 
 // Refresh re-presents the last frame with the current state. It is used when
@@ -343,7 +356,13 @@ func (p *Presenter) Refresh() error {
 		return p.PresentConsole(p.console, p.consoleUI)
 	}
 	if p.hasFrame {
-		return p.Present(p.lastFrame, p.lastScroll, p.lastNative)
+		native := p.lastNative
+		// A dead tab cannot ask the engine to replace native images with
+		// half-block art, so stop placing them and clear the old placements.
+		if p.crash != nil {
+			native = false
+		}
+		return p.Present(p.lastFrame, p.lastScroll, native)
 	}
 	// Defensive clamp in case a state bypassed SetState.
 	w := p.state.Width
@@ -366,7 +385,11 @@ func (p *Presenter) Refresh() error {
 	for i := range f.Cells {
 		f.Cells[i] = protocol.Cell{R: ' ', BG: bg}
 	}
-	return p.Present(f, p.state.Scroll, p.state.Flags&protocol.StateNativeImages != 0)
+	native := p.state.Flags&protocol.StateNativeImages != 0
+	if p.crash != nil {
+		native = false
+	}
+	return p.Present(f, p.state.Scroll, native)
 }
 
 // cloneFrameCells copies the cell buffer so front-end overlays can paint

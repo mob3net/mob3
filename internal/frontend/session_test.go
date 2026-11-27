@@ -42,33 +42,35 @@ func TestApplySessionEventPresentsNativeFrame(t *testing.T) {
 }
 
 func TestApplySessionEventDeduplicatesCrash(t *testing.T) {
-	p := NewPresenter(io.Discard, false)
-	loop := &Tab{Presenter: p, Stderr: io.Discard}
-	var reports []string
-	report := func(msg string) { reports = append(reports, msg) }
-	loop.Report = report
+	loop := &Tab{Stderr: io.Discard}
 	crash := protocol.Event{Body: protocol.Crash{Message: "bad\x1b[31m"}}
 	if _, err := loop.applyEvent(crash); err != nil {
 		t.Fatal(err)
 	}
+	if loop.State.LastCrash != "bad[31m" || loop.CrashMessage != "bad[31m" {
+		t.Fatalf("crash = %q / %q, want control-stripped text", loop.State.LastCrash, loop.CrashMessage)
+	}
+	// A repeated crash before a good frame is ignored, so it cannot replace a
+	// newer detail with an older one.
+	loop.CrashMessage = "newer"
 	if _, err := loop.applyEvent(crash); err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 1 {
-		t.Fatalf("reports = %d, want 1 for repeated crash", len(reports))
-	}
-	if strings.Contains(reports[0], "\x1b") {
-		t.Fatalf("report kept a control sequence: %q", reports[0])
+	if loop.CrashMessage != "newer" {
+		t.Fatalf("repeat replaced crash message: %q", loop.CrashMessage)
 	}
 	frame := protocol.Frame{W: 1, H: 1, Cells: []protocol.Cell{{R: 'x'}}}
 	if _, err := loop.applyEvent(protocol.Event{Body: frame}); err != nil {
 		t.Fatal(err)
 	}
+	if loop.State.LastCrash != "" || loop.CrashMessage != "" {
+		t.Fatalf("good frame kept crash state: %q / %q", loop.State.LastCrash, loop.CrashMessage)
+	}
 	if _, err := loop.applyEvent(crash); err != nil {
 		t.Fatal(err)
 	}
-	if len(reports) != 2 {
-		t.Fatalf("reports = %d, want 2 after a good frame re-armed reporting", len(reports))
+	if loop.CrashMessage != "bad[31m" {
+		t.Fatalf("crash after a good frame = %q", loop.CrashMessage)
 	}
 }
 

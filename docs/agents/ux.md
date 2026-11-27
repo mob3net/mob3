@@ -45,7 +45,8 @@ agreement, the non-negotiable constraints and the change protocol.
   click. A page may open at most 20 interactive alert/confirm/prompt dialogs per
   document load; later calls return the non-interactive defaults and one
   warning is logged, so a timer or loop cannot reopen a modal forever. A crashed
-  tab stays in the bar as `Crashed` and does not stop the others. New tabs from
+  tab stays in the bar as `Crashed`, shows the sanitized reason in a scrollable
+  content view, and does not stop the others. New tabs from
   `t`/`Ctrl-T`, the `+` button and help open at the end with an empty
   focused URL prompt when no target is given; config opens a settings window on
   the current tab instead. A link opened in a background tab

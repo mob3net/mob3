@@ -75,9 +75,9 @@ func (t *interactiveTabs) openWithLoader(id protocol.SessionID, w, h, contentTop
 			if exited.UserClosed() {
 				return
 			}
-			message := "Page engine stopped"
+			message := "process exited unexpectedly"
 			if err := exited.ExitError(); err != nil {
-				message += ": " + cleanError(err)
+				message = cleanError(err)
 			}
 			t.reportFailure(tab, message)
 		}()
@@ -138,6 +138,16 @@ func (t *interactiveTabs) close(tab *frontend.Tab) {
 			backend.Kill()
 		}
 		delete(t.backends, tab)
+		// Close marks the child as user-closed so its late exit does not look
+		// like a crash. For a tab that already died, the exit error is the
+		// detail the crash view needs, so report it after the close finishes.
+		if tab.Dead {
+			if exited, ok := backend.(interface{ ExitError() error }); ok {
+				if err := exited.ExitError(); err != nil {
+					t.reportFailure(tab, cleanError(err))
+				}
+			}
+		}
 		return
 	}
 	if tab.Session != nil {

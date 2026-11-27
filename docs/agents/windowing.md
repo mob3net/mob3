@@ -31,7 +31,7 @@ mob3 frontend
  │    └── window stack, paint order bottom to top:
  │         hint letters -> find bar -> URL prompt -> link preview  [inline chrome]
  │         -> menu -> history -> config -> select -> notice
- │         -> download -> dialog                                    [window painters]
+ │         -> download -> dialog -> crash view                      [window painters]
  ├── tab 2 screen
  │    └── same shape, its own windows
  └── tab 3 screen
@@ -44,11 +44,15 @@ abandoned because focus, geometry and tab chrome cannot be shared cleanly by the
 engine page and the front-end console. The tab strip is page header chrome, not
 a window.
 
-The stack is the input order too, topmost first: dialog, download, notice,
-select, config, history, menu, link preview, URL prompt, find bar, hint. The
-first four layers paint into the base surface (header, footer or page cells);
-the rest paint through `windowPainter`. A JavaScript dialog is always top, and
-the persistent console resumes under a modal.
+The stack is the input order too, topmost first: crash view, dialog, download,
+notice, select, config, history, menu, link preview, URL prompt, find bar, hint.
+The crash view is paint-only and exists only for a dead tab; the dead tab's
+keys, including scrolling the crash view, are handled by the tab rather than by
+a window. The hint, find bar, URL
+prompt and link preview paint into the base surface (header, footer or page
+cells); the other windows paint through `windowPainter`. A JavaScript dialog is
+always top among live windows, and the persistent console resumes under a
+modal.
 
 ## Model
 

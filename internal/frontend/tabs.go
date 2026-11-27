@@ -197,7 +197,7 @@ func (l *SessionLoop) Run() error {
 		case 3:
 			tab := eventTabs[chosen]
 			if !ok {
-				l.markDead(tab, "protocol session ended")
+				l.markDead(tab, sessionEndedMessage)
 				continue
 			}
 			ev, _ := recv.Interface().(protocol.Event)

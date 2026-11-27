@@ -203,9 +203,12 @@ text, 32 MiB per decoded stream, 64 MiB of retained page content), stops on
 the requesting page's cancellation, rejects encrypted documents, and contains
 panics, so a malformed file degrades to a note instead of a crash. It never
 rasterizes a page and writes nothing to disk. A panic in the engine goroutine
-is recovered by the session transport, reported as a crash, and the interactive
-front end restores the terminal before exiting. Like the rest of the engine it
-is not audited and is not a security boundary.
+is recovered by the session transport and shown in the crashed tab. Fatal
+runtime errors, such as a stack overflow, are not recoverable: per-tab mode
+contains one to the tab's child process and shows its captured message, while
+`-process=single` terminates the browser and may leave the terminal in raw or
+alternate-screen mode. Like the rest of the engine it is not audited and is not
+a security boundary.
 
 ## Memory and caches
 

@@ -60,7 +60,10 @@ agreement, the non-negotiable constraints and the change protocol.
   `localStorage`/`sessionStorage`. `-mem-limit` is per process: single mode
   has one shared process, while per-tab mode gives each tab child its own limit,
   so the browser total is not bounded by one limit. Dump, PNG and MCP stay
-  in-process.
+  in-process. A fatal Go runtime error cannot be recovered in-process: per-tab
+  mode contains a stack overflow or out-of-memory failure to that tab's child
+  and shows the captured message there, while single mode terminates the whole
+  browser and may leave the terminal in raw or alternate-screen mode.
 - Tabs are implemented, but iframes are permanent inert stubs, not a pending
   target. The default is one Go process per tab with one sobek VM in each
   engine process; iframe

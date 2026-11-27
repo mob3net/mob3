@@ -72,7 +72,10 @@ The parent keeps the terminal, network policy, cookies, cache, settings and
 history; a child owns its page DOM, JavaScript, layout and PDF state. Child tabs
 share `localStorage`/`sessionStorage` with the parent through the storage
 broker. A wedged tab child can be killed without stopping the browser, but this
-is fault isolation, not a security sandbox. Only the active tab draws;
+is fault isolation, not a security sandbox. A fatal runtime error in a tab
+child (for example a stack overflow) is contained to that tab and its captured
+stderr appears in the crashed tab; in `single` mode the same error terminates
+the whole browser, and terminal cleanup may not run. Only the active tab draws;
 background tabs keep loading and update their state but pause their timers and
 deferred image work.
 

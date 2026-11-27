@@ -87,9 +87,6 @@ type Tab struct {
 	// It keeps a compromised engine from overwriting the clipboard at will.
 	clipboardPendingUntil time.Time
 
-	// Report handles a contained crash. When nil, the error is shown in the
-	// tab's footer and the tab stays in the bar.
-	Report func(string)
 	// tabCloseQuit carries a quit request from a tab-bar close click, which is
 	// routed through the boolean handleChromeMouse return.
 	tabCloseQuit bool
@@ -99,6 +96,7 @@ type Tab struct {
 	// taking down the other tabs.
 	Dead         bool
 	CrashMessage string
+	crashScroll  int
 }
 
 // AttachPresenter gives the shared presenter to this tab, rebuilding every
@@ -111,6 +109,9 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 	}
 	p.ResetForTab()
 	p.SetState(l.State.Page)
+	if l.Dead {
+		p.SetCrash(l.crashView())
+	}
 	full := false
 	stack, count := l.windowStack()
 	for i := 0; i < count; i++ {
@@ -169,15 +170,30 @@ func isNewTabPage(rawURL string) bool {
 	return false
 }
 
+// sessionEndedMessage is the generic detail used when a protocol event stream
+// closes without a more specific crash report.
+const sessionEndedMessage = "protocol session ended"
+
 // MarkDead records a contained session failure. The tab stays in the bar so
-// its error remains visible and the rest of the browser keeps running.
+// its error remains visible and the rest of the browser keeps running. A later
+// child-exit report may replace the generic stream-close message, but it never
+// overwrites an already specific crash reason.
 func (l *Tab) MarkDead(message string) {
+	detail := clipCrashMessage(protocol.StripControls(message))
 	if l.Dead {
-		return
+		if detail == "" || detail == l.CrashMessage ||
+			(l.CrashMessage != "" && l.CrashMessage != sessionEndedMessage) {
+			return
+		}
+	}
+	if !l.Dead {
+		l.crashScroll = 0
 	}
 	l.Dead = true
-	if l.CrashMessage == "" {
-		l.CrashMessage = clipCrashMessage(protocol.StripControls(message))
+	if l.CrashMessage == "" || l.CrashMessage == sessionEndedMessage {
+		if detail != "" {
+			l.CrashMessage = detail
+		}
 	}
 	l.clearOverlaysAfterCrash()
 	st := l.State.Page
@@ -187,12 +203,13 @@ func (l *Tab) MarkDead(message string) {
 	st.PromptActive = false
 	st.FindActive = false
 	st.Menu = protocol.MenuNone
-	st.FooterLeft = " Page engine stopped: " + l.CrashMessage
+	st.FooterLeft = " " + crashTitle + ": " + l.CrashMessage
 	st.FooterLevel = protocol.FooterError
 	st.FooterStatusHit = false
 	st.PDFHint, st.PDFHintX = "", -1
 	l.State.Page = st
 	if l.Presenter != nil {
+		l.Presenter.SetCrash(l.crashView())
 		l.Presenter.SetState(st)
 		_ = l.Presenter.Refresh()
 	}
@@ -234,6 +251,9 @@ func (l *Tab) handleDeadInput(k string) (quit bool, err error) {
 	}
 	if handled, quit := l.handleTabKey(k); handled {
 		return quit, nil
+	}
+	if l.scrollCrash(k) {
+		return false, nil
 	}
 	switch k {
 	case "q", "ctrl-c":
@@ -364,7 +384,7 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 	case protocol.Quit:
 		return true, nil
 	case protocol.Crash:
-		msg := protocol.StripControls(v.Message)
+		msg := clipCrashMessage(protocol.StripControls(v.Message))
 		if msg == "" || msg == l.State.LastCrash {
 			return false, nil
 		}
@@ -375,10 +395,6 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		}
 		l.State.LastCrash = msg
 		l.CrashMessage = msg
-		msg = clipCrashMessage(msg)
-		if l.Report != nil {
-			l.Report(msg)
-		}
 	case protocol.State:
 		v = l.pageState(v)
 		stack, count := l.windowStack()
@@ -457,6 +473,7 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			}
 		}
 		l.State.LastCrash = ""
+		l.CrashMessage = ""
 	}
 	return false, nil
 }
@@ -930,13 +947,12 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 }
 
 func clipCrashMessage(msg string) string {
-	const max = 200
-	if len(msg) <= max {
+	if len(msg) <= maxCrashDetailRunes {
 		return msg
 	}
 	runes := []rune(msg)
-	if len(runes) <= max {
+	if len(runes) <= maxCrashDetailRunes {
 		return msg
 	}
-	return string(runes[:max]) + "…"
+	return string(runes[:maxCrashDetailRunes]) + "…"
 }

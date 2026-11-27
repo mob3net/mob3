@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -123,13 +122,40 @@ func TestInteractiveTabsReportsBackendFailure(t *testing.T) {
 	close(backend.done)
 	select {
 	case message := <-failed:
-		if !strings.Contains(message, "Page engine stopped") || !strings.Contains(message, "exit status 2") {
+		if message != "exit status 2" {
 			t.Fatalf("failure message = %q", message)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("backend failure was not reported")
 	}
 	tabs.kill(tab)
+}
+
+func TestInteractiveTabsReportsExitAfterDeadClose(t *testing.T) {
+	tabs := newInteractiveTabs(host.NewSession(), engine.LoaderConfig{}, "about:home", 8, 16, nil)
+	backend := &exitTestBackend{
+		session: backendTestSession{}, done: make(chan struct{}),
+		err: errors.New("exit status 2: fatal error: stack overflow"),
+	}
+	tabs.newBackend = func(*engine.Loader, protocol.SessionID, protocol.Init, string) (tabBackend, error) {
+		return backend, nil
+	}
+	failed := make(chan string, 1)
+	tabs.setFailure(func(_ *frontend.Tab, message string) { failed <- message })
+	tab, err := tabs.openWithLoader(1, 80, 24, 2, 21, "about:home", &engine.Loader{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab.MarkDead("protocol session ended")
+	tabs.close(tab)
+	select {
+	case message := <-failed:
+		if message != "exit status 2: fatal error: stack overflow" {
+			t.Fatalf("failure message = %q", message)
+		}
+	default:
+		t.Fatal("dead tab close did not report the exit error")
+	}
 }
 
 func TestInteractiveTabsKillAndCloseBackend(t *testing.T) {

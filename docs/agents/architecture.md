@@ -128,8 +128,10 @@ renderer is part of the model.
   update its own model. `protocol.Visibility` tells the engine which tab is
   active; an inactive tab stops drawing, JavaScript timers, deferred images,
   progress ticks and usage wakeups.
-- A failed tab is contained: its transport is released, the tab stays in the
-  bar marked crashed, and the other tabs keep running.
+- A failed tab is contained: a protocol failure or child-process exit releases
+  its transport, the tab stays in the bar marked crashed with the sanitized
+  reason in its content area, and the other tabs keep running. A fatal runtime
+  error is not recoverable in-process, so single mode remains process-fatal.
 - A tab owns one top-level browsing frame. Iframes stay inert stub documents
   with no browsing context; there is no child frame tree and none is planned.
   The frame owns its document/`Page`, `Layout`, URL and origin, viewport,
@@ -309,6 +311,7 @@ process.
 | `internal/protocol/ports.go` | Shared `EntryIDSource`, `BudgetShare`, `Abandoner` and `Waiter`. The parent can own the history-entry sequence and divide memory pools, and a discarded tab can drop a session without waiting for its handler. |
 | `internal/frontend/present.go` | `Presenter`: ANSI frame encoding, row diff, scroll/native resets, state-driven chrome composition and terminal writes. |
 | `internal/frontend/session.go` | `Tab`: one tab's protocol session and core per-tab state. It applies events, owns history, routes keys/mouse, runs shell keys and scrollbar/chrome hit testing, handles crashes and the one-shot clipboard permission/failure path. |
+| `internal/frontend/crash.go` | Dead-tab error view: bounded sanitized reason and page URL, scrollable full content-area painting under the header and footer, and the movement/`t`/`W`/`q` key hint. |
 | `internal/frontend/overlay.go` | The overlay contract and the tab's ordered window stack. Each front-end window keeps its state in its subsystem file; the stack is sorted by layer and drives key, mouse, page-state, dismissal, tab-switch and crash handling in one place. |
 | `internal/frontend/tabs.go` | `SessionLoop`: the terminal-owned side of the browser. It owns the input/resize/quit channels, the stuck-tab channel, cell size, the active tab and the main select loop; the active tab holds the shared presenter pointer. `CloseTab` is graceful; `KillTab` and `DiscardTab` remove a wedged tab without waiting for its session. |
 | `internal/frontend/probe.go` | Liveness probe around one page session: commands, loading and a due JS timer keep a deadline armed; a missing event triggers a `Ping`, a missing `Pong` reports the tab as stuck, and an idle state disarms the probe. |
@@ -359,7 +362,7 @@ process.
 | `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. A close that exceeds the grace period is force-discarded. |
 | `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
 | `internal/app/process_worker.go` | Engine worker mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
-| `internal/app/process_backend.go`, `process_stderr.go` | Process-backed `tabBackend`: self-exec, stdin/stdout pipes, shared host and storage RPC peers, worker-ready handshake, graceful close and process kill. Child stderr is captured in a bounded sanitized tail and included in the crash message; it never writes to the terminal directly. |
+| `internal/app/process_backend.go`, `process_stderr.go` | Process-backed `tabBackend`: self-exec, stdin/stdout pipes, shared host and storage RPC peers, worker-ready handshake, graceful close and process kill. Child stderr is captured in a bounded sanitized beginning and end and included in the crash message; it never writes to the terminal directly. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
 | `internal/engine/page.go` | `Page` and `Script`: the loaded document model, author rules, import map, PDF/download state and post-load inline-style collection. |

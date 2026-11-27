@@ -83,8 +83,23 @@ func TestBoundedStderrSanitizesAndBounds(t *testing.T) {
 	}
 	big := strings.Repeat("x", maxChildStderrBytes+1024)
 	_, _ = b.Write([]byte(big))
-	if len(b.Text()) > maxChildStderrRunes {
-		t.Fatalf("stderr tail = %d runes", len(b.Text()))
+	if n := len([]rune(b.Text())); n > maxChildStderrRunes {
+		t.Fatalf("stderr tail = %d runes", n)
+	}
+
+	both := newBoundedStderr()
+	_, _ = both.Write([]byte("fatal error: stack overflow\n"))
+	_, _ = both.Write([]byte(strings.Repeat("frame ", maxChildStderrBytes)))
+	_, _ = both.Write([]byte("\nlast frame"))
+	text = both.Text()
+	if !strings.Contains(text, "fatal error: stack overflow") {
+		t.Fatalf("stderr beginning was dropped: %q", text[:min(len(text), 200)])
+	}
+	if !strings.Contains(text, "last frame") {
+		t.Fatalf("stderr end was dropped: %q", text[max(0, len(text)-200):])
+	}
+	if !strings.Contains(text, "…") {
+		t.Fatalf("truncated stderr has no marker: %q", text[:min(len(text), 200)])
 	}
 }
 
