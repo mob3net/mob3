@@ -768,6 +768,49 @@ func TestMiddleClickTabClosesIt(t *testing.T) {
 	}
 }
 
+// TestMiddleClickTabClosesItFromURLPrompt checks that the URL prompt hands a
+// middle click on a tab to the tab strip, so one press closes the tab instead
+// of only dismissing the prompt.
+func TestMiddleClickTabClosesItFromURLPrompt(t *testing.T) {
+	st := chromeState()
+	st.Width = 120
+	tabs := []TabView{{Title: "One", Active: true}, {Title: "Two"}}
+	for _, target := range []ChromeHitKind{ChromeHitTab, ChromeHitTabClose} {
+		tab := &Tab{State: LoopState{Page: st}, TabBar: tabs}
+		closed := -1
+		tab.Actions = TabActions{
+			Select: func(int) { t.Fatal("middle click selected a tab") },
+			Close: func(index int) bool {
+				closed = index
+				return false
+			},
+		}
+		tab.promptOverlay.startEmpty(tab)
+		layout := LayoutChromeWithTabs(st, tabs, 0)
+		var hit ChromeHit
+		for _, h := range layout.Hits {
+			if h.Kind == target && h.Index == 1 {
+				hit = h
+				break
+			}
+		}
+		if hit.W == 0 {
+			t.Fatalf("missing %v hit", target)
+		}
+		if !tab.handleChromeMouse(MouseEvent{
+			Button: MouseButtonMiddle, X: hit.X + 1, Y: hit.Y + 1, Press: true,
+		}) {
+			t.Fatalf("middle click on %v from the URL prompt was not consumed", target)
+		}
+		if closed != 1 {
+			t.Fatalf("middle click on %v from the URL prompt closed tab %d, want 1", target, closed)
+		}
+		if tab.promptActive {
+			t.Fatalf("middle click on %v left the URL prompt open", target)
+		}
+	}
+}
+
 // TestMiddleClickTabWaitsForOpenOverlay checks that an open window owns the
 // pointer: the tab under a middle click must stay open until it is dismissed.
 func TestMiddleClickTabWaitsForOpenOverlay(t *testing.T) {
