@@ -1154,6 +1154,36 @@ func TestConsoleOpenAndCloseKeys(t *testing.T) {
 	}
 }
 
+func TestConsoleIgnoresInFlightPageFrame(t *testing.T) {
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	loop := &Tab{Session: &recordSession{}, Presenter: p}
+	loop.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	loop.consoleOverlay.open(loop)
+	if _, err := loop.applyEvent(protocol.Event{Body: protocol.ConsoleView{
+		Width: 80, Height: 24, Pane: consolePaneLogs, Tabs: []string{"Logs"}, Lines: []string{"line"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.consoleOverlay.consoleActive {
+		t.Fatal("console did not open")
+	}
+	out.Reset()
+	f := protocol.Frame{W: 80, H: 21, Cells: make([]protocol.Cell, 80*21)}
+	for i := range f.Cells {
+		f.Cells[i].R = 'P'
+	}
+	if _, err := loop.applyEvent(protocol.Event{Body: f}); err != nil {
+		t.Fatal(err)
+	}
+	if !loop.consoleOverlay.consoleActive {
+		t.Fatal("in-flight page frame closed the console")
+	}
+	if strings.Contains(out.String(), "P") {
+		t.Fatal("in-flight page frame was painted over the console")
+	}
+}
+
 func TestConsoleMovementAliases(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}

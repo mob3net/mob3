@@ -437,6 +437,13 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 			l.clipboardUnavailable()
 		}
 	case protocol.Frame:
+		if l.consoleOverlay.consoleActive {
+			// The engine stops drawing the page while the console is open, but a
+			// frame sent just before the console commands can still arrive after
+			// them. Keep the console; presenting that frame would clear the local
+			// overlay while the engine stays in console mode.
+			return false, nil
+		}
 		l.consoleOverlay.reset(l)
 		if l.Presenter != nil {
 			if err := l.Presenter.Present(v, l.State.Scroll, l.State.Native); err != nil {
