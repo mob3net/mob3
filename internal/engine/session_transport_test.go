@@ -465,6 +465,42 @@ func TestDialogTransportRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConsoleCloseWhileDialogWaits(t *testing.T) {
+	b := newTestSession(60, 10)
+	b.NoDraw = true
+	in := make(chan protocol.Command, 2)
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = &dialogSink{}
+	b.consoleOpen = true
+	in <- protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleClose}}
+	in <- protocol.Command{Body: protocol.DialogResult{ID: 1, OK: true}}
+	b.showAlert("x")
+	if b.consoleOpen {
+		t.Fatal("console stayed open after closing during a dialog")
+	}
+}
+
+func TestConsoleOpenWhileDialogWaits(t *testing.T) {
+	b := newTestSession(60, 10)
+	b.NoDraw = true
+	in := make(chan protocol.Command, 3)
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = &dialogSink{}
+	in <- protocol.Command{Body: protocol.ConsoleAction{Op: protocol.ConsoleOpen}}
+	in <- protocol.Command{Body: protocol.ConsoleAction{
+		Op: protocol.ConsoleWindow, Pane: consoleLogs, Start: -1, Rows: 5, Width: 40,
+	}}
+	in <- protocol.Command{Body: protocol.DialogResult{ID: 1, OK: true}}
+	b.showAlert("x")
+	if !b.consoleOpen || !b.window.valid {
+		t.Fatalf("console open=%v window=%+v", b.consoleOpen, b.window)
+	}
+}
+
 type selectSink struct{ sel protocol.Select }
 
 func (s *selectSink) Send(ev protocol.Event) error {

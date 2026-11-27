@@ -832,8 +832,12 @@ agreement, the non-negotiable constraints and the change protocol.
   console width and opening at the top) retained as `Page.RawHTML`, cached per
   page and width.
   Timers and timer-driven redraws pause while the console is open, so a
-  terminal selection is not cleared by redraws. The full error text is kept
-  there; the footer JavaScript label turns into red `JavaScript:Error` instead.
+  terminal selection is not cleared by redraws. A JavaScript alert, confirm or
+  prompt opened from the console is drawn over it and owns keyboard and pointer
+  input first; the console stays open underneath and resumes when the dialog is
+  answered, so the engine cannot be left blocked with the console hidden. The
+  full error text is kept there; the footer JavaScript label turns into red
+  `JavaScript:Error` instead.
 - **JavaScript events and timers:** `addEventListener`/`removeEventListener`
   on nodes, `document` and `window`; bubbling `click`; inline `onclick`
   attributes and the `onclick` property; `DOMContentLoaded` and `load`.

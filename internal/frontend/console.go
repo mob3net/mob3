@@ -59,7 +59,8 @@ type consoleOverlay struct {
 func (w *consoleOverlay) isOpen() bool { return w.consoleActive }
 
 // dismissOnModal is false: the console owns the whole screen and a page modal
-// is drawn over it instead of replacing it.
+// is drawn over it instead of replacing it. The modal still takes input first,
+// so it can be answered while the console stays open underneath.
 func (w *consoleOverlay) dismissOnModal() bool { return false }
 
 func (w *consoleOverlay) reset(l *Tab) {

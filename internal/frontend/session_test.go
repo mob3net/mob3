@@ -674,6 +674,37 @@ func TestDialogEventAndAnswers(t *testing.T) {
 	}
 }
 
+func TestDialogOwnsInputOverConsole(t *testing.T) {
+	s := &recordSession{}
+	tab := &Tab{Session: s}
+	tab.State.Page = protocol.State{FrontendChrome: true, Width: 80, Height: 24, HeaderRows: 2}
+	tab.consoleOverlay.open(tab)
+	s.cmds = nil
+	if _, err := tab.applyEvent(protocol.Event{Body: protocol.Dialog{
+		ID: 3, Kind: protocol.DialogAlert, Text: "123",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if !tab.consoleActive || !tab.dialogActive {
+		t.Fatalf("console=%v dialog=%v, want both open", tab.consoleActive, tab.dialogActive)
+	}
+	if handled, quit := tab.handleShellKey("!"); !handled || quit {
+		t.Fatalf("alert did not consume !: handled=%v quit=%v", handled, quit)
+	}
+	if !tab.consoleActive || len(s.cmds) != 0 {
+		t.Fatalf("! closed the console underneath the alert: active=%v commands=%#v", tab.consoleActive, s.cmds)
+	}
+	if handled, quit := tab.handleShellKey("enter"); !handled || quit {
+		t.Fatalf("alert did not consume enter: handled=%v quit=%v", handled, quit)
+	}
+	if tab.dialogActive || !tab.consoleActive {
+		t.Fatalf("after answer console=%v dialog=%v", tab.consoleActive, tab.dialogActive)
+	}
+	if len(s.cmds) != 1 || s.cmds[0].Body != (protocol.DialogResult{ID: 3, OK: true}) {
+		t.Fatalf("commands = %#v", s.cmds)
+	}
+}
+
 func TestDialogPromptMousePlacesCaret(t *testing.T) {
 	s := &recordSession{}
 	loop := &Tab{Session: s}
