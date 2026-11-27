@@ -231,7 +231,7 @@ func mcpToolDefinitions() []map[string]any {
 		},
 		{
 			"name":        "snapshot",
-			"description": "Return the current page text, visible numbered links and form controls with coordinates.",
+			"description": "Return the full page text, plus the visible numbered links and form controls with coordinates.",
 			"inputSchema": object(map[string]any{}),
 		},
 		{

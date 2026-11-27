@@ -401,7 +401,7 @@ child of the MCP server; `-process=single` keeps them in one process.
 | `internal/engine/session_images.go` | Deferred-image bridge: task/scheduling types, batch application, pending-row layout and refresh after script-driven rebuilds. The engine owns task collection, viewport ordering, the background stream and the `ImageLoader` port. |
 | `internal/engine/session_selection.go` | Drag state and clipboard policy; ordering, text extraction and painting call `Selection`. Copy emits a `protocol.Clipboard` event; OSC 52 encoding and the terminal write live in the front end. |
 | `internal/engine/automation.go` | Headless `Automation`: construction/close, navigation and load waits. Commands are serialized; `internal/app/automation_transport.go` exposes the type through the MCP protocol client. |
-| `internal/engine/automation_snapshot.go` | Snapshot text, viewport grid, page text and screenshots. |
+| `internal/engine/automation_snapshot.go` | Snapshot header, full-page text, visible links/controls, viewport grid and screenshots. |
 | `internal/engine/automation_click.go` | Click resolution by selector, text or cell, and node description helpers. |
 | `internal/engine/automation_input.go` | Typing, key presses and page scrolling. |
 | `internal/engine/automation_history.go` | Automation back/forward/reload and its own session history list and output. |

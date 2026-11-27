@@ -6,8 +6,17 @@ import (
 	"strings"
 )
 
-// Snapshot returns a readable text view of the current page and viewport,
-// followed by visible links and form controls with clickable coordinates.
+// Snapshot text is bounded by painted rows and cells so one tool call cannot
+// allocate an unbounded grid; the MCP transport also clips long text.
+const (
+	automationSnapshotRows  = 2000
+	automationSnapshotCells = 100000
+)
+
+// Snapshot returns a readable text view of the whole page, followed by the
+// visible links and form controls with clickable coordinates. The text is not
+// limited to the interaction viewport, so an agent does not have to scroll to
+// read a page.
 func (a *Automation) Snapshot() string {
 	if a == nil || a.b == nil {
 		return "No page loaded"
@@ -36,8 +45,31 @@ func (a *Automation) Snapshot() string {
 	if vh < 1 {
 		vh = 1
 	}
+	pageH := 0
+	if b.Layout != nil {
+		pageH = b.Layout.Height
+	}
+	shown := pageH
+	if shown > automationSnapshotRows {
+		shown = automationSnapshotRows
+	}
+	if b.Width > 0 {
+		if maxRows := automationSnapshotCells / b.Width; shown > maxRows {
+			shown = maxRows
+		}
+	}
+	if shown < 1 {
+		shown = 1
+	}
+	if pageH > 0 {
+		fmt.Fprintf(&sb, "Page: %dx%d", b.Width, pageH)
+		if shown < pageH {
+			fmt.Fprintf(&sb, " (snapshot truncated to %d rows)", shown)
+		}
+		fmt.Fprintf(&sb, "  ")
+	}
 	fmt.Fprintf(&sb, "Viewport: %dx%d  Scroll: %d%%\n\n", b.Width, vh, b.scrollPercent())
-	sb.WriteString(a.pageTextLocked(vh))
+	sb.WriteString(a.fullPageTextLocked(shown))
 	if lines := a.linkLinesLocked(vh); len(lines) > 0 {
 		sb.WriteString("\nLinks:\n")
 		sb.WriteString(strings.Join(lines, "\n"))
@@ -51,6 +83,23 @@ func (a *Automation) Snapshot() string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+// fullPageTextLocked paints the laid-out page from the top, independent of the
+// interaction scroll position.
+func (a *Automation) fullPageTextLocked(height int) string {
+	b := a.b
+	if b.Layout == nil || b.Page == nil || height < 1 {
+		return ""
+	}
+	b.Layout.SetFixedScroll(0)
+	g := NewGrid(b.Width, height, b.pageFG(), b.pageBG())
+	PaintLayout(g, b.Layout, 0, 0, height, nil, b.pageFG())
+	lines := GridLines(g)
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // viewportGrid renders the current page viewport without browser chrome.
 func (a *Automation) viewportGridLocked(vh int) *Grid {
 	b := a.b
@@ -61,19 +110,6 @@ func (a *Automation) viewportGridLocked(vh int) *Grid {
 	g := NewGrid(b.Width, vh, b.pageFG(), b.pageBG())
 	PaintLayout(g, b.Layout, b.Scroll, 0, vh, nil, b.pageFG())
 	return g
-}
-
-// pageText renders the current page viewport without browser chrome.
-func (a *Automation) pageTextLocked(vh int) string {
-	g := a.viewportGridLocked(vh)
-	if g == nil {
-		return ""
-	}
-	lines := GridLines(g)
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return strings.Join(lines, "\n")
 }
 
 // Screenshot renders the current page viewport as a PNG. Scale 1 uses 8x16

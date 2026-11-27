@@ -13,8 +13,10 @@ mob3 -mcp -width 120 https://en.wikipedia.org/
 
 - Optional starting URL; otherwise `about:home`.
 - `-width` controls wrapping and coordinates.
-- The virtual viewport is 30 rows by default; `-height N` sets it explicitly
-  (about `N-3` page rows after chrome).
+- The interaction viewport is 30 rows by default; `-height N` sets it explicitly
+  (about `N-3` page rows after chrome). `snapshot` returns the full page text
+  regardless of that viewport; the viewport still controls screenshots,
+  scrolling and click coordinates.
 - Images are disabled.
 - `-no-js`, `-layout-budget`, `-reader`, `-dark` and search settings
   are honored.
@@ -196,7 +198,7 @@ inside it.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `navigate` | `{url}` | Snapshot after loading |
-| `snapshot` | `{}` | Current page viewport, links and form controls |
+| `snapshot` | `{}` | Full page text, plus visible links and form controls |
 | `links` | `{selector?}` | Every link with index, text, href and selector |
 | `screenshot` | `{scale}` | PNG image of the current page viewport |
 | `click` | `{link}` or `{text}` or `{selector}` or `{x,y}` | Snapshot after the click |
@@ -227,12 +229,15 @@ Waits for the page, meta refreshes and scripted redirects.
 
 ### `snapshot`
 
-Returns the current page viewport as plain text:
+Returns the whole laid-out page as plain text, not just the interaction
+viewport, so reading a page does not require scrolling. Pages beyond the
+snapshot bound are marked as truncated in the header (the bound shrinks with
+width), and the transport may clip a very long response again:
 
 ```text
 URL: https://example.com/
 Title: Example Domain
-Viewport: 100x27  Scroll: 0%
+Page: 100x140  Viewport: 100x27  Scroll: 0%
 
 Example Domain
 ...
@@ -243,6 +248,11 @@ Links:
 Inputs:
 - input name="q" type="search" value="" at (4,12)
 ```
+
+The `Links` and `Inputs` sections list what is visible in the interaction
+viewport, with viewport coordinates; use `links` and `form` for every
+off-screen link or control. Scrolling still matters for screenshots and
+coordinate clicks, but not for reading the snapshot.
 
 - `[n]` is a 1-based link index for `click({link:n})`.
 - Only visible links are listed. Link numbers are stable layout indices, so a

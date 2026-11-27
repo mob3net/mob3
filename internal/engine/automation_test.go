@@ -12,8 +12,12 @@ import (
 
 // newTestAutomation wires a headless session to a fixed set of paths.
 func newTestAutomation(t *testing.T, pages map[string]string) *Automation {
+	return newTestAutomationSized(t, 80, 24, pages)
+}
+
+func newTestAutomationSized(t *testing.T, width, height int, pages map[string]string) *Automation {
 	t.Helper()
-	a := NewAutomationWithConfig(AutomationConfig{Loader: newTestLoader(), Width: 80, Height: 24})
+	a := NewAutomationWithConfig(AutomationConfig{Loader: newTestLoader(), Width: width, Height: height})
 	a.b.LoadFn = func(_ context.Context, _ string, target string, _ []byte, _ string) (*Page, error) {
 		u, err := url.Parse(target)
 		if err != nil {
@@ -735,8 +739,10 @@ func TestAutomationLinksListsOffscreen(t *testing.T) {
 	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
 		t.Fatal(err)
 	}
-	if snap := a.Snapshot(); strings.Contains(snap, "Far link") {
-		t.Fatalf("off-screen link unexpectedly in viewport snapshot:\n%s", snap)
+	if snap := a.Snapshot(); !strings.Contains(snap, "Far link") {
+		t.Fatalf("full-page snapshot missing off-screen link text:\n%s", snap)
+	} else if strings.Contains(snap, "-> https://example.com/next") {
+		t.Fatalf("off-screen link unexpectedly in the snapshot links section:\n%s", snap)
 	}
 	out, err := a.Links("")
 	if err != nil {
@@ -767,6 +773,44 @@ func TestAutomationLinksListsOffscreen(t *testing.T) {
 	}
 	if a.b.URL == nil || a.b.URL.Path != "/next" {
 		t.Fatalf("off-screen link click landed on %v", a.b.URL)
+	}
+}
+
+func TestAutomationSnapshotCoversFullPage(t *testing.T) {
+	a := newTestAutomation(t, map[string]string{
+		"/": `<html><body>` + strings.Repeat("<p>filler</p>", 80) +
+			`<p>Last row</p></body></html>`,
+	})
+	ctx := context.Background()
+	if err := a.Navigate(ctx, "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	snap := a.Snapshot()
+	if !strings.Contains(snap, "Last row") {
+		t.Fatalf("snapshot stopped at the viewport:\n%s", snap)
+	}
+	if !strings.Contains(snap, "Page: 80x") || !strings.Contains(snap, "Viewport:") {
+		t.Fatalf("snapshot has no page/viewport header:\n%s", snap)
+	}
+}
+
+func TestAutomationSnapshotBoundsWidePage(t *testing.T) {
+	a := newTestAutomationSized(t, 400, 24, map[string]string{
+		"/": `<html><body>` + strings.Repeat("<p>filler</p>", 400) +
+			`<p>Last row</p></body></html>`,
+	})
+	if err := a.Navigate(context.Background(), "https://example.com/"); err != nil {
+		t.Fatal(err)
+	}
+	snap := a.Snapshot()
+	if len(snap) > 110000 {
+		t.Fatalf("snapshot is %d bytes", len(snap))
+	}
+	if !strings.Contains(snap, "truncated") {
+		t.Fatalf("wide-page snapshot has no truncation marker:\n%s", snap[:min(len(snap), 200)])
+	}
+	if strings.Contains(snap, "Last row") {
+		t.Fatal("snapshot painted beyond the cell bound")
 	}
 }
 
