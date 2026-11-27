@@ -183,6 +183,10 @@ sessions.
 
 ## Current layout
 
+The front-end surface, window-stack and focus model, including the migration
+away from the fixed overlay list, is in
+[windowing.md](windowing.md).
+
 This is the **actual** state. Tabs are implemented. Real iframe browsing
 contexts are a permanent non-goal; iframes stay inert stubs. Interactive tabs
 run one engine child per tab by default; `-process=single` keeps them in one
