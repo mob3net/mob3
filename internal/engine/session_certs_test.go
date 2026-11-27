@@ -2,11 +2,12 @@ package engine
 
 import (
 	"crypto/x509"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"browser/internal/protocol"
 
 	"golang.org/x/crypto/x509roots/fallback/bundle"
 )
@@ -93,26 +94,21 @@ func TestSetCertSourceRejectsFiles(t *testing.T) {
 func TestConfigSwitchesCertSource(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
-	b.applyConfig(url.Values{"certs": {CertSourceEmbedded}})
+	if err := b.applyConfigValue(protocol.ConfigCerts, CertSourceEmbedded); err != "" {
+		t.Fatal(err)
+	}
 	if b.loader.CertStore != CertSourceEmbedded {
 		t.Fatalf("cert source = %q, want embedded", b.loader.CertStore)
 	}
 	if b.certSourceLabel() != CertSourceEmbedded {
 		t.Fatalf("config label = %q, want embedded", b.certSourceLabel())
 	}
-	if b.configNotice != "" {
-		t.Fatalf("unexpected notice %q", b.configNotice)
-	}
 
-	b.applyConfig(url.Values{"certs": {"roots.pem"}})
+	msg := b.applyConfigValue(protocol.ConfigCerts, "roots.pem")
 	if b.loader.CertStore != CertSourceEmbedded {
 		t.Fatalf("failed change replaced the store with %q", b.loader.CertStore)
 	}
-	if !strings.Contains(b.configNotice, "system or embedded") {
-		t.Fatalf("path change set notice %q", b.configNotice)
-	}
-	page := b.configPage(mustParse(t, "about:config"), true)
-	if !strings.Contains(page.RawHTML, "Certificate source not changed") {
-		t.Fatal("config page does not show the rejected change")
+	if !strings.Contains(msg, "system or embedded") {
+		t.Fatalf("path change error = %q", msg)
 	}
 }

@@ -39,8 +39,6 @@ const (
 	HostOpCookieViews
 	HostOpSetCertSource
 	HostOpCertSource
-	HostOpConfigTokenCurrent
-	HostOpConfigTokenConsume
 	// HostOpCancel cancels the call with the same ID. It has no result.
 	HostOpCancel
 )
@@ -89,7 +87,6 @@ type HostCall struct {
 	Height      int
 	CookieRaw   string
 	Source      string
-	Token       string
 }
 
 // HostResult is the answer to one HostCall. Fields not used by the call stay
@@ -143,7 +140,6 @@ func AppendHostCall(dst []byte, c HostCall, lim Limits) ([]byte, error) {
 	e.i32(c.Height)
 	e.str(c.CookieRaw)
 	e.str(c.Source)
-	e.str(c.Token)
 	return e.b, e.err
 }
 
@@ -180,7 +176,6 @@ func DecodeHostCall(src []byte, lim Limits) (HostCall, error) {
 	c.Height = d.i32()
 	c.CookieRaw = d.str()
 	c.Source = d.str()
-	c.Token = d.str()
 	if d.err != nil {
 		return HostCall{}, d.err
 	}

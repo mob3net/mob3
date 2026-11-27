@@ -17,8 +17,8 @@ import (
 )
 
 // Version is the wire protocol version. Bump it when a message changes shape.
-// 9: busy/timer state flag.
-const Version = 9
+// 10: front-end config overlay messages.
+const Version = 10
 
 // SessionID identifies one page session. It exists before tabs so a later tab
 // front end does not need a protocol break.
@@ -61,6 +61,7 @@ const (
 	CmdGraphics
 	CmdFollowLink
 	CmdPing
+	CmdConfig
 )
 
 const (
@@ -84,6 +85,8 @@ const (
 	EvLinkPreview
 	EvPong
 	EvReady
+	EvConfigState
+	EvOpenConfig
 )
 
 // Color is an RGBA cell color. Set distinguishes an unset color from black.

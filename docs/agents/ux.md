@@ -46,28 +46,27 @@ agreement, the non-negotiable constraints and the change protocol.
   document load; later calls return the non-interactive defaults and one
   warning is logged, so a timer or loop cannot reopen a modal forever. A crashed
   tab stays in the bar as `Crashed` and does not stop the others. New tabs from
-  `t`/`Ctrl-T`, the `+` button, help and config open at the end with an empty
-  focused URL prompt when no target is given; a link opened in a background tab
+  `t`/`Ctrl-T`, the `+` button and help open at the end with an empty
+  focused URL prompt when no target is given; config opens a settings window on
+  the current tab instead. A link opened in a background tab
   is inserted directly after the active tab. Graphics mode, zoom and terminal
   cell size are browser-wide. The `MEM` readout is the active engine process:
   the whole browser process in `-process=single`, or the active tab's child
   engine in `-process=per-tab`. It is not the sum of the parent and all
   children.
-- **Config:** the `⚙` toolbar icon opens `about:config` in a new tab, a form listing every
-  CLI option with its current value. Editable options apply immediately for the
-  session (no-js, ignore-blocks, home,
-  mem-limit, layout-budget, zoom, text-scale, ua, search, certs);
-  on/off options are checkboxes; options labelled “startup” are read-only, and
-  colour options are “dump only”. A rejected value keeps the current setting
-  and shows the reason above the table. `certs` accepts only `system` and
-  `embedded`: certificate files are not supported. Changes are never
-  persisted. The form posts its values with a one-shot session token, so a
-  link, script or typed `about:config?...` URL without that token applies
-  nothing; use the form's Apply button. The page starts
-  with the current viewport in characters and pixels (`width*cellW` by
-  `viewportHeight*cellH`, using the terminal cell pixels or the 8×16 default)
-  and the form uses the same centered `max-width:900px` reading column as
-  `about:help`.
+- **Config:** the `⚙` toolbar icon or a typed `about:config` opens a
+  front-end settings window over the current page. It lists only the mutable
+  options (no-js, no-pdf, ignore-blocks, home, mem-limit, layout-budget, zoom,
+  text-scale, ua, search, certs); startup and dump-only options are not shown.
+  Rows are chosen with `↑`/`↓` (or the mouse), `Enter`/`Space` toggles a
+  checkbox or cycles a choice, `Enter` edits a text value, and `Esc` closes the
+  window. Toggles and choices apply immediately; a text value applies when the
+  edit is committed. A rejected value keeps the current setting and shows the
+  reason in the window. `certs` accepts only `system` and `embedded`:
+  certificate files are not supported. Changes are never persisted. The window
+  works over any page, including reader mode, and `about:config?...` queries
+  carry no settings. Page links to `about:config` ask the front end to open the
+  same window.
 - **MCP automation:** `-mcp` starts a headless `Automation` session and serves
   MCP over stdin/stdout instead of entering the terminal UI. It accepts an
   optional start URL, `-width` and `-height` (default 30); `-no-js`,
@@ -230,7 +229,7 @@ agreement, the non-negotiable constraints and the change protocol.
   reload reuses the last method and body. The back/forward page cache is
   cleared because cached pages carry the previous mode's DOM and runtime.
   The footer reports `JavaScript off — press J to re-enable` or
-  `JavaScript on`; `-no-js` and `about:config` set the starting state and
+  `JavaScript on`; `-no-js` and the config window set the starting state and
   nothing is persisted. The JS console remains available through `!` and the
   `>_` icon, showing that scripting is disabled when a command is entered.
 - **Reader mode:** `R` or the footer `Reader:on`/`Reader:off` label toggles an
@@ -255,9 +254,8 @@ agreement, the non-negotiable constraints and the change protocol.
   `Reader mode is unavailable on the history page`.
   Toggling off restores the normal page and its previous scroll position.
   `-reader` starts with the preference on, including `-dump` mode, which prints
-  the extracted view when one is available. `about:config` is unavailable while
-  reader mode is on: opening it keeps the current page and shows the warning
-  `Config is not available in reader mode — press R to turn it off`. Reader
+  the extracted view when one is available. The config window remains available
+  while reader mode is on. Reader
   mode is a snapshot: live JS mutations are not reflected while it is active,
   and interactive controls are not available. Reader link clicks do not run the
   page's JavaScript click handlers, because the extracted clone is detached
@@ -276,11 +274,11 @@ agreement, the non-negotiable constraints and the change protocol.
   fallback) and works with JavaScript disabled.
   `about:history` uses the centered `max-width:900px` column shared with
   `about:help`.
-- **Built-in page styling:** the generated help, config, history,
+- **Built-in page styling:** the generated help, history,
   blocked (“Site blocked”) and error pages share `appPageCSS`/`appPageHTML`:
   one centered 900px reading column, a 32px `h1`, and the same table, muted,
-  warning and `pre` styles. Page-specific rules are appended (config form
-  controls, the blocked page's red heading and blue retry box), and
+  warning and `pre` styles. Page-specific rules are appended (the blocked
+  page's red heading and blue retry box), and
   page-derived text is escaped by the shell. The start page keeps
   its reader-mode column and the PDF viewer keeps its content-sized page boxes.
 - **Help page:** `?` and the toolbar `?` open the built-in
@@ -599,8 +597,8 @@ agreement, the non-negotiable constraints and the change protocol.
   replace empty output when the document is encrypted or has no readable
   pages, a truncation note is kept above the pages, and a document with no
   extractable text at all shows a per-page placeholder, while figure-only pages
-  in a text document stay blank. `-no-pdf` (also in
-  `about:config`) turns the viewer off for the session and restores the old
+  in a text document stay blank. `-no-pdf` (also in the
+  config window) turns the viewer off for the session and restores the old
   “Cannot display” page and popup. Nothing is written to disk.
 - **Downloads:** MOB3 never saves files. A link with a `download` attribute
   opens the modal download popup without making a request, because the

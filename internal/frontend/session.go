@@ -76,6 +76,7 @@ type Tab struct {
 	downloadOverlay
 	noticeOverlay
 	selectOverlay
+	configOverlay
 	historyOverlay
 	dialogOverlay
 	promptOverlay
@@ -126,6 +127,23 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 // DetachPresenter removes the shared presenter from this tab without touching
 // the presenter itself; the loop resets it before the next tab draws.
 func (l *Tab) DetachPresenter() { l.Presenter = nil }
+
+// setFrontendOverlay tells the engine whether a front-end window covers the
+// page. The engine then repaints native images as half-block art and scaled
+// text at normal size, so neither can composite above the window.
+func (l *Tab) setFrontendOverlay(open bool) {
+	if l.overlaySent == open {
+		return
+	}
+	l.overlaySent = open
+	arg := 0
+	if open {
+		arg = 1
+	}
+	if l.Session != nil {
+		_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppFrontendOverlay, Arg: arg}})
+	}
+}
 
 // BarView is this tab's label in the tab bar.
 func (l *Tab) BarView(active bool) TabView {
@@ -387,6 +405,10 @@ func (l *Tab) applyEvent(ev protocol.Event) (bool, error) {
 		l.noticeOverlay.start(l, v)
 	case protocol.Select:
 		l.selectOverlay.start(l, v)
+	case protocol.ConfigState:
+		l.configOverlay.applyConfigState(l, v)
+	case protocol.OpenConfig:
+		l.configOverlay.start(l)
 	case protocol.Dialog:
 		l.dialogOverlay.start(l, v)
 	case protocol.FindResults:
@@ -827,11 +849,8 @@ func (l *Tab) activateChromeHit(hit ChromeHit) {
 		}
 		body = protocol.Navigate{URL: "about:help", Push: true}
 	case ChromeHitConfig:
-		if l.Actions.NewTabURL != nil {
-			l.Actions.NewTabURL("about:config")
-			return
-		}
-		body = protocol.Navigate{URL: "about:config", Push: true}
+		l.configOverlay.start(l)
+		return
 	case ChromeHitURL:
 		l.promptOverlay.start(l, false)
 		return

@@ -214,8 +214,8 @@ process.
   (`frontend.Tab`, `frontend/session.go`), normal header/footer composition,
   header/footer and scrollbar mouse input, base shell keys, local quit confirmation, the
   URL/vim prompt, the page find bar, the view/zoom windows, JS dialogs, the
-  select popup, download/notice modals, link hints and console
-  pane/scroll/input/history/quit/find. It also owns the session history list, current
+  select popup, the settings window, download/notice modals, link hints and
+  console pane/scroll/input/history/quit/find. It also owns the session history list, current
   index, scroll offsets, the `about:history` display snapshot and the
   content-rectangle geometry (`ContentBounds` → `Init`/`Resize`); the engine
   keys its page cache by the front-end entry ID. It also owns the displayed
@@ -232,7 +232,7 @@ process.
   graphics renderer are injected by the app, and host state arrives through
   `protocol.Host`. `app` may import only the four boundary packages.
 - The host owns HTTP transport policy, raw fetch, cache, cookies, settings,
-  certificates, the request log, JS fetch/XHR and the config token. There is no
+  certificates, the request log and JS fetch/XHR. There is no
   global visited list or download history by design (D54): back/forward history
   is front-end state and the download/curl hint is presentation.
 - The engine contains the DOM/JS/style/layout/paint/PDF work. Its JS
@@ -299,7 +299,7 @@ process.
 | `internal/protocol/stream.go` | Stream transport: `ServeStream`/`ServePeer` handler side with direct abort and `DialStream`/`DialPeer` front-end session over the portable peer. Used by tests and available for a future process transport. |
 | `internal/protocol/stream_inbox.go` | Bounded command inbox between the shared peer reader and the engine command loop, so a command burst cannot block host-result delivery. |
 | `internal/protocol/hostrpc.go` | Serializable host-broker call/result types, request metadata, error identity codes and the bounded codec. Flat payloads cover every `protocol.Host` method; no `image.Image`, certificate pool or context value crosses the boundary. |
-| `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. `ConfigToken` calls are forwarded. It can own a dedicated peer or mount on the session peer. |
+| `internal/protocol/hostrpc_client.go` | `HostClient` multiplexes concurrent host calls by ID, sends cancellation for an aborted context, and `RemoteHost` implements `protocol.Host` over it. It can own a dedicated peer or mount on the session peer. |
 | `internal/protocol/hostrpc_server.go` | `HostServer` dispatches calls concurrently to the trusted host, cancels in-flight work on a cancel frame or shutdown, maps errors to sentinel kinds and contains panics as host errors. It can own a dedicated peer or mount on the session peer. |
 | `internal/protocol/storage.go`, `storage_rpc.go` | `Storage`/`StorageProvider` ports and the storage RPC client/server. A process-backed engine resolves `localStorage`/`sessionStorage` through the parent without changing the JS storage surface. |
 | `internal/protocol/ports.go` | Shared `EntryIDSource`, `BudgetShare`, `Abandoner` and `Waiter`. The parent can own the history-entry sequence and divide memory pools, and a discarded tab can drop a session without waiting for its handler. |
@@ -314,6 +314,7 @@ process.
 | `internal/frontend/history_overlay.go` | Front-end history overlay state and input: builds the newest-first popup from the shared visited-page log, handles keys/mouse through the shared choice layout, and opens the selected URL in the current tab. |
 | `internal/frontend/chrome.go` | Normal-page header/footer layout from `protocol.State`, header/footer hit regions, `ContentBounds` (the front-end-owned content rectangle) and the scrollbar painter hook. A focused page form still sends keys through the engine but does not hand it chrome. |
 | `internal/frontend/menu.go` | View/zoom menu state and input, full-screen dimmed choice box, row/close hit regions. |
+| `internal/frontend/config.go` | Front-end settings window: fixed mutable-row definitions, engine value snapshots, inline text editing, immediate toggles/choices, layout and drawing. |
 | `internal/frontend/dialog.go` | JS alert/confirm/prompt state and input, modal layout, prompt editing and answer routing. |
 | `internal/frontend/select.go` | Page select popup state and input, layout and `SelectResult` answer. |
 | `internal/frontend/download.go` | Download curl hint state and input, layout and drawing. |
@@ -322,7 +323,7 @@ process.
 | `internal/frontend/console.go` | Console pane, per-section scroll, input, history, quit and find state; layout, renderer, input row, tabs, HTML highlight plus the shared find bar, window requests and console overlay stacking. |
 | `internal/frontend/find.go` | In-page find bar state, results status and its footer row. |
 | `internal/frontend/findbar.go` | Shared find query, caret and key handling for the page find bar and the console HTML find bar; the engine owns matching. |
-| `internal/frontend/listnav.go` | Shared list-selection movement for the history, view/zoom menu and select popups: the line/top/bottom subset of the movement key table plus clamped index moves. |
+| `internal/frontend/listnav.go` | Shared list-selection movement for the history, view/zoom menu, select popup and settings window: the line/top/bottom subset of the movement key table plus clamped index moves. |
 | `internal/frontend/clipboard.go` | Clipboard policy and OSC 52 encoding: a one-shot permission set by user copy actions, a 100 KiB cap, control/format sanitization and a visible "Clipboard unavailable" failure. |
 | `internal/frontend/mouse.go` | Aliases to the shared protocol mouse event, button constants and SGR/X10/token codecs. |
 | `internal/protocol/mouse.go` | Shared terminal mouse event, button constants, SGR/X10 decoding and token encoding. |
@@ -332,10 +333,10 @@ process.
 | `internal/protocol/http.go` | HTTP method constants and standard status reason phrases shared by navigation and the loader. |
 | `internal/protocol/cookies.go` | Display-safe cookie rows for the storage inspector. |
 | `internal/protocol/clipboard.go` | `SanitizeClipboard`: drops C0/C1 and display-format controls from copied text while keeping newlines and tabs. |
-| `internal/protocol/host.go` | `Host` port, host fetch result, `AttestedURL`, request record and config-token interfaces. |
+| `internal/protocol/host.go` | `Host` port, host fetch result, `AttestedURL` and request record. |
 | `internal/protocol/netctx.go` | Shared request metadata, page-space and local-network/mixed-content error values used by loader and host. |
 | `internal/host/client.go` | Session HTTP client and swappable TLS transport wrapper; the browser reaches it through `protocol.Host`. |
-| `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log, config token and the final-URL attestation lookup. |
+| `internal/host/session.go` | `protocol.Host` implementation: fetch, policy, settings, cache, cookies, certificates, request log and the final-URL attestation lookup. |
 | `internal/engine/session_hooks_impl.go` | `SessionHooks` implementation on `Session`: JS host/runtime effects, timer/hover state, console/modal reset, rebuild/invalidate, status, download, history-commit, form navigation, hint activation and select-menu effects. |
 | `internal/engine/context.go` | `BrowserContext`: state shared by tab sessions inside one process. It allocates the opaque history-entry ID sequence and tab IDs, owns the local `StorageBroker` and `BudgetManager`, accepts injectable `protocol.StorageProvider`/`protocol.EntryIDSource` ports, and can reserve a tab-scoped entry-ID prefix for a child engine. |
 | `internal/engine/storage.go` | `StorageBroker`/`StorageView`: memory-only `localStorage` keyed by origin and shared across tabs, `sessionStorage` keyed by tab and origin, private areas for opaque origins, and per-area (5 MiB) and context (32 MiB) quotas. |
@@ -353,7 +354,7 @@ process.
 | `internal/app/interactive.go` | Interactive session boot: terminal raw mode/size/cell detection, `SessionConfig`, presenter, start/cleanup sequences, key/signal goroutines, `Init`/`Navigate` and the session loop. Falls back to dump when raw mode is unavailable. |
 | `internal/app/interactive_tabs.go` | Interactive tab registry: creates a loader and one `tabBackend` per tab, keeps the tab-to-backend map, and exposes graceful close and force kill to the session loop. A close that exceeds the grace period is force-discarded. |
 | `internal/app/interactive_backend.go` | `tabBackend` interface and the in-process implementation. `Kill` abandons a wedged handler without waiting, and release runs later if it returns. |
-| `internal/app/process_worker.go` | Hidden child mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
+| `internal/app/process_worker.go` | Engine worker mode: parses the normal CLI flags, opens the host and storage RPC clients, constructs one engine session with a tab-scoped entry-ID prefix, and serves the page protocol until the parent closes the pipes. |
 | `internal/app/process_backend.go`, `process_stderr.go` | Process-backed `tabBackend`: self-exec, stdin/stdout pipes, shared host and storage RPC peers, worker-ready handshake, graceful close and process kill. Child stderr is captured in a bounded sanitized tail and included in the crash message; it never writes to the terminal directly. |
 | `internal/app/run_mcp.go` | Starts the automation session and serves the MCP transport. |
 | `internal/app/dump.go` | One-shot `runDump`/`dumpPage` transport loop for `-dump`/`-png`: terminal sizing/color, protocol session, frame encoding and diagnostics. |
@@ -370,13 +371,13 @@ process.
 | `internal/engine/version.go` | Injected build version for built-in pages. |
 | `internal/host/cookies.go` | In-memory cookie jar with public-suffix checking, HttpOnly protection for `document.cookie`, and the storage-inspector view. |
 | `internal/host/cache.go` | Session-only LRU resource cache shared by raw CSS/JS bodies and decoded images, with a 3% derived budget (32 MiB fallback), 2 MiB per-entry cap, and immediate limit changes from config. |
-| `internal/engine/pages.go`, `pages_about.go`, `config_page.go` | Built-in page shell/CSS, start/help/history/blocked/error/config HTML and the config form token field. The session supplies history/settings data. |
+| `internal/engine/pages.go`, `pages_about.go` | Built-in page shell/CSS and the start/help/history/blocked/error HTML. The session supplies history/settings data. |
 | `internal/host/certs.go` | TLS trust store for `-certs`: `system` (the platform store, the default) or `embedded` (the official Mozilla NSS root bundle from `golang.org/x/crypto/x509roots/fallback`, parsed once with its distrust-after constraints attached through `AddCertWithConstraint`). Certificate files are not read. The module's `fallback` package is also imported, which registers the same roots with `x509.SetFallbackRoots`: the default source still verifies HTTPS on a machine with no platform roots, while a present but stale store is left alone (that is what `-certs=embedded` replaces). The selected source replaces the platform store rather than extending it. A stable `certTransport` wrapper swaps the underlying `http.Transport` (and closes its idle connections) when the source changes mid-session, so a change never races an in-flight request or keeps a pooled connection on the old roots. Refresh the bundle by bumping the module and re-vendoring. |
 | `internal/engine/pdf_object.go` | PDF object lexer, classic/xref-stream/object-stream cross-reference loading, damaged-xref recovery, and the stream filters (Flate, LZW, ASCIIHex, ASCII85, RunLength, TIFF/PNG predictors) with parse budgets. The deadline and requesting context are checked in the catalog scan, xref rows, object-stream members and predictor rows. |
 | `internal/engine/pdf_text.go` | PDF page tree, content-stream interpreter for text operators and form XObjects, font widths and encodings (WinAnsi/MacRoman, `/Differences`, `/ToUnicode` CMaps), inline-image skipping, and line/column reconstruction into styled spans. Page content is charged against a document-wide retained-content budget. |
 | `internal/engine/pdf_document.go` | PDF document model on `Page.PDF`, per-page HTML assembly with page rules and `Page n of N` labels, title/metadata, note messages, and panic containment. |
-| `internal/engine/session_config.go` | Runtime config model and apply path; the form HTML is in the engine and the one-shot token is `internal/host.ConfigToken`. |
-| `internal/engine/session_shell_core.go`, `session.go` | The single `Session` type: content and shell state, input resolution and the config-page branch, hint/status effects around a rebuild, mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling and `EscapeHTML`. |
+| `internal/engine/session_config.go` | Runtime config model and validated apply path for the front-end settings window. |
+| `internal/engine/session_shell_core.go`, `session.go` | The single `Session` type: content and shell state, input resolution and the `about:config` request to the front end, hint/status effects around a rebuild, mode toggles, scrolling and link focus, hover chain, link following, notices/downloads, anchor scrolling and `EscapeHTML`. |
 | `internal/engine/session_chrome.go` | Content-only draw path: paints the page rectangle, control/selection/find highlights and image placements, then emits the frame. Footer text/level for `State`, status levels, graphics cycling and the memory readout remain here. |
 | `internal/engine/session_shell_state.go` | `protocol.State` snapshot and the engine-side view of the front-end content rectangle (`contentRect`, `headerRows`, `viewport`). The front end computes the rectangle; the legacy derivation remains for direct callers and tests. |
 | `internal/engine/session_forms.go` | Form wrappers plus the control-focus highlight painter. Tab stepping, control activation, text/range editing, submission, label targets and form requests live in `forms.go` and the other form helpers. |

@@ -288,8 +288,13 @@ func (l *Tab) sendHistorySnapshot() {
 }
 
 // navigate starts a top-level load. A typed about:history carries a fresh
-// snapshot so the page reflects the current list.
+// snapshot so the page reflects the current list, and about:config opens the
+// front-end settings window instead of a page.
 func (l *Tab) navigate(target string) {
+	if isAboutConfigTarget(target) {
+		l.configOverlay.start(l)
+		return
+	}
 	l.recordHistoryScroll()
 	if isAboutHistory(target) {
 		l.sendHistorySnapshot()

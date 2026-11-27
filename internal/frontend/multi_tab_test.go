@@ -438,16 +438,19 @@ func TestTabsKeepSeparateHistoryScrollAndClipboard(t *testing.T) {
 	}
 }
 
-func TestHelpAndConfigOpenNewTabs(t *testing.T) {
-	tab := &Tab{State: LoopState{Page: protocol.State{FrontendChrome: true}}}
+func TestHelpOpensNewTabAndConfigOpensWindow(t *testing.T) {
+	tab := &Tab{Session: &recordSession{}, State: LoopState{Page: protocol.State{FrontendChrome: true}}}
 	var opened []string
 	tab.Actions = TabActions{NewTabURL: func(url string) { opened = append(opened, url) }}
 	if handled, quit := tab.handleShellKey("?"); !handled || quit {
 		t.Fatal("? was not handled")
 	}
 	tab.activateChromeHit(ChromeHit{Kind: ChromeHitConfig})
+	if !tab.configOverlay.isOpen() {
+		t.Fatal("config icon did not open the settings window")
+	}
 	tab.activateChromeHit(ChromeHit{Kind: ChromeHitHelp})
-	want := []string{"about:help", "about:config", "about:help"}
+	want := []string{"about:help", "about:help"}
 	if fmt.Sprint(opened) != fmt.Sprint(want) {
 		t.Fatalf("opened = %v, want %v", opened, want)
 	}

@@ -3,7 +3,7 @@ package host
 import "sync"
 
 // Settings is the host-owned runtime configuration shared by navigation,
-// workers and the config page.
+// workers and the config window.
 type Settings struct {
 	mu        sync.RWMutex
 	userAgent string

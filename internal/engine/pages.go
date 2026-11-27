@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// AppPageCSS is the shared stylesheet for MOB3's own pages: help, config,
-// history, the blocked page and the error pages. It gives them one centered
-// reading column, heading scale, table, secondary-text and warning style.
+// AppPageCSS is the shared stylesheet for MOB3's own pages: help, history,
+// the blocked page and the error pages. It gives them one centered reading
+// column, heading scale, table, secondary-text and warning style.
 // Page-specific rules are appended by AppPageHTML.
 const AppPageCSS = `body { max-width: 900px; margin: 8px auto; }
 h1 { font-size: 32px; margin-bottom: 4px; }
@@ -57,9 +57,9 @@ func LoadErrorPageHTML(message string) string {
 }
 
 // ApplyPageStyles copies a generated page's <style> element into the page's
-// author rules. Pages built outside the loader (the config page and the
-// load-error placeholder) use it; loader-built pages collect their styles
-// through CollectStylesheets, which also handles linked sheets.
+// author rules. Pages built outside the loader (the load-error placeholder)
+// use it; loader-built pages collect their styles through CollectStylesheets,
+// which also handles linked sheets.
 func ApplyPageStyles(root *Node, page *Page) {
 	if root == nil || page == nil {
 		return

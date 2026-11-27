@@ -288,21 +288,6 @@ func TestRemoteHostCookies(t *testing.T) {
 	}
 }
 
-func TestRemoteHostConfigToken(t *testing.T) {
-	remote, _ := hostRPCPair(t)
-	token := remote.ConfigToken()
-	current := token.Current()
-	if current == "" {
-		t.Fatal("empty config token")
-	}
-	if !token.Consume(current) {
-		t.Fatal("config token was not consumed")
-	}
-	if token.Consume(current) {
-		t.Fatal("config token replayed")
-	}
-}
-
 func TestRemoteHostCacheAndCert(t *testing.T) {
 	remote, _ := hostRPCPair(t)
 	remote.SetCacheLimitBytes(1 << 20)

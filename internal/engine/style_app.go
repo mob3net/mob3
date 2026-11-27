@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// parseZoomPercent parses a zoom percentage from a flag or about:config field.
+// parseZoomPercent parses a zoom percentage from a flag or config value.
 // A trailing % is allowed; the value must be between 25 and 200.
 func parseZoomPercent(s string) (float64, bool) {
 	s = strings.TrimSpace(s)
@@ -21,7 +21,7 @@ func parseZoomPercent(s string) (float64, bool) {
 	return v, true
 }
 
-// zoomPercentLabel formats a zoom factor for the config page.
+// zoomPercentLabel formats a zoom factor for the config window.
 func zoomPercentLabel(z float64) string {
 	if z <= 0 {
 		z = 1

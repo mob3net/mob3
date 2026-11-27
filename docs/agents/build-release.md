@@ -42,7 +42,7 @@ agreement, the non-negotiable constraints and the change protocol.
   `-ldflags "-X browser/internal/app.Version=<tag>"`; `mob3 -version` prints
   it, and `mob3 -h` prints usage plus the short build version, the
   `AGPL-3.0-only` license and the copyright notice. `-g` is an alias for
-  `-graphics`; `about:config` shows the canonical `-graphics` name only.
+  `-graphics`.
   Release binaries and the Docker image both receive `github.ref_name`.
   Local builds use `make VERSION=vX.Y.Z` or
   `docker build --build-arg VERSION=vX.Y.Z`.

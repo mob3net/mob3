@@ -14,7 +14,7 @@ import (
 )
 
 // TestProcessWorkerHelper is the child side of the process-backend tests. The
-// real binary reaches the same code through app.Run and the hidden worker env.
+// real binary reaches the same code through app.Run and the worker process env.
 func TestProcessWorkerHelper(t *testing.T) {
 	if os.Getenv("MOB3_PROCESS_TEST_HELPER") != "1" {
 		return

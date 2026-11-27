@@ -34,23 +34,10 @@ func (w *menuOverlay) start(l *Tab, kind protocol.MenuKind) {
 	w.sync(l)
 }
 
-// notify tells the engine whether a front-end window covers the page. The
-// engine then repaints native images as half-block art and scaled text at
-// normal size, so neither can composite above the window.
-func (w *menuOverlay) notify(l *Tab, open bool) {
-	if l.overlaySent == open {
-		return
-	}
-	l.overlaySent = open
-	arg := 0
-	if open {
-		arg = 1
-	}
-	_ = l.Session.Send(protocol.Command{Body: protocol.App{Action: protocol.AppFrontendOverlay, Arg: arg}})
-}
-
+// sync tells the engine whether a front-end window covers the page, then
+// republishes the menu state.
 func (w *menuOverlay) sync(l *Tab) {
-	w.notify(l, true)
+	l.setFrontendOverlay(true)
 	st := l.State.Page
 	st.Menu = w.menuKind
 	st.MenuIndex = w.menuIndex
@@ -68,7 +55,7 @@ func (w *menuOverlay) close(l *Tab) {
 		return
 	}
 	w.menuKind = protocol.MenuNone
-	w.notify(l, false)
+	l.setFrontendOverlay(false)
 	l.State.Page = w.menuBase
 	if l.Presenter != nil {
 		l.Presenter.SetState(w.menuBase)

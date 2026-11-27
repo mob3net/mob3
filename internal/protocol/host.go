@@ -31,12 +31,6 @@ type RequestRecord struct {
 	Cached  bool
 }
 
-// ConfigToken is the one-shot token used by the config form.
-type ConfigToken interface {
-	Consume(string) bool
-	Current() string
-}
-
 // Host is the host-side port used by the engine loader: raw fetching, policy,
 // settings, cache, cookies, certificates and request accounting. It is
 // implemented by host.Session so the browser never imports internal/host.
@@ -75,8 +69,6 @@ type Host interface {
 
 	SetCertSource(source string) error
 	CertSource() string
-
-	ConfigToken() ConfigToken
 }
 
 // ImageCache is the optional host-side decoded-image cache. It is separate

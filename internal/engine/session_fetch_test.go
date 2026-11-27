@@ -823,8 +823,8 @@ func TestResolveInputSearch(t *testing.T) {
 	}
 }
 
-// TestLoaderSettingsConcurrent exercises the settings that about:config can
-// change while navigation and image workers read them.
+// TestLoaderSettingsConcurrent exercises the settings that the config window
+// can change while navigation and image workers read them.
 func TestLoaderSettingsConcurrent(t *testing.T) {
 	l := newTestLoader()
 	im := image.NewRGBA(image.Rect(0, 0, 64, 64))

@@ -137,6 +137,11 @@ func AppendCommand(dst []byte, c Command, lim Limits) ([]byte, error) {
 	case Ping:
 		kind = CmdPing
 		e.u64(v.ID)
+	case Config:
+		kind = CmdConfig
+		e.u8(uint8(v.Action))
+		e.u8(uint8(v.Field))
+		e.str(v.Value)
 	case DialogResult:
 		kind = CmdDialogResult
 		e.u32(v.ID)
@@ -369,6 +374,16 @@ func AppendEvent(dst []byte, ev Event, lim Limits) ([]byte, error) {
 		e.u64(v.ID)
 	case Ready:
 		kind = EvReady
+	case ConfigState:
+		kind = EvConfigState
+		e.count(len(v.Values))
+		for _, item := range v.Values {
+			e.u8(uint8(item.Field))
+			e.str(item.Value)
+		}
+		e.str(v.Err)
+	case OpenConfig:
+		kind = EvOpenConfig
 	case AutomationResult:
 		kind = EvAutomationResult
 		e.u8(uint8(v.Op))
@@ -460,6 +475,8 @@ func DecodeCommand(src []byte, lim Limits) (Command, []byte, error) {
 		body = Shutdown{}
 	case CmdPing:
 		body = Ping{ID: d.u64()}
+	case CmdConfig:
+		body = Config{Action: ConfigAction(d.u8()), Field: ConfigField(d.u8()), Value: d.str()}
 	case CmdDialogResult:
 		body = DialogResult{ID: d.u32(), OK: d.bool(), Text: d.str()}
 	case CmdSelectResult:
@@ -681,6 +698,15 @@ func DecodeEvent(src []byte, lim Limits) (Event, []byte, error) {
 		body = Pong{ID: d.u64()}
 	case EvReady:
 		body = Ready{}
+	case EvConfigState:
+		n := d.count(lim.MaxLinks)
+		values := make([]ConfigValue, n)
+		for i := range values {
+			values[i] = ConfigValue{Field: ConfigField(d.u8()), Value: d.str()}
+		}
+		body = ConfigState{Values: values, Err: d.str()}
+	case EvOpenConfig:
+		body = OpenConfig{}
 	case EvAutomationResult:
 		body = AutomationResult{
 			Op:   AutomationOp(d.u8()),

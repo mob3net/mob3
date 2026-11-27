@@ -21,6 +21,7 @@ type CommandHooks interface {
 	ApplyModal(protocol.ModalClose)
 	ApplyHint(protocol.HintResult)
 	ApplyConsole(protocol.ConsoleAction)
+	ApplyConfig(protocol.Config)
 	LogClientError(string)
 	Abort()
 }
@@ -71,6 +72,8 @@ func (s *Session) HandleCommand(cmd protocol.Command, h CommandHooks) (bool, err
 		h.ApplyHint(v)
 	case protocol.ConsoleAction:
 		h.ApplyConsole(v)
+	case protocol.Config:
+		h.ApplyConfig(v)
 	case protocol.ClientError:
 		h.LogClientError(v.Message)
 	case protocol.Shutdown:

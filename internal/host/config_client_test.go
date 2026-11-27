@@ -6,32 +6,6 @@ import (
 	"testing"
 )
 
-func TestConfigTokenIsOneShot(t *testing.T) {
-	tok := NewConfigToken()
-	if tok.Consume("") {
-		t.Fatal("empty token accepted")
-	}
-	if tok.Consume("guess") {
-		t.Fatal("unminted token accepted")
-	}
-	current := tok.Current()
-	if current == "" {
-		t.Fatal("Current did not mint a token")
-	}
-	if tok.Current() != current {
-		t.Fatal("Current replaced a pending token")
-	}
-	if tok.Consume("wrong") || tok.Consume("") {
-		t.Fatal("invalid token accepted")
-	}
-	if !tok.Consume(current) {
-		t.Fatal("minted token rejected")
-	}
-	if tok.Consume(current) {
-		t.Fatal("token was reusable")
-	}
-}
-
 func TestSettingsRoundTrip(t *testing.T) {
 	s := NewSettings("ua-one", "https://search.test/?q=%s")
 	s.SetUserAgent("ua-two")

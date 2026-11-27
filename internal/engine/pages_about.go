@@ -91,7 +91,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 
 <h2>Tabs</h2>
 <p><b>t</b>/<b>Ctrl-T</b> opens a tab and focuses an empty URL prompt. New tabs from
-<b>t</b>, the <b>+</b> button, help and config are added at the end; a link
+<b>t</b>, the <b>+</b> button and help are added at the end; a link
 opened in a background tab (<b>F</b> or middle click) is inserted directly after
 the current tab.
 <b>W</b>/<b>Ctrl-W</b>
@@ -133,8 +133,7 @@ destination and waits: <b>Enter</b> follows, <b>y</b> copies, and
 
 <h2>Reader mode</h2>
 <p><b>R</b> toggles a clean article view and stays on across pages. Start with
-<b>-reader</b> to enable it at launch. The config page is unavailable while
-reader mode is on.</p>
+<b>-reader</b> to enable it at launch.</p>
 
 <h2>Dark mode</h2>
 <p><b>D</b> toggles a dark palette and asks sites for
@@ -168,8 +167,11 @@ navigate, so a page that redirects to itself cannot loop forever. Each tab
 keeps at most 500 back/forward entries.</p>
 
 <h2>Config</h2>
-<p>The <b>⚙</b> icon opens <b>about:config</b> in a new tab. Changes apply to this session
-only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
+<p>The <b>⚙</b> icon or <b>about:config</b> opens a settings window over the
+current page. Use <b>↑</b>/<b>↓</b> to choose a row, <b>Enter</b> or
+<b>Space</b> to toggle a checkbox or cycle a choice, <b>Enter</b> to edit a
+text value, and <b>Esc</b> to close. Changes apply immediately to this session
+only; startup and dump-only options are not shown.</p>
 
 <h2>Mouse</h2>
 <table>
@@ -198,7 +200,7 @@ only; <b>startup</b> and <b>dump only</b> options are read-only.</p>
 <tr><td>click the footer &gt;_ icon</td><td>open or close the JS console</td></tr>
 <tr><td>click a console tab</td><td>switch console sections; <b>y</b> copies the active section</td></tr>
 <tr><td>click the console input row</td><td>focus the JavaScript or Tools input</td></tr>
-<tr><td>click the ⚙ icon</td><td>open the config page in a new tab</td></tr>
+<tr><td>click the ⚙ icon</td><td>open the settings window</td></tr>
 <tr><td>click the × or the dimmed backdrop</td><td>close the modal</td></tr>
 <tr><td>wheel or hover over a select, zoom or view window</td><td>move the highlighted option or row</td></tr>
 <tr><td>wheel</td><td>scroll</td></tr>

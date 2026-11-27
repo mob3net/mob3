@@ -153,9 +153,9 @@ agreement, the non-negotiable constraints and the change protocol.
   and a response varying on `Cookie` (or `Vary: *`) is not cached. CSS and
   JavaScript keys include the top-level schemeful site so one site cannot reuse
   another site's cached body; decoded images stay keyed by URL. Hits avoid
-  network requests; nothing is written to disk. The limit is editable in
-  `about:config`. The separate back/forward page cache is described under
-  History.
+  network requests; nothing is written to disk. The limit is derived from
+  `-mem-limit`, which is editable in the config window. The separate
+  back/forward page cache is described under History.
 - Images load concurrently (max 6) and use the session resource cache per
   resolved URL for reloads. Initial loading also selects `srcset`/`picture`
   candidates, and images added or changed by page scripts (including lazy
@@ -189,10 +189,10 @@ agreement, the non-negotiable constraints and the change protocol.
   certificates issued after that date. The selected source replaces the
   platform store instead of merging, so a machine whose CA package is stale or
   missing verifies modern sites like an updated one. Each source is labelled in
-  `about:config`, where `system` and `embedded` can be switched for the
+  the config window, where `system` and `embedded` can be switched for the
   session.
   A switch applies to later requests and swaps the transport after closing the
   old idle connections; a rejected value keeps the previous store with the
-  reason shown on the page. The bundle is refreshed by bumping the module and
+  reason shown in the window. The bundle is refreshed by bumping the module and
   re-vendoring, and is only as fresh as the pinned version. Revocation is not
   checked in any mode.

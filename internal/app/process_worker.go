@@ -30,7 +30,7 @@ type processWorkerConfig struct {
 	SessionID     uint32
 }
 
-// runProcessWorker is the hidden child mode. It runs only the engine side over
+// runProcessWorker is the engine worker mode. It runs only the engine side over
 // stdin/stdout; the parent owns the terminal, host policy and shared state.
 func runProcessWorker(o runOptions) int {
 	if o.MemLimit > 0 {

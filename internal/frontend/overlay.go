@@ -31,14 +31,15 @@ type overlay interface {
 
 // overlayList returns every front-end window in dispatch priority order. This
 // is the only declaration of which windows exist and which owns input first.
-func (l *Tab) overlayList() [11]overlay {
-	return [11]overlay{
+func (l *Tab) overlayList() [12]overlay {
+	return [12]overlay{
 		&l.linkPreviewOverlay,
 		&l.consoleOverlay,
 		&l.hintOverlay,
 		&l.downloadOverlay,
 		&l.noticeOverlay,
 		&l.selectOverlay,
+		&l.configOverlay,
 		&l.historyOverlay,
 		&l.dialogOverlay,
 		&l.promptOverlay,

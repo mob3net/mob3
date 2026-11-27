@@ -94,7 +94,7 @@ func newSessionWithBrowserContext(w, h int, bc *BrowserContext, resetZoom bool) 
 		historyState: historyState{
 			Cache: NewPageCache(historyCacheBudget(effectiveMemoryLimit())), historyViewCur: -1,
 		},
-		configState: configState{home: "about:home", configToken: loader.ConfigToken()},
+		configState: configState{home: "about:home"},
 		loader:      loader,
 		browser:     bc,
 		tabID:       tabID,
@@ -122,11 +122,6 @@ func newSessionWithBrowserContext(w, h int, bc *BrowserContext, resetZoom bool) 
 // default loader.
 func (b *Session) setLoader(l *Loader) {
 	b.loader = l
-	if l != nil {
-		b.configToken = l.ConfigToken()
-	} else {
-		b.configToken = nil
-	}
 	if l == nil {
 		b.Images = nil
 	} else {
@@ -271,32 +266,10 @@ func (b *Session) navigateRequestEntry(method, input string, body []byte, conten
 	}
 	restoreScroll, hasRestoreScroll := b.NextScroll, b.NextScrollSet
 	b.NextScrollSet = false
-	if isAboutConfigURL(u) && b.Reader {
-		b.status = "Config is not available in reader mode — press R to turn it off"
-		b.draw()
-		return
-	}
 	if isAboutConfigURL(u) {
 		b.clearInputFocus()
-		b.suspendCurrentPage()
-		b.cancelLoadNow()
-		if b.loader != nil {
-			b.loader.BeginPage()
-		}
-		b.LoadSeq++
-		q := configValues(method, u, body)
-		applied := false
-		if b.consumeConfigToken(q.Get(configTokenParam)) {
-			b.applyConfig(q)
-			applied = true
-		} else if configHasSettings(q) {
-			b.configNotice = "Settings not changed: use the Apply button on the config page"
-		}
-		page := b.configPage(u, applied)
-		b.finishLoad(LoadResult{
-			Seq: b.LoadSeq, Page: page, URL: u, EntryID: entryID, HistoryPush: historyPush, Method: protocol.MethodGet,
-			RestoreScroll: restoreScroll, HasRestoreScroll: hasRestoreScroll,
-		})
+		b.clearControlFocus()
+		b.emitOpenConfig()
 		return
 	}
 	b.clearInputFocus()
@@ -528,10 +501,6 @@ func (b *Session) scaledTextWanted() bool {
 // toggleReader switches between the page and an extracted article view without
 // touching history or the live page DOM.
 func (b *Session) toggleReader() {
-	if !b.Reader && isAboutConfigURL(b.URL) {
-		b.status = "Reader mode is unavailable on the config page"
-		return
-	}
 	if !b.Reader && readerPageSkipped(b.URL) {
 		b.status = "Reader mode is unavailable on the history page"
 		return

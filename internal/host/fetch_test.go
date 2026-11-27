@@ -227,9 +227,6 @@ func TestSessionAccessorsAndCachedImage(t *testing.T) {
 		s.IsMixedContentError(nil) || s.IsLocalNetworkError(nil) {
 		t.Fatal("network error wrappers")
 	}
-	if s.ConfigToken().Current() == "" {
-		t.Fatal("config token wrapper")
-	}
 	if s.Client() == nil || s.Cookies() == nil || s.Settings() == nil || s.Cache() == nil || s.Requests() == nil {
 		t.Fatal("debug accessors")
 	}

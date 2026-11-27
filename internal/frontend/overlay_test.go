@@ -18,6 +18,7 @@ func TestOverlayDispatchOrder(t *testing.T) {
 		"*frontend.downloadOverlay",
 		"*frontend.noticeOverlay",
 		"*frontend.selectOverlay",
+		"*frontend.configOverlay",
 		"*frontend.historyOverlay",
 		"*frontend.dialogOverlay",
 		"*frontend.promptOverlay",

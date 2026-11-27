@@ -297,13 +297,6 @@ func (l *Loader) RequestCount() int {
 	return l.Host.RequestCount()
 }
 
-func (l *Loader) ConfigToken() protocol.ConfigToken {
-	if l == nil || l.Host == nil {
-		return nil
-	}
-	return l.Host.ConfigToken()
-}
-
 type requestRecord = protocol.RequestRecord
 
 func (l *Loader) ImageCapW() int { w, _ := l.ImageCap(); return w }

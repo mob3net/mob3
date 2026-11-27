@@ -28,7 +28,7 @@ func testHostCall() HostCall {
 		Gen: 3, Kind: "doc", RequestID: 9, Status: 200, Size: 12,
 		Elapsed: 2 * time.Second, ErrKind: HostErrMixedContent,
 		ErrText: "blocked", Limit: 1 << 20, UserAgent: "ua", SearchURL: "https://search/",
-		Width: 800, Height: 600, CookieRaw: "a=b", Source: "embedded", Token: "tok",
+		Width: 800, Height: 600, CookieRaw: "a=b", Source: "embedded",
 	}
 }
 

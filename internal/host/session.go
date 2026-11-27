@@ -15,15 +15,14 @@ import (
 var _ protocol.Host = (*Session)(nil)
 
 // Session owns the host-side state one engine loader needs: HTTP client,
-// cookies, settings, resource cache, request log and config token. It
-// implements protocol.Host so the engine never imports this package.
+// cookies, settings, resource cache and request log. It implements
+// protocol.Host so the engine never imports this package.
 type Session struct {
 	client   *Client
 	cookies  *CookieJar
 	settings *Settings
 	cache    *ResourceCache
 	requests *RequestLog
-	token    *ConfigToken
 	// attested holds the final URL of recent document fetches by entry ID. It
 	// is bounded because the front end only needs the entries whose commits
 	// have not been applied yet; overlapping loads can otherwise evict an
@@ -48,7 +47,6 @@ func NewSession() *Session {
 		settings: NewSettings("", ""),
 		cache:    NewResourceCache(0),
 		requests: NewRequestLog(),
-		token:    NewConfigToken(),
 		attested: make(map[uint64]string),
 	}
 }
@@ -180,8 +178,6 @@ func (s *Session) CookieViews(u *url.URL) []protocol.CookieView { return s.cooki
 func (s *Session) SetCertSource(source string) error { return s.client.SetCertSource(source) }
 func (s *Session) CertSource() string                { return s.client.CertSource() }
 func (s *Session) CertPool() *x509.CertPool          { return s.client.CertPool() }
-
-func (s *Session) ConfigToken() protocol.ConfigToken { return s.token }
 
 // Test/debug accessors.
 func (s *Session) Client() *Client       { return s.client }

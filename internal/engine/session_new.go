@@ -86,7 +86,6 @@ type SessionConfig struct {
 	Interactive   bool
 	Reader, Dark  bool
 	Home          string
-	CLIConfig     map[string]string
 	Color         bool
 	NoJS, NoPDF   bool
 	LayoutBudget  LayoutBudget
@@ -120,7 +119,6 @@ func NewConfiguredSession(c SessionConfig) *Session {
 	if strings.TrimSpace(b.home) == "" {
 		b.home = "about:home"
 	}
-	b.cliConfig = c.CLIConfig
 	b.color = c.Color
 	b.NoJS = c.NoJS
 	b.NoPDF = c.NoPDF
@@ -165,9 +163,6 @@ func JSMemLimit() int64 { return jsHeapBudget(effectiveMemoryLimit()) }
 
 // ParseZoomPercent parses the -zoom value.
 func ParseZoomPercent(s string) (float64, bool) { return parseZoomPercent(s) }
-
-// ZoomPercentLabel formats a zoom factor for the config page.
-func ZoomPercentLabel(z float64) string { return zoomPercentLabel(z) }
 
 // AutomationConfig is the headless session configuration used by MCP.
 type AutomationConfig struct {

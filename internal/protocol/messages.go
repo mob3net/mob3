@@ -239,6 +239,63 @@ type Ping struct {
 
 func (Ping) commandKind() Kind { return CmdPing }
 
+// ConfigField identifies one mutable runtime setting. Read-only startup and
+// dump-only options are not part of the config overlay.
+type ConfigField uint8
+
+const (
+	ConfigNoJS ConfigField = iota + 1
+	ConfigNoPDF
+	ConfigIgnoreBlocks
+	ConfigHome
+	ConfigMemLimit
+	ConfigLayoutBudget
+	ConfigZoom
+	ConfigTextScale
+	ConfigUserAgent
+	ConfigSearch
+	ConfigCerts
+)
+
+// ConfigAction selects a config read or write.
+type ConfigAction uint8
+
+const (
+	ConfigGet ConfigAction = iota + 1
+	ConfigSet
+)
+
+// Config reads or changes one runtime setting. Values are plain text: the
+// engine validates them and keeps the previous value when a write is rejected.
+type Config struct {
+	Action ConfigAction
+	Field  ConfigField
+	Value  string
+}
+
+func (Config) commandKind() Kind { return CmdConfig }
+
+// ConfigValue is one mutable setting and its current value.
+type ConfigValue struct {
+	Field ConfigField
+	Value string
+}
+
+// ConfigState answers a Config command with the full mutable snapshot. Err
+// explains a rejected write; the snapshot already carries the retained value.
+type ConfigState struct {
+	Values []ConfigValue
+	Err    string
+}
+
+func (ConfigState) eventKind() Kind { return EvConfigState }
+
+// OpenConfig asks the front end to open its settings window. It backs an
+// about:config navigation that starts inside the engine, such as a page link.
+type OpenConfig struct{}
+
+func (OpenConfig) eventKind() Kind { return EvOpenConfig }
+
 // Pong is the response to one Ping.
 type Pong struct {
 	ID uint64

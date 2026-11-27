@@ -47,7 +47,7 @@ Run `mob3 -h` for the exact defaults in your build.
 
 ## Process placement
 
-`-process=per-tab` (the default) runs one hidden engine child per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
+`-process=per-tab` (the default) runs a separate engine process per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
 
 Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=per-tab`.
 
@@ -173,7 +173,7 @@ caps:
 | `none` | disabled | disabled | disabled |
 
 `none` can freeze the UI on hostile or generated pages. The preset is editable
-in `about:config`; a zero individual limit disables that check. When a limit is
+in the config window; a zero individual limit disables that check. When a limit is
 hit, the page renders partially and the status says
 `Page truncated (layout limit)`.
 
@@ -186,7 +186,7 @@ represents, not the text size: body text keeps one cell per character and its
 normal line height, while fixed pixel widths, spacing, borders, images and
 kitty scaled large headings grow or shrink. The CSS viewport follows the ratio,
 so responsive pages reflow. It applies to dump, PNG and MCP runs, is editable in
-`about:config`, and is never persisted. In the interactive browser the URL row
+the config window, and is never persisted. In the interactive browser the URL row
 always shows the current level as a clickable badge at its far right; clicking
 it opens a window for choosing a preset with the mouse or arrow keys and
 `Enter`.
@@ -219,11 +219,11 @@ old but present CA package is not overridden, which is exactly when the flag is
 needed.
 
 The value can be switched between `system` and `embedded` for the session in
-`about:config`. It applies to every later request, and pooled connections made
+the config window. It applies to every later request, and pooled connections made
 with the previous store are closed. Certificate files are not supported: the
 binary reads no local bundle. An unknown value at startup is an error and the
-run stops; a rejected value in `about:config` keeps the current store and shows
-the reason on the page.
+run stops; a rejected value in the config window keeps the current store and
+shows the reason in the window.
 
 Trust-store choice is not a security boundary: revocation is not checked, and
 there is no certificate UI, pinning or warning flow beyond the connection error
@@ -275,13 +275,16 @@ and tools.
 
 ## `about:config`
 
-The `⚙` toolbar icon opens `about:config`, a form listing every CLI option and
-its current value. Editable options change for the session only; startup
-options are read-only; dump-only colour options do not affect the interactive
-UI. The top shows the current viewport in characters and pixels (using the
-terminal's reported cell size, or 8×16 by default). Nothing is persisted.
+The `⚙` toolbar icon, or typing `about:config`, opens a settings window over
+the current page. It lists only the options that can change at runtime:
+JavaScript, the PDF viewer, blocklist overrides, the home page, the memory
+limit, the layout budget, zoom, text scaling, the user agent, the search URL
+and the certificate store. Startup and dump-only options are not shown, and
+nothing is persisted.
 
-The form posts its values with a one-shot session token. A link, script or
-typed `about:config?...` query without that token applies nothing, so page
-content cannot rewrite session settings; use the form's **Apply changes**
-button.
+Use `↑`/`↓` to choose a row, `Enter` or `Space` to toggle a checkbox or cycle a
+choice, `Enter` to edit a text value, and `Esc` to close. Toggles and choices
+apply immediately; a text value applies when the edit is committed. A rejected
+value keeps the current setting and shows the reason in the window. The window
+works over any page, including reader mode; a page link to `about:config`
+opens the same window.

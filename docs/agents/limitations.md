@@ -141,8 +141,8 @@ agreement, the non-negotiable constraints and the change protocol.
   percentage layouts barely change in cells while fixed-pixel content grows.
   There is no horizontal scrolling, so zoomed-in fixed-width content can clip
   on the right instead of scrolling sideways, and bitmaps decoded before a
-  zoom-out can be upscaled. Zoom starts at `-zoom N`, is editable in
-  `about:config`, and is never persisted.
+  zoom-out can be upscaled. Zoom starts at `-zoom N`, is editable in the
+  config window, and is never persisted.
 - PDF support is text only. Pages are extracted, never rasterized: figures,
   images, chart art, shadings, annotations and link targets do not appear,
   scanned documents show no text, and encrypted (password-protected) files are

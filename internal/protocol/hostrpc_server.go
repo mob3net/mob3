@@ -169,14 +169,6 @@ func (s *HostServer) dispatch(ctx context.Context, call HostCall) HostResult {
 		err = s.host.SetCertSource(call.Source)
 	case HostOpCertSource:
 		result.Text = s.host.CertSource()
-	case HostOpConfigTokenCurrent:
-		if token := s.host.ConfigToken(); token != nil {
-			result.Text = token.Current()
-		}
-	case HostOpConfigTokenConsume:
-		if token := s.host.ConfigToken(); token != nil {
-			result.Bool = token.Consume(call.Token)
-		}
 	default:
 		err = fmt.Errorf("%w: host op %d", ErrInvalid, call.Op)
 	}

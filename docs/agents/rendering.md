@@ -114,8 +114,8 @@ agreement, the non-negotiable constraints and the change protocol.
   points check it; expiry produces a partial layout with `Layout.Truncated`
   set and the status `Page truncated (layout limit)`. This is the safety net
   against pathological pages, alongside the fragment/row limits. The three
-  limits are bundled into one `-layout-budget` preset, editable in
-  `about:config`: `low` (1s, 100k fragments, 80k rows), `standard` (2s, 250k,
+  limits are bundled into one `-layout-budget` preset, editable in the
+  config window: `low` (1s, 100k fragments, 80k rows), `standard` (2s, 250k,
   200k; the default), `high` (5s, 1M, 1M) and `none` (disables all three,
   which can freeze the UI on hostile pages). A zero limit disables that
   individual check.

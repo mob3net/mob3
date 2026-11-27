@@ -147,8 +147,8 @@ func (b *processTabBackend) killProcess() {
 	}
 }
 
-// newProcessBackendFactory returns a backend factory that starts one hidden
-// engine child per tab. The child receives the same CLI flags as the parent and
+// newProcessBackendFactory returns a backend factory that starts a dedicated
+// engine process per tab. The child receives the same CLI flags as the parent and
 // a small JSON geometry/config blob.
 func newProcessBackendFactory(hostSess *host.Session, storage protocol.StorageProvider, args []string, caps protocol.Capabilities, zoom float64, graphics int) tabBackendFactory {
 	self, err := os.Executable()
@@ -159,7 +159,7 @@ func newProcessBackendFactory(hostSess *host.Session, storage protocol.StoragePr
 }
 
 // startProcessBackend is the spawn seam used by tests. execPath and extraEnv
-// let a test run the hidden worker from the test binary itself.
+// let a test run the worker process from the test binary itself.
 func startProcessBackend(hostSess *host.Session, storage protocol.StorageProvider, execPath string, args, extraEnv []string, caps protocol.Capabilities, zoom float64, graphics int) tabBackendFactory {
 	return func(_ *engine.Loader, id protocol.SessionID, init protocol.Init, target string) (tabBackend, error) {
 		cfg := processWorkerConfig{

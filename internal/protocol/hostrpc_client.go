@@ -133,7 +133,6 @@ type RemoteHost struct {
 }
 
 var _ Host = (*RemoteHost)(nil)
-var _ ConfigToken = (*remoteConfigToken)(nil)
 
 // NewRemoteHost wraps a host client as a Host.
 func NewRemoteHost(client *HostClient) *RemoteHost {
@@ -343,27 +342,6 @@ func (h *RemoteHost) CertSource() string {
 		return ""
 	}
 	return result.Text
-}
-
-func (h *RemoteHost) ConfigToken() ConfigToken {
-	return &remoteConfigToken{host: h}
-}
-
-type remoteConfigToken struct {
-	host *RemoteHost
-}
-
-func (t *remoteConfigToken) Current() string {
-	result, err := t.host.call(context.Background(), HostCall{Op: HostOpConfigTokenCurrent})
-	if err != nil {
-		return ""
-	}
-	return result.Text
-}
-
-func (t *remoteConfigToken) Consume(got string) bool {
-	result, err := t.host.call(context.Background(), HostCall{Op: HostOpConfigTokenConsume, Token: got})
-	return err == nil && result.Bool
 }
 
 func errorText(err error) string {

@@ -1,13 +1,25 @@
 package engine
 
 import (
-	"net/http"
-	"net/url"
+	"runtime/debug"
 	"strings"
 	"testing"
+
+	"browser/internal/protocol"
 )
 
-func TestConfigPageShowsValues(t *testing.T) {
+func configValue(t *testing.T, values []protocol.ConfigValue, field protocol.ConfigField) string {
+	t.Helper()
+	for _, v := range values {
+		if v.Field == field {
+			return v.Value
+		}
+	}
+	t.Fatalf("config snapshot has no field %d", field)
+	return ""
+}
+
+func TestConfigSnapshotMutableOnly(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
 	b.home = "https://example.com/home"
@@ -16,250 +28,175 @@ func TestConfigPageShowsValues(t *testing.T) {
 	b.NoBigText = true
 	b.loader.SetUserAgent("TestUA")
 	b.loader.SetSearchURL("https://search.example/?q=%s")
-	b.cliConfig = map[string]string{
-		"-dump": "off", "-width": "80", "-graphics": "auto",
-		"-color": "off", "-no-color": "off",
-		"-version": "dev",
+
+	values := b.configSnapshot()
+	if len(values) != 11 {
+		t.Fatalf("config snapshot has %d values, want 11", len(values))
 	}
-	page := b.configPage(mustParse(t, "about:config"), false)
-	if !strings.Contains(page.RawHTML, "max-width: 900px") || !strings.Contains(page.RawHTML, "margin: 8px auto") {
-		t.Error("config page is not using the narrow reading column")
+	want := map[protocol.ConfigField]string{
+		protocol.ConfigNoJS:         "on",
+		protocol.ConfigNoPDF:        "off",
+		protocol.ConfigIgnoreBlocks: "off",
+		protocol.ConfigHome:         "https://example.com/home",
+		protocol.ConfigLayoutBudget: "standard",
+		protocol.ConfigZoom:         "100",
+		protocol.ConfigTextScale:    "off",
+		protocol.ConfigUserAgent:    "TestUA",
+		protocol.ConfigSearch:       "https://search.example/?q=%s",
+		protocol.ConfigCerts:        "system",
 	}
-	text := page.Root.TextContent()
-	for _, want := range []string{
-		"-dump", "-width", "-graphics", "-no-js", "-reader", "-dark", "-ignore-blocks",
-		"-home", "-layout-budget", "-text-scale", "-color", "-no-color",
-		"-ua", "-search", "-mcp", "-version", "startup",
-		"Viewport:", "80x7 characters", "640x112 pixels", "8x16 per cell",
-		"JS 64 MB", "cache 32 MB", "history 128 MB",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("config page missing %q", want)
-		}
-	}
-	if strings.Contains(text, "-js-memory") {
-		t.Error("config page still lists the removed -js-memory option")
-	}
-	values := map[string]string{}
-	checked := map[string]bool{}
-	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		values[n.Attr("name")] = n.Attr("value")
-		checked[n.Attr("name")] = n.HasAttr("checked")
-	}
-	selects := map[string]string{}
-	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "select" }) {
-		selects[n.Attr("name")] = InputValue(n)
-	}
-	want := map[string]string{
-		"no-js": "on", "home": "https://example.com/home",
-		"ua": "TestUA", "search": "https://search.example/?q=%s",
-	}
-	for k, v := range want {
-		if values[k] != v {
-			t.Errorf("input %s = %q, want %q", k, values[k], v)
-		}
-	}
-	if selects["text-scale"] != "off" {
-		t.Errorf("text-scale select = %q, want off", selects["text-scale"])
-	}
-	if !checked["no-js"] {
-		t.Fatal("no-js checkbox is not checked")
-	}
-	for _, n := range page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		if n.Attr("name") == "no-js" && n.Attr("type") != "checkbox" {
-			t.Fatalf("no-js input type = %q", n.Attr("type"))
+	for field, value := range want {
+		if got := configValue(t, values, field); got != value {
+			t.Errorf("field %d = %q, want %q", field, got, value)
 		}
 	}
 }
 
-func TestConfigPageShowsPixelViewport(t *testing.T) {
-	b := newTestSession(80, 10)
-	b.CellW, b.CellH = 10, 20
-	page := b.configPage(mustParse(t, "about:config"), false)
-	text := page.Root.TextContent()
-	for _, want := range []string{"80x7 characters", "800x140 pixels", "10x20 per cell"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("config page missing %q:\n%s", want, text)
-		}
-	}
-}
-
-func TestApplyConfig(t *testing.T) {
+func TestApplyConfigValues(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
-	q := url.Values{
-		"no-js":         {"on"},
-		"ignore-blocks": {"on"},
-		"home":          {"https://example.com/start"},
-		"layout-budget": {"high"},
-		"text-scale":    {"off"},
-		"ua":            {"TestUA"},
-		"search":        {""},
+	prevLimit := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(prevLimit)
+	cases := []struct {
+		field protocol.ConfigField
+		value string
+		check func() bool
+	}{
+		{protocol.ConfigNoJS, "on", func() bool { return b.NoJS && b.loader.NoScripts }},
+		{protocol.ConfigNoPDF, "on", func() bool { return b.NoPDF && b.loader.NoPDF }},
+		{protocol.ConfigIgnoreBlocks, "on", func() bool { return b.loader.IgnoreBlocks }},
+		{protocol.ConfigHome, "https://example.com/start", func() bool { return b.home == "https://example.com/start" }},
+		{protocol.ConfigMemLimit, "64", func() bool { return b.memLimitBytes == 64<<20 }},
+		{protocol.ConfigLayoutBudget, "high", func() bool { return b.LayoutBudget.Name == "high" }},
+		{protocol.ConfigTextScale, "off", func() bool { return b.NoBigText }},
+		{protocol.ConfigUserAgent, "TestUA", func() bool { return b.loader.RequestUserAgent() == "TestUA" }},
+		{protocol.ConfigSearch, "", func() bool { return b.loader.SearchTemplate() == "" }},
+		{protocol.ConfigCerts, "embedded", func() bool { return b.loader.CertStore == CertSourceEmbedded }},
 	}
-	b.applyConfig(q)
-	if !b.NoJS || !b.loader.NoScripts {
-		t.Fatal("-no-js was not applied")
-	}
-	if !b.loader.IgnoreBlocks {
-		t.Fatal("-ignore-blocks was not applied")
-	}
-	if b.home != "https://example.com/start" {
-		t.Fatalf("home = %q", b.home)
-	}
-	if !b.NoBigText {
-		t.Fatal("text-scale off was not applied")
-	}
-	if b.LayoutBudget.Name != "high" {
-		t.Fatalf("layout budget = %q, want high", b.LayoutBudget.Name)
-	}
-	if b.loader.RequestUserAgent() != "TestUA" {
-		t.Fatalf("ua = %q", b.loader.RequestUserAgent())
-	}
-	if b.loader.SearchTemplate() != "" {
-		t.Fatalf("search = %q", b.loader.SearchTemplate())
-	}
-}
-
-func TestConfigNavigation(t *testing.T) {
-	b := newTestSession(80, 10)
-	b.setLoader(newTestLoader())
-	oldHome, oldMem := b.home, b.JSMemLimit
-	// A typed query without the form token applies nothing.
-	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2Fhome", true)
-	if b.Page == nil || b.Page.Title != "Config — MOB3" {
-		t.Fatalf("config page = %+v", b.Page)
-	}
-	if b.home != oldHome || b.JSMemLimit != oldMem {
-		t.Fatal("typed about:config query changed settings without a token")
-	}
-	if !strings.Contains(b.Page.Root.TextContent(), "Settings not changed") {
-		t.Fatal("missing notice for a token-less config query")
-	}
-
-	// The rendered form carries a token and posts its values.
-	form := b.Page.Root.FindFirst("form")
-	if form == nil || strings.ToLower(form.Attr("method")) != "post" {
-		t.Fatalf("config form = %v, want method post", form)
-	}
-	token := configInputValue(b.Page, configTokenParam)
-	if token == "" || token != b.configToken.Current() {
-		t.Fatalf("form token = %q, browser token = %q", token, b.configToken.Current())
-	}
-	for _, n := range b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		if n.Attr("name") == "home" {
-			n.Value, n.ValueSet = "https://example.com/home", true
+	for _, tc := range cases {
+		if err := b.applyConfigValue(tc.field, tc.value); err != "" {
+			t.Fatalf("field %d: %s", tc.field, err)
+		}
+		if !tc.check() {
+			t.Fatalf("field %d did not apply %q", tc.field, tc.value)
 		}
 	}
-	if started, reason := b.submitForm(form); !started {
-		t.Fatalf("config form did not submit: %s", reason)
-	}
-	if b.home != "https://example.com/home" {
-		t.Fatalf("home = %q", b.home)
-	}
-	values := map[string]string{}
-	for _, n := range b.Page.Root.FindAll(func(n *Node) bool { return n.Tag == "input" }) {
-		values[n.Attr("name")] = InputValue(n)
-	}
-	if values["home"] != "https://example.com/home" {
-		t.Fatalf("config inputs = %+v", values)
-	}
-	if b.configToken.Current() == token {
-		t.Fatal("config token was not rotated after use")
-	}
-
-	// Replaying the used token from an old page applies nothing.
-	body := url.Values{
-		configTokenParam: {token},
-		"config-form":    {"1"},
-		"home":           {"https://evil.example/"},
-	}.Encode()
-	b.navigateRequest(http.MethodPost, "about:config", []byte(body), "application/x-www-form-urlencoded", true)
-	if b.home == "https://evil.example/" {
-		t.Fatal("replayed config token changed the home page")
-	}
 }
 
-// configInputValue returns the first input value with the given name.
-func configInputValue(page *Page, name string) string {
-	for _, n := range page.Root.FindAll(func(n *Node) bool {
-		return n.Tag == "input" && n.Attr("name") == name
-	}) {
-		return InputValue(n)
-	}
-	return ""
-}
-
-func TestConfigBlockedInReaderMode(t *testing.T) {
-	b := newTestSession(80, 10)
-	u := mustParse(t, "https://example.com/article")
-	b.Page = &Page{URL: u, Base: u, Title: "Article"}
-	b.URL = u
-	b.Reader = true
-	oldPage := b.Page
-	withQuietStdout(t, func() { b.Navigate("about:config", true) })
-	if b.Page != oldPage {
-		t.Fatal("config navigation replaced the page in reader mode")
-	}
-	want := "Config is not available in reader mode — press R to turn it off"
-	if b.status != want {
-		t.Fatalf("status = %q, want %q", b.status, want)
-	}
-	if statusLevelFor(b.status) != statusWarning {
-		t.Fatal("reader-mode config notice is not a warning")
-	}
-
-	cfg := newTestSession(80, 10)
-	cfgURL := mustParse(t, "about:config")
-	cfg.Page = &Page{URL: cfgURL, Base: cfgURL, Title: "Config — MOB3"}
-	cfg.URL = cfgURL
-	cfg.toggleReader()
-	if cfg.Reader {
-		t.Fatal("reader mode was enabled on the config page")
-	}
-	if cfg.status != "Reader mode is unavailable on the config page" {
-		t.Fatalf("status = %q", cfg.status)
-	}
-}
-
-func TestConfigCheckboxForm(t *testing.T) {
+func TestApplyConfigRejectsInvalidValues(t *testing.T) {
 	b := newTestSession(80, 10)
 	b.setLoader(newTestLoader())
-	b.NoJS = true
-	b.loader.IgnoreBlocks = true
-	b.applyConfig(url.Values{"config-form": {"1"}})
-	if b.NoJS || b.loader.NoScripts {
-		t.Fatal("unchecked no-js did not turn JS on")
+	prevLimit := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(prevLimit)
+	b.setMemoryLimitMB(32)
+	b.LayoutBudget = DefaultLayoutBudget
+	oldZoom := b.Zoom
+	oldCerts := b.loader.CertStore
+
+	cases := []struct {
+		name  string
+		field protocol.ConfigField
+		value string
+		want  string
+	}{
+		{"javascript", protocol.ConfigNoJS, "maybe", "on or off"},
+		{"pdf", protocol.ConfigNoPDF, "maybe", "on or off"},
+		{"blocks", protocol.ConfigIgnoreBlocks, "maybe", "on or off"},
+		{"memory", protocol.ConfigMemLimit, "many", "whole number"},
+		{"budget", protocol.ConfigLayoutBudget, "tiny", "low, standard, high or none"},
+		{"zoom", protocol.ConfigZoom, "10", "between 25% and 200%"},
+		{"text", protocol.ConfigTextScale, "huge", "auto or off"},
+		{"certs", protocol.ConfigCerts, "roots.pem", "system or embedded"},
 	}
-	if b.loader.IgnoreBlocks {
-		t.Fatal("unchecked ignore-blocks did not turn it off")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := b.applyConfigValue(tc.field, tc.value); !strings.Contains(got, tc.want) {
+				t.Fatalf("error = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if b.memLimitBytes != 32<<20 || b.LayoutBudget.Name != "standard" || b.Zoom != oldZoom || b.loader.CertStore != oldCerts {
+		t.Fatal("a rejected value changed the setting")
 	}
 }
 
 func TestConfigAppliesZoom(t *testing.T) {
 	b := newTestSession(80, 24)
 	defer SetZoom(1)
-	b.applyConfig(url.Values{"zoom": {"150%"}})
+	if err := b.applyConfigValue(protocol.ConfigZoom, "150"); err != "" {
+		t.Fatal(err)
+	}
 	if b.Zoom != 1.5 {
 		t.Fatalf("zoom = %g, want 1.5", b.Zoom)
 	}
 	if got := PX(16).ResolveH(0, 16); got != 3 {
 		t.Fatalf("16px at 150%% = %d cells, want 3", got)
 	}
-	found := false
-	for _, it := range b.configItems() {
-		if it.Flag == "-zoom" {
-			found = true
-			if it.Value != "150%" {
-				t.Fatalf("-zoom value = %q, want 150%%", it.Value)
-			}
-		}
+	if got := configValue(t, b.configSnapshot(), protocol.ConfigZoom); got != "150" {
+		t.Fatalf("zoom value = %q, want 150", got)
 	}
-	if !found {
-		t.Fatal("about:config does not list -zoom")
+}
+
+type configSink struct {
+	state  protocol.ConfigState
+	opened bool
+}
+
+func (s *configSink) Send(ev protocol.Event) error {
+	switch v := ev.Body.(type) {
+	case protocol.ConfigState:
+		s.state = v
+	case protocol.OpenConfig:
+		s.opened = true
 	}
-	// Out-of-range values are ignored.
-	b.applyConfig(url.Values{"zoom": {"10"}})
-	if b.Zoom != 1.5 {
-		t.Fatalf("invalid zoom changed value to %g", b.Zoom)
+	return nil
+}
+
+func TestConfigCommandAnswersWithSnapshot(t *testing.T) {
+	b := newTestSession(80, 10)
+	b.setLoader(newTestLoader())
+	sink := &configSink{}
+	b.sessionOut = sink
+
+	b.applyConfigCommand(protocol.Config{Action: protocol.ConfigGet})
+	if len(sink.state.Values) != 11 || sink.state.Err != "" {
+		t.Fatalf("config response = %+v", sink.state)
+	}
+	if got := configValue(t, sink.state.Values, protocol.ConfigHome); got != "about:home" {
+		t.Fatalf("home = %q", got)
+	}
+
+	b.applyConfigCommand(protocol.Config{Action: protocol.ConfigSet, Field: protocol.ConfigHome, Value: "https://example.com/"})
+	if sink.state.Err != "" {
+		t.Fatal(sink.state.Err)
+	}
+	if got := configValue(t, sink.state.Values, protocol.ConfigHome); got != "https://example.com/" {
+		t.Fatalf("home = %q", got)
+	}
+
+	b.applyConfigCommand(protocol.Config{Action: protocol.ConfigSet, Field: protocol.ConfigZoom, Value: "10"})
+	if !strings.Contains(sink.state.Err, "between 25% and 200%") {
+		t.Fatalf("error = %q", sink.state.Err)
+	}
+	if got := configValue(t, sink.state.Values, protocol.ConfigZoom); got != "100" {
+		t.Fatalf("zoom = %q, want the retained value", got)
+	}
+}
+
+func TestAboutConfigAsksFrontendToOpenSettings(t *testing.T) {
+	b := newTestSession(80, 10)
+	b.setLoader(newTestLoader())
+	sink := &configSink{}
+	b.sessionOut = sink
+	oldPage := b.Page
+	b.Navigate("about:config?home=https%3A%2F%2Fexample.com%2F", true)
+	if !sink.opened {
+		t.Fatal("about:config did not ask the front end to open settings")
+	}
+	if b.Page != oldPage {
+		t.Fatal("about:config replaced the page in the engine")
+	}
+	if b.home != "about:home" {
+		t.Fatalf("about:config query changed home to %q", b.home)
 	}
 }

@@ -48,6 +48,7 @@ func testCommands() []Command {
 		{Session: 11, Seq: 11, Body: DialogResult{ID: 77, OK: true, Text: "yes"}},
 		{Session: 12, Seq: 12, Body: ClientError{Message: "invalid engine event: test"}},
 		{Session: 13, Seq: 13, Body: Automation{Op: AutomationRunCommand, Name: "snapshot", Args: []byte(`{"x":1}`)}},
+		{Session: 21, Seq: 21, Body: Config{Action: ConfigSet, Field: ConfigHome, Value: "about:home"}},
 	}
 }
 
@@ -93,6 +94,8 @@ func testEvents() []Event {
 		{Session: 11, Seq: 11, Body: Pong{ID: 99}},
 		{Session: 11, Seq: 11, Body: Ready{}},
 		{Session: 12, Seq: 12, Body: AutomationResult{Op: AutomationSnapshot, Text: "page"}},
+		{Session: 18, Seq: 18, Body: ConfigState{Values: []ConfigValue{{Field: ConfigNoJS, Value: "on"}, {Field: ConfigZoom, Value: "150"}}, Err: "rejected"}},
+		{Session: 19, Seq: 19, Body: OpenConfig{}},
 	}
 }
 
