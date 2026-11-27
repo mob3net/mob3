@@ -45,6 +45,12 @@ agreement, the non-negotiable constraints and the change protocol.
   delivery is timer-based.
   Apps requiring missing APIs (for example Google search) may still show their
   no-JavaScript fallback.
+- **JS watchdog:** the 2-second interrupt is observed by sobek's bytecode
+  loop. A native ECMAScript regular-expression match cannot be interrupted, so
+  an expression with catastrophic backtracking can exceed the budget. The
+  liveness probe then force-stops the tab and keeps it as a crashed one; in
+  `-process=single` the abandoned engine goroutine keeps running until the
+  process exits, and dump, PNG and MCP modes hang until the match returns.
 - **CSS `:has()`:** supported with a bounded descendant/sibling search.
   Very large subtrees can exceed the search budget and are treated as
   non-matching rather than scanning without a limit. Selector matching itself

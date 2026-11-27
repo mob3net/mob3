@@ -111,7 +111,8 @@ mode, zoom and the memory readout are browser-wide. A background tab keeps
 loading and updates its title, but its timers and image work are paused and it
 never draws. A crashed tab stays marked <b>Crashed</b>, shows the sanitized
 reason in a scrollable content view, and can be closed without stopping the
-others. Scroll the report with the arrow keys, <b>PgUp</b>/<b>PgDn</b> or
+others. A tab whose engine stops responding is force-stopped and shown the same
+way. Scroll the report with the arrow keys, <b>PgUp</b>/<b>PgDn</b> or
 <b>Home</b>/<b>End</b>. Fatal runtime errors such as a stack overflow are
 contained to the tab only in the default per-tab process mode.</p>
 

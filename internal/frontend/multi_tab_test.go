@@ -96,25 +96,53 @@ func TestSessionLoopRoutesOnlyActiveFrames(t *testing.T) {
 	}
 }
 
-func TestDiscardTabKillsWithoutGracefulClose(t *testing.T) {
+func TestDiscardTabKillsWithoutGracefulCloseAndKeepsCrashedTab(t *testing.T) {
 	first := multiTab(1, "one")
 	second := multiTab(2, "two")
-	var closed, killed bool
+	var out bytes.Buffer
+	p := NewPresenter(&out, true)
+	first.Presenter = p
+	var closed, killed int
 	loop := &SessionLoop{
-		Tabs: []*Tab{first, second}, Active: first,
-		CloseTab: func(*Tab) { closed = true },
-		KillTab:  func(*Tab) { killed = true },
+		Tabs: []*Tab{first, second}, Active: first, Presenter: p,
+		CloseTab: func(*Tab) { closed++ },
+		KillTab:  func(*Tab) { killed++ },
 	}
 	loop.syncTabBar()
-	loop.DiscardTab(first)
-	if !killed || closed {
-		t.Fatalf("discard killed=%v closed=%v", killed, closed)
+	loop.DiscardTab(first, stuckEngineMessage)
+	if killed != 1 || closed != 0 {
+		t.Fatalf("discard killed=%d closed=%d", killed, closed)
 	}
-	if len(loop.Tabs) != 1 || loop.Active != second {
+	if len(loop.Tabs) != 2 || loop.Active != first {
 		t.Fatalf("tabs=%d active=%v", len(loop.Tabs), loop.Active)
 	}
-	if first.Session != nil || first.Presenter != nil {
-		t.Fatal("discarded tab kept its session or presenter")
+	if !first.Dead || first.CrashMessage != stuckEngineMessage {
+		t.Fatalf("dead=%v message=%q", first.Dead, first.CrashMessage)
+	}
+	if first.Session != nil {
+		t.Fatal("discarded tab kept its session")
+	}
+	if first.BarView(true).Title != "Crashed" {
+		t.Fatalf("tab title = %q", first.BarView(true).Title)
+	}
+	if first.Presenter != p || p.crash == nil || p.crash.Message != stuckEngineMessage {
+		t.Fatalf("crash view = %+v, presenter %v", p.crash, first.Presenter == p)
+	}
+}
+
+func TestDiscardLastTabKeepsCrashedTabActive(t *testing.T) {
+	only := multiTab(1, "only")
+	loop := &SessionLoop{
+		Tabs: []*Tab{only}, Active: only,
+		KillTab: func(*Tab) {},
+	}
+	loop.syncTabBar()
+	loop.DiscardTab(only, stuckEngineMessage)
+	if len(loop.Tabs) != 1 || loop.Active != only || !only.Dead {
+		t.Fatalf("tabs=%d active=%v dead=%v", len(loop.Tabs), loop.Active, only.Dead)
+	}
+	if only.Session != nil {
+		t.Fatal("discarded tab kept its session")
 	}
 }
 

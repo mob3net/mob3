@@ -488,9 +488,12 @@ agreement, the non-negotiable constraints and the change protocol.
   liveness probe.
 - **Stuck pages:** a tab that produces no event for 10 s after a command, while
   loading, or while a timer/frame callback is due is probed with `Ping`. If no
-  `Pong` arrives within 2 s, the tab is discarded; the other tabs keep running.
-  A normal slow load keeps producing progress events. A stuck tab cannot block
-  another tab's input because the child transport write queue is bounded.
+  `Pong` arrives within 2 s, the engine is force-stopped and the tab stays in the
+  bar as `Crashed` with the probe-timeout reason in its crash view; the other
+  tabs keep running. A command that cannot be queued (`ErrSessionBusy`) is
+  treated the same way with the write-queue reason. A normal slow load keeps
+  producing progress events. A stuck tab cannot block another tab's input
+  because the child transport write queue is bounded.
 - **Loading:** navigation runs asynchronously so the UI stays responsive.
   `Esc` cancels the in-flight page, stylesheet, script and image requests and
   shows “Stopped loading”. Late results from canceled navigations are ignored

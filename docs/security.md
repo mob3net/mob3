@@ -203,7 +203,9 @@ text, 32 MiB per decoded stream, 64 MiB of retained page content), stops on
 the requesting page's cancellation, rejects encrypted documents, and contains
 panics, so a malformed file degrades to a note instead of a crash. It never
 rasterizes a page and writes nothing to disk. A panic in the engine goroutine
-is recovered by the session transport and shown in the crashed tab. Fatal
+is recovered by the session transport and shown in the crashed tab, and an
+engine that stops answering the liveness probe is force-killed and shown the
+same way. Fatal
 runtime errors, such as a stack overflow, are not recoverable: per-tab mode
 contains one to the tab's child process and shows its captured message, while
 `-process=single` terminates the browser and may leave the terminal in raw or
@@ -235,12 +237,15 @@ best-effort resource bounds, not a sandbox.
 
 Each script and callback runs under a 2-second sobek interrupt watchdog and a
 per-runtime absolute heap ceiling drawn from the shared JS pool (25% of
-`-mem-limit`/`GOMEMLIMIT`, else 256 MB, divided across active sessions).
-One sampler per active runtime checks the ceiling every 75 ms and interrupts only
-a call that is running, so a page cannot reset its budget on every timer
-callback. A page's load-time scripts also share an 8-second budget and a
-2,000-script cap, and Esc or Ctrl-C interrupts the script currently blocking the
-loop and cancels its in-flight requests; closing the tab does the same before
+`-mem-limit`/`GOMEMLIMIT`, else 256 MB, divided across active sessions). The
+interrupt is observed by bytecode, not by a native regular-expression match, so
+catastrophic backtracking can exceed it until the liveness probe force-stops the
+tab (see the known limitations). One sampler per active runtime checks the
+ceiling every 75 ms and interrupts only a call that is running, so a page
+cannot reset its budget on every timer callback. A page's load-time scripts also
+share an 8-second budget and a 2,000-script cap, and Esc or Ctrl-C interrupts the
+script currently blocking the loop and cancels its in-flight requests; closing
+the tab does the same before
 releasing it. Timer counts and per-tick callbacks are capped. Go-side copies of
 page data are capped too: the console log at 8 KiB per line and 512 KiB total,
 DOM text and attribute values at 1 MiB each and 64 MiB per runtime, script-visible

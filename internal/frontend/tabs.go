@@ -147,7 +147,7 @@ func (l *SessionLoop) Run() error {
 			}
 			quit, err := l.Active.handleInput(k)
 			if errors.Is(err, protocol.ErrSessionBusy) {
-				l.DiscardTab(l.Active)
+				l.DiscardTab(l.Active, blockedEngineMessage)
 				continue
 			}
 			if err != nil {
@@ -166,7 +166,7 @@ func (l *SessionLoop) Run() error {
 			}
 			if err := l.resizeTab(l.Active); err != nil {
 				if errors.Is(err, protocol.ErrSessionBusy) {
-					l.DiscardTab(l.Active)
+					l.DiscardTab(l.Active, blockedEngineMessage)
 					continue
 				}
 				return err
@@ -184,7 +184,7 @@ func (l *SessionLoop) Run() error {
 				continue
 			}
 			if tab, _ := recv.Interface().(*Tab); tab != nil {
-				l.DiscardTab(tab)
+				l.DiscardTab(tab, stuckEngineMessage)
 			}
 		case 5:
 			if !ok {
@@ -263,20 +263,28 @@ func (l *SessionLoop) markDead(tab *Tab, message string) {
 }
 
 func (l *SessionLoop) removeTab(tab *Tab) {
-	l.removeTabWith(tab, false)
+	l.removeTabWith(tab)
 }
 
-// DiscardTab removes a tab whose session is wedged. It uses KillTab instead of
+// Messages for a tab that is still alive but can no longer be driven. They are
+// the retained reason in the tab's crash view.
+const (
+	stuckEngineMessage   = "liveness probe timed out"
+	blockedEngineMessage = "stopped accepting input (write queue full)"
+)
+
+// DiscardTab force-stops a tab whose session is wedged and keeps it in the bar
+// as a crashed tab, so the reason stays visible. It uses KillTab instead of
 // waiting for a graceful close, so a hung engine cannot hold the loop.
-func (l *SessionLoop) DiscardTab(tab *Tab) {
-	wasActive := tab == l.Active
-	l.removeTabWith(tab, true)
-	if wasActive && l.Active != nil {
-		l.showStatusError("Page stopped; tab discarded")
+func (l *SessionLoop) DiscardTab(tab *Tab, message string) {
+	if tab == nil {
+		return
 	}
+	l.discardTab(tab)
+	l.markDead(tab, message)
 }
 
-func (l *SessionLoop) removeTabWith(tab *Tab, kill bool) {
+func (l *SessionLoop) removeTabWith(tab *Tab) {
 	if tab == nil {
 		return
 	}
@@ -297,11 +305,7 @@ func (l *SessionLoop) removeTabWith(tab *Tab, kill bool) {
 	}
 	l.Tabs = append(l.Tabs[:index], l.Tabs[index+1:]...)
 	l.forgetTabHistory(tab)
-	if kill {
-		l.discardTab(tab)
-	} else {
-		l.releaseTab(tab)
-	}
+	l.releaseTab(tab)
 	if active && len(l.Tabs) > 0 {
 		if next := l.previousTab(); next != nil {
 			l.activateTab(l.tabIndex(next))
