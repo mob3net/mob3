@@ -26,6 +26,20 @@ func (w windowPainter) paint(c *chromeCanvas, st protocol.State) bool {
 	return w.draw(c, st)
 }
 
+// surfaceFrame is one fully composed base surface ready for terminal output.
+// A page surface includes its chrome and native placements; a console surface
+// replaces the page and clears visible terminal images.
+type surfaceFrame struct {
+	frame         protocol.Frame
+	state         protocol.State
+	headerRows    int
+	native        bool
+	placements    []protocol.Placement
+	leavingNative bool
+	clearGraphics bool
+	repaintChrome bool
+}
+
 // Presenter writes engine frames to the terminal and keeps the row diff that
 // suppresses unchanged lines. It owns the ANSI output; the engine only sends
 // cell values.
@@ -448,10 +462,6 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		f = full
 		headerRows = rows
 	}
-	lines := EncodeFrame(f, p.color, !p.color)
-	if len(lines) != f.H {
-		return nil
-	}
 	if headerRows > 0 && len(placements) > 0 {
 		shifted := make([]protocol.Placement, len(placements))
 		copy(shifted, placements)
@@ -460,26 +470,41 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		}
 		placements = shifted
 	}
+	return p.presentSurface(surfaceFrame{
+		frame: f, state: p.state, headerRows: headerRows, repaintChrome: true,
+		native: native, placements: placements, leavingNative: leavingNative,
+	})
+}
+
+// presentSurface writes one composed base surface and its row diff. Page and
+// console surfaces share this path; the flags select native placements, the
+// image clear used by the console, and whether native placements just ended.
+func (p *Presenter) presentSurface(sf surfaceFrame) error {
+	lines := EncodeFrame(sf.frame, p.color, !p.color)
+	if len(lines) != sf.frame.H {
+		return nil
+	}
 	needClear := p.prev == nil || len(p.prev) != len(lines)
 	if needClear {
 		p.prev = make([]string, len(lines))
 	}
 	var sb strings.Builder
-	if leavingNative && p.gfx != nil {
+	if sf.leavingNative && p.gfx != nil {
 		p.gfx.Clear(&sb)
 	}
-	if native && p.gfx != nil {
+	if (sf.native || sf.clearGraphics) && p.gfx != nil {
 		p.gfx.BeginFrame(&sb)
 	}
 	if needClear {
-		if native && p.gfx != nil {
+		if (sf.native || sf.clearGraphics) && p.gfx != nil {
 			p.gfx.ClearScreen(&sb)
 		} else {
 			sb.WriteString("\x1b[2J")
 		}
 	}
 	for i := range lines {
-		if !p.chromeRow(i, len(lines), headerRows) && p.prev[i] == lines[i] {
+		if p.prev[i] == lines[i] &&
+			!(sf.repaintChrome && p.chromeRow(i, len(lines), sf.headerRows)) {
 			continue
 		}
 		fmt.Fprintf(&sb, "\x1b[%d;1H", i+1)
@@ -491,8 +516,8 @@ func (p *Presenter) Present(f protocol.Frame, scroll int, native bool) error {
 		}
 		p.prev[i] = lines[i]
 	}
-	if native && p.gfx != nil && !p.overlayOpen() {
-		p.gfx.PlaceAll(&sb, placements)
+	if sf.native && p.gfx != nil && !p.overlayOpen() {
+		p.gfx.PlaceAll(&sb, sf.placements)
 	}
 	if sb.Len() == 0 {
 		return nil

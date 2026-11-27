@@ -12,7 +12,6 @@ import (
 func TestWindowStackOrder(t *testing.T) {
 	l := &Tab{}
 	l.linkPreviewActive = true
-	l.consoleActive = true
 	l.hintActive = true
 	l.downloadActive = true
 	l.noticeActive = true
@@ -34,7 +33,6 @@ func TestWindowStackOrder(t *testing.T) {
 		"*frontend.linkPreviewOverlay",
 		"*frontend.promptOverlay",
 		"*frontend.findOverlay",
-		"*frontend.consoleOverlay",
 		"*frontend.hintOverlay",
 	}
 	stack, count := l.windowStack()
@@ -51,13 +49,30 @@ func TestWindowStackOrder(t *testing.T) {
 // TestWindowStackOnlyOpen checks that closed windows stay out of dispatch.
 func TestWindowStackOnlyOpen(t *testing.T) {
 	l := &Tab{}
-	l.consoleActive = true
-	if stack, count := l.windowStack(); count != 1 || stack[0] != &l.consoleOverlay {
+	l.menuKind = protocol.MenuView
+	if stack, count := l.windowStack(); count != 1 || stack[0] != &l.menuOverlay {
 		t.Fatalf("stack = %d %v", count, stack[:count])
 	}
-	l.consoleActive = false
+	l.menuKind = protocol.MenuNone
 	if _, count := l.windowStack(); count != 0 {
-		t.Fatalf("closed console stayed in the stack: %d", count)
+		t.Fatalf("closed menu stayed in the stack: %d", count)
+	}
+}
+
+// TestConsoleIsSurface checks that the console is dispatched as a focused base
+// surface, not as a window in the input stack.
+func TestConsoleIsSurface(t *testing.T) {
+	l := &Tab{}
+	l.consoleActive = true
+	if _, count := l.windowStack(); count != 0 {
+		t.Fatalf("console stayed in the window stack: %d", count)
+	}
+	if got := l.focusedSurface(); got != surfaceConsole {
+		t.Fatalf("focused surface = %d, want console", got)
+	}
+	l.consoleActive = false
+	if got := l.focusedSurface(); got != surfacePage {
+		t.Fatalf("focused surface = %d, want page", got)
 	}
 }
 

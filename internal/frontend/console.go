@@ -1,8 +1,6 @@
 package frontend
 
 import (
-	"fmt"
-	"io"
 	"strings"
 
 	"browser/internal/movekeys"
@@ -56,13 +54,7 @@ type consoleOverlay struct {
 	consoleFindSet    bool
 }
 
-func (w *consoleOverlay) isOpen() bool       { return w.consoleActive }
-func (w *consoleOverlay) layer() windowLayer { return layerConsole }
-
-// persistent is true: the console owns the whole screen and a page modal is
-// drawn over it instead of replacing it. The modal still takes input first, so
-// it can be answered while the console stays open underneath.
-func (w *consoleOverlay) persistent() bool { return true }
+func (w *consoleOverlay) isOpen() bool { return w.consoleActive }
 
 func (w *consoleOverlay) reset(l *Tab) {
 	w.consoleActive = false
@@ -844,52 +836,15 @@ func (p *Presenter) PresentConsole(v *protocol.ConsoleView, ui ConsoleUI) error 
 	p.consoleUI = ui
 	p.consoleActive = true
 	f := BuildConsoleFrame(v, ui)
+	st := p.state
+	st.Width, st.Height, st.HeaderRows = f.W, f.H, 0
 	if f.W > 0 && f.H > 0 {
-		st := p.state
-		st.Width, st.Height, st.HeaderRows = f.W, f.H, 0
 		p.paintWindows(&f, st)
 	}
-	return p.presentFull(f)
-}
-
-func (p *Presenter) presentFull(f protocol.Frame) error {
-	lines := EncodeFrame(f, p.color, !p.color)
-	if len(lines) != f.H {
-		return nil
-	}
-	needClear := p.prev == nil || len(p.prev) != len(lines)
-	if needClear {
-		p.prev = make([]string, len(lines))
-	}
-	var sb strings.Builder
-	if p.gfx != nil {
-		// Delete visible page images so they cannot composite above the console.
-		// This keeps the transmitted kitty data, and ClearScreen below also
-		// preserves it; ED 2 would free it and leave the page images missing
-		// when the console closes.
-		p.gfx.BeginFrame(&sb)
-	}
-	if needClear {
-		if p.gfx != nil {
-			p.gfx.ClearScreen(&sb)
-		} else {
-			sb.WriteString("\x1b[2J")
-		}
-	}
-	for i := range lines {
-		if p.prev[i] == lines[i] {
-			continue
-		}
-		fmt.Fprintf(&sb, "\x1b[%d;1H", i+1)
-		sb.WriteString(lines[i])
-		if !p.color {
-			sb.WriteString("\x1b[K")
-		}
-		p.prev[i] = lines[i]
-	}
-	if sb.Len() == 0 {
-		return nil
-	}
-	_, err := io.WriteString(p.out, sb.String())
-	return err
+	// A console surface clears visible page images so they cannot composite
+	// above it. ClearScreen below keeps the transmitted kitty data, so the page
+	// images return when the console closes.
+	return p.presentSurface(surfaceFrame{
+		frame: f, state: st, clearGraphics: true,
+	})
 }
