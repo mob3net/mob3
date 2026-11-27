@@ -54,14 +54,15 @@ published by the Pages build.
 - **Ask before deciding.** Anything needing attention, approval, or that is a
   software design decision must be asked, not assumed. Ask **one question at a
   time** and wait for the answer. Never bundle several decisions.
-- **Separate “can be built” from “should be built” for all work.** Before
-  starting a feature, refactor or migration, give an explicit stop/go
-  recommendation, name the ownership or constraint conflicts it creates, and
-  state what would make it not worth continuing. A feasible prototype or a
-  migration-plan stage is not an endorsement. When a change starts needing
-  repeated fixes to the same ownership, state, correctness or performance
-  boundary, stop and reassess instead of patching the next symptom. Do not
-  present an optional or risky stage as approved roadmap work.
+- **Run a design gate before all work.** For a feature, refactor or migration,
+  write a short stop/go note covering: user value; ownership or constraint
+  conflicts; alternatives; what would make the work not worth continuing; and
+  the follow-up-fix budget. Give an explicit do it/defer/drop recommendation.
+  A feasible prototype or migration-plan stage is not approval. Treat two
+  follow-up fixes crossing different ownership boundaries, or three follow-up
+  fixes in total for one feature, as a stop signal: reassess instead of patching
+  the next symptom. Do not present an optional or risky stage as approved
+  roadmap work.
 - **Land the enabling refactor first, separately from the feature.** Do the
   structural work — ownership, dispatch, composition, tests — as its own
   reviewable change before the user-facing feature. If the feature is later
@@ -117,7 +118,10 @@ published by the Pages build.
   the build and terminal — and must stay aligned with the CLI. Security reports
   stay on the private advisory link, never the public form.
 - **Commit messages.** End every completed change with a short, one-line commit
-  message summarizing the work. Do not commit unless explicitly asked.
+  message summarizing the work.
+- **Git is user-operated.** Agents may read status, log and diffs, but must not
+  stage, commit, amend, merge, rebase, push, tag, switch branches or discard
+  work unless explicitly asked. Leave commits and releases to the user.
 - **Documentation split.** `README.md` is short and user-facing; detailed flags
   live in `mob3 -h`, keys/mouse/forms in `about:help`; do not duplicate those
   lists in the README. Do not hard-wrap README prose: one line per paragraph or
@@ -331,25 +335,22 @@ bin/mob3 -width 152 -height 35 -png "$URL" > bin/test.png
 Before handing work back: focused test, `go test -mod=vendor ./...`,
 `go vet -mod=vendor ./...`, `gofmt` on touched Go files, and
 `git diff --check`. Go 1.27 only; no new modules or cgo without an explicit user
-decision.
+decision. Release and tag steps are in
+[docs/agents/build-release.md](docs/agents/build-release.md); the benchmark
+recipe is in `docs/development.md`.
 
 ## 6. Change protocol for agents
 
-1. **Ask before deciding**, one question at a time, and ask again if an
-   unanswered question still matters.
-2. **Update the governing doc first** (or in the same change) when a
-   requirement changes or a decision is made: `AGENTS.md`, the matching
-   `docs/agents/` page, and `README.md`/`docs/` for user-visible changes.
+1. **Run the design gate and ask questions** per section 2; do not start
+   implementation without the stop/go recommendation.
+2. **Update the governing doc** when a requirement changes or a decision is
+   made: `AGENTS.md`, the matching `docs/agents/` page, and `README.md`/`docs/`
+   for user-visible changes.
 3. **Keep the canonical sources canonical.** `mob3 -h`, `about:help` and
    `mcpToolDefinitions()` define flags, keys and tools; docs must match them.
 4. **Keep Known limitations honest** (`docs/agents/limitations.md`); remove an
    item only when it is actually implemented.
-5. **Add or update tests** in the same change, including the golden fixture for
-   layout/rendering behavior, then run the validation in section 5. Delete
-   `zz_*` debug tests.
-6. **Report non-standard site behavior** instead of changing the engine to
-   mimic it; fix engine behavior only for standard CSS/HTML.
-7. **Never introduce external Go modules or cgo** without an explicit change to
-   section 3.
-8. **End every completed change with a one-line commit message**; do not create
-   the commit unless asked.
+5. **Add or update tests** in the same change, including layout/rendering golden
+   fixtures, then run the validation in section 5.
+6. **Finish per section 2:** supply the one-line commit message and leave the
+   git operations to the user.
