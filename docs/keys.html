@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en" data-root="..">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)">
+<meta name="description" content="MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://mob3.net/docs/keys.html">
+<link rel="icon" href="../assets/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../assets/site.webmanifest">
+<meta property="og:site_name" content="MOB³">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Keyboard and mouse">
+<meta property="og:description" content="MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection.">
+<meta property="og:url" content="https://mob3.net/docs/keys.html">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="https://mob3.net/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Keyboard and mouse">
+<meta name="twitter:description" content="MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection.">
+<meta name="twitter:image" content="https://mob3.net/assets/og-image.png">
+<meta name="twitter:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://mob3.net/"},{"@type":"ListItem","position":2,"name":"Documentation","item":"https://mob3.net/docs/index.html"},{"@type":"ListItem","position":3,"name":"Keyboard and mouse","item":"https://mob3.net/docs/keys.html"}]},{"@type":"TechArticle","headline":"Keyboard and mouse","description":"MOB³ keyboard and mouse reference: vim-style scrolling, link focus, the URL prompt, find, reader mode, dark mode and text selection.","url":"https://mob3.net/docs/keys.html","mainEntityOfPage":"https://mob3.net/docs/keys.html","inLanguage":"en","image":"https://mob3.net/assets/og-image.png","isPartOf":{"@type":"WebSite","@id":"https://mob3.net/#website"},"publisher":{"@type":"Organization","name":"MOB³","url":"https://mob3.net/"},"author":{"@type":"Person","name":"Milos Stojanovic"}}]}</script>
+<title>Keyboard and mouse — MOB3 documentation</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-width: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: .1rem;
+    margin-right: .25rem;
+  }
+  .site-nav a {
+    padding: .35rem .6rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-nav a:hover {
+    color: var(--fg);
+    background: var(--bg);
+  }
+  .search-wrap {
+    position: relative;
+    width: min(15rem, 30vw);
+    min-width: 8rem;
+  }
+  .search { display: block; }
+  .search input {
+    width: 100%;
+    padding: .35rem .65rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .search-results {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    z-index: 40;
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner {
+      gap: .5rem;
+      padding: .45rem .8rem;
+    }
+    .header-left { min-width: 0; }
+    .header-actions {
+      gap: .25rem;
+      min-width: 0;
+    }
+    /* The search box is desktop-only: the phone header must stay on one line. */
+    .search-wrap { display: none; }
+    .site-nav { gap: 0; margin-right: 0; }
+    .site-nav a {
+      padding: .3rem .4rem;
+      font-size: .88rem;
+    }
+    .theme-toggle, .nav-toggle { min-height: 38px; }
+    .theme-toggle { width: 38px; }
+    .nav-toggle {
+      padding: 0 .5rem;
+      font-size: .88rem;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .header-inner { gap: .35rem; padding: .45rem .55rem; }
+    .brand { font-size: 1.02rem; }
+    .site-nav a { padding: .28rem .22rem; font-size: .8rem; }
+    .theme-toggle { width: 34px; min-height: 34px; }
+    .nav-toggle { min-height: 34px; padding: 0 .4rem; font-size: .8rem; }
+  }
+  @media (max-width: 345px) {
+    .header-inner { gap: .25rem; padding: .4rem .4rem; }
+    .brand { font-size: .95rem; }
+    .site-nav a { padding: .25rem .18rem; font-size: .74rem; }
+    .theme-toggle { width: 30px; min-height: 30px; }
+    .nav-toggle { min-height: 30px; padding: 0 .3rem; font-size: .74rem; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="docs-page">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <a class="brand" href="../index.html">MOB³</a>
+    </div>
+    <div class="header-actions">
+      <nav class="site-nav" aria-label="Project">
+        <a href="../docs/">Docs</a>
+        <a href="https://github.com/mob3net/mob3">GitHub</a>
+        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
+        <a href="mailto:info@mob3.net">Contact</a>
+      </nav>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+      <div class="search-wrap">
+        <label class="search">
+          <span class="visually-hidden">Search the documentation</span>
+          <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+      </div>
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+<div class="docs-layout">
+<aside class="docs-sidebar" id="sidebar" aria-label="Documentation"><h2>Documentation</h2><ul><li><a href="index.html">MOB3 documentation</a></li><li><a href="use-cases.html">Use cases</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="install.html">Install</a></li><li><a href="cli.html">Command line</a></li><li><a class="active" aria-current="page" href="keys.html">Keyboard and mouse</a></li><li><a href="automation.html">Automation with MCP</a></li><li><a href="security.html">Security and privacy</a></li><li><a href="sites.html">Site support</a></li><li><a href="development.html">Development</a></li></ul></aside>
+<main class="content" id="content">
+<h1>Keyboard and mouse</h1>
+<p>Press <code>?</code> inside MOB3 for the built-in <code>about:help</code> page, which is the canonical
+key, mouse and form reference for the running build.</p>
+<h2 id="page-navigation">Page navigation</h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>j</code> / <code>k</code></td>
+<td>Scroll one line down / up</td>
+</tr>
+<tr>
+<td><code>Space</code> / <code>b</code></td>
+<td>Scroll one screen down / up</td>
+</tr>
+<tr>
+<td><code>d</code> / <code>u</code> (or <code>Ctrl-D</code> / <code>Ctrl-U</code>)</td>
+<td>Scroll half a screen down / up</td>
+</tr>
+<tr>
+<td><code>g</code> / <code>G</code></td>
+<td>Top / bottom of the page</td>
+</tr>
+<tr>
+<td><code>Tab</code> / <code>Shift-Tab</code></td>
+<td>Next / previous link or form control</td>
+</tr>
+<tr>
+<td><code>Enter</code></td>
+<td>Follow the focused link, submit the focused field, or insert a newline in a textarea</td>
+</tr>
+<tr>
+<td><code>Ctrl-O</code> / <code>[</code></td>
+<td>Back</td>
+</tr>
+<tr>
+<td><code>Ctrl-I</code> / <code>]</code></td>
+<td>Forward (Ctrl-I needs kitty key reporting; legacy terminals send Tab, so <code>]</code> is the portable key)</td>
+</tr>
+<tr>
+<td><code>r</code> / <code>Ctrl-R</code></td>
+<td>Reload</td>
+</tr>
+<tr>
+<td><code>R</code></td>
+<td>Toggle reader mode</td>
+</tr>
+<tr>
+<td><code>D</code></td>
+<td>Toggle dark mode</td>
+</tr>
+<tr>
+<td><code>J</code></td>
+<td>Toggle JavaScript and reload the page without or with scripts</td>
+</tr>
+<tr>
+<td><code>i</code></td>
+<td>Cycle graphics modes in place: full graphics, blocks, none (no reload)</td>
+</tr>
+<tr>
+<td><code>+</code> / <code>-</code></td>
+<td>Zoom the page in / out (25% to 200%). Fixed pixel layout, spacing, images and large kitty headings grow; body text keeps its size and line height</td>
+</tr>
+<tr>
+<td><code>0</code></td>
+<td>Reset zoom to 100%</td>
+</tr>
+<tr>
+<td><code>Z</code></td>
+<td>Open the zoom window to choose a preset with the mouse, arrow keys, mouse wheel or pointer hover</td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>Open the view options window (Fixed elements, Sticky elements, Background images); <code>Space</code>/<code>Enter</code> toggles the selected switch, and the mouse wheel or pointer hover moves the highlight</td>
+</tr>
+<tr>
+<td><code>o</code> / <code>Ctrl-L</code></td>
+<td>Open the URL prompt</td>
+</tr>
+<tr>
+<td><code>/</code>, <code>Ctrl-F</code></td>
+<td>Find in the page, or in the console HTML tab</td>
+</tr>
+<tr>
+<td><code>n</code> / <code>N</code></td>
+<td>Next / previous find match</td>
+</tr>
+<tr>
+<td><code>f</code></td>
+<td>Highlight letters in the visible links and follow one by typing them</td>
+</tr>
+<tr>
+<td><code>F</code></td>
+<td>Open the chosen link in a background tab after the current one</td>
+</tr>
+<tr>
+<td><code>p</code></td>
+<td>Preview the destination (<code>Enter</code> follows, <code>y</code> copies, <code>Esc</code> cancels)</td>
+</tr>
+<tr>
+<td><code>E</code></td>
+<td>Open the full warning or error message that the footer truncated (the <code>E</code> in <code>Error:</code> is underlined)</td>
+</tr>
+<tr>
+<td><code>S</code></td>
+<td>Open the curl download popup for the current PDF page (PDF viewer only; does nothing elsewhere)</td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td>Copy selected text, the current URL when nothing is selected, the download curl command, or the whole active console section</td>
+</tr>
+<tr>
+<td><code>Y</code></td>
+<td>Copy the whole rendered page as plain text (no colors or browser chrome) for pasting into a bug report; the first line is a <code>#</code> metadata line with URL, sizes, zoom and modes</td>
+</tr>
+<tr>
+<td><code>Ctrl-Y</code></td>
+<td>Copy only the page rows visible at the current scroll, with the same metadata line</td>
+</tr>
+<tr>
+<td><code>H</code></td>
+<td>Session history</td>
+</tr>
+<tr>
+<td><code>t</code> / <code>Ctrl-T</code></td>
+<td>Open a new tab at the end with an empty URL prompt</td>
+</tr>
+<tr>
+<td><code>W</code> / <code>Ctrl-W</code></td>
+<td>Close the active tab and return to the previously used tab; closing the last tab exits without confirmation</td>
+</tr>
+<tr>
+<td><code>Ctrl-N</code> / <code>Ctrl-P</code> (or <code>Alt-Right</code> / <code>Alt-Left</code>, <code>l</code> / <code>h</code>)</td>
+<td>Next / previous tab without wrapping</td>
+</tr>
+<tr>
+<td><code>1</code>-<code>9</code> / <code>Alt-1</code>-<code>Alt-9</code></td>
+<td>Select a tab by its number in the tab strip</td>
+</tr>
+<tr>
+<td><code>?</code></td>
+<td>Help page</td>
+</tr>
+<tr>
+<td><code>!</code></td>
+<td>JavaScript console</td>
+</tr>
+<tr>
+<td><code>q</code> / <code>Ctrl-C</code></td>
+<td>Ask to confirm quitting (<code>y</code>/<code>Enter</code> quits; any other key cancels)</td>
+</tr>
+<tr>
+<td><code>:q</code></td>
+<td>Exit immediately (in the <code>:</code> prompt)</td>
+</tr>
+<tr>
+<td><code>Esc</code></td>
+<td>Stop loading, a running script or a synchronous layout, leave a field, clear a selection, or show the exit hint</td>
+</tr>
+</tbody></table>
+<p>Back and Forward remember the scroll position you last had on each history
+entry. In-page <code>#</code> links become history entries too, so <code>h</code> returns to where you
+were before following the anchor, and Forward returns to the anchored section.
+If only the fragment changes, the page is not reloaded.</p>
+<p>Zoom changes how many CSS pixels one terminal cell represents, from 25% to
+200% in preset steps. Use <code>-zoom N</code> at launch to start at another level. It is not text scaling: glyphs stay one cell per
+character and lines keep their normal height, so text stays readable while
+fixed pixel widths, padding, borders, images and kitty scaled large headings
+grow or shrink. The CSS viewport shrinks or grows with the ratio, so responsive
+pages reflow and percentage columns keep filling the terminal. Zoom lasts for
+the session and applies to every page, including pages restored from the
+back/forward cache. The URL row always shows the current level as a clickable
+badge at its far right; clicking it opens a window where a preset can be chosen
+with the mouse, the arrow keys or the mouse wheel, then <code>Enter</code>.</p>
+<h2 id="console">Console</h2>
+<p><code>!</code> or the <code>&gt;_</code> footer icon opens the console. Inside it, <code>:</code> or <code>Enter</code> focuses
+the JavaScript input row, <code>Tab</code>/<code>Shift-Tab</code> or <code>h</code>/<code>l</code> switch sections, <code>j</code>/<code>k</code> and
+<code>g</code>/<code>G</code> scroll the active section, and <code>y</code> copies the whole active section (the
+logs, the raw page HTML, the request list, storage, or the Tools scrollback).
+Clicking a tab switches sections, clicking the input row focuses it, and the
+<code>×</code> in the console menu closes it; the wheel scrolls the active section. A JavaScript alert, confirm or prompt opened from the console is
+drawn over it and must be answered before the console takes input again. <code>Esc</code>
+leaves the input row first and closes the console on the next press; <code>!</code> closes
+it immediately.</p>
+<h2 id="url-prompt">URL prompt</h2>
+<p><code>o</code>, <code>Ctrl-L</code>, <code>:</code> or clicking the URL bar opens the prompt prefilled with the
+current URL and selected. Typing replaces the selection; <code>Backspace</code> clears it first.
+<code>:</code> is a Vim-style command prompt: <code>q</code> or <code>:q</code> plus <code>Enter</code> exits immediately,
+without the confirmation that <code>q</code> asks for. History of earlier URLs and search
+terms is kept in memory for the session.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Up</code> / <code>Ctrl-P</code></td>
+<td>Recall the previous URL/search entry</td>
+</tr>
+<tr>
+<td><code>Down</code> / <code>Ctrl-N</code></td>
+<td>Recall the next entry, or the draft</td>
+</tr>
+<tr>
+<td><code>Left</code> / <code>Right</code></td>
+<td>Move one character</td>
+</tr>
+<tr>
+<td><code>Home</code> / <code>End</code></td>
+<td>Start / end</td>
+</tr>
+<tr>
+<td><code>Ctrl-B</code> / <code>Ctrl-F</code></td>
+<td>Move one character</td>
+</tr>
+<tr>
+<td><code>Alt-B</code> / <code>Alt-F</code></td>
+<td>Move one word</td>
+</tr>
+<tr>
+<td><code>Ctrl-Left</code> / <code>Ctrl-Right</code></td>
+<td>Move one word</td>
+</tr>
+<tr>
+<td><code>Alt-Left</code> / <code>Alt-Right</code></td>
+<td>Move one word</td>
+</tr>
+<tr>
+<td><code>Backspace</code> / <code>Delete</code></td>
+<td>Delete around the caret</td>
+</tr>
+<tr>
+<td><code>Alt-Backspace</code> / <code>Ctrl-Backspace</code></td>
+<td>Delete the previous word or URL segment</td>
+</tr>
+<tr>
+<td><code>Ctrl-W</code></td>
+<td>Delete the previous word or URL segment</td>
+</tr>
+<tr>
+<td><code>Alt-D</code> / <code>Alt-Delete</code> / <code>Ctrl-Delete</code></td>
+<td>Delete the next word plus separators</td>
+</tr>
+<tr>
+<td><code>Ctrl-A</code></td>
+<td>Select all</td>
+</tr>
+<tr>
+<td><code>Ctrl-K</code></td>
+<td>Delete to the end</td>
+</tr>
+<tr>
+<td><code>Ctrl-U</code></td>
+<td>Clear</td>
+</tr>
+<tr>
+<td><code>Ctrl-C</code> / <code>Esc</code></td>
+<td>Close without navigating</td>
+</tr>
+<tr>
+<td><code>Enter</code></td>
+<td>Navigate</td>
+</tr>
+</tbody></table>
+<p>A mouse click places the caret. Shift+drag is left to the terminal for native
+selection. Input is resolved as a URL first, then through the <code>-search</code>
+fallback.</p>
+<h2 id="find">Find</h2>
+<p><code>/</code> or <code>Ctrl-F</code> opens the incremental find bar. Typing searches case-insensitively and
+highlights every match. <code>Enter</code> confirms and closes the bar; <code>n</code>/<code>N</code> then move
+between matches, and the footer shows the match position with the <code>n</code>/<code>N</code> hint.
+<code>Down</code>/<code>Up</code> also move while the bar is open. <code>Esc</code> closes the
+bar but keeps highlights; a later <code>Esc</code> clears them. After the bar closes, <code>f</code>
+keeps its normal link-hint behavior.</p>
+<p>The find bar supports the same word-editing keys as the URL prompt.</p>
+<h2 id="link-hints">Link hints</h2>
+<p>Press <code>f</code> to follow a link. It marks the links visible in the current viewport
+by highlighting letters from the link&#39;s own text with a yellow background and
+an underline. Form controls are labelled the same way: text fields focus,
+checkboxes and radios toggle, a select opens its options, multi-select options
+toggle, and buttons activate. The chosen control stays focused for Space/Enter
+and arrow or h/j/k/l keys. The page text is never changed. Up to 26 links
+the first letter not already used by
+another link is highlighted (case-insensitive), so <code>Documentation</code> uses <code>D</code> and
+a later <code>Dog</code> uses <code>o</code> if <code>d</code> is taken. On link-heavy pages a hint whose first
+letter is unique still shows only that one letter; hints sharing a first letter
+use two adjacent letters, with no gap between them. Type the highlighted letters to follow the link; either case works. Press <code>F</code>
+instead of <code>f</code> to open the chosen link in a background tab, or <code>p</code> to see the
+resolved destination highlighted in yellow in the footer and confirm with
+<code>Enter</code> or <code>y</code> before navigating; <code>Esc</code> or <code>n</code> cancels.
+If several labels share a first letter, the others disappear, the typed letter
+is no longer highlighted, and only the remaining letters stay marked. Unknown letters are ignored. <code>Esc</code>
+cancels hint mode, and scrolling with the wheel or scrollbar also dismisses the
+hints. Links outside the viewport are never labeled. A link with no text, such
+as an image link, gets free label letters drawn inside its box without
+brackets. While hints are shown, images are rendered as half-block art so the
+terminal&#39;s inline image protocol does not cover the hint letters.</p>
+<h2 id="forms">Forms</h2>
+<p><code>Tab</code>/<code>Shift-Tab</code> move through links and form controls in document order.
+A focused checkbox, radio, button or link is activated with <code>Space</code>/<code>Enter</code>;
+arrows change radio groups, single selects and ranges, and move the active
+option in a multi-select, where <code>Space</code> toggles it. On radios, selects and
+ranges, <code>h</code>/<code>l</code> work like Left/Right and <code>j</code>/<code>k</code> like Down/Up.</p>
+<p>Click a text input or textarea to focus it and place the caret at the clicked
+character, then type; click the input row of a JavaScript prompt dialog the same
+way. The focused field shows a block caret.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Left</code> / <code>Right</code></td>
+<td>Move by character</td>
+</tr>
+<tr>
+<td><code>Home</code> / <code>End</code></td>
+<td>Start / end of line</td>
+</tr>
+<tr>
+<td><code>Up</code> / <code>Down</code></td>
+<td>Move between lines in a textarea</td>
+</tr>
+<tr>
+<td><code>Alt-B</code> / <code>Alt-F</code></td>
+<td>Move by word</td>
+</tr>
+<tr>
+<td><code>Alt/Ctrl+Backspace</code>, <code>Ctrl-W</code></td>
+<td>Delete the previous word</td>
+</tr>
+<tr>
+<td><code>Alt-D</code> / <code>Alt-Delete</code> / <code>Ctrl-Delete</code></td>
+<td>Delete the next word</td>
+</tr>
+<tr>
+<td><code>Backspace</code></td>
+<td>Delete backwards</td>
+</tr>
+<tr>
+<td><code>Delete</code></td>
+<td>Delete forwards</td>
+</tr>
+<tr>
+<td><code>Ctrl-A</code></td>
+<td>Select all; typing, <code>Backspace</code> or <code>Delete</code> replaces the whole value</td>
+</tr>
+<tr>
+<td><code>Ctrl-K</code></td>
+<td>Delete to the end</td>
+</tr>
+<tr>
+<td><code>Ctrl-U</code></td>
+<td>Clear</td>
+</tr>
+<tr>
+<td><code>Enter</code></td>
+<td>Submit (or insert a newline in a textarea)</td>
+</tr>
+<tr>
+<td><code>Esc</code></td>
+<td>Leave the field</td>
+</tr>
+</tbody></table>
+<p>Checkboxes and radios toggle on click. A <code>&lt;select&gt;</code> opens a popup; use
+<code>Up</code>/<code>Down</code> and <code>Enter</code>, the mouse wheel or pointer hover to move the highlight,
+or click an option. <code>&lt;select multiple&gt;</code> renders as a
+list box; clicking an option toggles it. A file input opens a notice that
+uploads are unsupported.</p>
+<h2 id="mouse">Mouse</h2>
+<ul>
+<li>Hover a link to show its target in the footer.</li>
+<li>Hovering also applies CSS <code>:hover</code> and fires mouse-over/enter events, so
+hover menus open and stay open while moving between padded items; style
+updates wait briefly for the pointer to settle. Leaving the page clears the
+hover state, and wheel scrolling never blocks on a hover rebuild.</li>
+<li>Drag to select page text; <code>y</code> copies it through OSC 52. With no
+selection, <code>y</code> copies the current URL.</li>
+<li>Click a link to follow it; a download link opens the <code>curl</code> popup without fetching, except a <code>.pdf</code> download, which opens in the viewer.</li>
+<li>Middle-click a link to open it in a background tab after the current one.</li>
+<li>Middle-click a tab to close it; closing the last tab exits without confirmation.</li>
+<li>Click the URL bar to open the prompt; click outside to close it.</li>
+<li>Click in the prompt to move the caret.</li>
+<li>Click the zoom badge at the right end of the URL row to open the zoom window
+and choose a preset.</li>
+<li>Click <code>←</code>, <code>→</code>, <code>⟳</code>, <code>⌂</code>, History, Help or <code>⚙</code> in the toolbar.</li>
+<li>Right click a link to copy its URL (OSC 52); elsewhere it does nothing.</li>
+<li>Any click dismisses the quit confirmation, like <code>Esc</code>.</li>
+<li>The mouse back/forward buttons navigate.</li>
+<li>Click <code>Dark:on</code>/<code>Dark:off</code>, <code>Reader:on</code>/<code>Reader:off</code>,
+<code>JavaScript:on</code>/<code>JavaScript:off</code> or the <code>&gt;_</code> icon in the footer.</li>
+<li>The wheel scrolls three lines; drag the right-edge scrollbar to jump.</li>
+</ul>
+<p>Shift+mouse reports from the terminal are ignored so the terminal can keep a
+native selection over the URL. Terminal-native selection needs the terminal&#39;s
+Shift override.</p>
+<h2 id="terminal-support">Terminal support</h2>
+<p>MOB3 enables the kitty keyboard protocol in detected kitty, WezTerm, Ghostty
+and foot terminals. That makes <code>Esc</code>, modified keys, <code>Shift-Tab</code> and key
+releases reliable. Multiplexers (tmux, screen, zellij) are excluded because
+their forwarding is inconsistent.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#page-navigation">Page navigation</a></li><li><a href="#console">Console</a></li><li><a href="#url-prompt">URL prompt</a></li><li><a href="#find">Find</a></li><li><a href="#link-hints">Link hints</a></li><li><a href="#forms">Forms</a></li><li><a href="#mouse">Mouse</a></li><li><a href="#terminal-support">Terminal support</a></li></ul></nav>
+</main>
+</div>
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="../search-index.js"></script>
+<script src="../search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>

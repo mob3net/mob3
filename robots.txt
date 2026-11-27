@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mob3.net/sitemap.xml

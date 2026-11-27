@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en" data-root="..">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)">
+<meta name="description" content="How MOB3 is built: per-tab engine processes, the protocol boundary, rendering and JavaScript, memory-only networking, and the design tradeoffs.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://mob3.net/docs/architecture.html">
+<link rel="icon" href="../assets/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../assets/site.webmanifest">
+<meta property="og:site_name" content="MOB³">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Architecture">
+<meta property="og:description" content="How MOB3 is built: per-tab engine processes, the protocol boundary, rendering and JavaScript, memory-only networking, and the design tradeoffs.">
+<meta property="og:url" content="https://mob3.net/docs/architecture.html">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="https://mob3.net/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Architecture">
+<meta name="twitter:description" content="How MOB3 is built: per-tab engine processes, the protocol boundary, rendering and JavaScript, memory-only networking, and the design tradeoffs.">
+<meta name="twitter:image" content="https://mob3.net/assets/og-image.png">
+<meta name="twitter:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://mob3.net/"},{"@type":"ListItem","position":2,"name":"Documentation","item":"https://mob3.net/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture","item":"https://mob3.net/docs/architecture.html"}]},{"@type":"TechArticle","headline":"Architecture","description":"How MOB3 is built: per-tab engine processes, the protocol boundary, rendering and JavaScript, memory-only networking, and the design tradeoffs.","url":"https://mob3.net/docs/architecture.html","mainEntityOfPage":"https://mob3.net/docs/architecture.html","inLanguage":"en","image":"https://mob3.net/assets/og-image.png","isPartOf":{"@type":"WebSite","@id":"https://mob3.net/#website"},"publisher":{"@type":"Organization","name":"MOB³","url":"https://mob3.net/"},"author":{"@type":"Person","name":"Milos Stojanovic"}}]}</script>
+<title>Architecture — MOB3 documentation</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-width: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: .1rem;
+    margin-right: .25rem;
+  }
+  .site-nav a {
+    padding: .35rem .6rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-nav a:hover {
+    color: var(--fg);
+    background: var(--bg);
+  }
+  .search-wrap {
+    position: relative;
+    width: min(15rem, 30vw);
+    min-width: 8rem;
+  }
+  .search { display: block; }
+  .search input {
+    width: 100%;
+    padding: .35rem .65rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .search-results {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    z-index: 40;
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner {
+      gap: .5rem;
+      padding: .45rem .8rem;
+    }
+    .header-left { min-width: 0; }
+    .header-actions {
+      gap: .25rem;
+      min-width: 0;
+    }
+    /* The search box is desktop-only: the phone header must stay on one line. */
+    .search-wrap { display: none; }
+    .site-nav { gap: 0; margin-right: 0; }
+    .site-nav a {
+      padding: .3rem .4rem;
+      font-size: .88rem;
+    }
+    .theme-toggle, .nav-toggle { min-height: 38px; }
+    .theme-toggle { width: 38px; }
+    .nav-toggle {
+      padding: 0 .5rem;
+      font-size: .88rem;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .header-inner { gap: .35rem; padding: .45rem .55rem; }
+    .brand { font-size: 1.02rem; }
+    .site-nav a { padding: .28rem .22rem; font-size: .8rem; }
+    .theme-toggle { width: 34px; min-height: 34px; }
+    .nav-toggle { min-height: 34px; padding: 0 .4rem; font-size: .8rem; }
+  }
+  @media (max-width: 345px) {
+    .header-inner { gap: .25rem; padding: .4rem .4rem; }
+    .brand { font-size: .95rem; }
+    .site-nav a { padding: .25rem .18rem; font-size: .74rem; }
+    .theme-toggle { width: 30px; min-height: 30px; }
+    .nav-toggle { min-height: 30px; padding: 0 .3rem; font-size: .74rem; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="docs-page">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <a class="brand" href="../index.html">MOB³</a>
+    </div>
+    <div class="header-actions">
+      <nav class="site-nav" aria-label="Project">
+        <a href="../docs/">Docs</a>
+        <a href="https://github.com/mob3net/mob3">GitHub</a>
+        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
+        <a href="mailto:info@mob3.net">Contact</a>
+      </nav>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+      <div class="search-wrap">
+        <label class="search">
+          <span class="visually-hidden">Search the documentation</span>
+          <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+      </div>
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+<div class="docs-layout">
+<aside class="docs-sidebar" id="sidebar" aria-label="Documentation"><h2>Documentation</h2><ul><li><a href="index.html">MOB3 documentation</a></li><li><a href="use-cases.html">Use cases</a></li><li><a class="active" aria-current="page" href="architecture.html">Architecture</a></li><li><a href="install.html">Install</a></li><li><a href="cli.html">Command line</a></li><li><a href="keys.html">Keyboard and mouse</a></li><li><a href="automation.html">Automation with MCP</a></li><li><a href="security.html">Security and privacy</a></li><li><a href="sites.html">Site support</a></li><li><a href="development.html">Development</a></li></ul></aside>
+<main class="content" id="content">
+<h1>Architecture</h1>
+<p>This page is the map: the process model, the package boundaries, the rendering
+and JavaScript pipelines, and the tradeoffs behind them. It is deliberately an
+overview, not a file-by-file reference.</p>
+<h2 id="design-goals">Design goals</h2>
+<ul>
+<li><strong>One static binary.</strong> No cgo, no runtime service, no helper binary. The same
+executable is the browser, the per-tab worker and the MCP server.</li>
+<li><strong>A terminal cell is the layout unit.</strong> Pages are laid out in columns and rows
+and painted as ANSI, not as a pixel surface.</li>
+<li><strong>Memory-only operation.</strong> History, cookies, storage, caches and logs live in
+memory. Closing MOB3 saves nothing.</li>
+<li><strong>Idle stays idle.</strong> No polling, prefetching or perpetual repaint loops. A
+background tab pauses its timers and image work.</li>
+<li><strong>Fault isolation where it is cheap.</strong> Interactive tabs and MCP get their
+engine in a child process by default, so a fatal engine error does not take
+down the front end. This is not a security sandbox.</li>
+<li><strong>Capability per unit of resource.</strong> Prefer the inexpensive approximation over
+the exact but expensive implementation: text PDFs instead of rasterized pages,
+block backgrounds instead of inline ones, half-block images instead of sixel.</li>
+<li><strong>Text first.</strong> HTML, CSS, forms, links, find, selection, reader mode and
+JavaScript matter more than pixel-perfect rendering.</li>
+</ul>
+<h2 id="the-process-tree">The process tree</h2>
+<p><code>-process=per-tab</code> is the default. The parent owns the terminal and the network;
+each interactive tab and each MCP automation session gets its own engine child.</p>
+<pre><code class="language-text">mob3 parent process
+│  terminal, input, tabs, chrome, history
+│  host: network, TLS, cookies, cache, settings
+│  storage broker, history-entry IDs
+│
+├── tab 1 engine child
+│     DOM, JavaScript VM, layout, frames, PDF
+├── tab 2 engine child
+│     DOM, JavaScript VM, layout, frames, PDF
+└── -mcp mode instead uses one automation engine child (no tabs)
+      DOM, JavaScript VM, layout, frames, PDF
+</code></pre>
+<p><code>-process=single</code> keeps everything in one Go process:</p>
+<pre><code class="language-text">one mob3 process
+  terminal, input, tabs, chrome, history
+  host: network, TLS, cookies, cache, settings
+  tab engines + MCP engine: DOM, JavaScript VM, layout, frames, PDF
+  one -mem-limit, one address space
+</code></pre>
+<p>Dump and PNG modes stay in-process in both modes. They are one-shot jobs and
+the terminal is never put into raw mode, so a process boundary buys little
+there.</p>
+<h3>How a tab starts its engine</h3>
+<p>A new tab does not start a second browser binary that has to be installed or
+found. It re-executes the running binary:</p>
+<pre><code class="language-text">parent, on a new tab
+  │
+  ├─ os.Executable() + os.Args[1:]      same binary, same flags
+  ├─ worker marker + JSON geometry      tab id, size, zoom, graphics
+  ▼
+child process
+  ├─ parses the normal CLI flags        one option surface
+  ├─ opens host and storage RPC         over stdin/stdout
+  ├─ builds one engine session
+  └─ sends Ready
+  ▼
+parent
+  ├─ waits for Ready                    bounded handshake
+  ├─ sends Init and Navigate
+  └─ receives frames, state and events
+</code></pre>
+<p>The parent holds one end of two anonymous pipes. A small binary multiplexer
+carries page commands and events, host requests, storage requests and liveness
+pings over that pair, so no TCP port or platform-specific file descriptor is
+needed. The child never writes the terminal; it returns frames and data, and
+the front end remains the only terminal writer.</p>
+<p>The same worker serves MCP: the parent runs the JSON-RPC server on stdio and
+starts an automation engine child. <code>-process=single</code> replaces the child with the
+in-process transport for both tabs and MCP.</p>
+<h3>Closing and failure</h3>
+<p>A normal tab close asks the child to shut down, waits for a short grace period,
+then kills it if it does not exit. A wedged tab is force-discarded without
+waiting for its handler. Child stderr is captured with a bounded, sanitized head
+and tail and shown in the crashed tab; it is never written directly to the
+terminal.</p>
+<p>An engine crash is contained to that child. The tab stays in the strip marked
+<code>Crashed</code>, other tabs keep running, and an MCP server stays alive but reports
+the crash on later tool calls until the client restarts it. In <code>single</code> mode
+the engine shares the browser process, so the same fatal error takes the whole
+browser down; terminal cleanup may not run.</p>
+<h2 id="isolation-and-containment">Isolation and containment</h2>
+<p>Each tab is one protocol session with its own page, layout, JavaScript runtime
+and back/forward history. The parent shares the host, cookies, cache, settings
+and origin storage, and receives each document&#39;s final URL by entry ID, so the
+address bar never trusts a URL supplied by the engine.</p>
+<p>A background tab keeps loading and updating its state, title and history, but
+it does not draw, run JavaScript timers or stream deferred images.</p>
+<p>This is <strong>logical origin isolation plus fault isolation, not a security
+boundary</strong>. Tabs still share the parent host, storage broker and trust model. A
+compromised engine can read across tabs, and there is no OS sandbox, site
+isolation or Spectre mitigation. <code>-process=single</code> puts every tab back in one
+address space.</p>
+<h2 id="package-boundaries">Package boundaries</h2>
+<p>The source is split so that the network, the terminal and the page engine do not
+reach into each other:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>internal/protocol</code></td>
+<td>Wire types, binary codec, stream multiplexer, host and storage RPC, transports, limits. Standard library only; it never imports another project package.</td>
+</tr>
+<tr>
+<td><code>internal/engine</code></td>
+<td>HTML parsing, CSS, layout, painting, DOM, JavaScript, PDF extraction, document loading, find, selection, hints and reader mode. It reaches the network only through a host port.</td>
+</tr>
+<tr>
+<td><code>internal/host</code></td>
+<td>Sockets, TLS, DNS, proxies, cookies, the resource cache, settings and the request log.</td>
+</tr>
+<tr>
+<td><code>internal/frontend</code></td>
+<td>The terminal, input decoding, chrome, ANSI encoding, native images, dialogs, tabs and history.</td>
+</tr>
+<tr>
+<td><code>internal/app</code></td>
+<td>Wiring: flags, mode dispatch, process launch and the interactive loop.</td>
+</tr>
+<tr>
+<td><code>internal/textedit</code>, <code>internal/textwidth</code>, <code>internal/movekeys</code></td>
+<td>Pure line editing, terminal-cell arithmetic and viewport movement.</td>
+</tr>
+</tbody></table>
+<p>The dependency direction is enforced by a test: the engine never imports the
+front end, host or <code>net/http</code>; the front end never names an engine type; and the
+protocol package stays independent. Outside the standard library, the engine&#39;s
+only production imports are the approved vendored modules.</p>
+<p>That boundary is also what makes the process transport possible. Everything
+crossing a tab boundary is data: frames, events, placements, clipboard actions
+and host calls. No DOM node, <code>image.Image</code>, certificate pool or JavaScript value
+crosses it.</p>
+<h2 id="rendering">Rendering</h2>
+<pre><code class="language-text">HTML bytes
+  → parse and build the document
+  → selectors, cascade, computed styles
+  → block and inline layout in terminal cells
+  → paint into frames
+  → front end encodes ANSI and writes the terminal
+</code></pre>
+<p>The engine owns text measurement, line breaking, tables, floats, flex rows,
+positioning, backgrounds, borders and the text cursor. The front end owns the
+terminal encoding and presents only the active tab. Scaled text and native
+images are capabilities negotiated with the terminal.</p>
+<p>Optional images use kitty or iTerm2 native graphics first, then colored
+half-block art; there is no sixel. PDFs are read by an in-repo text extractor
+and shown as text pages, not rasterized. Images are off by default.</p>
+<h2 id="javascript">JavaScript</h2>
+<p>Page scripts run in a sobek runtime, one VM per top-level frame. Classic scripts
+run in document order, ES modules and import maps are supported, and external
+scripts require a JavaScript MIME type.</p>
+<p>The API surface is a practical subset: DOM queries and mutation, events, forms,
+timers, <code>fetch</code>/XHR through the host broker, in-memory storage, cookies and
+common compatibility shims. There is no WebGL, no worker execution, no real
+canvas pixels, no live <code>MutationObserver</code>, and no real iframe browsing context.
+A liveness watchdog can interrupt a long-running script; a native regular
+expression that cannot be interrupted is a documented limit.</p>
+<h2 id="networking-and-storage">Networking and storage</h2>
+<p>The host is the network boundary. The engine never opens a socket: document,
+CSS, script, image and form requests go through a host port, locally or over
+RPC. TLS, redirects, cookies, proxies and the resource cache live on the host
+side; the engine classifies the bytes and headers it receives.</p>
+<p>The parent also owns the storage broker: <code>localStorage</code> is shared by origin
+across tabs and <code>sessionStorage</code> is per tab and origin. The engine keeps a
+memory-only page cache for back/forward restoration.</p>
+<p>MOB3 writes no application files. Documents come from the network or <code>about:</code>
+pages; <code>file:</code> URLs are rejected, and <code>data:</code> is only an inline subresource. The
+only filesystem access is what the Go TLS, DNS and timezone libraries do, plus
+the self-exec used for worker processes.</p>
+<p>The host applies a local-network guard for subresources, upgrades or blocks
+mixed content and reports blocked requests in the console. This is not a
+sandbox, and top-level navigation is not blocked. See
+<a href="security.html">Security and privacy</a> for the full model.</p>
+<h2 id="memory-and-efficiency">Memory and efficiency</h2>
+<p><code>-mem-limit</code> derives the soft heap limit and the JS (25%), image (12%), SVG
+(3%), resource-cache (3%) and history-cache (12%) budgets. In <code>single</code> mode one
+<code>BudgetManager</code> divides those pools across tabs; in per-tab mode each engine
+child has its own process and its own limit, so the browser total is not capped
+by one number. Dump and PNG use the parent process.</p>
+<p>The design avoids work that does not produce a visible result: no prefetching,
+no polling, no background render loop, no automatic disk cache, and no drawing
+for background tabs. Long pages and unbounded inputs are capped; the dump path
+truncates by rows, the protocol has message and image limits, and the MCP tools
+page large results instead of returning them without bound.</p>
+<h2 id="tradeoffs">Tradeoffs</h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>What it costs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A separate engine process per tab</td>
+<td>Extra process memory and startup work; <code>-mem-limit</code> is per process in this mode.</td>
+</tr>
+<tr>
+<td>A text-first CSS and JavaScript subset</td>
+<td>Modern JavaScript-heavy apps may render partially or not at all.</td>
+</tr>
+<tr>
+<td>Terminal-cell layout</td>
+<td>Approximate CSS; not a pixel-perfect browser.</td>
+</tr>
+<tr>
+<td>Memory-only state</td>
+<td>Nothing survives a close, by design.</td>
+</tr>
+<tr>
+<td>Images off by default</td>
+<td>The fastest configuration is also the one without pictures.</td>
+</tr>
+<tr>
+<td>Text PDFs</td>
+<td>Scanned pages, figures and annotations are not rendered.</td>
+</tr>
+<tr>
+<td>No sandbox or site isolation</td>
+<td>The architecture is not a security boundary.</td>
+</tr>
+<tr>
+<td>Report-only MCP crash recovery</td>
+<td>The server survives an engine crash but does not respawn it.</td>
+</tr>
+</tbody></table>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="cli.html">Command line</a> for every flag and its limits.</li>
+<li><a href="security.html">Security and privacy</a> for the trust model and network policy.</li>
+<li><a href="automation.html">Automation with MCP</a> for the headless surface.</li>
+<li><a href="development.html">Development</a> for builds, tests and release steps.</li>
+</ul>
+<p>The repository also carries file-by-file ownership notes for contributors:
+<a href="https://github.com/mob3net/mob3/blob/main/docs/agents/architecture.md">docs/agents/architecture.md</a>.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#design-goals">Design goals</a></li><li><a href="#the-process-tree">The process tree</a></li><li><a href="#isolation-and-containment">Isolation and containment</a></li><li><a href="#package-boundaries">Package boundaries</a></li><li><a href="#rendering">Rendering</a></li><li><a href="#javascript">JavaScript</a></li><li><a href="#networking-and-storage">Networking and storage</a></li><li><a href="#memory-and-efficiency">Memory and efficiency</a></li><li><a href="#tradeoffs">Tradeoffs</a></li><li><a href="#further-reading">Further reading</a></li></ul></nav>
+</main>
+</div>
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="../search-index.js"></script>
+<script src="../search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>

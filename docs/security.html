@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en" data-root="..">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)">
+<meta name="description" content="How MOB³ handles cookies, TLS, storage and untrusted pages in memory, and why it is not a secure browser or a sandbox.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://mob3.net/docs/security.html">
+<link rel="icon" href="../assets/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="manifest" href="../assets/site.webmanifest">
+<meta property="og:site_name" content="MOB³">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Security and privacy">
+<meta property="og:description" content="How MOB³ handles cookies, TLS, storage and untrusted pages in memory, and why it is not a secure browser or a sandbox.">
+<meta property="og:url" content="https://mob3.net/docs/security.html">
+<meta property="og:locale" content="en">
+<meta property="og:image" content="https://mob3.net/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Security and privacy">
+<meta name="twitter:description" content="How MOB³ handles cookies, TLS, storage and untrusted pages in memory, and why it is not a secure browser or a sandbox.">
+<meta name="twitter:image" content="https://mob3.net/assets/og-image.png">
+<meta name="twitter:image:alt" content="MOB³ wordmark beside a screenshot of the browser's start page in a terminal window.">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://mob3.net/"},{"@type":"ListItem","position":2,"name":"Documentation","item":"https://mob3.net/docs/index.html"},{"@type":"ListItem","position":3,"name":"Security and privacy","item":"https://mob3.net/docs/security.html"}]},{"@type":"TechArticle","headline":"Security and privacy","description":"How MOB³ handles cookies, TLS, storage and untrusted pages in memory, and why it is not a secure browser or a sandbox.","url":"https://mob3.net/docs/security.html","mainEntityOfPage":"https://mob3.net/docs/security.html","inLanguage":"en","image":"https://mob3.net/assets/og-image.png","isPartOf":{"@type":"WebSite","@id":"https://mob3.net/#website"},"publisher":{"@type":"Organization","name":"MOB³","url":"https://mob3.net/"},"author":{"@type":"Person","name":"Milos Stojanovic"}}]}</script>
+<title>Security and privacy — MOB3 documentation</title>
+<script>
+try {
+  var saved = localStorage.getItem("mob3-docs-theme");
+  if (saved === "light" || saved === "dark") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+} catch (e) {}
+</script>
+<style>
+  :root {
+    --primary: #64748b;
+    --primary-dark: #334155;
+    --primary-light: #eef2f6;
+    --fg: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #e3e3e6;
+    --bg: #f5f5f5;
+    --surface: #fff;
+    --code-bg: #f7f7f8;
+    --max-width: 72rem;
+    --article: 60rem;
+    --sidebar: 17rem;
+    --radius: 8px;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--primary-dark); }
+  a:hover { color: var(--primary); }
+  strong { font-weight: 700; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    padding: .6rem 1rem;
+    background: var(--primary);
+    color: #fff;
+    z-index: 30;
+  }
+  .skip:focus { left: 0; }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: .6rem 1.25rem;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-width: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: .01em;
+  }
+  .brand:hover { color: var(--primary-dark); }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: .1rem;
+    margin-right: .25rem;
+  }
+  .site-nav a {
+    padding: .35rem .6rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-nav a:hover {
+    color: var(--fg);
+    background: var(--bg);
+  }
+  .search-wrap {
+    position: relative;
+    width: min(15rem, 30vw);
+    min-width: 8rem;
+  }
+  .search { display: block; }
+  .search input {
+    width: 100%;
+    padding: .35rem .65rem;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--surface);
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .search-results {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    z-index: 40;
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+  }
+  .search-results.hidden { display: none; }
+  .search-results a {
+    display: block;
+    padding: .5rem .7rem;
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .search-results a:hover,
+  .search-results a.active { background: var(--primary-light); }
+  .search-results .page { display: block; font-weight: 600; }
+  .search-results .hint {
+    display: block;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+  .search-results .empty {
+    margin: 0;
+    padding: .9rem 1rem;
+    color: var(--muted);
+  }
+  .theme-toggle, .nav-toggle {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 0 .8rem;
+    font: inherit;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .theme-toggle { width: 44px; padding: 0; }
+  .theme-toggle:hover, .nav-toggle:hover {
+    color: var(--fg);
+    border-color: var(--primary);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  .nav-toggle { display: none; font-size: .9rem; }
+
+  .docs-layout {
+    display: flex;
+    align-items: flex-start;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  #sidebar {
+    position: sticky;
+    top: 3.6rem;
+    flex: 0 0 var(--sidebar);
+    width: var(--sidebar);
+    max-height: calc(100vh - 3.6rem);
+    overflow-y: auto;
+    padding: 1.5rem 1rem 3rem;
+    border-right: 1px solid var(--line);
+  }
+  #sidebar h2 {
+    margin: 0 0 .5rem;
+    padding: 0 .6rem;
+    border: 0;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sidebar ul { margin: 0; padding: 0; list-style: none; }
+  #sidebar a {
+    display: block;
+    padding: .35rem .6rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: .92rem;
+    text-decoration: none;
+  }
+  #sidebar a:hover { background: var(--bg); color: var(--fg); }
+  #sidebar a.active { color: var(--primary-dark); background: var(--primary-light); }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--article);
+    padding: 2rem 2.5rem 4rem;
+  }
+  body:not(.docs-page) .content {
+    margin: 0 auto;
+  }
+
+  h1 { margin: 0 0 1.2rem; font-size: 2rem; line-height: 1.25; }
+  h2 {
+    margin: 2.4rem 0 .8rem;
+    padding-bottom: .3rem;
+    font-size: 1.35rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { margin: 1.8rem 0 .5rem; font-size: 1.1rem; }
+  h4 { margin: 1.4rem 0 .4rem; font-size: 1rem; }
+  p, ul, ol, table, pre, blockquote { margin: 0 0 1rem; }
+  li > ul, li > ol { margin: .2rem 0 .4rem; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1.2rem 0;
+    padding: .2rem 1rem;
+    border-left: 3px solid var(--primary);
+    background: var(--code-bg);
+    color: var(--fg);
+  }
+  blockquote > p:last-child { margin-bottom: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .content div[align="center"] { text-align: center; margin-bottom: 1rem; }
+  .content div[align="center"] img {
+    display: inline-block;
+    width: 32%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  code {
+    padding: .1em .35em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: .88rem;
+    line-height: 1.55;
+  }
+  pre code { padding: 0; background: none; font-size: inherit; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .94rem;
+    display: block;
+    overflow-x: auto;
+  }
+  th, td {
+    padding: .5rem .75rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
+  th { font-weight: 600; border-bottom-width: 2px; }
+  tbody tr:hover { background: var(--bg); }
+
+  .toc {
+    margin: 3rem 0 0;
+    padding: 1rem 1.2rem;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    font-size: .92rem;
+  }
+  .toc-title { margin: 0 0 .4rem; font-weight: 600; }
+  .toc ul { margin: 0; padding-left: 1.1rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .site-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .site-footer p { margin: 0; }
+
+  @media (max-width: 860px) {
+    .nav-toggle { display: block; }
+    body:not(.docs-page) .nav-toggle { display: none; }
+    .docs-layout { display: block; }
+    #sidebar {
+      position: static;
+      display: none;
+      width: auto;
+      max-height: none;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      padding: .5rem .75rem 1rem;
+    }
+    body.nav-open #sidebar { display: block; }
+    .content { max-width: none; padding: 1.5rem 1.1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .header-inner {
+      gap: .5rem;
+      padding: .45rem .8rem;
+    }
+    .header-left { min-width: 0; }
+    .header-actions {
+      gap: .25rem;
+      min-width: 0;
+    }
+    /* The search box is desktop-only: the phone header must stay on one line. */
+    .search-wrap { display: none; }
+    .site-nav { gap: 0; margin-right: 0; }
+    .site-nav a {
+      padding: .3rem .4rem;
+      font-size: .88rem;
+    }
+    .theme-toggle, .nav-toggle { min-height: 38px; }
+    .theme-toggle { width: 38px; }
+    .nav-toggle {
+      padding: 0 .5rem;
+      font-size: .88rem;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .header-inner { gap: .35rem; padding: .45rem .55rem; }
+    .brand { font-size: 1.02rem; }
+    .site-nav a { padding: .28rem .22rem; font-size: .8rem; }
+    .theme-toggle { width: 34px; min-height: 34px; }
+    .nav-toggle { min-height: 34px; padding: 0 .4rem; font-size: .8rem; }
+  }
+  @media (max-width: 345px) {
+    .header-inner { gap: .25rem; padding: .4rem .4rem; }
+    .brand { font-size: .95rem; }
+    .site-nav a { padding: .25rem .18rem; font-size: .74rem; }
+    .theme-toggle { width: 30px; min-height: 30px; }
+    .nav-toggle { min-height: 30px; padding: 0 .3rem; font-size: .74rem; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --primary: #94a3b8;
+      --primary-dark: #cbd5e1;
+      --primary-light: #1e293b;
+      --fg: #e6e6e8;
+      --muted: #9a9aa0;
+      --line: #2c2c30;
+      --bg: #1a1a1c;
+      --surface: #131315;
+      --code-bg: #1d1d20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --primary: #94a3b8;
+    --primary-dark: #cbd5e1;
+    --primary-light: #1e293b;
+    --fg: #e6e6e8;
+    --muted: #9a9aa0;
+    --line: #2c2c30;
+    --bg: #1a1a1c;
+    --surface: #131315;
+    --code-bg: #1d1d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  }
+</style>
+</head>
+<body class="docs-page">
+<a class="skip" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-left">
+      <a class="brand" href="../index.html">MOB³</a>
+    </div>
+    <div class="header-actions">
+      <nav class="site-nav" aria-label="Project">
+        <a href="../docs/">Docs</a>
+        <a href="https://github.com/mob3net/mob3">GitHub</a>
+        <a href="https://github.com/mob3net/mob3/releases/latest">Releases</a>
+        <a href="mailto:info@mob3.net">Contact</a>
+      </nav>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu</button>
+      <div class="search-wrap">
+        <label class="search">
+          <span class="visually-hidden">Search the documentation</span>
+          <input id="search" type="search" placeholder="Search the docs" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="search-results hidden" id="search-results" role="listbox" aria-label="Search results"></div>
+      </div>
+      <button class="theme-toggle" type="button" aria-label="Switch theme" title="Switch between light and dark">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"></path>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.7 8.7 0 1 0 11.1 11.1z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+<div class="docs-layout">
+<aside class="docs-sidebar" id="sidebar" aria-label="Documentation"><h2>Documentation</h2><ul><li><a href="index.html">MOB3 documentation</a></li><li><a href="use-cases.html">Use cases</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="install.html">Install</a></li><li><a href="cli.html">Command line</a></li><li><a href="keys.html">Keyboard and mouse</a></li><li><a href="automation.html">Automation with MCP</a></li><li><a class="active" aria-current="page" href="security.html">Security and privacy</a></li><li><a href="sites.html">Site support</a></li><li><a href="development.html">Development</a></li></ul></aside>
+<main class="content" id="content">
+<h1>Security and privacy</h1>
+<blockquote>
+<p><strong>Warning:</strong> <strong>MOB3 is not a secure browser.</strong> It has no sandboxing, process
+or site isolation, CSP enforcement, certificate UI, phishing protection or
+security audit. Treat every page as code running beside the browser. Do not
+use MOB3 for passwords, accounts, payments or confidential data.</p>
+</blockquote>
+<h2 id="what-it-does-not-do">What it does not do</h2>
+<ul>
+<li>No sandbox, site isolation or permission prompts.</li>
+<li>No memory, site or OS isolation. By default tabs are separate engine child
+processes with their own JavaScript runtime and history, over parent-owned
+shared origin storage, but they still trust the same parent host and protocol
+values; iframes remain inert stubs. The child process is fault isolation,
+not a security boundary, and <code>-process=single</code> puts every tab back in one
+address space. An engine bug or a sobek escape can still cross tab boundaries.</li>
+<li>No CSP enforcement, certificate warnings or certificate management UI.
+<code>-certs</code> changes which root bundle is trusted; it is not certificate
+inspection, revocation checking or pinning.</li>
+<li>No phishing, malware, tracker or fingerprinting protection.</li>
+<li>No proxy configuration UI. Standard <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code> and
+<code>NO_PROXY</code> environment variables are honored by the host transport; see
+<a href="#proxies">Proxies</a>.</li>
+<li>No private/incognito concept: every session is ephemeral. Tabs may run in
+separate engine processes by default, but that is fault isolation only, not
+memory or site isolation.</li>
+</ul>
+<h2 id="need-more-isolation">Need more isolation?</h2>
+<p>MOB3 does not sandbox pages itself. If you need a more isolated environment,
+run MOB3 in a container or a dedicated virtual machine with only the network
+and filesystem access you intend. Docker is a common way to do this, but
+container and VM configuration is outside this project&#39;s support scope.</p>
+<h2 id="tab-isolation-iframes-are-inert">Tab isolation (iframes are inert)</h2>
+<p>Interactive tabs run one engine child process per tab by default, and an MCP
+automation session runs its engine in a child too; <code>-process=single</code> keeps them
+inside one Go process. The process layout and spawn handshake are described in
+<a href="architecture.html#the-process-tree">the process model</a>. This is fault isolation,
+not a sandbox:</p>
+<ul>
+<li>A tab is one protocol session with its own engine session, page, layout,
+JavaScript runtime and back/forward history.</li>
+<li><code>localStorage</code> is shared per origin across tabs; <code>sessionStorage</code> is per tab
+and origin; cookies remain host-owned and domain-scoped.</li>
+<li>Single mode uses one shared budget for all JS runtimes, page caches,
+image/SVG work and the MCP engine. Per-tab mode gives each tab child and the
+MCP engine child its own process-wide <code>-mem-limit</code> cap. Zoom stays
+browser-global.</li>
+<li>Only the active tab draws. A background tab keeps loading and updates its own
+state, history and title, but its timers and deferred image work pause.</li>
+<li>A crashed MCP engine does not stop the MCP server, but the server does not
+respawn it: later tool calls report the crash until the client restarts the
+server.</li>
+</ul>
+<p>No DOM or sobek value crosses a tab boundary. This is logical isolation, not
+memory or site isolation. A compromised engine or a JavaScript-engine escape
+can read across tabs, and there is no OS sandbox or Spectre mitigation.</p>
+<p>Iframes are a permanent non-goal. Iframe elements have inert stub documents,
+<code>contentDocument</code> is null even for a same-origin frame, <code>frameElement</code> is null,
+and there is no DOM bridge. There is no child browsing context, frame tree or
+cross-frame DOM access, and none is planned.</p>
+<h2 id="no-persistence">No persistence</h2>
+<p>The running browser does not create or update configuration, history, cookie,
+cache, log or download files. Closing MOB3 saves nothing.</p>
+<ul>
+<li>History, cookies, <code>localStorage</code>/<code>sessionStorage</code>, the image cache and all
+JavaScript state live in memory only.</li>
+<li>The download popup only shows a <code>curl</code> command; it writes nothing.</li>
+<li>The binary opens no application files for reading or writing: there are no
+config, bookmark, certificate, cache, history or download files. It writes
+nothing to disk and never probes or reads a page, bundle or path.</li>
+<li>OS-level reads by Go&#39;s TLS, DNS and timezone libraries are not application
+storage. By default TLS roots come from the platform store; <code>-certs</code> can
+switch to the CA bundle compiled into the binary. No PEM file is read.</li>
+<li>The memory footer uses Go&#39;s runtime statistics for the active engine
+process; no <code>/proc</code> file is sampled. Per-tab mode therefore shows the active
+tab&#39;s child process, not the whole browser.</li>
+</ul>
+<h2 id="cookies-and-storage">Cookies and storage</h2>
+<p>Cookies are session-only and shared by page loads, resources, XHR, <code>fetch</code> and
+<code>document.cookie</code>. HttpOnly cookies are hidden from JavaScript, and a script
+cannot replace or delete a server-set HttpOnly cookie. Explicit <code>SameSite</code>
+values are enforced: <code>Strict</code> cookies are sent only to the same site, <code>Lax</code>
+also on top-level <code>GET</code>/<code>HEAD</code> navigations, and <code>None</code> only when <code>Secure</code> over
+HTTPS. A cookie with no <code>SameSite</code> keeps the legacy send-everywhere behavior.
+Non-GET form submissions carry the submitting page&#39;s <code>Origin</code>, so a server can
+reject cross-site posts. A <code>Secure</code> cookie is accepted only over HTTPS, and the
+<code>__Secure-</code>/<code>__Host-</code> prefixes are enforced: the former needs <code>Secure</code>, the
+latter needs <code>Secure</code>, <code>Path=/</code> and no <code>Domain</code>. <code>localStorage</code> and
+<code>sessionStorage</code> are in-memory and do not persist across restarts:
+<code>localStorage</code> is shared per origin across tabs, while <code>sessionStorage</code> is per
+tab and origin. Each area is capped at 5 MiB and the whole browser context at
+32 MiB. Opaque origins get a private area that is not shared with any other
+document. One cookie is capped at 4 KiB accounting size, a domain at 180
+cookies, and the jar at 1024 cookies / 4 MiB; a cookie that would exceed a bound
+is not stored.</p>
+<h2 id="clipboard">Clipboard</h2>
+<p>Clipboard use is write-only and user-initiated: <code>y</code>/<code>Y</code>/<code>Ctrl-Y</code>, a
+right-click link URL, console <code>y</code>, or the download prompt write through OSC 52.
+Page JavaScript cannot read or write the clipboard (<code>navigator.clipboard</code> is
+absent and <code>document.execCommand(&quot;copy&quot;)</code> is false). The engine emits plain text;
+the front end allows one clipboard event per copy action, drops unsolicited
+events, strips terminal and display-format controls, caps the payload at
+100 KiB and reports &quot;Clipboard unavailable&quot; when the terminal write fails. MOB3
+never reads the clipboard. Terminal support for OSC 52 still varies.</p>
+<h2 id="cross-origin-requests">Cross-origin requests</h2>
+<p>Pages can load cross-origin scripts, styles and images like a normal browser,
+and share the cookie jar for those requests. JavaScript <code>fetch</code> and
+<code>XMLHttpRequest</code> allow same-origin requests and only simple CORS cross-origin
+requests with a matching <code>Access-Control-Allow-Origin</code>; preflight and
+credentialed cross-origin requests are unsupported.</p>
+<p>A document loaded from a public <code>http</code>/<code>https</code> address cannot fetch
+subresources, <code>fetch</code> or XHR from loopback, private, link-local, CGNAT,
+<code>0.0.0.0/8</code> or reserved addresses. Literal local hosts and local names are
+rejected before the request and on every redirect hop; names that only resolve
+locally are rejected after DNS resolution, and every connection is re-checked
+before it is reused from the pool. Only the final document address decides local
+access, so a public page reached through a local redirect hop is still public.
+Documents that themselves loaded from a local address keep access, and top-level
+navigation is not blocked.
+Blocked requests appear as <code>ERR</code> in the console request list.</p>
+<p>MOB3 upgrades HTTP image requests on HTTPS pages to HTTPS and does not retry
+them over HTTP; HTTP scripts, stylesheets, modules, <code>@import</code>, XHR/fetch and
+secure-subresource redirects to HTTP are blocked. IP-literal image hosts are
+blocked rather than upgraded. Top-level navigation to HTTP remains allowed.</p>
+<h2 id="blocked-sites-and-challenges">Blocked sites and challenges</h2>
+<p>On 401/403/429/503 responses, MOB3 looks for common anti-bot/CAPTCHA signatures
+and shows a generic “Site blocked” page with the reason, status and URL. The
+site&#39;s challenge scripts are not executed unless you follow the one-shot
+<strong>Try anyway</strong> link, or start with <code>-ignore-blocks</code>.</p>
+<p>Challenge pages can run arbitrary script after that bypass. MOB3 cannot
+complete most browser checks, and it is not a security boundary.</p>
+<h2 id="local-files-and-downloads">Local files and downloads</h2>
+<p>Local file pages are not supported. <code>file:</code> URLs are rejected, bare paths are
+never probed on disk, and every document comes from <code>http</code>, <code>https</code> or
+<code>about:</code>. <code>data:</code> is accepted only as an inline subresource (images,
+stylesheets, scripts), never as a document. Remote pages therefore cannot use
+the viewport, a stylesheet, a script, an image or XHR to read a local file.</p>
+<p>MOB3 never saves downloads. A download link opens a popup with a
+ready-to-copy <code>curl</code> command without fetching the file, except for a <code>.pdf</code>
+download, which is fetched and shown in the text viewer. Running the <code>curl</code>
+command is your choice and outside MOB3.</p>
+<h2 id="tls-trust-store">TLS trust store</h2>
+<p>HTTPS verification uses the platform root store by default. If the platform
+provides no roots at all, the Mozilla NSS bundle compiled into the binary from
+<code>golang.org/x/crypto/x509roots/fallback</code> is used automatically.
+<code>-certs=embedded</code> selects that same bundle explicitly, replacing a stale
+platform store. No certificate file is read. The embedded
+bundle keeps Mozilla&#39;s distrust-after dates, so a constrained root stops
+validating certificates issued after that date. Revocation is still not checked
+in any mode, and there is no certificate UI or warning flow.</p>
+<h2 id="proxies">Proxies</h2>
+<p>The host transport uses Go&#39;s <code>http.ProxyFromEnvironment</code>, so
+<code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> work without a CLI flag or UI. HTTP
+proxies, HTTPS proxies and SOCKS5 proxy URLs are supported by the transport.
+The variables are read at process start.</p>
+<p>With a proxy, the proxy resolves and contacts the destination. The
+local-network guard cannot inspect that target, so the proxy is a deliberate
+exception to the private-network check. The proxy can see plain HTTP traffic
+and destination hostnames; HTTPS remains end-to-end encrypted unless the proxy
+terminates TLS. Proxy credentials in environment variables are visible to
+child processes and may be visible through process-environment inspection.
+This is best-effort networking, not a security boundary.</p>
+<h2 id="automation">Automation</h2>
+<p><code>-mcp</code> runs a local, unauthenticated automation server over stdin/stdout. Any
+process connected to that stdin/stdout can navigate, click, type and evaluate
+JavaScript in the page. Do not expose the MCP server as a network service and
+do not connect untrusted clients. Sessions and storage remain memory-only.</p>
+<h2 id="media-decoding">Media decoding</h2>
+<p>Images and inline SVG are treated as untrusted input. Responses are capped at
+12 MB, raster images above 25 megapixels are rejected before decoding, and SVG
+rasterization is capped at 1024 px. Decoder dependencies are kept at patched
+releases and scanned with <code>govulncheck</code>; a panic inside a raster or SVG decoder
+is contained and shown as a broken image instead of crashing the browser. SVG
+strokes with a pathological dash pattern fall back to a solid stroke, and a
+stroke outline beyond a fixed point budget is dropped. These limits bound
+resource use and crashes, not the general risk of rendering attacker-controlled
+content.</p>
+<p>CSS selector matching memoizes repeated ancestor states and runs under a
+per-selector or per-query step budget. A pathological selector is treated as
+non-matching instead of freezing the engine, and the style deadline and script
+abort flag are checked inside the match. UA rules have their own small budget,
+so exhausting author matching cannot expose script/style raw text.</p>
+<p>PDF responses are parsed in-repo rather than by a third-party renderer. The
+reader is bounded (500 pages, 4 seconds of parse time, 4 MiB of extracted
+text, 32 MiB per decoded stream, 64 MiB of retained page content), stops on
+the requesting page&#39;s cancellation, rejects encrypted documents, and contains
+panics, so a malformed file degrades to a note instead of a crash. It never
+rasterizes a page and writes nothing to disk. A panic in the engine goroutine
+is recovered by the session transport and shown in the crashed tab, and an
+engine that stops answering the liveness probe is force-killed and shown the
+same way. Fatal
+runtime errors, such as a stack overflow, are not recoverable: per-tab mode
+contains one to the tab&#39;s child process and shows its captured message, while
+<code>-process=single</code> terminates the browser and may leave the terminal in raw or
+alternate-screen mode. Like the rest of the engine it is not audited and is not
+a security boundary.</p>
+<h2 id="memory-and-caches">Memory and caches</h2>
+<p>The back/forward history-cache pool is 12% of <code>-mem-limit</code>/<code>GOMEMLIMIT</code> (or
+128 MB when unlimited), divided across active tabs. Each tab evicts its least
+recently used pages first, and a page heavier than half its share is never
+cached. When a heavy cached page is evicted, one collection plus scavenge runs
+between frames so its memory returns to the OS. The separate subresource cache
+keys CSS, JavaScript and raw image bodies by top-level site as well as URL, so
+one site cannot reuse another site&#39;s cached response, and a response that varies
+on <code>Cookie</code> (or <code>Vary: *</code>) is not cached at all. Decoded images remain keyed by
+URL.</p>
+<p><code>-mem-limit</code> sets an optional soft limit on the Go heap, making the runtime
+collect harder as memory approaches it. It is off by default (<code>0</code>), so memory is
+unlimited and any <code>GOMEMLIMIT</code> environment setting applies. Single-mode tabs
+divide the image/SVG pools (12% and 3% of the limit when set, with conservative
+fallbacks otherwise) because they share one process. With <code>-process=per-tab</code>,
+every tab child is its own process and receives the full <code>-mem-limit</code>, as does
+the parent, so the browser total is not bounded by one limit. These limits are
+best-effort resource bounds, not a sandbox.</p>
+<h2 id="javascript-safety-limits">JavaScript safety limits</h2>
+<p>Each script and callback runs under a 2-second sobek interrupt watchdog and a
+per-runtime absolute heap ceiling drawn from the shared JS pool (25% of
+<code>-mem-limit</code>/<code>GOMEMLIMIT</code>, else 256 MB, divided across active sessions). The
+interrupt is observed by bytecode, not by a native regular-expression match, so
+catastrophic backtracking can exceed it until the liveness probe force-stops the
+tab (see the known limitations). One sampler per active runtime checks the
+ceiling every 75 ms and interrupts only a call that is running, so a page
+cannot reset its budget on every timer callback. A page&#39;s load-time scripts also
+share an 8-second budget and a 2,000-script cap, and Esc or Ctrl-C interrupts the
+script currently blocking the loop and cancels its in-flight requests; closing
+the tab does the same before
+releasing it. Timer counts and per-tick callbacks are capped. Go-side copies of
+page data are capped too: the console log at 8 KiB per line and 512 KiB total,
+DOM text and attribute values at 1 MiB each and 64 MiB per runtime, script-visible
+nodes at 200,000, and request-log URLs at 2 KiB. Interactive
+<code>alert</code>/<code>confirm</code>/<code>prompt</code> dialogs are limited to 20 per page load and 8 KiB
+each; later calls return the non-interactive defaults, so a script cannot reopen
+a modal forever. These limits protect against runaway scripts, not against
+malicious pages in general.</p>
+
+
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li><a href="#what-it-does-not-do">What it does not do</a></li><li><a href="#need-more-isolation">Need more isolation?</a></li><li><a href="#tab-isolation-iframes-are-inert">Tab isolation (iframes are inert)</a></li><li><a href="#no-persistence">No persistence</a></li><li><a href="#cookies-and-storage">Cookies and storage</a></li><li><a href="#clipboard">Clipboard</a></li><li><a href="#cross-origin-requests">Cross-origin requests</a></li><li><a href="#blocked-sites-and-challenges">Blocked sites and challenges</a></li><li><a href="#local-files-and-downloads">Local files and downloads</a></li><li><a href="#tls-trust-store">TLS trust store</a></li><li><a href="#proxies">Proxies</a></li><li><a href="#automation">Automation</a></li><li><a href="#media-decoding">Media decoding</a></li><li><a href="#memory-and-caches">Memory and caches</a></li><li><a href="#javascript-safety-limits">JavaScript safety limits</a></li></ul></nav>
+</main>
+</div>
+<footer class="site-footer">
+  <p>Copyright (c) 2026 Milos Stojanovic. Licensed under AGPL-3.0-only.</p>
+</footer>
+<script src="../search-index.js"></script>
+<script src="../search.js"></script>
+<script>
+(function () {
+  var theme = document.querySelector(".theme-toggle");
+  if (theme) {
+    theme.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        current = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      }
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("mob3-docs-theme", next); } catch (e) {}
+    });
+  }
+  var nav = document.querySelector(".nav-toggle");
+  if (nav) {
+    nav.addEventListener("click", function () {
+      var open = document.body.classList.toggle("nav-open");
+      nav.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+})();
+</script>
+</body>
+</html>
