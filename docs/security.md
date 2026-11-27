@@ -27,8 +27,9 @@
 ## Tab isolation (iframes are inert)
 
 Interactive tabs run one engine child process per tab by default;
-`-process=single` keeps them inside one Go process. This is fault isolation,
-not a sandbox:
+`-process=single` keeps them inside one Go process. The process layout is drawn
+in [Process placement](cli.md#process-placement). This is fault isolation, not a
+sandbox:
 
 - A tab is one protocol session with its own engine session, page, layout,
   JavaScript runtime and back/forward history.

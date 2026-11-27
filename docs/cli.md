@@ -47,9 +47,39 @@ Run `mob3 -h` for the exact defaults in your build.
 
 ## Process placement
 
-`-process=per-tab` (the default) runs a separate engine process per interactive tab using the same static binary. The parent keeps the terminal, network policy, cookies, cache, settings and history; the child owns the page DOM, JavaScript, layout and PDF state. A wedged tab can be killed without stopping the browser, but this is fault isolation, not a security sandbox.
+`-process=per-tab` (the default) runs a separate engine process per interactive
+tab using the same static binary:
 
-Child tabs share `localStorage`/`sessionStorage` with the parent through the storage broker. `-mem-limit` applies per process: in `single` mode all tabs share one process and one limit, while `per-tab` mode gives each tab child its own limit and the parent its own. Dump, PNG and MCP modes remain in-process. The default is `-process=per-tab`.
+```text
+mob3 parent process
+ │  terminal, tabs, network, cookies, cache, history
+ │
+ ├── tab 1 child process: DOM, JS, layout, PDF
+ ├── tab 2 child process: DOM, JS, layout, PDF
+ └── tab 3 child process: DOM, JS, layout, PDF
+```
+
+`-process=single` keeps every tab inside that one process:
+
+```text
+one mob3 process
+  terminal, tabs, network, cookies, cache, history
+  tab 1 + tab 2 + tab 3 engines: DOM, JS, layout, PDF
+  one -mem-limit, one address space
+```
+
+The parent keeps the terminal, network policy, cookies, cache, settings and
+history; a child owns its page DOM, JavaScript, layout and PDF state. Child tabs
+share `localStorage`/`sessionStorage` with the parent through the storage
+broker. A wedged tab child can be killed without stopping the browser, but this
+is fault isolation, not a security sandbox. Only the active tab draws;
+background tabs keep loading and update their state but pause their timers and
+deferred image work.
+
+`-mem-limit` applies per process: in `single` mode all tabs share one process
+and one limit, while `per-tab` mode gives each tab child its own limit and the
+parent its own. Dump, PNG and MCP modes remain in-process. The default is
+`-process=per-tab`.
 
 ## Proxy
 
