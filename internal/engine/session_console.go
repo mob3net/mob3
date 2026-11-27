@@ -988,6 +988,15 @@ func (b *Session) runTransportDialog(d *jsDialog) (string, bool) {
 	id := b.nextDialogID
 	b.dialog = d
 	defer func() { b.dialog = nil }()
+	// Kitty scaled text composites above the cell grid, and the frontend dims
+	// the page behind the modal. Push a page frame without scaled text before
+	// the dialog event so large glyphs and their backgrounds cannot survive
+	// the dim layer. The engine loop is blocked here, so it cannot do this on
+	// the next draw.
+	if !b.NoDraw {
+		b.draw()
+		b.emitPendingFrame()
+	}
 	if err := b.sessionOut.Send(protocol.Event{Body: protocol.Dialog{
 		ID: id, Kind: kind, Text: d.message, Default: d.text,
 	}}); err != nil {

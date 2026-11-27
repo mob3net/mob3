@@ -501,6 +501,56 @@ func TestConsoleOpenWhileDialogWaits(t *testing.T) {
 	}
 }
 
+type dialogFrameSink struct {
+	sawDialog   bool
+	frameBefore bool
+	plainFrame  bool
+}
+
+func (s *dialogFrameSink) Send(ev protocol.Event) error {
+	switch v := ev.Body.(type) {
+	case protocol.Frame:
+		if !s.sawDialog {
+			s.frameBefore = true
+			if len(v.Runs) == 0 {
+				s.plainFrame = true
+			}
+		}
+	case protocol.Dialog:
+		s.sawDialog = true
+	}
+	return nil
+}
+
+func TestDialogRebuildsBeforeBlocking(t *testing.T) {
+	t.Setenv("TERM", "xterm-kitty")
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	b := newTestSession(40, 10)
+	b.caps |= protocol.CapKittyGraphics | protocol.CapKittyText
+	u := mustParse(t, "https://example.com/")
+	b.Page = &Page{URL: u, Base: u, Root: ParseHTML(`<h1>big</h1><p>text</p>`)}
+	b.URL = u
+	b.rebuild()
+	if !b.BigText {
+		t.Fatal("scaled text should be enabled before the dialog")
+	}
+
+	in := make(chan protocol.Command, 1)
+	sink := &dialogFrameSink{}
+	b.sessionCtx = context.Background()
+	b.sessionIn = in
+	b.sessionAbort = make(chan struct{})
+	b.sessionOut = sink
+	in <- protocol.Command{Body: protocol.DialogResult{ID: 1, OK: true}}
+	b.showAlert("hello")
+	if b.BigText {
+		t.Fatal("scaled text stayed on while the dialog blocked the engine")
+	}
+	if !sink.frameBefore || !sink.plainFrame {
+		t.Fatalf("dialog frame ordering = %+v", sink)
+	}
+}
+
 type selectSink struct{ sel protocol.Select }
 
 func (s *selectSink) Send(ev protocol.Event) error {
