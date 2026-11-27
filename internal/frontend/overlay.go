@@ -51,11 +51,11 @@ type overlay interface {
 }
 
 // allWindows returns every front-end window in registration order. The order
-// only identifies them; windowStack derives priority from layer.
-func (l *Tab) allWindows() [12]overlay {
-	return [12]overlay{
+// only identifies them; windowStack derives priority from layer. The console is
+// a base surface, not a window, and is dispatched through focusedSurface.
+func (l *Tab) allWindows() [11]overlay {
+	return [11]overlay{
 		&l.linkPreviewOverlay,
-		&l.consoleOverlay,
 		&l.hintOverlay,
 		&l.downloadOverlay,
 		&l.noticeOverlay,
@@ -72,7 +72,7 @@ func (l *Tab) allWindows() [12]overlay {
 // windowStack returns the open windows in input order, topmost first. Equal
 // layers keep registration order. The fixed array avoids an allocation on the
 // input path.
-func (l *Tab) windowStack() (stack [12]overlay, count int) {
+func (l *Tab) windowStack() (stack [11]overlay, count int) {
 	for _, o := range l.allWindows() {
 		if !o.isOpen() {
 			continue

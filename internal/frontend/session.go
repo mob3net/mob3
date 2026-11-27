@@ -118,6 +118,9 @@ func (l *Tab) AttachPresenter(p *Presenter) {
 			full = true
 		}
 	}
+	if l.consoleOverlay.isOpen() && l.consoleOverlay.install(l) {
+		full = true
+	}
 	if full {
 		l.consoleOverlay.present(l)
 		return
@@ -199,6 +202,7 @@ func (l *Tab) clearOverlaysAfterCrash() {
 	for _, o := range l.allWindows() {
 		o.reset(l)
 	}
+	l.consoleOverlay.reset(l)
 	l.quitPending = false
 }
 
@@ -464,7 +468,27 @@ const quitPrompt = "Are you sure you want to quit? (y)"
 // the key was consumed and whether the loop should exit.
 func (l *Tab) handleShellKey(k string) (handled, quit bool) {
 	stack, count := l.windowStack()
+	// Windows above the console own input first. A focused console then owns
+	// the key; page-scoped windows below it (hints) only see input when the
+	// page surface is focused.
+	split := count
 	for i := 0; i < count; i++ {
+		if stack[i].layer() <= layerConsole {
+			split = i
+			break
+		}
+	}
+	for i := 0; i < split; i++ {
+		if handled, quit := stack[i].handleKey(l, k); handled {
+			return handled, quit
+		}
+	}
+	if l.focusedSurface() == surfaceConsole && l.consoleOverlay.isOpen() {
+		if handled, quit := l.consoleOverlay.handleKey(l, k); handled {
+			return handled, quit
+		}
+	}
+	for i := split; i < count; i++ {
 		if handled, quit := stack[i].handleKey(l, k); handled {
 			return handled, quit
 		}
@@ -688,11 +712,31 @@ func (l *Tab) handleChromeMouse(ev MouseEvent) bool {
 			l.scrollDrag = false
 		}
 	}
-	// The topmost open window owns the pointer. The find bar is a footer strip,
-	// not a modal, so it only claims its own row and every other open window
-	// still outranks it.
+	// The topmost open window owns the pointer; then the focused base surface.
+	// The find bar is a footer strip, not a modal, so it is checked after the
+	// other windows and does not outrank the console.
 	stack, count := l.windowStack()
+	split := count
 	for i := 0; i < count; i++ {
+		if stack[i].layer() <= layerConsole {
+			split = i
+			break
+		}
+	}
+	for i := 0; i < split; i++ {
+		if stack[i] == &l.findOverlay {
+			continue
+		}
+		return stack[i].handleMouse(l, ev)
+	}
+	if l.focusedSurface() == surfaceConsole && l.consoleOverlay.isOpen() {
+		r := l.paneFor(surfaceConsole)
+		x, y := ev.X-1, ev.Y-1
+		if r.contains(x, y) || r.covers(l.State.Page.Width, l.State.Page.Height) {
+			return l.consoleOverlay.handleMouse(l, ev)
+		}
+	}
+	for i := split; i < count; i++ {
 		if stack[i] == &l.findOverlay {
 			continue
 		}

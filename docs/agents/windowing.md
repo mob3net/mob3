@@ -98,7 +98,12 @@ blocked-console case but is not the target model.
   dialog-over-console and multiple non-modal windows; existing console and
   dialog goldens stay unchanged.
 
-### Stage 3: panes (later)
+### Stage 3: panes (scaffold landed, split UX pending)
+
+The scaffolding is landed: `surfaceID`, `paneRect`/`paneLayout`, a focused
+surface query, the console removed from the window stack, and one
+`surfaceFrame` writer for page and console output. Both surfaces are still
+full-terminal; the split behavior below remains.
 
 - Give surfaces pane rectangles and a focused pane. A split screen paints the
   page and console side by side or above/below; the console's `ConsoleView`
