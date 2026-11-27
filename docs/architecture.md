@@ -1,9 +1,5 @@
 # Architecture
 
-MOB3 is a small web browser for the terminal, written in Go. It has its own
-HTML parser, CSS cascade, layout engine, renderer and JavaScript runtime, and
-it can run each tab's engine in a separate process.
-
 This page is the map: the process model, the package boundaries, the rendering
 and JavaScript pipelines, and the tradeoffs behind them. It is deliberately an
 overview, not a file-by-file reference.
