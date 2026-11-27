@@ -113,8 +113,9 @@ agreement, the non-negotiable constraints and the change protocol.
 - **Keys (vim-first):** Vim-style bindings are the preferred convention and
   take priority over browser-style alternatives. `f` follows links; `Tab` and
   `Enter` remain fallbacks. Tabs use `t`/`Ctrl-T` to open, `W`/`Ctrl-W` to
-  close, `Ctrl-N`/`Ctrl-P` (or `Alt-Right`/`Alt-Left`) to move next/previous
-  without wrapping, and `1`-`9`/`Alt-1`-`Alt-9` to select.
+  close, `Ctrl-N`/`Ctrl-P` (or `Alt-Right`/`Alt-Left`, `l`/`h`) to move
+  next/previous without wrapping, and `1`-`9`/`Alt-1`-`Alt-9` to select.
+  The console and focused page controls keep `h`/`l` for their own movement.
   `j/k` line scroll, `Space/b`
   page scroll, `d/u` or `Ctrl-D/U` half page, `g/G` top/bottom, `Tab/Shift-Tab`
   focusable elements (links and controls; `f` hints are the quick path),

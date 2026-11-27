@@ -79,7 +79,7 @@ The URL prompt recalls earlier URLs and searches with <b>Up</b>/<b>Down</b> or
 <tr><td><b>H</b> / <b>Ctrl-H</b></td><td>session history overlay; Enter restores an entry</td></tr>
 <tr><td><b>t</b> / <b>Ctrl-T</b></td><td>open a new tab at the end; the URL prompt is focused and empty</td></tr>
 <tr><td><b>W</b> / <b>Ctrl-W</b></td><td>close the active tab and return to the previously used tab; closing the last tab exits without confirmation, and the URL prompt keeps Ctrl-W for word delete</td></tr>
-<tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> work too</td></tr>
+<tr><td><b>Ctrl-N</b> / <b>Ctrl-P</b></td><td>next / previous tab, stopping at the first and last; <b>Alt-Right</b> / <b>Alt-Left</b> and <b>l</b> / <b>h</b> work too</td></tr>
 <tr><td><b>1</b>-<b>9</b> / <b>Alt-1</b>-<b>Alt-9</b></td><td>select a tab by its number in the tab bar</td></tr>
 <tr><td><b>E</b></td><td>open the full warning or error message that the footer truncated; the E in Error: is underlined</td></tr>
 <tr><td><b>?</b></td><td>open this help page in a new tab</td></tr>
@@ -97,8 +97,8 @@ the current tab.
 <b>W</b>/<b>Ctrl-W</b>
 closes the active tab and returns to the tab used before it; closing the last
 tab exits without the quit
-confirmation. <b>Ctrl-N</b>/<b>Ctrl-P</b> or
-<b>Alt-Right</b>/<b>Alt-Left</b> move next and previous without wrapping, and
+confirmation. <b>Ctrl-N</b>/<b>Ctrl-P</b>, <b>Alt-Right</b>/<b>Alt-Left</b> or
+<b>l</b>/<b>h</b> move next and previous without wrapping, and
 <b>1</b>-<b>9</b> or <b>Alt-1</b>-<b>Alt-9</b> select a number from the bar.
 While an overlay, dialog, hint or the console is open it owns
 the keyboard and pointer; close it before switching or closing tabs. The URL

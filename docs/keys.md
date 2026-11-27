@@ -38,7 +38,7 @@ key, mouse and form reference for the running build.
 | `H` | Session history |
 | `t` / `Ctrl-T` | Open a new tab at the end with an empty URL prompt |
 | `W` / `Ctrl-W` | Close the active tab and return to the previously used tab; closing the last tab exits without confirmation |
-| `Ctrl-N` / `Ctrl-P` (or `Alt-Right` / `Alt-Left`) | Next / previous tab without wrapping |
+| `Ctrl-N` / `Ctrl-P` (or `Alt-Right` / `Alt-Left`, `l` / `h`) | Next / previous tab without wrapping |
 | `1`-`9` / `Alt-1`-`Alt-9` | Select a tab by its number in the tab strip |
 | `?` | Help page |
 | `!` | JavaScript console |

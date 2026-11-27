@@ -598,12 +598,12 @@ func (l *Tab) handleTabKey(k string) (handled, quit bool) {
 			return true, l.Actions.Close(-1)
 		}
 		return true, false
-	case "ctrl-n", "alt-right", "ctrl-tab":
+	case "ctrl-n", "alt-right", "ctrl-tab", "l":
 		if l.Actions.Cycle != nil {
 			l.Actions.Cycle(1)
 		}
 		return true, false
-	case "ctrl-p", "alt-left", "ctrl-backtab":
+	case "ctrl-p", "alt-left", "ctrl-backtab", "h":
 		if l.Actions.Cycle != nil {
 			l.Actions.Cycle(-1)
 		}

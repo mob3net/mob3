@@ -588,8 +588,8 @@ func TestTabKeysRouteToActions(t *testing.T) {
 	}{
 		{"t", 400}, {"ctrl-t", 400},
 		{"W", 299}, {"ctrl-w", 299},
-		{"ctrl-n", 201}, {"alt-right", 201},
-		{"ctrl-p", 199}, {"alt-left", 199},
+		{"ctrl-n", 201}, {"alt-right", 201}, {"l", 201},
+		{"ctrl-p", 199}, {"alt-left", 199}, {"h", 199},
 		{"2", 101}, {"alt-3", 102},
 	}
 	for _, tc := range cases {
